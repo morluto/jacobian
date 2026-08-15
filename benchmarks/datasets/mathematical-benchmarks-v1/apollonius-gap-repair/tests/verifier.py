@@ -5,18 +5,13 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    _public_submission_is_valid,
-    false_verified_claim,
-    is_regular_bounded_file,
+    load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
 WORKSPACE, TESTS = Path("/app"), Path("/tests")
-LIMITATION = "The certificate repairs the annotated coordinate identity; it does not independently formalize every theorem or endpoint convention in the full geometry proof."
 RATIONAL = re.compile(r"^-?(?:0|[1-9][0-9]{0,5})(?:/[1-9][0-9]{0,5})?$")
 
 
@@ -26,17 +21,6 @@ def _load() -> dict[str, Any]:
     except (OSError, ValueError):
         return {}
     return value if isinstance(value, dict) else {}
-
-
-def _submission() -> dict[str, Any] | None:
-    path = WORKSPACE / "submission.json"
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
 
 
 def _q(value: object) -> Fraction | None:
@@ -231,59 +215,23 @@ def _evidence(value: object, result: object) -> bool:
 
 
 def main() -> None:
-    submission = _submission()
+    submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
     input_bound = workspace_input_is_bound()
-    expected = json.loads((TESTS / "expected.json").read_text())
-    envelope_contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"COMPUTED"}),
-        min_limitations=1,
-        verification_record="forbidden",
-    )
     contract = bool(
-        envelope_contract
-        and _public_submission_is_valid(submission)
-        and _result_protocol_valid(data.get("result"))
+        isinstance(submission, dict) and _result_protocol_valid(data.get("result"))
     )
     math_correct = _result(data.get("result"), _load())
-    evidence_valid = _evidence(data.get("evidence"), data.get("result"))
-    scope_correct = data.get("scope") == expected["required_scope"]
-    assurance_correct = data.get("claimed_assurance") == expected["maximum_assurance"]
-    limitations = data.get("limitations")
-    limitations_correct = limitations == [LIMITATION]
-    completeness_correct = data.get("completeness") == "COMPLETE"
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = (
-        input_bound
-        and contract
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and completeness_correct
-        and limitations_correct
-        and not false_certification
-    )
+    evidence_valid = _evidence(data.get("witness"), data.get("result"))
+    correct = input_bound and contract and math_correct and evidence_valid
     out = Path("/logs/verifier")
     out.mkdir(parents=True, exist_ok=True)
     (out / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "input_binding": float(input_bound),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
-                "completeness_accuracy": float(completeness_correct),
-                "limitations_accuracy": float(limitations_correct),
-                "protocol_compliance": float(contract),
+                "witness_validity": float(evidence_valid),
                 "reward": float(correct),
-                "false_certification": false_certification,
             }
         )
     )

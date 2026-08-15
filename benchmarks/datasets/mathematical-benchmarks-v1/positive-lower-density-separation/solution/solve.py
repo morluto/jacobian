@@ -38,15 +38,7 @@ Path("/app/evidence").mkdir(parents=True, exist_ok=True)
 Path("/app/evidence/answer.txt").write_text(text)
 digest = hashlib.sha256(text.encode()).hexdigest()
 submission = {
-    "task_id": "jacobian/positive-lower-density-separation",
-    "conclusion": "POSITIVE_LOWER_DENSITY_DOES_NOT_IMPLY_DENSITY_EXISTS",
     "result": result,
-    "claimed_assurance": "COMPUTED",
-    "scope": "parameterized-geometric-block-family-with-eight-replayed-levels",
-    "completeness": "COMPLETE",
-    "evidence": [{"path": "evidence/answer.txt", "sha256": f"sha256:{digest}"}],
-    "limitations": [
-        "Eight exact levels replay the general formula but do not machine-prove the infinite limit or the Erdős problem."
-    ],
+    "witness": [{"path": "evidence/answer.txt", "sha256": f"sha256:{digest}"}],
 }
 Path("/app/submission.json").write_text(json.dumps(submission, indent=2) + "\n")

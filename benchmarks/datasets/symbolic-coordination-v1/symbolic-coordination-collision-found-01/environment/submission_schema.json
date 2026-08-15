@@ -121,51 +121,6 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
-    },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "conclusion": {
-      "enum": [
-        "TRUE",
-        "FALSE",
-        "UNKNOWN"
-      ]
-    },
-    "evidence": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "const": "evidence/certificate.json"
-          },
-          "sha256": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "type": "object"
-      },
-      "maxItems": 1,
-      "minItems": 1,
-      "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "NO_CLAIM_OUTSIDE_EXACT_COLLISION_WITNESS"
-      ]
-    },
     "result": {
       "additionalProperties": false,
       "properties": {
@@ -184,9 +139,6 @@
             "forward_map_sha256": {
               "const": "sha256:9766b9646532d049dd66a947ec8b880fc072dfd612c701292de3132cfe5d5a4f"
             },
-            "scope_id": {
-              "const": "scope://symbolic-coordination-v1/symbolic-coordination-collision-found-01"
-            },
             "semantics_id": {
               "const": "exact-sparse-polynomial-maps-over-QQ@1"
             },
@@ -198,7 +150,6 @@
             "binding_schema_version",
             "claim_id",
             "semantics_id",
-            "scope_id",
             "forward_map_sha256",
             "subject_sha256",
             "checker_id"
@@ -417,23 +368,32 @@
       ],
       "type": "object"
     },
-    "scope": {
-      "const": "DECLARED_RATIONAL_GRID_AND_SUPPLIED_SEARCH_RECORD:symbolic-coordination-collision-found-01",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/symbolic-coordination-collision-found-01"
+    "witness": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/certificate.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

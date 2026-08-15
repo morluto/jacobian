@@ -3,11 +3,11 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
+    aggregate_reward,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W, E = Path("/app"), Path("/tests")
@@ -122,46 +122,28 @@ def frozen_ok():
 
 def main():
     submission = load_submission()
-    contract = strict_submission_contract(
-        submission,
-        task_id="jacobian/disjoint-closed-distance-scope-audit",
-        conclusion="DISJOINT_CLOSED_DOES_NOT_IMPLY_POSITIVE_DISTANCE",
-        allowed_assurances=frozenset({"COMPUTED"}),
-        verification_record="forbidden",
-    )
-    result = submission.get("result") if contract else None
+    protocol_ok = submission is not None
+    result = submission.get("result") if protocol_ok else None
     math_ok = bool(result_ok(result) and frozen_ok())
+    witness = submission.get("witness") if protocol_ok else None
     evidence = (
         read_evidence_json(
-            submission["evidence"][0],
+            witness[0],
             expected_path="evidence/disjoint-closed-distance-audit.json",
         )
-        if contract
+        if isinstance(witness, list) and len(witness) == 1
         else None
     )
     evidence_ok = bool(
         evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and set(evidence) == {"schema_version", "task_id", "result"}
         and evidence["schema_version"] == "1"
-        and evidence["task_id"] == submission["task_id"]
-        and evidence["result"] == result
-        and evidence["limitations"] == submission["limitations"]
+        and json_value_equal(evidence["result"], result)
     )
-    scope_ok = bool(
-        contract
-        and submission["scope"] == "EXACT_PARAMETRIC_METRIC_COUNTERMODEL"
-        and submission["limitations"]
-        == [
-            "TOPOLOGICAL_CLOSEDNESS_REPLAYED_FROM_INTEGER_HORIZONTAL_GAP",
-            "LEAN_ELABORATION_NOT_ASSESSED",
-        ]
-    )
-    assurance_ok = bool(contract and submission["claimed_assurance"] == "COMPUTED")
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
-    reward = (
-        1.0
-        if math_ok and evidence_ok and scope_ok and assurance_ok and not false_cert
-        else 0.0
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=evidence_ok,
+        protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
@@ -169,9 +151,6 @@ def main():
             {
                 "correctness": float(math_ok),
                 "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
-                "false_certification": false_cert,
                 "reward": reward,
             }
         )

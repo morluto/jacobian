@@ -1,1 +1,17 @@
-{"task_id":"jacobian/sat-witness","conclusion":"SATISFIABLE","result":{"status":"SATISFIABLE","assignment":{"a":true,"b":false,"c":true,"d":true}},"claimed_assurance":"VERIFIED","scope":"jacobian/sat-witness complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:52b92c52420e60bce1632898a4eccbb578da86a222416833dab27b2b88ba06fa"}],"limitations":[],"verification_record_uri":{"path":"evidence/verification-record.json","sha256":"sha256:d928a5b8d943f9ab31b565ae9d4653630fc5f75719e9448a149fe1234455975c"}}
+{
+  "result": {
+    "assignment": {
+      "a": true,
+      "b": false,
+      "c": true,
+      "d": true
+    },
+    "status": "SATISFIABLE"
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:52b92c52420e60bce1632898a4eccbb578da86a222416833dab27b2b88ba06fa"
+    }
+  ]
+}

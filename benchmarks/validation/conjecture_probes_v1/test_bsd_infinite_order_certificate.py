@@ -28,13 +28,12 @@ def case(tmp_path: Path):
 def write(app: Path, s: dict):
     payload = {
         "schema_version": "1",
-        "task_id": s["task_id"],
+        "task_id": "jacobian/bsd-infinite-order-certificate",
         "result": s["result"],
-        "limitations": s["limitations"],
     }
     e = app / "evidence/answer.txt"
     e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
-    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
+    s["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
     (app / "submission.json").write_text(json.dumps(s) + "\n")
 
 
@@ -75,11 +74,7 @@ def test_singular_curve_and_torsion_shortcut_fail(tmp_path):
     assert run(app, logs).details["aggregate_reward"] == 0.0
 
 
-def test_false_verified_and_tampered_input_fail_closed(tmp_path):
-    app, logs, s = case(tmp_path)
-    s["claimed_assurance"] = "VERIFIED"
-    write(app, s)
-    assert run(app, logs).details["false_certification"] is True
+def test_tampered_input_fails_closed(tmp_path):
     app, logs, _ = case(tmp_path / "input")
     (app / "input.json").write_text("{}\n")
     reward = run(app, logs)
@@ -95,14 +90,14 @@ def test_large_digest_bound_evidence_whitespace_streams_without_a_size_cap(tmp_p
     write(app, s)
     evidence = app / "evidence/answer.txt"
     evidence.write_bytes(evidence.read_bytes() + (b" \n" * (9 * 1024 * 1024)))
-    s["evidence"][0]["sha256"] = (
+    s["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
     )
     (app / "submission.json").write_text(json.dumps(s) + "\n")
 
     verdict = run(app, logs)
 
-    assert verdict.details["evidence"] == 1.0
+    assert verdict.details["witness_validity"] == 1.0
     assert verdict.details["aggregate_reward"] == 1.0
 
 
@@ -114,14 +109,14 @@ def test_evidence_json_prefix_split_across_stream_chunk_is_not_rejected(tmp_path
     # Leave an incomplete JSON prefix at the 65,536-byte boundary.  The next
     # read completes it, so this is valid evidence rather than malformed JSON.
     evidence.write_bytes(b" " * 65_534 + original)
-    submission["evidence"][0]["sha256"] = (
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
     )
     (app / "submission.json").write_text(json.dumps(submission) + "\n")
 
     verdict = run(app, logs)
 
-    assert verdict.details["evidence"] == 1.0
+    assert verdict.details["witness_validity"] == 1.0
     assert verdict.details["aggregate_reward"] == 1.0
 
 
@@ -130,12 +125,12 @@ def test_digest_bound_evidence_with_trailing_garbage_fails_closed(tmp_path):
     write(app, s)
     evidence = app / "evidence/answer.txt"
     evidence.write_bytes(evidence.read_bytes() + b"not-json")
-    s["evidence"][0]["sha256"] = (
+    s["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
     )
     (app / "submission.json").write_text(json.dumps(s) + "\n")
 
     verdict = run(app, logs)
 
-    assert verdict.details["evidence"] == 0.0
+    assert verdict.details["witness_validity"] == 0.0
     assert verdict.details["aggregate_reward"] == 0.0

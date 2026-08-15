@@ -3,12 +3,10 @@ import math
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W = Path("/app")
@@ -149,63 +147,37 @@ def certificate_valid(result: object, frozen: dict) -> bool:
 
 def main() -> None:
     frozen = frozen_contract()
-    expected = json.loads((T / "expected.json").read_text())
     submission = load_submission(W / "submission.json")
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
+    contract = bool(submission)
     evidence = (
         read_evidence_json(
-            submission["evidence"][0], expected_path="evidence/local-audit.json"
+            submission["witness"][0], expected_path="evidence/local-audit.json"
         )
         if contract
-        and isinstance(submission.get("evidence"), list)
-        and len(submission["evidence"]) == 1
+        and isinstance(submission.get("witness"), list)
+        and len(submission["witness"]) == 1
         else None
     )
     math_correct = bool(
         frozen
         and submission is not None
-        and submission.get("conclusion") == expected["conclusion"]
         and certificate_valid(submission.get("result"), frozen)
     )
     evidence_ok = bool(
         evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and set(evidence) == {"schema_version", "task_id", "result"}
         and evidence.get("schema_version") == "1"
-        and evidence.get("task_id") == expected["task_id"]
+        and evidence.get("task_id") == "primitive-eisenstein-norm-audit"
         and _json_equal(evidence.get("result"), submission.get("result"))
-        and _json_equal(evidence.get("limitations"), LIMITATIONS)
     )
-    scope_ok = bool(
-        contract
-        and submission is not None
-        and submission.get("limitations") == LIMITATIONS
-        and submission.get("scope") == "PRIMITIVE_EISENSTEIN_NORM_LOCAL_CRITERION_ONLY"
-    )
-    assurance_ok = bool(
-        contract
-        and submission is not None
-        and submission.get("claimed_assurance") == "COMPUTED"
-    )
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
-    correct = bool(
-        math_correct and evidence_ok and scope_ok and contract and not false_cert
-    )
+    correct = bool(math_correct and evidence_ok and contract)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
+                "witness_validity": float(evidence_ok),
                 "reward": float(correct),
-                "false_certification": false_cert,
             }
         )
     )

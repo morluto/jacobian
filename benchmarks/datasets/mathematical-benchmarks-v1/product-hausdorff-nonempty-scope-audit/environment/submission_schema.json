@@ -66,21 +66,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
+    "result": {
+      "$ref": "#/$defs/result"
     },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "conclusion": {
-      "const": "EMPTY_FACTOR_MASKS_NON_HAUSDORFF_FACTOR"
-    },
-    "evidence": {
+    "witness": {
       "items": {
         "additionalProperties": false,
         "properties": {
@@ -101,33 +90,11 @@
       "maxItems": 1,
       "minItems": 1,
       "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "FINITE_TOPOLOGIES_ONLY",
-        "LEAN_ELABORATION_NOT_ASSESSED"
-      ]
-    },
-    "result": {
-      "$ref": "#/$defs/result"
-    },
-    "scope": {
-      "const": "FINITE_TOPOLOGICAL_PRODUCT_SCOPE_COUNTERMODEL",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/product-hausdorff-nonempty-scope-audit"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

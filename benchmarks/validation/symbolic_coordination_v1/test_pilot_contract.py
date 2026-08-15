@@ -137,13 +137,11 @@ def test_every_hidden_oracle_solution_receives_full_reward(
     assert result.reward == 1.0
     assert result.details == {
         "artifact_binding": 1.0,
-        "assurance_calibration": 1.0,
-        "correctness": 1.0,
-        "evidence_validity": 1.0,
-        "false_certification": False,
         "input_binding": 1.0,
-        "protocol_compliance": 1.0,
-        "scope_accuracy": 1.0,
+        "mathematics": 1.0,
+        "protocol": 1.0,
+        "witness_validity": 1.0,
+        "aggregate_reward": 1.0,
     }
 
 
@@ -183,7 +181,7 @@ def test_alternate_exact_collision_witnesses_are_accepted(
     support.rebind_evidence(app, submission)
     result = support.run_verifier(task, app, logs)
     assert result.reward == 1.0
-    assert result.details["correctness"] == 1.0
+    assert result.details["mathematics"] == 1.0
 
 
 def test_malformed_certificate_is_rejected_without_crashing(tmp_path: Path) -> None:
@@ -193,7 +191,7 @@ def test_malformed_certificate_is_rejected_without_crashing(tmp_path: Path) -> N
     submission["result"]["certificate"] = None
     support.rebind_evidence(app, submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["protocol"] == 0.0
     assert result.reward == 0.0
 
 
@@ -209,7 +207,7 @@ def test_empty_or_malformed_submission_fails_closed(
     else:
         (app / "submission.json").write_text(payload)
     result = support.run_verifier(task, app, logs)
-    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["protocol"] == 0.0
     assert result.reward == 0.0
 
 
@@ -220,7 +218,7 @@ def test_unknown_submission_field_is_rejected(tmp_path: Path) -> None:
     submission["unexpected"] = "field"
     support.write_json(app / "submission.json", submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["protocol"] == 0.0
     assert result.reward == 0.0
 
 
@@ -234,9 +232,9 @@ def test_schema_invalid_submission_preserves_independent_diagnostics(
     submission["unexpected"] = "field"
     support.write_json(app / "submission.json", submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["protocol_compliance"] == 0.0
-    assert result.details["correctness"] == 1.0
-    assert result.details["evidence_validity"] == 1.0
+    assert result.details["protocol"] == 0.0
+    assert result.details["mathematics"] == 1.0
+    assert result.details["witness_validity"] == 1.0
     assert result.reward == 0.0
 
 
@@ -249,8 +247,8 @@ def test_one_sided_inverse_certificate_is_rejected(tmp_path: Path) -> None:
     certificate.pop("forward_after_inverse_residuals")
     support.rebind_evidence(app, submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["protocol_compliance"] == 0.0
-    assert result.details["correctness"] == 0.0
+    assert result.details["protocol"] == 0.0
+    assert result.details["mathematics"] == 0.0
     assert result.reward == 0.0
 
 
@@ -263,7 +261,7 @@ def test_forged_second_composition_is_rejected(tmp_path: Path) -> None:
     }
     support.rebind_evidence(app, submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["correctness"] == 0.0
+    assert result.details["mathematics"] == 0.0
     assert result.reward == 0.0
 
 
@@ -275,10 +273,9 @@ def test_near_miss_cannot_substitute_zero_residuals(tmp_path: Path) -> None:
     certificate["inverse_after_forward_residuals"] = [{"terms": []}, {"terms": []}]
     certificate["forward_after_inverse_residuals"] = [{"terms": []}, {"terms": []}]
     submission["result"]["verdict"] = "VALID_TWO_SIDED_INVERSE"
-    submission["conclusion"] = "TRUE"
     support.rebind_evidence(app, submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["correctness"] == 0.0
+    assert result.details["mathematics"] == 0.0
     assert result.reward == 0.0
 
 
@@ -301,20 +298,19 @@ def test_substituted_workspace_input_is_rejected_separately(tmp_path: Path) -> N
     data["claim_id"] += "-substituted"
     support.write_json(app / "input.json", data)
     result = support.run_verifier(task, app, logs)
-    assert result.details["correctness"] == 1.0
+    assert result.details["mathematics"] == 1.0
     assert result.details["input_binding"] == 0.0
     assert result.reward == 0.0
 
 
-def test_scope_escalation_after_grid_exhaustion_is_rejected(tmp_path: Path) -> None:
+def test_legacy_generic_claim_field_is_rejected(tmp_path: Path) -> None:
     task, app, logs, submission = canonical_case(
         tmp_path, "symbolic-coordination-grid-exhausted-01"
     )
-    submission["scope"] = "GLOBAL_INJECTIVITY_OVER_QQ"
-    submission["limitations"] = []
-    support.rebind_evidence(app, submission)
+    submission["claimed_assurance"] = "VERIFIED"
+    support.write_json(app / "submission.json", submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["scope_accuracy"] == 0.0
+    assert result.details["protocol"] == 0.0
     assert result.reward == 0.0
 
 
@@ -341,23 +337,9 @@ def test_incomplete_search_cannot_be_promoted_to_grid_exhaustion(
         "examined_point_count": record["grid_point_count"],
         "global_consequence": "NOT_ESTABLISHED",
     }
-    submission["conclusion"] = "FALSE"
-    submission["completeness"] = "COMPLETE"
     support.rebind_evidence(app, submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["correctness"] == 0.0
-    assert result.reward == 0.0
-
-
-def test_false_verified_claim_is_rejected(tmp_path: Path) -> None:
-    task, app, logs, submission = canonical_case(
-        tmp_path, "symbolic-coordination-keller-only-01"
-    )
-    submission["claimed_assurance"] = "VERIFIED"
-    support.rebind_evidence(app, submission)
-    result = support.run_verifier(task, app, logs)
-    assert result.details["false_certification"] is True
-    assert result.details["assurance_calibration"] == 0.0
+    assert result.details["mathematics"] == 0.0
     assert result.reward == 0.0
 
 
@@ -368,8 +350,8 @@ def test_keller_certificate_cannot_claim_global_invertibility(tmp_path: Path) ->
     submission["result"]["certificate"]["global_invertibility"] = "PROVED"
     support.rebind_evidence(app, submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["protocol_compliance"] == 0.0
-    assert result.details["correctness"] == 0.0
+    assert result.details["protocol"] == 0.0
+    assert result.details["mathematics"] == 0.0
     assert result.reward == 0.0
 
 
@@ -380,7 +362,7 @@ def test_forged_collision_witness_is_rejected(tmp_path: Path) -> None:
     submission["result"]["certificate"]["common_image"][0]["num"] = "99"
     support.rebind_evidence(app, submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["correctness"] == 0.0
+    assert result.details["mathematics"] == 0.0
     assert result.reward == 0.0
 
 
@@ -388,10 +370,10 @@ def test_stale_evidence_digest_is_rejected(tmp_path: Path) -> None:
     task, app, logs, submission = canonical_case(
         tmp_path, "symbolic-coordination-semantic-equivalence-01"
     )
-    submission["evidence"][0]["sha256"] = "sha256:" + "f" * 64
+    submission["witness"][0]["sha256"] = "sha256:" + "f" * 64
     support.write_json(app / "submission.json", submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["evidence_validity"] == 0.0
+    assert result.details["witness_validity"] == 0.0
     assert result.reward == 0.0
 
 
@@ -399,10 +381,10 @@ def test_escaped_evidence_path_is_rejected(tmp_path: Path) -> None:
     task, app, logs, submission = canonical_case(
         tmp_path, "symbolic-coordination-semantic-equivalence-02"
     )
-    submission["evidence"][0]["path"] = "../certificate.json"
+    submission["witness"][0]["path"] = "../certificate.json"
     support.write_json(app / "submission.json", submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["evidence_validity"] == 0.0
+    assert result.details["witness_validity"] == 0.0
     assert result.reward == 0.0
 
 
@@ -415,10 +397,10 @@ def test_symlinked_evidence_is_rejected(tmp_path: Path) -> None:
     substitute.write_bytes(evidence.read_bytes())
     evidence.unlink()
     evidence.symlink_to(substitute)
-    submission["evidence"][0]["sha256"] = support.digest(substitute)
+    submission["witness"][0]["sha256"] = support.digest(substitute)
     support.write_json(app / "submission.json", submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["evidence_validity"] == 0.0
+    assert result.details["witness_validity"] == 0.0
     assert result.reward == 0.0
 
 
@@ -429,12 +411,12 @@ def test_substituted_evidence_object_is_rejected(tmp_path: Path) -> None:
     evidence = json.loads((app / "evidence/certificate.json").read_text())
     evidence["task_id"] = "jacobian/substituted-task"
     support.write_json(app / "evidence/certificate.json", evidence)
-    submission["evidence"][0]["sha256"] = support.digest(
+    submission["witness"][0]["sha256"] = support.digest(
         app / "evidence/certificate.json"
     )
     support.write_json(app / "submission.json", submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["evidence_validity"] == 0.0
+    assert result.details["witness_validity"] == 0.0
     assert result.reward == 0.0
 
 
@@ -450,7 +432,7 @@ def test_malformed_nested_exponents_fail_closed(
     ][0] = malformed
     support.rebind_evidence(app, submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["protocol"] == 0.0
     assert result.reward == 0.0
 
 
@@ -468,7 +450,7 @@ def test_unreduced_rational_coefficient_is_accepted(tmp_path: Path) -> None:
             }
     support.rebind_evidence(app, submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["correctness"] == 1.0
+    assert result.details["mathematics"] == 1.0
     assert result.reward == 1.0
 
 
@@ -491,22 +473,26 @@ def test_non_canonical_polynomial_is_accepted(tmp_path: Path) -> None:
     ]
     support.rebind_evidence(app, submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["correctness"] == 1.0
+    assert result.details["mathematics"] == 1.0
     assert result.reward == 1.0
 
 
-@pytest.mark.parametrize("assurance", ["UNVERIFIED", "COMPUTED"])
-def test_lower_assurance_levels_receive_credit(tmp_path: Path, assurance: str) -> None:
-    """Thread 6: scoreable assurances below CHECKED must receive credit."""
+def test_witness_result_binding_is_type_strict(tmp_path: Path) -> None:
     task, app, logs, submission = canonical_case(
         tmp_path, "symbolic-coordination-valid-inverse-01"
     )
-    submission["claimed_assurance"] = assurance
-    support.rebind_evidence(app, submission)
+    evidence_path = app / "evidence/certificate.json"
+    evidence = json.loads(evidence_path.read_text())
+    evidence["result"]["certificate"]["inverse_map"]["coordinates"][0]["terms"][0][
+        "exponents"
+    ][0] = True
+    support.write_json(evidence_path, evidence)
+    submission["witness"][0]["sha256"] = support.digest(evidence_path)
+    support.write_json(app / "submission.json", submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["protocol_compliance"] == 1.0
-    assert result.details["assurance_calibration"] == 1.0
-    assert result.reward == 1.0
+    assert result.details["mathematics"] == 1.0
+    assert result.details["witness_validity"] == 0.0
+    assert result.reward == 0.0
 
 
 @pytest.mark.parametrize("field", ["conclusion", "claimed_assurance", "completeness"])
@@ -519,7 +505,7 @@ def test_malformed_enum_field_does_not_crash(tmp_path: Path, field: str) -> None
     submission[field] = ["not", "a", "string"]
     support.write_json(app / "submission.json", submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["protocol_compliance"] == 0.0
+    assert result.details["protocol"] == 0.0
     assert result.reward == 0.0
 
 
@@ -533,8 +519,8 @@ def test_malformed_enum_field_does_not_crash(tmp_path: Path, field: str) -> None
 def test_collision_witness_in_timeout_case_is_accepted(
     tmp_path: Path, task_id: str
 ) -> None:
-    """Thread 2: an exact collision witness found during a timeout/incomplete
-    search must be accepted with collision-witness scope and limitations."""
+    """An exact collision witness is sufficient even after a non-terminal
+    bounded search record."""
     task, app, logs, submission = canonical_case(tmp_path, task_id)
     data = json.loads((app / "input.json").read_text())
     record = data["search_record"]
@@ -553,25 +539,17 @@ def test_collision_witness_in_timeout_case_is_accepted(
         "common_image": _point_json(image),
         "global_consequence": "MAP_NOT_INJECTIVE_OVER_QQ",
     }
-    submission["conclusion"] = "TRUE"
-    submission["completeness"] = "COMPLETE"
-    submission["limitations"] = ["NO_CLAIM_OUTSIDE_EXACT_COLLISION_WITNESS"]
     support.rebind_evidence(app, submission)
     result = support.run_verifier(task, app, logs)
-    assert result.details["correctness"] == 1.0
-    assert result.details["scope_accuracy"] == 1.0
+    assert result.details["mathematics"] == 1.0
     assert result.reward == 1.0
 
 
-def test_verdict_to_conclusion_mapping_is_documented() -> None:
-    """Thread 3: the verdict-to-conclusion mapping must appear in the
-    agent-visible instruction."""
+def test_semantic_verdict_is_documented_without_a_generic_conclusion() -> None:
     task_dir = DATASET / "symbolic-coordination-grid-exhausted-01"
     instruction = (task_dir / "instruction.md").read_text()
-    assert "NO_COLLISION_IN_DECLARED_GRID" in instruction
-    assert "`FALSE`" in instruction
-    assert "COLLISION_FOUND" in instruction
-    assert "`TRUE`" in instruction
+    assert "semantic field" in instruction
+    assert "generic conclusion" in instruction
 
 
 def test_evidence_wrapper_contract_is_documented() -> None:
@@ -583,8 +561,5 @@ def test_evidence_wrapper_contract_is_documented() -> None:
         "schema_version",
         "task_id",
         "result",
-        "scope",
-        "completeness",
-        "limitations",
     ):
         assert field in instruction

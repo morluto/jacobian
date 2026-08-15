@@ -1,1 +1,217 @@
-{"task_id":"jacobian/distinct-parity-primal-dual","conclusion":"OPTIMUM_CERTIFIED","result":{"even_numbers":[2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50],"odd_numbers":[1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59,61,63,65,67,69,71,79],"objective":384,"frontier":[{"odd_count":1,"max_even_count":44,"minimum_sum":1981,"objective":227},{"odd_count":3,"max_even_count":44,"minimum_sum":1989,"objective":241},{"odd_count":5,"max_even_count":44,"minimum_sum":2005,"objective":255},{"odd_count":7,"max_even_count":43,"minimum_sum":1941,"objective":264},{"odd_count":9,"max_even_count":43,"minimum_sum":1973,"objective":278},{"odd_count":11,"max_even_count":43,"minimum_sum":2013,"objective":292},{"odd_count":13,"max_even_count":42,"minimum_sum":1975,"objective":301},{"odd_count":15,"max_even_count":41,"minimum_sum":1947,"objective":310},{"odd_count":17,"max_even_count":41,"minimum_sum":2011,"objective":324},{"odd_count":19,"max_even_count":40,"minimum_sum":2001,"objective":333},{"odd_count":21,"max_even_count":39,"minimum_sum":2001,"objective":342},{"odd_count":23,"max_even_count":38,"minimum_sum":2011,"objective":351},{"odd_count":25,"max_even_count":36,"minimum_sum":1957,"objective":355},{"odd_count":27,"max_even_count":35,"minimum_sum":1989,"objective":364},{"odd_count":29,"max_even_count":33,"minimum_sum":1963,"objective":368},{"odd_count":31,"max_even_count":32,"minimum_sum":2017,"objective":377},{"odd_count":33,"max_even_count":30,"minimum_sum":2019,"objective":381},{"odd_count":35,"max_even_count":27,"minimum_sum":1981,"objective":380},{"odd_count":37,"max_even_count":25,"minimum_sum":2019,"objective":384},{"odd_count":39,"max_even_count":21,"minimum_sum":1983,"objective":378},{"odd_count":41,"max_even_count":18,"minimum_sum":2023,"objective":377},{"odd_count":43,"max_even_count":12,"minimum_sum":2005,"objective":361},{"odd_count":45,"max_even_count":0,"minimum_sum":2025,"objective":315}]},"claimed_assurance":"COMPUTED","scope":"ALL_DISTINCT_POSITIVE_PARITY_LISTS_SUMMING_TO_2025","completeness":"COMPLETE","evidence":[{"path":"evidence/distinct-parity-certificate.json","sha256":"sha256:6894e93a55035490fa4d1dd735ae780d0884e57ba114a6cebb76feda8815edba"}],"limitations":["FINITE_INTEGER_OPTIMIZATION","NO_PROOF_ASSISTANT_REPLAY"]}
+{
+  "result": {
+    "even_numbers": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16,
+      18,
+      20,
+      22,
+      24,
+      26,
+      28,
+      30,
+      32,
+      34,
+      36,
+      38,
+      40,
+      42,
+      44,
+      46,
+      48,
+      50
+    ],
+    "frontier": [
+      {
+        "max_even_count": 44,
+        "minimum_sum": 1981,
+        "objective": 227,
+        "odd_count": 1
+      },
+      {
+        "max_even_count": 44,
+        "minimum_sum": 1989,
+        "objective": 241,
+        "odd_count": 3
+      },
+      {
+        "max_even_count": 44,
+        "minimum_sum": 2005,
+        "objective": 255,
+        "odd_count": 5
+      },
+      {
+        "max_even_count": 43,
+        "minimum_sum": 1941,
+        "objective": 264,
+        "odd_count": 7
+      },
+      {
+        "max_even_count": 43,
+        "minimum_sum": 1973,
+        "objective": 278,
+        "odd_count": 9
+      },
+      {
+        "max_even_count": 43,
+        "minimum_sum": 2013,
+        "objective": 292,
+        "odd_count": 11
+      },
+      {
+        "max_even_count": 42,
+        "minimum_sum": 1975,
+        "objective": 301,
+        "odd_count": 13
+      },
+      {
+        "max_even_count": 41,
+        "minimum_sum": 1947,
+        "objective": 310,
+        "odd_count": 15
+      },
+      {
+        "max_even_count": 41,
+        "minimum_sum": 2011,
+        "objective": 324,
+        "odd_count": 17
+      },
+      {
+        "max_even_count": 40,
+        "minimum_sum": 2001,
+        "objective": 333,
+        "odd_count": 19
+      },
+      {
+        "max_even_count": 39,
+        "minimum_sum": 2001,
+        "objective": 342,
+        "odd_count": 21
+      },
+      {
+        "max_even_count": 38,
+        "minimum_sum": 2011,
+        "objective": 351,
+        "odd_count": 23
+      },
+      {
+        "max_even_count": 36,
+        "minimum_sum": 1957,
+        "objective": 355,
+        "odd_count": 25
+      },
+      {
+        "max_even_count": 35,
+        "minimum_sum": 1989,
+        "objective": 364,
+        "odd_count": 27
+      },
+      {
+        "max_even_count": 33,
+        "minimum_sum": 1963,
+        "objective": 368,
+        "odd_count": 29
+      },
+      {
+        "max_even_count": 32,
+        "minimum_sum": 2017,
+        "objective": 377,
+        "odd_count": 31
+      },
+      {
+        "max_even_count": 30,
+        "minimum_sum": 2019,
+        "objective": 381,
+        "odd_count": 33
+      },
+      {
+        "max_even_count": 27,
+        "minimum_sum": 1981,
+        "objective": 380,
+        "odd_count": 35
+      },
+      {
+        "max_even_count": 25,
+        "minimum_sum": 2019,
+        "objective": 384,
+        "odd_count": 37
+      },
+      {
+        "max_even_count": 21,
+        "minimum_sum": 1983,
+        "objective": 378,
+        "odd_count": 39
+      },
+      {
+        "max_even_count": 18,
+        "minimum_sum": 2023,
+        "objective": 377,
+        "odd_count": 41
+      },
+      {
+        "max_even_count": 12,
+        "minimum_sum": 2005,
+        "objective": 361,
+        "odd_count": 43
+      },
+      {
+        "max_even_count": 0,
+        "minimum_sum": 2025,
+        "objective": 315,
+        "odd_count": 45
+      }
+    ],
+    "objective": 384,
+    "odd_numbers": [
+      1,
+      3,
+      5,
+      7,
+      9,
+      11,
+      13,
+      15,
+      17,
+      19,
+      21,
+      23,
+      25,
+      27,
+      29,
+      31,
+      33,
+      35,
+      37,
+      39,
+      41,
+      43,
+      45,
+      47,
+      49,
+      51,
+      53,
+      55,
+      57,
+      59,
+      61,
+      63,
+      65,
+      67,
+      69,
+      71,
+      79
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/distinct-parity-certificate.json",
+      "sha256": "sha256:6894e93a55035490fa4d1dd735ae780d0884e57ba114a6cebb76feda8815edba"
+    }
+  ]
+}

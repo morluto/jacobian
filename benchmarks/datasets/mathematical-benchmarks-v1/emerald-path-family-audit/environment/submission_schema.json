@@ -2,47 +2,6 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
-    },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "conclusion": {
-      "const": "PUBLISHED_SINGLETON_CLASSIFICATION_IS_FALSE"
-    },
-    "evidence": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "const": "evidence/answer.txt"
-          },
-          "sha256": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "type": "object"
-      },
-      "maxItems": 1,
-      "minItems": 1,
-      "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "The certificate refutes the published singleton claim and proves sufficiency for its submitted family member; it does not independently prove necessity for every possible trip."
-      ]
-    },
     "result": {
       "additionalProperties": false,
       "properties": {
@@ -106,23 +65,32 @@
       ],
       "type": "object"
     },
-    "scope": {
-      "const": "PROOFBENCH_APMO_2025_2_CONSTRUCTIVE_SUFFICIENCY_AUDIT",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/emerald-path-family-audit"
+    "witness": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

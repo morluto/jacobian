@@ -1,1 +1,52 @@
-{"task_id":"jacobian/euler-fourth-power-scope-audit","conclusion":"FALSE","result":{"left_bases":[95800,217519,414560],"target_base":422481,"left_fourth_powers":[84229075969600000000,2238663363846304960321,29535857400192040960000],"left_sum":31858749840007945920321,"right_fourth_power":31858749840007945920321,"joint_gcd":1,"residue_checks":[{"modulus":5,"left_residue":1,"right_residue":1},{"modulus":7,"left_residue":4,"right_residue":4},{"modulus":11,"left_residue":3,"right_residue":3},{"modulus":13,"left_residue":9,"right_residue":9},{"modulus":17,"left_residue":13,"right_residue":13}],"claim_status":"REFUTED_BY_COUNTEREXAMPLE"},"claimed_assurance":"COMPUTED","scope":"the frozen three-summand fourth-power claim only","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:5d2d19208d959800b4ff1327b000e3e9fffaa63da49d6d5b25cbb91b2f0856ce"}],"limitations":["The witness proves neither minimality nor claims about other exponents or numbers of summands."]}
+{
+  "result": {
+    "claim_status": "REFUTED_BY_COUNTEREXAMPLE",
+    "joint_gcd": 1,
+    "left_bases": [
+      95800,
+      217519,
+      414560
+    ],
+    "left_fourth_powers": [
+      84229075969600000000,
+      2238663363846304960321,
+      29535857400192040960000
+    ],
+    "left_sum": 31858749840007945920321,
+    "residue_checks": [
+      {
+        "left_residue": 1,
+        "modulus": 5,
+        "right_residue": 1
+      },
+      {
+        "left_residue": 4,
+        "modulus": 7,
+        "right_residue": 4
+      },
+      {
+        "left_residue": 3,
+        "modulus": 11,
+        "right_residue": 3
+      },
+      {
+        "left_residue": 9,
+        "modulus": 13,
+        "right_residue": 9
+      },
+      {
+        "left_residue": 13,
+        "modulus": 17,
+        "right_residue": 13
+      }
+    ],
+    "right_fourth_power": 31858749840007945920321,
+    "target_base": 422481
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:5d2d19208d959800b4ff1327b000e3e9fffaa63da49d6d5b25cbb91b2f0856ce"
+    }
+  ]
+}

@@ -7,11 +7,6 @@ from fractions import Fraction
 from pathlib import Path
 
 TASK_ID = "jacobian/yang-mills-gauge-invariance-certificate"
-LIMITATIONS = [
-    "ONE_FINITE_RATIONAL_SU2_PLAQUETTE",
-    "NO_CONTINUUM_YANG_MILLS_CONSTRUCTION",
-    "NO_MASS_GAP_CONCLUSION",
-]
 
 
 def mul(a, b):
@@ -75,25 +70,18 @@ def main():
         "schema_version": "1",
         "task_id": TASK_ID,
         "result": result,
-        "limitations": LIMITATIONS,
     }
     e = root / "evidence/answer.txt"
     e.parent.mkdir(parents=True, exist_ok=True)
     e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
     s = {
-        "task_id": TASK_ID,
-        "conclusion": "FINITE_SU2_PLAQUETTE_GAUGE_INVARIANCE",
         "result": result,
-        "claimed_assurance": "CHECKED",
-        "scope": "one-rational-su2-plaquette-v1",
-        "completeness": "COMPLETE",
-        "evidence": [
+        "witness": [
             {
                 "path": "evidence/answer.txt",
                 "sha256": "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest(),
             }
         ],
-        "limitations": LIMITATIONS,
     }
     (root / "submission.json").write_text(json.dumps(s, sort_keys=True) + "\n")
 

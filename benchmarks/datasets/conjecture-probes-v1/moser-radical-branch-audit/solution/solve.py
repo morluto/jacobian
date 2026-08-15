@@ -7,11 +7,6 @@ from fractions import Fraction
 from pathlib import Path
 
 TASK_ID = "jacobian/moser-radical-branch-audit"
-LIMITATIONS = [
-    "ONE_EXACT_MOSER_SPINDLE_EMBEDDING",
-    "RADICAL_RELATIONS_REPLAYED_IN_Q_SQRT_33",
-    "NO_PLANE_CHROMATIC_NUMBER_DETERMINATION",
-]
 X = [
     (Fraction(1, 2), 0),
     (Fraction(-1, 2), 0),
@@ -113,7 +108,6 @@ def main() -> None:
         "schema_version": "1",
         "task_id": TASK_ID,
         "result": result,
-        "limitations": LIMITATIONS,
     }
     evidence = root / "evidence/answer.json"
     evidence.parent.mkdir(parents=True, exist_ok=True)
@@ -121,19 +115,13 @@ def main() -> None:
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
     )
     submission = {
-        "task_id": TASK_ID,
-        "conclusion": "MOSER_RADICAL_BRANCH_REPAIRED",
         "result": result,
-        "claimed_assurance": "CHECKED",
-        "scope": "moser-spindle-radical-sign-repair-v1",
-        "completeness": "COMPLETE",
-        "evidence": [
+        "witness": [
             {
                 "path": "evidence/answer.json",
                 "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
             }
         ],
-        "limitations": LIMITATIONS,
     }
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 

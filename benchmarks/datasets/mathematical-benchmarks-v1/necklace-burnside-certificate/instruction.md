@@ -10,22 +10,16 @@ Submit a complete certificate by writing `/app/submission.json` conforming to `s
 4. `burnside_numerator` and `orbit_count`; and
 5. `canonical_representatives`: the sorted list of the lexicographically least representative of every orbit.
 
-All count fields must be JSON integers (not booleans or floats). The evidence file `evidence/answer.txt` must be a single JSON object with exactly the keys `schema_version` (the string `"1"`), `task_id` (the task identifier), `result` (the same `result` object placed in `submission.json`), and `limitations` (the same limitations list). Bind it in `submission.json` under `evidence` with its `path` and `sha256` digest.
+All count fields must be JSON integers (not booleans or floats). The witness file `evidence/answer.txt` must be a single JSON object with exactly the keys `schema_version` (the string `"1"`), `task_id` (the task identifier), and `result` (the same result object placed in `submission.json`). Bind it in `submission.json` under `witness` with its `path` and `sha256` digest.
 
-The verifier independently enumerates all 65,536 binary words, applies the cyclic constraint, reconstructs every dihedral action, recomputes the fixed-point table, and compares the complete orbit partition. A count without the representatives is incomplete. Claim only `COMPUTED`; this is an exact finite replay, not a proof of a general necklace theorem.
+The verifier independently enumerates all 65,536 binary words, applies the cyclic constraint, reconstructs every dihedral action, recomputes the fixed-point table, and compares the complete orbit partition. A count without the representatives is incomplete; this is an exact finite replay, not a proof of a general necklace theorem.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 
-- **Conclusion:** exactly `DIHEDRAL_ORBITS_ENUMERATED`
-- **Assurance:** scoreable values are `COMPUTED` (ceiling `COMPUTED`); the submission schema accepts any of `UNVERIFIED`, `COMPUTED`, `CHECKED`, `VERIFIED` but only scoreable assurances receive credit.
-- **Scope:** the exact value declared in `submission_schema.json`
-- **Completeness:** `COMPLETE`.
-- **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
-- **Evidence media types:** `text/plain`.
-- **Required artifact filenames:** `evidence/answer.txt`.
+- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

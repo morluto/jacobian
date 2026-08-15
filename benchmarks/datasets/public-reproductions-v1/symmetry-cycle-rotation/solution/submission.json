@@ -1,1 +1,38 @@
-{"task_id":"jacobian/symmetry-cycle-rotation","conclusion":"TRUE","result":{"vertex_orbits":[["a","b","c","d"]],"edge_orbits":[[["a","b"],["a","d"],["b","c"],["c","d"]]]},"claimed_assurance":"COMPUTED","scope":"jacobian/symmetry-cycle-rotation complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:8e14efaaf2948d40d7d11d890c04edb9c79c6ae8db744894e02a3381be654e09"}],"limitations":[]}
+{
+  "result": {
+    "edge_orbits": [
+      [
+        [
+          "a",
+          "b"
+        ],
+        [
+          "a",
+          "d"
+        ],
+        [
+          "b",
+          "c"
+        ],
+        [
+          "c",
+          "d"
+        ]
+      ]
+    ],
+    "vertex_orbits": [
+      [
+        "a",
+        "b",
+        "c",
+        "d"
+      ]
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:8e14efaaf2948d40d7d11d890c04edb9c79c6ae8db744894e02a3381be654e09"
+    }
+  ]
+}

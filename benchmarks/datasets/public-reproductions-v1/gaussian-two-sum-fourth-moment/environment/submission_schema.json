@@ -1,110 +1,84 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": [
-    "task_id",
-    "conclusion",
-    "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
-  ],
   "properties": {
-    "task_id": {
-      "const": "jacobian/gaussian-two-sum-fourth-moment"
-    },
-    "conclusion": {
-      "const": "TRUE"
-    },
     "result": {
-      "type": "object",
       "additionalProperties": false,
-      "required": [
-        "moment"
-      ],
       "properties": {
         "moment": {
-          "type": "object",
           "additionalProperties": false,
+          "properties": {
+            "imaginary": {
+              "additionalProperties": false,
+              "properties": {
+                "den": {
+                  "type": "string"
+                },
+                "num": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "num",
+                "den"
+              ],
+              "type": "object"
+            },
+            "real": {
+              "additionalProperties": false,
+              "properties": {
+                "den": {
+                  "type": "string"
+                },
+                "num": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "num",
+                "den"
+              ],
+              "type": "object"
+            }
+          },
           "required": [
             "real",
             "imaginary"
           ],
-          "properties": {
-            "real": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "num",
-                "den"
-              ],
-              "properties": {
-                "num": {
-                  "type": "string"
-                },
-                "den": {
-                  "type": "string"
-                }
-              }
-            },
-            "imaginary": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "num",
-                "den"
-              ],
-              "properties": {
-                "num": {
-                  "type": "string"
-                },
-                "den": {
-                  "type": "string"
-                }
-              }
-            }
-          }
+          "type": "object"
         }
-      }
+      },
+      "required": [
+        "moment"
+      ],
+      "type": "object"
     },
-    "claimed_assurance": {
-      "enum": ["UNVERIFIED","COMPUTED"]
-    },
-    "scope": {
-      "const": "jacobian/gaussian-two-sum-fourth-moment complete finite input"
-    },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "evidence": {
-      "type": "array",
-      "minItems": 1,"maxItems":1,
+    "witness": {
       "items": {
-        "type": "object",
         "additionalProperties": false,
-        "required": [
-          "path",
-          "sha256"
-        ],
         "properties": {
           "path": {
             "const": "evidence/answer.txt"
           },
           "sha256": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
           }
-        }
-      }
-    },
-    "limitations": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
     }
-  }
+  },
+  "required": [
+    "result",
+    "witness"
+  ],
+  "type": "object"
 }

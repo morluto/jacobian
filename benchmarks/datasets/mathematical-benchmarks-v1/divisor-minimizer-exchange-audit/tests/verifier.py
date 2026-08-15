@@ -2,15 +2,10 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    strict_submission_contract,
 )
 
-T = Path("/tests")
 PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41]
 
 
@@ -101,54 +96,19 @@ def result_valid(result: object) -> bool:
     )
 
 
-def evidence_valid(value: object) -> bool:
-    if not evidence_list_is_bound(value):
-        return False
-    target = resolve_evidence(value[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text().lower()
-    except (OSError, UnicodeError):
-        return False
-    return len(text.split()) >= 55 and all(
-        term in text
-        for term in ("partition", "exponent", "prime", "minimal", "divides")
-    )
-
-
 def main() -> None:
-    expected = json.loads((T / "expected.json").read_text())
     submission = load_submission()
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
-    math_ok = bool(contract and result_valid(submission.get("result")))
-    evidence_ok = bool(contract and evidence_valid(submission.get("evidence")))
-    scope_ok = bool(contract and submission.get("scope") == expected["required_scope"])
-    assurance_ok = bool(contract and submission.get("claimed_assurance") == "COMPUTED")
-    false = false_verified_claim(submission, verification_record_bound=False)
-    correct = math_ok and not false
-    reward = (
-        0.0
-        if not correct or not evidence_ok
-        else 0.8 + 0.1 * scope_ok + 0.1 * assurance_ok
-    )
+    result = submission.get("result") if isinstance(submission, dict) else None
+    math_ok = result_valid(result)
+    correct = bool(math_ok)
+    reward = float(correct)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
                 "reward": reward,
-                "false_certification": false,
             }
         )
     )

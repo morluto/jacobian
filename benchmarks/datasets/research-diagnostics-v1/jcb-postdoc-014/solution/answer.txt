@@ -1,4 +1,0 @@
-Nine-line counterexample to combinatorial determination of Jacobian-relation degree
-
-Expected conclusion: DISPROVED.
-Oracle summary: Both arrangements have non-double flats exactly as listed and weak combinatorics (n2,n3,n4)=(9,7,1). The graded maps Phi_h,q:(Q[x,y,z]_q)^3 -> Q[x,y,z]_(q+8) are injective through q=3 for both; Phi_f,4 has one-dimensional kernel while Phi_g,4 is injective and Phi_g,5 has four-dimensional kernel. Thus mdr(f)=4 and mdr(g)=5.

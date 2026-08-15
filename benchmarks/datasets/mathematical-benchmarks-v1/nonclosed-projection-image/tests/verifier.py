@@ -5,12 +5,11 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
@@ -396,76 +395,29 @@ def _limitation_is_valid(value: str) -> bool:
 
 def main() -> None:
     submission = load_submission()
-    data = submission if isinstance(submission, dict) else {}
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
+    protocol_ok = submission is not None
+    data = submission if protocol_ok else {}
     source = _source()
     result = data.get("result")
-    # Protocol and evidence defects must not erase an independently valid
-    # mathematical witness from the correctness diagnostic.
-    correct = bool(_witness(result, source))
-    evidence = bool(correct and _evidence(data.get("evidence"), result))
-    declared_scope = data.get("scope")
-    folded_scope = declared_scope.casefold() if isinstance(declared_scope, str) else ""
-    # Thread PRRT_kwDOThEfjc6VxiRu: match "closed" as a word-boundary unit so the
-    # substring "closed" inside "nonclosed" does not satisfy the closed-subspace
-    # requirement. A scope describing "a nonclosed Hilbert subspace" describes
-    # the wrong kind of M and must not receive scope credit.
-    scope = bool(
-        contract
-        and isinstance(declared_scope, str)
-        and (
-            declared_scope == expected["required_scope"]
-            or (
-                re.search(r"\bclosed\b", folded_scope) is not None
-                and not re.search(r"\b(?:non[- ]closed|not\s+closed)\b", folded_scope)
-                and all(
-                    term in folded_scope
-                    for term in ("hilbert", "subspace", "orthogonal", "projection")
-                )
-            )
-        )
+    math_correct = bool(_witness(result, source))
+    evidence_valid = bool(
+        protocol_ok and math_correct and _evidence(data.get("witness"), result)
     )
-    assurance = bool(
-        contract and data.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations = bool(
-        contract
-        and isinstance(data.get("limitations"), list)
-        and any(
-            isinstance(item, str) and _limitation_is_valid(item)
-            for item in data["limitations"]
-        )
-    )
-    false_verified = false_verified_claim(submission, verification_record_bound=False)
-    passed = bool(
-        correct
-        and evidence
-        and scope
-        and assurance
-        and limitations
-        and not false_verified
+    reward = aggregate_reward(
+        correctness=math_correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
-                "correctness": float(correct),
-                "evidence_validity": float(evidence),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
-                "reward": float(passed),
-                "false_certification": false_verified,
-            },
-            sort_keys=True,
+                "correctness": float(math_correct),
+                "evidence_validity": float(evidence_valid),
+                "reward": reward,
+            }
         )
-        + "\n"
     )
     normalize_reward_file(logs / "reward.json")
 

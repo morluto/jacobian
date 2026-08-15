@@ -30,14 +30,13 @@ def _write(app: Path, submission: dict) -> None:
     evidence = app / "evidence/answer.txt"
     payload = {
         "schema_version": "1",
-        "task_id": submission["task_id"],
+        "task_id": "jacobian/happy-ending-convex-position",
         "result": submission["result"],
-        "limitations": submission["limitations"],
     }
     evidence.write_text(
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
     )
-    submission["evidence"][0]["sha256"] = (
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
     )
     (app / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
@@ -75,20 +74,6 @@ def test_wrong_count_and_nonmaximum_witness_fail(tmp_path: Path) -> None:
     assert _run(app, logs).details["aggregate_reward"] == 0.0
 
 
-def test_scope_and_false_certification_fail_closed(tmp_path: Path) -> None:
-    app, logs, submission = _case(tmp_path)
-    submission["scope"] = "general-happy-ending-conjecture"
-    _write(app, submission)
-    assert _run(app, logs).details["aggregate_reward"] == 0.0
-
-    app, logs, submission = _case(tmp_path / "verified")
-    submission["claimed_assurance"] = "VERIFIED"
-    _write(app, submission)
-    reward = _run(app, logs)
-    assert reward.details["false_certification"] is True
-    assert reward.details["aggregate_reward"] == 0.0
-
-
 def test_input_and_evidence_tampering_fail_closed(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
     frozen = json.loads((app / "input.json").read_text())
@@ -100,5 +85,5 @@ def test_input_and_evidence_tampering_fail_closed(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path / "evidence")
     (app / "evidence/answer.txt").write_text("{}\n")
     reward = _run(app, logs)
-    assert reward.details["evidence"] == 0.0
+    assert reward.details["witness_validity"] == 0.0
     assert reward.details["aggregate_reward"] == 0.0

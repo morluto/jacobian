@@ -7,8 +7,7 @@ Assess one exact polynomial-map claim in the valid-two-sided-inverse pilot famil
 - family: `valid-two-sided-inverse`
 - case version: `symbolic-coordination-v1/pilot-1`
 - generator: `symbolic-coordination-pilot-generator@1`
-- fixture digest: `sha256:9d452ad5e4cbf4bfcc74fda9deb8a857222dec7ab21a3ea64e3aec59ba34327e`
-- assurance ceiling: `CHECKED`
+- fixture digest: `sha256:7e842ccd456a5d059b344dd0961062b6719a837a97098a40704f8d9513645a1c`
 - note: Linear inverse with rational coefficients.
 
 ## Verification boundary
@@ -16,5 +15,5 @@ Assess one exact polynomial-map claim in the valid-two-sided-inverse pilot famil
 The task is offline and solvable without Jacobian. The instruction names no
 operation or tool order. The task-local clean-room verifier imports neither
 Jacobian nor the generator; it replays exact rational polynomial arithmetic,
-scope, input and artifact bindings, evidence digest, and assurance. `VERIFIED`
-is unauthorized in this pilot and receives zero reward.
+input and artifact bindings, and the witness digest. Reward is binary: the
+replayed mathematical predicate and every required binding must hold.

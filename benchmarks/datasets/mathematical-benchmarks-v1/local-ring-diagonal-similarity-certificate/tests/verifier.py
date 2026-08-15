@@ -5,39 +5,19 @@ from pathlib import Path
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    aggregate_reward,
-    false_verified_claim,
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
 W, T = Path("/app"), Path("/tests")
-LIMITATION = "The verifier certifies only the frozen matrix certificate, not the general local-ring theorem."
+LIMITATION_ID = "FROZEN_LOCAL_RING_CERTIFICATE_ONLY"
 
 
 def _limitations_valid(value: object) -> bool:
-    if not (isinstance(value, list) and len(value) == 1 and isinstance(value[0], str)):
-        return False
-    text = value[0].casefold()
-    return (
-        any(
-            term in text
-            for term in (
-                "frozen",
-                "six-dimensional",
-                "6-dimensional",
-                "matrix certificate",
-            )
-        )
-        and any(
-            term in text for term in ("local-ring", "local ring", "general theorem")
-        )
-        and any(term in text for term in ("not general", "not the general", "only"))
-    )
+    return value == [LIMITATION_ID]
 
 
 # The published prose obligation is structural, not verbatim: the explanation
@@ -229,51 +209,23 @@ def raw_submission():
 
 def main():
     raw = raw_submission()
-    e = json.loads((T / "expected.json").read_text())
     d = json.loads((T / "input.json").read_text())
     input_binding = workspace_input_is_bound()
     s = load_submission(W / "submission.json", require_input_binding=False)
-    c = strict_submission_contract(
-        s,
-        task_id=e["task_id"],
-        conclusion=e["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
+    protocol_ok = isinstance(s, dict)
     # Mathematical correctness and evidence are evaluated from the bounded raw
-    # payload so a malformed non-result field cannot erase them; protocol and
-    # scope remain tied to the schema-valid envelope.
+    # payload so a malformed non-result field cannot erase them.
     r = raw.get("result") if isinstance(raw, dict) else None
     m = valid(r, d)
-    ev = bool(isinstance(raw, dict) and evidence_ok(raw.get("evidence")))
-    a = bool(isinstance(raw, dict) and raw.get("claimed_assurance") == "COMPUTED")
-    sc = bool(
-        isinstance(s, dict)
-        and s.get("scope") == "frozen-six-dimensional-Z-mod-125-certificate"
-        and s.get("completeness") == "COMPLETE"
-        and _limitations_valid(s.get("limitations"))
-    )
-    f = false_verified_claim(raw, verification_record_bound=False)
+    ev = bool(isinstance(raw, dict) and evidence_ok(raw.get("witness")))
+    correct = bool(input_binding and protocol_ok and m and ev)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
-                "protocol_compliance": float(bool(c)),
-                "input_binding": float(input_binding),
                 "correctness": float(m),
                 "evidence_validity": float(ev),
-                "scope_accuracy": float(sc),
-                "assurance_calibration": float(a),
-                "reward": aggregate_reward(
-                    correctness=m,
-                    evidence_validity=ev,
-                    scope_accuracy=sc,
-                    assurance_calibration=a,
-                    false_certification=f,
-                    protocol_ok=bool(c and input_binding),
-                    soft_assurance=True,
-                ),
-                "false_certification": f,
+                "reward": float(correct),
             }
         )
     )

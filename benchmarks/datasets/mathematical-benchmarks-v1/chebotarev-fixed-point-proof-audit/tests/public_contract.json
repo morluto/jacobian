@@ -1,21 +1,4 @@
 {
-  "allowed_assurance": [
-    "UNVERIFIED",
-    "COMPUTED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE",
-    "PARTIAL",
-    "UNKNOWN"
-  ],
-  "assurance_ceiling": "COMPUTED",
-  "conclusion": {
-    "enum": [
-      "PUBLISHED_SOLUTION_CONTAINS_MULTIPLE_FATAL_ERRORS",
-      "PUBLISHED_SOLUTION_CORRECT",
-      "INSUFFICIENT_EVIDENCE"
-    ]
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/chebotarev-audit.json"
@@ -28,13 +11,7 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "limitations": {
-    "const": [
-      "S4_CLASSIFICATION_NOT_REPROVED",
-      "CHEBOTAREV_THEOREM_TRUSTED"
-    ]
-  },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.",
   "required_artifact_filenames": [
     "evidence/chebotarev-audit.json"
   ],
@@ -69,33 +46,6 @@
         "class_size",
         "fixed_points",
         "contributes"
-      ],
-      "type": "object"
-    },
-    "evidence_envelope": {
-      "additionalProperties": false,
-      "properties": {
-        "limitations": {
-          "const": [
-            "S4_CLASSIFICATION_NOT_REPROVED",
-            "CHEBOTAREV_THEOREM_TRUSTED"
-          ]
-        },
-        "result": {
-          "$ref": "#/$defs/result"
-        },
-        "schema_version": {
-          "const": "1"
-        },
-        "task_id": {
-          "const": "jacobian/chebotarev-fixed-point-proof-audit"
-        }
-      },
-      "required": [
-        "schema_version",
-        "task_id",
-        "result",
-        "limitations"
       ],
       "type": "object"
     },
@@ -169,12 +119,6 @@
     }
   },
   "schema_version": "1",
-  "scope": {
-    "const": "CONDITIONAL_ON_FROZEN_S4_PREMISE",
-    "enum": null,
-    "pattern": null,
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
     "$ref": "#/$defs/result"
@@ -211,33 +155,6 @@
           "class_size",
           "fixed_points",
           "contributes"
-        ],
-        "type": "object"
-      },
-      "evidence_envelope": {
-        "additionalProperties": false,
-        "properties": {
-          "limitations": {
-            "const": [
-              "S4_CLASSIFICATION_NOT_REPROVED",
-              "CHEBOTAREV_THEOREM_TRUSTED"
-            ]
-          },
-          "result": {
-            "$ref": "#/$defs/result"
-          },
-          "schema_version": {
-            "const": "1"
-          },
-          "task_id": {
-            "const": "jacobian/chebotarev-fixed-point-proof-audit"
-          }
-        },
-        "required": [
-          "schema_version",
-          "task_id",
-          "result",
-          "limitations"
         ],
         "type": "object"
       },
@@ -313,29 +230,10 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
+      "result": {
+        "$ref": "#/$defs/result"
       },
-      "completeness": {
-        "enum": [
-          "COMPLETE",
-          "PARTIAL",
-          "UNKNOWN"
-        ]
-      },
-      "conclusion": {
-        "enum": [
-          "PUBLISHED_SOLUTION_CONTAINS_MULTIPLE_FATAL_ERRORS",
-          "PUBLISHED_SOLUTION_CORRECT",
-          "INSUFFICIENT_EVIDENCE"
-        ]
-      },
-      "evidence": {
+      "witness": {
         "items": {
           "additionalProperties": false,
           "properties": {
@@ -356,36 +254,13 @@
         "maxItems": 1,
         "minItems": 1,
         "type": "array"
-      },
-      "limitations": {
-        "const": [
-          "S4_CLASSIFICATION_NOT_REPROVED",
-          "CHEBOTAREV_THEOREM_TRUSTED"
-        ]
-      },
-      "result": {
-        "$ref": "#/$defs/result"
-      },
-      "scope": {
-        "const": "CONDITIONAL_ON_FROZEN_S4_PREMISE",
-        "type": "string"
-      },
-      "task_id": {
-        "const": "jacobian/chebotarev-fixed-point-proof-audit"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
   },
-  "task_id": "jacobian/chebotarev-fixed-point-proof-audit",
-  "verification_record": null
+  "task_id": "jacobian/chebotarev-fixed-point-proof-audit"
 }

@@ -1,7 +1,7 @@
 {
   "task_id": "jacobian/vizing-bounded-cartesian-products",
   "conclusion": "VIZING_BOUNDED_PROBE",
-  "maximum_assurance": "CHECKED",
+  "maximum_assurance": "COMPUTED",
   "required_scope_terms": [
     "vizing-bounded-cartesian-products:graphs-v1:pairs-v1"
   ]

@@ -31,23 +31,3 @@ def test_fraction_rejects_nonfinite_and_unbounded_values():
     assert loaded.fraction(float("inf")) is None
     assert loaded.fraction("1e1000000000") is None
     assert loaded.fraction("1" * 129) is None
-
-
-def test_scope_accepts_equivalent_marked_index_ordering():
-    loaded = module()
-    instance = loaded.load_instance()
-    assert loaded.scope_is_correct(
-        "A cyclic sequence on the frozen 60-cycle has marked positions "
-        "60, 48, 36, 24, and 12.",
-        instance,
-    )
-
-
-def test_scope_rejects_wrong_marked_indices():
-    loaded = module()
-    instance = loaded.load_instance()
-    assert not loaded.scope_is_correct(
-        "A cyclic sequence on the frozen 60-cycle has marked positions "
-        "12, 24, 36, 48, and 59.",
-        instance,
-    )

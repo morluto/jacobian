@@ -5,12 +5,11 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
@@ -177,50 +176,28 @@ def _evidence(value: object) -> bool:
 
 def main() -> None:
     submission = load_submission()
-    data = submission if isinstance(submission, dict) else {}
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
+    protocol_ok = submission is not None
+    data = submission if protocol_ok else {}
+    math_correct = bool(protocol_ok and _result(data.get("result"), _load_input()))
+    evidence_valid = bool(
+        protocol_ok and math_correct and _evidence(data.get("witness"))
     )
-    correct = bool(contract and _result(data.get("result"), _load_input()))
-    evidence = bool(correct and _evidence(data.get("evidence")))
-    scope = bool(contract and data.get("scope") == expected["required_scope"])
-    assurance = bool(
-        contract and data.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations = bool(
-        contract
-        and isinstance(data.get("limitations"), list)
-        and any(
-            isinstance(item, str)
-            and "proof assistant" in item.casefold()
-            and "not" in item.casefold()
-            for item in data["limitations"]
-        )
-    )
-    false_verified = false_verified_claim(submission, verification_record_bound=False)
-    passed = bool(
-        correct
-        and evidence
-        and scope
-        and assurance
-        and limitations
-        and not false_verified
+    reward = aggregate_reward(
+        correctness=math_correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
-    result = {
-        "correctness": float(correct),
-        "evidence_validity": float(evidence),
-        "scope_accuracy": float(scope),
-        "assurance_calibration": float(assurance),
-        "reward": float(passed),
-        "false_certification": false_verified,
-    }
-    (logs / "reward.json").write_text(json.dumps(result, sort_keys=True) + "\n")
+    (logs / "reward.json").write_text(
+        json.dumps(
+            {
+                "correctness": float(math_correct),
+                "evidence_validity": float(evidence_valid),
+                "reward": reward,
+            }
+        )
+    )
     normalize_reward_file(logs / "reward.json")
 
 

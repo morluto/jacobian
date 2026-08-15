@@ -2,65 +2,19 @@ from __future__ import annotations
 
 import json
 import math
-import sys
-from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    false_verified_claim,
-    is_regular_bounded_file,
+    json_value_equal,
+    load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    strict_submission_contract,
+    read_evidence_json,
     workspace_input_is_bound,
 )
 
 WORKSPACE, TESTS = Path("/app"), Path("/tests")
 EVIDENCE_PATH = "evidence/divisibility-audit.json"
-LIMITATION = "The countermodel refutes the frozen divisibility inference; it does not adjudicate the source theorem."
-# Keep exponent-form integers within Python's default raw-integer parsing ceiling.
-MAX_INTEGER_DIGITS = sys.int_info.default_max_str_digits
-
-
-class _JsonFloat(float):
-    """Preserve a JSON decimal token while remaining schema-compatible."""
-
-    def __new__(cls, value: str) -> _JsonFloat:
-        instance = super().__new__(cls, value)
-        instance.lexeme = value
-        return instance
-
-
-def _bounded_json_float(value: str) -> int | _JsonFloat:
-    try:
-        exact = Decimal(value)
-    except InvalidOperation as error:
-        raise ValueError(f"invalid JSON number: {value}") from error
-    if not exact.is_finite() or (exact != 0 and exact.adjusted() >= MAX_INTEGER_DIGITS):
-        raise ValueError(f"out-of-range JSON number: {value}")
-    if exact == exact.to_integral_value():
-        return int(exact)
-    parsed = _JsonFloat(value)
-    if not math.isfinite(parsed):
-        raise ValueError(f"out-of-range JSON number: {value}")
-    return parsed
-
-
-def _reject_nonfinite_json(value: str) -> None:
-    raise ValueError(f"non-finite JSON number: {value}")
-
-
-def _read_untrusted_json(path: Path) -> object | None:
-    try:
-        return json.loads(
-            path.read_text(),
-            parse_float=_bounded_json_float,
-            parse_constant=_reject_nonfinite_json,
-        )
-    except (OSError, ValueError, RecursionError, MemoryError):
-        return None
 
 
 def _frozen() -> dict[str, Any]:
@@ -71,35 +25,12 @@ def _frozen() -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _submission() -> dict[str, Any] | None:
-    path = WORKSPACE / "submission.json"
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    value = _read_untrusted_json(path)
-    return value if isinstance(value, dict) else None
-
-
 def _integer(
     value: object, *, minimum: int | None = None, maximum: int | None = None
 ) -> int | None:
-    if type(value) is int:
-        integer = value
-    if isinstance(value, _JsonFloat):
-        try:
-            exact = Decimal(value.lexeme)
-        except InvalidOperation:
-            return None
-        if (
-            not exact.is_finite()
-            or exact != exact.to_integral_value()
-            or (exact != 0 and exact.adjusted() >= MAX_INTEGER_DIGITS)
-            or (minimum is not None and exact < minimum)
-            or (maximum is not None and exact > maximum)
-        ):
-            return None
-        integer = int(exact)
-    elif type(value) is not int:
+    if type(value) is not int:
         return None
+    integer = value
     if minimum is not None and integer < minimum:
         return None
     if maximum is not None and integer > maximum:
@@ -204,73 +135,41 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     )
 
 
-def _evidence(submission: dict[str, Any], *, expected_task_id: str) -> bool:
-    evidence = submission.get("evidence")
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    evidence_path = resolve_evidence(evidence[0], expected_path=EVIDENCE_PATH)
-    if evidence_path is None:
-        return False
-    payload = _read_untrusted_json(evidence_path)
+def _witness(submission: dict[str, Any], *, expected_task_id: str) -> bool:
+    witness = submission.get("witness")
+    payload = (
+        read_evidence_json(witness[0], expected_path=EVIDENCE_PATH)
+        if isinstance(witness, list) and len(witness) == 1
+        else None
+    )
     return bool(
         isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
+        and set(payload) == {"schema_version", "task_id", "result"}
         and payload["schema_version"] == "1"
         and payload["task_id"] == expected_task_id
-        and payload["task_id"] == submission.get("task_id")
-        and json.dumps(payload["result"], sort_keys=True, separators=(",", ":"))
-        == json.dumps(submission.get("result"), sort_keys=True, separators=(",", ":"))
-        and json.dumps(payload["limitations"], separators=(",", ":"))
-        == json.dumps(submission.get("limitations"), separators=(",", ":"))
+        and json_value_equal(payload["result"], submission.get("result"))
     )
 
 
 def main() -> None:
-    submission = _submission()
+    submission = load_submission(WORKSPACE / "submission.json")
     data = submission if isinstance(submission, dict) else {}
     input_bound = workspace_input_is_bound()
     expected = json.loads((TESTS / "expected.json").read_text())
-    envelope_valid = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
-    limitations_correct = data.get("limitations") == [LIMITATION]
-    contract = bool(envelope_valid and limitations_correct)
+    contract = bool(submission)
     math_correct = _result(data.get("result"), _frozen())
-    evidence_valid = _evidence(data, expected_task_id=expected["task_id"])
-    scope_correct = data.get("scope") == expected["required_scope"]
-    assurance_correct = bool(
-        data.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(
-        input_bound
-        and contract
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and limitations_correct
-        and not false_certification
-    )
+    evidence_valid = _witness(data, expected_task_id=expected["task_id"])
+    correct = bool(input_bound and contract and math_correct and evidence_valid)
     out = Path("/logs/verifier")
     out.mkdir(parents=True, exist_ok=True)
     (out / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
+                "witness_validity": float(evidence_valid),
                 "input_binding": float(input_bound),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
                 "protocol_compliance": float(contract),
-                "limitations_accuracy": float(limitations_correct),
                 "reward": float(correct),
-                "false_certification": false_certification,
             }
         )
     )

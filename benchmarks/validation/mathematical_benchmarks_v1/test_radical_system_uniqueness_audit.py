@@ -8,14 +8,11 @@ TASK = Path(
 )
 
 
-def test_public_schema_exposes_coefficient_order_and_scope() -> None:
+def test_public_schema_exposes_coefficient_order() -> None:
     schema = json.loads((TASK / "environment/submission_schema.json").read_text())
     properties = schema["properties"]
 
-    assert properties["scope"] == {
-        "const": "Complete real solution set under principal-root semantics.",
-        "type": "string",
-    }
+    assert "scope" not in properties
     coefficient_schema = properties["result"]["properties"]["elimination_coefficients"]
     assert "ascending power order" in coefficient_schema["description"]
     assert "[u^0, u^1, u^2, u^3, u^4]" in coefficient_schema["description"]

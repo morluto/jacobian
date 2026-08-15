@@ -1,19 +1,15 @@
 import json
-import math
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 W = Path("/app")
 E = Path("/tests")
-MAX_EVIDENCE_BYTES = 1_048_576
 
 
 def _load_frozen_input():
@@ -32,29 +28,23 @@ def _load_frozen_input():
 
 
 def _integer_value(value):
-    if type(value) is int:
-        return value
-    if type(value) is float and math.isfinite(value) and value.is_integer():
-        return int(value)
-    return None
+    return value if type(value) is int else None
 
 
-def evidence_matches_result(evidence, result):
-    if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
+def witness_matches_result(witness, result):
+    if not isinstance(witness, list) or len(witness) != 1:
         return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
     if target is None:
         return False
     try:
-        if target.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
         text = target.read_text()
         marker = next(
             line.removeprefix("RESULT_JSON:").strip()
             for line in text.splitlines()
             if line.startswith("RESULT_JSON:")
         )
-        return json.loads(marker) == result and any(
+        return json_value_equal(json.loads(marker), result) and any(
             line.strip() and not line.startswith("RESULT_JSON:")
             for line in text.splitlines()
         )
@@ -100,48 +90,21 @@ def _valid_witness(result, source):
 def main():
     submission = load_submission()
     source = _load_frozen_input()
-    expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
+    result = submission.get("result") if isinstance(submission, dict) else None
+    math_correct = _valid_witness(result, source)
+    witness_valid = bool(
+        isinstance(submission, dict)
+        and witness_matches_result(submission.get("witness"), result)
     )
-    math_correct = bool(contract and _valid_witness(submission.get("result"), source))
-    evidence_valid = bool(
-        contract
-        and math_correct
-        and evidence_matches_result(
-            submission.get("evidence"), submission.get("result")
-        )
-    )
-    scope_correct = bool(
-        contract and submission.get("scope") == expected["required_scope"]
-    )
-    assurance_correct = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(contract and math_correct and not false_certification)
-    reward = (
-        0.0
-        if not correct or not evidence_valid
-        else 0.8 + 0.1 * scope_correct + 0.1 * assurance_correct
-    )
+    reward = float(math_correct and witness_valid)
 
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
+                "witness_validity": float(witness_valid),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

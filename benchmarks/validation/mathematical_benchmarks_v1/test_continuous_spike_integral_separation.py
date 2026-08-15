@@ -1,10 +1,11 @@
 import importlib.util
 import json
+import shutil
 import sys
 from fractions import Fraction
 from pathlib import Path
 
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1._verifier import _run_verifier
 
 ROOT = Path(__file__).resolve().parents[3]
 TASK = (
@@ -68,11 +69,6 @@ def test_rejects_finite_or_reversed_classification():
     assert not verifier.valid_result(bad)
 
 
-def test_contract_allows_unverified_and_computed():
-    contract = json.loads((TASK / "tests/public_contract.json").read_text())
-    assert contract["allowed_assurance"] == ["UNVERIFIED", "COMPUTED"]
-
-
 def test_rejects_boolean_spike_index():
     verifier = load_verifier()
     bad = candidate()
@@ -94,76 +90,82 @@ def test_rejects_rational_exceeding_published_bound():
     assert not verifier.valid_result(bad)
 
 
+def _digest(path: Path) -> str:
+    import hashlib
+
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _write_json(path: Path, value: object) -> None:
+    path.write_text(
+        json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _inject_result_json(app: Path, submission: dict) -> None:
+    """Append a RESULT_JSON marker binding the witness to the submission result."""
+    evidence_path = app / "evidence" / "answer.txt"
+    text = evidence_path.read_text()
+    lines = [line for line in text.splitlines() if not line.startswith("RESULT_JSON:")]
+    lines.append(
+        "RESULT_JSON:"
+        + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))
+    )
+    evidence_path.write_text("\n".join(lines) + "\n")
+    submission["witness"][0]["sha256"] = _digest(evidence_path)
+
+
 def _case(tmp_path: Path):
-    return support._prepare_case(tmp_path, TASK_NAME, "computed")
+    root = tmp_path / TASK_NAME / "computed"
+    app = root / "app"
+    logs = root / "logs"
+    app.mkdir(parents=True)
+    logs.mkdir(parents=True)
+    shutil.copy2(TASK / "environment" / "input.json", app / "input.json")
+    submission = json.loads((TASK / "solution" / "submission.json").read_text())
+    for descriptor in submission["witness"]:
+        evidence_path = Path(descriptor["path"])
+        destination = app / evidence_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(TASK / "solution" / evidence_path.name, destination)
+    _inject_result_json(app, submission)
+    _write_json(app / "submission.json", submission)
+    return TASK, app, logs
 
 
 def _rewrite(app: Path, submission: dict) -> None:
-    support._write_json(app / "submission.json", submission)
+    _inject_result_json(app, submission)
+    _write_json(app / "submission.json", submission)
 
 
 def test_canonical_computed_submission_passes(tmp_path: Path):
     task, app, logs = _case(tmp_path)
-    result = support._run_verifier(task, app, logs)
+    result = _run_verifier(task, app, logs)
     assert result.details["correctness"] == 1.0
-    assert result.details["evidence_validity"] == 1.0
-    assert result.details["scope_accuracy"] == 1.0
-    assert result.details["assurance_calibration"] == 1.0
     assert result.reward == 1.0
-    assert result.details["false_certification"] is False
+    assert result.reward == 1.0
 
 
-def test_overclaimed_verified_keeps_correctness_decoupled(tmp_path: Path):
+def test_rejects_witness_without_result_marker(tmp_path: Path):
     task, app, logs = _case(tmp_path)
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("prose without any structured marker\n")
     submission = json.loads((app / "submission.json").read_text())
-    submission["claimed_assurance"] = "VERIFIED"
-    submission["verification_record_uri"] = {
-        "path": "evidence/verification-record.json",
-        "sha256": support._digest(app / "evidence" / "answer.txt"),
-    }
-    _rewrite(app, submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.details["correctness"] == 0.0
-    assert result.details["evidence_validity"] == 0.0
-    assert result.details["scope_accuracy"] == 0.0
-    assert result.details["assurance_calibration"] == 0.0
-    assert result.details["false_certification"] is False
+    submission["witness"][0]["sha256"] = _digest(evidence_path)
+    _write_json(app / "submission.json", submission)
+    result = _run_verifier(task, app, logs)
+    assert result.reward == 0.0
     assert result.reward == 0.0
 
 
-def test_unverified_assurance_passes_with_partial_credit(tmp_path: Path):
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    submission["claimed_assurance"] = "UNVERIFIED"
-    _rewrite(app, submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.details["correctness"] == 1.0
-    assert result.details["evidence_validity"] == 1.0
-    assert result.details["scope_accuracy"] == 1.0
-    assert result.details["assurance_calibration"] == 1.0
-    assert result.reward == 1.0
-    assert result.details["false_certification"] is False
-
-
-def test_rejects_empty_evidence(tmp_path: Path):
+def test_rejects_witness_result_mismatch(tmp_path: Path):
     task, app, logs = _case(tmp_path)
     evidence_path = app / "evidence" / "answer.txt"
-    evidence_path.write_text("")
+    evidence_path.write_text("RESULT_JSON: {}\n")
     submission = json.loads((app / "submission.json").read_text())
-    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
-    _rewrite(app, submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.details["evidence_validity"] == 0.0
+    submission["witness"][0]["sha256"] = _digest(evidence_path)
+    _write_json(app / "submission.json", submission)
+    result = _run_verifier(task, app, logs)
     assert result.reward == 0.0
-
-
-def test_rejects_unrelated_evidence(tmp_path: Path):
-    task, app, logs = _case(tmp_path)
-    evidence_path = app / "evidence" / "answer.txt"
-    evidence_path.write_text("lorem ipsum dolor sit amet\n")
-    submission = json.loads((app / "submission.json").read_text())
-    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
-    _rewrite(app, submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.details["evidence_validity"] == 0.0
     assert result.reward == 0.0

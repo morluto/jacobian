@@ -1,1 +1,26 @@
-{"task_id":"jacobian/jacobian-keller","conclusion":"TRUE","result":{"keller_condition_verified":true,"determinant":{"terms":[{"coefficient":{"num":"-2","den":"1"},"exponents":[0,0,0]}]}},"claimed_assurance":"COMPUTED","scope":"jacobian/jacobian-keller complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:1983698e0110076e6b17cc5231bc7ce5a872fa6c8916ee04a9463f69d57f05ef"}],"limitations":[]}
+{
+  "result": {
+    "determinant": {
+      "terms": [
+        {
+          "coefficient": {
+            "den": "1",
+            "num": "-2"
+          },
+          "exponents": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    "keller_condition_verified": true
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:1983698e0110076e6b17cc5231bc7ce5a872fa6c8916ee04a9463f69d57f05ef"
+    }
+  ]
+}

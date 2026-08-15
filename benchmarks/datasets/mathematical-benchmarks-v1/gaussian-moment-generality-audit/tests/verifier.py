@@ -5,12 +5,11 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
@@ -358,36 +357,17 @@ def limitations_are_semantically_covered(limitations: object) -> bool:
 def main() -> None:
     submission = load_bounded_submission()
     data = submission if isinstance(submission, dict) else {}
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
+    protocol_ok = submission is not None
     math_correct = bool(
-        contract and construction_valid(data.get("result"), load_frozen())
+        protocol_ok and construction_valid(data.get("result"), load_frozen())
     )
     evidence_correct = bool(
-        math_correct and evidence_valid(data.get("evidence"), data.get("result"))
+        math_correct and evidence_valid(data.get("witness"), data.get("result"))
     )
-    scope_correct = bool(contract and data.get("scope") == expected["required_scope"])
-    assurance_correct = bool(
-        contract and data.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations_correct = bool(
-        contract and limitations_are_semantically_covered(data.get("limitations"))
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = (
-        math_correct
-        and evidence_correct
-        and scope_correct
-        and assurance_correct
-        and limitations_correct
-        and not false_certification
+    reward = aggregate_reward(
+        correctness=math_correct,
+        evidence_validity=evidence_correct,
+        protocol_ok=protocol_ok,
     )
     output = Path("/logs/verifier")
     output.mkdir(parents=True, exist_ok=True)
@@ -396,10 +376,7 @@ def main() -> None:
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_correct),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
-                "reward": float(correct),
-                "false_certification": false_certification,
+                "reward": reward,
             }
         )
     )

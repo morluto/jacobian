@@ -1,17 +1,4 @@
 {
-  "claimed_assurance": "COMPUTED",
-  "completeness": "COMPLETE",
-  "conclusion": "PROOF_REPAIRED_AND_REPLAYED",
-  "evidence": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:af70e75694f2183395eebd322b2f6477a83d50a0ed4f5e7e1721f441e339c861"
-    }
-  ],
-  "limitations": [
-    "FROZEN_FRAGMENT_NOT_FULL_UPSTREAM_DATABASE",
-    "NO_EXTERNAL_METAMATH_KERNEL_REPLAY"
-  ],
   "result": {
     "changed_positions": [
       6,
@@ -203,6 +190,10 @@
       }
     ]
   },
-  "scope": "FROZEN_METAMATH_STYLE_ASSERTION_REGISTRY",
-  "task_id": "jacobian/metamath-syllogism-repair"
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:af70e75694f2183395eebd322b2f6477a83d50a0ed4f5e7e1721f441e339c861"
+    }
+  ]
 }

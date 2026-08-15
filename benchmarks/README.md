@@ -23,8 +23,6 @@ evaluation bundle.
 | `jacobian/symbolic-coordination-v1` | Exact polynomial-map coordination pilot | Oracle |
 | `jacobian/public-reproductions-v1` | Replay known public mathematical cases | Oracle |
 | `jacobian/conjecture-probes-v1` | Independently checked bounded conjecture progress | Oracle |
-| `jacobian/research-diagnostics-v1` | Answer-visible research challenges | Oracle diagnostics |
-| `jacobian/provider-feasibility-v1` | Pinned optional-backend checks | Oracle |
 | `jacobian/examples-v1` | Tutorial and smoke workflows | Oracle |
 
 `registry.toml` is the discovery index. Each dataset's member fragments own
@@ -76,7 +74,7 @@ make harbor-check
 make harbor-check-all  # explicit full host-verifier reproduction
 make harbor-oracle DATASET=mathematical-benchmarks-v1 FULL=1
 make harbor-oracle-all
-make provider-eval PROVIDER=cgal
+uv run pytest tests/boundary/process/providers
 make codex-visibility
 ```
 

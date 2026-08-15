@@ -1,1 +1,35 @@
-{"task_id":"jacobian/symmetry-identity-subgroup","conclusion":"TRUE","result":{"vertex_orbits":[["a"],["b"],["c"]],"edge_orbits":[[["a","b"]],[["b","c"]]]},"claimed_assurance":"COMPUTED","scope":"jacobian/symmetry-identity-subgroup complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:a532dac785a6b23fe279e2ad645c8ee8cedc59ca249bf121daff9133bc546153"}],"limitations":[]}
+{
+  "result": {
+    "edge_orbits": [
+      [
+        [
+          "a",
+          "b"
+        ]
+      ],
+      [
+        [
+          "b",
+          "c"
+        ]
+      ]
+    ],
+    "vertex_orbits": [
+      [
+        "a"
+      ],
+      [
+        "b"
+      ],
+      [
+        "c"
+      ]
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:a532dac785a6b23fe279e2ad645c8ee8cedc59ca249bf121daff9133bc546153"
+    }
+  ]
+}

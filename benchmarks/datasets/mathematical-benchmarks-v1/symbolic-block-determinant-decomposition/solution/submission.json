@@ -1,1 +1,51 @@
-{"task_id":"jacobian/symbolic-block-determinant-decomposition","conclusion":"SYMBOLIC_DECOMPOSITION_CERTIFIED","result":{"basis_change":[["1","1","1"],["1","-1","0"],["1","0","-1"]],"basis_change_inverse":[["1/3","1/3","1/3"],["1/3","-2/3","1/3"],["1/3","1/3","-2/3"]],"channels":["A+2B","A-B","A-B"],"determinant_identity":"det(C)=det(A-B)^2*det(A+2B)","invertibility_assumption":"NOT_REQUIRED_FOR_POLYNOMIAL_IDENTITY"},"scope":"SYMBOLIC_N2_K3_BLOCK_FAMILY","completeness":"COMPLETE","claimed_assurance":"COMPUTED","limitations":["The unrestricted n,k theorem and the source proof are not machine-checked."],"evidence":[{"path":"evidence/answer.txt","sha256":"sha256:0008150e13c0ae450acc4ee9b0a06edc9c3a670d7fcf9b53eac164d6af6f7276"}]}
+{
+  "result": {
+    "basis_change": [
+      [
+        "1",
+        "1",
+        "1"
+      ],
+      [
+        "1",
+        "-1",
+        "0"
+      ],
+      [
+        "1",
+        "0",
+        "-1"
+      ]
+    ],
+    "basis_change_inverse": [
+      [
+        "1/3",
+        "1/3",
+        "1/3"
+      ],
+      [
+        "1/3",
+        "-2/3",
+        "1/3"
+      ],
+      [
+        "1/3",
+        "1/3",
+        "-2/3"
+      ]
+    ],
+    "channels": [
+      "A+2B",
+      "A-B",
+      "A-B"
+    ],
+    "determinant_identity": "det(C)=det(A-B)^2*det(A+2B)",
+    "invertibility_assumption": "NOT_REQUIRED_FOR_POLYNOMIAL_IDENTITY"
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:0008150e13c0ae450acc4ee9b0a06edc9c3a670d7fcf9b53eac164d6af6f7276"
+    }
+  ]
+}

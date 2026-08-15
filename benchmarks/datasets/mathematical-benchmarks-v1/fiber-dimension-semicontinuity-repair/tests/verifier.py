@@ -8,20 +8,16 @@ from typing import Any
 
 from sympy import QQ, Matrix, Poly, groebner, symbols
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    _public_submission_is_valid,
-    false_verified_claim,
-    is_regular_bounded_file,
+    json_value_equal,
+    load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
 WORKSPACE, TESTS = Path("/app"), Path("/tests")
 X, Y = symbols("x y")
 RATIONAL = re.compile(r"^-?(?:0|[1-9][0-9]{0,5})(?:/[1-9][0-9]{0,5})?$")
-LIMITATION = "The verifier checks the frozen affine presentation and the two identified proof obligations; it does not formalize the full scheme-theoretic semicontinuity theorem."
 TENSOR_REPAIR = "RIGHT_EXACTNESS_SUFFICES_RESIDUE_FIELD_NOT_FLAT_IN_GENERAL"
 GLOBAL_REPAIR = "GLOBAL_FITTING_IDEAL_REPLACES_ARBITRARY_UNION"
 
@@ -31,14 +27,6 @@ def _load_json(path: Path) -> object:
         return json.loads(path.read_text())
     except (OSError, ValueError, RecursionError, MemoryError):
         return None
-
-
-def _submission() -> dict[str, Any] | None:
-    path = WORKSPACE / "submission.json"
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    value = _load_json(path)
-    return value if isinstance(value, dict) else None
 
 
 def _q(value: object) -> Fraction | None:
@@ -220,142 +208,50 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     )
 
 
-def _result_protocol(value: object) -> bool:
-    if not isinstance(value, dict) or set(value) != {
-        "tensor_repair",
-        "global_repair",
-        "ideal_generators",
-        "fiber_checks",
-    }:
+def _witness_is_valid(value: object, result: object) -> bool:
+    if not isinstance(value, list) or len(value) != 1:
         return False
-    generators = value.get("ideal_generators")
-    if (
-        not isinstance(generators, list)
-        or not 2 <= len(generators) <= 6
-        or any(_poly(item) is None for item in generators)
-    ):
+    path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
+    if path is None:
         return False
-    checks = value.get("fiber_checks")
-    if not isinstance(checks, list) or len(checks) != 4:
-        return False
-    return all(
-        isinstance(check, dict)
-        and set(check) == {"point", "matrix_rank", "cokernel_dimension"}
-        and isinstance(check.get("point"), dict)
-        and set(check["point"]) == {"x", "y"}
-        and _q(check["point"].get("x")) is not None
-        and _q(check["point"].get("y")) is not None
-        and type(check.get("matrix_rank")) is int
-        and type(check.get("cokernel_dimension")) is int
-        for check in checks
-    )
-
-
-def _evidence_lines(result: dict[str, Any]) -> list[str] | None:
-    checks = result.get("fiber_checks")
-    generators = result.get("ideal_generators")
-    if (
-        not isinstance(checks, list)
-        or len(checks) != 4
-        or not isinstance(generators, list)
-        or not 2 <= len(generators) <= 6
-    ):
-        return None
-    rows: list[tuple[Fraction, Fraction, int]] = []
-    for check in checks:
-        if not isinstance(check, dict) or not isinstance(check.get("point"), dict):
-            return None
-        x_value, y_value = _q(check["point"].get("x")), _q(check["point"].get("y"))
-        dimension = check.get("cokernel_dimension")
-        if x_value is None or y_value is None or type(dimension) is not int:
-            return None
-        rows.append((x_value, y_value, dimension))
-    rows.sort()
-    return [
-        "fiber-dimension-fitting-repair-v1",
-        f"tensor-repair: {result.get('tensor_repair')}",
-        f"global-repair: {result.get('global_repair')}",
-        f"generator-count: {len(generators)}",
-        "fiber-dimensions: "
-        + ";".join(f"{x},{y}:{dimension}" for x, y, dimension in rows),
-    ]
-
-
-def _evidence(value: object, result: object) -> bool:
-    if not isinstance(value, list) or len(value) != 1 or not isinstance(result, dict):
-        return False
-    lines = _evidence_lines(result)
-    if lines is None:
-        return False
-    encoded = ("\n".join(lines) + "\n").encode()
-    path = resolve_evidence(
-        value[0], expected_path="evidence/answer.txt", max_bytes=len(encoded)
-    )
     try:
-        return path is not None and path.read_bytes() == encoded
-    except OSError:
+        text = path.read_text()
+    except (OSError, UnicodeError):
         return False
+    markers = [
+        line.removeprefix("RESULT_JSON:").strip()
+        for line in text.splitlines()
+        if line.startswith("RESULT_JSON:")
+    ]
+    if len(markers) != 1:
+        return False
+    try:
+        bound_result = json.loads(markers[0])
+    except (ValueError, RecursionError):
+        return False
+    return isinstance(result, dict) and json_value_equal(bound_result, result)
 
 
 def main() -> None:
-    submission = _submission()
+    submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
     frozen_value = _load_json(TESTS / "input.json")
     frozen = frozen_value if isinstance(frozen_value, dict) else {}
-    expected_value = _load_json(TESTS / "expected.json")
-    expected = expected_value if isinstance(expected_value, dict) else {}
     result = data.get("result")
     input_bound = workspace_input_is_bound()
-    envelope = strict_submission_contract(
-        submission,
-        task_id=str(expected.get("task_id")),
-        conclusion=str(expected.get("conclusion")),
-        allowed_assurances=frozenset({"COMPUTED"}),
-        min_limitations=1,
-        verification_record="forbidden",
+    math_correct = bool(
+        isinstance(submission, dict) and input_bound and _result(result, frozen)
     )
-    protocol = bool(
-        envelope
-        and _public_submission_is_valid(submission)
-        and _result_protocol(result)
-    )
-    math_correct = bool(_result(result, frozen))
-    evidence_valid = _evidence(data.get("evidence"), result)
-    scope_correct = bool(data.get("scope") == expected.get("required_scope"))
-    assurance_correct = data.get("claimed_assurance") == "COMPUTED"
-    completeness_correct = data.get("completeness") == "COMPLETE"
-    limitations_correct = data.get("limitations") == [LIMITATION]
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = all(
-        (
-            input_bound,
-            protocol,
-            math_correct,
-            evidence_valid,
-            scope_correct,
-            assurance_correct,
-            completeness_correct,
-            limitations_correct,
-            not false_certification,
-        )
-    )
+    witness_ok = bool(math_correct and _witness_is_valid(data.get("witness"), result))
+    correct = bool(math_correct and witness_ok)
     out = Path("/logs/verifier")
     out.mkdir(parents=True, exist_ok=True)
     (out / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "input_binding": float(input_bound),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
-                "completeness_accuracy": float(completeness_correct),
-                "limitations_accuracy": float(limitations_correct),
-                "protocol_compliance": float(protocol),
+                "witness_validity": float(witness_ok),
                 "reward": float(correct),
-                "false_certification": false_certification,
             }
         )
     )

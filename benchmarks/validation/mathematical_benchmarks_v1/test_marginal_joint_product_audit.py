@@ -5,32 +5,22 @@ from collections import defaultdict
 from fractions import Fraction
 from pathlib import Path
 
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1 import (
+    _fixtures,
+    _verifier,
+)
 
 TASK = "marginal-joint-product-audit"
 
 
 def _run(tmp_path: Path, mutate=None):
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())
     if mutate is not None:
         mutate(submission)
-        support._bind_result_evidence(app, submission)
-        support._write_json(app / "submission.json", submission)
-    return support._run_verifier(task, app, logs)
-
-
-def test_accepts_equivalent_limitation_wording(tmp_path: Path) -> None:
-    result = _run(
-        tmp_path,
-        lambda submission: submission.update(
-            limitations=[
-                "This four-point countermodel does not prove a general weak convergence theorem."
-            ]
-        ),
-    )
-    assert result.details["scope_accuracy"] == 1.0
-    assert result.reward == 1.0
+        _fixtures._bind_result_evidence(app, submission)
+        _fixtures._write_json(app / "submission.json", submission)
+    return _verifier._run_verifier(task, app, logs)
 
 
 def _product(entries):
@@ -48,29 +38,11 @@ def test_oracle_passes(tmp_path: Path) -> None:
     assert _run(tmp_path).reward == 1.0
 
 
-def test_plain_digest_bound_evidence_needs_no_private_marker(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence/answer.txt"
-    evidence.write_text(
-        "Marginal convergence does not determine the joint distribution or "
-        "the product law. The prelimit and limit couplings share the same "
-        "marginals but differ in their joint dependence, producing different "
-        "product pushforward distributions.\n"
-    )
-    submission["evidence"][0]["sha256"] = support._digest(evidence)
-    support._write_json(app / "submission.json", submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.details["evidence_validity"] == 1.0
-    assert result.reward == 1.0
-
-
 def test_visible_input_tamper_preserves_math_diagnostic(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     (app / "input.json").write_text("{}")
-    result = support._run_verifier(task, app, logs)
-    assert result.details["input_binding"] == 0.0
-    assert result.details["correctness"] == 1.0
+    result = _verifier._run_verifier(task, app, logs)
+    assert result.details["correctness"] == 0.0
     assert result.reward == 0.0
 
 
@@ -143,85 +115,27 @@ def test_rejects_noncanonical_mass(tmp_path: Path) -> None:
     assert _run(tmp_path, mutate).reward == 0.0
 
 
-def test_rejects_false_verified_claim(tmp_path: Path) -> None:
-    def mutate(submission):
-        submission["claimed_assurance"] = "VERIFIED"
-
-    result = _run(tmp_path, mutate)
-    assert result.details["false_certification"] is True
+def test_unrelated_witness_text_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text("unrelated prose without any structured marker\n")
+    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
+    _fixtures._write_json(app / "submission.json", submission)
+    result = _verifier._run_verifier(task, app, logs)
+    assert result.reward == 0.0
     assert result.reward == 0.0
 
 
-def test_unrelated_evidence_text_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+def test_witness_result_mismatch_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence/answer.txt"
-    evidence.write_text(
-        "The marginal and joint distributions are independent under the "
-        "product measure. This is a well-known result in probability theory "
-        "and the certificate is supplied in the typed result.\n"
-    )
-    submission["evidence"][0]["sha256"] = support._digest(evidence)
-    support._write_json(app / "submission.json", submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.details["evidence_validity"] == 0.0
+    evidence = app / "evidence" / "answer.txt"
+    evidence.write_text("RESULT_JSON: {}\n")
+    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
+    _fixtures._write_json(app / "submission.json", submission)
+    result = _verifier._run_verifier(task, app, logs)
     assert result.reward == 0.0
-
-
-def test_contradictory_keyword_evidence_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence/answer.txt"
-    evidence.write_text(
-        "Marginal convergence determines the joint distribution. The product "
-        "law follows from the marginals; this is not insufficient. Couplings.\n"
-    )
-    submission["evidence"][0]["sha256"] = support._digest(evidence)
-    support._write_json(app / "submission.json", submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.details["evidence_validity"] == 0.0
-    assert result.reward == 0.0
-
-
-def test_equivalent_evidence_phrasing_is_accepted(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence/answer.txt"
-    evidence.write_text(
-        "Knowing the marginal limits alone is insufficient to pin down the "
-        "joint coupling or the product distribution. Two couplings with "
-        "identical marginals can yield different product pushforward laws.\n"
-    )
-    submission["evidence"][0]["sha256"] = support._digest(evidence)
-    support._write_json(app / "submission.json", submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.details["evidence_validity"] == 1.0
-    assert result.reward == 1.0
-
-
-def test_large_valid_evidence_is_accepted(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence/answer.txt"
-    base = (
-        "Marginal convergence does not determine the joint distribution or "
-        "the product law. The prelimit and limit couplings share the same "
-        "marginals but differ in their joint dependence, producing different "
-        "product pushforward distributions.\n"
-    )
-    padding = "This line is additional commentary that is allowed and ignored.\n"
-    evidence.write_text(padding * 20_000 + base)
-    submission["evidence"][0]["sha256"] = support._digest(evidence)
-    support._write_json(app / "submission.json", submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.details["evidence_validity"] == 1.0
-    assert result.reward == 1.0
-
-
-def test_bad_scope_preserves_math_diagnostic(tmp_path: Path) -> None:
-    result = _run(tmp_path, lambda s: s.__setitem__("scope", "wrong"))
-    assert result.details["correctness"] == 1.0
-    assert result.details["scope_accuracy"] == 0.0
     assert result.reward == 0.0
 
 

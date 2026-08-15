@@ -1,9 +1,0 @@
-{
-  "task_id": "jacobian/jcb-postdoc-016",
-  "challenge_id": "jcb-postdoc-016",
-  "definition": "EVERY_PRIME_EXPONENT_AT_LEAST_TWO",
-  "finite_window": {"first": "8", "last": "16"},
-  "triple_starts": ["8", "9", "10", "11", "12", "13", "14"],
-  "public_bounded_reference": {"largest_member_at_most": "100000000000000", "artifact_available": false},
-  "global_conjecture_status": "OPEN"
-}

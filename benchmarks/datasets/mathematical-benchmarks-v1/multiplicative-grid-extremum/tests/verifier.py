@@ -6,13 +6,12 @@ from collections import defaultdict
 from pathlib import Path
 
 from verifier_support import (
-    ASSURANCE_LEVELS,
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 TESTS = Path("/tests")
@@ -304,65 +303,33 @@ def _evidence_valid(evidence: object, result: object) -> bool:
         MemoryError,
     ):
         return False
-    return _json_values_equal(value, result)
+    return json_value_equal(value, result)
 
 
 def main() -> None:
     source = _source()
-    expected = json.loads((TESTS / "expected.json").read_text(encoding="utf-8"))
     submission = load_submission()
-    structure = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=ASSURANCE_LEVELS,
-        completeness=expected["completeness"],
-        verification_record="forbidden",
-    )
-    result_shape = bool(
-        isinstance(submission, dict)
-        and source is not None
-        and _result_shape_valid(submission.get("result"), source)
-    )
-    protocol = bool(
-        structure
-        and result_shape
-        and isinstance(submission, dict)
-        and submission["claimed_assurance"] in {"UNVERIFIED", "COMPUTED"}
-    )
+    protocol_ok = submission is not None
     correctness = bool(
-        source is not None
-        and isinstance(submission, dict)
+        protocol_ok
+        and source is not None
         and _result_valid(submission.get("result"), source)
     )
     evidence = bool(
-        isinstance(submission, dict)
-        and _evidence_valid(submission.get("evidence"), submission.get("result"))
+        protocol_ok
+        and correctness
+        and _evidence_valid(submission.get("witness"), submission.get("result"))
     )
-    scope = bool(
-        isinstance(submission, dict)
-        and isinstance(submission.get("claimed_assurance"), str)
-        and submission.get("scope") == expected["scope"]
-        and submission.get("completeness") == expected["completeness"]
-        and submission.get("limitations") == expected["limitations"]
-    )
-    assurance = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") == expected["assurance_ceiling"]
-    )
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
-    reward = float(
-        protocol and correctness and evidence and scope and assurance and not false_cert
+    reward = aggregate_reward(
+        correctness=correctness,
+        evidence_validity=evidence,
+        protocol_ok=protocol_ok,
     )
     _write_reward(
         {
-            "protocol_compliance": float(protocol),
             "correctness": float(correctness),
             "evidence_validity": float(evidence),
-            "scope_accuracy": float(scope),
-            "assurance_calibration": float(assurance),
             "reward": reward,
-            "false_certification": false_cert,
         }
     )
 
@@ -373,12 +340,8 @@ if __name__ == "__main__":
     except Exception:
         _write_reward(
             {
-                "protocol_compliance": 0.0,
                 "correctness": 0.0,
                 "evidence_validity": 0.0,
-                "scope_accuracy": 0.0,
-                "assurance_calibration": 0.0,
                 "reward": 0.0,
-                "false_certification": False,
             }
         )

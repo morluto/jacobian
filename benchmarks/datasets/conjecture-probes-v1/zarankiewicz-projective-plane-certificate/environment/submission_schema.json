@@ -65,49 +65,6 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
-    },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "conclusion": {
-      "const": "PG2_F3_ZARANKIEWICZ_EXTREMAL_CERTIFICATE"
-    },
-    "evidence": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "const": "evidence/answer.json"
-          },
-          "sha256": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "type": "object"
-      },
-      "maxItems": 1,
-      "minItems": 1,
-      "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "ONE_FINITE_PG2_F3_INSTANCE",
-        "EXACT_K22_FREE_PAIR_COUNT_REPLAY",
-        "NO_GENERAL_ZARANKIEWICZ_CONCLUSION"
-      ]
-    },
     "result": {
       "additionalProperties": false,
       "properties": {
@@ -162,23 +119,32 @@
       ],
       "type": "object"
     },
-    "scope": {
-      "const": "pg2-f3-zarankiewicz-k22-extremal-certificate-v1",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/zarankiewicz-projective-plane-certificate"
+    "witness": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

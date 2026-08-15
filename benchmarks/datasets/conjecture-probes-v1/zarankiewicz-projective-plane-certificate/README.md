@@ -32,6 +32,6 @@ existing coloring, minor, homology, and generic incidence-determinant tasks.
 - Construction source: the standard point-line incidence structure of
   `PG(2,3)`; all finite claims are reconstructed locally.
 
-Full reward means `CHECKED` for this one finite graph and its exact finite
+Full reward means `COMPUTED` for this one finite graph and its exact finite
 upper bound. It does not prove any unresolved asymptotic or general
 Zarankiewicz statement.

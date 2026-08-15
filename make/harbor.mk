@@ -216,7 +216,7 @@ harbor-oracle-all: ## Run every registered dataset Oracle with tasks.
 	$(VALIDATION_LOCK) run --target harbor-oracle-all -- $(MAKE) _harbor-oracle-all
 
 _harbor-oracle-all: _harbor-check-all
-	@set -e; for dataset in mathematical-benchmarks-v1 symbolic-coordination-v1 public-reproductions-v1 conjecture-probes-v1 research-diagnostics-v1 provider-feasibility-v1; do \
+	@set -e; for dataset in mathematical-benchmarks-v1 symbolic-coordination-v1 public-reproductions-v1 conjecture-probes-v1; do \
 		$(MAKE) --no-print-directory harbor-oracle-run DATASET=$$dataset FULL=1 EVAL_ARGS="$(EVAL_ARGS)"; \
 	done
 

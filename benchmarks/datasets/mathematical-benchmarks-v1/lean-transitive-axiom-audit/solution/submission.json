@@ -1,1 +1,43 @@
-{"task_id":"jacobian/lean-transitive-axiom-audit","conclusion":"SHALLOW_REPORTS_INCOMPLETE","result":{"cases":[{"case_id":"axiom-type-closure","status":"INCOMPLETE","closure":["A0","A1","A2"],"missing":["A0","A1"],"missing_roles":{"A0":"TYPE_DEPENDENCY","A1":"TYPE_DEPENDENCY"}},{"case_id":"native-decide-trust","status":"INCOMPLETE","closure":["Lean.ofReduceBool","Lean.trustCompiler"],"missing":["Lean.trustCompiler"],"missing_roles":{"Lean.trustCompiler":"COMPILER_TRUST"}}]},"claimed_assurance":"COMPUTED","scope":"the two frozen declaration-dependency reports only","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:84f723acce3d593b74d0e53f0d190c0035ccd6e6ef6a7b4a206957dab4f0af34"}],"limitations":["The checker does not execute Lean, assess proposition truth, or establish the behavior of current Lean releases."]}
+{
+  "result": {
+    "cases": [
+      {
+        "case_id": "axiom-type-closure",
+        "closure": [
+          "A0",
+          "A1",
+          "A2"
+        ],
+        "missing": [
+          "A0",
+          "A1"
+        ],
+        "missing_roles": {
+          "A0": "TYPE_DEPENDENCY",
+          "A1": "TYPE_DEPENDENCY"
+        },
+        "status": "INCOMPLETE"
+      },
+      {
+        "case_id": "native-decide-trust",
+        "closure": [
+          "Lean.ofReduceBool",
+          "Lean.trustCompiler"
+        ],
+        "missing": [
+          "Lean.trustCompiler"
+        ],
+        "missing_roles": {
+          "Lean.trustCompiler": "COMPILER_TRUST"
+        },
+        "status": "INCOMPLETE"
+      }
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:84f723acce3d593b74d0e53f0d190c0035ccd6e6ef6a7b4a206957dab4f0af34"
+    }
+  ]
+}

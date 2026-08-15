@@ -1,1 +1,39 @@
-{"task_id":"jacobian/noncompact-lefschetz-proof-audit","conclusion":"FROZEN_LEMMA_REFUTED","result":{"counterexample":{"space":"R","translation":{"numerator":1,"denominator":1},"fixed_point_equation":"x+q=x","fixed_point_exists":false,"proper":true,"compact_support_cohomology":[{"degree":0,"dimension":0},{"degree":1,"dimension":1}],"top_degree_action":1,"lefschetz_number":-1},"theorem_audit":{"frozen_lemma_status":"FALSE","invalid_step":"COMPACTLY_SUPPORTED_DIAGONAL_THOM_CLASS","repair_boundary":"REQUIRES_ADDITIONAL_HYPOTHESES_OR_DIFFERENT_ARGUMENT"},"downstream_status":"UNSUPPORTED_BY_FROZEN_ARGUMENT","original_question_status":"NOT_ASSESSED"},"claimed_assurance":"COMPUTED","scope":"the frozen noncompact compact-support Lefschetz lemma and its use in the supplied model proof","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:c47d5ccb38b7aab614cc7c9233b9c2113080e4b15f7f7d2dedd2db8b5efaf54d"}],"limitations":["The original First Proof lattice/manifold question and any alternative proof are not assessed."]}
+{
+  "result": {
+    "counterexample": {
+      "compact_support_cohomology": [
+        {
+          "degree": 0,
+          "dimension": 0
+        },
+        {
+          "degree": 1,
+          "dimension": 1
+        }
+      ],
+      "fixed_point_equation": "x+q=x",
+      "fixed_point_exists": false,
+      "lefschetz_number": -1,
+      "proper": true,
+      "space": "R",
+      "top_degree_action": 1,
+      "translation": {
+        "denominator": 1,
+        "numerator": 1
+      }
+    },
+    "downstream_status": "UNSUPPORTED_BY_FROZEN_ARGUMENT",
+    "original_question_status": "NOT_ASSESSED",
+    "theorem_audit": {
+      "frozen_lemma_status": "FALSE",
+      "invalid_step": "COMPACTLY_SUPPORTED_DIAGONAL_THOM_CLASS",
+      "repair_boundary": "REQUIRES_ADDITIONAL_HYPOTHESES_OR_DIFFERENT_ARGUMENT"
+    }
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:c47d5ccb38b7aab614cc7c9233b9c2113080e4b15f7f7d2dedd2db8b5efaf54d"
+    }
+  ]
+}

@@ -37,32 +37,6 @@
       ],
       "type": "object"
     },
-    "evidence_envelope": {
-      "additionalProperties": false,
-      "properties": {
-        "limitations": {
-          "const": [
-            "NEWTON_IDENTITIES_VIETE_AND_AMGM_TRUSTED"
-          ]
-        },
-        "result": {
-          "$ref": "#/$defs/result"
-        },
-        "schema_version": {
-          "const": "1"
-        },
-        "task_id": {
-          "const": "jacobian/real-rooted-sign-polynomials"
-        }
-      },
-      "required": [
-        "schema_version",
-        "task_id",
-        "result",
-        "limitations"
-      ],
-      "type": "object"
-    },
     "result": {
       "additionalProperties": false,
       "properties": {
@@ -117,28 +91,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
+    "result": {
+      "$ref": "#/$defs/result"
     },
-    "completeness": {
-      "enum": [
-        "COMPLETE",
-        "PARTIAL",
-        "UNKNOWN"
-      ]
-    },
-    "conclusion": {
-      "enum": [
-        "CLASSIFICATION_CERTIFIED",
-        "INSUFFICIENT_EVIDENCE"
-      ]
-    },
-    "evidence": {
+    "witness": {
       "items": {
         "additionalProperties": false,
         "properties": {
@@ -159,32 +115,11 @@
       "maxItems": 1,
       "minItems": 1,
       "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "NEWTON_IDENTITIES_VIETE_AND_AMGM_TRUSTED"
-      ]
-    },
-    "result": {
-      "$ref": "#/$defs/result"
-    },
-    "scope": {
-      "const": "ALL_NONCONSTANT_SIGN_COEFFICIENT_POLYNOMIALS",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/real-rooted-sign-polynomials"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

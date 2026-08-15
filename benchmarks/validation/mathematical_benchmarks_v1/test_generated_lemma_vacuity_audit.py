@@ -3,13 +3,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1 import (
+    _fixtures,
+    _verifier,
+)
 
 TASK = "generated-lemma-vacuity-audit"
 
 
 def test_enforces_visible_divisor_witness_bounds(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())
     audit = submission["result"]["common_divisor_audit"]
     audit["a"] = 1_000_001
@@ -20,7 +23,7 @@ def test_enforces_visible_divisor_witness_bounds(tmp_path: Path) -> None:
         2 * audit["a"] + 1,
     ]
     audit["original_premise_holds"] = False
-    support._bind_result_evidence(app, submission)
-    support._write_json(app / "submission.json", submission)
-    rejected = support._run_verifier(task, app, logs)
+    _fixtures._bind_result_evidence(app, submission)
+    _fixtures._write_json(app / "submission.json", submission)
+    rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0

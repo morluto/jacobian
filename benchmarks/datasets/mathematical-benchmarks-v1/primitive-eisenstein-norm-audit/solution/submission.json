@@ -1,1 +1,28 @@
-{"task_id":"jacobian/primitive-eisenstein-norm-audit","conclusion":"SOURCE_PRIMITIVE_NORM_CRITERION_FALSE","result":{"ramified_witness":{"x":1,"y":4,"norm":21,"gcd":1,"v3":1},"inert_obstruction":{"prime":5,"zero_pairs":[{"x":0,"y":0}],"square_primitive_status":"IMPOSSIBLE"},"repaired_criterion":"THREE_EXPONENT_AT_MOST_ONE_AND_NO_PRIME_TWO_MOD_THREE"},"claimed_assurance":"COMPUTED","scope":"PRIMITIVE_EISENSTEIN_NORM_LOCAL_CRITERION_ONLY","completeness":"COMPLETE","evidence":[{"path":"evidence/local-audit.json","sha256":"sha256:bd12f31da835dc443b5d3024a4a077fb2bb30d547cf2e3ff9bc3556e99c502f1"}],"limitations":["CUBIC_FORM_INTERSECTION_COUNT_NOT_ASSESSED","GENERAL_CRITERION_NOT_PROOF_ASSISTANT_VERIFIED","GENERAL_CRITERION_ONLY_LOCALLY_DEMONSTRATED"]}
+{
+  "result": {
+    "inert_obstruction": {
+      "prime": 5,
+      "square_primitive_status": "IMPOSSIBLE",
+      "zero_pairs": [
+        {
+          "x": 0,
+          "y": 0
+        }
+      ]
+    },
+    "ramified_witness": {
+      "gcd": 1,
+      "norm": 21,
+      "v3": 1,
+      "x": 1,
+      "y": 4
+    },
+    "repaired_criterion": "THREE_EXPONENT_AT_MOST_ONE_AND_NO_PRIME_TWO_MOD_THREE"
+  },
+  "witness": [
+    {
+      "path": "evidence/local-audit.json",
+      "sha256": "sha256:93de0a3babbb4f446683213365029ec278f5c40fc075197c72047a8d38d073a4"
+    }
+  ]
+}

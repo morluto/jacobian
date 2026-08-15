@@ -1,20 +1,4 @@
 {
-  "allowed_assurance": [
-    "UNVERIFIED",
-    "COMPUTED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE",
-    "PARTIAL",
-    "UNKNOWN"
-  ],
-  "assurance_ceiling": "COMPUTED",
-  "conclusion": {
-    "enum": [
-      "ORIGINAL_SUM_DIVERGES_TRUNCATED_LIMIT_ZERO",
-      "INSUFFICIENT_EVIDENCE"
-    ]
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/scope-audit.json"
@@ -27,13 +11,7 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "limitations": {
-    "const": [
-      "ORIGINAL_SUM_TREATED_AS_NONNEGATIVE_EXTENDED_SUM",
-      "TRUNCATED_LIMIT_USES_ELEMENTARY_GEOMETRIC_CONTRACTION"
-    ]
-  },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.",
   "required_artifact_filenames": [
     "evidence/scope-audit.json"
   ],
@@ -146,12 +124,6 @@
     }
   },
   "schema_version": "1",
-  "scope": {
-    "const": "ORIGINAL_DOMAIN_AUDIT_AND_TRUNCATED_REPAIR",
-    "enum": null,
-    "pattern": null,
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
     "$ref": "#/$defs/result"
@@ -268,28 +240,10 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
+      "result": {
+        "$ref": "#/$defs/result"
       },
-      "completeness": {
-        "enum": [
-          "COMPLETE",
-          "PARTIAL",
-          "UNKNOWN"
-        ]
-      },
-      "conclusion": {
-        "enum": [
-          "ORIGINAL_SUM_DIVERGES_TRUNCATED_LIMIT_ZERO",
-          "INSUFFICIENT_EVIDENCE"
-        ]
-      },
-      "evidence": {
+      "witness": {
         "items": {
           "additionalProperties": false,
           "properties": {
@@ -310,36 +264,13 @@
         "maxItems": 1,
         "minItems": 1,
         "type": "array"
-      },
-      "limitations": {
-        "const": [
-          "ORIGINAL_SUM_TREATED_AS_NONNEGATIVE_EXTENDED_SUM",
-          "TRUNCATED_LIMIT_USES_ELEMENTARY_GEOMETRIC_CONTRACTION"
-        ]
-      },
-      "result": {
-        "$ref": "#/$defs/result"
-      },
-      "scope": {
-        "const": "ORIGINAL_DOMAIN_AUDIT_AND_TRUNCATED_REPAIR",
-        "type": "string"
-      },
-      "task_id": {
-        "const": "jacobian/finite-support-sum-scope-audit"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
   },
-  "task_id": "jacobian/finite-support-sum-scope-audit",
-  "verification_record": null
+  "task_id": "jacobian/finite-support-sum-scope-audit"
 }

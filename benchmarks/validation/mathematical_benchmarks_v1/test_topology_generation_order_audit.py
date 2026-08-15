@@ -4,13 +4,16 @@ import json
 from pathlib import Path
 
 import pytest
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1 import (
+    _fixtures,
+    _verifier,
+)
 
 TASK = "topology-generation-order-audit"
 
 
 def _case(tmp_path: Path):
-    return support._prepare_case(tmp_path, TASK, "computed")
+    return _fixtures._prepare_case(tmp_path, TASK, "computed")
 
 
 def test_accepts_reordered_incomparable_family_and_different_witness(
@@ -21,8 +24,8 @@ def test_accepts_reordered_incomparable_family_and_different_witness(
     submission = json.loads(path.read_text())
     submission["result"]["input_topologies"].reverse()
     submission["result"]["witness_open_set"] = 2
-    support._write_json(path, submission)
-    accepted = support._run_verifier(task, app, logs)
+    _fixtures._write_json(path, submission)
+    accepted = _verifier._run_verifier(task, app, logs)
     assert accepted.details["correctness"] == 1.0
     assert accepted.reward == pytest.approx(1.0)
 
@@ -43,18 +46,7 @@ def test_rejects_corrupted_or_trivial_models(
     path = app / "submission.json"
     submission = json.loads(path.read_text())
     submission["result"][field] = value
-    support._write_json(path, submission)
-    rejected = support._run_verifier(task, app, logs)
+    _fixtures._write_json(path, submission)
+    rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
     assert rejected.reward == 0.0
-
-
-def test_rejects_unearned_verified_claim(tmp_path: Path) -> None:
-    task, app, logs = _case(tmp_path)
-    path = app / "submission.json"
-    submission = json.loads(path.read_text())
-    submission["claimed_assurance"] = "VERIFIED"
-    support._write_json(path, submission)
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected.reward == 0.0
-    assert rejected.details["false_certification"] is True

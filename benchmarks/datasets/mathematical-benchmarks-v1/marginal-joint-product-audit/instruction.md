@@ -13,13 +13,7 @@ Write `/app/submission.json` and bind a concise explanation at `/app/evidence/an
 
 The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The evidence explanation must state why marginal convergence does not determine joint convergence or the product law; unrelated text does not earn evidence credit. Product distributions may include ascending zero-mass attainable entries, which the verifier normalizes away. In the solver's own words, the limitations array must disclose that this exact finite-law countermodel does not prove a general weak-convergence theorem or disambiguate the original prose.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 
-- **Conclusion:** exactly `MARGINAL_CONVERGENCE_INSUFFICIENT`
-- **Assurance:** scoreable values are `UNVERIFIED`, `COMPUTED` (ceiling `COMPUTED`); the submission schema accepts any of `UNVERIFIED`, `COMPUTED`, `CHECKED`, `VERIFIED` but only scoreable assurances receive credit.
-- **Scope:** the exact value declared in `submission_schema.json`
-- **Completeness:** `COMPLETE`.
-- **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
-- **Evidence media types:** `text/plain`.
-- **Required artifact filenames:** `evidence/answer.txt`.
+- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

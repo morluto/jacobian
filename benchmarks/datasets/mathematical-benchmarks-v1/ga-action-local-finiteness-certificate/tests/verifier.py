@@ -7,93 +7,19 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    false_verified_claim,
-    is_regular_bounded_file,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 DIMENSION = 5
-LIMITATION = "The general local-finiteness theorem is not machine-formalized."
-
-
-def _limitations_valid(value: object) -> bool:
-    if not (isinstance(value, list) and len(value) == 1 and isinstance(value[0], str)):
-        return False
-    text = value[0].casefold()
-    if any(
-        term in text
-        for term in ("formally verified", "machine-proves", "general theorem is proved")
-    ):
-        return False
-    return (
-        any(
-            term in text
-            for term in (
-                "local-finiteness",
-                "local finiteness",
-                "degree-four",
-                "degree four",
-            )
-        )
-        and any(term in text for term in ("theorem", "general result", "frozen action"))
-        and any(
-            term in text
-            for term in (
-                "not formal",
-                "not machine",
-                "not prove",
-                "not verified",
-                "only",
-            )
-        )
-    )
 
 
 _RATIONAL_PATTERN = re.compile(r"^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$")
-_EVIDENCE_FACTS = {
-    "finite_expansion": (
-        re.compile(r"\bfinite.{0,64}\bcoefficients?\b"),
-        re.compile(r"\bcoefficients?.{0,64}\bfinite\b"),
-        re.compile(r"\bfinite.{0,64}\bexpansion\b"),
-    ),
-    "insufficient_alone": (
-        re.compile(r"\balone\b"),
-        re.compile(r"\b(?:not|insufficient|fails?).{0,48}\b(?:prove|show|establish)\b"),
-        re.compile(r"\bdoes\s+not\s+imply\b"),
-    ),
-    "action_law": (
-        re.compile(r"\bcoaction\b"),
-        re.compile(r"\bgroup[- ]law\b"),
-        re.compile(r"r\s*\(\s*s\s*\+\s*t\s*\)"),
-        re.compile(r"\bcomposition\b.{0,96}\b(?:law|identity)\b"),
-        re.compile(r"\b(?:law|identity)\b.{0,96}\bcomposition\b"),
-        re.compile(
-            r"\baction\b.{0,96}\b(?:composition|group)\b"
-            r".{0,32}\b(?:law|identity)\b"
-        ),
-    ),
-    "invariance": (
-        re.compile(r"\binvarian"),
-        re.compile(r"\bstable\b"),
-        re.compile(r"\bclosed\s+under\s+the\s+action\b"),
-    ),
-}
-_EVIDENCE_CONTRADICTIONS = (
-    re.compile(
-        r"\bfinite\b.{0,64}\b(?:coefficient\s+)?expansion\b"
-        r".{0,64}\b(?:alone\s+(?:proves|establishes|implies)|"
-        r"by\s+itself\s+(?:proves|establishes|implies))\b"
-    ),
-    re.compile(r"\bcomposition\s+(?:law|identity)\b.{0,32}\b(?:fail|false)\b"),
-    re.compile(r"\b(?:subspace|span)\b.{0,32}\bnot\s+invariant\b"),
-)
 
 
 def _load_frozen_input() -> dict:
@@ -358,101 +284,51 @@ def _certificate_valid(result: object, source: dict) -> bool:
     return _action_law_ok(basis, matrix)
 
 
-def _evidence_valid(evidence: object) -> bool:
-    """Stream the public explanation and require both sides of its distinction."""
-
-    if not isinstance(evidence, list) or len(evidence) != 1:
+def _witness_is_valid(witness: object, result: object) -> bool:
+    if not isinstance(witness, list) or len(witness) != 1:
         return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
     if target is None:
         return False
-    matched = dict.fromkeys(_EVIDENCE_FACTS, False)
-    contradicted = False
-    carry = ""
     try:
-        with target.open("r", encoding="utf-8") as stream:
-            while chunk := stream.read(65_536):
-                window = (carry + chunk).lower()
-                contradicted = contradicted or any(
-                    pattern.search(window) for pattern in _EVIDENCE_CONTRADICTIONS
-                )
-                for name, alternatives in _EVIDENCE_FACTS.items():
-                    if not matched[name] and any(
-                        pattern.search(window) for pattern in alternatives
-                    ):
-                        matched[name] = True
-                carry = window[-256:]
-    except (OSError, UnicodeError, MemoryError):
+        text = target.read_text()
+    except (OSError, UnicodeError):
         return False
-    return not contradicted and all(matched.values())
-
-
-def _raw_submission() -> dict | None:
-    """Parse the bounded envelope without conflating schema and math diagnostics."""
-
-    path = WORKSPACE / "submission.json"
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
+    markers = [
+        line.removeprefix("RESULT_JSON:").strip()
+        for line in text.splitlines()
+        if line.startswith("RESULT_JSON:")
+    ]
+    if len(markers) != 1:
+        return False
     try:
-        value = json.loads(path.read_text())
-    except (OSError, UnicodeError, ValueError, TypeError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
+        bound_result = json.loads(markers[0])
+    except (ValueError, RecursionError):
+        return False
+    return isinstance(result, dict) and json_value_equal(bound_result, result)
 
 
 def main() -> None:
-    input_binding = workspace_input_is_bound()
-    raw = _raw_submission()
-    submission = load_submission(require_input_binding=False)
+    submission = load_submission()
+    data = submission if isinstance(submission, dict) else {}
+    input_bound = workspace_input_is_bound()
     source = _load_frozen_input()
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
+    result = data.get("result")
+    math_correct = bool(
+        isinstance(submission, dict)
+        and input_bound
+        and _certificate_valid(result, source)
     )
-    result = raw.get("result") if isinstance(raw, dict) else None
-    math_correct = bool(_certificate_valid(result, source))
-    evidence_valid = bool(
-        isinstance(raw, dict) and _evidence_valid(raw.get("evidence"))
-    )
-    scope_correct = bool(
-        isinstance(raw, dict) and raw.get("scope") == expected["required_scope"]
-    )
-    claimed_assurance = raw.get("claimed_assurance") if isinstance(raw, dict) else None
-    assurance_correct = bool(
-        isinstance(claimed_assurance, str)
-        and claimed_assurance in {"UNVERIFIED", "COMPUTED"}
-    )
-    limitations_correct = bool(
-        isinstance(raw, dict) and _limitations_valid(raw.get("limitations"))
-    )
-    false_certification = false_verified_claim(raw, verification_record_bound=False)
-    correct = (
-        math_correct
-        and input_binding
-        and contract
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and limitations_correct
-        and not false_certification
-    )
+    witness_ok = bool(math_correct and _witness_is_valid(data.get("witness"), result))
+    correct = bool(math_correct and witness_ok)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
-                "protocol_compliance": float(bool(contract)),
-                "input_binding": float(input_binding),
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
-                "limitation_accuracy": float(limitations_correct),
+                "witness_validity": float(witness_ok),
                 "reward": float(correct),
-                "false_certification": false_certification,
             }
         )
     )

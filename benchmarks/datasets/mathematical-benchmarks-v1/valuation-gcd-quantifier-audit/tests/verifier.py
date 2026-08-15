@@ -3,27 +3,14 @@ from math import gcd
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
+    aggregate_reward,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W, E = Path("/app"), Path("/tests")
-
-
-def _json_equal(a, b):
-    """Deep equality that rejects bool/int coercion (True == 1 in Python)."""
-    if type(a) is not type(b):
-        return False
-    if isinstance(a, dict):
-        return set(a) == set(b) and all(_json_equal(a[k], b[k]) for k in a)
-    if isinstance(a, list):
-        return len(a) == len(b) and all(
-            _json_equal(x, y) for x, y in zip(a, b, strict=True)
-        )
-    return a == b
 
 
 def _frozen_ok():
@@ -112,16 +99,11 @@ def _repair(rows):
 def main():
     submission = load_submission()
     expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
-    result = submission.get("result") if isinstance(submission, dict) else None
+    protocol_ok = submission is not None
+    result = submission.get("result") if protocol_ok else None
     math_ok = bool(
-        isinstance(result, dict)
+        protocol_ok
+        and isinstance(result, dict)
         and set(result) == {"defect", "countermodel", "repair"}
         and result["defect"] == "EXISTS_PRIME_MIN_ZERO_IS_TOO_WEAK"
         and _countermodel(result["countermodel"])
@@ -130,44 +112,32 @@ def main():
     )
     evidence = None
     if (
-        contract
-        and isinstance(submission.get("evidence"), list)
-        and len(submission["evidence"]) == 1
+        protocol_ok
+        and isinstance(submission.get("witness"), list)
+        and len(submission["witness"]) == 1
     ):
         evidence = read_evidence_json(
-            submission["evidence"][0], expected_path="evidence/valuation-audit.json"
+            submission["witness"][0], expected_path="evidence/valuation-audit.json"
         )
     evidence_ok = bool(
         evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and set(evidence) == {"schema_version", "task_id", "result"}
         and evidence["schema_version"] == "1"
         and evidence["task_id"] == expected["task_id"]
-        and _json_equal(evidence["result"], result)
-        and evidence["limitations"] == submission.get("limitations")
+        and json_value_equal(evidence["result"], result)
     )
-    scope_ok = bool(
-        contract
-        and submission.get("scope")
-        == "FROZEN_VALUATION_TRANSLATION_AND_SUBMITTED_TABLES"
-        and submission.get("limitations")
-        == [
-            "SOURCE_FINAL_SUMMATION_NOT_ASSESSED",
-            "INTEGER_RECONSTRUCTION_CHECKED_ONLY_FOR_SUBMITTED_PRIMES",
-        ]
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=evidence_ok,
+        protocol_ok=protocol_ok,
     )
-    assurance_ok = bool(contract and submission.get("claimed_assurance") == "COMPUTED")
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
-    correct = math_ok and evidence_ok and scope_ok and not false_cert
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
                 "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
-                "reward": float(correct),
-                "false_certification": false_cert,
+                "reward": reward,
             }
         )
     )

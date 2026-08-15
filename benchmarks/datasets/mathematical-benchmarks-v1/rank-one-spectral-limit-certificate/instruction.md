@@ -12,13 +12,7 @@ Write `/app/submission.json` following the schema and bind the identical result 
 
 The verifier independently replays exact rational sums and freely selected checkpoints; the determinant lemma and rational limit inference remain trusted.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 
-- **Conclusion:** exactly `LIMIT_DERIVED_EXACTLY`
-- **Assurance:** scoreable values are `UNVERIFIED`, `COMPUTED` (ceiling `COMPUTED`); the submission schema accepts any of `UNVERIFIED`, `COMPUTED`, `CHECKED`, `VERIFIED` but only scoreable assurances receive credit.
-- **Scope:** the exact value declared in `submission_schema.json`
-- **Completeness:** `COMPLETE`.
-- **Evidence:** 1-1 item(s); allowed path(s): `evidence/spectral-certificate.json`; digest must match `^sha256:[0-9a-f]{64}$`.
-- **Evidence media types:** `application/json`.
-- **Required artifact filenames:** `evidence/spectral-certificate.json`.
+- **Witness:** 1-1 item(s); allowed path(s): `evidence/spectral-certificate.json`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `application/json`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

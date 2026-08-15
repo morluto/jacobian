@@ -6,42 +6,22 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-MAX_EVIDENCE_BYTES = 1_048_576
 
 _FRACTION_RE = re.compile(r"-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?")
-_LIMITATION_DISCLAIM_RE = re.compile(
-    r"\b(?:no|not|without|never|none|unverified|uncertified|unproven)\b",
-    re.IGNORECASE,
-)
-_LIMITATION_FORMAL_RE = re.compile(
-    r"\b(?:formal\s+proof|proof[ -]assistant|independent\s+checker)\b",
-    re.IGNORECASE,
-)
-_LIMITATION_AFFIRMATIVE_RE = re.compile(
-    r"\b(?:checked|proved|proven|verified|completed|performed|run|ran|used|invoked)\b",
-    re.IGNORECASE,
-)
-_CLAUSE_SPLIT_RE = re.compile(r"[.;,!?\n]+")
-
-
-def _split_clauses(text: str) -> list[str]:
-    return [clause.strip() for clause in _CLAUSE_SPLIT_RE.split(text) if clause.strip()]
 
 
 def _source() -> dict[str, Any]:
     try:
         raw = (TESTS / "input.json").read_bytes()
-        if (WORKSPACE / "input.json").read_bytes() != raw:
-            return {}
         value = json.loads(raw)
     except (OSError, ValueError):
         return {}
@@ -68,34 +48,6 @@ def _krawtchouk(order: int, distance: int, *, q: int = 3, n: int = 6) -> int:
                 * math.comb(n - distance, order - h)
             )
     return total
-
-
-def _limitation_disclaims_formal_proof(item: object) -> bool:
-    """A limitation whose formal-proof clause is negated (disclaims verification)."""
-
-    if not isinstance(item, str) or not _LIMITATION_FORMAL_RE.search(item):
-        return False
-    for clause in _split_clauses(item):
-        if _LIMITATION_FORMAL_RE.search(clause) and _LIMITATION_DISCLAIM_RE.search(
-            clause
-        ):
-            return True
-    return False
-
-
-def _limitation_affirms_formal_proof(item: object) -> bool:
-    """A limitation whose formal-proof clause asserts verification happened."""
-
-    if not isinstance(item, str) or not _LIMITATION_FORMAL_RE.search(item):
-        return False
-    for clause in _split_clauses(item):
-        if not _LIMITATION_FORMAL_RE.search(clause):
-            continue
-        if _LIMITATION_DISCLAIM_RE.search(clause):
-            continue
-        if _LIMITATION_AFFIRMATIVE_RE.search(clause):
-            return True
-    return False
 
 
 def _construction(
@@ -205,57 +157,34 @@ def _upper_bound(value: object, a4: Fraction, a6: Fraction) -> bool:
     return bool(value["bound"] == 18 and combined == (17, -1, -1))
 
 
-def _distribution_matches(result: object, text: str) -> bool:
-    # Bind evidence claims to the submitted certificate: extract A4 and A6
-    # values from the prose and compare to the certificate's distribution.
-    if not isinstance(result, dict):
+def _witness_is_valid(witness: object, result: object) -> bool:
+    if not isinstance(witness, list) or len(witness) != 1:
         return False
-    distribution = result.get("distance_distribution")
-    if not isinstance(distribution, dict):
-        return False
-    for key in ("A4", "A6"):
-        claimed = _fraction(distribution.get(key))
-        if claimed is None:
-            return False
-        match = re.search(rf"{key}\s*[=:]\s*([0-9]+(?:/[0-9]+)?)", text, re.IGNORECASE)
-        if match is None:
-            return False
-        parsed = _fraction(match.group(1))
-        if parsed is None or parsed != claimed:
-            return False
-    return True
-
-
-def _evidence(value: object, result: object) -> bool:
-    if not isinstance(value, list) or len(value) != 1:
-        return False
-    path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
+    path = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
     if path is None:
         return False
     try:
-        if path.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
         text = path.read_text()
     except (OSError, UnicodeError):
         return False
-    folded = text.casefold()
-    if len(folded) < 120 or not all(
-        term in folded for term in ("18", "a4", "a6", "delsarte", "computed")
-    ):
+    markers = [
+        line.removeprefix("RESULT_JSON:").strip()
+        for line in text.splitlines()
+        if line.startswith("RESULT_JSON:")
+    ]
+    if len(markers) != 1:
         return False
-    return _distribution_matches(result, text)
+    try:
+        bound_result = json.loads(markers[0])
+    except (ValueError, RecursionError):
+        return False
+    return isinstance(result, dict) and json_value_equal(bound_result, result)
 
 
 def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion="OPTIMUM_CERTIFIED",
-        verification_record="forbidden",
-    )
+    input_bound = workspace_input_is_bound()
     source = _source()
     result = data.get("result")
     result_data = result if isinstance(result, dict) else {}
@@ -264,43 +193,21 @@ def main() -> None:
         construction
         and _upper_bound(result_data.get("upper_bound_certificate"), a4, a6)
     )
-    correct = bool(contract and construction and upper)
-    evidence = bool(correct and _evidence(data.get("evidence"), result_data))
-    scope = bool(
-        contract
-        and data.get("scope")
-        == "ternary words of length 6 with distinct-pair agreements in {0,2}"
-        and data.get("completeness") == "COMPLETE"
+    math_correct = bool(
+        isinstance(submission, dict) and input_bound and construction and upper
     )
-    assurance = bool(contract and data.get("claimed_assurance") == "COMPUTED")
-    limitations_list = data.get("limitations")
-    has_disclaimer = isinstance(limitations_list, list) and any(
-        _limitation_disclaims_formal_proof(item) for item in limitations_list
+    witness_ok = bool(
+        math_correct and _witness_is_valid(data.get("witness"), result_data)
     )
-    has_affirmative = isinstance(limitations_list, list) and any(
-        _limitation_affirms_formal_proof(item) for item in limitations_list
-    )
-    limitations = bool(contract and has_disclaimer and not has_affirmative)
-    false_verified = false_verified_claim(submission, verification_record_bound=False)
-    passed = bool(
-        correct
-        and evidence
-        and scope
-        and assurance
-        and limitations
-        and not false_verified
-    )
+    correct = bool(math_correct and witness_ok)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
-                "correctness": float(correct),
-                "evidence_validity": float(evidence),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
-                "reward": float(passed),
-                "false_certification": false_verified,
+                "correctness": float(math_correct),
+                "witness_validity": float(witness_ok),
+                "reward": float(correct),
             },
             sort_keys=True,
         )

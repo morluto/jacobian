@@ -105,12 +105,13 @@ def _write_suite_toml(
                 "field": "test",
                 "provenance_class": "hand-designed",
                 "provenance_ref": "unit-test fixture",
-                "assurance_ceiling": entry["assurance_ceiling"],
                 "required_provider": entry.get("required_provider", "core"),
                 "environment_profile": "test-profile",
                 "verifier_contract_version": "1",
                 "evaluation_owner": ds_id,
             }
+            if "assurance_ceiling" in entry:
+                member["assurance_ceiling"] = entry["assurance_ceiling"]
             member_name = task_id.replace("/", "-")
             (members / f"{member_name}.toml").write_text(tomli_w.dumps(member))
 

@@ -1,1 +1,20 @@
-{"task_id":"jacobian/gaussian-sixth-moment","conclusion":"TRUE","result":{"moment":{"real":{"num":"15","den":"1"},"imaginary":{"num":"0","den":"1"}}},"claimed_assurance":"COMPUTED","scope":"jacobian/gaussian-sixth-moment complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:c67a313046e0ad717fbc7756660ead6d84c83d26c02de84b02d2af0ea32b4827"}],"limitations":[]}
+{
+  "result": {
+    "moment": {
+      "imaginary": {
+        "den": "1",
+        "num": "0"
+      },
+      "real": {
+        "den": "1",
+        "num": "15"
+      }
+    }
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:c67a313046e0ad717fbc7756660ead6d84c83d26c02de84b02d2af0ea32b4827"
+    }
+  ]
+}

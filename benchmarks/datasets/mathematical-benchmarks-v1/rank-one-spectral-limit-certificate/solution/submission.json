@@ -1,1 +1,59 @@
-{"task_id":"jacobian/rank-one-spectral-limit-certificate","conclusion":"LIMIT_DERIVED_EXACTLY","result":{"rank_one_sign":"DIAGONAL_MINUS_LAMBDA_ONES","partial_fraction":{"scale":{"numerator":1,"denominator":2},"left_coefficient":1,"right_coefficient":-1},"checkpoints":[{"n":4,"reciprocal_sum":{"numerator":9,"denominator":40},"root":{"numerator":40,"denominator":9}},{"n":7,"reciprocal_sum":{"numerator":27,"denominator":112},"root":{"numerator":112,"denominator":27}},{"n":12,"reciprocal_sum":{"numerator":77,"denominator":312},"root":{"numerator":312,"denominator":77}}],"root_formula":"4*n*(n+1)/((n-1)*(n+2))","limit":{"numerator":4,"denominator":1}},"claimed_assurance":"COMPUTED","scope":"DECLARED_MATRIX_FAMILY","completeness":"COMPLETE","evidence":[{"path":"evidence/spectral-certificate.json","sha256":"sha256:05e2466af19c59a3ecc6178a56b1b6c9e4c2288cf73712a4aab283432ba3da34"}],"limitations":["MATRIX_DETERMINANT_LEMMA_TRUSTED","RATIONAL_LIMIT_INFERENCE_NOT_PROOF_ASSISTANT_VERIFIED"]}
+{
+  "result": {
+    "checkpoints": [
+      {
+        "n": 4,
+        "reciprocal_sum": {
+          "denominator": 40,
+          "numerator": 9
+        },
+        "root": {
+          "denominator": 9,
+          "numerator": 40
+        }
+      },
+      {
+        "n": 7,
+        "reciprocal_sum": {
+          "denominator": 112,
+          "numerator": 27
+        },
+        "root": {
+          "denominator": 27,
+          "numerator": 112
+        }
+      },
+      {
+        "n": 12,
+        "reciprocal_sum": {
+          "denominator": 312,
+          "numerator": 77
+        },
+        "root": {
+          "denominator": 77,
+          "numerator": 312
+        }
+      }
+    ],
+    "limit": {
+      "denominator": 1,
+      "numerator": 4
+    },
+    "partial_fraction": {
+      "left_coefficient": 1,
+      "right_coefficient": -1,
+      "scale": {
+        "denominator": 2,
+        "numerator": 1
+      }
+    },
+    "rank_one_sign": "DIAGONAL_MINUS_LAMBDA_ONES",
+    "root_formula": "4*n*(n+1)/((n-1)*(n+2))"
+  },
+  "witness": [
+    {
+      "path": "evidence/spectral-certificate.json",
+      "sha256": "sha256:b072a77d9b2640512258dc5ce5fa8f1c8febfd2c3cddf23a8bf9b3e62a4a60f4"
+    }
+  ]
+}

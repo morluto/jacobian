@@ -5,15 +5,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verifier_support import resolve_evidence, strict_submission_contract
+from verifier_support import json_value_equal, resolve_evidence
 
 VARIABLES = {"u", "v", "w"}
 
-ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
-LIMITATIONS = [
-    "FROZEN_FRAGMENT_NOT_FULL_UPSTREAM_DATABASE",
-    "NO_EXTERNAL_METAMATH_KERNEL_REPLAY",
-]
 RESULT_KEYS = frozenset(
     {"repaired_proof", "changed_positions", "trace", "final_expression"}
 )
@@ -22,13 +17,10 @@ STEP_KEYS = frozenset({"position", "label", "substitution", "stack_depth", "stac
 
 @dataclass
 class VerifyResult:
-    """Independent diagnostic dimensions for one submission."""
+    """Task-owned replay and witness diagnostics for one submission."""
 
-    protocol_ok: bool
     correctness: bool
-    evidence_validity: bool
-    scope_accuracy: bool
-    assurance_ok: bool
+    witness_validity: bool
     message: str
 
 
@@ -145,13 +137,13 @@ def _trace_types_valid(trace: object) -> bool:
     return True
 
 
-def _evidence_binds_result(
-    evidence: object, result: dict[str, Any], task_root: Path
+def _witness_binds_result(
+    witness: object, result: dict[str, Any], task_root: Path
 ) -> bool:
-    """Bind evidence to the exact path, digest, result, and replay explanation."""
+    """Bind the declared witness to the exact replayed result."""
 
     target = resolve_evidence(
-        evidence[0] if isinstance(evidence, list) and len(evidence) == 1 else None,
+        witness[0] if isinstance(witness, list) and len(witness) == 1 else None,
         expected_path="evidence/answer.txt",
         workspace=task_root,
     )
@@ -168,24 +160,7 @@ def _evidence_binds_result(
         marker_value = json.loads(marker_lines[0].removeprefix("RESULT_JSON:").strip())
     except (TypeError, ValueError, RecursionError, MemoryError):
         return False
-    if json.dumps(marker_value, sort_keys=True, separators=(",", ":")) != json.dumps(
-        result, sort_keys=True, separators=(",", ":")
-    ):
-        return False
-    explanation = " ".join(
-        line.strip()
-        for line in lines
-        if line.strip() and not line.startswith("RESULT_JSON:")
-    ).casefold()
-    return bool(
-        explanation
-        and "ordered" in explanation
-        and "hypothes" in explanation
-        and "stack" in explanation
-        and "unif" in explanation
-        and "substitut" in explanation
-        and all(label in explanation for label in ("wi", "a1i", "mpd"))
-    )
+    return json_value_equal(marker_value, result)
 
 
 def _valid_proof_and_positions(
@@ -225,9 +200,9 @@ def _valid_trace_and_target(
     submitted_trace = result.get("trace")
     if not _trace_types_valid(submitted_trace):
         return "trace transcript mismatch"
-    if submitted_trace != expected_trace:
+    if not json_value_equal(submitted_trace, expected_trace):
         return "trace transcript mismatch"
-    if result.get("final_expression") != input_data.get("target"):
+    if not json_value_equal(result.get("final_expression"), input_data.get("target")):
         return "final expression mismatch"
     return None
 
@@ -245,60 +220,24 @@ def _mathematical_failure(result: object, input_data: dict[str, Any]) -> str | N
 def verify_submission(
     task_root: Path, submission: dict[str, Any], input_data: dict[str, Any]
 ) -> VerifyResult:
-    task_id = input_data.get("task_id", "")
-    envelope_ok = strict_submission_contract(
-        submission,
-        task_id=task_id,
-        conclusion="PROOF_REPAIRED_AND_REPLAYED",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}),
-        verification_record="forbidden",
-    )
-    assurance_ok = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") in ALLOWED_ASSURANCES
-    )
-    scope_accuracy = bool(
-        isinstance(submission, dict)
-        and submission.get("scope") == "FROZEN_METAMATH_STYLE_ASSERTION_REGISTRY"
-        and submission.get("completeness") == "COMPLETE"
-        and submission.get("limitations") == LIMITATIONS
-    )
     result = submission.get("result") if isinstance(submission, dict) else None
     result_shape_ok = isinstance(result, dict) and set(result) == RESULT_KEYS
-    protocol_ok = bool(
-        envelope_ok and scope_accuracy and assurance_ok and result_shape_ok
-    )
     math_failure = _mathematical_failure(result, input_data)
     correctness = bool(math_failure is None)
-    evidence_validity = bool(
+    witness_validity = bool(
         isinstance(result, dict)
-        and _evidence_binds_result(submission.get("evidence"), result, task_root)
+        and _witness_binds_result(submission.get("witness"), result, task_root)
     )
 
-    if (
-        protocol_ok
-        and correctness
-        and evidence_validity
-        and scope_accuracy
-        and assurance_ok
-    ):
+    if result_shape_ok and correctness and witness_validity:
         message = "accepted"
-    elif not protocol_ok:
-        message = "protocol mismatch"
     elif not correctness:
         message = math_failure or "mathematical verification failed"
-    elif not evidence_validity:
-        message = "evidence binding failed"
-    elif not scope_accuracy:
-        message = "scope or completeness mismatch"
     else:
-        message = "assurance mismatch"
+        message = "witness binding failed"
 
     return VerifyResult(
-        protocol_ok,
         correctness,
-        evidence_validity,
-        scope_accuracy,
-        assurance_ok,
+        witness_validity,
         message,
     )

@@ -4,20 +4,14 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 W, T = Path("/app"), Path("/tests")
-LIMITATIONS = [
-    "STANDARD_POWER_LOG_INTEGRAL_CRITERION_TRUSTED",
-    "DECLARED_FUNCTION_FAMILY_ONLY",
-    "NO_PROOF_ASSISTANT_VERIFICATION",
-]
 MAX_EVIDENCE_BYTES = 64 * 1024
 
 
@@ -111,49 +105,25 @@ def valid_evidence(evidence, result):
 
 
 def main():
-    expected = json.loads((T / "expected.json").read_text())
     submission = load_submission(W / "submission.json")
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        completeness="COMPLETE_FOR_DECLARED_FAMILY",
-        allowed_assurances=frozenset({"COMPUTED"}),
-        verification_record="forbidden",
-    )
-    envelope = isinstance(submission, dict)
-    result = submission.get("result") if envelope else None
-    # Evaluate mathematical correctness independently of the assurance/contract
-    # envelope so an unsupported assurance claim does not collapse the
-    # correctness diagnostic to zero for an otherwise valid result.
-    math_ok = bool(envelope and frozen() and valid_result(result))
+    protocol_ok = submission is not None
+    result = submission.get("result") if protocol_ok else None
+    math_ok = bool(protocol_ok and frozen() and valid_result(result))
     evidence_ok = bool(
-        envelope and frozen() and valid_evidence(submission.get("evidence"), result)
+        protocol_ok and frozen() and valid_evidence(submission.get("witness"), result)
     )
-    scope_ok = bool(
-        envelope
-        and submission.get("scope") == expected["required_scope"]
-        and submission.get("completeness") == "COMPLETE_FOR_DECLARED_FAMILY"
-        and submission.get("limitations") == LIMITATIONS
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=evidence_ok,
+        protocol_ok=protocol_ok,
     )
-    assurance_ok = bool(
-        envelope
-        and isinstance(submission.get("claimed_assurance"), str)
-        and submission.get("claimed_assurance") == "COMPUTED"
-    )
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
-    correct = bool(contract and math_ok and scope_ok and evidence_ok and not false_cert)
-    reward = float(correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
                 "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
                 "reward": reward,
-                "false_certification": false_cert,
             }
         )
     )

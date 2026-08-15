@@ -59,19 +59,13 @@ p = root / "evidence/gram-schmidt-audit.json"
 p.parent.mkdir(parents=True, exist_ok=True)
 p.write_text(json.dumps(evidence, separators=(",", ":")))
 submission = {
-    "task_id": evidence["task_id"],
-    "conclusion": "FORMAL_FILTER_INCLUDES_ZERO_RESIDUALS",
     "result": result,
-    "claimed_assurance": "COMPUTED",
-    "scope": "EXACT_RATIONAL_GRAM_SCHMIDT_COUNTERMODEL",
-    "completeness": "COMPLETE",
-    "evidence": [
+    "witness": [
         {
             "path": "evidence/gram-schmidt-audit.json",
             "sha256": "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest(),
         }
     ],
-    "limitations": limitations,
 }
 (root / "submission.json").write_text(json.dumps(submission, indent=2) + "\n")
 (root / "answer.txt").write_text(

@@ -134,21 +134,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
+    "result": {
+      "$ref": "#/$defs/result"
     },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "conclusion": {
-      "const": "FROZEN_PROOF_INVALID"
-    },
-    "evidence": {
+    "witness": {
       "items": {
         "additionalProperties": false,
         "properties": {
@@ -169,33 +158,11 @@
       "maxItems": 1,
       "minItems": 1,
       "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "TRUE_SHIFT_COMPLEXITY_SUPREMUM_NOT_DETERMINED",
-        "NO_INFINITE_DIMENSIONAL_OPERATOR_THEOREM_VERIFIED"
-      ]
-    },
-    "result": {
-      "$ref": "#/$defs/result"
-    },
-    "scope": {
-      "const": "AUDIT_THE_FOUR_FROZEN_STEPS_ONLY",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/generalized-shift-proof-audit"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

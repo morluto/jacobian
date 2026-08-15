@@ -7,7 +7,6 @@ from verifier_support import (
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 W = Path("/app")
@@ -193,7 +192,6 @@ def evidence_valid(evidence, result):
 def main():
     submission = load_submission()
     frozen = load_frozen()
-    expected = json.loads((E / "expected.json").read_text())
     source = frozen.get("source") if isinstance(frozen, dict) else {}
     source_bound = bool(
         isinstance(source, dict)
@@ -202,54 +200,21 @@ def main():
         == "sha256:094bc10d13dd610b5f2a17f69203641a0cc05fbca5982df06d9e07c8d189a559"
         and source.get("license") == "CC 4.0"
     )
-    mathematical_contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="optional",
-    )
-    public_contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
-    )
     result = submission.get("result") if isinstance(submission, dict) else {}
-    correctness = bool(
-        mathematical_contract and source_bound and certificate_valid(result, frozen)
-    )
+    correctness = bool(source_bound and certificate_valid(result, frozen))
     evidence = bool(
-        mathematical_contract
-        and isinstance(result, dict)
-        and evidence_valid(submission.get("evidence"), result)
-    )
-    scope = bool(
-        mathematical_contract and submission.get("scope") == expected["required_scope"]
-    )
-    assurance = bool(
-        mathematical_contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false_certification = bool(
         isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "VERIFIED"
+        and isinstance(result, dict)
+        and evidence_valid(submission.get("witness"), result)
     )
-    reward = (
-        0.0
-        if not public_contract or not correctness or not evidence or false_certification
-        else 0.8 + 0.1 * scope + 0.1 * assurance
-    )
+    reward = float(correctness and evidence)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(correctness),
-                "evidence_validity": float(evidence),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
+                "witness_validity": float(evidence),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

@@ -1,6 +1,0 @@
-{
-  "task_id": "jacobian/gudhi",
-  "provider": "gudhi",
-  "contract": "jacobian.gudhi-persistence-spike/v1",
-  "pin_sha256": "sha256:3decd51546ff618689114fb57eff03e1abc50133207e50fcba5c473583c02f4f"
-}

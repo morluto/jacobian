@@ -95,28 +95,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
+    "result": {
+      "$ref": "#/$defs/result"
     },
-    "completeness": {
-      "enum": [
-        "COMPLETE",
-        "PARTIAL",
-        "UNKNOWN"
-      ]
-    },
-    "conclusion": {
-      "enum": [
-        "ROOT_BOUND_CERTIFIED",
-        "INSUFFICIENT_EVIDENCE"
-      ]
-    },
-    "evidence": {
+    "witness": {
       "items": {
         "additionalProperties": false,
         "properties": {
@@ -137,32 +119,11 @@
       "maxItems": 1,
       "minItems": 1,
       "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "ELEMENTARY_COMPLEX_MODULUS_LEMMAS_TRUSTED"
-      ]
-    },
-    "result": {
-      "$ref": "#/$defs/result"
-    },
-    "scope": {
-      "const": "ALL_REAL_PARAMETERS_WITH_1_GE_A_GE_B_GE_C_GE_0",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/polynomial-root-localization-certificate"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

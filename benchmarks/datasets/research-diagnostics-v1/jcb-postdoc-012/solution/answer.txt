@@ -1,4 +1,0 @@
-A counterexample to Anderson's quasi-completeness conjecture
-
-Expected conclusion: COUNTEREXAMPLE_EXISTS.
-Oracle summary: The public project constructs a weakly quasi-complete Noetherian local ring that is not quasi-complete and supplies a large Lean formalization. The construction and proof are evaluator-visible but intentionally omitted from this prompt.

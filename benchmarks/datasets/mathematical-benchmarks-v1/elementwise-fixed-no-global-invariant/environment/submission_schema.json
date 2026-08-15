@@ -74,21 +74,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
+    "result": {
+      "$ref": "#/$defs/result"
     },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "conclusion": {
-      "const": "ELEMENTWISE_DOES_NOT_IMPLY_GLOBAL"
-    },
-    "evidence": {
+    "witness": {
       "items": {
         "additionalProperties": false,
         "properties": {
@@ -109,41 +98,11 @@
       "maxItems": 1,
       "minItems": 1,
       "type": "array"
-    },
-    "limitations": {
-      "items": false,
-      "maxItems": 2,
-      "minItems": 2,
-      "prefixItems": [
-        {
-          "const": "claim:finite-action-counterexample"
-        },
-        {
-          "const": "limitation:no-general-classification-theorem"
-        }
-      ],
-      "type": "array"
-    },
-    "result": {
-      "$ref": "#/$defs/result"
-    },
-    "scope": {
-      "const": "finite subgroups of SL_3 over one declared allowed prime field",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/elementwise-fixed-no-global-invariant"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

@@ -1,1 +1,17 @@
-{"task_id":"jacobian/nondifferentiable-maximum-construction","conclusion":"VALID_NONDIFFERENTIABLE_MAXIMUM","result":{"peak":"2","left_slope":"3","right_slope":"-1/2","left_value_at_join":"2","right_value_at_join":"2","left_derivative":"3","right_derivative":"-1/2"},"claimed_assurance":"COMPUTED","scope":"piecewise-linear construction on the closed interval [-1,1]","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:8696aa4834e68ed7fcdb46e29e0fa1a06e39569b68d28e52d7d47fc0a7075ddb"}],"limitations":["The verifier covers the declared rational piecewise-linear family, not arbitrary function representations."]}
+{
+  "result": {
+    "left_derivative": "3",
+    "left_slope": "3",
+    "left_value_at_join": "2",
+    "peak": "2",
+    "right_derivative": "-1/2",
+    "right_slope": "-1/2",
+    "right_value_at_join": "2"
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:8696aa4834e68ed7fcdb46e29e0fa1a06e39569b68d28e52d7d47fc0a7075ddb"
+    }
+  ]
+}

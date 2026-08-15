@@ -1,4 +1,0 @@
-A planar counterexample to the bunkbed conjecture
-
-Expected conclusion: DISPROVED.
-Oracle summary: The public construction gives a planar counterexample with 7,222 vertices, together with code and rigorous probability bounds establishing the reversed connectivity inequality.

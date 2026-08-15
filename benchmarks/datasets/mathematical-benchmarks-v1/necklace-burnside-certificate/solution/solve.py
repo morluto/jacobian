@@ -46,12 +46,10 @@ result = {
     "orbit_count": len(representatives),
     "canonical_representatives": representatives,
 }
-limitations = ["FINITE_LENGTH_16_INSTANCE", "NO_GENERAL_ENUMERATION_THEOREM"]
 evidence = {
     "schema_version": "1",
     "task_id": "jacobian/necklace-burnside-certificate",
     "result": result,
-    "limitations": limitations,
 }
 root = (
     Path(sys.argv[2])
@@ -65,14 +63,8 @@ evidence_path = (
 evidence_path.write_text(json.dumps(evidence, sort_keys=True, separators=(",", ":")))
 digest = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
 submission = {
-    "task_id": "jacobian/necklace-burnside-certificate",
-    "conclusion": "DIHEDRAL_ORBITS_ENUMERATED",
     "result": result,
-    "claimed_assurance": "COMPUTED",
-    "scope": "ALL_LENGTH_16_BINARY_WORDS_AND_ALL_32_DIHEDRAL_ACTIONS",
-    "completeness": "COMPLETE",
-    "evidence": [{"path": "evidence/answer.txt", "sha256": digest}],
-    "limitations": limitations,
+    "witness": [{"path": "evidence/answer.txt", "sha256": digest}],
 }
 (root / "submission.json").write_text(
     json.dumps(submission, sort_keys=True, separators=(",", ":"))

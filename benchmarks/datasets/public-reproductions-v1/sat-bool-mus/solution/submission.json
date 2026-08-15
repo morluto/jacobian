@@ -1,1 +1,12 @@
-{"task_id":"jacobian/sat-bool-mus","conclusion":"UNSATISFIABLE","result":{"status":"UNSATISFIABLE","assignment":{}},"claimed_assurance":"COMPUTED","scope":"jacobian/sat-bool-mus complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:5d34e60fe44ff7dd3ff912fec178582a47219a47779da705bec9281cdbbd874c"}],"limitations":[]}
+{
+  "result": {
+    "assignment": {},
+    "status": "UNSATISFIABLE"
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:5d34e60fe44ff7dd3ff912fec178582a47219a47779da705bec9281cdbbd874c"
+    }
+  ]
+}

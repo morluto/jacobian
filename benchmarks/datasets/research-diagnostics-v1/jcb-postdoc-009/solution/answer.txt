@@ -1,4 +1,0 @@
-Irreducible vertices in positive-definite weighted tree lattices
-
-Expected conclusion: PROVED.
-Oracle summary: The First Proof release includes the selected problem, a reference solution, and expert review artifacts. Those answer-visible materials are evaluator-only and are not included in the prompt.

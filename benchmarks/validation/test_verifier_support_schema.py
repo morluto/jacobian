@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import inspect
 import json
 import sys
 from pathlib import Path
@@ -166,41 +167,68 @@ def test_load_submission_enforces_the_complete_public_schema(
 
 
 def test_aggregate_reward_full_credit_when_hard_gates_pass() -> None:
-    assert (
-        _VS.aggregate_reward(
-            correctness=1.0,
-            evidence_validity=True,
-            scope_accuracy=1,
-            assurance_calibration=1.0,
-        )
-        == 1.0
-    )
+    assert _VS.aggregate_reward(correctness=1.0, evidence_validity=True) == 1.0
 
 
 def test_aggregate_reward_zeros_on_invalid_evidence_even_when_math_passes() -> None:
+    assert _VS.aggregate_reward(correctness=1.0, evidence_validity=0.0) == 0.0
+
+
+def test_aggregate_reward_zeros_on_protocol_failure() -> None:
     assert (
-        _VS.aggregate_reward(
-            correctness=1.0,
-            evidence_validity=0.0,
-            scope_accuracy=1.0,
-            assurance_calibration=1.0,
-        )
+        _VS.aggregate_reward(correctness=1.0, evidence_validity=1.0, protocol_ok=False)
         == 0.0
     )
 
 
-def test_aggregate_reward_soft_assurance_partial_after_hard_gates() -> None:
-    assert _VS.aggregate_reward(
-        correctness=1.0,
-        evidence_validity=1.0,
-        scope_accuracy=1.0,
-        assurance_calibration=0.0,
-        soft_assurance=True,
-    ) == pytest.approx(0.9)
+def test_aggregate_reward_is_binary_with_no_partial_credit() -> None:
+    # A partial correctness diagnostic is not a full mathematical outcome.
+    assert _VS.aggregate_reward(correctness=0.5, evidence_validity=1.0) == 0.0
+    # Booleans are accepted and treated as full/empty unit scores.
+    assert _VS.aggregate_reward(correctness=True, evidence_validity=True) == 1.0
+    assert _VS.aggregate_reward(correctness=True, evidence_validity=False) == 0.0
 
 
-def test_template_exports_aggregate_reward() -> None:
-    assert "aggregate_reward" in _VS.__all__
+def test_aggregate_reward_has_no_soft_assurance_parameter() -> None:
+    signature = inspect.signature(_VS.aggregate_reward)
+    assert set(signature.parameters) == {
+        "correctness",
+        "evidence_validity",
+        "protocol_ok",
+    }
+
+
+def test_template_exports_new_protocol_surface() -> None:
+    for name in (
+        "aggregate_reward",
+        "submission_matches_public_schema",
+        "normalize_reward_file",
+    ):
+        assert name in _VS.__all__
+
+
+def test_template_does_not_export_retired_envelope_helpers() -> None:
+    retired = (
+        "strict_submission_contract",
+        "false_verified_claim",
+        "authorized_record_is_bound",
+        "ASSURANCE_LEVELS",
+        "SUBMISSION_FIELDS",
+    )
+    for name in retired:
+        assert name not in _VS.__all__
+        assert not hasattr(_VS, name)
+
+
+def test_submission_matches_public_schema_validates_against_contract(
+    contract_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        _VS, "_load_public_contract", lambda: json.loads(contract_path.read_text())
+    )
+    assert _VS.submission_matches_public_schema({"count": 1, "labels": ["one"]}) is True
+    assert _VS.submission_matches_public_schema({"count": -1, "labels": []}) is False
 
 
 def test_reject_duplicate_keys_raises_on_duplicate_object_name() -> None:

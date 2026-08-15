@@ -1,1 +1,20 @@
-{"task_id":"jacobian/gaussian-complex-cancellation","conclusion":"TRUE","result":{"moment":{"real":{"num":"0","den":"1"},"imaginary":{"num":"0","den":"1"}}},"claimed_assurance":"COMPUTED","scope":"jacobian/gaussian-complex-cancellation complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:3944d1b7060c44846d83d4e4689414de8299c1c3e87750f1007fc9d6c691c941"}],"limitations":[]}
+{
+  "result": {
+    "moment": {
+      "imaginary": {
+        "den": "1",
+        "num": "0"
+      },
+      "real": {
+        "den": "1",
+        "num": "0"
+      }
+    }
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:3944d1b7060c44846d83d4e4689414de8299c1c3e87750f1007fc9d6c691c941"
+    }
+  ]
+}

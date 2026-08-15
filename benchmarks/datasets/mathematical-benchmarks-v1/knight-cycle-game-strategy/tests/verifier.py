@@ -5,11 +5,9 @@ from typing import Any
 
 from verifier_support import (
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
@@ -195,61 +193,27 @@ def _evidence(value: object) -> bool:
 def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion="OPTIMUM_STRATEGIES_CERTIFIED",
-        verification_record="forbidden",
-    )
     source = _source()
     result = data.get("result")
     result_data = result if isinstance(result, dict) else {}
     provenance = source.get("source", {})
     correct = bool(
-        contract
-        and provenance.get("revision") == "882ba08befd0856f5364db1e53d58c7e2cf704f9"
+        provenance.get("revision") == "882ba08befd0856f5364db1e53d58c7e2cf704f9"
         and source.get("claimed_optimum") == 100
         and set(result_data) == {"lower_strategy", "upper_strategy"}
         and _lower(result_data.get("lower_strategy"))
         and _upper(result_data.get("upper_strategy"))
     )
-    evidence = bool(correct and _evidence(data.get("evidence")))
-    scope = bool(
-        contract
-        and data.get("scope")
-        == "20x20 board, squared-distance-5 red conflicts, alternating Amy-first play"
-        and data.get("completeness") == "COMPLETE"
-    )
-    assurance = bool(contract and data.get("claimed_assurance") == "COMPUTED")
-    limitations = bool(
-        contract
-        and isinstance(data.get("limitations"), list)
-        and any(
-            isinstance(item, str) and "formal proof" in item.casefold()
-            for item in data["limitations"]
-        )
-    )
-    false_verified = false_verified_claim(submission, verification_record_bound=False)
-    passed = bool(
-        correct
-        and evidence
-        and scope
-        and assurance
-        and limitations
-        and not false_verified
-    )
+    witness = bool(correct and _evidence(data.get("witness")))
+    passed = correct and witness
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(correct),
-                "evidence_validity": float(evidence),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
+                "witness_validity": float(witness),
                 "reward": float(passed),
-                "false_certification": false_verified,
             },
             sort_keys=True,
         )

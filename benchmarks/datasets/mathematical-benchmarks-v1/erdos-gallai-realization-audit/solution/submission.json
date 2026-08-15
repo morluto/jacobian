@@ -1,1 +1,67 @@
-{"task_id":"jacobian/erdos-gallai-realization-audit","conclusion":"MIXED_REALIZATION_AND_OBSTRUCTION","result":{"cases":[{"case_id":"constructive","status":"GRAPHICAL","edges":[[0,1],[0,2],[0,3],[0,4],[1,2],[1,3],[1,4],[2,3],[4,5]],"violations":[]},{"case_id":"obstruction","status":"NONGRAPHICAL","edges":[],"violations":[{"k":3,"lhs":13,"rhs":11}]}]},"claimed_assurance":"COMPUTED","scope":"the two frozen degree sequences only","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:9e6179842f104a249f90d554b4a73f32866ae60c03c09a413bfafeaf21b3262e"}],"limitations":["The checker does not enumerate all graph realizations or prove claims about other degree sequences."]}
+{
+  "result": {
+    "cases": [
+      {
+        "case_id": "constructive",
+        "edges": [
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            0,
+            4
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            4,
+            5
+          ]
+        ],
+        "status": "GRAPHICAL",
+        "violations": []
+      },
+      {
+        "case_id": "obstruction",
+        "edges": [],
+        "status": "NONGRAPHICAL",
+        "violations": [
+          {
+            "k": 3,
+            "lhs": 13,
+            "rhs": 11
+          }
+        ]
+      }
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:9e6179842f104a249f90d554b4a73f32866ae60c03c09a413bfafeaf21b3262e"
+    }
+  ]
+}

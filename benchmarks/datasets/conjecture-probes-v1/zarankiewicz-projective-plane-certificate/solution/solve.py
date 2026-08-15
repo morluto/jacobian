@@ -59,7 +59,6 @@ def main() -> None:
         "schema_version": "1",
         "task_id": TASK_ID,
         "result": result,
-        "limitations": LIMITATIONS,
     }
     evidence = root / "evidence/answer.json"
     evidence.parent.mkdir(parents=True, exist_ok=True)
@@ -67,19 +66,13 @@ def main() -> None:
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
     )
     submission = {
-        "task_id": TASK_ID,
-        "conclusion": "PG2_F3_ZARANKIEWICZ_EXTREMAL_CERTIFICATE",
         "result": result,
-        "claimed_assurance": "CHECKED",
-        "scope": "pg2-f3-zarankiewicz-k22-extremal-certificate-v1",
-        "completeness": "COMPLETE",
-        "evidence": [
+        "witness": [
             {
                 "path": "evidence/answer.json",
                 "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
             }
         ],
-        "limitations": LIMITATIONS,
     }
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 

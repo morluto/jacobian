@@ -1,5 +1,4 @@
 import importlib.util
-import json
 import sys
 from pathlib import Path
 
@@ -35,8 +34,3 @@ def test_corrupt_term_or_histogram_is_rejected():
     result = verifier.derive()
     result["exact_even_fixed_histogram"][1] += 1
     assert not verifier.matches(result)
-
-
-def test_contract_has_no_verified_upgrade():
-    contract = json.loads((TASK / "tests/public_contract.json").read_text())
-    assert contract["allowed_assurance"] == ["COMPUTED"]

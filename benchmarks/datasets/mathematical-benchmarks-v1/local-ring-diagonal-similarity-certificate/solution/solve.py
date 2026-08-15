@@ -53,15 +53,7 @@ Path("/app/evidence").mkdir(parents=True, exist_ok=True)
 Path("/app/evidence/answer.txt").write_text(text)
 h = hashlib.sha256(text.encode()).hexdigest()
 s = {
-    "task_id": "jacobian/local-ring-diagonal-similarity-certificate",
-    "conclusion": "DIAGONAL_ENTRIES_MATCH_BY_UNIT_PERMUTATION",
     "result": r,
-    "claimed_assurance": "COMPUTED",
-    "scope": "frozen-six-dimensional-Z-mod-125-certificate",
-    "completeness": "COMPLETE",
-    "evidence": [{"path": "evidence/answer.txt", "sha256": f"sha256:{h}"}],
-    "limitations": [
-        "The verifier certifies only the frozen matrix certificate, not the general local-ring theorem."
-    ],
+    "witness": [{"path": "evidence/answer.txt", "sha256": f"sha256:{h}"}],
 }
 Path("/app/submission.json").write_text(json.dumps(s, indent=2) + "\n")

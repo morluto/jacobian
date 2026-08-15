@@ -1,1 +1,0 @@
-{"task_id":"jacobian/jcb-postdoc-008","conclusion":"EXACT_IDENTITY","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/jcb-postdoc-008","answer-visible diagnostic"],"expected_conclusion":"EXACT_IDENTITY","expected_key_facts":{"density_exists":"true","error_term":"O_b(X/sqrt(log X))"}}

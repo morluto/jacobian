@@ -1,1 +1,69 @@
-{"task_id":"jacobian/valuation-gcd-quantifier-audit","conclusion":"QUANTIFIER_DEFECT_REPAIRED","result":{"defect":"EXISTS_PRIME_MIN_ZERO_IS_TOO_WEAK","countermodel":[{"prime":2,"exponents":[0,2,2,2]},{"prime":3,"exponents":[1,1,1,1]},{"prime":5,"exponents":[2,2,2,2]}],"repair":[{"prime":2,"exponents":[0,2,2,2]},{"prime":3,"exponents":[3,0,3,3]},{"prime":5,"exponents":[4,4,0,4]}]},"claimed_assurance":"COMPUTED","scope":"FROZEN_VALUATION_TRANSLATION_AND_SUBMITTED_TABLES","completeness":"COMPLETE","evidence":[{"path":"evidence/valuation-audit.json","sha256":"sha256:cd95ca9f0e1537a54a97b16902fb3c60bc6b099911ba28fc3fa9e5f725b4e668"}],"limitations":["SOURCE_FINAL_SUMMATION_NOT_ASSESSED","INTEGER_RECONSTRUCTION_CHECKED_ONLY_FOR_SUBMITTED_PRIMES"]}
+{
+  "result": {
+    "countermodel": [
+      {
+        "exponents": [
+          0,
+          2,
+          2,
+          2
+        ],
+        "prime": 2
+      },
+      {
+        "exponents": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "prime": 3
+      },
+      {
+        "exponents": [
+          2,
+          2,
+          2,
+          2
+        ],
+        "prime": 5
+      }
+    ],
+    "defect": "EXISTS_PRIME_MIN_ZERO_IS_TOO_WEAK",
+    "repair": [
+      {
+        "exponents": [
+          0,
+          2,
+          2,
+          2
+        ],
+        "prime": 2
+      },
+      {
+        "exponents": [
+          3,
+          0,
+          3,
+          3
+        ],
+        "prime": 3
+      },
+      {
+        "exponents": [
+          4,
+          4,
+          0,
+          4
+        ],
+        "prime": 5
+      }
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/valuation-audit.json",
+      "sha256": "sha256:cd95ca9f0e1537a54a97b16902fb3c60bc6b099911ba28fc3fa9e5f725b4e668"
+    }
+  ]
+}

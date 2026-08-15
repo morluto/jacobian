@@ -7,25 +7,16 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    _finite_json_float,
-    _reject_nonfinite_json,
     evidence_list_is_bound,
-    is_regular_bounded_file,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
+    resolve_evidence,
     workspace_input_is_bound,
 )
 
 TASK_ID = "jacobian/hadwiger-triangle-free-minor-certificate"
-SCOPE = "triangle-free-11-vertex-hadwiger-instance-v1"
-LIMITATIONS = [
-    "ONE_TRIANGLE_FREE_11_VERTEX_GRAPH",
-    "EXHAUSTIVE_THREE_COLOR_REJECTION",
-    "NO_GLOBAL_HADWIGER_CONCLUSION",
-]
 RESULT_KEYS = {
     "edges",
     "four_coloring",
@@ -183,39 +174,6 @@ def mathematics(r: Any) -> bool:
     )
 
 
-def _json_equal(a: Any, b: Any) -> bool:
-    """Return whether two JSON-decoded values are identical, types included.
-
-    Python ``==`` treats booleans as integers (``False == 0``) and integral
-    floats as integers (``4.0 == 4``), but the evidence contract requires the
-    payload to exactly copy the submitted ``result`` with concrete JSON types.
-    """
-    if type(a) is not type(b):
-        return False
-    if isinstance(a, dict):
-        return set(a) == set(b) and all(_json_equal(a[k], b[k]) for k in a)
-    if isinstance(a, list):
-        return len(a) == len(b) and all(
-            _json_equal(x, y) for x, y in zip(a, b, strict=True)
-        )
-    return a == b
-
-
-def _raw_submission() -> dict[str, Any] | None:
-    path = Path("/app/submission.json")
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(
-            path.read_text(),
-            parse_constant=_reject_nonfinite_json,
-            parse_float=_finite_json_float,
-        )
-    except (OSError, ValueError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
-
-
 def reward(v):
     p = Path("/logs/verifier")
     p.mkdir(parents=True, exist_ok=True)
@@ -223,60 +181,39 @@ def reward(v):
     normalize_reward_file(p / "reward.json")
 
 
-def main():
-    ib = workspace_input_is_bound()
-    s = load_submission(require_input_binding=False)
-    c = strict_submission_contract(
-        s,
-        task_id=TASK_ID,
-        conclusion="FINITE_HADWIGER_K4_CERTIFICATE",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
-    )
-    raw = _raw_submission()
-    m = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
-    e = bool(
-        isinstance(raw, dict)
-        and evidence_list_is_bound(raw.get("evidence"), max_bytes=None)
-    )
-    payload = (
-        read_evidence_json(
-            raw["evidence"][0],
-            expected_path="evidence/answer.txt",
-            max_bytes=None,
-        )
-        if e
-        else None
-    )
-    e = bool(
+def _witness_matches_result(witness: object, result: object) -> bool:
+    if not evidence_list_is_bound(witness, expected_path="evidence/answer.txt"):
+        return False
+    if resolve_evidence(witness[0], expected_path="evidence/answer.txt") is None:
+        return False
+    payload = read_evidence_json(witness[0], expected_path="evidence/answer.txt")
+    return bool(
         isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
+        and set(payload) == {"schema_version", "task_id", "result"}
         and payload.get("schema_version") == "1"
         and payload.get("task_id") == TASK_ID
-        and _json_equal(payload.get("result"), raw.get("result"))
-        and payload.get("limitations") == LIMITATIONS
+        and json_value_equal(payload.get("result"), result)
     )
-    sc = bool(
-        isinstance(raw, dict)
-        and raw.get("scope") == SCOPE
-        and raw.get("limitations") == LIMITATIONS
+
+
+def main():
+    input_bound = workspace_input_is_bound()
+    submission = load_submission(require_input_binding=False)
+    protocol = isinstance(submission, dict)
+    mathematics_ok = bool(protocol and mathematics(submission.get("result")))
+    witness_ok = bool(
+        protocol
+        and _witness_matches_result(submission.get("witness"), submission.get("result"))
     )
-    scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
-    claimed = raw.get("claimed_assurance") if isinstance(raw, dict) else None
-    a = bool(isinstance(claimed, str) and claimed in scoreable_assurances)
-    f = bool(claimed == "VERIFIED")
-    agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
+    aggregate = float(input_bound and protocol and mathematics_ok and witness_ok)
     reward(
         {
-            "protocol": 1.0 if c else 0.0,
-            "input_binding": 1.0 if ib else 0.0,
-            "mathematics": 1.0 if m else 0.0,
-            "evidence": 1.0 if e else 0.0,
-            "scope": 1.0 if sc else 0.0,
-            "assurance": 1.0 if a else 0.0,
-            "false_certification": f,
-            "aggregate_reward": agg,
-            "reward": agg,
+            "protocol": float(protocol),
+            "input_binding": float(input_bound),
+            "mathematics": float(mathematics_ok),
+            "witness_validity": float(witness_ok),
+            "aggregate_reward": aggregate,
+            "reward": aggregate,
         }
     )
 
@@ -290,10 +227,7 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "evidence": 0.0,
-                "scope": 0.0,
-                "assurance": 0.0,
-                "false_certification": False,
+                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

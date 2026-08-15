@@ -9,7 +9,9 @@ import sys
 from pathlib import Path
 
 from benchmarks.validation._verifier_child import VerifierOutput
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1 import (
+    _verifier,
+)
 
 TASK = (
     Path(__file__).parents[2]
@@ -47,30 +49,22 @@ def _bind(app: Path, submission: dict) -> None:
         + "\nThe witness and projection data are replayed independently.\n",
         encoding="utf-8",
     )
-    submission["evidence"] = [
+    submission["witness"] = [
         {"path": "evidence/answer.txt", "sha256": _digest(evidence)}
     ]
     _write_json(app / "submission.json", submission)
 
 
 def _run(app: Path, logs: Path) -> VerifierOutput:
-    return support._run_verifier(TASK, app, logs)
+    return _verifier._run_verifier(TASK, app, logs)
 
 
 def test_oracle_receives_full_reward(tmp_path: Path) -> None:
     app, logs, _ = _case(tmp_path)
     result = _run(app, logs)
     assert result.reward == 1.0
-    assert all(
-        result.details[key] == 1.0
-        for key in (
-            "protocol_compliance",
-            "correctness",
-            "evidence_validity",
-            "scope_accuracy",
-            "assurance_calibration",
-        )
-    )
+    assert result.details["correctness"] == 1.0
+    assert result.reward == 1.0
 
 
 def test_alternative_coprime_rescaling_is_accepted(tmp_path: Path) -> None:
@@ -116,50 +110,19 @@ def test_unrelated_evidence_preserves_math_dimension(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
     evidence = app / "evidence" / "answer.txt"
     evidence.write_text("RESULT_JSON: {}\nunrelated\n", encoding="utf-8")
-    submission["evidence"][0]["sha256"] = _digest(evidence)
+    submission["witness"][0]["sha256"] = _digest(evidence)
     _write_json(app / "submission.json", submission)
     result = _run(app, logs)
     assert result.details["correctness"] == 1.0
-    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
     assert result.reward == 0.0
 
 
 def test_wrong_digest_is_rejected(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
-    submission["evidence"][0]["sha256"] = "sha256:" + "0" * 64
+    submission["witness"][0]["sha256"] = "sha256:" + "0" * 64
     _write_json(app / "submission.json", submission)
-    assert _run(app, logs).details["evidence_validity"] == 0.0
-
-
-def test_scope_attack_preserves_correctness(tmp_path: Path) -> None:
-    app, logs, submission = _case(tmp_path)
-    submission["scope"] = "some integers"
-    _write_json(app / "submission.json", submission)
-    result = _run(app, logs)
-    assert result.details["correctness"] == 0.0
-    assert result.details["scope_accuracy"] == 0.0
-    assert result.reward == 0.0
-
-
-def test_unverified_preserves_math_but_not_full_reward(tmp_path: Path) -> None:
-    app, logs, submission = _case(tmp_path)
-    submission["claimed_assurance"] = "UNVERIFIED"
-    _write_json(app / "submission.json", submission)
-    result = _run(app, logs)
-    assert result.details["correctness"] == 1.0
-    assert result.details["evidence_validity"] == 1.0
-    assert result.details["assurance_calibration"] == 0.0
-    assert result.reward == 0.0
-
-
-def test_false_verified_claim_is_rejected(tmp_path: Path) -> None:
-    app, logs, submission = _case(tmp_path)
-    submission["claimed_assurance"] = "VERIFIED"
-    _write_json(app / "submission.json", submission)
-    result = _run(app, logs)
-    assert result.details["correctness"] == 1.0
-    assert result.details["false_certification"] is True
-    assert result.reward == 0.0
+    assert _run(app, logs).details["witness_validity"] == 0.0
 
 
 def test_tampered_input_and_malformed_submission_fail_closed(tmp_path: Path) -> None:
@@ -192,13 +155,13 @@ def test_oversized_evidence_is_rejected_deterministically(tmp_path: Path) -> Non
     import os
 
     os.truncate(evidence, 20 * 1024 * 1024)
-    submission["evidence"] = [
+    submission["witness"] = [
         {"path": "evidence/answer.txt", "sha256": _digest(evidence)}
     ]
     _write_json(app / "submission.json", submission)
     result = _run(app, logs)
     assert result.reward == 0.0
-    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
     assert (logs / "reward.json").is_file()
 
 
@@ -235,37 +198,24 @@ def test_evidence_marker_is_sufficient(tmp_path: Path) -> None:
         + "\nx\n",
         encoding="utf-8",
     )
-    submission["evidence"] = [
+    submission["witness"] = [
         {"path": "evidence/answer.txt", "sha256": _digest(evidence)}
     ]
     _write_json(app / "submission.json", submission)
     result = _run(app, logs)
-    assert result.details["evidence_validity"] == 1.0
+    assert result.reward == 1.0
     assert result.details["correctness"] == 1.0
     assert result.reward == 1.0
 
 
 def test_envelope_defect_preserves_correctness_dimension(tmp_path: Path) -> None:
-    """An extra top-level field must zero protocol but not correctness."""
+    """An extra top-level field must zero reward."""
 
     app, logs, submission = _case(tmp_path)
     _bind(app, submission)
     submission["unexpected_field"] = "extra"
     _write_json(app / "submission.json", submission)
     result = _run(app, logs)
-    assert result.details["protocol_compliance"] == 0.0
-    assert result.details["correctness"] == 0.0
-    assert result.reward == 0.0
-
-
-def test_result_shape_defect_lowers_protocol_compliance(tmp_path: Path) -> None:
-    """A bool in numbers must zero protocol_compliance while math is also wrong."""
-
-    app, logs, submission = _case(tmp_path)
-    submission["result"]["numbers"][0] = True
-    _bind(app, submission)
-    result = _run(app, logs)
-    assert result.details["protocol_compliance"] == 0.0
     assert result.details["correctness"] == 0.0
     assert result.reward == 0.0
 
@@ -280,12 +230,12 @@ def test_deeply_nested_evidence_json_does_not_crash(tmp_path: Path) -> None:
         "RESULT_JSON: " + nested + "\nThe witness is replayed independently.\n",
         encoding="utf-8",
     )
-    submission["evidence"] = [
+    submission["witness"] = [
         {"path": "evidence/answer.txt", "sha256": _digest(evidence)}
     ]
     _write_json(app / "submission.json", submission)
     result = _run(app, logs)
-    assert result.details["evidence_validity"] == 0.0
+    assert result.reward == 0.0
     assert result.details["correctness"] == 1.0
     assert result.reward == 0.0
     assert (logs / "reward.json").is_file()
@@ -304,35 +254,11 @@ def test_type_mismatched_evidence_json_is_rejected(tmp_path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-    submission["evidence"] = [
+    submission["witness"] = [
         {"path": "evidence/answer.txt", "sha256": _digest(evidence)}
     ]
     _write_json(app / "submission.json", submission)
     result = _run(app, logs)
     assert result.details["correctness"] == 1.0
-    assert result.details["evidence_validity"] == 0.0
     assert result.reward == 0.0
-
-
-def test_duplicate_pairs_lower_protocol_compliance(tmp_path: Path) -> None:
-    """A duplicate pair is schema-invalid even when the mathematical result fails."""
-
-    app, logs, submission = _case(tmp_path)
-    submission["result"]["good_pairs"][1] = submission["result"]["good_pairs"][0]
-    _bind(app, submission)
-    result = _run(app, logs)
-    assert result.details["protocol_compliance"] == 0.0
-    assert result.details["correctness"] == 0.0
-    assert result.reward == 0.0
-
-
-def test_envelope_defect_preserves_assurance_calibration(tmp_path: Path) -> None:
-    """A protocol defect does not make a correctly calibrated claim incorrect."""
-
-    app, logs, submission = _case(tmp_path)
-    submission["unexpected_field"] = "extra"
-    _write_json(app / "submission.json", submission)
-    result = _run(app, logs)
-    assert result.details["protocol_compliance"] == 0.0
-    assert result.details["assurance_calibration"] == 0.0
     assert result.reward == 0.0

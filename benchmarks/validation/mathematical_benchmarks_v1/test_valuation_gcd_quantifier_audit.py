@@ -4,7 +4,7 @@ import json
 import shutil
 from pathlib import Path
 
-from benchmarks.validation.mathematical_benchmarks_v1.support import _run_verifier
+from benchmarks.validation.mathematical_benchmarks_v1._verifier import _run_verifier
 
 TASK = "valuation-gcd-quantifier-audit"
 
@@ -29,11 +29,10 @@ def _prepare(tmp_path, submission):
         "schema_version": "1",
         "task_id": f"jacobian/{TASK}",
         "result": submission["result"],
-        "limitations": submission["limitations"],
     }
     evidence_path = app / "evidence/valuation-audit.json"
     evidence_path.write_text(json.dumps(evidence, separators=(",", ":")))
-    submission["evidence"][0]["sha256"] = (
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
     )
     (app / "submission.json").write_text(json.dumps(submission))
@@ -55,14 +54,10 @@ def test_oracle_and_alternative_repair(tmp_path):
     assert _verify(tmp_path / "alt", alt).reward == 1.0
 
 
-def test_rejects_weak_countermodel_and_false_assurance(tmp_path):
-    for name, mutate in [
-        ("counter", lambda s: s["result"].update(countermodel=s["result"]["repair"])),
-        ("assurance", lambda s: s.update(claimed_assurance="VERIFIED")),
-    ]:
-        submission = copy.deepcopy(_oracle())
-        mutate(submission)
-        assert _verify(tmp_path / name, submission).reward == 0
+def test_rejects_weak_countermodel(tmp_path):
+    submission = copy.deepcopy(_oracle())
+    submission["result"].update(countermodel=submission["result"]["repair"])
+    assert _verify(tmp_path / "counter", submission).reward == 0
 
 
 def test_rejects_zero_row_that_is_not_a_prime_factor(tmp_path):
@@ -94,28 +89,10 @@ def test_evidence_result_requires_exact_json_types(tmp_path):
     evidence = json.loads(evidence_path.read_text())
     evidence["result"]["countermodel"][0]["exponents"][0] = True
     evidence_path.write_text(json.dumps(evidence, separators=(",", ":")))
-    submission["evidence"][0]["sha256"] = (
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
     )
     (app / "submission.json").write_text(json.dumps(submission))
     reward = _run_verifier(task, app, logs)
     assert reward.details["correctness"] == 1.0
-    assert reward.details["evidence_validity"] == 0.0
     assert reward.reward == 0
-
-
-def test_math_diagnostic_survives_envelope_failures(tmp_path):
-    for name, mutate, expected_correctness in [
-        ("extra-field", lambda s: s.update(extra=True), 0.0),
-        (
-            "conclusion",
-            lambda s: s.update(conclusion="INSUFFICIENT_EVIDENCE"),
-            1.0,
-        ),
-        ("completeness", lambda s: s.update(completeness="UNKNOWN"), 1.0),
-    ]:
-        submission = copy.deepcopy(_oracle())
-        mutate(submission)
-        reward = _verify(tmp_path / name, submission)
-        assert reward.details["correctness"] == expected_correctness, name
-        assert reward.reward == 0

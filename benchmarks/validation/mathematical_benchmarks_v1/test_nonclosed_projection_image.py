@@ -7,7 +7,10 @@ from fractions import Fraction
 from pathlib import Path
 
 import pytest
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1 import (
+    _fixtures,
+    _verifier,
+)
 from jsonschema import Draft202012Validator
 
 TASK_NAME = "nonclosed-projection-image"
@@ -141,16 +144,10 @@ def _write_case(
     (app / "evidence" / "answer.txt").write_text(evidence_text)
     digest = "sha256:" + hashlib.sha256(evidence_text.encode("utf-8")).hexdigest()
     submission = {
-        "task_id": "jacobian/nonclosed-projection-image",
-        "conclusion": "NONCLOSED_IMAGE_CERTIFIED",
         "result": {**result, "proof_obligations": proof or {}},
-        "claimed_assurance": "COMPUTED",
-        "scope": SCOPE,
-        "completeness": "COMPLETE",
-        "evidence": [{"path": "evidence/answer.txt", "sha256": digest}],
-        "limitations": [LIMITATION],
+        "witness": [{"path": "evidence/answer.txt", "sha256": digest}],
     }
-    support._write_json(app / "submission.json", submission)
+    _fixtures._write_json(app / "submission.json", submission)
     return TASK, app, logs
 
 
@@ -170,7 +167,7 @@ def test_nonclosed_projection_accepts_alternate_diagonal_weights(
     # Review thread: weights 1/n^2, limit y_n=1/n, forced preimage x_n=n is a
     # bounded operator with a closed graph, the same convergent limit, and a
     # non-square-summable preimage. It must not be rejected as a false negative.
-    result = support._run_verifier(
+    result = _verifier._run_verifier(
         *_write_case(
             tmp_path,
             result=_witness(weight_reciprocal_square=True),
@@ -179,14 +176,13 @@ def test_nonclosed_projection_accepts_alternate_diagonal_weights(
         )
     )
     assert result.details["correctness"] == 1.0
-    assert result.details["evidence_validity"] == 1.0
     assert result.reward == pytest.approx(1.0)
 
 
 def test_nonclosed_projection_rejects_token_only_evidence(tmp_path: Path) -> None:
     # Review thread: an evidence file containing only the legacy tokens must no
     # longer receive full evidence validity.
-    result = support._run_verifier(
+    result = _verifier._run_verifier(
         *_write_case(
             tmp_path,
             result=_witness(weight_reciprocal_square=False),
@@ -196,7 +192,6 @@ def test_nonclosed_projection_rejects_token_only_evidence(tmp_path: Path) -> Non
         )
     )
     assert result.details["correctness"] == 0.0
-    assert result.details["evidence_validity"] == 0.0
     assert result.reward == 0.0
 
 
@@ -205,7 +200,7 @@ def test_nonclosed_projection_rejects_missing_proof_obligation(
 ) -> None:
     proof = _proof(weight_reciprocal_square=False)
     del proof["absent_preimage"]
-    result = support._run_verifier(
+    result = _verifier._run_verifier(
         *_write_case(
             tmp_path,
             result=_witness(weight_reciprocal_square=False),
@@ -214,7 +209,6 @@ def test_nonclosed_projection_rejects_missing_proof_obligation(
         )
     )
     assert result.details["correctness"] == 0.0
-    assert result.details["evidence_validity"] == 0.0
     assert result.reward == 0.0
 
 
@@ -223,7 +217,7 @@ def test_nonclosed_projection_rejects_keyword_only_proof_argument(
 ) -> None:
     proof = _proof(weight_reciprocal_square=False)
     proof["boundedness"] = "bound"
-    result = support._run_verifier(
+    result = _verifier._run_verifier(
         *_write_case(
             tmp_path,
             result=_witness(weight_reciprocal_square=False),
@@ -232,7 +226,6 @@ def test_nonclosed_projection_rejects_keyword_only_proof_argument(
         )
     )
     assert result.details["correctness"] == 0.0
-    assert result.details["evidence_validity"] == 0.0
     assert result.reward == 0.0
 
 
@@ -250,7 +243,7 @@ def test_nonclosed_projection_ignores_stale_hidden_result_marker(
         proof, sort_keys=True, separators=(",", ":")
     )
     evidence_text = "Witness.\n\n" + marker + "\n" + proof_marker + "\n"
-    out = support._run_verifier(
+    out = _verifier._run_verifier(
         *_write_case(
             tmp_path,
             result=result,
@@ -260,7 +253,6 @@ def test_nonclosed_projection_ignores_stale_hidden_result_marker(
         )
     )
     assert out.details["correctness"] == 1.0
-    assert out.details["evidence_validity"] == 1.0
     assert out.reward == pytest.approx(1.0)
 
 
@@ -280,7 +272,7 @@ def test_nonclosed_projection_rejects_corrupted_witnesses(
 ) -> None:
     result = _witness(weight_reciprocal_square=False)
     mutate(result)
-    out = support._run_verifier(
+    out = _verifier._run_verifier(
         *_write_case(
             tmp_path,
             result=result,

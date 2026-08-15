@@ -1,1 +1,77 @@
-{"task_id":"jacobian/nonlinear-recurrence-crossing-certificate","conclusion":"NEGATIVE_TERM_BEFORE_2002","result":{"potential_identity_coefficients":[1,-2,1],"initial_potential":3136,"threshold":{"numerator":4,"denominator":1},"decrement_lower_bound":{"numerator":7,"denominator":4},"phase_transitions":1790,"threshold_index_upper":1791,"terminal_bounds":[{"input_lower":{"numerator":0,"denominator":1},"input_upper":{"numerator":2,"denominator":1},"output_lower":"NEGATIVE_INFINITY","output_upper":{"numerator":3,"denominator":2}},{"input_lower":{"numerator":0,"denominator":1},"input_upper":{"numerator":1,"denominator":1},"output_lower":"NEGATIVE_INFINITY","output_upper":{"numerator":0,"denominator":1}},{"input_lower":{"numerator":1,"denominator":1},"input_upper":{"numerator":3,"denominator":2},"output_lower":{"numerator":0,"denominator":1},"output_upper":{"numerator":5,"denominator":6}}],"negative_index_upper":1794},"claimed_assurance":"COMPUTED","scope":"TOTAL_REAL_RECURRENCE_FROM_A1_EQUALS_56","completeness":"COMPLETE","evidence":[{"path":"evidence/nonlinear-recurrence-certificate.json","sha256":"sha256:c6d346c966642799a09ba93dab67aa92a713139e294ca60d2ff44914a1feb721"}],"limitations":["ELEMENTARY_REAL_ORDER_LEMMAS_TRUSTED"]}
+{
+  "result": {
+    "decrement_lower_bound": {
+      "denominator": 4,
+      "numerator": 7
+    },
+    "initial_potential": 3136,
+    "negative_index_upper": 1794,
+    "phase_transitions": 1790,
+    "potential_identity_coefficients": [
+      1,
+      -2,
+      1
+    ],
+    "terminal_bounds": [
+      {
+        "input_lower": {
+          "denominator": 1,
+          "numerator": 0
+        },
+        "input_upper": {
+          "denominator": 1,
+          "numerator": 2
+        },
+        "output_lower": "NEGATIVE_INFINITY",
+        "output_upper": {
+          "denominator": 2,
+          "numerator": 3
+        }
+      },
+      {
+        "input_lower": {
+          "denominator": 1,
+          "numerator": 0
+        },
+        "input_upper": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "output_lower": "NEGATIVE_INFINITY",
+        "output_upper": {
+          "denominator": 1,
+          "numerator": 0
+        }
+      },
+      {
+        "input_lower": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "input_upper": {
+          "denominator": 2,
+          "numerator": 3
+        },
+        "output_lower": {
+          "denominator": 1,
+          "numerator": 0
+        },
+        "output_upper": {
+          "denominator": 6,
+          "numerator": 5
+        }
+      }
+    ],
+    "threshold": {
+      "denominator": 1,
+      "numerator": 4
+    },
+    "threshold_index_upper": 1791
+  },
+  "witness": [
+    {
+      "path": "evidence/nonlinear-recurrence-certificate.json",
+      "sha256": "sha256:609f0c17084654a4a6fbb92f983bea217c944a4dbebb21f6724df72077f8ee15"
+    }
+  ]
+}

@@ -50,15 +50,12 @@ def prepare(tmp_path: Path, task_id: str) -> tuple[Path, Path, Path]:
 def rebind_evidence(app: Path, submission: dict) -> None:
     evidence = {
         "schema_version": "1",
-        "task_id": submission["task_id"],
+        "task_id": json.loads((app / "input.json").read_text())["task_id"],
         "result": submission["result"],
-        "scope": submission["scope"],
-        "completeness": submission["completeness"],
-        "limitations": submission["limitations"],
     }
     evidence_path = app / "evidence/certificate.json"
     write_json(evidence_path, evidence)
-    submission["evidence"] = [
+    submission["witness"] = [
         {"path": "evidence/certificate.json", "sha256": digest(evidence_path)}
     ]
     write_json(app / "submission.json", submission)

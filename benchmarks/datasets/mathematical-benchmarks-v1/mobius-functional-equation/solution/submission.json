@@ -1,1 +1,143 @@
-{"task_id":"jacobian/mobius-functional-equation","conclusion":"UNIQUE_SOLUTION_CERTIFIED","result":{"orbit":[{"numerator":[0,1],"denominator":[1]},{"numerator":[-1,1],"denominator":[0,1]},{"numerator":[-1],"denominator":[-1,1]}],"right_hand_sides":[{"numerator":[1,1],"denominator":[1]},{"numerator":[-1,2],"denominator":[0,1]},{"numerator":[-2,1],"denominator":[-1,1]}],"solution_values":[{"numerator":[-1,0,-1,1],"denominator":[0,-2,2]},{"numerator":[1,-2,1,1],"denominator":[0,-2,2]},{"numerator":[1,-4,3,-1],"denominator":[0,-2,2]}],"coefficient_matrix":[[1,1,0],[0,1,1],[1,0,1]],"matrix_determinant":2,"solution_at_x":{"numerator":[-1,0,-1,1],"denominator":[0,-2,2]}},"claimed_assurance":"COMPUTED","scope":"FROZEN_DOMAIN_AND_MOBIUS_ORBIT_CERTIFICATE","completeness":"COMPLETE","evidence":[{"path":"evidence/functional-equation-certificate.json","sha256":"sha256:abf3408db28e17bea52317149cc1f15ec80b7951598ea1232291398d31430aef"}],"limitations":["REAL_FUNCTION_EXTENT_FROM_THREE_CYCLE_COVERAGE_TRUSTED"]}
+{
+  "result": {
+    "coefficient_matrix": [
+      [
+        1,
+        1,
+        0
+      ],
+      [
+        0,
+        1,
+        1
+      ],
+      [
+        1,
+        0,
+        1
+      ]
+    ],
+    "matrix_determinant": 2,
+    "orbit": [
+      {
+        "denominator": [
+          1
+        ],
+        "numerator": [
+          0,
+          1
+        ]
+      },
+      {
+        "denominator": [
+          0,
+          1
+        ],
+        "numerator": [
+          -1,
+          1
+        ]
+      },
+      {
+        "denominator": [
+          -1,
+          1
+        ],
+        "numerator": [
+          -1
+        ]
+      }
+    ],
+    "right_hand_sides": [
+      {
+        "denominator": [
+          1
+        ],
+        "numerator": [
+          1,
+          1
+        ]
+      },
+      {
+        "denominator": [
+          0,
+          1
+        ],
+        "numerator": [
+          -1,
+          2
+        ]
+      },
+      {
+        "denominator": [
+          -1,
+          1
+        ],
+        "numerator": [
+          -2,
+          1
+        ]
+      }
+    ],
+    "solution_at_x": {
+      "denominator": [
+        0,
+        -2,
+        2
+      ],
+      "numerator": [
+        -1,
+        0,
+        -1,
+        1
+      ]
+    },
+    "solution_values": [
+      {
+        "denominator": [
+          0,
+          -2,
+          2
+        ],
+        "numerator": [
+          -1,
+          0,
+          -1,
+          1
+        ]
+      },
+      {
+        "denominator": [
+          0,
+          -2,
+          2
+        ],
+        "numerator": [
+          1,
+          -2,
+          1,
+          1
+        ]
+      },
+      {
+        "denominator": [
+          0,
+          -2,
+          2
+        ],
+        "numerator": [
+          1,
+          -4,
+          3,
+          -1
+        ]
+      }
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/functional-equation-certificate.json",
+      "sha256": "sha256:abf3408db28e17bea52317149cc1f15ec80b7951598ea1232291398d31430aef"
+    }
+  ]
+}

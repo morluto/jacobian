@@ -1,1 +1,74 @@
-{"task_id":"jacobian/finite-support-sum-scope-audit","conclusion":"ORIGINAL_SUM_DIVERGES_TRUNCATED_LIMIT_ZERO","result":{"n":6,"tail_singletons":[7,8,9,10,11,12],"summand_values":[{"numerator":1,"denominator":1},{"numerator":1,"denominator":1},{"numerator":1,"denominator":1},{"numerator":1,"denominator":1},{"numerator":1,"denominator":1},{"numerator":1,"denominator":1}],"partial_sum_lower_bound":6,"truncated_checkpoints":[{"n":3,"value":{"numerator":19,"denominator":8}},{"n":5,"value":{"numerator":31977,"denominator":64000}},{"n":8,"value":{"numerator":1104133833,"denominator":89915392000}}],"ratio_threshold":2,"ratio_bound":{"numerator":3,"denominator":4}},"claimed_assurance":"COMPUTED","scope":"ORIGINAL_DOMAIN_AUDIT_AND_TRUNCATED_REPAIR","completeness":"COMPLETE","evidence":[{"path":"evidence/scope-audit.json","sha256":"sha256:ea2242c0ab6ddef99f36bd328d509e66deb2d20341f57593b146e2aa11a68b61"}],"limitations":["ORIGINAL_SUM_TREATED_AS_NONNEGATIVE_EXTENDED_SUM","TRUNCATED_LIMIT_USES_ELEMENTARY_GEOMETRIC_CONTRACTION"]}
+{
+  "result": {
+    "n": 6,
+    "partial_sum_lower_bound": 6,
+    "ratio_bound": {
+      "denominator": 4,
+      "numerator": 3
+    },
+    "ratio_threshold": 2,
+    "summand_values": [
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      }
+    ],
+    "tail_singletons": [
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "truncated_checkpoints": [
+      {
+        "n": 3,
+        "value": {
+          "denominator": 8,
+          "numerator": 19
+        }
+      },
+      {
+        "n": 5,
+        "value": {
+          "denominator": 64000,
+          "numerator": 31977
+        }
+      },
+      {
+        "n": 8,
+        "value": {
+          "denominator": 89915392000,
+          "numerator": 1104133833
+        }
+      }
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/scope-audit.json",
+      "sha256": "sha256:ea2242c0ab6ddef99f36bd328d509e66deb2d20341f57593b146e2aa11a68b61"
+    }
+  ]
+}

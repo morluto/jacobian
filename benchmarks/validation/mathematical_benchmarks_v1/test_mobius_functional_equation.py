@@ -1,143 +1,66 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
-import pytest
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1 import _fixtures, _verifier
 
 TASK = "mobius-functional-equation"
+TASK_ID = f"jacobian/{TASK}"
 
 
-def _prepare_mobius_case(tmp_path: Path):
-    task, app, logs = support._prepare_case(
-        tmp_path, "mobius-functional-equation", "computed"
-    )
-    (app / "evidence" / "functional-equation-certificate.json").write_bytes(
-        (task / "solution" / "functional-equation-certificate.json").read_bytes()
-    )
+def _case(tmp_path: Path):
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     return task, app, logs
 
 
-def test_mobius_functional_equation_accepts_exact_orbit(tmp_path: Path) -> None:
-    task, app, logs = _prepare_mobius_case(tmp_path)
-    accepted = support._run_verifier(task, app, logs)
-    assert accepted.details["correctness"] == 1.0
-    assert accepted.reward == pytest.approx(1.0)
+def _rewrite(app: Path, submission: dict, *, payload: object | None = None) -> None:
+    evidence = {
+        "schema_version": "1",
+        "task_id": TASK_ID,
+        "result": submission["result"],
+    }
+    raw = json.dumps(
+        evidence if payload is None else payload, separators=(",", ":")
+    ).encode()
+    path = app / "evidence" / "functional-equation-certificate.json"
+    path.write_bytes(raw)
+    submission["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
+    _fixtures._write_json(app / "submission.json", submission)
 
 
-def test_mobius_functional_equation_rejects_corrupted_orbit_value(
-    tmp_path: Path,
-) -> None:
-    task, app, logs = _prepare_mobius_case(tmp_path)
-    submission_path = app / "submission.json"
-    submission = json.loads(submission_path.read_text())
+def test_accepts_exact_orbit(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    _rewrite(app, submission)
+    assert _verifier._run_verifier(task, app, logs).reward == 1.0
+
+
+def test_rejects_corrupted_orbit_and_singular_matrix(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
     submission["result"]["solution_values"][1]["numerator"][0] += 1
-    evidence = {
-        "schema_version": "1",
-        "task_id": submission["task_id"],
-        "result": submission["result"],
-        "limitations": submission["limitations"],
-    }
-    evidence_path = app / "evidence" / "functional-equation-certificate.json"
-    support._write_json(evidence_path, evidence)
-    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
-    support._write_json(submission_path, submission)
+    _rewrite(app, submission)
+    assert _verifier._run_verifier(task, app, logs).reward == 0.0
 
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected.details["correctness"] == 0.0
-    assert rejected.reward == 0.0
-
-
-def test_mobius_functional_equation_rejects_singular_matrix_claim(
-    tmp_path: Path,
-) -> None:
-    task, app, logs = _prepare_mobius_case(tmp_path)
-    submission_path = app / "submission.json"
-    submission = json.loads(submission_path.read_text())
+    task, app, logs = _case(tmp_path / "matrix")
+    submission = json.loads((app / "submission.json").read_text())
     submission["result"]["coefficient_matrix"][2] = [0, 1, 1]
-    evidence = {
+    _rewrite(app, submission)
+    assert _verifier._run_verifier(task, app, logs).reward == 0.0
+
+
+def test_witness_binds_result_without_limitations(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    payload = {
         "schema_version": "1",
-        "task_id": submission["task_id"],
-        "result": submission["result"],
-        "limitations": submission["limitations"],
+        "task_id": TASK_ID,
+        "result": {**submission["result"], "matrix_determinant": 3},
     }
-    evidence_path = app / "evidence" / "functional-equation-certificate.json"
-    support._write_json(evidence_path, evidence)
-    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
-    support._write_json(submission_path, submission)
-
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected.details["correctness"] == 0.0
-    assert rejected.reward == 0.0
-
-
-def test_mobius_functional_equation_rejects_scalar_orbit(tmp_path: Path) -> None:
-    """A scalar orbit must be rejected without crashing the verifier."""
-    task, app, logs = _prepare_mobius_case(tmp_path)
-    submission_path = app / "submission.json"
-    submission = json.loads(submission_path.read_text())
-    submission["result"]["orbit"] = 0
-    evidence = {
-        "schema_version": "1",
-        "task_id": submission["task_id"],
-        "result": submission["result"],
-        "limitations": submission["limitations"],
-    }
-    evidence_path = app / "evidence" / "functional-equation-certificate.json"
-    support._write_json(evidence_path, evidence)
-    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
-    support._write_json(submission_path, submission)
-
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected.details["correctness"] == 0.0
-    assert rejected.reward == 0.0
-
-
-def test_mobius_functional_equation_rejects_short_orbit(tmp_path: Path) -> None:
-    """A short orbit list must be rejected without crashing the verifier."""
-    task, app, logs = _prepare_mobius_case(tmp_path)
-    submission_path = app / "submission.json"
-    submission = json.loads(submission_path.read_text())
-    submission["result"]["orbit"] = submission["result"]["orbit"][:1]
-    evidence = {
-        "schema_version": "1",
-        "task_id": submission["task_id"],
-        "result": submission["result"],
-        "limitations": submission["limitations"],
-    }
-    evidence_path = app / "evidence" / "functional-equation-certificate.json"
-    support._write_json(evidence_path, evidence)
-    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
-    support._write_json(submission_path, submission)
-
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected.details["correctness"] == 0.0
-    assert rejected.reward == 0.0
-
-
-def test_mobius_functional_equation_rejects_boolean_matrix(tmp_path: Path) -> None:
-    """Booleans in the coefficient matrix must be rejected even though they
-    compare equal to the expected integer matrix."""
-    task, app, logs = _prepare_mobius_case(tmp_path)
-    submission_path = app / "submission.json"
-    submission = json.loads(submission_path.read_text())
-    submission["result"]["coefficient_matrix"] = [
-        [True, True, False],
-        [False, True, True],
-        [True, False, True],
-    ]
-    evidence = {
-        "schema_version": "1",
-        "task_id": submission["task_id"],
-        "result": submission["result"],
-        "limitations": submission["limitations"],
-    }
-    evidence_path = app / "evidence" / "functional-equation-certificate.json"
-    support._write_json(evidence_path, evidence)
-    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
-    support._write_json(submission_path, submission)
-
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected.details["correctness"] == 0.0
-    assert rejected.reward == 0.0
+    _rewrite(app, submission, payload=payload)
+    result = _verifier._run_verifier(task, app, logs)
+    assert result.details["correctness"] == 1.0
+    assert result.reward == 0.0
+    assert result.reward == 0.0

@@ -2,14 +2,10 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    aggregate_reward,
-    evidence_list_is_bound,
-    is_regular_bounded_file,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -17,10 +13,10 @@ W = Path("/app")
 E = Path("/tests")
 
 
-def evidence_matches_result(evidence, result):
-    if not evidence_list_is_bound(evidence):
+def witness_matches_result(witness, result):
+    if not isinstance(witness, list) or len(witness) != 1:
         return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
     if target is None:
         return False
     try:
@@ -30,7 +26,7 @@ def evidence_matches_result(evidence, result):
             for line in text.splitlines()
             if line.startswith("RESULT_JSON:")
         )
-        return json.loads(marker) == result and any(
+        return json_value_equal(json.loads(marker), result) and any(
             line.strip() and not line.startswith("RESULT_JSON:")
             for line in text.splitlines()
         )
@@ -42,32 +38,12 @@ def concatenate(month, day):
     return int(f"{month}{day}")
 
 
-def raw_submission():
-    path = W / "submission.json"
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
-
-
 def main():
-    raw = raw_submission()
     input_binding = workspace_input_is_bound()
-    s = load_submission(require_input_binding=False)
+    submission = load_submission(require_input_binding=False)
     x = json.loads(next(E.glob("*input*.json")).read_text())
-    e = json.loads((E / "expected.json").read_text())
-    r = raw.get("result") if isinstance(raw, dict) else None
+    r = submission.get("result") if isinstance(submission, dict) else None
     r = r if isinstance(r, dict) else {}
-    contract = strict_submission_contract(
-        s,
-        task_id=e["task_id"],
-        conclusion=e["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
     expected_dates = []
     for month_spec in x["months"]:
         month = month_spec["month"]
@@ -94,38 +70,18 @@ def main():
         and len(expected_dates) != 15
     )
     math_correct = bool(valid)
-    good = bool(
-        isinstance(raw, dict) and evidence_matches_result(raw.get("evidence"), r)
+    witness_ok = bool(
+        isinstance(submission, dict)
+        and witness_matches_result(submission.get("witness"), r)
     )
-    scope = bool(
-        isinstance(raw, dict)
-        and raw.get("scope") == " ".join(e["required_scope_terms"])
-    )
-    assurance = bool(
-        isinstance(raw, dict) and raw.get("claimed_assurance") == e["maximum_assurance"]
-    )
-    false = bool(isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED")
-    reward = aggregate_reward(
-        correctness=math_correct,
-        evidence_validity=good,
-        scope_accuracy=scope,
-        assurance_calibration=assurance,
-        false_certification=false,
-        protocol_ok=bool(contract and input_binding),
-        soft_assurance=True,
-    )
+    reward = float(input_binding and math_correct and witness_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
-                "protocol_compliance": float(bool(contract)),
-                "input_binding": float(input_binding),
                 "correctness": float(math_correct),
-                "evidence_validity": float(good),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
+                "witness_validity": float(witness_ok),
                 "reward": reward,
-                "false_certification": false,
             }
         )
     )

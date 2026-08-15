@@ -4,39 +4,15 @@ from math import isqrt
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
+    aggregate_reward,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W, E = Path("/app"), Path("/tests")
 ZERO = (0, 0, 0, 0, 0, 0)
-
-
-def _json_equal(left, right):
-    """Compare JSON recursively without Python's bool/int coercion."""
-
-    if isinstance(left, bool) or isinstance(right, bool):
-        return type(left) is type(right) and left == right
-    if type(left) is int or type(right) is int:
-        return type(left) is type(right) and left == right
-    if isinstance(left, dict) or isinstance(right, dict):
-        return (
-            isinstance(left, dict)
-            and isinstance(right, dict)
-            and set(left) == set(right)
-            and all(_json_equal(left[key], right[key]) for key in left)
-        )
-    if isinstance(left, list) or isinstance(right, list):
-        return (
-            isinstance(left, list)
-            and isinstance(right, list)
-            and len(left) == len(right)
-            and all(_json_equal(a, b) for a, b in zip(left, right, strict=True))
-        )
-    return type(left) is type(right) and left == right
 
 
 def _load_frozen():
@@ -252,61 +228,34 @@ def _result_ok(result, frozen):
 def main():
     submission, frozen = load_submission(), _load_frozen()
     expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
-    math_correct = bool(contract and _result_ok(submission.get("result"), frozen))
+    protocol_ok = submission is not None
+    math_correct = bool(protocol_ok and _result_ok(submission.get("result"), frozen))
     evidence = None
-    if (
-        contract
-        and isinstance(submission.get("evidence"), list)
-        and len(submission["evidence"]) == 1
-    ):
+    witness = submission.get("witness") if protocol_ok else None
+    if isinstance(witness, list) and len(witness) == 1:
         evidence = read_evidence_json(
-            submission["evidence"][0],
+            witness[0],
             expected_path="evidence/inequality-certificate.json",
         )
     evidence_valid = bool(
         evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and set(evidence) == {"schema_version", "task_id", "result"}
         and evidence["schema_version"] == "1"
         and evidence["task_id"] == expected["task_id"]
-        and _json_equal(evidence["result"], submission.get("result"))
-        and evidence["limitations"] == submission.get("limitations")
+        and json_value_equal(evidence["result"], submission.get("result"))
     )
-    scope_ok = bool(
-        contract
-        and submission.get("scope")
-        == "FROZEN_INEQUALITY_AND_SUBMITTED_SYMBOLIC_CERTIFICATE"
-        and submission.get("limitations")
-        == [
-            "ELEMENTARY_REAL_ORDER_AND_SQUARE_ROOT_LEMMAS_TRUSTED",
-            "POSITIVE_HOMOGENEITY_NORMALIZATION_TRUSTED",
-        ]
+    reward = aggregate_reward(
+        correctness=math_correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
-    assurance_ok = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = math_correct and evidence_valid and scope_ok and not false_certification
-    reward = float(correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

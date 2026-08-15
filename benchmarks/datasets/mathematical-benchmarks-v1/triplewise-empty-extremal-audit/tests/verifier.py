@@ -4,12 +4,11 @@ import re
 from pathlib import Path
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 
@@ -138,31 +137,17 @@ def _scope_is_positive(scope):
 
 def main():
     submission = load_submission()
-    contract = strict_submission_contract(
-        submission,
-        task_id="jacobian/triplewise-empty-extremal-audit",
-        conclusion="SOURCE_BOUND_REPAIRED",
-        min_limitations=1,
-        verification_record="forbidden",
-    )
-    data = submission if isinstance(submission, dict) else {}
+    protocol_ok = submission is not None
+    data = submission if protocol_ok else {}
     result = data.get("result", {})
-    math_correct = _math_claim_is_correct(result)
-    evidence_valid = _evidence_is_valid(data.get("evidence"))
-    scope_correct = bool(contract and _scope_is_positive(data.get("scope")))
-    assurance_correct = bool(contract and data.get("claimed_assurance") == "COMPUTED")
-    false_certification = bool(
-        false_verified_claim(submission, verification_record_bound=False)
+    math_correct = bool(protocol_ok and _math_claim_is_correct(result))
+    evidence_valid = bool(
+        protocol_ok and math_correct and _evidence_is_valid(data.get("witness"))
     )
-    reward = (
-        1.0
-        if contract
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and not false_certification
-        else 0.0
+    reward = aggregate_reward(
+        correctness=math_correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
@@ -170,10 +155,7 @@ def main():
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

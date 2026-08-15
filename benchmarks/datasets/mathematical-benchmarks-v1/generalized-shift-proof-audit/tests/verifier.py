@@ -3,11 +3,11 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 W = Path("/app")
@@ -138,35 +138,14 @@ def main():
     except OSError:
         oversized = True
     submission = None if oversized else load_submission()
-    expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
-    result = submission.get("result") if isinstance(submission, dict) else None
-    correctness = bool(contract and frozen_valid() and certificate_valid(result))
-    evidence = bool(contract and evidence_valid(submission.get("evidence"), result))
-    scope = bool(
-        contract
-        and submission.get("scope") == expected["required_scope"]
-        and submission.get("completeness") == "COMPLETE"
-        and submission.get("limitations") == expected["required_limitations"]
-    )
-    assurance = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false_certification = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "VERIFIED"
-    )
-    reward = (
-        0.0
-        if not correctness or not evidence or false_certification
-        else 0.8 + 0.1 * scope + 0.1 * assurance
+    protocol_ok = submission is not None
+    result = submission.get("result") if protocol_ok else None
+    correctness = bool(protocol_ok and frozen_valid() and certificate_valid(result))
+    evidence = bool(protocol_ok and evidence_valid(submission.get("witness"), result))
+    reward = aggregate_reward(
+        correctness=correctness,
+        evidence_validity=evidence,
+        protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier") / "reward.json").write_text(
@@ -174,10 +153,7 @@ def main():
             {
                 "correctness": float(correctness),
                 "evidence_validity": float(evidence),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

@@ -3,11 +3,12 @@ from math import gcd
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
+    aggregate_reward,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 W, E = Path("/app"), Path("/tests")
@@ -176,57 +177,41 @@ def _result_ok(result, frozen):
 
 def main():
     submission, frozen = load_submission(), _load_frozen()
+    input_binding = workspace_input_is_bound()
     expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
+    math_ok = bool(
+        submission is not None and _result_ok(submission.get("result"), frozen)
     )
-    math_correct = bool(contract and _result_ok(submission.get("result"), frozen))
     evidence = None
     if (
-        contract
-        and isinstance(submission.get("evidence"), list)
-        and len(submission["evidence"]) == 1
+        submission is not None
+        and isinstance(submission.get("witness"), list)
+        and len(submission["witness"]) == 1
     ):
         evidence = read_evidence_json(
-            submission["evidence"][0],
+            submission["witness"][0],
             expected_path="evidence/functional-equation-certificate.json",
         )
-    evidence_valid = bool(
+    ev_ok = bool(
         evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and set(evidence) == {"schema_version", "task_id", "result"}
         and evidence["schema_version"] == "1"
         and evidence["task_id"] == expected["task_id"]
-        and evidence["result"] == submission.get("result")
-        and evidence["limitations"] == submission.get("limitations")
+        and json_value_equal(evidence["result"], submission.get("result"))
     )
-    scope_ok = bool(
-        contract
-        and submission.get("scope") == "FROZEN_DOMAIN_AND_MOBIUS_ORBIT_CERTIFICATE"
-        and submission.get("limitations")
-        == ["REAL_FUNCTION_EXTENT_FROM_THREE_CYCLE_COVERAGE_TRUSTED"]
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=ev_ok,
+        protocol_ok=bool(input_binding and submission is not None),
     )
-    assurance_ok = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = math_correct and evidence_valid and scope_ok and not false_certification
-    reward = float(correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
-                "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
+                "correctness": float(math_ok),
+                "evidence_validity": float(ev_ok),
+                "input_binding": float(input_binding),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

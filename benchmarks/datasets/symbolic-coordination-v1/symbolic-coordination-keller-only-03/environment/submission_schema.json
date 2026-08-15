@@ -121,51 +121,6 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
-    },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "conclusion": {
-      "enum": [
-        "TRUE",
-        "FALSE",
-        "UNKNOWN"
-      ]
-    },
-    "evidence": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "const": "evidence/certificate.json"
-          },
-          "sha256": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "type": "object"
-      },
-      "maxItems": 1,
-      "minItems": 1,
-      "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "KELLER_CONDITION_DOES_NOT_LICENSE_GLOBAL_INVERTIBILITY"
-      ]
-    },
     "result": {
       "additionalProperties": false,
       "properties": {
@@ -184,9 +139,6 @@
             "forward_map_sha256": {
               "const": "sha256:5c5d8a401056f4e365f1bfdd6f8fdf4dbd4990e64ea70d29bcdc9025f75e11ab"
             },
-            "scope_id": {
-              "const": "scope://symbolic-coordination-v1/symbolic-coordination-keller-only-03"
-            },
             "semantics_id": {
               "const": "exact-sparse-polynomial-maps-over-QQ@1"
             },
@@ -198,7 +150,6 @@
             "binding_schema_version",
             "claim_id",
             "semantics_id",
-            "scope_id",
             "forward_map_sha256",
             "subject_sha256",
             "checker_id"
@@ -417,23 +368,32 @@
       ],
       "type": "object"
     },
-    "scope": {
-      "const": "KELLER_CONDITION_ONLY_OVER_QQ:symbolic-coordination-keller-only-03",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/symbolic-coordination-keller-only-03"
+    "witness": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/certificate.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

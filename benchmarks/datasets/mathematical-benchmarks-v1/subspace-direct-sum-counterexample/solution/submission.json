@@ -1,1 +1,38 @@
-{"task_id":"jacobian/subspace-direct-sum-counterexample","conclusion":"FALSE","result":{"generators":[[1,0,0],[0,1,0],[0,0,1],[1,1,1]],"dependence_coefficients":[1,1,1,-1]},"claimed_assurance":"COMPUTED","scope":"subspace-direct-sum-counterexample exact rational-linear witness","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:0b3abdbb451b830738b3c6581caf752991558f5fbdc562e1596ce2ad473e50f3"}],"limitations":["Each listed generator represents a one-dimensional subspace over Q."]}
+{
+  "result": {
+    "dependence_coefficients": [
+      1,
+      1,
+      1,
+      -1
+    ],
+    "generators": [
+      [
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        0,
+        1
+      ],
+      [
+        1,
+        1,
+        1
+      ]
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:0b3abdbb451b830738b3c6581caf752991558f5fbdc562e1596ce2ad473e50f3"
+    }
+  ]
+}

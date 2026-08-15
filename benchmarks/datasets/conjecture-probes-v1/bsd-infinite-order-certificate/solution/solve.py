@@ -7,11 +7,6 @@ from fractions import Fraction
 from pathlib import Path
 
 TASK_ID = "jacobian/bsd-infinite-order-certificate"
-LIMITATIONS = [
-    "ONE_AUTHORED_ELLIPTIC_CURVE",
-    "LUTZ_NAGELL_TRUSTED",
-    "NO_BSD_CONCLUSION",
-]
 
 
 def add(
@@ -50,7 +45,6 @@ def main() -> None:
         "schema_version": "1",
         "task_id": TASK_ID,
         "result": result,
-        "limitations": LIMITATIONS,
     }
     evidence = root / "evidence/answer.txt"
     evidence.parent.mkdir(parents=True, exist_ok=True)
@@ -58,19 +52,13 @@ def main() -> None:
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
     )
     submission = {
-        "task_id": TASK_ID,
-        "conclusion": "ELLIPTIC_POINT_INFINITE_ORDER_CERTIFICATE",
         "result": result,
-        "claimed_assurance": "CHECKED",
-        "scope": "integral-lutz-nagell-witness-v1",
-        "completeness": "COMPLETE",
-        "evidence": [
+        "witness": [
             {
                 "path": "evidence/answer.txt",
                 "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
             }
         ],
-        "limitations": LIMITATIONS,
     }
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 

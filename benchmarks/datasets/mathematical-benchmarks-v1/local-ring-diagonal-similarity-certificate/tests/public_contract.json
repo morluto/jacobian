@@ -1,15 +1,4 @@
 {
-  "allowed_assurance": [
-    "UNVERIFIED",
-    "COMPUTED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE"
-  ],
-  "assurance_ceiling": "COMPUTED",
-  "conclusion": {
-    "const": "DIAGONAL_ENTRIES_MATCH_BY_UNIT_PERMUTATION"
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/answer.txt"
@@ -22,86 +11,12 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "limitations": {
-    "items": {"minLength": 1, "type": "string"},
-    "maxItems": 1,
-    "minItems": 1,
-    "type": "array"
-  },
-  "public_notes": "Submit the exact modular matrix products, determinant residue, one unit determinant term, and its induced diagonal matching. The verifier recomputes the determinant expansion and every claimed ring operation. In the solver's own words, the limitations array must disclose that the certificate covers only the frozen matrix instance, not the general local-ring theorem.",
+  "public_notes": "Submit the exact modular matrix products, determinant residue, one unit determinant term, and its induced diagonal matching. The verifier recomputes the determinant expansion and every claimed ring operation. The required limitation is the exact ID `FROZEN_LOCAL_RING_CERTIFICATE_ONLY`.",
   "required_artifact_filenames": [
     "evidence/answer.txt"
   ],
   "schema_definitions": {},
   "schema_version": "1",
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "claimed_assurance": { "enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"] },
-      "completeness": { "const": "COMPLETE" },
-      "conclusion": { "const": "DIAGONAL_ENTRIES_MATCH_BY_UNIT_PERMUTATION" },
-      "evidence": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": { "const": "evidence/answer.txt" },
-            "sha256": { "pattern": "^sha256:[0-9a-f]{64}$", "type": "string" }
-          },
-          "required": ["path", "sha256"],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
-      },
-      "limitations": { "items": {"minLength": 1, "type": "string"}, "maxItems": 1, "minItems": 1, "type": "array" },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "BP": {
-            "items": { "items": { "maximum": 124, "minimum": 0, "type": "integer" }, "maxItems": 6, "minItems": 6, "type": "array" },
-            "maxItems": 6, "minItems": 6, "type": "array"
-          },
-          "PA": {
-            "items": { "items": { "maximum": 124, "minimum": 0, "type": "integer" }, "maxItems": 6, "minItems": 6, "type": "array" },
-            "maxItems": 6, "minItems": 6, "type": "array"
-          },
-          "determinant_modulus": { "maximum": 124, "minimum": 0, "type": "integer" },
-          "matched_pairs": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "a_value": { "type": "integer" }, "b_value": { "type": "integer" },
-                "column": { "type": "integer" }, "row": { "type": "integer" },
-                "unit_entry": { "type": "integer" }
-              },
-              "required": ["row", "column", "b_value", "a_value", "unit_entry"],
-              "type": "object"
-            },
-            "maxItems": 6, "minItems": 6, "type": "array"
-          },
-          "modulus": { "const": 125 },
-          "permutation_sign": { "enum": [-1, 1] },
-          "signed_term_modulus": { "maximum": 124, "minimum": 0, "type": "integer" },
-          "unit_permutation": {
-            "items": { "maximum": 5, "minimum": 0, "type": "integer" },
-            "maxItems": 6, "minItems": 6, "type": "array", "uniqueItems": true
-          }
-        },
-        "required": ["modulus", "PA", "BP", "determinant_modulus", "unit_permutation", "permutation_sign", "signed_term_modulus", "matched_pairs"],
-        "type": "object"
-      },
-      "scope": { "const": "frozen-six-dimensional-Z-mod-125-certificate", "type": "string" },
-      "task_id": { "const": "jacobian/local-ring-diagonal-similarity-certificate" }
-    },
-    "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
-    "type": "object"
-  },
-  "scope": {
-    "const": "frozen-six-dimensional-Z-mod-125-certificate",
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
     "additionalProperties": false,
@@ -145,21 +60,44 @@
         "items": {
           "additionalProperties": false,
           "properties": {
-            "a_value": { "type": "integer" },
-            "b_value": { "type": "integer" },
-            "column": { "type": "integer" },
-            "row": { "type": "integer" },
-            "unit_entry": { "type": "integer" }
+            "a_value": {
+              "type": "integer"
+            },
+            "b_value": {
+              "type": "integer"
+            },
+            "column": {
+              "type": "integer"
+            },
+            "row": {
+              "type": "integer"
+            },
+            "unit_entry": {
+              "type": "integer"
+            }
           },
-          "required": ["row", "column", "b_value", "a_value", "unit_entry"],
+          "required": [
+            "row",
+            "column",
+            "b_value",
+            "a_value",
+            "unit_entry"
+          ],
           "type": "object"
         },
         "maxItems": 6,
         "minItems": 6,
         "type": "array"
       },
-      "modulus": { "const": 125 },
-      "permutation_sign": { "enum": [-1, 1] },
+      "modulus": {
+        "const": 125
+      },
+      "permutation_sign": {
+        "enum": [
+          -1,
+          1
+        ]
+      },
       "signed_term_modulus": {
         "maximum": 124,
         "minimum": 0,
@@ -189,6 +127,147 @@
     ],
     "type": "object"
   },
-  "task_id": "jacobian/local-ring-diagonal-similarity-certificate",
-  "verification_record": null
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "BP": {
+            "items": {
+              "items": {
+                "maximum": 124,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 6,
+              "minItems": 6,
+              "type": "array"
+            },
+            "maxItems": 6,
+            "minItems": 6,
+            "type": "array"
+          },
+          "PA": {
+            "items": {
+              "items": {
+                "maximum": 124,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 6,
+              "minItems": 6,
+              "type": "array"
+            },
+            "maxItems": 6,
+            "minItems": 6,
+            "type": "array"
+          },
+          "determinant_modulus": {
+            "maximum": 124,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "matched_pairs": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "a_value": {
+                  "type": "integer"
+                },
+                "b_value": {
+                  "type": "integer"
+                },
+                "column": {
+                  "type": "integer"
+                },
+                "row": {
+                  "type": "integer"
+                },
+                "unit_entry": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "row",
+                "column",
+                "b_value",
+                "a_value",
+                "unit_entry"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "minItems": 6,
+            "type": "array"
+          },
+          "modulus": {
+            "const": 125
+          },
+          "permutation_sign": {
+            "enum": [
+              -1,
+              1
+            ]
+          },
+          "signed_term_modulus": {
+            "maximum": 124,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unit_permutation": {
+            "items": {
+              "maximum": 5,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 6,
+            "minItems": 6,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "modulus",
+          "PA",
+          "BP",
+          "determinant_modulus",
+          "unit_permutation",
+          "permutation_sign",
+          "signed_term_modulus",
+          "matched_pairs"
+        ],
+        "type": "object"
+      },
+      "witness": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      }
+    },
+    "required": [
+      "result",
+      "witness"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/local-ring-diagonal-similarity-certificate"
 }

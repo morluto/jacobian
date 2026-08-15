@@ -1,78 +1,52 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": [
-    "task_id",
-    "conclusion",
-    "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
-  ],
   "properties": {
-    "task_id": {
-      "const": "jacobian/smith-rectangular"
-    },
-    "conclusion": {
-      "const": "TRUE"
-    },
     "result": {
-      "type": "object",
       "additionalProperties": false,
+      "properties": {
+        "invariant_factors": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "rank": {
+          "type": "integer"
+        }
+      },
       "required": [
         "rank",
         "invariant_factors"
       ],
-      "properties": {
-        "rank": {
-          "type": "integer"
-        },
-        "invariant_factors": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
+      "type": "object"
     },
-    "claimed_assurance": {
-      "enum": ["UNVERIFIED","COMPUTED"]
-    },
-    "scope": {
-      "const": "jacobian/smith-rectangular complete finite input"
-    },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "evidence": {
-      "type": "array",
-      "minItems": 1,"maxItems":1,
+    "witness": {
       "items": {
-        "type": "object",
         "additionalProperties": false,
-        "required": [
-          "path",
-          "sha256"
-        ],
         "properties": {
           "path": {
             "const": "evidence/answer.txt"
           },
           "sha256": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
           }
-        }
-      }
-    },
-    "limitations": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
     }
-  }
+  },
+  "required": [
+    "result",
+    "witness"
+  ],
+  "type": "object"
 }

@@ -1,15 +1,4 @@
 {
-  "allowed_assurance": [
-    "UNVERIFIED",
-    "COMPUTED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE"
-  ],
-  "assurance_ceiling": "COMPUTED",
-  "conclusion": {
-    "const": "MARGINAL_CONVERGENCE_INSUFFICIENT"
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/answer.txt"
@@ -22,12 +11,6 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "limitations": {
-    "items": {"minLength": 1, "type": "string"},
-    "maxItems": 1,
-    "minItems": 1,
-    "type": "array"
-  },
   "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The evidence explanation must state why marginal convergence does not determine joint convergence or the product law; unrelated text does not earn evidence credit. Product distributions may include ascending zero-mass attainable entries, which the verifier normalizes away. In the solver's own words, the limitations array must disclose that this exact finite-law countermodel does not prove a general weak-convergence theorem or disambiguate the original prose.",
   "required_artifact_filenames": [
     "evidence/answer.txt"
@@ -36,15 +19,15 @@
     "joint_entry": {
       "additionalProperties": false,
       "properties": {
+        "mass": {
+          "pattern": "^(0|1|[1-9][0-9]*/[1-9][0-9]*)$",
+          "type": "string"
+        },
         "x": {
           "type": "integer"
         },
         "y": {
           "type": "integer"
-        },
-        "mass": {
-          "type": "string",
-          "pattern": "^(0|1|[1-9][0-9]*/[1-9][0-9]*)$"
         }
       },
       "required": [
@@ -57,12 +40,12 @@
     "product_entry": {
       "additionalProperties": false,
       "properties": {
+        "mass": {
+          "pattern": "^(0|1|[1-9][0-9]*/[1-9][0-9]*)$",
+          "type": "string"
+        },
         "value": {
           "type": "integer"
-        },
-        "mass": {
-          "type": "string",
-          "pattern": "^(0|1|[1-9][0-9]*/[1-9][0-9]*)$"
         }
       },
       "required": [
@@ -73,18 +56,48 @@
     }
   },
   "schema_version": "1",
-  "scope": {
-    "const": "frozen-four-point-marginal-and-submitted-couplings",
-    "enum": null,
-    "pattern": null,
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
     "additionalProperties": false,
     "properties": {
       "diagnosis": {
         "const": "MISSING_JOINT_LAW_CONTROL"
+      },
+      "limit_joint": {
+        "items": {
+          "$ref": "#/$defs/joint_entry"
+        },
+        "maxItems": 16,
+        "minItems": 16,
+        "type": "array"
+      },
+      "limit_product_distribution": {
+        "items": {
+          "$ref": "#/$defs/product_entry"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "missing_assumption": {
+        "enum": [
+          "JOINT_CONVERGENCE",
+          "LIMIT_PAIR_INDEPENDENCE"
+        ]
+      },
+      "prelimit_joint": {
+        "items": {
+          "$ref": "#/$defs/joint_entry"
+        },
+        "maxItems": 16,
+        "minItems": 16,
+        "type": "array"
+      },
+      "prelimit_product_distribution": {
+        "items": {
+          "$ref": "#/$defs/product_entry"
+        },
+        "minItems": 1,
+        "type": "array"
       },
       "sequence_model": {
         "const": "CONSTANT_IN_N"
@@ -97,44 +110,8 @@
           5
         ]
       },
-      "prelimit_joint": {
-        "items": {
-          "$ref": "#/$defs/joint_entry"
-        },
-        "minItems": 16,
-        "maxItems": 16,
-        "type": "array"
-      },
-      "limit_joint": {
-        "items": {
-          "$ref": "#/$defs/joint_entry"
-        },
-        "minItems": 16,
-        "maxItems": 16,
-        "type": "array"
-      },
-      "prelimit_product_distribution": {
-        "items": {
-          "$ref": "#/$defs/product_entry"
-        },
-        "minItems": 1,
-        "type": "array"
-      },
-      "limit_product_distribution": {
-        "items": {
-          "$ref": "#/$defs/product_entry"
-        },
-        "minItems": 1,
-        "type": "array"
-      },
       "witness_product_value": {
         "type": "integer"
-      },
-      "missing_assumption": {
-        "enum": [
-          "JOINT_CONVERGENCE",
-          "LIMIT_PAIR_INDEPENDENCE"
-        ]
       }
     },
     "required": [
@@ -151,21 +128,19 @@
     "type": "object"
   },
   "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
     "$defs": {
       "joint_entry": {
         "additionalProperties": false,
         "properties": {
+          "mass": {
+            "pattern": "^(0|1|[1-9][0-9]*/[1-9][0-9]*)$",
+            "type": "string"
+          },
           "x": {
             "type": "integer"
           },
           "y": {
             "type": "integer"
-          },
-          "mass": {
-            "type": "string",
-            "pattern": "^(0|1|[1-9][0-9]*/[1-9][0-9]*)$"
           }
         },
         "required": [
@@ -178,12 +153,12 @@
       "product_entry": {
         "additionalProperties": false,
         "properties": {
+          "mass": {
+            "pattern": "^(0|1|[1-9][0-9]*/[1-9][0-9]*)$",
+            "type": "string"
+          },
           "value": {
             "type": "integer"
-          },
-          "mass": {
-            "type": "string",
-            "pattern": "^(0|1|[1-9][0-9]*/[1-9][0-9]*)$"
           }
         },
         "required": [
@@ -193,22 +168,80 @@
         "type": "object"
       }
     },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "diagnosis": {
+            "const": "MISSING_JOINT_LAW_CONTROL"
+          },
+          "limit_joint": {
+            "items": {
+              "$ref": "#/$defs/joint_entry"
+            },
+            "maxItems": 16,
+            "minItems": 16,
+            "type": "array"
+          },
+          "limit_product_distribution": {
+            "items": {
+              "$ref": "#/$defs/product_entry"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "missing_assumption": {
+            "enum": [
+              "JOINT_CONVERGENCE",
+              "LIMIT_PAIR_INDEPENDENCE"
+            ]
+          },
+          "prelimit_joint": {
+            "items": {
+              "$ref": "#/$defs/joint_entry"
+            },
+            "maxItems": 16,
+            "minItems": 16,
+            "type": "array"
+          },
+          "prelimit_product_distribution": {
+            "items": {
+              "$ref": "#/$defs/product_entry"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "sequence_model": {
+            "const": "CONSTANT_IN_N"
+          },
+          "support": {
+            "const": [
+              -3,
+              -1,
+              2,
+              5
+            ]
+          },
+          "witness_product_value": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "diagnosis",
+          "sequence_model",
+          "support",
+          "prelimit_joint",
+          "limit_joint",
+          "prelimit_product_distribution",
+          "limit_product_distribution",
+          "witness_product_value",
+          "missing_assumption"
+        ],
+        "type": "object"
       },
-      "completeness": {
-        "const": "COMPLETE"
-      },
-      "conclusion": {
-        "const": "MARGINAL_CONVERGENCE_INSUFFICIENT"
-      },
-      "evidence": {
+      "witness": {
         "items": {
           "additionalProperties": false,
           "properties": {
@@ -229,103 +262,13 @@
         "maxItems": 1,
         "minItems": 1,
         "type": "array"
-      },
-      "limitations": {
-        "items": {"minLength": 1, "type": "string"},
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "diagnosis": {
-            "const": "MISSING_JOINT_LAW_CONTROL"
-          },
-          "sequence_model": {
-            "const": "CONSTANT_IN_N"
-          },
-          "support": {
-            "const": [
-              -3,
-              -1,
-              2,
-              5
-            ]
-          },
-          "prelimit_joint": {
-            "items": {
-              "$ref": "#/$defs/joint_entry"
-            },
-            "minItems": 16,
-            "maxItems": 16,
-            "type": "array"
-          },
-          "limit_joint": {
-            "items": {
-              "$ref": "#/$defs/joint_entry"
-            },
-            "minItems": 16,
-            "maxItems": 16,
-            "type": "array"
-          },
-          "prelimit_product_distribution": {
-            "items": {
-              "$ref": "#/$defs/product_entry"
-            },
-            "minItems": 1,
-            "type": "array"
-          },
-          "limit_product_distribution": {
-            "items": {
-              "$ref": "#/$defs/product_entry"
-            },
-            "minItems": 1,
-            "type": "array"
-          },
-          "witness_product_value": {
-            "type": "integer"
-          },
-          "missing_assumption": {
-            "enum": [
-              "JOINT_CONVERGENCE",
-              "LIMIT_PAIR_INDEPENDENCE"
-            ]
-          }
-        },
-        "required": [
-          "diagnosis",
-          "sequence_model",
-          "support",
-          "prelimit_joint",
-          "limit_joint",
-          "prelimit_product_distribution",
-          "limit_product_distribution",
-          "witness_product_value",
-          "missing_assumption"
-        ],
-        "type": "object"
-      },
-      "scope": {
-        "const": "frozen-four-point-marginal-and-submitted-couplings",
-        "type": "string"
-      },
-      "task_id": {
-        "const": "jacobian/marginal-joint-product-audit"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
   },
-  "task_id": "jacobian/marginal-joint-product-audit",
-  "verification_record": null
+  "task_id": "jacobian/marginal-joint-product-audit"
 }

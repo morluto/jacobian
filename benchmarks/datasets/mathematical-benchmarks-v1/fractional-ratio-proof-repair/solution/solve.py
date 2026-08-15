@@ -36,15 +36,7 @@ Path("/app/evidence").mkdir(parents=True, exist_ok=True)
 Path("/app/evidence/answer.txt").write_text(text)
 digest = hashlib.sha256(text.encode()).hexdigest()
 submission = {
-    "task_id": "jacobian/fractional-ratio-proof-repair",
-    "conclusion": "PUBLIC_PROOF_INVALID_REPAIR_CERTIFIED",
     "result": result,
-    "claimed_assurance": "COMPUTED",
-    "scope": "frozen-24-item-binary-fractional-ratio-instance",
-    "completeness": "COMPLETE",
-    "evidence": [{"path": "evidence/answer.txt", "sha256": f"sha256:{digest}"}],
-    "limitations": [
-        "The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem."
-    ],
+    "witness": [{"path": "evidence/answer.txt", "sha256": f"sha256:{digest}"}],
 }
 Path("/app/submission.json").write_text(json.dumps(submission, indent=2) + "\n")

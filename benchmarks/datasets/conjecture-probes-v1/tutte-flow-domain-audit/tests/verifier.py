@@ -9,7 +9,6 @@ from verifier_support import (
     is_regular_bounded_file,
     load_submission,
     read_evidence_json,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -146,76 +145,47 @@ def _write(values):
     (path / "reward-details.json").write_text(json.dumps(details, sort_keys=True))
 
 
-def _assurance_is_calibrated(raw: object) -> bool:
-    return bool(
-        isinstance(raw, dict)
-        and type(raw.get("claimed_assurance")) is str
-        and raw.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED", "CHECKED"}
-    )
-
-
-def _evidence_payload_is_bound(payload: object, raw: object) -> bool:
+def _evidence_payload_is_bound(payload: object, result: object) -> bool:
     return bool(
         isinstance(payload, dict)
-        and isinstance(raw, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
+        and set(payload) == {"schema_version", "task_id", "result"}
         and payload.get("schema_version") == "1"
-        and _json_equal(payload.get("task_id"), raw.get("task_id"))
-        and _json_equal(payload.get("result"), raw.get("result"))
-        and _json_equal(payload.get("limitations"), raw.get("limitations"))
+        and payload.get("task_id") == TASK_ID
+        and _json_equal(payload.get("result"), result)
     )
 
 
 def main():
     raw = _raw()
     submission = load_submission(require_input_binding=False)
-    contract = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion="CONSERVATION_ONLY_IS_UNSOUND_AND_REPAIRED",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
-    )
+    contract = bool(submission)
     evidence_ok = bool(
         isinstance(raw, dict)
-        and evidence_list_is_bound(raw.get("evidence"), max_bytes=None)
+        and evidence_list_is_bound(raw.get("witness"), max_bytes=None)
     )
     payload = (
         read_evidence_json(
-            raw["evidence"][0], expected_path="evidence/answer.json", max_bytes=None
+            raw["witness"][0], expected_path="evidence/answer.json", max_bytes=None
         )
         if evidence_ok
         else None
     )
-    evidence_ok = _evidence_payload_is_bound(payload, raw)
-    math_ok = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
-    scope_ok = bool(
-        isinstance(raw, dict)
-        and raw.get("scope") == SCOPE
-        and raw.get("completeness") == "COMPLETE"
-        and raw.get("limitations") == LIMITATIONS
+    evidence_ok = _evidence_payload_is_bound(
+        payload, raw.get("result") if isinstance(raw, dict) else None
     )
-    assurance_ok = _assurance_is_calibrated(raw)
+    math_ok = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
     values = {
         "input_binding": float(workspace_input_is_bound()),
         "protocol": float(bool(contract)),
         "mathematics": float(math_ok),
         "correctness": float(math_ok),
-        "evidence": float(evidence_ok),
-        "evidence_validity": float(evidence_ok),
-        "scope": float(scope_ok),
-        "scope_accuracy": float(scope_ok),
-        "assurance": float(assurance_ok),
-        "assurance_calibration": float(assurance_ok),
+        "witness_validity": float(evidence_ok),
     }
     reward = float(all(values.values()))
     values.update(
         {
             "aggregate_reward": reward,
             "reward": reward,
-            "false_certification": bool(
-                isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
-            ),
         }
     )
     _write(values)
@@ -231,15 +201,9 @@ if __name__ == "__main__":
                 "input_binding": 0.0,
                 "mathematics": 0.0,
                 "correctness": 0.0,
-                "evidence": 0.0,
-                "evidence_validity": 0.0,
-                "scope": 0.0,
-                "scope_accuracy": 0.0,
-                "assurance": 0.0,
-                "assurance_calibration": 0.0,
+                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
-                "false_certification": False,
                 "error": type(exc).__name__,
             }
         )

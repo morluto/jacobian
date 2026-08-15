@@ -3,18 +3,21 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1 import (
+    _fixtures,
+    _verifier,
+)
 
 TASK = "bounded-variation-uniform-limit"
 
 
 def _case(tmp_path: Path):
-    return support._prepare_case(tmp_path, TASK, "computed")
+    return _fixtures._prepare_case(tmp_path, TASK, "computed")
 
 
 def test_reference_passes(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
-    assert support._run_verifier(task, app, logs).reward == 1.0
+    assert _verifier._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_alternative_scale_and_indices_pass(tmp_path: Path) -> None:
@@ -37,9 +40,9 @@ def test_alternative_scale_and_indices_pass(tmp_path: Path) -> None:
                 "total_variation": "4",
             }
         )
-    support._bind_result_evidence(app, submission)
-    support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs).reward == 1.0
+    _fixtures._bind_result_evidence(app, submission)
+    _fixtures._write_json(path, submission)
+    assert _verifier._run_verifier(task, app, logs).reward == 1.0
 
 
 def _mutate(tmp_path: Path, mutation) -> float:
@@ -47,9 +50,9 @@ def _mutate(tmp_path: Path, mutation) -> float:
     path = app / "submission.json"
     submission = json.loads(path.read_text())
     mutation(submission)
-    support._bind_result_evidence(app, submission)
-    support._write_json(path, submission)
-    return support._run_verifier(task, app, logs).reward
+    _fixtures._bind_result_evidence(app, submission)
+    _fixtures._write_json(path, submission)
+    return _verifier._run_verifier(task, app, logs).reward
 
 
 def test_wrong_segment_count_is_rejected(tmp_path: Path) -> None:
@@ -83,23 +86,12 @@ def test_duplicate_indices_are_rejected(tmp_path: Path) -> None:
     assert _mutate(tmp_path, duplicate) == 0.0
 
 
-def test_false_verified_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _case(tmp_path)
-    path = app / "submission.json"
-    submission = json.loads(path.read_text())
-    submission["claimed_assurance"] = "VERIFIED"
-    support._write_json(path, submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.details["false_certification"] is True
-
-
 def test_visible_input_tampering_is_rejected(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     data = json.loads((app / "input.json").read_text())
     data["source"]["row"] = 601
-    support._write_json(app / "input.json", data)
-    assert support._run_verifier(task, app, logs).reward == 0.0
+    _fixtures._write_json(app / "input.json", data)
+    assert _verifier._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_unstructured_argument_claim_is_rejected(tmp_path: Path) -> None:
@@ -107,9 +99,9 @@ def test_unstructured_argument_claim_is_rejected(tmp_path: Path) -> None:
     path = app / "submission.json"
     submission = json.loads(path.read_text())
     submission["result"]["argument"]["implication"] = "does not force"
-    support._bind_result_evidence(app, submission)
-    support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs).reward == 0.0
+    _fixtures._bind_result_evidence(app, submission)
+    _fixtures._write_json(path, submission)
+    assert _verifier._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_oversized_evidence_is_rejected_before_digest_binding(tmp_path: Path) -> None:
@@ -120,9 +112,9 @@ def test_oversized_evidence_is_rejected_before_digest_binding(tmp_path: Path) ->
     submission = json.loads(path.read_text())
     evidence = app / "evidence" / "answer.txt"
     evidence.write_text("x" * (1_048_576 + 1))
-    submission["evidence"][0]["sha256"] = "sha256:" + "0" * 64
-    support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs).reward == 0.0
+    submission["witness"][0]["sha256"] = "sha256:" + "0" * 64
+    _fixtures._write_json(path, submission)
+    assert _verifier._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_bool_in_integer_certificate_is_rejected(tmp_path: Path) -> None:
@@ -148,35 +140,6 @@ def test_equivalent_sequence_serialization_passes(tmp_path: Path) -> None:
     path = app / "submission.json"
     submission = json.loads(path.read_text())
     submission["result"]["sequence"] = "sin(n*q*x)/(n*q)"
-    support._bind_result_evidence(app, submission)
-    support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs).reward == 1.0
-
-
-def test_equivalent_limitation_wording_passes(tmp_path: Path) -> None:
-    """The public structured limitation value is accepted."""
-
-    task, app, logs = _case(tmp_path)
-    path = app / "submission.json"
-    submission = json.loads(path.read_text())
-    submission["limitations"] = ["NO_PROOF_ASSISTANT_VERIFICATION"]
-    support._bind_result_evidence(app, submission)
-    support._write_json(path, submission)
-    assert support._run_verifier(task, app, logs).reward == 1.0
-
-
-def test_protocol_failure_preserves_math_correctness(tmp_path: Path) -> None:
-    """An extra top-level field must zero reward but not collapse correctness."""
-
-    task, app, logs = _case(tmp_path)
-    path = app / "submission.json"
-    submission = json.loads(path.read_text())
-    submission["extra_field"] = "protocol violation"
-    support._bind_result_evidence(app, submission)
-    support._write_json(path, submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.details["protocol"] is False
-    assert result.details["correctness"] == 0.0
-    assert result.details["evidence_validity"] == 0.0
-    assert result.details["scope_accuracy"] == 0.0
+    _fixtures._bind_result_evidence(app, submission)
+    _fixtures._write_json(path, submission)
+    assert _verifier._run_verifier(task, app, logs).reward == 1.0

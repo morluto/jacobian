@@ -1,1 +1,43 @@
-{"task_id":"jacobian/radical-distance-triangle-certificate","conclusion":"SHARP_LOWER_BOUND_CERTIFIED","result":{"method":"DISTANCE_TRIANGLE_INEQUALITY","scaled_centers":[[-1,-1],[1,1]],"expanded_radicands":[{"a2":1,"b2":1,"a_sqrt2":1,"b_sqrt2":1,"constant":1},{"a2":1,"b2":1,"a_sqrt2":-1,"b_sqrt2":-1,"constant":1}],"center_distance_squared":4,"lower_bound":2,"equality_witness":[0,0]},"claimed_assurance":"COMPUTED","scope":"ALL_REAL_A_B","completeness":"COMPLETE","evidence":[{"path":"evidence/radical-distance-certificate.json","sha256":"sha256:b76ad5bf8a5e28db164a7ad5d555cd88cf01ab0779942e4916491f0a2f0225c2"}],"limitations":["TRIANGLE_INEQUALITY_TRUSTED","NO_PROOF_ASSISTANT_REPLAY"]}
+{
+  "result": {
+    "center_distance_squared": 4,
+    "equality_witness": [
+      0,
+      0
+    ],
+    "expanded_radicands": [
+      {
+        "a2": 1,
+        "a_sqrt2": 1,
+        "b2": 1,
+        "b_sqrt2": 1,
+        "constant": 1
+      },
+      {
+        "a2": 1,
+        "a_sqrt2": -1,
+        "b2": 1,
+        "b_sqrt2": -1,
+        "constant": 1
+      }
+    ],
+    "lower_bound": 2,
+    "method": "DISTANCE_TRIANGLE_INEQUALITY",
+    "scaled_centers": [
+      [
+        -1,
+        -1
+      ],
+      [
+        1,
+        1
+      ]
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/radical-distance-certificate.json",
+      "sha256": "sha256:b76ad5bf8a5e28db164a7ad5d555cd88cf01ab0779942e4916491f0a2f0225c2"
+    }
+  ]
+}

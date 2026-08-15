@@ -1,1 +1,56 @@
-{"task_id":"jacobian/chebotarev-fixed-point-proof-audit","conclusion":"PUBLISHED_SOLUTION_CONTAINS_MULTIPLE_FATAL_ERRORS","result":{"mod2_factor":"(x+1)^4","actual_discriminant":-6656,"cycle_types":[{"partition":"1+1+1+1","class_size":1,"fixed_points":4,"contributes":true},{"partition":"2+1+1","class_size":6,"fixed_points":2,"contributes":true},{"partition":"2+2","class_size":3,"fixed_points":0,"contributes":false},{"partition":"3+1","class_size":8,"fixed_points":1,"contributes":true},{"partition":"4","class_size":6,"fixed_points":0,"contributes":false}],"fixed_point_total":15,"density":{"numerator":5,"denominator":8},"encoded_answer":508,"defects":["MOD2_IRREDUCIBILITY_FALSE","DISCRIMINANT_WRONG","DOUBLE_TRANSPOSITIONS_HAVE_NO_FIXED_POINTS","PUBLISHED_DENSITY_WRONG"]},"claimed_assurance":"COMPUTED","scope":"CONDITIONAL_ON_FROZEN_S4_PREMISE","completeness":"COMPLETE","evidence":[{"path":"evidence/chebotarev-audit.json","sha256":"sha256:641d07c31201810d4ecb8f51ad4769d2258641f11681c10ab54e4e7946d5e8f2"}],"limitations":["S4_CLASSIFICATION_NOT_REPROVED","CHEBOTAREV_THEOREM_TRUSTED"]}
+{
+  "result": {
+    "actual_discriminant": -6656,
+    "cycle_types": [
+      {
+        "class_size": 1,
+        "contributes": true,
+        "fixed_points": 4,
+        "partition": "1+1+1+1"
+      },
+      {
+        "class_size": 6,
+        "contributes": true,
+        "fixed_points": 2,
+        "partition": "2+1+1"
+      },
+      {
+        "class_size": 3,
+        "contributes": false,
+        "fixed_points": 0,
+        "partition": "2+2"
+      },
+      {
+        "class_size": 8,
+        "contributes": true,
+        "fixed_points": 1,
+        "partition": "3+1"
+      },
+      {
+        "class_size": 6,
+        "contributes": false,
+        "fixed_points": 0,
+        "partition": "4"
+      }
+    ],
+    "defects": [
+      "MOD2_IRREDUCIBILITY_FALSE",
+      "DISCRIMINANT_WRONG",
+      "DOUBLE_TRANSPOSITIONS_HAVE_NO_FIXED_POINTS",
+      "PUBLISHED_DENSITY_WRONG"
+    ],
+    "density": {
+      "denominator": 8,
+      "numerator": 5
+    },
+    "encoded_answer": 508,
+    "fixed_point_total": 15,
+    "mod2_factor": "(x+1)^4"
+  },
+  "witness": [
+    {
+      "path": "evidence/chebotarev-audit.json",
+      "sha256": "sha256:641d07c31201810d4ecb8f51ad4769d2258641f11681c10ab54e4e7946d5e8f2"
+    }
+  ]
+}

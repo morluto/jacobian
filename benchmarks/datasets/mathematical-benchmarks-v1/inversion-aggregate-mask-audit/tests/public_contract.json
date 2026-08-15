@@ -1,14 +1,4 @@
 {
-  "allowed_assurance": [
-    "COMPUTED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE"
-  ],
-  "assurance_ceiling": "COMPUTED",
-  "conclusion": {
-    "const": "LOCAL_DEFINITION_WRONG_AGGREGATE_MASKS_DEFECT"
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/inversion-audit.json"
@@ -21,24 +11,12 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "limitations": {
-    "const": [
-      "FINITE_N4_REPLAY",
-      "NO_LEAN_ELABORATION"
-    ]
-  },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.",
   "required_artifact_filenames": [
     "evidence/inversion-audit.json"
   ],
   "schema_definitions": {},
   "schema_version": "1",
-  "scope": {
-    "const": "FROZEN_N4_ALL_PERMUTATIONS",
-    "enum": null,
-    "pattern": null,
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
     "additionalProperties": false,
@@ -92,48 +70,6 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
-      },
-      "completeness": {
-        "const": "COMPLETE"
-      },
-      "conclusion": {
-        "const": "LOCAL_DEFINITION_WRONG_AGGREGATE_MASKS_DEFECT"
-      },
-      "evidence": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/inversion-audit.json"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
-      },
-      "limitations": {
-        "const": [
-          "FINITE_N4_REPLAY",
-          "NO_LEAN_ELABORATION"
-        ]
-      },
       "result": {
         "additionalProperties": false,
         "properties": {
@@ -182,26 +118,34 @@
         ],
         "type": "object"
       },
-      "scope": {
-        "const": "FROZEN_N4_ALL_PERMUTATIONS",
-        "type": "string"
-      },
-      "task_id": {
-        "const": "jacobian/inversion-aggregate-mask-audit"
+      "witness": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/inversion-audit.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
   },
-  "task_id": "jacobian/inversion-aggregate-mask-audit",
-  "verification_record": null
+  "task_id": "jacobian/inversion-aggregate-mask-audit"
 }

@@ -7,22 +7,13 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
+    aggregate_reward,
     evidence_list_is_bound,
-    is_regular_bounded_file,
     load_submission,
     read_evidence_json,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
-TASK_ID = "jacobian/mahler-leading-coefficient-audit"
-SCOPE = "mahler-leading-coefficient-audit-v1"
-LIMITATIONS = [
-    "ONE_DEGREE_EIGHT_POLYNOMIAL",
-    "EXACT_FACTOR_FORMULA_AUDIT_ONLY",
-    "LEHMER_PROBLEM_NOT_ASSESSED",
-]
 TARGET = [2, -11, 21, -22, 23, -22, 21, -11, 2]
 RATIONAL = re.compile(r"^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$")
 
@@ -92,11 +83,8 @@ def _evidence_payload_matches_submission(payload: object, raw: object) -> bool:
     return bool(
         isinstance(payload, dict)
         and isinstance(raw, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
         and payload.get("schema_version") == "1"
-        and _json_equal(payload.get("task_id"), raw.get("task_id"))
         and _json_equal(payload.get("result"), raw.get("result"))
-        and _json_equal(payload.get("limitations"), raw.get("limitations"))
     )
 
 
@@ -174,17 +162,6 @@ def mathematics(result):
     )
 
 
-def _raw():
-    path = Path("/app/submission.json")
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError, MemoryError, RecursionError):
-        return None
-    return value if isinstance(value, dict) else None
-
-
 def _write(values):
     path = Path("/logs/verifier")
     path.mkdir(parents=True, exist_ok=True)
@@ -192,62 +169,38 @@ def _write(values):
 
 
 def main():
-    raw = _raw()
+    input_bound = workspace_input_is_bound()
     submission = load_submission(require_input_binding=False)
-    contract = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion="NONMONIC_FORMULA_REPAIRED",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
-    )
+    protocol_ok = submission is not None
+    math_ok = bool(protocol_ok and mathematics(submission.get("result")))
     evidence_ok = bool(
-        isinstance(raw, dict)
-        and evidence_list_is_bound(raw.get("evidence"), max_bytes=None)
+        protocol_ok
+        and evidence_list_is_bound(submission.get("witness"), max_bytes=None)
     )
     payload = (
         read_evidence_json(
-            raw["evidence"][0], expected_path="evidence/answer.json", max_bytes=None
+            submission["witness"][0],
+            expected_path="evidence/answer.json",
+            max_bytes=None,
         )
         if evidence_ok
         else None
     )
-    evidence_ok = _evidence_payload_matches_submission(payload, raw)
-    math_ok = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
-    scope_ok = bool(
-        isinstance(raw, dict)
-        and raw.get("scope") == SCOPE
-        and raw.get("completeness") == "COMPLETE"
-        and raw.get("limitations") == LIMITATIONS
+    evidence_ok = _evidence_payload_matches_submission(payload, submission)
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=evidence_ok,
+        protocol_ok=protocol_ok and input_bound,
     )
-    assurance_ok = bool(
-        contract
-        and isinstance(raw, dict)
-        and raw.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED", "CHECKED"}
-    )
-    values = {
-        "input_binding": float(workspace_input_is_bound()),
-        "protocol": float(bool(contract)),
-        "mathematics": float(math_ok),
-        "correctness": float(math_ok),
-        "evidence": float(evidence_ok),
-        "evidence_validity": float(evidence_ok),
-        "scope": float(scope_ok),
-        "scope_accuracy": float(scope_ok),
-        "assurance": float(assurance_ok),
-        "assurance_calibration": float(assurance_ok),
-    }
-    reward = float(all(values.values()))
-    values.update(
+    _write(
         {
-            "aggregate_reward": reward,
+            "protocol_compliance": float(protocol_ok),
+            "input_binding": float(input_bound),
+            "correctness": float(math_ok),
+            "evidence_validity": float(evidence_ok),
             "reward": reward,
-            "false_certification": bool(
-                isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
-            ),
         }
     )
-    _write(values)
 
 
 if __name__ == "__main__":
@@ -256,19 +209,11 @@ if __name__ == "__main__":
     except BaseException as exc:
         _write(
             {
-                "protocol": 0.0,
+                "protocol_compliance": 0.0,
                 "input_binding": 0.0,
-                "mathematics": 0.0,
                 "correctness": 0.0,
-                "evidence": 0.0,
                 "evidence_validity": 0.0,
-                "scope": 0.0,
-                "scope_accuracy": 0.0,
-                "assurance": 0.0,
-                "assurance_calibration": 0.0,
-                "aggregate_reward": 0.0,
                 "reward": 0.0,
-                "false_certification": False,
                 "error": type(exc).__name__,
             }
         )

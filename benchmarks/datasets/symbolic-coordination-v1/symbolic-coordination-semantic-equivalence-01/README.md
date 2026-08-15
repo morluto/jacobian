@@ -7,8 +7,7 @@ Assess one exact polynomial-map claim in the semantic-equivalence pilot family.
 - family: `semantic-equivalence`
 - case version: `symbolic-coordination-v1/pilot-1`
 - generator: `symbolic-coordination-pilot-generator@1`
-- fixture digest: `sha256:c8f456306e53daf98898db91dce44eec9d4a1229de2b5720aa6dc07ae3e64330`
-- assurance ceiling: `CHECKED`
+- fixture digest: `sha256:842e7930e19e1cd8bb249ad72e175a357efb2d2cb05eda5f6b32ace02cc7174d`
 - note: Term reordering, duplicates, cancellations, and variable renaming.
 
 ## Verification boundary
@@ -16,5 +15,5 @@ Assess one exact polynomial-map claim in the semantic-equivalence pilot family.
 The task is offline and solvable without Jacobian. The instruction names no
 operation or tool order. The task-local clean-room verifier imports neither
 Jacobian nor the generator; it replays exact rational polynomial arithmetic,
-scope, input and artifact bindings, evidence digest, and assurance. `VERIFIED`
-is unauthorized in this pilot and receives zero reward.
+input and artifact bindings, and the witness digest. Reward is binary: the
+replayed mathematical predicate and every required binding must hold.

@@ -4,12 +4,11 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 W = Path("/app")
@@ -271,67 +270,17 @@ def _evidence_matches(evidence):
 
 def main():
     submission, frozen = _load_bounded_submission(), _load_frozen_input()
-    expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
+    protocol_ok = submission is not None
+    math_correct = bool(
+        protocol_ok and _result_is_valid(submission.get("result"), frozen)
     )
-    math_correct = bool(contract and _result_is_valid(submission.get("result"), frozen))
     evidence_valid = bool(
-        contract and math_correct and _evidence_matches(submission.get("evidence"))
+        protocol_ok and math_correct and _evidence_matches(submission.get("witness"))
     )
-    scope = submission.get("scope") if isinstance(submission, dict) else None
-    scope_text = scope.casefold() if isinstance(scope, str) else ""
-    scope_correct = bool(
-        contract
-        and all(
-            term in scope_text
-            for term in ("two", "atom", "exponential", "generic", "rank")
-        )
-        and not re.search(
-            r"\b(?:not|without|exclude|excluding|except|omit)\b[^.]{0,60}\b(?:generic|rank|two[- ]atom)\b",
-            scope_text,
-        )
-    )
-    assurance_correct = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations = (
-        submission.get("limitations", []) if isinstance(submission, dict) else []
-    )
-    limitation_correct = False
-    if contract and isinstance(limitations, list):
-        combined = " ".join(
-            item.casefold() for item in limitations if isinstance(item, str)
-        )
-        negative_pattern = (
-            r"\b(?:not|no|without|does not|doesn't|lacks?)\b[^.]{0,80}"
-            r"\b(?:proof(?:[- ]assistant)?|machine|formal(?:ly)?)\b"
-        )
-        negative = re.search(negative_pattern, combined)
-        remainder = re.sub(negative_pattern, "", combined)
-        limitation_correct = bool(
-            negative
-            and re.search(r"\b(?:proof|machine|formal)", combined)
-            and not re.search(
-                r"\b(?:machine|formal(?:ly)?|proof[- ]assistant)\b[^.]{0,60}"
-                r"\b(?:verified|checked|proof)\b",
-                remainder,
-            )
-        )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(
-        contract and math_correct and limitation_correct and not false_certification
-    )
-    reward = (
-        0.0
-        if not correct or not evidence_valid
-        else 0.8 + 0.1 * scope_correct + 0.1 * assurance_correct
+    reward = aggregate_reward(
+        correctness=math_correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
@@ -339,10 +288,7 @@ def main():
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

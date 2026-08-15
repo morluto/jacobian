@@ -19,15 +19,9 @@ Additional lines are allowed and ignored. There is no byte limit on the evidence
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. In the solver's own words, the limitations array must disclose that the certificate covers only the frozen exact instance and does not prove a general greedy theorem.
+The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The required limitation is the exact ID `FROZEN_BINARY_RATIO_INSTANCE_ONLY`.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 
-- **Conclusion:** exactly `PUBLIC_PROOF_INVALID_REPAIR_CERTIFIED`
-- **Assurance:** scoreable values are `UNVERIFIED`, `COMPUTED` (ceiling `COMPUTED`); the submission schema accepts any of `UNVERIFIED`, `COMPUTED`, `CHECKED`, `VERIFIED` but only scoreable assurances receive credit.
-- **Scope:** the exact value declared in `submission_schema.json`
-- **Completeness:** `COMPLETE`.
-- **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`.
-- **Evidence media types:** `text/plain`.
-- **Required artifact filenames:** `evidence/answer.txt`.
+- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

@@ -1,33 +1,268 @@
 {
-  "task_id": "jacobian/lcm-highly-abundant-scope-audit",
-  "conclusion": "VALID_COUNTEREXAMPLE_INVALID_MINIMALITY",
   "result": {
     "counterexample_at_97": "VALID",
     "minimality_claim": "REFUTED_BY_EARLIER_COUNTEREXAMPLE",
     "witnesses": [
       {
-        "n": 97,
-        "lcm_factorization": [{"prime":2,"exponent":6},{"prime":3,"exponent":4},{"prime":5,"exponent":2},{"prime":7,"exponent":2},{"prime":11,"exponent":1},{"prime":13,"exponent":1},{"prime":17,"exponent":1},{"prime":19,"exponent":1},{"prime":23,"exponent":1},{"prime":29,"exponent":1},{"prime":31,"exponent":1},{"prime":37,"exponent":1},{"prime":41,"exponent":1},{"prime":43,"exponent":1},{"prime":47,"exponent":1},{"prime":53,"exponent":1},{"prime":59,"exponent":1},{"prime":61,"exponent":1},{"prime":67,"exponent":1},{"prime":71,"exponent":1},{"prime":73,"exponent":1},{"prime":79,"exponent":1},{"prime":83,"exponent":1},{"prime":89,"exponent":1},{"prime":97,"exponent":1}],
-        "exponent_deltas": [{"prime":2,"delta":2},{"prime":3,"delta":1},{"prime":5,"delta":1},{"prime":11,"delta":1},{"prime":13,"delta":1},{"prime":89,"delta":-1},{"prime":97,"delta":-1}],
-        "lcm_value": 69720375229712477164533808935312303556800,
         "competitor": 69292345589126960972049123209194899168000,
-        "sigma_lcm": 550166808184454444248584375721839820800000,
-        "sigma_competitor": 550446793937749666112291758331595325440000
+        "exponent_deltas": [
+          {
+            "delta": 2,
+            "prime": 2
+          },
+          {
+            "delta": 1,
+            "prime": 3
+          },
+          {
+            "delta": 1,
+            "prime": 5
+          },
+          {
+            "delta": 1,
+            "prime": 11
+          },
+          {
+            "delta": 1,
+            "prime": 13
+          },
+          {
+            "delta": -1,
+            "prime": 89
+          },
+          {
+            "delta": -1,
+            "prime": 97
+          }
+        ],
+        "lcm_factorization": [
+          {
+            "exponent": 6,
+            "prime": 2
+          },
+          {
+            "exponent": 4,
+            "prime": 3
+          },
+          {
+            "exponent": 2,
+            "prime": 5
+          },
+          {
+            "exponent": 2,
+            "prime": 7
+          },
+          {
+            "exponent": 1,
+            "prime": 11
+          },
+          {
+            "exponent": 1,
+            "prime": 13
+          },
+          {
+            "exponent": 1,
+            "prime": 17
+          },
+          {
+            "exponent": 1,
+            "prime": 19
+          },
+          {
+            "exponent": 1,
+            "prime": 23
+          },
+          {
+            "exponent": 1,
+            "prime": 29
+          },
+          {
+            "exponent": 1,
+            "prime": 31
+          },
+          {
+            "exponent": 1,
+            "prime": 37
+          },
+          {
+            "exponent": 1,
+            "prime": 41
+          },
+          {
+            "exponent": 1,
+            "prime": 43
+          },
+          {
+            "exponent": 1,
+            "prime": 47
+          },
+          {
+            "exponent": 1,
+            "prime": 53
+          },
+          {
+            "exponent": 1,
+            "prime": 59
+          },
+          {
+            "exponent": 1,
+            "prime": 61
+          },
+          {
+            "exponent": 1,
+            "prime": 67
+          },
+          {
+            "exponent": 1,
+            "prime": 71
+          },
+          {
+            "exponent": 1,
+            "prime": 73
+          },
+          {
+            "exponent": 1,
+            "prime": 79
+          },
+          {
+            "exponent": 1,
+            "prime": 83
+          },
+          {
+            "exponent": 1,
+            "prime": 89
+          },
+          {
+            "exponent": 1,
+            "prime": 97
+          }
+        ],
+        "lcm_value": 69720375229712477164533808935312303556800,
+        "n": 97,
+        "sigma_competitor": 550446793937749666112291758331595325440000,
+        "sigma_lcm": 550166808184454444248584375721839820800000
       },
       {
-        "n": 71,
-        "lcm_factorization": [{"prime":2,"exponent":6},{"prime":3,"exponent":3},{"prime":5,"exponent":2},{"prime":7,"exponent":2},{"prime":11,"exponent":1},{"prime":13,"exponent":1},{"prime":17,"exponent":1},{"prime":19,"exponent":1},{"prime":23,"exponent":1},{"prime":29,"exponent":1},{"prime":31,"exponent":1},{"prime":37,"exponent":1},{"prime":41,"exponent":1},{"prime":43,"exponent":1},{"prime":47,"exponent":1},{"prime":53,"exponent":1},{"prime":59,"exponent":1},{"prime":61,"exponent":1},{"prime":67,"exponent":1},{"prime":71,"exponent":1}],
-        "exponent_deltas": [{"prime":2,"delta":2},{"prime":3,"delta":1},{"prime":5,"delta":1},{"prime":67,"delta":-1},{"prime":71,"delta":-1},{"prime":79,"delta":1}],
-        "lcm_value": 5624043567677125526551547131200,
         "competitor": 5603945030647377548003853984000,
-        "sigma_lcm": 41466695608612977439691243520000,
-        "sigma_competitor": 41500513392662295249388830720000
+        "exponent_deltas": [
+          {
+            "delta": 2,
+            "prime": 2
+          },
+          {
+            "delta": 1,
+            "prime": 3
+          },
+          {
+            "delta": 1,
+            "prime": 5
+          },
+          {
+            "delta": -1,
+            "prime": 67
+          },
+          {
+            "delta": -1,
+            "prime": 71
+          },
+          {
+            "delta": 1,
+            "prime": 79
+          }
+        ],
+        "lcm_factorization": [
+          {
+            "exponent": 6,
+            "prime": 2
+          },
+          {
+            "exponent": 3,
+            "prime": 3
+          },
+          {
+            "exponent": 2,
+            "prime": 5
+          },
+          {
+            "exponent": 2,
+            "prime": 7
+          },
+          {
+            "exponent": 1,
+            "prime": 11
+          },
+          {
+            "exponent": 1,
+            "prime": 13
+          },
+          {
+            "exponent": 1,
+            "prime": 17
+          },
+          {
+            "exponent": 1,
+            "prime": 19
+          },
+          {
+            "exponent": 1,
+            "prime": 23
+          },
+          {
+            "exponent": 1,
+            "prime": 29
+          },
+          {
+            "exponent": 1,
+            "prime": 31
+          },
+          {
+            "exponent": 1,
+            "prime": 37
+          },
+          {
+            "exponent": 1,
+            "prime": 41
+          },
+          {
+            "exponent": 1,
+            "prime": 43
+          },
+          {
+            "exponent": 1,
+            "prime": 47
+          },
+          {
+            "exponent": 1,
+            "prime": 53
+          },
+          {
+            "exponent": 1,
+            "prime": 59
+          },
+          {
+            "exponent": 1,
+            "prime": 61
+          },
+          {
+            "exponent": 1,
+            "prime": 67
+          },
+          {
+            "exponent": 1,
+            "prime": 71
+          }
+        ],
+        "lcm_value": 5624043567677125526551547131200,
+        "n": 71,
+        "sigma_competitor": 41500513392662295249388830720000,
+        "sigma_lcm": 41466695608612977439691243520000
       }
     ]
   },
-  "claimed_assurance": "COMPUTED",
-  "scope": "the two frozen claims: counterexample validity at index 97 and refutation of 97-minimality",
-  "completeness": "COMPLETE",
-  "evidence": [{"path":"evidence/answer.txt","sha256":"sha256:d61f2367b99bd99ccf1414887d32bd5bd0b331c552592aa26f55b06feae50a38"}],
-  "limitations": ["The checker refutes minimality at index 97 but does not establish the actual smallest counterexample or replay the complete public conversation."]
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:d61f2367b99bd99ccf1414887d32bd5bd0b331c552592aa26f55b06feae50a38"
+    }
+  ]
 }

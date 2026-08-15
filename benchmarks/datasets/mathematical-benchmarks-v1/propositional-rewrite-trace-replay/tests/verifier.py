@@ -3,12 +3,10 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    aggregate_reward,
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W, E = Path("/app"), Path("/tests")
@@ -182,63 +180,31 @@ def _trace_valid(result, frozen):
 
 def main():
     submission, frozen = load_submission(), _frozen()
-    expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
-    math_correct = bool(contract and _trace_valid(submission.get("result"), frozen))
+    math_correct = bool(submission and _trace_valid(submission.get("result"), frozen))
     evidence = None
     if (
-        contract
-        and isinstance(submission.get("evidence"), list)
-        and len(submission["evidence"]) == 1
+        submission
+        and isinstance(submission.get("witness"), list)
+        and len(submission["witness"]) == 1
     ):
         evidence = read_evidence_json(
-            submission["evidence"][0], expected_path="evidence/rewrite-trace.json"
+            submission["witness"][0], expected_path="evidence/rewrite-trace.json"
         )
     evidence_valid = bool(
         evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and set(evidence) == {"schema_version", "task_id", "result"}
         and evidence["schema_version"] == "1"
-        and evidence["task_id"] == expected["task_id"]
-        and evidence["result"] == submission.get("result")
-        and evidence["limitations"] == submission.get("limitations")
+        and evidence["task_id"] == "propositional-rewrite-trace-replay"
+        and json_value_equal(evidence["result"], submission.get("result"))
     )
-    envelope = bool(
-        contract
-        and submission.get("scope")
-        == "FROZEN_PROPOSITIONAL_AST_AND_REGISTERED_LOCAL_RULES"
-        and submission.get("limitations")
-        == ["PREDICATE_APPLICATIONS_TREATED_AS_PROPOSITIONAL_ATOMS"]
-    )
-    assurance = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    reward = aggregate_reward(
-        correctness=math_correct,
-        evidence_validity=evidence_valid,
-        scope_accuracy=envelope,
-        assurance_calibration=assurance,
-        false_certification=false_certification,
-        soft_assurance=True,
-    )
+    reward = float(math_correct and evidence_valid)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(envelope),
-                "assurance_calibration": float(assurance),
+                "witness_validity": float(evidence_valid),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

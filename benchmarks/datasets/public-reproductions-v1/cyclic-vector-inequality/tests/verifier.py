@@ -1,53 +1,19 @@
 from __future__ import annotations
 
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-TASK_ID = "jacobian/cyclic-vector-inequality"
-CONCLUSION = "SHARP_CONSTANT_CERTIFIED"
-SCOPE_TEMPLATE = "the cyclic vector inequality at dimension n = {n}"
-_AFFIRMATIVE_PROOF_ASSISTANT = re.compile(
-    r"\b(?:verif(?:y|ied|ies)|formaliz(?:e|ed|es)|prove(?:s|d)|certif(?:y|ied|ies))\b"
-    r"[^.;\n]{0,80}\b(?:proof assistant|lean)\b|"
-    r"\b(?:proof assistant|lean)\b[^.;\n]{0,80}"
-    r"\b(?:verif(?:y|ied|ies)|formaliz(?:e|ed|es)|prove(?:s|d)|certif(?:y|ied|ies))\b",
-    re.I,
-)
-_NEGATION = re.compile(r"\b(?:not|no|without|cannot|never|doesn['']?t)\b", re.I)
-
-
-def _expected_scope(result: object) -> str | None:
-    if not isinstance(result, dict):
-        return None
-    n = result.get("dimension")
-    if type(n) is not int or not 5 <= n <= 12:
-        return None
-    return SCOPE_TEMPLATE.format(n=n)
-
-
-def _limitation_is_valid(value: str) -> bool:
-    """Require a genuine negation and reject affirmative proof-assistant claims."""
-
-    normalized = re.sub(r"[-_\s]+", " ", value.casefold()).strip()
-    if "proof assistant" not in normalized and "lean" not in normalized:
-        return False
-    for clause in re.split(r"[.;\n]", normalized):
-        if _AFFIRMATIVE_PROOF_ASSISTANT.search(clause) and not _NEGATION.search(clause):
-            return False
-    return _NEGATION.search(normalized) is not None
 
 
 def _source_is_bound() -> bool:
@@ -212,45 +178,23 @@ def _evidence(value: object, result: object) -> bool:
     )
 
 
-def _evaluate(submission: object) -> dict[str, float | bool]:
-    protocol = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion=CONCLUSION,
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    expected_scope = (
-        _expected_scope(submission.get("result"))
-        if isinstance(submission, dict)
-        else None
-    )
+def _evaluate(submission: object) -> dict[str, float]:
+    protocol_ok = isinstance(submission, dict)
     correct = bool(
-        protocol
-        and isinstance(submission, dict)
+        protocol_ok
         and _source_is_bound()
-        and expected_scope is not None
-        and submission.get("scope") == expected_scope
-        and submission.get("claimed_assurance") == "COMPUTED"
         and _result(submission.get("result"))
-        and _evidence(submission.get("evidence"), submission.get("result"))
-        and any(
-            _limitation_is_valid(item)
-            for item in submission.get("limitations", [])
-            if isinstance(item, str)
-        )
+        and _evidence(submission.get("witness"), submission.get("result"))
     )
-    score = 1.0 if correct and not false_certification else 0.0
+    reward = aggregate_reward(
+        correctness=correct,
+        evidence_validity=correct,
+        protocol_ok=protocol_ok,
+    )
     return {
-        "correctness": score,
-        "evidence_validity": score,
-        "scope_accuracy": score,
-        "assurance_calibration": score,
-        "reward": score,
-        "false_certification": false_certification,
+        "correctness": float(correct),
+        "evidence_validity": float(correct),
+        "reward": reward,
     }
 
 

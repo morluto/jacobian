@@ -1,15 +1,4 @@
 {
-  "allowed_assurance": [
-    "UNVERIFIED",
-    "COMPUTED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE"
-  ],
-  "assurance_ceiling": "COMPUTED",
-  "conclusion": {
-    "const": "BAD_REDUCTION_DIAGNOSED_AND_IRREDUCIBILITY_REPAIRED"
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/answer.txt"
@@ -22,23 +11,12 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "limitations": {
-    "const": [
-      "The verifier does not assess the source proof's later Galois-group or density claims and does not invoke a proof assistant."
-    ]
-  },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.",
   "required_artifact_filenames": [
     "evidence/answer.txt"
   ],
   "schema_definitions": {},
   "schema_version": "1",
-  "scope": {
-    "const": "the irreducibility step for x^4-4x+1 only",
-    "enum": null,
-    "pattern": null,
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
     "additionalProperties": false,
@@ -110,47 +88,6 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
-      },
-      "completeness": {
-        "const": "COMPLETE"
-      },
-      "conclusion": {
-        "const": "BAD_REDUCTION_DIAGNOSED_AND_IRREDUCIBILITY_REPAIRED"
-      },
-      "evidence": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/answer.txt"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
-      },
-      "limitations": {
-        "const": [
-          "The verifier does not assess the source proof's later Galois-group or density claims and does not invoke a proof assistant."
-        ]
-      },
       "result": {
         "additionalProperties": false,
         "properties": {
@@ -217,26 +154,34 @@
         ],
         "type": "object"
       },
-      "scope": {
-        "const": "the irreducibility step for x^4-4x+1 only",
-        "type": "string"
-      },
-      "task_id": {
-        "const": "jacobian/finite-field-irreducibility-repair"
+      "witness": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
   },
-  "task_id": "jacobian/finite-field-irreducibility-repair",
-  "verification_record": null
+  "task_id": "jacobian/finite-field-irreducibility-repair"
 }

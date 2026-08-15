@@ -13,17 +13,11 @@ from verifier_support import (
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
+    resolve_evidence,
     workspace_input_is_bound,
 )
 
 TASK_ID = "jacobian/illumination-strictness-audit"
-SCOPE = "cube-illumination-strictness-audit-v1"
-LIMITATIONS = [
-    "ONE_THREE_DIMENSIONAL_CUBE",
-    "VERTEX_SIGN_CONE_MODEL_ONLY",
-    "GENERAL_ILLUMINATION_CONJECTURE_NOT_ASSESSED",
-]
 VERTICES = list(product((-1, 1), repeat=3))
 
 
@@ -64,18 +58,19 @@ def _json_equal(left: Any, right: Any) -> bool:
     return left == right
 
 
-def _evidence_payload_matches_submission(payload: Any, raw: Any) -> bool:
-    """Bind every copied evidence field to the submitted JSON value."""
+def _witness_matches_result(witness: object, result: object) -> bool:
+    if not evidence_list_is_bound(witness, expected_path="evidence/answer.json"):
+        return False
+    if resolve_evidence(witness[0], expected_path="evidence/answer.json") is None:
+        return False
+    payload = read_evidence_json(witness[0], expected_path="evidence/answer.json")
     try:
         return bool(
             isinstance(payload, dict)
-            and isinstance(raw, dict)
-            and set(payload) == {"schema_version", "task_id", "result", "limitations"}
-            and {"task_id", "result", "limitations"} <= raw.keys()
+            and set(payload) == {"schema_version", "task_id", "result"}
             and payload.get("schema_version") == "1"
-            and _json_equal(payload.get("task_id"), raw.get("task_id"))
-            and _json_equal(payload.get("result"), raw.get("result"))
-            and _json_equal(payload.get("limitations"), raw.get("limitations"))
+            and payload.get("task_id") == TASK_ID
+            and _json_equal(payload.get("result"), result)
         )
     except RecursionError:
         return False
@@ -155,73 +150,26 @@ def _write(values):
 
 
 def main():
-    raw = _raw()
     submission = load_submission(require_input_binding=False)
-    contract = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion="WEAK_ILLUMINATION_IS_UNSOUND_AND_REPAIRED",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
+    protocol = isinstance(submission, dict)
+    witness_ok = bool(
+        protocol
+        and _witness_matches_result(submission.get("witness"), submission.get("result"))
     )
-    evidence_ok = bool(
-        isinstance(raw, dict)
-        and evidence_list_is_bound(raw.get("evidence"), max_bytes=None)
-    )
-    payload = (
-        read_evidence_json(
-            raw["evidence"][0],
-            expected_path="evidence/answer.json",
-            max_bytes=None,
-        )
-        if evidence_ok
-        else None
-    )
-    evidence_ok = _evidence_payload_matches_submission(payload, raw)
-    mathematics_score = float(
-        bool(isinstance(raw, dict) and mathematics(raw.get("result")))
-    )
+    mathematics_score = float(bool(protocol and mathematics(submission.get("result"))))
+    input_bound = workspace_input_is_bound()
+    reward = float(input_bound and protocol and mathematics_score and witness_ok)
     values = {
-        "input_binding": float(workspace_input_is_bound()),
-        "protocol": float(bool(contract)),
+        "input_binding": float(input_bound),
+        "protocol": float(protocol),
         "correctness": mathematics_score,
         "mathematics": mathematics_score,
-        "evidence": float(evidence_ok),
-        "evidence_validity": float(evidence_ok),
-        "scope": float(
-            bool(
-                isinstance(raw, dict)
-                and raw.get("scope") == SCOPE
-                and raw.get("completeness") == "COMPLETE"
-                and raw.get("limitations") == LIMITATIONS
-            )
-        ),
-        "scope_accuracy": float(
-            bool(
-                isinstance(raw, dict)
-                and raw.get("scope") == SCOPE
-                and raw.get("completeness") == "COMPLETE"
-                and raw.get("limitations") == LIMITATIONS
-            )
-        ),
-        "assurance": float(
-            bool(
-                isinstance(raw, dict)
-                and type(raw.get("claimed_assurance")) is str
-                and raw.get("claimed_assurance")
-                in {"UNVERIFIED", "COMPUTED", "CHECKED"}
-            )
-        ),
+        "witness_validity": float(witness_ok),
     }
-    values["assurance_calibration"] = values["assurance"]
-    reward = float(all(values.values()))
     values.update(
         {
             "aggregate_reward": reward,
             "reward": reward,
-            "false_certification": bool(
-                isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
-            ),
         }
     )
     _write(values)
@@ -237,15 +185,9 @@ if __name__ == "__main__":
                 "input_binding": 0.0,
                 "mathematics": 0.0,
                 "correctness": 0.0,
-                "evidence": 0.0,
-                "evidence_validity": 0.0,
-                "scope": 0.0,
-                "scope_accuracy": 0.0,
-                "assurance": 0.0,
-                "assurance_calibration": 0.0,
+                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
-                "false_certification": False,
                 "error": type(exc).__name__,
             }
         )

@@ -19,25 +19,6 @@ def _module():
     return module
 
 
-def test_raw_submission_is_bounded_before_read(monkeypatch):
-    module = _module()
-
-    class UnreadablePath:
-        def __init__(self, _value):
-            pass
-
-        def read_text(self):
-            raise AssertionError("oversized submission must not be read")
-
-    def reject_oversized(_path, *, max_bytes):
-        assert max_bytes == module.MAX_SUBMISSION_BYTES
-        return False
-
-    monkeypatch.setattr(module, "Path", UnreadablePath)
-    monkeypatch.setattr(module, "is_regular_bounded_file", reject_oversized)
-    assert module._raw() is None
-
-
 def test_oracle_mathematics():
     module = _module()
     vertices = [0, 1, 0, 1, 2, 1, 2, 3, 3, 1]

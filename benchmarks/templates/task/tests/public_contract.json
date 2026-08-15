@@ -48,21 +48,12 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
+      "result": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
       },
-      "completeness": {
-        "const": "COMPLETE"
-      },
-      "conclusion": {
-        "const": "REPLACE_CONCLUSION"
-      },
-      "evidence": {
+      "witness": {
         "items": {
           "additionalProperties": false,
           "properties": {
@@ -83,35 +74,11 @@
         "maxItems": 1,
         "minItems": 1,
         "type": "array"
-      },
-      "limitations": {
-        "items": {
-          "type": "string"
-        },
-        "type": "array"
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {},
-        "type": "object"
-      },
-      "scope": {
-        "const": "REPLACE_SCOPE",
-        "type": "string"
-      },
-      "task_id": {
-        "const": "jacobian/replace-task-id"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
   },

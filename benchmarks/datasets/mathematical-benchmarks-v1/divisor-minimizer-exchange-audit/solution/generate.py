@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -43,21 +42,8 @@ def factors(number):
 
 current, next_table = table(12), table(13)
 a, b = min(item["value"] for item in current), min(item["value"] for item in next_table)
-text = (
-    "Every divisor-count exponent shape corresponds to an integer partition. "
-    "For a fixed partition, assigning the largest exponent to the smallest prime is minimal by exchange. "
-    "The complete candidate tables therefore prove global minimality rather than sampling shapes. "
-    "The current minimizer divides the next one by the submitted exact quotient after both prime factorizations and divisor counts are checked."
-)
 base = Path(os.environ.get("SOLUTION_DIR", "/app"))
-evidence = base / "evidence/answer.txt"
-evidence.parent.mkdir(parents=True, exist_ok=True)
-evidence.write_text(text)
-if base != Path("/app"):
-    (base / "answer.txt").write_text(text)
 submission = {
-    "task_id": "jacobian/divisor-minimizer-exchange-audit",
-    "conclusion": "CONSECUTIVE_MINIMIZERS_CERTIFIED",
     "result": {
         "k": 12,
         "current_minimizer": a,
@@ -70,17 +56,5 @@ submission = {
         "next_candidates": next_table,
         "quotient": b // a,
     },
-    "claimed_assurance": "COMPUTED",
-    "scope": "k=12 and k+1 complete exponent-partition audit",
-    "completeness": "COMPLETE",
-    "evidence": [
-        {
-            "path": "evidence/answer.txt",
-            "sha256": "sha256:" + hashlib.sha256(text.encode()).hexdigest(),
-        }
-    ],
-    "limitations": [
-        "Finite exact audit at k=12; the general all-k theorem is not proof-assistant verified."
-    ],
 }
 (base / "submission.json").write_text(json.dumps(submission))

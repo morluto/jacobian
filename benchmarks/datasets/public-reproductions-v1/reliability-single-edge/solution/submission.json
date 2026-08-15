@@ -1,1 +1,15 @@
-{"task_id":"jacobian/reliability-single-edge","conclusion":"TRUE","result":{"probability":{"num":"1","den":"3"},"states":2},"claimed_assurance":"COMPUTED","scope":"jacobian/reliability-single-edge complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:e92eb04b6549972116deace7a86c109116375f94313b5683a36ef94e1135f96d"}],"limitations":[]}
+{
+  "result": {
+    "probability": {
+      "den": "3",
+      "num": "1"
+    },
+    "states": 2
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:e92eb04b6549972116deace7a86c109116375f94313b5683a36ef94e1135f96d"
+    }
+  ]
+}

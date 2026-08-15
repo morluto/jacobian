@@ -3,12 +3,9 @@ from collections import deque
 from pathlib import Path
 
 from verifier_support import (
-    aggregate_reward,
     evidence_list_is_bound,
+    load_submission,
     normalize_reward_file,
-)
-from verifier_support import (
-    load_submission as load_strict_submission,
 )
 
 W = Path("/app")
@@ -16,17 +13,16 @@ E = Path("/tests")
 
 
 def sub():
-    return load_strict_submission()
+    return load_submission()
 
 
 def ev(s):
-    return bool(s and evidence_list_is_bound(s.get("evidence")))
+    return bool(s and evidence_list_is_bound(s.get("witness")))
 
 
 def main():
     s = sub()
     x = json.loads(next(E.glob("*input*.json")).read_text())
-    expected = json.loads((E / "expected.json").read_text())
     v = {str(a): set() for a in x["vertices"]}
     for a, b in x["edges"]:
         v[a].add(b)
@@ -58,56 +54,18 @@ def main():
         )
         and type(s["result"].get("maximum_distance_to_set")) is int
     )
-    required = {
-        "task_id",
-        "conclusion",
-        "result",
-        "claimed_assurance",
-        "scope",
-        "completeness",
-        "evidence",
-        "limitations",
-    }
-    contract = (
-        isinstance(s, dict)
-        and set(s) == required
-        and s.get("task_id") == expected["task_id"]
-        and s.get("conclusion") == expected["conclusion"]
-        and isinstance(s.get("result"), dict)
-        and s.get("completeness") == "COMPLETE"
-        and isinstance(s.get("scope"), str)
-        and isinstance(s.get("limitations"), list)
-        and isinstance(s.get("claimed_assurance"), str)
-        and s.get("claimed_assurance")
-        in {"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}
+    math_correct = bool(
+        isinstance(s, dict) and distances_are_integers and s.get("result") == result
     )
-    claimed_verified = isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED"
-    math_correct = bool(contract and distances_are_integers and s["result"] == result)
-    correct = bool(math_correct and not claimed_verified)
-    scope = bool(contract and s["scope"] == " ".join(expected["required_scope_terms"]))
-    assurance = bool(
-        contract and s["claimed_assurance"] == expected["maximum_assurance"]
-    )
-    evidence = ev(s) if contract else False
-    false = claimed_verified
-    reward = aggregate_reward(
-        correctness=correct,
-        evidence_validity=evidence,
-        scope_accuracy=scope,
-        assurance_calibration=assurance,
-        false_certification=false,
-        soft_assurance=True,
-    )
+    witness_valid = ev(s)
+    reward = float(math_correct and witness_valid)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
+                "witness_validity": float(witness_valid),
                 "reward": reward,
-                "false_certification": false,
             }
         )
     )

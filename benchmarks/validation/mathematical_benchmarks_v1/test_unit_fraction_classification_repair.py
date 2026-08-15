@@ -2,7 +2,10 @@ import hashlib
 import json
 from pathlib import Path
 
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1 import (
+    _fixtures,
+    _verifier,
+)
 
 TASK = "unit-fraction-classification-repair"
 
@@ -10,18 +13,17 @@ TASK = "unit-fraction-classification-repair"
 def rewrite(app: Path, s: dict):
     e = {
         "schema_version": "1",
-        "task_id": s["task_id"],
+        "task_id": f"jacobian/{TASK}",
         "result": s["result"],
-        "limitations": s["limitations"],
     }
     raw = json.dumps(e, separators=(",", ":")).encode()
     (app / "evidence/unit-fraction-repair.json").write_bytes(raw)
-    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
-    support._write_json(app / "submission.json", s)
+    s["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
+    _fixtures._write_json(app / "submission.json", s)
 
 
 def test_accepts_alternative_valid_witnesses(tmp_path: Path):
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     s = json.loads((app / "submission.json").read_text())
     s["result"]["witnesses"] = [
         {"n": n, "d": d}
@@ -39,36 +41,42 @@ def test_accepts_alternative_valid_witnesses(tmp_path: Path):
         ]
     ]
     rewrite(app, s)
-    assert support._run_verifier(task, app, logs).reward == 1.0
+    assert _verifier._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_rejects_published_count(tmp_path: Path):
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     s = json.loads((app / "submission.json").read_text())
     s["result"]["corrected_count"] = 2022
     rewrite(app, s)
-    assert support._run_verifier(task, app, logs).reward == 0.0
+    assert _verifier._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_rejects_single_bit_coverage_tamper(tmp_path: Path):
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     s = json.loads((app / "submission.json").read_text())
     bitmap = bytearray.fromhex(s["result"]["membership_bitmap_hex"])
     bitmap[0] ^= 1 << 5
     s["result"]["membership_bitmap_hex"] = bitmap.hex()
     rewrite(app, s)
-    assert support._run_verifier(task, app, logs).details["correctness"] == 0.0
+    assert _verifier._run_verifier(task, app, logs).details["correctness"] == 0.0
 
 
-def test_decouples_evidence_and_scope_from_assurance(tmp_path: Path):
-    """An otherwise exact submission claiming VERIFIED must retain
-    evidence_validity and scope_accuracy while failing assurance and reward."""
-    task, app, logs = support._prepare_case(tmp_path, TASK, "invalid")
-    s = json.loads((app / "submission.json").read_text())
-    rewrite(app, s)
-    result = support._run_verifier(task, app, logs)
-    assert result.details["correctness"] == 0.0
-    assert result.details["evidence_validity"] == 0.0
-    assert result.details["scope_accuracy"] == 0.0
-    assert result.details["assurance_calibration"] == 0.0
+def test_rejects_int_float_witness_mismatch(tmp_path: Path):
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
+    submission = json.loads((app / "submission.json").read_text())
+    evidence = {
+        "schema_version": "1",
+        "task_id": f"jacobian/{TASK}",
+        "result": json.loads(json.dumps(submission["result"])),
+    }
+    evidence["result"]["corrected_count"] = 827.0
+    raw = json.dumps(evidence, separators=(",", ":")).encode()
+    path = app / "evidence" / "unit-fraction-repair.json"
+    path.write_bytes(raw)
+    submission["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
+    _fixtures._write_json(app / "submission.json", submission)
+    result = _verifier._run_verifier(task, app, logs)
+    assert result.details["correctness"] == 1.0
+    assert result.reward == 0.0
     assert result.reward == 0.0

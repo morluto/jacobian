@@ -8,22 +8,14 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
+    aggregate_reward,
     evidence_list_is_bound,
-    is_regular_bounded_file,
+    json_value_equal,
     load_submission,
     read_evidence_json,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
-TASK_ID = "jacobian/normal-projective-chart-audit"
-SCOPE = "ellipse-normal-projective-chart-audit-v1"
-LIMITATIONS = [
-    "ONE_RATIONAL_ELLIPSE",
-    "ONE_QUERY_POINT",
-    "CONCURRENT_NORMALS_CONJECTURE_NOT_ASSESSED",
-]
 Q_PATTERN = re.compile(r"^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$")
 MAX_Q_CHARS = 128
 
@@ -117,22 +109,6 @@ def mathematics(result):
     return True
 
 
-def _raw():
-    path = Path("/app/submission.json")
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(
-            path.read_text(),
-            object_pairs_hook=_reject_duplicate_keys,
-            parse_constant=_reject_nonfinite_json,
-            parse_float=_finite_json_float,
-        )
-    except (OSError, ValueError, MemoryError, RecursionError):
-        return None
-    return value if isinstance(value, dict) else None
-
-
 def _write(values):
     path = Path("/logs/verifier")
     path.mkdir(parents=True, exist_ok=True)
@@ -140,69 +116,42 @@ def _write(values):
 
 
 def main():
-    raw = _raw()
+    input_bound = workspace_input_is_bound()
     submission = load_submission(require_input_binding=False)
-    contract = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion="AFFINE_NORMAL_COUNT_IS_INCOMPLETE_AND_REPAIRED",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
-    )
+    protocol_ok = submission is not None
+    math_ok = bool(protocol_ok and mathematics(submission.get("result")))
     evidence_ok = bool(
-        isinstance(raw, dict)
-        and evidence_list_is_bound(raw.get("evidence"), max_bytes=None)
+        protocol_ok
+        and evidence_list_is_bound(submission.get("witness"), max_bytes=None)
     )
     payload = (
         read_evidence_json(
-            raw["evidence"][0], expected_path="evidence/answer.json", max_bytes=None
+            submission["witness"][0],
+            expected_path="evidence/answer.json",
+            max_bytes=None,
         )
         if evidence_ok
         else None
     )
     evidence_ok = bool(
         isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
         and payload.get("schema_version") == "1"
-        and payload.get("task_id") == TASK_ID
-        and payload.get("result") == raw.get("result")
-        and payload.get("limitations") == LIMITATIONS
+        and json_value_equal(payload.get("result"), submission.get("result"))
     )
-    values = {
-        "input_binding": float(workspace_input_is_bound()),
-        "protocol": float(bool(contract)),
-        "mathematics": float(
-            bool(isinstance(raw, dict) and mathematics(raw.get("result")))
-        ),
-        "evidence": float(evidence_ok),
-        "scope": float(
-            bool(
-                isinstance(raw, dict)
-                and raw.get("scope") == SCOPE
-                and raw.get("completeness") == "COMPLETE"
-                and raw.get("limitations") == LIMITATIONS
-            )
-        ),
-        "assurance": float(
-            bool(
-                contract
-                and isinstance(raw, dict)
-                and raw.get("claimed_assurance")
-                in {"UNVERIFIED", "COMPUTED", "CHECKED"}
-            )
-        ),
-    }
-    reward = float(all(values.values()))
-    values.update(
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=evidence_ok,
+        protocol_ok=protocol_ok and input_bound,
+    )
+    _write(
         {
-            "aggregate_reward": reward,
+            "protocol_compliance": float(protocol_ok),
+            "input_binding": float(input_bound),
+            "correctness": float(math_ok),
+            "evidence_validity": float(evidence_ok),
             "reward": reward,
-            "false_certification": bool(
-                isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
-            ),
         }
     )
-    _write(values)
 
 
 if __name__ == "__main__":
@@ -211,15 +160,11 @@ if __name__ == "__main__":
     except BaseException as exc:
         _write(
             {
-                "protocol": 0.0,
+                "protocol_compliance": 0.0,
                 "input_binding": 0.0,
-                "mathematics": 0.0,
-                "evidence": 0.0,
-                "scope": 0.0,
-                "assurance": 0.0,
-                "aggregate_reward": 0.0,
+                "correctness": 0.0,
+                "evidence_validity": 0.0,
                 "reward": 0.0,
-                "false_certification": False,
                 "error": type(exc).__name__,
             }
         )

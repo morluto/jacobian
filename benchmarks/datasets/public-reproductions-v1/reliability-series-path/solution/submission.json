@@ -1,1 +1,15 @@
-{"task_id":"jacobian/reliability-series-path","conclusion":"TRUE","result":{"probability":{"num":"1","den":"3"},"states":4},"claimed_assurance":"COMPUTED","scope":"jacobian/reliability-series-path complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:fc9d88131154752b0d883147954dd505a9fedeb13a5404c3a1a50ef6f90ba022"}],"limitations":[]}
+{
+  "result": {
+    "probability": {
+      "den": "3",
+      "num": "1"
+    },
+    "states": 4
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:fc9d88131154752b0d883147954dd505a9fedeb13a5404c3a1a50ef6f90ba022"
+    }
+  ]
+}

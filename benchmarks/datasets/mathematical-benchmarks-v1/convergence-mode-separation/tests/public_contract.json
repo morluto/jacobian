@@ -1,20 +1,4 @@
 {
-  "allowed_assurance": [
-    "UNVERIFIED",
-    "COMPUTED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE",
-    "PARTIAL",
-    "UNKNOWN"
-  ],
-  "assurance_ceiling": "COMPUTED",
-  "conclusion": {
-    "enum": [
-      "CONVERGENCE_MODES_SEPARATED",
-      "INSUFFICIENT_EVIDENCE"
-    ]
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/answer.txt"
@@ -27,26 +11,12 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "limitations": {
-    "items": {
-      "const": "NO_OPEN_PROBLEM_OR_LEAN_CLAIM"
-    },
-    "maxItems": 1,
-    "minItems": 1,
-    "type": "array"
-  },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.",
   "required_artifact_filenames": [
     "evidence/answer.txt"
   ],
   "schema_definitions": {},
   "schema_version": "1",
-  "scope": {
-    "const": "the frozen dyadic typewriter construction on [0,1)",
-    "enum": null,
-    "pattern": null,
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
     "additionalProperties": false,
@@ -84,22 +54,36 @@
         "minItems": 8,
         "type": "array"
       },
-          "pointwise_argument": {
+      "pointwise_argument": {
         "additionalProperties": false,
         "properties": {
-          "hit_count_per_level": {"const": 1},
-          "miss_count_per_level": {"const": "AT_LEAST_ONE"}
+          "hit_count_per_level": {
+            "const": 1
+          },
+          "miss_count_per_level": {
+            "const": "AT_LEAST_ONE"
+          }
         },
-        "required": ["hit_count_per_level", "miss_count_per_level"],
+        "required": [
+          "hit_count_per_level",
+          "miss_count_per_level"
+        ],
         "type": "object"
       },
       "probability_argument": {
         "additionalProperties": false,
         "properties": {
-          "event_mass_formula": {"const": "1/2^k"},
-          "limit": {"const": "ZERO"}
+          "event_mass_formula": {
+            "const": "1/2^k"
+          },
+          "limit": {
+            "const": "ZERO"
+          }
         },
-        "required": ["event_mass_formula", "limit"],
+        "required": [
+          "event_mass_formula",
+          "limit"
+        ],
         "type": "object"
       },
       "probes": {
@@ -162,57 +146,6 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
-      },
-      "completeness": {
-        "enum": [
-          "COMPLETE",
-          "PARTIAL",
-          "UNKNOWN"
-        ]
-      },
-      "conclusion": {
-        "enum": [
-          "CONVERGENCE_MODES_SEPARATED",
-          "INSUFFICIENT_EVIDENCE"
-        ]
-      },
-      "evidence": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/answer.txt"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
-      },
-      "limitations": {
-        "items": {
-          "const": "NO_OPEN_PROBLEM_OR_LEAN_CLAIM"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
-      },
       "result": {
         "additionalProperties": false,
         "properties": {
@@ -252,19 +185,33 @@
           "pointwise_argument": {
             "additionalProperties": false,
             "properties": {
-              "hit_count_per_level": {"const": 1},
-              "miss_count_per_level": {"const": "AT_LEAST_ONE"}
+              "hit_count_per_level": {
+                "const": 1
+              },
+              "miss_count_per_level": {
+                "const": "AT_LEAST_ONE"
+              }
             },
-            "required": ["hit_count_per_level", "miss_count_per_level"],
+            "required": [
+              "hit_count_per_level",
+              "miss_count_per_level"
+            ],
             "type": "object"
           },
           "probability_argument": {
             "additionalProperties": false,
             "properties": {
-              "event_mass_formula": {"const": "1/2^k"},
-              "limit": {"const": "ZERO"}
+              "event_mass_formula": {
+                "const": "1/2^k"
+              },
+              "limit": {
+                "const": "ZERO"
+              }
             },
-            "required": ["event_mass_formula", "limit"],
+            "required": [
+              "event_mass_formula",
+              "limit"
+            ],
             "type": "object"
           },
           "probes": {
@@ -323,26 +270,34 @@
         ],
         "type": "object"
       },
-      "scope": {
-        "const": "the frozen dyadic typewriter construction on [0,1)",
-        "type": "string"
-      },
-      "task_id": {
-        "const": "jacobian/convergence-mode-separation"
+      "witness": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
   },
-  "task_id": "jacobian/convergence-mode-separation",
-  "verification_record": null
+  "task_id": "jacobian/convergence-mode-separation"
 }

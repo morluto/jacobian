@@ -1,6 +1,0 @@
-{
-  "task_id": "jacobian/nauty",
-  "provider": "nauty-traces",
-  "contract": "jacobian.nauty-provider-spike/v1",
-  "pin_sha256": "sha256:c2f070eb0e1a6fc3bf9af3a3360bc8f6ddf65611c9e7c51755a24cbc4dd08070"
-}

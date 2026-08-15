@@ -3,11 +3,11 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
+    aggregate_reward,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 TESTS = Path("/tests")
@@ -65,7 +65,7 @@ def _canonical_fraction(value: object) -> Fraction | None:
     return parsed if str(parsed) == value else None
 
 
-def _evidence_valid(value: object, result: object, limitations: object) -> bool:
+def _evidence_valid(value: object, result: object) -> bool:
     if not isinstance(value, list) or len(value) != 1:
         return False
     evidence = read_evidence_json(
@@ -75,11 +75,10 @@ def _evidence_valid(value: object, result: object, limitations: object) -> bool:
     )
     return bool(
         evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and set(evidence) == {"schema_version", "task_id", "result"}
         and evidence.get("schema_version") == "1"
         and evidence.get("task_id") == "jacobian/rational-pole-vieta-audit"
         and _json_equal(evidence.get("result"), result)
-        and _json_equal(evidence.get("limitations"), limitations)
     )
 
 
@@ -124,38 +123,27 @@ def _result_valid(result: object) -> bool:
 
 def main() -> None:
     submission = load_submission()
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
+    input_binding = workspace_input_is_bound()
     result = submission.get("result") if isinstance(submission, dict) else None
-    mathematical = _result_valid(result)
-    evidence = bool(
-        contract
-        and _evidence_valid(
-            submission.get("evidence"), result, submission.get("limitations")
-        )
+    math_ok = bool(_result_valid(result))
+    ev_ok = bool(
+        isinstance(submission, dict)
+        and _evidence_valid(submission.get("witness"), result)
     )
-    scope = bool(contract and submission.get("scope") == expected["required_scope"])
-    assurance = bool(contract and submission.get("claimed_assurance") == "COMPUTED")
-    false = false_verified_claim(submission, verification_record_bound=False)
-    correct = bool(contract and mathematical and not false)
-    reward = 0.0 if not correct or not evidence else 0.8 + 0.1 * scope + 0.1 * assurance
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=ev_ok,
+        protocol_ok=bool(input_binding and submission is not None),
+    )
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
-                "correctness": float(mathematical),
-                "evidence_validity": float(evidence),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
+                "correctness": float(math_ok),
+                "evidence_validity": float(ev_ok),
+                "input_binding": float(input_binding),
                 "reward": reward,
-                "false_certification": false,
             }
         )
     )

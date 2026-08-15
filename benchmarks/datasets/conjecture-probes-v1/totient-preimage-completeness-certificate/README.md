@@ -14,4 +14,4 @@ Provisional difficulty is Hard because the response must coordinate the prime
 restriction, exponent bounds, a complete 288-branch product, exact
 factorizations, and duplicate-free output. The shortcut audit rejects bounded
 brute force, answer-only public lists, incomplete prime options, and false
-global Carmichael claims. Full reward is only `CHECKED` for `phi(n)=48`.
+global Carmichael claims. Full reward is only `COMPUTED` for `phi(n)=48`.

@@ -23,15 +23,9 @@ def _run_verifier(task: Path, app: Path, logs: Path) -> VerifierOutput:
         return VerifierOutput(
             reward=0.0,
             details={
-                "assurance_calibration": 0.0,
                 "correctness": 0.0,
-                "evidence_validity": 0.0,
-                "false_certification": False,
                 "input_binding": 0.0,
-                "input_integrity": 0.0,
-                "limitation_accuracy": 0.0,
                 "protocol": 0.0,
-                "protocol_compliance": 0.0,
-                "scope_accuracy": 0.0,
+                "witness_validity": 0.0,
             },
         )

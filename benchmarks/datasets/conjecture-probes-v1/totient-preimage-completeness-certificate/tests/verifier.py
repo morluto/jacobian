@@ -15,7 +15,6 @@ from verifier_support import (
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -194,22 +193,16 @@ def _raw() -> dict[str, Any] | None:
 def main() -> None:
     bound = workspace_input_is_bound()
     submission = load_submission(require_input_binding=False)
-    contract = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion="PHI_48_COMPLETE_PREIMAGE_CLASSIFICATION",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
-    )
+    contract = bool(submission)
     raw = _raw()
     math_ok = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
     evidence_ok = bool(
         isinstance(raw, dict)
-        and evidence_list_is_bound(raw.get("evidence"), max_bytes=None)
+        and evidence_list_is_bound(raw.get("witness"), max_bytes=None)
     )
     payload = (
         read_evidence_json(
-            raw["evidence"][0],
+            raw["witness"][0],
             expected_path="evidence/answer.json",
             max_bytes=None,
         )
@@ -219,37 +212,19 @@ def main() -> None:
     try:
         evidence_ok = bool(
             isinstance(payload, dict)
-            and set(payload) == {"schema_version", "task_id", "result", "limitations"}
+            and set(payload) == {"schema_version", "task_id", "result"}
             and payload.get("schema_version") == "1"
-            and type(raw.get("task_id")) is str
-            and _json_equal(payload.get("task_id"), raw["task_id"])
+            and payload.get("task_id") == TASK_ID
             and _json_equal(payload.get("result"), raw.get("result"))
-            and _json_equal(payload.get("limitations"), raw.get("limitations"))
         )
     except RecursionError:
         evidence_ok = False
-    scope_ok = bool(
-        isinstance(raw, dict)
-        and raw.get("scope") == SCOPE
-        and raw.get("completeness") == "COMPLETE"
-        and raw.get("limitations") == LIMITATIONS
-    )
-    assurance_ok = bool(
-        isinstance(raw, dict)
-        and type(raw.get("claimed_assurance")) is str
-        and raw.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED", "CHECKED"}
-    )
     values = {
         "input_binding": float(bound),
         "protocol": float(bool(contract)),
         "correctness": float(math_ok),
         "mathematics": float(math_ok),
-        "evidence": float(evidence_ok),
-        "evidence_validity": float(evidence_ok),
-        "scope": float(scope_ok),
-        "scope_accuracy": float(scope_ok),
-        "assurance": float(assurance_ok),
-        "assurance_calibration": float(assurance_ok),
+        "witness_validity": float(evidence_ok),
     }
     values["aggregate_reward"] = float(
         all(
@@ -258,16 +233,11 @@ def main() -> None:
                 "input_binding",
                 "protocol",
                 "correctness",
-                "evidence_validity",
-                "scope_accuracy",
-                "assurance_calibration",
+                "witness_validity",
             )
         )
     )
     values["reward"] = values["aggregate_reward"]
-    values["false_certification"] = bool(
-        isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
-    )
     path = Path("/logs/verifier")
     path.mkdir(parents=True, exist_ok=True)
     reward_path = path / "reward.json"
@@ -289,13 +259,7 @@ if __name__ == "__main__":
                     "input_binding": 0.0,
                     "correctness": 0.0,
                     "mathematics": 0.0,
-                    "evidence": 0.0,
-                    "evidence_validity": 0.0,
-                    "scope": 0.0,
-                    "scope_accuracy": 0.0,
-                    "assurance": 0.0,
-                    "assurance_calibration": 0.0,
-                    "false_certification": False,
+                    "witness_validity": 0.0,
                     "aggregate_reward": 0.0,
                     "reward": 0.0,
                     "error": type(exc).__name__,

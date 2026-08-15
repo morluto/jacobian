@@ -2,12 +2,11 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    ASSURANCE_LEVELS,
-    false_verified_claim,
+    aggregate_reward,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W, E = Path("/app"), Path("/tests")
@@ -93,103 +92,54 @@ def _frozen_ok():
         return False
 
 
-def _evidence_ok(evidence, result, expected, submission):
+def _evidence_ok(evidence, result, expected):
     if not evidence:
         return False
-    if set(evidence) != {"schema_version", "task_id", "result", "limitations"}:
+    if set(evidence) != {"schema_version", "task_id", "result"}:
         return False
     if evidence["schema_version"] != "1":
         return False
     if evidence["task_id"] != expected["task_id"]:
         return False
     # Validate the evidence result with the same strict matrix checks used for
-    # the submission result, then require byte-for-byte equality. Python ``==``
+    # the submission result, then require recursive JSON equality. Python ``==``
     # admits ``True == 1`` and ``1.0 == 1``, so a certificate that replaces
-    # integers with booleans or floats must be rejected by type-aware checks
-    # rather than by equality alone.
+    # integers with booleans or floats must be rejected by type-aware checks.
     if not _result_ok(evidence["result"]):
         return False
-    if evidence["result"] != result:
-        return False
-    return evidence["limitations"] == submission.get("limitations")
+    return json_value_equal(evidence["result"], result)
 
 
 def main():
     submission = load_submission()
     expected = json.loads((E / "expected.json").read_text())
-    # Structural envelope validity accepts any assurance level, any
-    # schema-allowed conclusion, and any schema-allowed completeness so
-    # that a false VERIFIED claim, an abstention, or a partial submission
-    # corrupts only assurance calibration / protocol, not the independent
-    # correctness, evidence, and scope diagnostics.
-    allowed_conclusions = frozenset({expected["conclusion"], "INSUFFICIENT_EVIDENCE"})
-    allowed_completeness = frozenset({"COMPLETE", "PARTIAL", "UNKNOWN"})
-    structure_valid = any(
-        strict_submission_contract(
-            submission,
-            task_id=expected["task_id"],
-            conclusion=conclusion,
-            completeness=completeness,
-            allowed_assurances=ASSURANCE_LEVELS,
-            verification_record="forbidden",
-        )
-        for conclusion in allowed_conclusions
-        for completeness in allowed_completeness
-    )
-    protocol = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
-    is_submission = isinstance(submission, dict)
-    result = submission.get("result") if is_submission else None
-    math_ok = bool(_result_ok(result) and _frozen_ok())
+    protocol_ok = submission is not None
+    result = submission.get("result") if protocol_ok else None
+    math_ok = bool(protocol_ok and _result_ok(result) and _frozen_ok())
     evidence = (
         read_evidence_json(
-            submission["evidence"][0],
+            submission["witness"][0],
             expected_path="evidence/matrix-completion.json",
             max_bytes=16 * 1024 * 1024,
         )
-        if structure_valid
-        and is_submission
-        and isinstance(submission.get("evidence"), list)
-        and len(submission["evidence"]) == 1
+        if protocol_ok
+        and isinstance(submission.get("witness"), list)
+        and len(submission["witness"]) == 1
         else None
     )
-    evidence_ok = bool(
-        structure_valid and _evidence_ok(evidence, result, expected, submission)
+    evidence_ok = bool(_evidence_ok(evidence, result, expected))
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=evidence_ok,
+        protocol_ok=protocol_ok,
     )
-    scope_ok = bool(
-        structure_valid
-        and is_submission
-        and submission.get("scope") == "SUBMITTED_FINITE_GF2_PATTERN_AND_COMPLETIONS"
-        and submission.get("limitations")
-        == [
-            "SOURCE_2025_DIMENSION_OPTIMUM_NOT_ASSESSED",
-            "ONLY_SUBMITTED_FINITE_COMPLETIONS_CHECKED",
-        ]
-    )
-    assurance_ok = bool(protocol and submission.get("claimed_assurance") == "COMPUTED")
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
-    correct = math_ok and evidence_ok and scope_ok and not false_cert
-    reward = 0.0
-    if correct and assurance_ok and protocol:
-        reward = 1.0
-    elif correct and protocol:
-        reward = 0.9
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
-                "protocol_compliance": float(protocol),
                 "correctness": float(math_ok),
                 "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
                 "reward": reward,
-                "false_certification": false_cert,
             }
         )
     )

@@ -3,12 +3,9 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    ASSURANCE_LEVELS,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W, T = Path("/app"), Path("/tests")
@@ -111,66 +108,29 @@ def valid(r):
 def main():
     expected = json.loads((T / "expected.json").read_text())
     s = load_submission(W / "submission.json")
-    contract = strict_submission_contract(
-        s,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"COMPUTED"}),
-        verification_record="forbidden",
-    )
-    envelope_valid = strict_submission_contract(
-        s,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=ASSURANCE_LEVELS,
-        verification_record="forbidden",
-    )
     ev = (
         read_evidence_json(
-            s["evidence"][0], expected_path="evidence/inversion-audit.json"
+            s["witness"][0], expected_path="evidence/inversion-audit.json"
         )
-        if s is not None and isinstance(s.get("evidence"), list) and s["evidence"]
+        if s is not None and isinstance(s.get("witness"), list) and s["witness"]
         else None
     )
     math_ok = bool(s is not None and frozen() and valid(s.get("result")))
     evidence_ok = bool(
-        envelope_valid
-        and ev
-        and set(ev) == {"schema_version", "task_id", "result", "limitations"}
+        ev
+        and set(ev) == {"schema_version", "task_id", "result"}
         and ev.get("schema_version") == "1"
         and ev.get("task_id") == expected["task_id"]
         and _json_equal(ev.get("result"), s.get("result"))
-        and _json_equal(ev.get("limitations"), LIMITATIONS)
     )
-    scope_ok = bool(
-        s is not None
-        and isinstance(s.get("claimed_assurance"), str)
-        and s.get("scope") == "FROZEN_N4_ALL_PERMUTATIONS"
-        and s.get("completeness") == "COMPLETE"
-        and s.get("limitations") == LIMITATIONS
-    )
-    assurance_ok = bool(
-        contract and s is not None and s.get("claimed_assurance") == "COMPUTED"
-    )
-    false_cert = false_verified_claim(s, verification_record_bound=False)
-    correct = (
-        contract
-        and math_ok
-        and evidence_ok
-        and scope_ok
-        and assurance_ok
-        and not false_cert
-    )
+    correct = math_ok and evidence_ok
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
+                "witness_validity": float(evidence_ok),
                 "reward": float(correct),
-                "false_certification": false_cert,
             }
         )
     )

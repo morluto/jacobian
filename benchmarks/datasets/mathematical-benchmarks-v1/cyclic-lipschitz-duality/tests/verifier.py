@@ -4,11 +4,9 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 FROZEN_INPUT = Path(__file__).with_name("input.json")
@@ -138,38 +136,17 @@ def result_contract(result, instance):
     )
 
 
-def scope_is_correct(scope, instance):
-    if type(scope) is not str or len(scope) > 4096:
+def witness_is_valid(witness, instance):
+    if not isinstance(witness, list) or len(witness) != 1:
         return False
-    folded = " ".join(scope.casefold().split())
-    if re.search(r"\b(?:not|without|except|fewer|more)\b", folded):
-        return False
-    if not re.search(r"\b(?:cycle|cyclic)\b", folded):
-        return False
-    if "marked" not in folded or not re.search(
-        r"\b(?:index|indices|position|positions)\b", folded
-    ):
-        return False
-    numbers = {int(value) for value in re.findall(r"(?<![0-9])[0-9]+(?![0-9])", folded)}
-    expected = {
-        instance["cycle_size"],
-        *(index + 1 for index in instance["marked_indices"]),
-    }
-    return numbers == expected
-
-
-def evidence_is_valid(evidence, result, instance):
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    payload = read_evidence_json(evidence[0], expected_path="evidence/answer.txt")
-    if not isinstance(payload, dict) or set(payload) != {
+    payload = read_evidence_json(witness[0], expected_path="evidence/answer.txt")
+    if not isinstance(payload, dict) or not {
         "schema_version",
         "task_id",
         "primal",
         "dual",
         "optimality",
-        "limitations",
-    }:
+    } <= set(payload):
         return False
     optimum = minimum_cost(instance)
     primal = payload["primal"]
@@ -192,58 +169,29 @@ def evidence_is_valid(evidence, result, instance):
         and dual["l1_cost"] == str(optimum)
         and dual["minimum_cost"] == str(optimum)
         and payload["optimality"] == "weak_duality_after_median_minimum"
-        and payload["limitations"] == result.get("limitations")
     )
 
 
 def main():
     submission = load_submission()
     instance = load_instance()
-    contract = strict_submission_contract(
-        submission,
-        task_id="jacobian/cyclic-lipschitz-duality",
-        conclusion="OPTIMUM_CERTIFIED",
-        verification_record="forbidden",
-    )
     data = submission if isinstance(submission, dict) else {}
     result = data.get("result", {})
-    contract = bool(
+    math_correct = bool(
         instance is not None
-        and contract
+        and isinstance(submission, dict)
         and result_contract(result, instance)
-        and isinstance(data.get("limitations"), list)
-        and bool(data["limitations"])
-        and all(type(item) is str for item in data["limitations"])
+        and valid(result, instance)
     )
-    math_correct = bool(instance is not None and valid(result, instance))
-    evidence_valid = bool(
-        instance is not None and evidence_is_valid(data.get("evidence"), data, instance)
-    )
-    scope_correct = bool(contract and scope_is_correct(data.get("scope"), instance))
-    assurance_correct = bool(data.get("claimed_assurance") == "COMPUTED")
-    false_certification = bool(
-        false_verified_claim(submission, verification_record_bound=False)
-    )
-    reward = (
-        1.0
-        if contract
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and not false_certification
-        else 0.0
-    )
+    witness_ok = bool(math_correct and witness_is_valid(data.get("witness"), instance))
+    correct = bool(math_correct and witness_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
-                "reward": reward,
-                "false_certification": false_certification,
+                "witness_validity": float(witness_ok),
+                "reward": float(correct),
             }
         )
     )

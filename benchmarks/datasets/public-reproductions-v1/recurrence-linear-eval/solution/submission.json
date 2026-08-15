@@ -1,1 +1,11 @@
-{"task_id":"jacobian/recurrence-linear-eval","conclusion":"TRUE","result":{"selected_operation":"combinatorics.recurrence.linear.evaluate"},"claimed_assurance":"COMPUTED","scope":"jacobian/recurrence-linear-eval complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:7d22597992fc835788729734dd6bf3c078e6a25419e5d02276339b3134008295"}],"limitations":[]}
+{
+  "result": {
+    "selected_operation": "combinatorics.recurrence.linear.evaluate"
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:7d22597992fc835788729734dd6bf3c078e6a25419e5d02276339b3134008295"
+    }
+  ]
+}

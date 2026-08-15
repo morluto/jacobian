@@ -38,19 +38,13 @@ def main():
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
     )
     submission = {
-        "task_id": TASK_ID,
-        "conclusion": "AFFINE_NORMAL_COUNT_IS_INCOMPLETE_AND_REPAIRED",
         "result": result,
-        "claimed_assurance": "CHECKED",
-        "scope": "ellipse-normal-projective-chart-audit-v1",
-        "completeness": "COMPLETE",
-        "evidence": [
+        "witness": [
             {
                 "path": "evidence/answer.json",
                 "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
             }
         ],
-        "limitations": LIMITATIONS,
     }
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 

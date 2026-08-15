@@ -1,1 +1,15 @@
-{"task_id":"jacobian/reliability-triangle-fair","conclusion":"TRUE","result":{"probability":{"num":"5","den":"8"},"states":8},"claimed_assurance":"COMPUTED","scope":"jacobian/reliability-triangle-fair complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:f6f94ea9c3f487fc4df414f30786b83798d9479ccaab9e2fe1e0c0370cc46bcc"}],"limitations":[]}
+{
+  "result": {
+    "probability": {
+      "den": "8",
+      "num": "5"
+    },
+    "states": 8
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:f6f94ea9c3f487fc4df414f30786b83798d9479ccaab9e2fe1e0c0370cc46bcc"
+    }
+  ]
+}

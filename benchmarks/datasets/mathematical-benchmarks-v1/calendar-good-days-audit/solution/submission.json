@@ -1,1 +1,78 @@
-{"task_id":"jacobian/calendar-good-days-audit","conclusion":"FALSE","result":{"count":13,"good_dates":[{"month":3,"day":3,"concatenated":33},{"month":3,"day":6,"concatenated":36},{"month":3,"day":12,"concatenated":312},{"month":3,"day":15,"concatenated":315},{"month":3,"day":30,"concatenated":330},{"month":4,"day":4,"concatenated":44},{"month":4,"day":8,"concatenated":48},{"month":4,"day":16,"concatenated":416},{"month":4,"day":20,"concatenated":420},{"month":5,"day":5,"concatenated":55},{"month":5,"day":10,"concatenated":510},{"month":5,"day":20,"concatenated":520},{"month":5,"day":25,"concatenated":525}]},"claimed_assurance":"COMPUTED","scope":"calendar-good-days-audit exhaustive declared-date enumeration","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:d2d5322cb2e07c5a2168be282fc8b4503204ebf65905acbda394c88a85cd777b"}],"limitations":["The audit covers exactly the three declared months and their declared day bounds."]}
+{
+  "result": {
+    "count": 13,
+    "good_dates": [
+      {
+        "concatenated": 33,
+        "day": 3,
+        "month": 3
+      },
+      {
+        "concatenated": 36,
+        "day": 6,
+        "month": 3
+      },
+      {
+        "concatenated": 312,
+        "day": 12,
+        "month": 3
+      },
+      {
+        "concatenated": 315,
+        "day": 15,
+        "month": 3
+      },
+      {
+        "concatenated": 330,
+        "day": 30,
+        "month": 3
+      },
+      {
+        "concatenated": 44,
+        "day": 4,
+        "month": 4
+      },
+      {
+        "concatenated": 48,
+        "day": 8,
+        "month": 4
+      },
+      {
+        "concatenated": 416,
+        "day": 16,
+        "month": 4
+      },
+      {
+        "concatenated": 420,
+        "day": 20,
+        "month": 4
+      },
+      {
+        "concatenated": 55,
+        "day": 5,
+        "month": 5
+      },
+      {
+        "concatenated": 510,
+        "day": 10,
+        "month": 5
+      },
+      {
+        "concatenated": 520,
+        "day": 20,
+        "month": 5
+      },
+      {
+        "concatenated": 525,
+        "day": 25,
+        "month": 5
+      }
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:d2d5322cb2e07c5a2168be282fc8b4503204ebf65905acbda394c88a85cd777b"
+    }
+  ]
+}

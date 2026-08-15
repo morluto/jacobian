@@ -39,28 +39,17 @@ def main():
         "formal_conclusion": "POSITIVE_DISTANCE",
         "corrected_conclusion": "SEPARATED_BUT_DISTANCE_INFIMUM_ZERO",
     }
-    limits = [
-        "TOPOLOGICAL_CLOSEDNESS_REPLAYED_FROM_INTEGER_HORIZONTAL_GAP",
-        "LEAN_ELABORATION_NOT_ASSESSED",
-    ]
     evidence = {
         "schema_version": "1",
         "task_id": "jacobian/disjoint-closed-distance-scope-audit",
         "result": result,
-        "limitations": limits,
     }
     ep = app / "evidence/disjoint-closed-distance-audit.json"
     ep.parent.mkdir(parents=True, exist_ok=True)
     ep.write_text(json.dumps(evidence, separators=(",", ":")))
     submission = {
-        "task_id": evidence["task_id"],
-        "conclusion": "DISJOINT_CLOSED_DOES_NOT_IMPLY_POSITIVE_DISTANCE",
-        "scope": "EXACT_PARAMETRIC_METRIC_COUNTERMODEL",
-        "claimed_assurance": "COMPUTED",
-        "completeness": "COMPLETE",
         "result": result,
-        "limitations": limits,
-        "evidence": [
+        "witness": [
             {
                 "path": "evidence/disjoint-closed-distance-audit.json",
                 "sha256": "sha256:" + hashlib.sha256(ep.read_bytes()).hexdigest(),

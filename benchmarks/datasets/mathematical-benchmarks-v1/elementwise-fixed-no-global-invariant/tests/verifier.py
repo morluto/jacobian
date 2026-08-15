@@ -8,7 +8,6 @@ from verifier_support import (
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -250,24 +249,9 @@ def evidence_valid(descriptors):
 
 
 def main():
-    raw = raw_submission()
     input_binding = workspace_input_is_bound()
     submission = load_submission(require_input_binding=False)
     frozen = json.loads((E / "input.json").read_text())
-    expected = json.loads((E / "expected.json").read_text())
-    math_contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="optional",
-    )
-    accepted_contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
     source = frozen.get("source", {})
     source_bound = bool(
         source.get("revision") == "f5935720f176cedff4ecd8ebf83d1696e31cfac8"
@@ -276,47 +260,21 @@ def main():
         == "sha256:8be03d5c7464658a27833f65a0d8b8198ea5d2d0658d088f667bb30754dd36da"
         and source.get("license") == "MIT"
     )
-    result = raw.get("result") if isinstance(raw, dict) else None
+    result = submission.get("result") if isinstance(submission, dict) else None
     mathematical = bool(source_bound and certificate_valid(result, frozen))
-    evidence = bool(isinstance(raw, dict) and evidence_valid(raw.get("evidence")))
-    scope = bool(
-        isinstance(raw, dict) and raw.get("scope") == expected["required_scope"]
+    witness = bool(
+        isinstance(submission, dict) and evidence_valid(submission.get("witness"))
     )
-    assurance = bool(
-        isinstance(raw, dict)
-        and isinstance(raw.get("claimed_assurance"), str)
-        and raw.get("claimed_assurance") in ALLOWED_ASSURANCES
-    )
-    limitation = bool(
-        isinstance(raw, dict) and _limitations_valid(raw.get("limitations"))
-    )
-    false_certification = bool(
-        isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
-    )
-    correct = bool(
-        accepted_contract
-        and input_binding
-        and mathematical
-        and evidence
-        and scope
-        and assurance
-        and limitation
-        and not false_certification
-    )
+    correct = bool(input_binding and mathematical and witness)
     reward = 1.0 if correct else 0.0
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
-                "protocol_compliance": float(bool(math_contract)),
                 "input_binding": float(input_binding),
                 "correctness": float(mathematical),
-                "evidence_validity": float(evidence),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
-                "limitation_accuracy": float(limitation),
+                "witness_validity": float(witness),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

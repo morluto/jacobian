@@ -8,11 +8,9 @@ from typing import Any
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
     _public_submission_is_valid,
-    false_verified_claim,
     is_regular_bounded_file,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -193,56 +191,23 @@ def main() -> None:
     submission = _submission()
     data = submission if isinstance(submission, dict) else {}
     input_bound = workspace_input_is_bound()
-    expected = json.loads((TESTS / "expected.json").read_text())
-    envelope_contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"COMPUTED"}),
-        min_limitations=1,
-        verification_record="forbidden",
-    )
     contract = bool(
-        envelope_contract
-        and _public_submission_is_valid(submission)
+        _public_submission_is_valid(submission)
         and _result_protocol_valid(data.get("result"))
     )
     math_correct = _result(data.get("result"), _load())
-    evidence_valid = _evidence(data.get("evidence"), data.get("result"))
-    scope_correct = data.get("scope") == expected["required_scope"]
-    assurance_correct = data.get("claimed_assurance") == expected["maximum_assurance"]
-    limitations = data.get("limitations")
-    limitations_correct = isinstance(limitations, list) and LIMITATION in limitations
-    completeness_correct = data.get("completeness") == "COMPLETE"
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = (
-        input_bound
-        and contract
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and completeness_correct
-        and limitations_correct
-        and not false_certification
-    )
+    witness_valid = _evidence(data.get("witness"), data.get("result"))
+    correct = input_bound and contract and math_correct and witness_valid
     output = Path("/logs/verifier")
     output.mkdir(parents=True, exist_ok=True)
     (output / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
+                "witness_validity": float(witness_valid),
                 "input_binding": float(input_bound),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
-                "completeness_accuracy": float(completeness_correct),
-                "limitations_accuracy": float(limitations_correct),
                 "protocol_compliance": float(contract),
                 "reward": float(correct),
-                "false_certification": false_certification,
             }
         )
     )

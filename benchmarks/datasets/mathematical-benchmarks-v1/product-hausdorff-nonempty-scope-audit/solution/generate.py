@@ -32,14 +32,8 @@ def main():
     ep.parent.mkdir(parents=True, exist_ok=True)
     ep.write_text(json.dumps(evidence, separators=(",", ":")))
     submission = {
-        "task_id": task_id,
-        "conclusion": "EMPTY_FACTOR_MASKS_NON_HAUSDORFF_FACTOR",
-        "scope": "FINITE_TOPOLOGICAL_PRODUCT_SCOPE_COUNTERMODEL",
-        "claimed_assurance": "COMPUTED",
-        "completeness": "COMPLETE",
         "result": result,
-        "limitations": limitations,
-        "evidence": [
+        "witness": [
             {
                 "path": "evidence/product-hausdorff-audit.json",
                 "sha256": "sha256:" + hashlib.sha256(ep.read_bytes()).hexdigest(),

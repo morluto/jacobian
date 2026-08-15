@@ -1,4 +1,0 @@
-Bandeira Matrix AM-GM Open Problem 0.2(a)
-
-Expected conclusion: DISPROVED.
-Oracle summary: The inequality is false for n=5. The public artifact supplies a large exact rational Farkas-style certificate using six 31-by-31 PSD blocks and a Lean-checked arithmetic layer; it documents an external equivalence boundary between the certificate and the original matrix inequality.

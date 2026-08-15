@@ -31,5 +31,4 @@ graph-theory
 The task is self-contained and offline. The instruction names no tool,
 operation, or invocation order. The clean-room verifier independently checks
 the graph, connectivity, exact average degree, pendant vertices, and both
-minimal total-dominating witnesses. A wrong result or an unsupported
-`VERIFIED` claim forces reward to zero.
+minimal total-dominating sets. A wrong result forces reward to zero.

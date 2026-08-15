@@ -2,11 +2,9 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 TESTS = Path("/tests")
@@ -89,7 +87,7 @@ def _valid_vector(value: object) -> bool:
     )
 
 
-def _evidence_valid(value: object, result: object, limitations: object) -> bool:
+def _evidence_valid(value: object, result: object) -> bool:
     if not isinstance(value, list) or len(value) != 1:
         return False
     evidence = read_evidence_json(
@@ -99,11 +97,10 @@ def _evidence_valid(value: object, result: object, limitations: object) -> bool:
     )
     return bool(
         evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and set(evidence) == {"schema_version", "task_id", "result"}
         and evidence.get("schema_version") == "1"
         and evidence.get("task_id") == "jacobian/domino-profile-transfer-audit"
         and _json_equal(evidence.get("result"), result)
-        and _json_equal(evidence.get("limitations"), limitations)
     )
 
 
@@ -159,38 +156,21 @@ def _result_valid(result: object) -> bool:
 
 def main() -> None:
     submission = load_submission()
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
     result = submission.get("result") if isinstance(submission, dict) else None
     mathematical = _result_valid(result)
     evidence = bool(
-        contract
-        and _evidence_valid(
-            submission.get("evidence"), result, submission.get("limitations")
-        )
+        isinstance(submission, dict)
+        and _evidence_valid(submission.get("witness"), result)
     )
-    scope = bool(contract and submission.get("scope") == expected["required_scope"])
-    assurance = bool(contract and submission.get("claimed_assurance") == "COMPUTED")
-    false = false_verified_claim(submission, verification_record_bound=False)
-    correct = bool(contract and mathematical and not false)
-    reward = 0.0 if not correct or not evidence else 0.8 + 0.1 * scope + 0.1 * assurance
+    reward = float(mathematical and evidence)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(mathematical),
-                "evidence_validity": float(evidence),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
+                "witness_validity": float(evidence),
                 "reward": reward,
-                "false_certification": false,
             }
         )
     )

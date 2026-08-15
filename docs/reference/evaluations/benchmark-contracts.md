@@ -8,12 +8,19 @@ verifier, pinned environment, and task digest under `benchmarks/datasets/`.
 The evaluation author owns task selection, scoring, and any independent
 validation needed by that task.
 
+Choose tasks for the difficult mathematical capability they measure—especially
+capabilities that matter for higher-level conjecture work—not because the
+current operation library already solves them. A task that exposes an operation
+gap is useful evidence. Jacobian availability is a treatment condition that an
+experiment can compare with a tool-free control; it is not a criterion for
+admitting a benchmark task.
+
 Keep the boundary sharp: a benchmark may call `math.find` and `math.run`, but
 it must pass complete bounded inputs and use returned typed values. It must not
 assume a Jacobian workspace, artifact URI, persistence layer, checker registry,
 or verification record. Freeze task and environment digests, keep hidden
 material out of the agent environment, and report the task's limitations with
-its score.
+its result.
 
 Experiments expose the public MCP surface they measure. The agent decides
 whether to use Jacobian, whether discovery is useful, which operation to run,
@@ -22,10 +29,21 @@ product-facing runtime state machines, alternate assurance schemas, or
 lifecycle APIs for a study. A reusable benchmark adapter stays a small consumer
 of Harbor trial artifacts and the public MCP surface, never a second planner.
 
+## Task outcome and diagnostics
+
+For an atomic mathematical task, the default outcome is binary: the verifier
+returns `1` only when it can replay a valid submitted result and every declared
+task-specific witness condition; otherwise it returns `0`. Tool calls, prose,
+confidence claims, and diagnostic observations do not earn credit. Report
+input binding, witness validity, tool use, cost, and failure modes separately.
+Use non-binary scoring only for a public task deliberately decomposed into
+independent, meaningful, replayable mathematical subclaims.
+
 ## Generated output
 
-Task bundles, member records, and immutable snapshot locks are reproducibility
-anchors and remain tracked. Run outputs, collected traces, reports, and other
+Task bundles and member records are reproducibility anchors and remain tracked.
+Create an immutable snapshot lock only at an intentional evaluation or
+publication boundary. Run outputs, collected traces, reports, and other
 regenerable evidence belong under ignored `benchmarks/results/` or an external
 artifact store. Do not mix generated study output with a runtime or benchmark
 source refactor; publish it separately when it is needed for review.

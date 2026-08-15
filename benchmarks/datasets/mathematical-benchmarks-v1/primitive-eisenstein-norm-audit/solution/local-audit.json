@@ -1,1 +1,24 @@
-{"schema_version":"1","task_id":"jacobian/primitive-eisenstein-norm-audit","result":{"ramified_witness":{"x":1,"y":4,"norm":21,"gcd":1,"v3":1},"inert_obstruction":{"prime":5,"zero_pairs":[{"x":0,"y":0}],"square_primitive_status":"IMPOSSIBLE"},"repaired_criterion":"THREE_EXPONENT_AT_MOST_ONE_AND_NO_PRIME_TWO_MOD_THREE"},"limitations":["CUBIC_FORM_INTERSECTION_COUNT_NOT_ASSESSED","GENERAL_CRITERION_NOT_PROOF_ASSISTANT_VERIFIED","GENERAL_CRITERION_ONLY_LOCALLY_DEMONSTRATED"]}
+{
+  "schema_version": "1",
+  "task_id": "primitive-eisenstein-norm-audit",
+  "result": {
+    "ramified_witness": {
+      "x": 1,
+      "y": 4,
+      "norm": 21,
+      "gcd": 1,
+      "v3": 1
+    },
+    "inert_obstruction": {
+      "prime": 5,
+      "zero_pairs": [
+        {
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "square_primitive_status": "IMPOSSIBLE"
+    },
+    "repaired_criterion": "THREE_EXPONENT_AT_MOST_ONE_AND_NO_PRIME_TWO_MOD_THREE"
+  }
+}

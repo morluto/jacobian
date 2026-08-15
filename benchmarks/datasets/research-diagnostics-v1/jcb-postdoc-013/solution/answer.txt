@@ -1,4 +1,0 @@
-Erdős Problem 397: a parametric family of central-binomial collisions
-
-Expected conclusion: DISPROVED.
-Oracle summary: The displayed identity holds for every a >= 2 after reducing ratios of adjacent central binomial coefficients and substituting c = 8a^2 + 8a + 1. The indices satisfy a < a+1 < 2a < 2a+2 < c < c+1, so varying a gives infinitely many collisions.

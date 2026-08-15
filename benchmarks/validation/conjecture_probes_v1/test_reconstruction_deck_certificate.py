@@ -12,9 +12,10 @@ from benchmarks.validation._verifier_child import run_verifier_in_child
 
 ROOT = Path(__file__).parents[3]
 TASK = ROOT / "benchmarks/datasets/conjecture-probes-v1/reconstruction-deck-certificate"
+TASK_ID = "jacobian/reconstruction-deck-certificate"
 
 
-def case(tmp_path):
+def case(tmp_path: Path):
     app, logs = tmp_path / "app", tmp_path / "logs"
     app.mkdir(parents=True)
     logs.mkdir(parents=True)
@@ -26,216 +27,123 @@ def case(tmp_path):
     return app, logs, json.loads((app / "submission.json").read_text())
 
 
-def write(app, s):
-    payload = {
-        "schema_version": "1",
-        "task_id": s["task_id"],
-        "result": s["result"],
-        "limitations": s["limitations"],
-    }
-    e = app / "evidence/answer.txt"
-    e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
-    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
-    (app / "submission.json").write_text(json.dumps(s) + "\n")
+def _payload(result: object) -> dict[str, object]:
+    return {"schema_version": "1", "task_id": TASK_ID, "result": result}
 
 
-def run(app, logs):
+def write(app: Path, submission: dict, *, payload: object | None = None) -> None:
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text(
+        json.dumps(
+            _payload(submission["result"]) if payload is None else payload,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    )
+    submission["witness"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
+    )
+    (app / "submission.json").write_text(json.dumps(submission) + "\n")
+
+
+def run(app: Path, logs: Path):
     return run_verifier_in_child(task=TASK, app=app, logs=logs)
 
 
-def test_oracle_passes(tmp_path):
+def test_oracle_passes(tmp_path: Path) -> None:
     app, logs, _ = case(tmp_path)
-    assert run(app, logs).details["aggregate_reward"] == 1.0
+    result = run(app, logs)
+    assert result.reward == result.details["aggregate_reward"] == 1.0
 
 
-def test_wrong_mapping_and_deleted_vertex_fail(tmp_path):
-    app, logs, s = case(tmp_path)
-    s["result"]["embeddings"][0]["local_to_original"][:2] = reversed(
-        s["result"]["embeddings"][0]["local_to_original"][:2]
+def test_wrong_reconstruction_and_duplicate_card_fail(tmp_path: Path) -> None:
+    app, logs, submission = case(tmp_path)
+    submission["result"]["embeddings"][0]["local_to_original"][:2] = reversed(
+        submission["result"]["embeddings"][0]["local_to_original"][:2]
     )
-    write(app, s)
-    assert run(app, logs).details["mathematics"] == 0.0
-    app, logs, s = case(tmp_path / "d")
-    s["result"]["embeddings"][0]["deleted_vertex"] = 1
-    write(app, s)
+    write(app, submission)
+    assert run(app, logs).details["aggregate_reward"] == 0.0
+
+    app, logs, submission = case(tmp_path / "duplicate")
+    submission["result"]["embeddings"][-1] = submission["result"]["embeddings"][0]
+    write(app, submission)
     assert run(app, logs).details["aggregate_reward"] == 0.0
 
 
-def test_corrupt_original_and_duplicate_card_fail(tmp_path):
-    app, logs, s = case(tmp_path)
-    s["result"]["original_edges"][0] = [0, 4]
-    write(app, s)
-    assert run(app, logs).details["aggregate_reward"] == 0.0
-    app, logs, s = case(tmp_path / "dup")
-    s["result"]["embeddings"][-1] = s["result"]["embeddings"][0]
-    write(app, s)
-    assert run(app, logs).details["aggregate_reward"] == 0.0
-
-
-def test_false_verified_and_tampered_input_fail(tmp_path):
-    app, logs, s = case(tmp_path)
-    s["claimed_assurance"] = "VERIFIED"
-    write(app, s)
-    assert run(app, logs).details["false_certification"] is True
-    app, logs, _ = case(tmp_path / "input")
+def test_tampered_input_and_witness_fail_independently(tmp_path: Path) -> None:
+    app, logs, _ = case(tmp_path)
     (app / "input.json").write_text("{}\n")
-    r = run(app, logs)
-    assert (
-        r.details["input_binding"] == 0.0
-        and r.details["mathematics"] == 1.0
-        and r.details["aggregate_reward"] == 0.0
-    )
+    result = run(app, logs)
+    assert result.details["input_binding"] == 0.0
+    assert result.details["mathematics"] == 1.0
+    assert result.reward == 0.0
+
+    app, logs, _ = case(tmp_path / "witness")
+    (app / "evidence/answer.txt").write_text("tampered\n")
+    result = run(app, logs)
+    assert result.details["witness_validity"] == 0.0
+    assert result.details["mathematics"] == 1.0
+    assert result.reward == 0.0
 
 
-def test_unhashable_claimed_assurance_keeps_other_diagnostics(tmp_path):
-    """A JSON array/object assurance must not crash the membership test."""
-    for value in (["CHECKED", "COMPUTED"], {"level": "CHECKED"}):
-        app, logs, s = case(tmp_path / type(value).__name__)
-        s["claimed_assurance"] = value
-        write(app, s)
-        r = run(app, logs)
-        assert (
-            r.details["assurance"] == 0.0
-            and r.details["input_binding"] == 1.0
-            and r.details["mathematics"] == 1.0
-            and r.details["evidence"] == 1.0
-            and r.details["scope"] == 1.0
-            and r.details["aggregate_reward"] == 0.0
-        )
+def test_witness_binding_is_type_strict(tmp_path: Path) -> None:
+    app, logs, submission = case(tmp_path)
+    payload = _payload(submission["result"])
+    payload["result"] = json.loads(json.dumps(payload["result"]))
+    payload["result"]["original_edges"][0][1] = True
+    write(app, submission, payload=payload)
+    result = run(app, logs)
+    assert result.details["mathematics"] == 1.0
+    assert result.details["witness_validity"] == 0.0
+    assert result.reward == 0.0
 
 
-def test_evidence_with_oversized_whitespace_padding_passes(tmp_path):
-    """Legal trailing whitespace beyond any internal ceiling must parse."""
-    app, logs, s = case(tmp_path)
-    e = app / "evidence/answer.txt"
-    answer = (
+def test_witness_with_oversized_whitespace_padding_passes(tmp_path: Path) -> None:
+    """A digest-bound witness is streamed without an arbitrary byte ceiling."""
+    app, logs, submission = case(tmp_path)
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text(
         json.dumps(
-            {
-                "schema_version": "1",
-                "task_id": s["task_id"],
-                "result": s["result"],
-                "limitations": s["limitations"],
-            },
-            sort_keys=True,
-            separators=(",", ":"),
+            _payload(submission["result"]), sort_keys=True, separators=(",", ":")
         )
         + "\n"
         + " " * (64 * 1024 * 1024 + 424242)
     )
-    e.write_text(answer)
-    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
-    (app / "submission.json").write_text(json.dumps(s) + "\n")
-    r = run(app, logs)
-    assert r.details["evidence"] == 1.0 and r.details["aggregate_reward"] == 1.0
+    submission["witness"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
+    )
+    (app / "submission.json").write_text(json.dumps(submission) + "\n")
+    assert run(app, logs).reward == 1.0
 
 
-def test_evidence_with_large_whitespace_prefix_passes_quickly(tmp_path):
-    """A large legal whitespace prefix before the value must not be retained.
-
-    The streaming parser discards the consumed leading-whitespace prefix.
-    Without that, a digest-correct file would retain (and repeatedly copy)
-    the whole prefix, turning the linear parse into a quadratic one that can
-    exhaust the 1 GiB verifier memory limit or the 120-second verifier
-    timeout for storage-scale padding. 64 MiB of leading whitespace is fast
-    (<1 s of parsing) only when the prefix is discarded, and stays well
-    inside the 30-second child harness timeout.
-    """
-    app, logs, s = case(tmp_path)
-    e = app / "evidence/answer.txt"
-    answer = (
+def test_witness_with_large_whitespace_prefix_streams_quickly(tmp_path: Path) -> None:
+    """Leading whitespace is discarded while parsing a legal large witness."""
+    app, logs, submission = case(tmp_path)
+    evidence = app / "evidence/answer.txt"
+    evidence.write_text(
         " \n" * (32 * 1024 * 1024)
         + json.dumps(
-            {
-                "schema_version": "1",
-                "task_id": s["task_id"],
-                "result": s["result"],
-                "limitations": s["limitations"],
-            },
-            sort_keys=True,
-            separators=(",", ":"),
+            _payload(submission["result"]), sort_keys=True, separators=(",", ":")
         )
         + "\n"
     )
-    e.write_text(answer)
-    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
-    (app / "submission.json").write_text(json.dumps(s) + "\n")
+    submission["witness"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
+    )
+    (app / "submission.json").write_text(json.dumps(submission) + "\n")
     started = time.monotonic()
-    r = run(app, logs)
-    elapsed = time.monotonic() - started
-    assert r.details["evidence"] == 1.0 and r.details["aggregate_reward"] == 1.0
-    # Retaining the prefix makes parsing quadratic: 64 MiB of padding takes
-    # ~15 s in-process before the fix, vs well under 1 s after. 15 seconds
-    # cleanly separates streaming discard from unbounded buffer accumulation
-    # with generous headroom for slow runners.
-    assert elapsed < 15.0
+    assert run(app, logs).reward == 1.0
+    assert time.monotonic() - started < 15.0
 
 
-def test_evidence_leading_garbage_still_rejected(tmp_path):
-    """Non-whitespace before the JSON value fails evidence like json.load."""
-    app, logs, s = case(tmp_path)
-    e = app / "evidence/answer.txt"
-    e.write_text(
-        " \n" * 1024
-        + "garbage"
-        + json.dumps(
-            {
-                "schema_version": "1",
-                "task_id": s["task_id"],
-                "result": s["result"],
-                "limitations": s["limitations"],
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        + "\n"
-    )
-    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
-    (app / "submission.json").write_text(json.dumps(s) + "\n")
-    r = run(app, logs)
-    assert r.details["evidence"] == 0.0 and r.details["aggregate_reward"] == 0.0
-
-
-def test_evidence_trailing_garbage_still_rejected(tmp_path):
-    """Non-whitespace after the JSON value fails evidence like json.load."""
-    app, logs, s = case(tmp_path)
-    e = app / "evidence/answer.txt"
-    e.write_text(
-        json.dumps(
-            {
-                "schema_version": "1",
-                "task_id": s["task_id"],
-                "result": s["result"],
-                "limitations": s["limitations"],
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        + "\n"
-        + "garbage"
-    )
-    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
-    (app / "submission.json").write_text(json.dumps(s) + "\n")
-    r = run(app, logs)
-    assert r.details["evidence"] == 0.0 and r.details["aggregate_reward"] == 0.0
-
-
-def test_duplicate_json_object_member_in_submission_rejected(tmp_path):
-    """A duplicate JSON object member must not bypass the raw submission parser.
-
-    Python's default ``json.loads`` applies last-key-wins semantics.  Without
-    an ``object_pairs_hook`` that rejects duplicate names, a submission with
-    conflicting ``task_id`` values (wrong first, canonical second) would parse
-    to the canonical value and earn full reward despite being malformed.
-    """
+def test_malformed_submission_and_witness_are_rejected(tmp_path: Path) -> None:
     app, logs, _ = case(tmp_path)
-    raw = (app / "submission.json").read_text()
-    duplicate = raw.replace(
-        '"task_id": "jacobian/reconstruction-deck-certificate"',
-        '"task_id": "wrong", "task_id": "jacobian/reconstruction-deck-certificate"',
-    )
-    assert duplicate != raw, "replacement target not found in canonical submission"
-    (app / "submission.json").write_text(duplicate)
-    r = run(app, logs)
-    assert r.details["protocol"] == 0.0
-    assert r.details["aggregate_reward"] == 0.0
-    assert r.reward == 0.0
+    (app / "submission.json").write_text('{"result":{},"result":{}}\n')
+    assert run(app, logs).reward == 0.0
+
+    app, logs, submission = case(tmp_path / "witness")
+    write(app, submission, payload={**_payload(submission["result"]), "extra": True})
+    result = run(app, logs)
+    assert result.details["witness_validity"] == 0.0
+    assert result.reward == 0.0

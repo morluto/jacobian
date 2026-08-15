@@ -20,7 +20,7 @@ This checks one exact finite embedding and does not determine the chromatic
 number of the plane.
 
 After every protocol, input, mathematical, evidence, and scope gate passes,
-assurance contributes `1.0` for `CHECKED`, `0.5` for `COMPUTED`, and `0.25` for
+assurance contributes `1.0` for `COMPUTED`, `0.5` for `COMPUTED`, and `0.25` for
 `UNVERIFIED`. Thus full reward is reserved for the intended checked claim.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
@@ -30,13 +30,7 @@ Exact radical-sign repair for one Moser embedding only; no plane chromatic-numbe
 
 The evidence file must be a JSON object with exactly four fields: `schema_version` must be `"1"`, `task_id` must equal the submission task ID, `result` must be an exact JSON copy of `submission.json`'s result object, and `limitations` must be an exact JSON copy of its limitations list.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 
-- **Conclusion:** exactly `MOSER_RADICAL_BRANCH_REPAIRED`
-- **Assurance:** scoreable values are `UNVERIFIED`, `COMPUTED`, `CHECKED` (ceiling `CHECKED`); the submission schema accepts any of `UNVERIFIED`, `COMPUTED`, `CHECKED`, `VERIFIED` but only scoreable assurances receive credit.
-- **Scope:** the exact value declared in `submission_schema.json`
-- **Completeness:** `COMPLETE`.
-- **Evidence:** 1-1 item(s); allowed path(s): `evidence/answer.json`; digest must match `^sha256:[0-9a-f]{64}$`.
-- **Evidence media types:** `application/json`.
-- **Required artifact filenames:** `evidence/answer.json`.
+- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.json`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `application/json`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

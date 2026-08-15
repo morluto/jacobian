@@ -3,7 +3,10 @@ import json
 import sys
 from pathlib import Path
 
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1 import (
+    _fixtures,
+    _verifier,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 VERIFIER = (
@@ -41,14 +44,14 @@ def test_source_bound_cannot_be_attained():
 
 
 def _prepared_submission(tmp_path, mutate):
-    task, app, logs = support._prepare_case(
+    task, app, logs = _fixtures._prepare_case(
         tmp_path, "triplewise-empty-extremal-audit", "computed"
     )
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
     mutate(submission, app)
-    support._write_json(submission_path, submission)
-    return support._run_verifier(task, app, logs)
+    _fixtures._write_json(submission_path, submission)
+    return _verifier._run_verifier(task, app, logs)
 
 
 def test_non_integer_family_elements_are_rejected():
@@ -77,34 +80,13 @@ def test_nested_extra_fields_are_rejected(tmp_path):
     assert reward.reward == 0.0
 
 
-def test_protocol_failures_do_not_hide_mathematical_correctness(tmp_path):
-    def mutate(submission, _app):
-        submission["limitations"] = []
-
-    reward = _prepared_submission(tmp_path, mutate)
-    assert reward.details["correctness"] == 0.0
-    assert reward.reward == 0.0
-
-
-def test_negated_scope_is_rejected(tmp_path):
-    def mutate(submission, _app):
-        submission["scope"] = (
-            "does not cover distinct subsets with triplewise empty intersection"
-        )
-
-    reward = _prepared_submission(tmp_path, mutate)
-    assert reward.details["correctness"] == 1.0
-    assert reward.details["scope_accuracy"] == 0.0
-    assert reward.reward == 0.0
-
-
 def test_unrelated_digest_bound_evidence_is_rejected(tmp_path):
     def mutate(submission, app):
         evidence = app / "evidence" / "answer.txt"
         evidence.write_text("This unrelated text is nonempty but proves nothing.\n")
-        submission["evidence"][0]["sha256"] = support._digest(evidence)
+        submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
 
     reward = _prepared_submission(tmp_path, mutate)
     assert reward.details["correctness"] == 1.0
-    assert reward.details["evidence_validity"] == 0.0
+    assert reward.reward == 0.0
     assert reward.reward == 0.0

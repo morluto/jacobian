@@ -1,22 +1,52 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import shutil
 from pathlib import Path
 
 import pytest
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1._verifier import _run_verifier
 from jsonschema import Draft202012Validator
 
-TASK = "complex-power-sum-elimination"
+TASK = Path(__file__).resolve().parents[3] / (
+    "benchmarks/datasets/mathematical-benchmarks-v1/complex-power-sum-elimination"
+)
 
 
-def _case(tmp_path: Path):
-    return support._prepare_case(tmp_path, TASK, "computed")
+def _digest(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _write_json(path: Path, value: object) -> None:
+    path.write_text(
+        json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _case(tmp_path: Path) -> tuple[Path, Path, Path]:
+    root = tmp_path / "complex-power-sum-elimination" / "computed"
+    app = root / "app"
+    logs = root / "logs"
+    app.mkdir(parents=True)
+    logs.mkdir(parents=True)
+    shutil.copy2(TASK / "environment" / "input.json", app / "input.json")
+    submission = json.loads((TASK / "solution" / "submission.json").read_text())
+    for descriptor in submission["witness"]:
+        evidence_path = Path(descriptor["path"])
+        destination = app / evidence_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(TASK / "solution" / evidence_path.name, destination)
+        descriptor["sha256"] = _digest(destination)
+    _write_json(app / "submission.json", submission)
+    return TASK, app, logs
 
 
 def _rewrite(app: Path, submission: dict) -> None:
-    support._bind_result_evidence(app, submission)
-    support._write_json(app / "submission.json", submission)
+    evidence_path = app / "evidence" / "answer.txt"
+    submission["witness"][0]["sha256"] = _digest(evidence_path)
+    _write_json(app / "submission.json", submission)
 
 
 def test_accepts_reversed_branch_order(tmp_path: Path) -> None:
@@ -25,7 +55,7 @@ def test_accepts_reversed_branch_order(tmp_path: Path) -> None:
     submission["result"]["branches"].reverse()
     _rewrite(app, submission)
 
-    accepted = support._run_verifier(task, app, logs)
+    accepted = _run_verifier(task, app, logs)
     assert accepted.details["correctness"] == 1.0
     assert accepted.reward == pytest.approx(1.0)
 
@@ -58,7 +88,7 @@ def test_rejects_corrupted_certificates(
     target[path[-1]] = replacement
     _rewrite(app, submission)
 
-    rejected = support._run_verifier(task, app, logs)
+    rejected = _run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
     assert rejected.reward == 0.0
 
@@ -68,10 +98,10 @@ def test_does_not_require_prescribed_recurrence(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     submission["result"].pop("recurrence")
     submission["result"]["elimination"].pop("hypothesis_factorization")
-    schema = json.loads((task / "environment" / "submission_schema.json").read_text())
+    schema = json.loads((TASK / "environment" / "submission_schema.json").read_text())
     Draft202012Validator(schema).validate(submission)
     _rewrite(app, submission)
 
-    accepted = support._run_verifier(task, app, logs)
+    accepted = _run_verifier(task, app, logs)
     assert accepted.details["correctness"] == 1.0
     assert accepted.reward == pytest.approx(1.0)

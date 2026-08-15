@@ -1,15 +1,4 @@
 {
-  "allowed_assurance": [
-    "UNVERIFIED",
-    "COMPUTED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE"
-  ],
-  "assurance_ceiling": "COMPUTED",
-  "conclusion": {
-    "const": "INVARIANTS_NOT_EQUIVALENT"
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/answer.txt"
@@ -22,22 +11,11 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "limitations": {
-    "items": {
-      "type": "string"
-    },
-    "minItems": 1,
-    "type": "array"
-  },
   "public_notes": "The verifier checks the declared result, exact finite scope, completeness, digest-bound evidence, limitation claims, and assurance as separate protocol dimensions. State both that Lean compilation is not assessed and that proof of the source-corrected conjecture is not claimed.",
   "required_artifact_filenames": [
     "evidence/answer.txt"
   ],
   "schema_version": "1",
-  "scope": {
-    "const": "exact finite comparison of induced-C4 count and C4-free characteristic",
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
     "additionalProperties": false,
@@ -112,49 +90,6 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
-      },
-      "completeness": {
-        "const": "COMPLETE"
-      },
-      "conclusion": {
-        "const": "INVARIANTS_NOT_EQUIVALENT"
-      },
-      "evidence": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/answer.txt"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
-      },
-      "limitations": {
-        "items": {
-          "type": "string"
-        },
-        "minItems": 1,
-        "type": "array"
-      },
       "result": {
         "additionalProperties": false,
         "properties": {
@@ -224,23 +159,32 @@
         ],
         "type": "object"
       },
-      "scope": {
-        "const": "exact finite comparison of induced-C4 count and C4-free characteristic",
-        "type": "string"
-      },
-      "task_id": {
-        "const": "jacobian/c4-characteristic-invariant-audit"
+      "witness": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
   },

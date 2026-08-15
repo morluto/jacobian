@@ -1,1 +1,24 @@
-{"task_id":"jacobian/lp-integrability-separator","conclusion":"VALID_LP_SEPARATOR","claimed_assurance":"COMPUTED","scope":"ALL_POSITIVE_FINITE_P","completeness":"COMPLETE_FOR_DECLARED_FAMILY","result":{"beta":"1","origin_power_coefficient":"-1/2","infinity_power_coefficient":"-1/2","p2_log_exponent":"-2","p2_integral_each":"1","critical_p":"2","lower_regime":{"p_interval":"0<p<2","obstruction":"INFINITY_POWER_TAIL"},"upper_regime":{"p_interval":"p>2","obstruction":"ORIGIN_POWER_SINGULARITY"}},"evidence":[{"path":"evidence/answer.txt","sha256":"sha256:0247600af02fa3e35c65ade41d5f49111eef47f3ced13276207be1d7765a6abd"}],"limitations":["STANDARD_POWER_LOG_INTEGRAL_CRITERION_TRUSTED","DECLARED_FUNCTION_FAMILY_ONLY","NO_PROOF_ASSISTANT_VERIFICATION"]}
+{
+  "result": {
+    "beta": "1",
+    "critical_p": "2",
+    "infinity_power_coefficient": "-1/2",
+    "lower_regime": {
+      "obstruction": "INFINITY_POWER_TAIL",
+      "p_interval": "0<p<2"
+    },
+    "origin_power_coefficient": "-1/2",
+    "p2_integral_each": "1",
+    "p2_log_exponent": "-2",
+    "upper_regime": {
+      "obstruction": "ORIGIN_POWER_SINGULARITY",
+      "p_interval": "p>2"
+    }
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:0247600af02fa3e35c65ade41d5f49111eef47f3ced13276207be1d7765a6abd"
+    }
+  ]
+}

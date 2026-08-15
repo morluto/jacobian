@@ -1,1 +1,0 @@
-{"task_id":"jacobian/jcb-postdoc-005","conclusion":"EXACT_IDENTITY","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/jcb-postdoc-005","answer-visible diagnostic"],"expected_conclusion":"EXACT_IDENTITY","expected_key_facts":{"identity":"E(P^m)=0 and E(QP^m)=m! for all m>=1"}}

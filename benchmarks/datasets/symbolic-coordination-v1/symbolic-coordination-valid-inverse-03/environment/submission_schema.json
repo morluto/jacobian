@@ -121,51 +121,6 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
-    },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "conclusion": {
-      "enum": [
-        "TRUE",
-        "FALSE",
-        "UNKNOWN"
-      ]
-    },
-    "evidence": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "const": "evidence/certificate.json"
-          },
-          "sha256": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "type": "object"
-      },
-      "maxItems": 1,
-      "minItems": 1,
-      "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "NO_CLAIM_BEYOND_SUPPLIED_CANDIDATE_AND_EXACT_QQ_COMPOSITIONS"
-      ]
-    },
     "result": {
       "additionalProperties": false,
       "properties": {
@@ -184,21 +139,17 @@
             "forward_map_sha256": {
               "const": "sha256:4415ca8e3e9e95bcbd9a2449cd2e14747f2c6e64b18e9240d52b71136cbe8a80"
             },
-            "scope_id": {
-              "const": "scope://symbolic-coordination-v1/symbolic-coordination-valid-inverse-03"
-            },
             "semantics_id": {
               "const": "exact-sparse-polynomial-maps-over-QQ@1"
             },
             "subject_sha256": {
-              "const": "sha256:0471bd8636f3dc3befed9738004b72eddd3c639be2900cd1e40ad04974c9bd41"
+              "const": "sha256:41c749258afb5358227554bcbb2be65efffad85cdbb62dc9ec807c7a5b647046"
             }
           },
           "required": [
             "binding_schema_version",
             "claim_id",
             "semantics_id",
-            "scope_id",
             "forward_map_sha256",
             "subject_sha256",
             "checker_id"
@@ -417,23 +368,32 @@
       ],
       "type": "object"
     },
-    "scope": {
-      "const": "EXACT_TWO_SIDED_COMPOSITION_OVER_QQ:symbolic-coordination-valid-inverse-03",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/symbolic-coordination-valid-inverse-03"
+    "witness": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/certificate.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

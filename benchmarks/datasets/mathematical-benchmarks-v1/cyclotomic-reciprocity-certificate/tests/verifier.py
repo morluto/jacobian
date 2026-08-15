@@ -1,15 +1,12 @@
 import json
 import math
-import re
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 W = Path("/app")
@@ -179,103 +176,47 @@ def _result_is_valid(result, frozen):
     )
 
 
-def _evidence_matches(evidence):
-    if (
-        not isinstance(evidence, list)
-        or len(evidence) != 1
-        or not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt")
-    ):
+def _witness_matches(witness, result):
+    if not isinstance(witness, list) or len(witness) != 1:
         return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
+    if target is None:
+        return False
     try:
-        text = target.read_text().casefold() if target else ""
+        text = target.read_text()
     except (OSError, UnicodeError):
         return False
-    return bool(
-        len(text) >= 180
-        and "cyclotomic" in text
-        and "inversion" in text
-        and "root" in text
-        and "orbit" in text
-        and ("phi_1" in text or "phi1" in text)
-        and "p(1)" in text
-        and re.search(r"x\s*[-\u2212]\s*1", text)
-        and ("coefficient symmetry" in text or "reciprocal" in text)
-    )
+    markers = [
+        line.removeprefix("RESULT_JSON:").strip()
+        for line in text.splitlines()
+        if line.startswith("RESULT_JSON:")
+    ]
+    if len(markers) != 1:
+        return False
+    try:
+        bound_result = json.loads(markers[0])
+    except (ValueError, RecursionError):
+        return False
+    return isinstance(result, dict) and json_value_equal(bound_result, result)
 
 
 def main():
     submission, frozen = load_submission(), _load_frozen_input()
-    expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
+    data = submission if isinstance(submission, dict) else {}
+    math_correct = bool(
+        isinstance(submission, dict) and _result_is_valid(data.get("result"), frozen)
     )
-    math_correct = bool(contract and _result_is_valid(submission.get("result"), frozen))
-    evidence_valid = bool(
-        contract and math_correct and _evidence_matches(submission.get("evidence"))
+    witness_ok = bool(
+        math_correct and _witness_matches(data.get("witness"), data.get("result"))
     )
-    scope = submission.get("scope") if isinstance(submission, dict) else None
-    scope_text = scope.casefold() if isinstance(scope, str) else ""
-    scope_correct = bool(
-        contract
-        and ("degree 16" in scope_text or "degree_16" in scope_text)
-        and "frozen" in scope_text
-        and "cyclotomic" in scope_text
-        and "general" in scope_text
-        and "orbit" in scope_text
-        and not re.search(
-            r"\b(?:not|without|excluding|only)\b[^.]{0,50}\bgeneral\b", scope_text
-        )
-    )
-    assurance_correct = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations = (
-        submission.get("limitations", []) if isinstance(submission, dict) else []
-    )
-    limitation_correct = False
-    if contract and isinstance(limitations, list):
-        combined = " ".join(
-            item.casefold() for item in limitations if isinstance(item, str)
-        )
-        negative_pattern = (
-            r"\b(?:not|no|without|does not|doesn't|lacks?|"
-            r"no\s+[^.]{0,20})\b[^.]{0,60}"
-            r"\b(?:machine|formal(?:ly)?|proof[- ]assistant)\b"
-        )
-        limitation_correct = bool(
-            re.search(r"\bunrestricted\b", combined)
-            and re.search(negative_pattern, combined)
-            and not re.search(
-                r"\b(?:machine|formal(?:ly)?|proof[- ]assistant)\b[^.]{0,60}\b(?:verified|checked|proof)\b",
-                re.sub(negative_pattern, "", combined),
-            )
-        )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(
-        contract and math_correct and limitation_correct and not false_certification
-    )
-    reward = (
-        0.0
-        if not correct or not evidence_valid
-        else 0.8 + 0.1 * scope_correct + 0.1 * assurance_correct
-    )
+    correct = bool(math_correct and witness_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
-                "reward": reward,
-                "false_certification": false_certification,
+                "witness_validity": float(witness_ok),
+                "reward": float(correct),
             }
         )
     )

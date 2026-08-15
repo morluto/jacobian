@@ -1,1 +1,22 @@
-{"task_id":"jacobian/inversion-aggregate-mask-audit","conclusion":"LOCAL_DEFINITION_WRONG_AGGREGATE_MASKS_DEFECT","result":{"witness_permutation":[0,1,2,3],"implemented_count":6,"intended_count":0,"implemented_aggregate":72,"intended_aggregate":72,"pair_count":6,"complement_relation":"IMPLEMENTED_PLUS_INTENDED_EQUALS_PAIR_COUNT_PER_PERMUTATION"},"claimed_assurance":"COMPUTED","scope":"FROZEN_N4_ALL_PERMUTATIONS","completeness":"COMPLETE","evidence":[{"path":"evidence/inversion-audit.json","sha256":"sha256:c407add9f79263a866a9b07c1d8be74ec612cccbaecf806e1d3462ab1536a0c7"}],"limitations":["FINITE_N4_REPLAY","NO_LEAN_ELABORATION"]}
+{
+  "result": {
+    "complement_relation": "IMPLEMENTED_PLUS_INTENDED_EQUALS_PAIR_COUNT_PER_PERMUTATION",
+    "implemented_aggregate": 72,
+    "implemented_count": 6,
+    "intended_aggregate": 72,
+    "intended_count": 0,
+    "pair_count": 6,
+    "witness_permutation": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/inversion-audit.json",
+      "sha256": "sha256:c407add9f79263a866a9b07c1d8be74ec612cccbaecf806e1d3462ab1536a0c7"
+    }
+  ]
+}

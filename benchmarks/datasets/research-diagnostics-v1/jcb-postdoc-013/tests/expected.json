@@ -1,1 +1,0 @@
-{"task_id":"jacobian/jcb-postdoc-013","conclusion":"DISPROVED","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/jcb-postdoc-013","answer-visible diagnostic"],"expected_conclusion":"DISPROVED","expected_key_facts":{"identity_holds":"true","index_order":"a<a+1<2a<2a+2<c<c+1"}}

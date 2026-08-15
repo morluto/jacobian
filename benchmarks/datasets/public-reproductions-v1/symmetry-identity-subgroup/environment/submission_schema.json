@@ -1,90 +1,64 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "additionalProperties": false,
-  "required": [
-    "task_id",
-    "conclusion",
-    "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
-  ],
   "properties": {
-    "task_id": {
-      "const": "jacobian/symmetry-identity-subgroup"
-    },
-    "conclusion": {
-      "const": "TRUE"
-    },
     "result": {
-      "type": "object",
       "additionalProperties": false,
+      "properties": {
+        "edge_orbits": {
+          "items": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "vertex_orbits": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
       "required": [
         "vertex_orbits",
         "edge_orbits"
       ],
-      "properties": {
-        "vertex_orbits": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "edge_orbits": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          }
-        }
-      }
+      "type": "object"
     },
-    "claimed_assurance": {
-      "enum": ["UNVERIFIED","COMPUTED"]
-    },
-    "scope": {
-      "const": "jacobian/symmetry-identity-subgroup complete finite input"
-    },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "evidence": {
-      "type": "array",
-      "minItems": 1,"maxItems":1,
+    "witness": {
       "items": {
-        "type": "object",
         "additionalProperties": false,
-        "required": [
-          "path",
-          "sha256"
-        ],
         "properties": {
           "path": {
             "const": "evidence/answer.txt"
           },
           "sha256": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
           }
-        }
-      }
-    },
-    "limitations": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
     }
-  }
+  },
+  "required": [
+    "result",
+    "witness"
+  ],
+  "type": "object"
 }

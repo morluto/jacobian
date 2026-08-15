@@ -42,33 +42,6 @@
         }
       ]
     },
-    "evidence_envelope": {
-      "additionalProperties": false,
-      "properties": {
-        "limitations": {
-          "const": [
-            "REMAINING_31X31_BLOCK_ENTRIES_AND_FIVE_BLOCKS_NOT_CHECKED",
-            "FULL_FARKAS_AND_LEAN_THEOREM_NOT_ESTABLISHED"
-          ]
-        },
-        "result": {
-          "$ref": "#/$defs/result"
-        },
-        "schema_version": {
-          "const": "1"
-        },
-        "task_id": {
-          "const": "jacobian/exact-farkas-ldl-slice"
-        }
-      },
-      "required": [
-        "schema_version",
-        "task_id",
-        "result",
-        "limitations"
-      ],
-      "type": "object"
-    },
     "matrix4": {
       "items": {
         "$ref": "#/$defs/row4"
@@ -153,28 +126,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
+    "result": {
+      "$ref": "#/$defs/result"
     },
-    "completeness": {
-      "enum": [
-        "COMPLETE",
-        "PARTIAL",
-        "UNKNOWN"
-      ]
-    },
-    "conclusion": {
-      "enum": [
-        "LOCAL_SLICE_CERTIFIED",
-        "INSUFFICIENT_EVIDENCE"
-      ]
-    },
-    "evidence": {
+    "witness": {
       "items": {
         "additionalProperties": false,
         "properties": {
@@ -195,33 +150,11 @@
       "maxItems": 1,
       "minItems": 1,
       "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "REMAINING_31X31_BLOCK_ENTRIES_AND_FIVE_BLOCKS_NOT_CHECKED",
-        "FULL_FARKAS_AND_LEAN_THEOREM_NOT_ESTABLISHED"
-      ]
-    },
-    "result": {
-      "$ref": "#/$defs/result"
-    },
-    "scope": {
-      "const": "SCALAR_SIGNS_AND_ONE_4X4_PRINCIPAL_SUBMATRIX_ONLY",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/exact-farkas-ldl-slice"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

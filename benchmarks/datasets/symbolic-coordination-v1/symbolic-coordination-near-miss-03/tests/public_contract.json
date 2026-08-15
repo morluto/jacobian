@@ -1,20 +1,4 @@
 {
-  "allowed_assurance": [
-    "UNVERIFIED",
-    "COMPUTED",
-    "CHECKED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE"
-  ],
-  "assurance_ceiling": "CHECKED",
-  "conclusion": {
-    "enum": [
-      "TRUE",
-      "FALSE",
-      "UNKNOWN"
-    ]
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/certificate.json"
@@ -26,12 +10,7 @@
     ],
     "min_items": 1
   },
-  "limitations": {
-    "const": [
-      "NO_CLAIM_BEYOND_SUPPLIED_CANDIDATE_AND_EXACT_QQ_COMPOSITIONS"
-    ]
-  },
-  "public_notes": "Write evidence/certificate.json as a JSON wrapper with exactly these fields: schema_version (the string \\\"1\\\"), task_id (the string \\\"jacobian/symbolic-coordination-near-miss-03\\\"), result (an exact copy of the submission result object), scope (an exact copy of the submission scope), completeness (an exact copy of the submission completeness), and limitations (an exact copy of the submission limitations). Bind that exact regular file by SHA-256. The verifier independently checks the mathematics, input and artifact identities, declared scope, completeness, and assurance.",
+  "public_notes": "Write evidence/certificate.json as a JSON wrapper with exactly these fields: schema_version (the string \\\"1\\\"), task_id (the string \\\"jacobian/symbolic-coordination-near-miss-03\\\"), result (an exact copy of the submission result object). Bind that exact regular file by SHA-256. The verifier independently replays the mathematics and checks the input, artifact, and witness identities.",
   "required_artifact_filenames": [
     "evidence/certificate.json"
   ],
@@ -155,10 +134,6 @@
     }
   },
   "schema_version": "1",
-  "scope": {
-    "const": "EXACT_TWO_SIDED_COMPOSITION_OVER_QQ:symbolic-coordination-near-miss-03",
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
     "additionalProperties": false,
@@ -178,21 +153,17 @@
           "forward_map_sha256": {
             "const": "sha256:4415ca8e3e9e95bcbd9a2449cd2e14747f2c6e64b18e9240d52b71136cbe8a80"
           },
-          "scope_id": {
-            "const": "scope://symbolic-coordination-v1/symbolic-coordination-near-miss-03"
-          },
           "semantics_id": {
             "const": "exact-sparse-polynomial-maps-over-QQ@1"
           },
           "subject_sha256": {
-            "const": "sha256:e6b583a5a8142a9bf0daff76d487312631c62cfbca70b52ae07b2741767c0c0b"
+            "const": "sha256:374ca30dda9499f311d7d82ac5e11dfe5ffad721957b75db0298f16ae3bffbda"
           }
         },
         "required": [
           "binding_schema_version",
           "claim_id",
           "semantics_id",
-          "scope_id",
           "forward_map_sha256",
           "subject_sha256",
           "checker_id"
@@ -534,51 +505,6 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
-      },
-      "completeness": {
-        "const": "COMPLETE"
-      },
-      "conclusion": {
-        "enum": [
-          "TRUE",
-          "FALSE",
-          "UNKNOWN"
-        ]
-      },
-      "evidence": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/certificate.json"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
-      },
-      "limitations": {
-        "const": [
-          "NO_CLAIM_BEYOND_SUPPLIED_CANDIDATE_AND_EXACT_QQ_COMPOSITIONS"
-        ]
-      },
       "result": {
         "additionalProperties": false,
         "properties": {
@@ -597,21 +523,17 @@
               "forward_map_sha256": {
                 "const": "sha256:4415ca8e3e9e95bcbd9a2449cd2e14747f2c6e64b18e9240d52b71136cbe8a80"
               },
-              "scope_id": {
-                "const": "scope://symbolic-coordination-v1/symbolic-coordination-near-miss-03"
-              },
               "semantics_id": {
                 "const": "exact-sparse-polynomial-maps-over-QQ@1"
               },
               "subject_sha256": {
-                "const": "sha256:e6b583a5a8142a9bf0daff76d487312631c62cfbca70b52ae07b2741767c0c0b"
+                "const": "sha256:374ca30dda9499f311d7d82ac5e11dfe5ffad721957b75db0298f16ae3bffbda"
               }
             },
             "required": [
               "binding_schema_version",
               "claim_id",
               "semantics_id",
-              "scope_id",
               "forward_map_sha256",
               "subject_sha256",
               "checker_id"
@@ -830,23 +752,32 @@
         ],
         "type": "object"
       },
-      "scope": {
-        "const": "EXACT_TWO_SIDED_COMPOSITION_OVER_QQ:symbolic-coordination-near-miss-03",
-        "type": "string"
-      },
-      "task_id": {
-        "const": "jacobian/symbolic-coordination-near-miss-03"
+      "witness": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/certificate.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
   },

@@ -9,7 +9,7 @@ compute exact witnesses (counts, domination numbers, bound checks) over that
 family, and binds the result through a digest-bound evidence artifact. The
 verifier independently recomputes every value from the frozen input using only
 the Python standard library and rejects malformed submissions, false
-certification, and incomplete scope. Probes are capped at `CHECKED` assurance:
+certification, and incomplete scope. Probes are capped at `COMPUTED` assurance:
 the verifier checks the finite certificate, but a bounded probe is never a proof
 of the open conjecture.
 

@@ -91,7 +91,7 @@ def test_suite_loads_tasks_when_suite_toml_exists(
 # ---------------------------------------------------------------------------
 
 
-def test_suite_parses_tasks_with_assurance_ceiling(
+def test_suite_parses_tasks_without_assurance_ceiling(
     tmp_path: Path, patched_root: Path
 ) -> None:
     ds_path = tmp_path / "test-v1"
@@ -103,7 +103,6 @@ def test_suite_parses_tasks_with_assurance_ceiling(
         tasks=[
             {
                 "id": "jacobian/test-v1-a",
-                "assurance_ceiling": "COMPUTED",
                 "required_provider": "core",
             }
         ],
@@ -114,31 +113,7 @@ def test_suite_parses_tasks_with_assurance_ceiling(
     )
     suite = load_registry(reg)[0]
     assert suite.tasks[0].name == "jacobian/test-v1-a"
-    assert suite.tasks[0].maximum_assurance == "COMPUTED"
     assert suite.tasks[0].required_provider == "core"
-
-
-def test_suite_parses_verified_ceiling(tmp_path: Path, patched_root: Path) -> None:
-    ds_path = tmp_path / "test-v1"
-    _make_canonical_task(tmp_path)
-    (ds_path / "jobs").mkdir()
-    (ds_path / "jobs" / "oracle.json").write_text("{}")
-    _write_suite_toml(
-        ds_path / "suite.toml",
-        tasks=[
-            {
-                "id": "jacobian/test-v1-a",
-                "assurance_ceiling": "VERIFIED",
-                "required_provider": "core",
-            }
-        ],
-    )
-    reg = _write_registry(
-        tmp_path,
-        [_make_dataset_entry("jacobian/test-v1", ds_path)],
-    )
-    suite = load_registry(reg)[0]
-    assert suite.tasks[0].maximum_assurance == "VERIFIED"
 
 
 def test_suite_allows_empty_tasks(tmp_path: Path, patched_root: Path) -> None:
@@ -260,11 +235,6 @@ def test_registry_rejects_unowned_direct_task_bundle(
 
     with pytest.raises(HarborSuiteError, match=r"not assigned in members"):
         load_registry(reg)
-
-
-def test_committed_provider_suite_has_provider_tasks() -> None:
-    suite = get_suite("jacobian/provider-feasibility-v1")
-    assert suite.tasks
 
 
 def test_committed_examples_suite_allows_empty_tasks() -> None:

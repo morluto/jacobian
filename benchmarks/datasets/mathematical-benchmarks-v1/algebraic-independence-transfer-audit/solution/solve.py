@@ -38,15 +38,7 @@ Path("/app/evidence").mkdir(parents=True, exist_ok=True)
 Path("/app/evidence/answer.txt").write_text(text)
 digest = hashlib.sha256(text.encode()).hexdigest()
 submission = {
-    "task_id": "jacobian/algebraic-independence-transfer-audit",
-    "conclusion": "EXPLICIT_TRANSFER_CHAIN_REPAIRS_COMPRESSED_PROOF",
     "result": result,
-    "claimed_assurance": "COMPUTED",
-    "scope": "exact-birational-and-quadratic-transfer-over-QQ",
-    "completeness": "COMPLETE",
-    "evidence": [{"path": "evidence/answer.txt", "sha256": f"sha256:{digest}"}],
-    "limitations": [
-        "The external algebraic-independence theorem for delta and its derivatives is a trusted premise and is not verified here."
-    ],
+    "witness": [{"path": "evidence/answer.txt", "sha256": f"sha256:{digest}"}],
 }
 Path("/app/submission.json").write_text(json.dumps(submission, indent=2) + "\n")

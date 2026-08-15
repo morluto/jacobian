@@ -1,20 +1,4 @@
 {
-  "allowed_assurance": [
-    "UNVERIFIED",
-    "COMPUTED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE",
-    "PARTIAL",
-    "UNKNOWN"
-  ],
-  "assurance_ceiling": "COMPUTED",
-  "conclusion": {
-    "enum": [
-      "MIN_RANK_ARGUMENT_REFUTED",
-      "INSUFFICIENT_EVIDENCE"
-    ]
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/matrix-completion.json"
@@ -27,13 +11,7 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "limitations": {
-    "const": [
-      "SOURCE_2025_DIMENSION_OPTIMUM_NOT_ASSESSED",
-      "ONLY_SUBMITTED_FINITE_COMPLETIONS_CHECKED"
-    ]
-  },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.",
   "required_artifact_filenames": [
     "evidence/matrix-completion.json"
   ],
@@ -91,12 +69,6 @@
     }
   },
   "schema_version": "1",
-  "scope": {
-    "const": "SUBMITTED_FINITE_GF2_PATTERN_AND_COMPLETIONS",
-    "enum": null,
-    "pattern": null,
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
     "$ref": "#/$defs/result"
@@ -158,28 +130,10 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
+      "result": {
+        "$ref": "#/$defs/result"
       },
-      "completeness": {
-        "enum": [
-          "COMPLETE",
-          "PARTIAL",
-          "UNKNOWN"
-        ]
-      },
-      "conclusion": {
-        "enum": [
-          "MIN_RANK_ARGUMENT_REFUTED",
-          "INSUFFICIENT_EVIDENCE"
-        ]
-      },
-      "evidence": {
+      "witness": {
         "items": {
           "additionalProperties": false,
           "properties": {
@@ -200,36 +154,13 @@
         "maxItems": 1,
         "minItems": 1,
         "type": "array"
-      },
-      "limitations": {
-        "const": [
-          "SOURCE_2025_DIMENSION_OPTIMUM_NOT_ASSESSED",
-          "ONLY_SUBMITTED_FINITE_COMPLETIONS_CHECKED"
-        ]
-      },
-      "result": {
-        "$ref": "#/$defs/result"
-      },
-      "scope": {
-        "const": "SUBMITTED_FINITE_GF2_PATTERN_AND_COMPLETIONS",
-        "type": "string"
-      },
-      "task_id": {
-        "const": "jacobian/gf2-matrix-completion-quantifier-audit"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
   },
-  "task_id": "jacobian/gf2-matrix-completion-quantifier-audit",
-  "verification_record": null
+  "task_id": "jacobian/gf2-matrix-completion-quantifier-audit"
 }

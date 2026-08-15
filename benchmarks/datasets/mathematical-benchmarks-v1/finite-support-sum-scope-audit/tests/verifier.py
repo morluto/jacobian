@@ -4,11 +4,10 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W, E = Path("/app"), Path("/tests")
@@ -102,54 +101,32 @@ def _frozen_ok():
 def main():
     submission = load_submission()
     expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
-    result = submission.get("result") if contract else None
+    result = submission.get("result") if isinstance(submission, dict) else None
     math_ok = bool(_result_ok(result) and _frozen_ok())
-    evidence = (
+    witness = (
         read_evidence_json(
-            submission["evidence"][0], expected_path="evidence/scope-audit.json"
+            submission["witness"][0], expected_path="evidence/scope-audit.json"
         )
-        if contract
-        and isinstance(submission.get("evidence"), list)
-        and len(submission["evidence"]) == 1
+        if isinstance(submission, dict)
+        and isinstance(submission.get("witness"), list)
+        and len(submission["witness"]) == 1
         else None
     )
-    evidence_ok = bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
-        and evidence["schema_version"] == "1"
-        and evidence["task_id"] == expected["task_id"]
-        and evidence["result"] == result
-        and evidence["limitations"] == submission.get("limitations")
+    witness_ok = bool(
+        witness
+        and set(witness) == {"schema_version", "task_id", "result"}
+        and witness["schema_version"] == "1"
+        and witness["task_id"] == expected["task_id"]
+        and json_value_equal(witness["result"], result)
     )
-    scope_ok = bool(
-        contract
-        and submission.get("scope") == "ORIGINAL_DOMAIN_AUDIT_AND_TRUNCATED_REPAIR"
-        and submission.get("limitations")
-        == [
-            "ORIGINAL_SUM_TREATED_AS_NONNEGATIVE_EXTENDED_SUM",
-            "TRUNCATED_LIMIT_USES_ELEMENTARY_GEOMETRIC_CONTRACTION",
-        ]
-    )
-    assurance_ok = bool(contract and submission.get("claimed_assurance") == "COMPUTED")
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
-    correct = math_ok and evidence_ok and scope_ok and not false_cert
+    correct = math_ok and witness_ok
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
+                "witness_validity": float(witness_ok),
                 "reward": float(correct),
-                "false_certification": false_cert,
             }
         )
     )

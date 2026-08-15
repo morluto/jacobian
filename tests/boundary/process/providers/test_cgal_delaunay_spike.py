@@ -14,24 +14,15 @@ from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStat
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 SPIKE = runpy.run_path(
-    str(
-        PROJECT_ROOT
-        / "benchmarks"
-        / "datasets"
-        / "provider-feasibility-v1"
-        / "cgal"
-        / "environment"
-        / "spike.py"
-    )
+    str(PROJECT_ROOT / "tests" / "fixtures" / "providers" / "cgal" / "spike.py")
 )
 BASE_PIN = json.loads(
     (
         PROJECT_ROOT
-        / "benchmarks"
-        / "datasets"
-        / "provider-feasibility-v1"
+        / "tests"
+        / "fixtures"
+        / "providers"
         / "cgal"
-        / "environment"
         / "cgal_delaunay_pin.json"
     ).read_text(encoding="utf-8")
 )

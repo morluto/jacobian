@@ -13,7 +13,7 @@ square away the sign or use decimal tolerance.
 
 The shortcut audit rejects label-only repair claims, partial edge checks,
 floating-point evidence, and the public standard edge list without a complete
-corrupted-state diagnosis. Full reward is `CHECKED` for this embedding only.
+corrupted-state diagnosis. Full reward is `COMPUTED` for this embedding only.
 
 Source: SageMath's pinned `MoserSpindle` exact embedding and the retained
 conjecture inventory row C-009. The authored corruption is not a claim about

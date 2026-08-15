@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="7d5eea7f5f65957f7e4b35602fc1c742263debc54d689b69576b2c0a7db3b752"
+LABEL jacobian.checksum="6657d2ce76b1df71c970131028331aabd99babe13ca6823b61d18498dbd3b0cd"
 LABEL jacobian.task="jacobian/dead-end-local-density-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

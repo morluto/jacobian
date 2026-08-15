@@ -23,10 +23,10 @@ def _write_task(
         !tooling/
         !tooling/command_runner.py
         !datasets/
-        !datasets/provider-feasibility-v1/
-        !datasets/provider-feasibility-v1/*/
-        !datasets/provider-feasibility-v1/*/environment/
-        !datasets/provider-feasibility-v1/*/environment/**
+        !datasets/mathematical-benchmarks-v1/
+        !datasets/mathematical-benchmarks-v1/*/
+        !datasets/mathematical-benchmarks-v1/*/environment/
+        !datasets/mathematical-benchmarks-v1/*/environment/**
         """
     ),
     command_runner: bytes = b"# canonical runner\n",
@@ -34,7 +34,7 @@ def _write_task(
     """Build a minimal task tree with a widened compose build context."""
 
     benchmarks = tmp_path / "benchmarks"
-    task_dir = benchmarks / "datasets" / "provider-feasibility-v1" / "test-task"
+    task_dir = benchmarks / "datasets" / "mathematical-benchmarks-v1" / "test-task"
     env = task_dir / "environment"
     env.mkdir(parents=True, exist_ok=True)
     (env / "Dockerfile").write_text(
@@ -50,7 +50,7 @@ def _write_task(
               main:
                 build:
                   context: {context}
-                  dockerfile: datasets/provider-feasibility-v1/test-task/environment/Dockerfile
+                  dockerfile: datasets/mathematical-benchmarks-v1/test-task/environment/Dockerfile
             """
         ),
         encoding="utf-8",
@@ -94,7 +94,11 @@ def test_compose_context_supplement_binds_runner_content(tmp_path: Path) -> None
     assert digest_a.startswith("sha256:")
     _write_task(tmp_path, command_runner=b"# version B\n")
     task_dir2 = (
-        tmp_path / "benchmarks" / "datasets" / "provider-feasibility-v1" / "test-task"
+        tmp_path
+        / "benchmarks"
+        / "datasets"
+        / "mathematical-benchmarks-v1"
+        / "test-task"
     )
     digest_b = compose_context_supplement(task_dir2)
     assert digest_b is not None

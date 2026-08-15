@@ -1,4 +1,0 @@
-Written on the Wall II Conjecture 194: discover an 18-vertex obstruction
-
-Expected conclusion: COUNTEREXAMPLE_EXISTS.
-Oracle summary: One 18-vertex witness starts with a clique on 0 through 10, adds vertices 11 through 14 adjacent to every clique vertex, and attaches one leaf to each of 11, 12, and 14. It has alpha=4 and l_avg=3, while three leaves force any putative Hamiltonian path to have at least three endpoints.

@@ -9,11 +9,6 @@ TASK_ID = "jacobian/thrackle-local-maximality-certificate"
 POINTS = [(0, 0), (4, 0), (5, 3), (2, 5), (-1, 3)]
 ALL = list(combinations(range(5), 2))
 SELECTED = [(0, 2), (0, 3), (1, 3), (1, 4), (2, 4)]
-LIMITATIONS = [
-    "ONE_FIVE_POINT_CONFIGURATION",
-    "LOCAL_MAXIMALITY_INSIDE_FROZEN_K5",
-    "THRACKLE_CONJECTURE_NOT_ASSESSED",
-]
 
 
 def orient(a, b, c):
@@ -58,7 +53,6 @@ def main():
         "schema_version": "1",
         "task_id": TASK_ID,
         "result": result,
-        "limitations": LIMITATIONS,
     }
     evidence = root / "evidence/answer.json"
     evidence.parent.mkdir(parents=True, exist_ok=True)
@@ -66,19 +60,13 @@ def main():
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
     )
     submission = {
-        "task_id": TASK_ID,
-        "conclusion": "LOCAL_THRACKLE_CERTIFIED",
         "result": result,
-        "claimed_assurance": "CHECKED",
-        "scope": "five-point-thrackle-local-maximality-v1",
-        "completeness": "COMPLETE",
-        "evidence": [
+        "witness": [
             {
                 "path": "evidence/answer.json",
                 "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
             }
         ],
-        "limitations": LIMITATIONS,
     }
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 

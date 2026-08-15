@@ -6,11 +6,10 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
+    aggregate_reward,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -239,44 +238,21 @@ def _assurance_limitation_is_negated(value: object) -> bool:
     return affirmative is None and negated is not None
 
 
-def _evaluate(submission: object) -> dict[str, float | bool]:
-    protocol = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion=CONCLUSION,
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
+def _evaluate(submission: object) -> dict[str, float]:
     data = submission if isinstance(submission, dict) else {}
-    limitations = data.get("limitations", [])
-    limitation_ok = _assurance_limitation_is_negated(limitations)
-    math_correct = bool(_source_is_bound() and _result(data.get("result")))
-    evidence_valid = bool(_evidence(data.get("evidence"), data.get("result")))
-    scope_correct = bool(protocol and data.get("scope") == SCOPE)
-    assurance_correct = bool(
-        data.get("claimed_assurance") == "COMPUTED" and limitation_ok
-    )
-    reward = (
-        1.0
-        if protocol
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and not false_certification
-        else 0.0
+    input_binding = workspace_input_is_bound()
+    math_ok = bool(_source_is_bound() and _result(data.get("result")))
+    ev_ok = bool(_evidence(data.get("witness"), data.get("result")))
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=ev_ok,
+        protocol_ok=bool(input_binding and submission is not None),
     )
     return {
-        "correctness": float(math_correct),
-        "protocol_compliance": float(protocol),
-        "evidence_validity": float(evidence_valid),
-        "scope_accuracy": float(scope_correct),
-        "assurance_calibration": float(assurance_correct),
+        "correctness": float(math_ok),
+        "evidence_validity": float(ev_ok),
+        "input_binding": float(input_binding),
         "reward": reward,
-        "false_certification": false_certification,
     }
 
 

@@ -37,7 +37,6 @@ def _suite_inventory(suite: Suite) -> dict[str, Any]:
             "domain",
             "primary_domain",
             "field",
-            "assurance_ceiling",
             "answer_visibility",
             "provenance_class",
             "required_provider",

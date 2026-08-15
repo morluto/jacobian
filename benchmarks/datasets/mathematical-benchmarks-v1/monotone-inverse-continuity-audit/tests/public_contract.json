@@ -1,29 +1,54 @@
 {
-  "schema_version": "1",
-  "task_id": "jacobian/monotone-inverse-continuity-audit",
-  "submission_path": "/app/submission.json",
-  "assurance_ceiling": "COMPUTED",
-  "allowed_assurance": ["UNVERIFIED", "COMPUTED"],
-  "allowed_completeness": ["COMPLETE"],
-  "conclusion": {"const": "CONTINUITY_IS_NECESSARY"},
-  "scope": {
-    "type": "string",
-    "const": "DECLARED_PIECEWISE_RATIONAL_FAMILY_ON_CLOSED_INTERVAL"
-  },
   "evidence": {
-    "min_items": 1,
-    "max_items": 1,
-    "allowed_paths": ["evidence/answer.txt"],
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
     "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "media_types": ["text/plain"],
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
     "payload_shape": null
   },
-  "verification_record": null,
-  "required_artifact_filenames": ["evidence/answer.txt"],
   "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. Evidence prose must explain that both branches are strictly increasing, the positive jump creates an omitted image gap, and the gap witness has no preimage, so the full-interval inverse conclusion fails; RESULT_JSON binds the submitted values but does not replace this derivation.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
+  "schema_version": "1",
+  "submission_path": "/app/submission.json",
   "submission_result": {
-    "type": "object",
     "additionalProperties": false,
+    "properties": {
+      "gap_witness": {
+        "type": "string"
+      },
+      "jump": {
+        "type": "string"
+      },
+      "left_endpoint_value": {
+        "type": "string"
+      },
+      "left_limit": {
+        "type": "string"
+      },
+      "left_slope": {
+        "type": "string"
+      },
+      "offset": {
+        "type": "string"
+      },
+      "right_breakpoint_value": {
+        "type": "string"
+      },
+      "right_endpoint_value": {
+        "type": "string"
+      },
+      "right_slope": {
+        "type": "string"
+      }
+    },
     "required": [
       "left_slope",
       "right_slope",
@@ -35,47 +60,43 @@
       "right_endpoint_value",
       "gap_witness"
     ],
-    "properties": {
-      "left_slope": {"type": "string"},
-      "right_slope": {"type": "string"},
-      "offset": {"type": "string"},
-      "jump": {"type": "string"},
-      "left_endpoint_value": {"type": "string"},
-      "left_limit": {"type": "string"},
-      "right_breakpoint_value": {"type": "string"},
-      "right_endpoint_value": {"type": "string"},
-      "gap_witness": {"type": "string"}
-    }
+    "type": "object"
   },
-  "limitations": {
-    "type": "array",
-    "minItems": 1,
-    "maxItems": 1,
-    "items": {
-      "const": "The certificate covers only the declared piecewise rational family and does not machine-check the source Lean declaration."
-    }
-  },
-  "schema_definitions": {},
   "submission_schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "type": "object",
     "additionalProperties": false,
-    "required": [
-      "task_id",
-      "conclusion",
-      "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
-    ],
     "properties": {
-      "task_id": {"const": "jacobian/monotone-inverse-continuity-audit"},
-      "conclusion": {"const": "CONTINUITY_IS_NECESSARY"},
       "result": {
-        "type": "object",
         "additionalProperties": false,
+        "properties": {
+          "gap_witness": {
+            "type": "string"
+          },
+          "jump": {
+            "type": "string"
+          },
+          "left_endpoint_value": {
+            "type": "string"
+          },
+          "left_limit": {
+            "type": "string"
+          },
+          "left_slope": {
+            "type": "string"
+          },
+          "offset": {
+            "type": "string"
+          },
+          "right_breakpoint_value": {
+            "type": "string"
+          },
+          "right_endpoint_value": {
+            "type": "string"
+          },
+          "right_slope": {
+            "type": "string"
+          }
+        },
         "required": [
           "left_slope",
           "right_slope",
@@ -87,51 +108,36 @@
           "right_endpoint_value",
           "gap_witness"
         ],
-        "properties": {
-          "left_slope": {"type": "string"},
-          "right_slope": {"type": "string"},
-          "offset": {"type": "string"},
-          "jump": {"type": "string"},
-          "left_endpoint_value": {"type": "string"},
-          "left_limit": {"type": "string"},
-          "right_breakpoint_value": {"type": "string"},
-          "right_endpoint_value": {"type": "string"},
-          "gap_witness": {"type": "string"}
-        }
+        "type": "object"
       },
-      "claimed_assurance": {
-        "enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]
-      },
-      "scope": {
-        "type": "string",
-        "const": "DECLARED_PIECEWISE_RATIONAL_FAMILY_ON_CLOSED_INTERVAL"
-      },
-      "completeness": {"const": "COMPLETE"},
-      "evidence": {
-        "type": "array",
-        "minItems": 1,
-        "maxItems": 1,
+      "witness": {
         "items": {
-          "type": "object",
           "additionalProperties": false,
-          "required": ["path", "sha256"],
           "properties": {
-            "path": {"const": "evidence/answer.txt"},
+            "path": {
+              "const": "evidence/answer.txt"
+            },
             "sha256": {
-              "type": "string",
-              "pattern": "^sha256:[0-9a-f]{64}$"
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
             }
-          }
-        }
-      },
-      "limitations": {
-        "type": "array",
-        "minItems": 1,
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
         "maxItems": 1,
-        "items": {
-          "const": "The certificate covers only the declared piecewise rational family and does not machine-check the source Lean declaration."
-        }
+        "minItems": 1,
+        "type": "array"
       }
-    }
-  }
+    },
+    "required": [
+      "result",
+      "witness"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/monotone-inverse-continuity-audit"
 }

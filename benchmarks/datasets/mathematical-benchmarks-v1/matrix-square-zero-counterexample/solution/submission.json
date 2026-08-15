@@ -1,1 +1,20 @@
-{"task_id":"jacobian/matrix-square-zero-counterexample","conclusion":"FALSE","result":{"matrix":[[0,1],[0,0]]},"claimed_assurance":"COMPUTED","scope":"matrix-square-zero-counterexample exact integer witness","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:daa2b36244b1b01e0f100dc057d2fe077d75d9be2db7df26a1fc1ae10f91c3b2"}],"limitations":["The witness refutes the claim without classifying all square-zero matrices."]}
+{
+  "result": {
+    "matrix": [
+      [
+        0,
+        1
+      ],
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:daa2b36244b1b01e0f100dc057d2fe077d75d9be2db7df26a1fc1ae10f91c3b2"
+    }
+  ]
+}

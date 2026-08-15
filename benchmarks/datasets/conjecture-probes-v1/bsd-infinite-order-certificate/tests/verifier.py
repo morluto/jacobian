@@ -9,22 +9,16 @@ from typing import Any
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    evidence_list_is_bound,
     is_regular_bounded_file,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
+    resolve_evidence,
     workspace_input_is_bound,
 )
 
 TASK_ID = "jacobian/bsd-infinite-order-certificate"
-SCOPE = "integral-lutz-nagell-witness-v1"
-LIMITATIONS = [
-    "ONE_AUTHORED_ELLIPTIC_CURVE",
-    "LUTZ_NAGELL_TRUSTED",
-    "NO_BSD_CONCLUSION",
-]
 
 
 def _rat(value: object) -> Fraction:
@@ -134,70 +128,38 @@ def _raw_submission() -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
+def _witness_matches_result(witness: object, result: object) -> bool:
+    if not isinstance(witness, list) or len(witness) != 1:
+        return False
+    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
+    if target is None:
+        return False
+    payload = read_evidence_json(witness[0], expected_path="evidence/answer.txt")
+    return bool(
+        isinstance(payload, dict)
+        and set(payload) == {"schema_version", "task_id", "result"}
+        and payload.get("schema_version") == "1"
+        and payload.get("task_id") == TASK_ID
+        and json_value_equal(payload.get("result"), result)
+    )
+
+
 def main() -> None:
     input_bound = workspace_input_is_bound()
     submission = load_submission(require_input_binding=False)
-    contract = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion="ELLIPTIC_POINT_INFINITE_ORDER_CERTIFICATE",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
+    protocol = isinstance(submission, dict)
+    mathematics = bool(protocol and _mathematics(submission.get("result")))
+    witness = bool(
+        protocol
+        and _witness_matches_result(submission.get("witness"), submission.get("result"))
     )
-    mathematics = bool(
-        isinstance(submission, dict) and _mathematics(submission.get("result"))
-    )
-    evidence = bool(
-        isinstance(submission, dict)
-        and evidence_list_is_bound(submission.get("evidence"), max_bytes=None)
-    )
-    payload = (
-        read_evidence_json(
-            submission["evidence"][0],
-            expected_path="evidence/answer.txt",
-            max_bytes=None,
-        )
-        if evidence
-        else None
-    )
-    evidence = bool(
-        isinstance(payload, dict)
-        and payload
-        == {
-            "schema_version": "1",
-            "task_id": TASK_ID,
-            "result": submission.get("result"),
-            "limitations": LIMITATIONS,
-        }
-    )
-    scope = bool(
-        isinstance(submission, dict)
-        and submission.get("scope") == SCOPE
-        and submission.get("limitations") == LIMITATIONS
-    )
-    assurance = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "CHECKED"
-    )
-    raw = _raw_submission()
-    false_certification = bool(
-        isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
-    )
-    aggregate = (
-        1.0
-        if all((input_bound, contract, mathematics, evidence, scope, assurance))
-        and not false_certification
-        else 0.0
-    )
+    aggregate = float(input_bound and protocol and mathematics and witness)
     _reward(
         {
-            "protocol": 1.0 if contract else 0.0,
+            "protocol": float(protocol),
             "input_binding": 1.0 if input_bound else 0.0,
             "mathematics": 1.0 if mathematics else 0.0,
-            "evidence": 1.0 if evidence else 0.0,
-            "scope": 1.0 if scope else 0.0,
-            "assurance": 1.0 if assurance else 0.0,
-            "false_certification": false_certification,
+            "witness_validity": float(witness),
             "aggregate_reward": aggregate,
             "reward": aggregate,
         }
@@ -213,10 +175,7 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "evidence": 0.0,
-                "scope": 0.0,
-                "assurance": 0.0,
-                "false_certification": False,
+                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

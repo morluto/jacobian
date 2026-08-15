@@ -1,79 +1,7 @@
 {
-  "$defs": {
-    "evidenceContent": {
-      "additionalProperties": false,
-      "description": "Required shape of the JSON object stored in evidence/answer.txt; the verifier enforces this exact four-key contract.",
-      "properties": {
-        "limitations": {
-          "const": [
-            "FINITE_LENGTH_16_INSTANCE",
-            "NO_GENERAL_ENUMERATION_THEOREM"
-          ]
-        },
-        "result": {
-          "description": "The same result object placed in submission.json."
-        },
-        "schema_version": {
-          "const": "1"
-        },
-        "task_id": {
-          "const": "jacobian/necklace-burnside-certificate"
-        }
-      },
-      "required": [
-        "schema_version",
-        "task_id",
-        "result",
-        "limitations"
-      ],
-      "type": "object"
-    }
-  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
-    },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "conclusion": {
-      "const": "DIHEDRAL_ORBITS_ENUMERATED"
-    },
-    "evidence": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "const": "evidence/answer.txt"
-          },
-          "sha256": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "type": "object"
-      },
-      "maxItems": 1,
-      "minItems": 1,
-      "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "FINITE_LENGTH_16_INSTANCE",
-        "NO_GENERAL_ENUMERATION_THEOREM"
-      ]
-    },
     "result": {
       "additionalProperties": false,
       "properties": {
@@ -133,23 +61,32 @@
       ],
       "type": "object"
     },
-    "scope": {
-      "const": "ALL_LENGTH_16_BINARY_WORDS_AND_ALL_32_DIHEDRAL_ACTIONS",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/necklace-burnside-certificate"
+    "witness": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/answer.txt"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

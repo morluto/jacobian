@@ -33,19 +33,13 @@ epath = Path("/app/evidence/precedence-audit.json")
 epath.parent.mkdir(parents=True, exist_ok=True)
 epath.write_text(json.dumps(evidence, separators=(",", ":")))
 submission = {
-    "task_id": evidence["task_id"],
-    "conclusion": "FORMALIZATION_CHANGES_SEMANTICS",
     "result": result,
-    "claimed_assurance": "COMPUTED",
-    "scope": "EXACT_RATIONAL_PARAMETRIC_COUNTERMODEL_TO_FORMAL_EXPRESSION",
-    "completeness": "COMPLETE",
-    "evidence": [
+    "witness": [
         {
             "path": "evidence/precedence-audit.json",
             "sha256": "sha256:" + hashlib.sha256(epath.read_bytes()).hexdigest(),
         }
     ],
-    "limitations": limitations,
 }
 Path("/app/submission.json").write_text(json.dumps(submission, indent=2) + "\n")
 Path("/app/answer.txt").write_text(

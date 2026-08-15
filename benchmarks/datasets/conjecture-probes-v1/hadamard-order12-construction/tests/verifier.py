@@ -7,17 +7,16 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
-TASK_ID = "jacobian/hadamard-order12-construction"
 SCOPE = "hadamard-order12-construction:normalized-v1"
-LIMITATIONS = ["ORDER_12_ONLY", "NO_GENERAL_HADAMARD_CONJECTURE_CONCLUSION"]
 
 
 def _determinant(matrix: list[list[int]]) -> int:
@@ -47,20 +46,6 @@ def _determinant(matrix: list[list[int]]) -> int:
             work[row][pivot_index] = 0
         previous = pivot
     return sign * work[-1][-1]
-
-
-def _frozen() -> dict[str, Any] | None:
-    try:
-        value = json.loads(Path("/tests/input.json").read_text())
-    except (OSError, json.JSONDecodeError):
-        return None
-    return (
-        value
-        if isinstance(value, dict)
-        and value.get("task_id") == TASK_ID
-        and value.get("order") == 12
-        else None
-    )
 
 
 def _mathematics(result: Any) -> bool:
@@ -121,27 +106,15 @@ def _reward(value: dict[str, Any]) -> None:
 
 def main() -> None:
     input_bound = workspace_input_is_bound()
-    frozen = _frozen() if input_bound else None
     submission = load_submission(require_input_binding=False)
-    contract = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion="HADAMARD_ORDER12_CONSTRUCTION",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
-    )
+    protocol_ok = submission is not None
     mathematics = bool(
-        frozen
-        and isinstance(submission, dict)
-        and _mathematics(submission.get("result"))
+        protocol_ok and input_bound and _mathematics(submission.get("result"))
     )
-    evidence = bool(
-        isinstance(submission, dict)
-        and evidence_list_is_bound(submission.get("evidence"))
-    )
+    evidence = bool(protocol_ok and evidence_list_is_bound(submission.get("witness")))
     payload = (
         read_evidence_json(
-            submission["evidence"][0],
+            submission["witness"][0],
             expected_path="evidence/answer.txt",
         )
         if evidence
@@ -149,47 +122,21 @@ def main() -> None:
     )
     evidence = bool(
         isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
         and payload.get("schema_version") == "1"
-        and payload.get("task_id") == TASK_ID
-        and payload.get("result") == submission.get("result")
-        and payload.get("limitations") == LIMITATIONS
+        and json_value_equal(payload.get("result"), submission.get("result"))
     )
-    scope = bool(
-        isinstance(submission, dict)
-        and submission.get("scope") == SCOPE
-        and submission.get("limitations") == LIMITATIONS
-    )
-    scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
-    assurance = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") in scoreable_assurances
-    )
-    false_certification = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "VERIFIED"
-    )
-    aggregate = (
-        1.0
-        if all((input_bound, contract, mathematics, evidence, scope, assurance))
-        and not false_certification
-        else 0.0
+    reward = aggregate_reward(
+        correctness=mathematics,
+        evidence_validity=evidence,
+        protocol_ok=protocol_ok and input_bound,
     )
     _reward(
         {
-            "protocol": float(contract),
+            "protocol_compliance": float(protocol_ok),
             "input_binding": float(input_bound),
-            "mathematics": float(mathematics),
-            "evidence": float(evidence),
-            "scope": float(scope),
-            "assurance": float(assurance),
-            "false_certification": false_certification,
-            "aggregate_reward": aggregate,
-            "reward": aggregate,
-            "correctness": 1.0 if mathematics else 0.0,
-            "evidence_validity": 1.0 if evidence else 0.0,
-            "scope_accuracy": 1.0 if scope else 0.0,
-            "assurance_calibration": 1.0 if assurance else 0.0,
+            "correctness": float(mathematics),
+            "evidence_validity": float(evidence),
+            "reward": reward,
         }
     )
 
@@ -200,19 +147,11 @@ if __name__ == "__main__":
     except BaseException as exc:
         _reward(
             {
-                "protocol": 0.0,
+                "protocol_compliance": 0.0,
                 "input_binding": 0.0,
-                "mathematics": 0.0,
-                "evidence": 0.0,
-                "scope": 0.0,
-                "assurance": 0.0,
-                "false_certification": False,
-                "aggregate_reward": 0.0,
-                "reward": 0.0,
                 "correctness": 0.0,
                 "evidence_validity": 0.0,
-                "scope_accuracy": 0.0,
-                "assurance_calibration": 0.0,
+                "reward": 0.0,
                 "error": type(exc).__name__,
             }
         )

@@ -1,4 +1,0 @@
-Exact LP certificate for the pairwise-independent correlation-gap counterexample
-
-Expected conclusion: DISPROVED.
-Oracle summary: The three primal masses have the required marginals and every support set covers all four features, so f+=4. The listed quadratic dual dominates f on all 32 subsets and has objective 479/160. Therefore the ratio is at least 640/479, which is strictly larger than 4/3.

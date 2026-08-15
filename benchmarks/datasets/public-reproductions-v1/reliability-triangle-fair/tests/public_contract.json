@@ -1,49 +1,54 @@
 {
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1
+  },
+  "public_notes": "Submit the result and the required replay artifact. The verifier recomputes the task-specific mathematical claim from the frozen input.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
   "schema_version": "1",
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "probability": {
+        "additionalProperties": false,
+        "properties": {
+          "den": {
+            "type": "string"
+          },
+          "num": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "num",
+          "den"
+        ],
+        "type": "object"
+      },
+      "states": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "probability",
+      "states"
+    ],
+    "type": "object"
+  },
   "submission_schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED"
-        ]
-      },
-      "completeness": {
-        "const": "COMPLETE"
-      },
-      "conclusion": {
-        "const": "TRUE"
-      },
-      "evidence": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/answer.txt"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
-      },
-      "limitations": {
-        "items": {
-          "type": "string"
-        },
-        "type": "array"
-      },
       "result": {
         "additionalProperties": false,
         "properties": {
@@ -73,23 +78,34 @@
         ],
         "type": "object"
       },
-      "scope": {
-        "const": "jacobian/reliability-triangle-fair complete finite input"
-      },
-      "task_id": {
-        "const": "jacobian/reliability-triangle-fair"
+      "witness": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
-  }
+  },
+  "task_id": "jacobian/reliability-triangle-fair"
 }

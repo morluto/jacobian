@@ -1,1 +1,47 @@
-{"schema_version":"1","task_id":"jacobian/periodic-orbit-polynomial-obstruction","result":{"orbit_basis":["F(pq)","F(p)","F(q)","F(1)"],"exact_period_coefficients":[1,-1,-1,1],"orbit_divisibility":"pq_DIVIDES_F(pq)-F(p)-F(q)+F(1)","modular_reductions":[{"modulus":"p","residue_basis":["P(q)","P(1)"],"residue_coefficients":[-1,1],"conclusion":"p_DIVIDES_P(q)-P(1)"},{"modulus":"q","residue_basis":["P(p)","P(1)"],"residue_coefficients":[-1,1],"conclusion":"q_DIVIDES_P(p)-P(1)"}],"infinite_prime_step":"FOR_EACH_PRIME_q_ALL_OTHER_PRIMES_p_DIVIDE_P(q)-P(1)_SO_P(q)=P(1)","polynomial_identity_step":"P_EQUALS_CONSTANT_P(1)_ON_INFINITELY_MANY_PRIMES"},"limitations":["STANDARD_ORBIT_DIVISIBILITY_AND_INFINITE_PRIME_LEMMAS_TRUSTED"]}
+{
+  "schema_version": "1",
+  "task_id": "periodic-orbit-polynomial-obstruction",
+  "result": {
+    "orbit_basis": [
+      "F(pq)",
+      "F(p)",
+      "F(q)",
+      "F(1)"
+    ],
+    "exact_period_coefficients": [
+      1,
+      -1,
+      -1,
+      1
+    ],
+    "orbit_divisibility": "pq_DIVIDES_F(pq)-F(p)-F(q)+F(1)",
+    "modular_reductions": [
+      {
+        "modulus": "p",
+        "residue_basis": [
+          "P(q)",
+          "P(1)"
+        ],
+        "residue_coefficients": [
+          -1,
+          1
+        ],
+        "conclusion": "p_DIVIDES_P(q)-P(1)"
+      },
+      {
+        "modulus": "q",
+        "residue_basis": [
+          "P(p)",
+          "P(1)"
+        ],
+        "residue_coefficients": [
+          -1,
+          1
+        ],
+        "conclusion": "q_DIVIDES_P(p)-P(1)"
+      }
+    ],
+    "infinite_prime_step": "FOR_EACH_PRIME_q_ALL_OTHER_PRIMES_p_DIVIDE_P(q)-P(1)_SO_P(q)=P(1)",
+    "polynomial_identity_step": "P_EQUALS_CONSTANT_P(1)_ON_INFINITELY_MANY_PRIMES"
+  }
+}

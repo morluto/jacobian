@@ -1,1 +1,74 @@
-{"task_id":"jacobian/parameterized-sharp-bound-audit","conclusion":"PIECEWISE_BOUND_REPAIRED","result":{"transition":{"numerator":15,"denominator":4},"low_regime":{"condition":"0<d<=15/4","bound":"1/9+d/27","interpolation":{"tangent_weight":"1-4*d/15","schur_weight":"4*d/15"}},"high_regime":{"condition":"d>=15/4","bound":"1/4","remainder_coefficient":"d-15/4","attainment":"ATTAINED_ONLY_AT_THRESHOLD; INFIMUM_ONLY_ABOVE_THRESHOLD"},"threshold_case":"BOTH_FORMULAS_AGREE_AND_SYMMETRIC_EQUALITY_IS_ATTAINED","certificate":{"tangent_variables":["a","b","c"],"schur_ordering":["a","b","c"],"identity_scope":"a+b+c=1; a,b,c>0"},"symmetric_witness":{"a":{"numerator":1,"denominator":3},"b":{"numerator":1,"denominator":3},"c":{"numerator":1,"denominator":3}},"boundary_family":{"vanishing_variable":"c","other_variables":["a","b"],"parameter":"t->0+","limit":"1/4","attained_for_positive_parameter":false},"audit":{"frozen_explanation_status":"PARTIALLY_CORRECT_BUT_SHARPNESS_JUSTIFICATION_DEFECTIVE","defects":["SYMMETRIC_EQUALITY_OVERCLAIMED_FOR_ALL_D","BOUNDARY_INFIMUM_MISLABELED_AS_MINIMUM","TRANSITION_CASE_NOT_SEPARATED"]}},"claimed_assurance":"COMPUTED","scope":"the frozen parameterized inequality, its two sharp-bound regimes, and strict-positivity attainment semantics","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:dc1c162e38f2100d6eade83fb65929ca738fdd9a783e65e31b34ce800437cd34"}],"limitations":["The checker replays the declared exact certificate family; it is not a general inequality prover or external proof assistant."]}
+{
+  "result": {
+    "audit": {
+      "defects": [
+        "SYMMETRIC_EQUALITY_OVERCLAIMED_FOR_ALL_D",
+        "BOUNDARY_INFIMUM_MISLABELED_AS_MINIMUM",
+        "TRANSITION_CASE_NOT_SEPARATED"
+      ],
+      "frozen_explanation_status": "PARTIALLY_CORRECT_BUT_SHARPNESS_JUSTIFICATION_DEFECTIVE"
+    },
+    "boundary_family": {
+      "attained_for_positive_parameter": false,
+      "limit": "1/4",
+      "other_variables": [
+        "a",
+        "b"
+      ],
+      "parameter": "t->0+",
+      "vanishing_variable": "c"
+    },
+    "certificate": {
+      "identity_scope": "a+b+c=1; a,b,c>0",
+      "schur_ordering": [
+        "a",
+        "b",
+        "c"
+      ],
+      "tangent_variables": [
+        "a",
+        "b",
+        "c"
+      ]
+    },
+    "high_regime": {
+      "attainment": "ATTAINED_ONLY_AT_THRESHOLD; INFIMUM_ONLY_ABOVE_THRESHOLD",
+      "bound": "1/4",
+      "condition": "d>=15/4",
+      "remainder_coefficient": "d-15/4"
+    },
+    "low_regime": {
+      "bound": "1/9+d/27",
+      "condition": "0<d<=15/4",
+      "interpolation": {
+        "schur_weight": "4*d/15",
+        "tangent_weight": "1-4*d/15"
+      }
+    },
+    "symmetric_witness": {
+      "a": {
+        "denominator": 3,
+        "numerator": 1
+      },
+      "b": {
+        "denominator": 3,
+        "numerator": 1
+      },
+      "c": {
+        "denominator": 3,
+        "numerator": 1
+      }
+    },
+    "threshold_case": "BOTH_FORMULAS_AGREE_AND_SYMMETRIC_EQUALITY_IS_ATTAINED",
+    "transition": {
+      "denominator": 4,
+      "numerator": 15
+    }
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:dc1c162e38f2100d6eade83fb65929ca738fdd9a783e65e31b34ce800437cd34"
+    }
+  ]
+}

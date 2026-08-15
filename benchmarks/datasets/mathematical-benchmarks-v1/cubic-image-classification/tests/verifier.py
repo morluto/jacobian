@@ -1,20 +1,16 @@
 import json
-import re
 from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    evidence_list_is_bound,
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-LIMITATION = "The verifier checks exact symbolic families and modular completeness but does not replay the universal classification in a proof assistant."
 
 
 def _source() -> dict[str, Any]:
@@ -185,10 +181,8 @@ def _result(value: object, source: dict[str, Any]) -> bool:
     )
 
 
-def _evidence(value: object, result: object) -> bool:
+def _witness(value: object, result: object) -> bool:
     if not isinstance(value, list) or len(value) != 1:
-        return False
-    if not evidence_list_is_bound(value):
         return False
     path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
     if path is None:
@@ -210,96 +204,27 @@ def _evidence(value: object, result: object) -> bool:
         bound_result = json.loads(markers[0])
     except (ValueError, RecursionError):
         return False
-    if bound_result != result:
-        return False
-    text = raw_text.casefold()
-    return all(
-        term in text for term in ("factorization", "affine", "modulo 9", "computed")
-    ) and not re.search(
-        r"\b(?:not|never|without|doesn['']?t|cannot)\b[^.;\n]{0,60}"
-        r"\b(?:factorization|affine|computed)\b",
-        text,
-    )
-
-
-def _limitation_is_valid(value: str) -> bool:
-    folded = value.casefold()
-    if "proof assistant" not in folded:
-        return False
-    affirmative = re.compile(
-        r"\b(?:verif(?:y|ied|ies)|formaliz(?:e|ed|es)|prove(?:s|d)|certif(?:y|ied|ies))\b"
-        r"[^.;\n]{0,80}\b(?:proof assistant|lean)\b|"
-        r"\b(?:proof assistant|lean)\b[^.;\n]{0,80}"
-        r"\b(?:verif(?:y|ied|ies)|formaliz(?:e|ed|es)|prove(?:s|d)|certif(?:y|ied|ies))\b",
-        re.I,
-    )
-    for clause in re.split(r"[.;\n]", folded):
-        if affirmative.search(clause) and not re.search(
-            r"\b(?:not|no|without|doesn['']?t|cannot)\b", clause
-        ):
-            return False
-    return bool(
-        re.search(
-            r"\b(?:not|no|without|doesn['']?t|cannot)\b"
-            r"[^.;\n]{0,100}\b(?:proof assistant|lean|replay|formal)\b",
-            folded,
-        )
-    )
+    return isinstance(result, dict) and json_value_equal(bound_result, result)
 
 
 def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
+    math_correct = bool(
+        isinstance(submission, dict) and _result(data.get("result"), _source())
     )
-    correct = bool(contract and _result(data.get("result"), _source()))
-    evidence = bool(correct and _evidence(data.get("evidence"), data.get("result")))
-    scope_text = data.get("scope")
-    scope = bool(
-        contract
-        and isinstance(scope_text, str)
-        and re.search(r"\bcomplete\b", scope_text.casefold())
-        and not re.search(r"\b(?:incomplete|not complete)\b", scope_text.casefold())
-        and all(
-            term in scope_text.casefold()
-            for term in ("nonnegative", "integer", "image")
-        )
+    witness_ok = bool(
+        math_correct and _witness(data.get("witness"), data.get("result"))
     )
-    assurance = bool(
-        contract and data.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations = bool(
-        contract
-        and isinstance(data.get("limitations"), list)
-        and bool(data["limitations"])
-        and all(isinstance(item, str) for item in data["limitations"])
-        and all(_limitation_is_valid(item) for item in data["limitations"])
-    )
-    false_verified = false_verified_claim(submission, verification_record_bound=False)
-    passed = bool(
-        correct
-        and evidence
-        and scope
-        and assurance
-        and limitations
-        and not false_verified
-    )
+    correct = bool(math_correct and witness_ok)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
-                "correctness": float(correct),
-                "evidence_validity": float(evidence),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
-                "reward": float(passed),
-                "false_certification": false_verified,
+                "correctness": float(math_correct),
+                "witness_validity": float(witness_ok),
+                "reward": float(correct),
             },
             sort_keys=True,
         )

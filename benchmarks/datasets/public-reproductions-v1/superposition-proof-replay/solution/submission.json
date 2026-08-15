@@ -1,1 +1,47 @@
-{"task_id":"jacobian/superposition-proof-replay","conclusion":"PROOF_RECONSTRUCTED","result":{"axioms":[1,2,3,6],"steps":[{"child":5,"parents":[2,6]},{"child":8,"parents":[5,6]},{"child":4,"parents":[3,8]},{"child":7,"parents":[1,4]}],"root":7},"claimed_assurance":"COMPUTED","scope":"binary first-order resolution replay over the eight frozen clauses","completeness":"COMPLETE","evidence":[{"path":"evidence/resolution-proof.json","sha256":"sha256:bd6891a144f2502b06d774567e742b3f9fe9ec2fd4164bff68fa3b0f17f097ab"}],"limitations":["FROZEN_RESOLUTION_CALCULUS_ONLY"]}
+{
+  "result": {
+    "axioms": [
+      1,
+      2,
+      3,
+      6
+    ],
+    "root": 7,
+    "steps": [
+      {
+        "child": 5,
+        "parents": [
+          2,
+          6
+        ]
+      },
+      {
+        "child": 8,
+        "parents": [
+          5,
+          6
+        ]
+      },
+      {
+        "child": 4,
+        "parents": [
+          3,
+          8
+        ]
+      },
+      {
+        "child": 7,
+        "parents": [
+          1,
+          4
+        ]
+      }
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/resolution-proof.json",
+      "sha256": "sha256:bd6891a144f2502b06d774567e742b3f9fe9ec2fd4164bff68fa3b0f17f097ab"
+    }
+  ]
+}

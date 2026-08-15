@@ -4,19 +4,16 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
+    aggregate_reward,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 W = Path("/app")
 T = Path("/tests")
-LIMITATIONS = [
-    "MATRIX_DETERMINANT_LEMMA_TRUSTED",
-    "RATIONAL_LIMIT_INFERENCE_NOT_PROOF_ASSISTANT_VERIFIED",
-]
 
 
 def frozen_contract() -> dict:
@@ -108,48 +105,40 @@ def main() -> None:
     frozen = frozen_contract()
     expected = json.loads((T / "expected.json").read_text())
     submission = load_submission(W / "submission.json")
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
+    input_binding = workspace_input_is_bound()
     evidence = (
         read_evidence_json(
-            submission["evidence"][0],
+            submission["witness"][0],
             expected_path="evidence/spectral-certificate.json",
         )
-        if contract
+        if isinstance(submission, dict)
         else None
     )
-    math_ok = bool(contract and frozen and certificate_valid(submission.get("result")))
+    math_ok = bool(
+        submission is not None
+        and frozen
+        and certificate_valid(submission.get("result"))
+    )
     evidence_ok = bool(
         evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and set(evidence) == {"schema_version", "task_id", "result"}
         and evidence.get("schema_version") == "1"
         and evidence.get("task_id") == expected["task_id"]
-        and evidence.get("result") == submission.get("result")
-        and evidence.get("limitations") == LIMITATIONS
+        and json_value_equal(evidence.get("result"), submission.get("result"))
     )
-    scope_ok = bool(
-        contract
-        and submission.get("scope") == "DECLARED_MATRIX_FAMILY"
-        and submission.get("limitations") == LIMITATIONS
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=evidence_ok,
+        protocol_ok=bool(input_binding and submission is not None),
     )
-    assurance_ok = bool(contract and submission.get("claimed_assurance") == "COMPUTED")
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
-    correct = math_ok and evidence_ok and scope_ok and not false_cert
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
                 "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
-                "reward": float(correct),
-                "false_certification": false_cert,
+                "input_binding": float(input_binding),
+                "reward": reward,
             }
         )
     )

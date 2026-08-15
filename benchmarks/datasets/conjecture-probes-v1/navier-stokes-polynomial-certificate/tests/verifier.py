@@ -8,24 +8,17 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
+    aggregate_reward,
     evidence_list_is_bound,
-    is_regular_bounded_file,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
 TASK_ID = "jacobian/navier-stokes-polynomial-certificate"
-SCOPE = "steady-affine-2d-polynomial-fields-v1"
-LIMITATIONS = [
-    "ONE_EXACT_2D_STEADY_POLYNOMIAL_FIELD",
-    "NO_GLOBAL_NAVIER_STOKES_REGULARITY_CONCLUSION",
-]
 MAX_EVIDENCE_BYTES = None
-scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
 
 
 def _rat(value: object, num_bound: int = 50, den_bound: int = 20) -> Fraction:
@@ -106,18 +99,6 @@ def _mathematics(result: Any, num_bound: int = 50, den_bound: int = 20) -> bool:
     )
 
 
-def _raw_submission() -> dict[str, Any] | None:
-    if not is_regular_bounded_file(
-        Path("/app/submission.json"), max_bytes=MAX_SUBMISSION_BYTES
-    ):
-        return None
-    try:
-        value = json.loads(Path("/app/submission.json").read_text())
-    except (OSError, ValueError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
-
-
 def _reward(value: dict[str, Any]) -> None:
     path = Path("/logs/verifier")
     path.mkdir(parents=True, exist_ok=True)
@@ -128,75 +109,45 @@ def _reward(value: dict[str, Any]) -> None:
 def main() -> None:
     input_bound = workspace_input_is_bound()
     submission = load_submission(require_input_binding=False)
-    contract = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion="STEADY_INCOMPRESSIBLE_POLYNOMIAL_CERTIFICATE",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
-    )
+    protocol_ok = submission is not None
     frozen = _frozen_input()
     num_bound = frozen.get("coefficient_numerator_bound", 50) if frozen else 50
     den_bound = frozen.get("coefficient_denominator_bound", 20) if frozen else 20
     mathematics = bool(
-        isinstance(submission, dict)
-        and _mathematics(submission.get("result"), num_bound, den_bound)
+        protocol_ok and _mathematics(submission.get("result"), num_bound, den_bound)
     )
     evidence = bool(
-        isinstance(submission, dict)
-        and evidence_list_is_bound(submission.get("evidence"), max_bytes=None)
+        protocol_ok
+        and evidence_list_is_bound(
+            submission.get("witness"), max_bytes=MAX_EVIDENCE_BYTES
+        )
     )
     payload = (
         read_evidence_json(
-            submission["evidence"][0],
+            submission["witness"][0],
             expected_path="evidence/answer.txt",
-            max_bytes=None,
+            max_bytes=MAX_EVIDENCE_BYTES,
         )
         if evidence
         else None
     )
     evidence = bool(
         isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
-        and payload
-        == {
-            "schema_version": "1",
-            "task_id": TASK_ID,
-            "result": submission.get("result"),
-            "limitations": LIMITATIONS,
-        }
+        and payload.get("schema_version") == "1"
+        and json_value_equal(payload.get("result"), submission.get("result"))
     )
-    scope = bool(
-        isinstance(submission, dict)
-        and submission.get("scope") == SCOPE
-        and submission.get("limitations") == LIMITATIONS
-    )
-    assurance = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") in scoreable_assurances
-    )
-    raw_submission = _raw_submission()
-    false_certification = bool(
-        isinstance(raw_submission, dict)
-        and raw_submission.get("claimed_assurance") == "VERIFIED"
-    )
-    aggregate = (
-        1.0
-        if all((input_bound, contract, mathematics, evidence, scope, assurance))
-        and not false_certification
-        else 0.0
+    reward = aggregate_reward(
+        correctness=mathematics,
+        evidence_validity=evidence,
+        protocol_ok=protocol_ok and input_bound,
     )
     _reward(
         {
-            "protocol": 1.0 if contract else 0.0,
-            "input_binding": 1.0 if input_bound else 0.0,
-            "mathematics": 1.0 if mathematics else 0.0,
-            "evidence": 1.0 if evidence else 0.0,
-            "scope": 1.0 if scope else 0.0,
-            "assurance": 1.0 if assurance else 0.0,
-            "false_certification": false_certification,
-            "aggregate_reward": aggregate,
-            "reward": aggregate,
+            "protocol_compliance": float(protocol_ok),
+            "input_binding": float(input_bound),
+            "correctness": float(mathematics),
+            "evidence_validity": float(evidence),
+            "reward": reward,
         }
     )
 
@@ -207,14 +158,10 @@ if __name__ == "__main__":
     except BaseException as exc:
         _reward(
             {
-                "protocol": 0.0,
+                "protocol_compliance": 0.0,
                 "input_binding": 0.0,
-                "mathematics": 0.0,
-                "evidence": 0.0,
-                "scope": 0.0,
-                "assurance": 0.0,
-                "false_certification": False,
-                "aggregate_reward": 0.0,
+                "correctness": 0.0,
+                "evidence_validity": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,
             }

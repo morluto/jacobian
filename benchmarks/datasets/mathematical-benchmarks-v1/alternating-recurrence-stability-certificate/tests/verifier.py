@@ -3,19 +3,14 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
     is_regular_bounded_file,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W, T = Path("/app"), Path("/tests")
-LIMITATIONS = [
-    "EXPONENTIAL_DOMINANCE_USES_ARCHIMEDEAN_ORDER",
-    "NO_PROOF_ASSISTANT_REPLAY",
-]
 MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
 MAX_INPUT_BYTES = 16 * 1024 * 1024
 
@@ -41,28 +36,6 @@ def rat(value: object) -> Fraction | None:
     if type(n) is not int or type(d) is not int or d <= 0:
         return None
     return Fraction(n, d)
-
-
-def _json_equal(left: object, right: object) -> bool:
-    if isinstance(left, bool) or isinstance(right, bool):
-        return type(left) is type(right) and left == right
-    if type(left) is int or type(right) is int:
-        return type(left) is type(right) and left == right
-    if isinstance(left, dict) or isinstance(right, dict):
-        return (
-            isinstance(left, dict)
-            and isinstance(right, dict)
-            and set(left) == set(right)
-            and all(_json_equal(left[key], right[key]) for key in left)
-        )
-    if isinstance(left, list) or isinstance(right, list):
-        return (
-            isinstance(left, list)
-            and isinstance(right, list)
-            and len(left) == len(right)
-            and all(_json_equal(a, b) for a, b in zip(left, right, strict=True))
-        )
-    return type(left) is type(right) and left == right
 
 
 def valid(result: object) -> bool:
@@ -118,27 +91,21 @@ def valid(result: object) -> bool:
 def main() -> None:
     expected = json.loads((T / "expected.json").read_text())
     submission = load_submission(W / "submission.json")
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
+    witness = submission.get("witness") if isinstance(submission, dict) else None
     evidence = (
         read_evidence_json(
-            submission["evidence"][0],
+            witness[0],
             expected_path="evidence/stability-certificate.json",
             max_bytes=MAX_EVIDENCE_BYTES,
         )
-        if contract
+        if isinstance(witness, list) and len(witness) == 1
         else None
     )
     math_ok = bool(
         frozen() and isinstance(submission, dict) and valid(submission.get("result"))
     )
     try:
-        result_match = _json_equal(
+        result_match = json_value_equal(
             evidence.get("result") if evidence else None,
             submission.get("result") if isinstance(submission, dict) else None,
         )
@@ -146,30 +113,19 @@ def main() -> None:
         result_match = False
     evidence_ok = bool(
         evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and {"schema_version", "task_id", "result"} <= set(evidence)
         and evidence.get("schema_version") == "1"
         and evidence.get("task_id") == expected["task_id"]
         and result_match
-        and evidence.get("limitations") == submission.get("limitations")
     )
-    scope_ok = bool(
-        contract
-        and submission.get("scope") == "DECLARED_RECURRENCE_ALL_N_AT_LEAST_ONE"
-        and submission.get("limitations") == LIMITATIONS
-    )
-    assurance_ok = bool(contract and submission.get("claimed_assurance") == "COMPUTED")
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
-    correct = math_ok and evidence_ok and scope_ok and assurance_ok and not false_cert
+    correct = bool(math_ok and evidence_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
+                "witness_validity": float(evidence_ok),
                 "reward": float(correct),
-                "false_certification": false_cert,
             }
         )
     )

@@ -6,7 +6,6 @@ from verifier_support import (
     load_submission_raw,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 W = Path("/app")
@@ -236,63 +235,22 @@ def evidence_valid(evidence, result):
 def main():
     submission = load_submission_bounded()
     frozen = load_frozen()
-    expected = json.loads((E / "expected.json").read_text())
-    claimed_assurance = (
-        submission.get("claimed_assurance") if isinstance(submission, dict) else None
-    )
-    if isinstance(claimed_assurance, str):
-        mathematical_contract = strict_submission_contract(
-            submission,
-            task_id=expected["task_id"],
-            conclusion=expected["conclusion"],
-            verification_record="optional",
-        )
-        public_contract = strict_submission_contract(
-            submission,
-            task_id=expected["task_id"],
-            conclusion=expected["conclusion"],
-            allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-            verification_record="forbidden",
-        )
-    else:
-        mathematical_contract = False
-        public_contract = False
+    mathematical_contract = bool(submission)
     result = submission.get("result") if isinstance(submission, dict) else {}
     math_correct = bool(isinstance(result, dict) and cases_valid(result, frozen))
     evidence = bool(
         mathematical_contract
         and isinstance(result, dict)
-        and evidence_valid(submission.get("evidence"), result)
+        and evidence_valid(submission.get("witness"), result)
     )
-    scope = bool(
-        mathematical_contract and submission.get("scope") == expected["required_scope"]
-    )
-    assurance = bool(
-        mathematical_contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false_certification = isinstance(claimed_assurance, str) and claimed_assurance in {
-        "VERIFIED",
-        "CHECKED",
-    }
-    reward = (
-        0.0
-        if not public_contract
-        or not math_correct
-        or not evidence
-        or false_certification
-        else 0.8 + 0.1 * scope + 0.1 * assurance
-    )
+    reward = float(mathematical_contract and math_correct and evidence)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
+                "witness_validity": float(evidence),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

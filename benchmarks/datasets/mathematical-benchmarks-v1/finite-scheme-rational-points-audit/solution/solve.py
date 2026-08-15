@@ -63,16 +63,7 @@ Path("/app/evidence").mkdir(parents=True, exist_ok=True)
 Path("/app/evidence/answer.txt").write_text(text)
 digest = hashlib.sha256(text.encode()).hexdigest()
 submission = {
-    "task_id": "jacobian/finite-scheme-rational-points-audit",
-    "conclusion": "RATIONAL_POINT_BIJECTION_DOES_NOT_FORCE_SCHEME_ISOMORPHISM",
     "result": result,
-    "claimed_assurance": "COMPUTED",
-    "scope": "finite-affine-schemes-over-F5-certificate",
-    "completeness": "COMPLETE",
-    "evidence": [{"path": "evidence/answer.txt", "sha256": f"sha256:{digest}"}],
-    "limitations": [
-        "claim:finite-affine-countermodel",
-        "limitation:no-general-scheme-theorem",
-    ],
+    "witness": [{"path": "evidence/answer.txt", "sha256": f"sha256:{digest}"}],
 }
 Path("/app/submission.json").write_text(json.dumps(submission, indent=2) + "\n")

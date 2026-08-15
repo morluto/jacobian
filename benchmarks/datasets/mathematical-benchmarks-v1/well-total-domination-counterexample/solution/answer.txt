@@ -1,8 +1,0 @@
-The graph is the path 0-1-2-3-4. It is connected, its degree sequence is
-(1,2,2,2,1), and its average degree is 8/5. The two pendant vertices are 0
-and 4, so 8/5 <= 2.
-
-The set {1,2,3} is a minimal total dominating set of size 3. The set
-{0,1,3,4} is a minimal total dominating set of size 4. Each vertex has a
-neighbor in the stated set, and deleting any member destroys that property.
-The different cardinalities refute well total domination.

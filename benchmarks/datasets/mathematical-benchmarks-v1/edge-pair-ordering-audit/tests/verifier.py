@@ -6,11 +6,9 @@ from typing import Any
 
 from verifier_support import (
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     valid_sha256_uri,
 )
 
@@ -162,16 +160,11 @@ def _evidence_descriptor_shape_is_valid(evidence: object) -> bool:
 
 
 def _protocol_is_valid(submission: object, contract: bool, result: object) -> bool:
-    if not isinstance(submission, dict) or not contract:
+    if not isinstance(submission, dict):
         return False
-    limitations = submission.get("limitations")
     return bool(
         _result_shape_is_valid(result)
-        and isinstance(submission.get("scope"), str)
-        and isinstance(limitations, list)
-        and len(limitations) == 1
-        and type(limitations[0]) is str
-        and _evidence_descriptor_shape_is_valid(submission.get("evidence"))
+        and _evidence_descriptor_shape_is_valid(submission.get("witness"))
     )
 
 
@@ -230,56 +223,21 @@ def main():
     data = submission if isinstance(submission, dict) else {}
     expected = _load_json(Path("/tests/expected.json"))
     source = _load_json(Path("/tests/input.json"))
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected.get("task_id", ""),
-        conclusion=expected.get("conclusion", ""),
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
     result = data.get("result")
-    protocol = _protocol_is_valid(submission, contract, result)
+    protocol = _protocol_is_valid(submission, True, result)
     math_correct = _mathematical_result_is_valid(result, source)
     evidence_valid = _evidence_is_valid(
-        data.get("evidence"), result, expected.get("evidence_max_bytes", 0)
+        data.get("witness"), result, expected.get("evidence_max_bytes", 0)
     )
-    scope_correct = bool(
-        isinstance(submission, dict)
-        and isinstance(data.get("claimed_assurance"), str)
-        and data.get("scope") == expected.get("required_scope")
-    )
-    assurance_correct = data.get("claimed_assurance") == expected.get(
-        "maximum_assurance"
-    )
-    limitations_correct = data.get("limitations") == [
-        expected.get("required_limitation")
-    ]
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    protocol = bool(protocol and limitations_correct)
-    reward = (
-        1.0
-        if protocol
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and limitations_correct
-        and not false_certification
-        else 0.0
-    )
+    reward = 1.0 if protocol and math_correct and evidence_valid else 0.0
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "protocol_compliance": float(protocol),
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
+                "witness_validity": float(evidence_valid),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

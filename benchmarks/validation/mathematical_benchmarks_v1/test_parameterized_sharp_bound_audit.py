@@ -4,18 +4,21 @@ import json
 from pathlib import Path
 
 import pytest
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1 import (
+    _fixtures,
+    _verifier,
+)
 
 TASK = "parameterized-sharp-bound-audit"
 
 
 def _case(tmp_path: Path):
-    return support._prepare_case(tmp_path, TASK, "computed")
+    return _fixtures._prepare_case(tmp_path, TASK, "computed")
 
 
 def _rewrite(app: Path, submission: dict) -> None:
-    support._bind_result_evidence(app, submission)
-    support._write_json(app / "submission.json", submission)
+    _fixtures._bind_result_evidence(app, submission)
+    _fixtures._write_json(app / "submission.json", submission)
 
 
 def test_accepts_permuted_certificates(tmp_path: Path) -> None:
@@ -34,7 +37,7 @@ def test_accepts_permuted_certificates(tmp_path: Path) -> None:
     result["audit"]["defects"].reverse()
     _rewrite(app, submission)
 
-    accepted = support._run_verifier(task, app, logs)
+    accepted = _verifier._run_verifier(task, app, logs)
     assert accepted.details["correctness"] == 1.0
     assert accepted.reward == pytest.approx(1.0)
 
@@ -74,7 +77,7 @@ def test_rejects_corrupted_sharpness(
     submission["result"][field] = replacement
     _rewrite(app, submission)
 
-    rejected = support._run_verifier(task, app, logs)
+    rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
     assert rejected.reward == 0.0
 
@@ -84,15 +87,15 @@ def test_evidence_binds_boundary_family(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["boundary_family"]["vanishing_variable"] = "a"
     submission["result"]["boundary_family"]["other_variables"] = ["b", "c"]
-    support._bind_result_evidence(app, submission)
+    _fixtures._bind_result_evidence(app, submission)
     evidence_path = app / "evidence" / "answer.txt"
     text = evidence_path.read_text().replace(
         'BOUNDARY_FAMILY_JSON: {"attained_for_positive_parameter":false,"limit":"1/4","other_variables":["b","c"],"parameter":"t->0+","vanishing_variable":"a"}',
         'BOUNDARY_FAMILY_JSON: {"attained_for_positive_parameter":false,"limit":"1/4","other_variables":["a","b"],"parameter":"t->0+","vanishing_variable":"c"}',
     )
     evidence_path.write_text(text)
-    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
-    support._write_json(app / "submission.json", submission)
-    rejected = support._run_verifier(task, app, logs)
+    submission["witness"][0]["sha256"] = _fixtures._digest(evidence_path)
+    _fixtures._write_json(app / "submission.json", submission)
+    rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 1.0
-    assert rejected.details["evidence_validity"] == 0.0
+    assert rejected.reward == 0.0

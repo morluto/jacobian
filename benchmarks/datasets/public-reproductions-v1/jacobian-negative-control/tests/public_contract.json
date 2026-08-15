@@ -1,22 +1,52 @@
 {
+  "evidence": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1
+  },
+  "public_notes": "Submit the result and the required replay artifact. The verifier recomputes the task-specific mathematical claim from the frozen input.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
+  "schema_definitions": {},
   "schema_version": "1",
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "boundary_note": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "required": [
+      "boundary_note"
+    ],
+    "type": "object"
+  },
   "submission_schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED"
-        ]
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "boundary_note": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "boundary_note"
+        ],
+        "type": "object"
       },
-      "completeness": {
-        "const": "COMPLETE"
-      },
-      "conclusion": {
-        "const": "UNKNOWN"
-      },
-      "evidence": {
+      "witness": {
         "items": {
           "additionalProperties": false,
           "properties": {
@@ -37,47 +67,13 @@
         "maxItems": 1,
         "minItems": 1,
         "type": "array"
-      },
-      "limitations": {
-        "items": {
-          "type": "string"
-        },
-        "type": "array"
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "boundary_note": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "verification_record_uri": {
-            "type": "null"
-          }
-        },
-        "required": [
-          "verification_record_uri",
-          "boundary_note"
-        ],
-        "type": "object"
-      },
-      "scope": {
-        "const": "jacobian/jacobian-negative-control complete finite input"
-      },
-      "task_id": {
-        "const": "jacobian/jacobian-negative-control"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
-  }
+  },
+  "task_id": "jacobian/jacobian-negative-control"
 }

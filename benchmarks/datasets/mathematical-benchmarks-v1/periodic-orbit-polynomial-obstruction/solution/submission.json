@@ -1,1 +1,51 @@
-{"task_id":"jacobian/periodic-orbit-polynomial-obstruction","conclusion":"NONCONSTANT_POLYNOMIAL_IMPOSSIBLE","result":{"orbit_basis":["F(pq)","F(p)","F(q)","F(1)"],"exact_period_coefficients":[1,-1,-1,1],"orbit_divisibility":"pq_DIVIDES_F(pq)-F(p)-F(q)+F(1)","modular_reductions":[{"modulus":"p","residue_basis":["P(q)","P(1)"],"residue_coefficients":[-1,1],"conclusion":"p_DIVIDES_P(q)-P(1)"},{"modulus":"q","residue_basis":["P(p)","P(1)"],"residue_coefficients":[-1,1],"conclusion":"q_DIVIDES_P(p)-P(1)"}],"infinite_prime_step":"FOR_EACH_PRIME_q_ALL_OTHER_PRIMES_p_DIVIDE_P(q)-P(1)_SO_P(q)=P(1)","polynomial_identity_step":"P_EQUALS_CONSTANT_P(1)_ON_INFINITELY_MANY_PRIMES"},"claimed_assurance":"COMPUTED","scope":"ALL_FUNCTIONS_Z_TO_Z_WITH_FINITE_ITERATE_FIXED_POINT_COUNTS_AND_ALL_P_IN_Z[x]","completeness":"COMPLETE","evidence":[{"path":"evidence/periodic-orbit-certificate.json","sha256":"sha256:2f5667a8500d026c9441b71535e8fd1bfd7cb119d55ae5c3544836c4f815ad0c"}],"limitations":["STANDARD_ORBIT_DIVISIBILITY_AND_INFINITE_PRIME_LEMMAS_TRUSTED"]}
+{
+  "result": {
+    "exact_period_coefficients": [
+      1,
+      -1,
+      -1,
+      1
+    ],
+    "infinite_prime_step": "FOR_EACH_PRIME_q_ALL_OTHER_PRIMES_p_DIVIDE_P(q)-P(1)_SO_P(q)=P(1)",
+    "modular_reductions": [
+      {
+        "conclusion": "p_DIVIDES_P(q)-P(1)",
+        "modulus": "p",
+        "residue_basis": [
+          "P(q)",
+          "P(1)"
+        ],
+        "residue_coefficients": [
+          -1,
+          1
+        ]
+      },
+      {
+        "conclusion": "q_DIVIDES_P(p)-P(1)",
+        "modulus": "q",
+        "residue_basis": [
+          "P(p)",
+          "P(1)"
+        ],
+        "residue_coefficients": [
+          -1,
+          1
+        ]
+      }
+    ],
+    "orbit_basis": [
+      "F(pq)",
+      "F(p)",
+      "F(q)",
+      "F(1)"
+    ],
+    "orbit_divisibility": "pq_DIVIDES_F(pq)-F(p)-F(q)+F(1)",
+    "polynomial_identity_step": "P_EQUALS_CONSTANT_P(1)_ON_INFINITELY_MANY_PRIMES"
+  },
+  "witness": [
+    {
+      "path": "evidence/periodic-orbit-certificate.json",
+      "sha256": "sha256:75eb859e6be135b07804003b7a9da52463b4ed3aecc8b00f3f2c34c6713d266f"
+    }
+  ]
+}

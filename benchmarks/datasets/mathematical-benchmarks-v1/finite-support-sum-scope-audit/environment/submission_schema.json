@@ -110,28 +110,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
+    "result": {
+      "$ref": "#/$defs/result"
     },
-    "completeness": {
-      "enum": [
-        "COMPLETE",
-        "PARTIAL",
-        "UNKNOWN"
-      ]
-    },
-    "conclusion": {
-      "enum": [
-        "ORIGINAL_SUM_DIVERGES_TRUNCATED_LIMIT_ZERO",
-        "INSUFFICIENT_EVIDENCE"
-      ]
-    },
-    "evidence": {
+    "witness": {
       "items": {
         "additionalProperties": false,
         "properties": {
@@ -152,33 +134,11 @@
       "maxItems": 1,
       "minItems": 1,
       "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "ORIGINAL_SUM_TREATED_AS_NONNEGATIVE_EXTENDED_SUM",
-        "TRUNCATED_LIMIT_USES_ELEMENTARY_GEOMETRIC_CONTRACTION"
-      ]
-    },
-    "result": {
-      "$ref": "#/$defs/result"
-    },
-    "scope": {
-      "const": "ORIGINAL_DOMAIN_AUDIT_AND_TRUNCATED_REPAIR",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/finite-support-sum-scope-audit"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

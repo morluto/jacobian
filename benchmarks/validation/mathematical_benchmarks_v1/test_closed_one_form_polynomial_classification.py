@@ -47,92 +47,47 @@ def test_dependent_basis_is_detected() -> None:
 
 
 def test_verifier_rejects_short_and_surplus_basis_rows(tmp_path: Path) -> None:
-    from benchmarks.validation.mathematical_benchmarks_v1 import support
+    from benchmarks.validation.mathematical_benchmarks_v1 import (
+        _fixtures,
+        _verifier,
+    )
 
-    task, app, logs = support._prepare_case(
+    task, app, logs = _fixtures._prepare_case(
         tmp_path, "closed-one-form-polynomial-classification", "short-basis"
     )
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["basis"] = [
         [1 if i == j else 0 for i in range(8)] for j in range(8)
     ]
-    support._write_json(app / "submission.json", submission)
-    rejected = support._run_verifier(task, app, logs)
+    _fixtures._write_json(app / "submission.json", submission)
+    rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
     assert rejected.reward == 0.0
 
-    task, app, logs = support._prepare_case(
+    task, app, logs = _fixtures._prepare_case(
         tmp_path, "closed-one-form-polynomial-classification", "surplus-basis"
     )
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["basis"].append(submission["result"]["basis"][0])
     submission["result"]["potentials"].append(submission["result"]["potentials"][0])
-    support._write_json(app / "submission.json", submission)
-    rejected = support._run_verifier(task, app, logs)
+    _fixtures._write_json(app / "submission.json", submission)
+    rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
     assert rejected.reward == 0.0
 
 
 def test_verifier_rejects_boolean_matrix_entries(tmp_path: Path) -> None:
-    from benchmarks.validation.mathematical_benchmarks_v1 import support
+    from benchmarks.validation.mathematical_benchmarks_v1 import (
+        _fixtures,
+        _verifier,
+    )
 
-    task, app, logs = support._prepare_case(
+    task, app, logs = _fixtures._prepare_case(
         tmp_path, "closed-one-form-polynomial-classification", "boolean-entry"
     )
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["constraints"][0][4] = True
-    support._write_json(app / "submission.json", submission)
-    rejected = support._run_verifier(task, app, logs)
+    _fixtures._write_json(app / "submission.json", submission)
+    rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
     assert rejected.reward == 0.0
-
-
-def test_verifier_checks_derivation_evidence_and_scope(tmp_path: Path) -> None:
-    from benchmarks.validation.mathematical_benchmarks_v1 import support
-
-    task, app, logs = support._prepare_case(
-        tmp_path, "closed-one-form-polynomial-classification", "empty-evidence"
-    )
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    evidence.write_text("unrelated prose\n")
-    submission["evidence"][0]["sha256"] = support._digest(evidence)
-    support._write_json(app / "submission.json", submission)
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected.details["evidence_validity"] == 0.0
-    assert rejected.reward == 0.0
-
-    task, app, logs = support._prepare_case(
-        tmp_path, "closed-one-form-polynomial-classification", "bad-scope"
-    )
-    submission = json.loads((app / "submission.json").read_text())
-    submission["scope"] = "not a closed polynomial one-form; degree at most three on R2"
-    support._write_json(app / "submission.json", submission)
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected.details["scope_accuracy"] == 0.0
-    assert rejected.reward == 0.0
-
-
-def test_verifier_separates_math_from_envelope_and_limitation(tmp_path: Path) -> None:
-    from benchmarks.validation.mathematical_benchmarks_v1 import support
-
-    task, app, logs = support._prepare_case(
-        tmp_path, "closed-one-form-polynomial-classification", "mismatched-claim"
-    )
-    submission = json.loads((app / "submission.json").read_text())
-    submission["conclusion"] = "UNSUPPORTED"
-    support._write_json(app / "submission.json", submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.details["correctness"] == 0.0
-    assert result.reward == 0.0
-
-    task, app, logs = support._prepare_case(
-        tmp_path, "closed-one-form-polynomial-classification", "bad-limitation"
-    )
-    submission = json.loads((app / "submission.json").read_text())
-    submission["limitations"] = ["No limitations."]
-    support._write_json(app / "submission.json", submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.details["correctness"] == 1.0
-    assert result.details["assurance_calibration"] == 0.0
-    assert result.reward == 0.0

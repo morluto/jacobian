@@ -121,51 +121,6 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
-    },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "conclusion": {
-      "enum": [
-        "TRUE",
-        "FALSE",
-        "UNKNOWN"
-      ]
-    },
-    "evidence": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "const": "evidence/certificate.json"
-          },
-          "sha256": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "type": "object"
-      },
-      "maxItems": 1,
-      "minItems": 1,
-      "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "NO_CLAIM_BEYOND_SUPPLIED_CANDIDATE_AND_EXACT_QQ_COMPOSITIONS"
-      ]
-    },
     "result": {
       "additionalProperties": false,
       "properties": {
@@ -184,21 +139,17 @@
             "forward_map_sha256": {
               "const": "sha256:bbe686ae2c0d6aac0d7b4b9ed92cd88d1d2768a4473aaef9db5988d5d44efe66"
             },
-            "scope_id": {
-              "const": "scope://symbolic-coordination-v1/symbolic-coordination-one-direction-03"
-            },
             "semantics_id": {
               "const": "exact-sparse-polynomial-maps-over-QQ@1"
             },
             "subject_sha256": {
-              "const": "sha256:8bb77b25ad2de8293deee449cbee6656ead13c3308eecc1ddc8f00358f065866"
+              "const": "sha256:154a987838a6cefe9eef52a324743f16cd513fbb39ac41176916337b83592f51"
             }
           },
           "required": [
             "binding_schema_version",
             "claim_id",
             "semantics_id",
-            "scope_id",
             "forward_map_sha256",
             "subject_sha256",
             "checker_id"
@@ -417,23 +368,32 @@
       ],
       "type": "object"
     },
-    "scope": {
-      "const": "EXACT_TWO_SIDED_COMPOSITION_OVER_QQ:symbolic-coordination-one-direction-03",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/symbolic-coordination-one-direction-03"
+    "witness": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/certificate.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

@@ -5,12 +5,9 @@ import re
 from pathlib import Path
 
 from verifier_support import (
-    ASSURANCE_LEVELS,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
@@ -341,46 +338,14 @@ def _limitation_valid(limits: object) -> bool:
 
 
 def _evaluate(submission: object) -> dict[str, float | bool]:
-    protocol = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion=CONCLUSION,
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
-    envelope_valid = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion=CONCLUSION,
-        allowed_assurances=ASSURANCE_LEVELS,
-        verification_record="forbidden",
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
     data = submission if isinstance(submission, dict) else {}
-    limit_ok = _limitation_valid(data.get("limitations"))
     math_correct = bool(_source_is_bound() and _result(data.get("result")))
-    evidence_valid = bool(_evidence(data.get("evidence"), data.get("result")))
-    scope_correct = bool(envelope_valid and data.get("scope") == SCOPE and limit_ok)
-    assurance_correct = bool(data.get("claimed_assurance") == "COMPUTED" and limit_ok)
-    reward = (
-        1.0
-        if protocol
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and not false_certification
-        else 0.0
-    )
+    witness_valid = bool(_evidence(data.get("witness"), data.get("result")))
+    reward = float(math_correct and witness_valid)
     return {
         "correctness": float(math_correct),
-        "evidence_validity": float(evidence_valid),
-        "scope_accuracy": float(scope_correct),
-        "assurance_calibration": float(assurance_correct),
+        "witness_validity": float(witness_valid),
         "reward": reward,
-        "false_certification": false_certification,
     }
 
 

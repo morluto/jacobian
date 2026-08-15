@@ -1,20 +1,4 @@
 {
-  "allowed_assurance": [
-    "UNVERIFIED",
-    "COMPUTED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE",
-    "PARTIAL",
-    "UNKNOWN"
-  ],
-  "assurance_ceiling": "COMPUTED",
-  "conclusion": {
-    "enum": [
-      "CLASSIFICATION_CERTIFIED",
-      "INSUFFICIENT_EVIDENCE"
-    ]
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/classification-certificate.json"
@@ -27,12 +11,7 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "limitations": {
-    "const": [
-      "NEWTON_IDENTITIES_VIETE_AND_AMGM_TRUSTED"
-    ]
-  },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.",
   "required_artifact_filenames": [
     "evidence/classification-certificate.json"
   ],
@@ -71,32 +50,6 @@
         "degree",
         "discriminant",
         "all_roots_real"
-      ],
-      "type": "object"
-    },
-    "evidence_envelope": {
-      "additionalProperties": false,
-      "properties": {
-        "limitations": {
-          "const": [
-            "NEWTON_IDENTITIES_VIETE_AND_AMGM_TRUSTED"
-          ]
-        },
-        "result": {
-          "$ref": "#/$defs/result"
-        },
-        "schema_version": {
-          "const": "1"
-        },
-        "task_id": {
-          "const": "jacobian/real-rooted-sign-polynomials"
-        }
-      },
-      "required": [
-        "schema_version",
-        "task_id",
-        "result",
-        "limitations"
       ],
       "type": "object"
     },
@@ -152,12 +105,6 @@
     }
   },
   "schema_version": "1",
-  "scope": {
-    "const": "ALL_NONCONSTANT_SIGN_COEFFICIENT_POLYNOMIALS",
-    "enum": null,
-    "pattern": null,
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
     "$ref": "#/$defs/result"
@@ -198,32 +145,6 @@
           "degree",
           "discriminant",
           "all_roots_real"
-        ],
-        "type": "object"
-      },
-      "evidence_envelope": {
-        "additionalProperties": false,
-        "properties": {
-          "limitations": {
-            "const": [
-              "NEWTON_IDENTITIES_VIETE_AND_AMGM_TRUSTED"
-            ]
-          },
-          "result": {
-            "$ref": "#/$defs/result"
-          },
-          "schema_version": {
-            "const": "1"
-          },
-          "task_id": {
-            "const": "jacobian/real-rooted-sign-polynomials"
-          }
-        },
-        "required": [
-          "schema_version",
-          "task_id",
-          "result",
-          "limitations"
         ],
         "type": "object"
       },
@@ -281,28 +202,10 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
+      "result": {
+        "$ref": "#/$defs/result"
       },
-      "completeness": {
-        "enum": [
-          "COMPLETE",
-          "PARTIAL",
-          "UNKNOWN"
-        ]
-      },
-      "conclusion": {
-        "enum": [
-          "CLASSIFICATION_CERTIFIED",
-          "INSUFFICIENT_EVIDENCE"
-        ]
-      },
-      "evidence": {
+      "witness": {
         "items": {
           "additionalProperties": false,
           "properties": {
@@ -323,35 +226,13 @@
         "maxItems": 1,
         "minItems": 1,
         "type": "array"
-      },
-      "limitations": {
-        "const": [
-          "NEWTON_IDENTITIES_VIETE_AND_AMGM_TRUSTED"
-        ]
-      },
-      "result": {
-        "$ref": "#/$defs/result"
-      },
-      "scope": {
-        "const": "ALL_NONCONSTANT_SIGN_COEFFICIENT_POLYNOMIALS",
-        "type": "string"
-      },
-      "task_id": {
-        "const": "jacobian/real-rooted-sign-polynomials"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
   },
-  "task_id": "jacobian/real-rooted-sign-polynomials",
-  "verification_record": null
+  "task_id": "jacobian/real-rooted-sign-polynomials"
 }

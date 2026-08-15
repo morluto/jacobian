@@ -59,31 +59,20 @@ def main() -> None:
         "repair_cycles": CYCLES,
         "repair_multiplicities": multiplicities(CYCLES),
     }
-    payload = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": result,
-        "limitations": LIMITATIONS,
-    }
+    payload = {"schema_version": "1", "task_id": TASK_ID, "result": result}
     evidence = root / "evidence/answer.json"
     evidence.parent.mkdir(parents=True, exist_ok=True)
     evidence.write_text(
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
     )
     submission = {
-        "task_id": TASK_ID,
-        "conclusion": "UNION_COVERAGE_IS_INSUFFICIENT_AND_REPAIRED",
         "result": result,
-        "claimed_assurance": "CHECKED",
-        "scope": "petersen-cycle-double-cover-audit-v1",
-        "completeness": "COMPLETE",
-        "evidence": [
+        "witness": [
             {
                 "path": "evidence/answer.json",
                 "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
             }
         ],
-        "limitations": LIMITATIONS,
     }
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 

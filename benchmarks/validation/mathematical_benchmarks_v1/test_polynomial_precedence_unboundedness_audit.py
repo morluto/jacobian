@@ -3,7 +3,7 @@ import json
 import shutil
 from pathlib import Path
 
-from benchmarks.validation.mathematical_benchmarks_v1.support import _run_verifier
+from benchmarks.validation.mathematical_benchmarks_v1._verifier import _run_verifier
 
 TASK = "polynomial-precedence-unboundedness-audit"
 
@@ -26,17 +26,8 @@ def oracle():
         "formal_status": "UNBOUNDED_BELOW",
     }
     return {
-        "task_id": f"jacobian/{TASK}",
-        "conclusion": "FORMALIZATION_CHANGES_SEMANTICS",
         "result": result,
-        "claimed_assurance": "COMPUTED",
-        "scope": "EXACT_RATIONAL_PARAMETRIC_COUNTERMODEL_TO_FORMAL_EXPRESSION",
-        "completeness": "COMPLETE",
-        "evidence": [{"path": "evidence/precedence-audit.json", "sha256": ""}],
-        "limitations": [
-            "LEAN_ELABORATION_NOT_ASSESSED",
-            "INFORMAL_MINIMUM_NOT_REPROVED",
-        ],
+        "witness": [{"path": "evidence/precedence-audit.json", "sha256": ""}],
     }
 
 
@@ -48,13 +39,12 @@ def verify(tmp_path, submission):
     shutil.copy2(task / "environment/input.json", app / "input.json")
     evidence = {
         "schema_version": "1",
-        "task_id": submission["task_id"],
+        "task_id": f"jacobian/{TASK}",
         "result": submission["result"],
-        "limitations": submission["limitations"],
     }
     path = app / "evidence/precedence-audit.json"
     path.write_text(json.dumps(evidence, separators=(",", ":")))
-    submission["evidence"][0]["sha256"] = (
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
     )
     (app / "submission.json").write_text(json.dumps(submission))
@@ -80,13 +70,10 @@ def test_oracle_and_alternative_family(tmp_path):
     assert verify(tmp_path / "alt", alt).reward == 1.0
 
 
-def test_corruption_and_false_assurance_fail(tmp_path):
+def test_corruption_fails(tmp_path):
     bad = oracle()
     bad["result"]["formal_coefficients"][-1] = r(-1, 3)
     assert verify(tmp_path / "bad", bad).reward == 0
-    assurance = oracle()
-    assurance["claimed_assurance"] = "VERIFIED"
-    assert verify(tmp_path / "assurance", assurance).reward == 0
 
 
 def test_malformed_and_input_tamper_fail_closed(tmp_path):

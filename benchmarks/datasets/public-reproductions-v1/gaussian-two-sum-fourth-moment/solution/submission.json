@@ -1,1 +1,20 @@
-{"task_id":"jacobian/gaussian-two-sum-fourth-moment","conclusion":"TRUE","result":{"moment":{"real":{"num":"12","den":"1"},"imaginary":{"num":"0","den":"1"}}},"claimed_assurance":"COMPUTED","scope":"jacobian/gaussian-two-sum-fourth-moment complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:0dab19cb9bf7e33b309c61637a2c377110292bcfa8d0a010dcb55f0d472395c3"}],"limitations":[]}
+{
+  "result": {
+    "moment": {
+      "imaginary": {
+        "den": "1",
+        "num": "0"
+      },
+      "real": {
+        "den": "1",
+        "num": "12"
+      }
+    }
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:0dab19cb9bf7e33b309c61637a2c377110292bcfa8d0a010dcb55f0d472395c3"
+    }
+  ]
+}

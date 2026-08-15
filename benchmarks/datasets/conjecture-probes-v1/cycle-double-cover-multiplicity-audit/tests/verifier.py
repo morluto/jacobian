@@ -1,26 +1,19 @@
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
-    is_regular_bounded_file,
+    json_value_equal,
     load_submission,
+    normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
+    resolve_evidence,
     workspace_input_is_bound,
 )
 
 TASK_ID = "jacobian/cycle-double-cover-multiplicity-audit"
-SCOPE = "petersen-cycle-double-cover-audit-v1"
-LIMITATIONS = [
-    "ONE_PETERSEN_GRAPH_INSTANCE",
-    "MULTIPLICITY_CONTRACT_AUDIT_ONLY",
-    "CYCLE_DOUBLE_COVER_CONJECTURE_NOT_ASSESSED",
-]
 EDGES = [
     (0, 1),
     (1, 2),
@@ -82,34 +75,6 @@ def _exact_integer_list(value: object, expected: list[int]) -> bool:
     )
 
 
-def _finite_floats_equal(left: float, right: float) -> bool:
-    return math.isfinite(left) and math.isfinite(right) and left == right
-
-
-def _json_equal(left: object, right: object) -> bool:
-    pending = [(left, right)]
-    while pending:
-        current_left, current_right = pending.pop()
-        if type(current_left) is not type(current_right):
-            return False
-        if isinstance(current_left, dict):
-            if set(current_left) != set(current_right):
-                return False
-            pending.extend(
-                (current_left[key], current_right[key]) for key in current_left
-            )
-        elif isinstance(current_left, list):
-            if len(current_left) != len(current_right):
-                return False
-            pending.extend(zip(current_left, current_right, strict=True))
-        elif isinstance(current_left, float):
-            if not _finite_floats_equal(current_left, current_right):
-                return False
-        elif current_left != current_right:
-            return False
-    return True
-
-
 def mathematics(result: object) -> bool:
     if not isinstance(result, dict) or set(result) != {
         "flawed_cycles",
@@ -134,124 +99,51 @@ def mathematics(result: object) -> bool:
     )
 
 
-def _raw() -> dict | None:
-    path = Path("/app/submission.json")
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(
-            path.read_text(),
-            object_pairs_hook=_reject_duplicate_keys,
-            parse_constant=_reject_nonfinite,
-            parse_float=_parse_finite_float,
-        )
-    except (OSError, ValueError, MemoryError, RecursionError):
-        return None
-    return value if isinstance(value, dict) else None
-
-
-def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    result: dict[str, object] = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError(f"duplicate JSON object key: {key}")
-        result[key] = value
-    return result
-
-
-def _reject_nonfinite(value: str) -> object:
-    raise ValueError(f"non-finite JSON number: {value}")
-
-
-def _parse_finite_float(value: str) -> float:
-    parsed = float(value)
-    if not math.isfinite(parsed):
-        raise ValueError(f"out-of-range JSON number: {value}")
-    return parsed
-
-
-def _write(values: dict) -> None:
-    path = Path("/logs/verifier")
-    path.mkdir(parents=True, exist_ok=True)
-    reward = values.get("reward", 0.0)
-    details = {key: value for key, value in values.items() if key != "reward"}
-    (path / "reward.json").write_text(json.dumps({"reward": reward}, sort_keys=True))
-    (path / "reward-details.json").write_text(json.dumps(details, sort_keys=True))
-
-
-def _evidence_payload_is_bound(payload: object, raw: object) -> bool:
+def _witness_matches_result(witness: object, result: object) -> bool:
+    if not evidence_list_is_bound(witness, expected_path="evidence/answer.json"):
+        return False
+    target = resolve_evidence(witness[0], expected_path="evidence/answer.json")
+    if target is None:
+        return False
+    payload = read_evidence_json(witness[0], expected_path="evidence/answer.json")
     return bool(
         isinstance(payload, dict)
-        and isinstance(raw, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
+        and set(payload) == {"schema_version", "task_id", "result"}
         and payload.get("schema_version") == "1"
-        and _json_equal(payload.get("task_id"), raw.get("task_id"))
-        and _json_equal(payload.get("result"), raw.get("result"))
-        and _json_equal(payload.get("limitations"), raw.get("limitations"))
+        and payload.get("task_id") == TASK_ID
+        and json_value_equal(payload.get("result"), result)
     )
 
 
-def _assurance_is_calibrated(raw: object) -> bool:
-    return bool(
-        isinstance(raw, dict)
-        and type(raw.get("claimed_assurance")) is str
-        and raw.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED", "CHECKED"}
-    )
+def _write(values: dict[str, object]) -> None:
+    path = Path("/logs/verifier")
+    path.mkdir(parents=True, exist_ok=True)
+    reward_path = path / "reward.json"
+    reward_path.write_text(json.dumps(values, sort_keys=True))
+    normalize_reward_file(reward_path)
 
 
 def main() -> None:
-    raw = _raw()
     submission = load_submission(require_input_binding=False)
-    contract = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion="UNION_COVERAGE_IS_INSUFFICIENT_AND_REPAIRED",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
+    protocol = isinstance(submission, dict)
+    mathematics_ok = bool(protocol and mathematics(submission.get("result")))
+    witness_ok = bool(
+        protocol
+        and _witness_matches_result(submission.get("witness"), submission.get("result"))
     )
-    evidence_ok = bool(
-        isinstance(raw, dict)
-        and evidence_list_is_bound(raw.get("evidence"), max_bytes=None)
-    )
-    payload = (
-        read_evidence_json(
-            raw["evidence"][0], expected_path="evidence/answer.json", max_bytes=None
-        )
-        if evidence_ok
-        else None
-    )
-    evidence_ok = _evidence_payload_is_bound(payload, raw)
-    math_ok = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
-    scope_ok = bool(
-        isinstance(raw, dict)
-        and raw.get("scope") == SCOPE
-        and raw.get("completeness") == "COMPLETE"
-        and raw.get("limitations") == LIMITATIONS
-    )
-    assurance_ok = _assurance_is_calibrated(raw)
-    values = {
-        "input_binding": float(workspace_input_is_bound()),
-        "protocol": float(bool(contract)),
-        "mathematics": float(math_ok),
-        "correctness": float(math_ok),
-        "evidence": float(evidence_ok),
-        "evidence_validity": float(evidence_ok),
-        "scope": float(scope_ok),
-        "scope_accuracy": float(scope_ok),
-        "assurance": float(assurance_ok),
-        "assurance_calibration": float(assurance_ok),
-    }
-    reward = float(all(values.values()))
-    values.update(
+    input_bound = workspace_input_is_bound()
+    reward = float(input_bound and protocol and mathematics_ok and witness_ok)
+    _write(
         {
+            "protocol": float(protocol),
+            "input_binding": float(input_bound),
+            "mathematics": float(mathematics_ok),
+            "correctness": float(mathematics_ok),
+            "witness_validity": float(witness_ok),
             "aggregate_reward": reward,
             "reward": reward,
-            "false_certification": bool(
-                isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
-            ),
         }
     )
-    _write(values)
 
 
 if __name__ == "__main__":
@@ -264,15 +156,9 @@ if __name__ == "__main__":
                 "input_binding": 0.0,
                 "mathematics": 0.0,
                 "correctness": 0.0,
-                "evidence": 0.0,
-                "evidence_validity": 0.0,
-                "scope": 0.0,
-                "scope_accuracy": 0.0,
-                "assurance": 0.0,
-                "assurance_calibration": 0.0,
+                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
-                "false_certification": False,
                 "error": type(exc).__name__,
             }
         )

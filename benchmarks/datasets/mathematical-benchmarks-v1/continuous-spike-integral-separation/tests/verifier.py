@@ -5,30 +5,14 @@ from itertools import pairwise
 from pathlib import Path
 
 from verifier_support import (
-    ASSURANCE_LEVELS,
-    SUBMISSION_FIELDS,
-    evidence_list_is_bound,
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 W, T = Path("/app"), Path("/tests")
-LIMITATIONS = [
-    "STANDARD_HARMONIC_AND_P_SERIES_CRITERIA_TRUSTED",
-    "TWELVE_EXACT_SPIKES_PLUS_GENERAL_FORMULA",
-    "NO_PROOF_ASSISTANT_VERIFICATION",
-]
-ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
 MAX_RATIONAL_LEN = 100
-EVIDENCE_KEYWORDS = (
-    "disjoint",
-    "integer",
-    "diverg",
-    "converg",
-)
 
 
 def fraction(value):
@@ -113,60 +97,28 @@ def valid_result(result):
     )
 
 
-def structural_contract(submission, *, task_id, conclusion):
-    """Assurance-neutral envelope check for math/evidence/scope dimensions.
-
-    Accepts any well-formed assurance level (including an overclaimed
-    ``VERIFIED``) so that a false certification zeros only the assurance
-    calibration dimension and the aggregate reward, not the independently
-    computed mathematical correctness, evidence validity, or scope accuracy.
-    """
-
-    if not isinstance(submission, dict):
+def witness_content_valid(witness, result):
+    if not isinstance(witness, list) or len(witness) != 1:
         return False
-    verified = submission.get("claimed_assurance") == "VERIFIED"
-    fields = frozenset(SUBMISSION_FIELDS)
-    if verified:
-        fields = frozenset(SUBMISSION_FIELDS | {"verification_record_uri"})
-    return bool(
-        frozenset(submission) == fields
-        and submission.get("task_id") == task_id
-        and submission.get("conclusion") == conclusion
-        and submission.get("completeness") == "COMPLETE_FOR_DECLARED_FAMILY"
-        and isinstance(submission.get("result"), dict)
-        and isinstance(submission.get("scope"), str)
-        and isinstance(submission.get("limitations"), list)
-        and all(type(item) is str for item in submission.get("limitations", []))
-        and isinstance(submission.get("evidence"), list)
-        and len(submission.get("evidence", [])) == 1
-        and isinstance(submission.get("claimed_assurance"), str)
-        and submission.get("claimed_assurance") in ASSURANCE_LEVELS
-    )
-
-
-def evidence_content_valid(submission):
-    """Reject empty or unrelated certificate evidence.
-
-    The public instruction requires the certificate to show support
-    disjointness, integer avoidance, and the two series arguments. A
-    digest-bound file of unrelated or empty bytes must not score as valid
-    evidence even though its path and hash match.
-    """
-
-    evidence = submission.get("evidence")
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
     if target is None:
         return False
     try:
-        text = target.read_text(encoding="utf-8", errors="replace")
-    except OSError:
+        text = target.read_text()
+    except (OSError, UnicodeError):
         return False
-    if not text.strip():
+    markers = [
+        line.removeprefix("RESULT_JSON:").strip()
+        for line in text.splitlines()
+        if line.startswith("RESULT_JSON:")
+    ]
+    if len(markers) != 1:
         return False
-    lowered = text.lower()
-    return all(keyword in lowered for keyword in EVIDENCE_KEYWORDS)
+    try:
+        bound_result = json.loads(markers[0])
+    except (ValueError, RecursionError):
+        return False
+    return isinstance(result, dict) and json_value_equal(bound_result, result)
 
 
 def frozen():
@@ -179,49 +131,27 @@ def frozen():
 
 
 def main():
-    expected = json.loads((T / "expected.json").read_text())
     submission = load_submission(W / "submission.json")
-    structural = structural_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
+    data = submission if isinstance(submission, dict) else {}
+    input_bound = frozen()
+    math_ok = bool(
+        isinstance(submission, dict)
+        and input_bound
+        and valid_result(data.get("result"))
     )
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        completeness="COMPLETE_FOR_DECLARED_FAMILY",
-        allowed_assurances=ALLOWED_ASSURANCES,
-        verification_record="forbidden",
+    witness_ok = bool(
+        math_ok
+        and isinstance(submission, dict)
+        and witness_content_valid(data.get("witness"), data.get("result"))
     )
-    math_ok = bool(structural and frozen() and valid_result(submission.get("result")))
-    evidence_bound = bool(
-        structural
-        and evidence_list_is_bound(
-            submission.get("evidence"), expected_path="evidence/answer.txt"
-        )
-    )
-    evidence_ok = bool(evidence_bound and evidence_content_valid(submission))
-    scope_ok = bool(
-        structural
-        and submission.get("scope") == expected["required_scope"]
-        and submission.get("limitations") == LIMITATIONS
-    )
-    assurance_ok = bool(
-        contract and submission.get("claimed_assurance") in ALLOWED_ASSURANCES
-    )
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
-    correct = math_ok and evidence_ok and scope_ok and not false_cert
+    correct = bool(math_ok and witness_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
+                "witness_validity": float(witness_ok),
                 "reward": float(correct),
-                "false_certification": false_cert,
             }
         )
     )

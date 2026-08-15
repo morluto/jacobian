@@ -9,35 +9,18 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
-    is_regular_bounded_file,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
+    resolve_evidence,
     workspace_input_is_bound,
 )
 
 TASK_ID = "jacobian/perfect-cuboid-scope-audit"
 SCOPE = "perfect-cuboid-scope-audit:case-set-v1"
-LIMITATIONS = ["TWELVE_FROZEN_INTEGER_CUBOIDS", "NO_GLOBAL_PERFECT_CUBOID_CONCLUSION"]
 CLASSES = {"PERFECT_CUBOID", "EULER_BRICK_ONLY", "SPACE_AND_TWO_FACES", "OTHER"}
-MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
-scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
-
-
-def _raw_submission() -> dict[str, Any] | None:
-    """Parse the raw submission JSON without strict schema validation."""
-    if not is_regular_bounded_file(
-        Path("/app/submission.json"), max_bytes=MAX_SUBMISSION_BYTES
-    ):
-        return None
-    try:
-        value = json.loads(Path("/app/submission.json").read_text())
-    except (OSError, ValueError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
 
 
 def _root(value: int) -> int | None:
@@ -151,74 +134,40 @@ def _reward(value: dict[str, Any]) -> None:
     normalize_reward_file(path / "reward.json")
 
 
+def _witness_matches_result(witness: object, result: object) -> bool:
+    if not evidence_list_is_bound(witness, expected_path="evidence/answer.txt"):
+        return False
+    if resolve_evidence(witness[0], expected_path="evidence/answer.txt") is None:
+        return False
+    payload = read_evidence_json(witness[0], expected_path="evidence/answer.txt")
+    return bool(
+        isinstance(payload, dict)
+        and set(payload) == {"schema_version", "task_id", "result"}
+        and payload.get("schema_version") == "1"
+        and payload.get("task_id") == TASK_ID
+        and json_value_equal(payload.get("result"), result)
+    )
+
+
 def main() -> None:
     input_bound = workspace_input_is_bound()
     frozen = _frozen()
     submission = load_submission(require_input_binding=False)
-    raw_submission = _raw_submission()
-    contract = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion="PERFECT_CUBOID_FINITE_SCOPE_AUDIT",
-        allowed_assurances=scoreable_assurances,
-        verification_record="forbidden",
-    )
+    protocol = isinstance(submission, dict)
     mathematics = bool(
-        frozen
-        and isinstance(submission, dict)
-        and _mathematics(submission.get("result"), frozen)
+        frozen and protocol and _mathematics(submission.get("result"), frozen)
     )
-    evidence = bool(
-        isinstance(submission, dict)
-        and evidence_list_is_bound(
-            submission.get("evidence", []), max_bytes=MAX_EVIDENCE_BYTES
-        )
+    witness = bool(
+        protocol
+        and _witness_matches_result(submission.get("witness"), submission.get("result"))
     )
-    payload = (
-        read_evidence_json(
-            submission["evidence"][0],
-            expected_path="evidence/answer.txt",
-            max_bytes=MAX_EVIDENCE_BYTES,
-        )
-        if evidence
-        else None
-    )
-    evidence = bool(
-        isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
-        and payload.get("schema_version") == "1"
-        and payload.get("task_id") == TASK_ID
-        and payload.get("result") == submission.get("result")
-        and payload.get("limitations") == LIMITATIONS
-    )
-    scope = bool(
-        isinstance(submission, dict)
-        and submission.get("scope") == SCOPE
-        and submission.get("limitations") == LIMITATIONS
-    )
-    assurance = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") in scoreable_assurances
-    )
-    false_certification = bool(
-        isinstance(raw_submission, dict)
-        and raw_submission.get("claimed_assurance") == "VERIFIED"
-    )
-    aggregate = (
-        1.0
-        if all((input_bound, contract, mathematics, evidence, scope, assurance))
-        and not false_certification
-        else 0.0
-    )
+    aggregate = float(input_bound and protocol and mathematics and witness)
     _reward(
         {
-            "protocol": 1.0 if contract else 0.0,
-            "input_binding": 1.0 if input_bound else 0.0,
-            "mathematics": 1.0 if mathematics else 0.0,
-            "evidence": 1.0 if evidence else 0.0,
-            "scope": 1.0 if scope else 0.0,
-            "assurance": 1.0 if assurance else 0.0,
-            "false_certification": false_certification,
+            "protocol": float(protocol),
+            "input_binding": float(input_bound),
+            "mathematics": float(mathematics),
+            "witness_validity": float(witness),
             "aggregate_reward": aggregate,
             "reward": aggregate,
         }
@@ -234,10 +183,7 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "evidence": 0.0,
-                "scope": 0.0,
-                "assurance": 0.0,
-                "false_certification": False,
+                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

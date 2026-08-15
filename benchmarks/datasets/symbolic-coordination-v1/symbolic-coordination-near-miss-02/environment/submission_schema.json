@@ -121,51 +121,6 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
-    },
-    "completeness": {
-      "const": "COMPLETE"
-    },
-    "conclusion": {
-      "enum": [
-        "TRUE",
-        "FALSE",
-        "UNKNOWN"
-      ]
-    },
-    "evidence": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "const": "evidence/certificate.json"
-          },
-          "sha256": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "type": "object"
-      },
-      "maxItems": 1,
-      "minItems": 1,
-      "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "NO_CLAIM_BEYOND_SUPPLIED_CANDIDATE_AND_EXACT_QQ_COMPOSITIONS"
-      ]
-    },
     "result": {
       "additionalProperties": false,
       "properties": {
@@ -184,21 +139,17 @@
             "forward_map_sha256": {
               "const": "sha256:f12fac9e1109dfb7a94d3bcdcb27caa1cf7ca05326538cfd3dacfab067e0d5b6"
             },
-            "scope_id": {
-              "const": "scope://symbolic-coordination-v1/symbolic-coordination-near-miss-02"
-            },
             "semantics_id": {
               "const": "exact-sparse-polynomial-maps-over-QQ@1"
             },
             "subject_sha256": {
-              "const": "sha256:f4478e301eedd4e11bfba5fb24a8ce869e6c8e5da596c92f17c66caa7ec68de3"
+              "const": "sha256:90ae8bff07bbfc6ef3dec64dbe371eba5ecb21d2442da4365215111818d036e3"
             }
           },
           "required": [
             "binding_schema_version",
             "claim_id",
             "semantics_id",
-            "scope_id",
             "forward_map_sha256",
             "subject_sha256",
             "checker_id"
@@ -417,23 +368,32 @@
       ],
       "type": "object"
     },
-    "scope": {
-      "const": "EXACT_TWO_SIDED_COMPOSITION_OVER_QQ:symbolic-coordination-near-miss-02",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/symbolic-coordination-near-miss-02"
+    "witness": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "const": "evidence/certificate.json"
+          },
+          "sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

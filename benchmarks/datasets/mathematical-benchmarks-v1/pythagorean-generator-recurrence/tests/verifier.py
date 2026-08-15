@@ -3,12 +3,12 @@ import math
 from pathlib import Path
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     valid_sha256_uri,
     workspace_input_is_bound,
 )
@@ -273,74 +273,32 @@ def _evidence_bound(evidence, result):
         bound = json.loads(markers[0])
     except (ValueError, RecursionError):
         return False
-    return _json_equal(bound, result)
+    return json_value_equal(bound, result)
 
 
 def main():
-    expected = json.loads((T / "expected.json").read_text())
     submission = load_submission(W / "submission.json", require_input_binding=False)
-    envelope = isinstance(submission, dict)
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"COMPUTED"}),
-        verification_record="forbidden",
+    protocol_ok = submission is not None and workspace_input_is_bound(
+        W / "input.json", tests=T
     )
-    # Protocol compliance includes the envelope contract, the result shape,
-    # and the evidence descriptor schema (shape, path, and digest syntax) so
-    # schema violations are reported as protocol failures, not only as
-    # mathematical incorrectness or evidence invalidity. File-content binding
-    # remains the evidence metric's responsibility.
-    protocol_ok = bool(
-        contract
-        and envelope
-        and result_shape_valid(submission.get("result"))
-        and _evidence_descriptors_valid(submission.get("evidence"))
-    )
-    # Evaluate mathematical correctness independently of input binding so an
-    # input-integrity failure is reported separately by ``input_binding``
-    # rather than corrupting the correctness metric. Only aggregate reward is
-    # gated on ``input_bound``.
-    input_bound = bool(envelope and frozen())
-    math_ok = bool(envelope and valid_result(submission.get("result")))
-    # Evaluate evidence validity independently of input binding so an
-    # input-integrity failure is distinguishable from forged evidence.
+    math_ok = bool(submission is not None and valid_result(submission.get("result")))
     evidence_ok = bool(
-        envelope
-        and _evidence_bound(submission.get("evidence"), submission.get("result"))
-    )
-    scope_ok = bool(
-        envelope
-        and submission.get("scope") == expected["required_scope"]
-        and submission.get("limitations") == LIMITATIONS
-    )
-    assurance_ok = bool(
-        envelope
-        and isinstance(submission.get("claimed_assurance"), str)
-        and submission.get("claimed_assurance") == "COMPUTED"
-    )
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
-    correct = bool(
         protocol_ok
         and math_ok
-        and evidence_ok
-        and scope_ok
-        and input_bound
-        and not false_cert
+        and _evidence_bound(submission.get("witness"), submission.get("result"))
+    )
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=evidence_ok,
+        protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
-                "protocol_compliance": float(protocol_ok),
                 "correctness": float(math_ok),
                 "evidence_validity": float(evidence_ok),
-                "input_binding": float(input_bound),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
-                "reward": float(correct),
-                "false_certification": false_cert,
+                "reward": reward,
             }
         )
     )

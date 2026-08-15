@@ -4,12 +4,10 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 E = Path("/tests")
@@ -142,12 +140,10 @@ def _valid_result(result, source):
     )
 
 
-def _evidence_valid(evidence, result):
-    if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
+def _witness_valid(witness, result):
+    if not isinstance(witness, list) or len(witness) != 1:
         return False
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
     if target is None:
         return False
     try:
@@ -156,7 +152,7 @@ def _evidence_valid(evidence, result):
         text = target.read_text()
     except (OSError, UnicodeError):
         return False
-    # The evidence binds the exact checked result. The semantic arguments and
+    # The witness binds the exact checked result. The semantic arguments and
     # research-status boundary are closed fields in that result, rather than
     # brittle inferred properties of free-form prose.
     markers = [
@@ -170,59 +166,24 @@ def _evidence_valid(evidence, result):
         bound_result = json.loads(markers[0])
     except (ValueError, RecursionError):
         return False
-    return isinstance(result, dict) and bound_result == result
+    return isinstance(result, dict) and json_value_equal(bound_result, result)
 
 
 def main():
     submission = _load_bounded_submission()
     source = json.loads(next(E.glob("*input*.json")).read_text())
-    expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
     data = submission if isinstance(submission, dict) else {}
     result = data.get("result")
-    math_correct = bool(contract and _valid_result(result, source))
-    evidence_valid = bool(
-        contract and math_correct and _evidence_valid(data.get("evidence"), result)
-    )
-    scope_correct = bool(contract and data.get("scope") == expected["required_scope"])
-    assurance_correct = bool(
-        contract and data.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations_correct = bool(
-        contract and data.get("limitations") == ["NO_OPEN_PROBLEM_OR_LEAN_CLAIM"]
-    )
-    false_certification = bool(
-        false_verified_claim(submission, verification_record_bound=False)
-        or (
-            isinstance(data.get("claimed_assurance"), str)
-            and data.get("claimed_assurance") not in {"UNVERIFIED", "COMPUTED"}
-        )
-    )
-    correct = bool(
-        contract
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and limitations_correct
-        and not false_certification
-    )
-    reward = 0.0 if not correct else 0.8 + 0.1 * scope_correct + 0.1 * assurance_correct
+    math_correct = bool(isinstance(submission, dict) and _valid_result(result, source))
+    witness_valid = bool(math_correct and _witness_valid(data.get("witness"), result))
+    correct = bool(math_correct and witness_valid)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
-                "reward": reward,
-                "false_certification": false_certification,
+                "witness_validity": float(witness_valid),
+                "reward": float(correct),
             }
         )
     )

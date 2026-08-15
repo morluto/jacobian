@@ -1,80 +1,204 @@
 {
-  "schema_version": "1",
-  "task_id": "jacobian/elementwise-fixed-no-global-invariant",
-  "submission_path": "/app/submission.json",
-  "allowed_assurance": ["UNVERIFIED", "COMPUTED"],
-  "assurance_ceiling": "COMPUTED",
-  "allowed_completeness": ["COMPLETE"],
-  "conclusion": {"const": "ELEMENTWISE_DOES_NOT_IMPLY_GLOBAL"},
-  "scope": {"type": "string", "const": "finite subgroups of SL_3 over one declared allowed prime field", "enum": null, "pattern": null},
   "evidence": {
-    "min_items": 1, "max_items": 1,
-    "allowed_paths": ["evidence/answer.txt"],
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
     "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "media_types": ["text/plain"],
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
     "payload_shape": null
   },
-  "required_artifact_filenames": ["evidence/answer.txt"],
-  "verification_record": null,
-  "limitations": {"type": "array", "minItems": 2, "maxItems": 2, "prefixItems": [{"const": "claim:finite-action-counterexample"}, {"const": "limitation:no-general-classification-theorem"}], "items": false},
   "public_notes": "The verifier independently generates the finite group, checks determinant one and every elementwise fixed vector, and computes the common fixed-space intersection. The evidence file remains qualitative prose and must explain the elementwise fixed vectors, absence of a common fixed vector, and quantifier-order separation; unrelated or empty text does not earn evidence credit. The limitations array records the exact obligation IDs `claim:finite-action-counterexample` and `limitation:no-general-classification-theorem` in that order.",
+  "required_artifact_filenames": [
+    "evidence/answer.txt"
+  ],
   "schema_definitions": {
-    "entry": {"type": "integer", "minimum": 0, "maximum": 12},
-    "vector": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/entry"}},
-    "matrix": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/vector"}},
+    "entry": {
+      "maximum": 12,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "matrix": {
+      "items": {
+        "$ref": "#/$defs/vector"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    },
     "result": {
-      "type": "object", "additionalProperties": false,
-      "required": ["field_prime", "generators", "group_elements", "fixed_vectors", "common_fixed_dimension"],
+      "additionalProperties": false,
       "properties": {
-        "field_prime": {"enum": [3, 5, 7, 11, 13]},
-        "generators": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/matrix"}},
-        "group_elements": {"type": "array", "minItems": 6, "maxItems": 48, "items": {"$ref": "#/$defs/matrix"}},
-        "fixed_vectors": {"type": "array", "minItems": 6, "maxItems": 48, "items": {"$ref": "#/$defs/vector"}},
-        "common_fixed_dimension": {"const": 0}
-      }
-    }
-  },
-  "submission_result": {"$ref": "#/$defs/result"},
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "type": "object",
-    "additionalProperties": false,
-    "required": ["task_id", "conclusion", "result", "claimed_assurance", "scope", "completeness", "evidence", "limitations"],
-    "properties": {
-      "task_id": {"const": "jacobian/elementwise-fixed-no-global-invariant"},
-      "conclusion": {"const": "ELEMENTWISE_DOES_NOT_IMPLY_GLOBAL"},
-      "result": {"$ref": "#/$defs/result"},
-      "claimed_assurance": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
-      "scope": {"type": "string", "const": "finite subgroups of SL_3 over one declared allowed prime field"},
-      "completeness": {"const": "COMPLETE"},
-      "evidence": {
-        "type": "array", "minItems": 1, "maxItems": 1,
-        "items": {
-          "type": "object", "additionalProperties": false,
-          "required": ["path", "sha256"],
-          "properties": {
-            "path": {"const": "evidence/answer.txt"},
-            "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
-          }
+        "common_fixed_dimension": {
+          "const": 0
+        },
+        "field_prime": {
+          "enum": [
+            3,
+            5,
+            7,
+            11,
+            13
+          ]
+        },
+        "fixed_vectors": {
+          "items": {
+            "$ref": "#/$defs/vector"
+          },
+          "maxItems": 48,
+          "minItems": 6,
+          "type": "array"
+        },
+        "generators": {
+          "items": {
+            "$ref": "#/$defs/matrix"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "group_elements": {
+          "items": {
+            "$ref": "#/$defs/matrix"
+          },
+          "maxItems": 48,
+          "minItems": 6,
+          "type": "array"
         }
       },
-      "limitations": {"type": "array", "minItems": 2, "maxItems": 2, "prefixItems": [{"const": "claim:finite-action-counterexample"}, {"const": "limitation:no-general-classification-theorem"}], "items": false}
+      "required": [
+        "field_prime",
+        "generators",
+        "group_elements",
+        "fixed_vectors",
+        "common_fixed_dimension"
+      ],
+      "type": "object"
     },
-    "$defs": {
-      "entry": {"type": "integer", "minimum": 0, "maximum": 12},
-      "vector": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/entry"}},
-      "matrix": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/vector"}},
-      "result": {
-        "type": "object", "additionalProperties": false,
-        "required": ["field_prime", "generators", "group_elements", "fixed_vectors", "common_fixed_dimension"],
-        "properties": {
-          "field_prime": {"enum": [3, 5, 7, 11, 13]},
-          "generators": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/matrix"}},
-          "group_elements": {"type": "array", "minItems": 6, "maxItems": 48, "items": {"$ref": "#/$defs/matrix"}},
-          "fixed_vectors": {"type": "array", "minItems": 6, "maxItems": 48, "items": {"$ref": "#/$defs/vector"}},
-          "common_fixed_dimension": {"const": 0}
-        }
-      }
+    "vector": {
+      "items": {
+        "$ref": "#/$defs/entry"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
     }
-  }
+  },
+  "schema_version": "1",
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "$ref": "#/$defs/result"
+  },
+  "submission_schema": {
+    "$defs": {
+      "entry": {
+        "maximum": 12,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "matrix": {
+        "items": {
+          "$ref": "#/$defs/vector"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      },
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "common_fixed_dimension": {
+            "const": 0
+          },
+          "field_prime": {
+            "enum": [
+              3,
+              5,
+              7,
+              11,
+              13
+            ]
+          },
+          "fixed_vectors": {
+            "items": {
+              "$ref": "#/$defs/vector"
+            },
+            "maxItems": 48,
+            "minItems": 6,
+            "type": "array"
+          },
+          "generators": {
+            "items": {
+              "$ref": "#/$defs/matrix"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "group_elements": {
+            "items": {
+              "$ref": "#/$defs/matrix"
+            },
+            "maxItems": 48,
+            "minItems": 6,
+            "type": "array"
+          }
+        },
+        "required": [
+          "field_prime",
+          "generators",
+          "group_elements",
+          "fixed_vectors",
+          "common_fixed_dimension"
+        ],
+        "type": "object"
+      },
+      "vector": {
+        "items": {
+          "$ref": "#/$defs/entry"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "result": {
+        "$ref": "#/$defs/result"
+      },
+      "witness": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
+      }
+    },
+    "required": [
+      "result",
+      "witness"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/elementwise-fixed-no-global-invariant"
 }

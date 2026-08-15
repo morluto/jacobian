@@ -1,1 +1,14 @@
-{"task_id":"jacobian/smith-rank-deficient","conclusion":"TRUE","result":{"rank":1,"invariant_factors":["2"]},"claimed_assurance":"COMPUTED","scope":"jacobian/smith-rank-deficient complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:1784b7c02011cc15a85579c6c5133f1e8bff38bd5dcb893dc58b680151f39403"}],"limitations":[]}
+{
+  "result": {
+    "invariant_factors": [
+      "2"
+    ],
+    "rank": 1
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:1784b7c02011cc15a85579c6c5133f1e8bff38bd5dcb893dc58b680151f39403"
+    }
+  ]
+}

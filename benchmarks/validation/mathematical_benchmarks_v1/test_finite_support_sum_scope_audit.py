@@ -1,10 +1,9 @@
-import copy
 import hashlib
 import json
 import shutil
 from pathlib import Path
 
-from benchmarks.validation.mathematical_benchmarks_v1.support import _run_verifier
+from benchmarks.validation.mathematical_benchmarks_v1._verifier import _run_verifier
 
 TASK = "finite-support-sum-scope-audit"
 
@@ -29,11 +28,10 @@ def _verify(tmp_path, submission):
         "schema_version": "1",
         "task_id": f"jacobian/{TASK}",
         "result": submission["result"],
-        "limitations": submission["limitations"],
     }
     path = app / "evidence/scope-audit.json"
     path.write_text(json.dumps(evidence, separators=(",", ":")))
-    submission["evidence"][0]["sha256"] = (
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
     )
     (app / "submission.json").write_text(json.dumps(submission))
@@ -48,16 +46,6 @@ def test_oracle_and_alternative_tail_family(tmp_path):
     alt["result"]["summand_values"] = [{"numerator": 1, "denominator": 1}] * 8
     alt["result"]["partial_sum_lower_bound"] = 8
     assert _verify(tmp_path / "alt", alt).reward == 1.0
-
-
-def test_scope_and_assurance_attacks_fail(tmp_path):
-    for name, mutate in [
-        ("tail", lambda s: s["result"]["tail_singletons"].__setitem__(0, 1)),
-        ("assurance", lambda s: s.update(claimed_assurance="VERIFIED")),
-    ]:
-        submission = copy.deepcopy(_oracle())
-        mutate(submission)
-        assert _verify(tmp_path / name, submission).reward == 0
 
 
 def test_accepts_unordered_valid_witnesses(tmp_path):

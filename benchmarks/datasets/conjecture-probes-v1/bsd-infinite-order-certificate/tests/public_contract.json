@@ -1,16 +1,4 @@
 {
-  "allowed_assurance": [
-    "UNVERIFIED",
-    "COMPUTED",
-    "CHECKED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE"
-  ],
-  "assurance_ceiling": "CHECKED",
-  "conclusion": {
-    "const": "ELLIPTIC_POINT_INFINITE_ORDER_CERTIFICATE"
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/answer.txt"
@@ -22,13 +10,6 @@
     ],
     "min_items": 1,
     "payload_shape": null
-  },
-  "limitations": {
-    "const": [
-      "ONE_AUTHORED_ELLIPTIC_CURVE",
-      "LUTZ_NAGELL_TRUSTED",
-      "NO_BSD_CONCLUSION"
-    ]
   },
   "public_notes": "Checks one infinite-order certificate under trusted Lutz-Nagell; no Birch-Swinnerton-Dyer conclusion.",
   "required_artifact_filenames": [
@@ -49,10 +30,6 @@
     }
   },
   "schema_version": "1",
-  "scope": {
-    "const": "integral-lutz-nagell-witness-v1",
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
     "additionalProperties": false,
@@ -128,49 +105,6 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
-      },
-      "completeness": {
-        "const": "COMPLETE"
-      },
-      "conclusion": {
-        "const": "ELLIPTIC_POINT_INFINITE_ORDER_CERTIFICATE"
-      },
-      "evidence": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/answer.txt"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
-      },
-      "limitations": {
-        "const": [
-          "ONE_AUTHORED_ELLIPTIC_CURVE",
-          "LUTZ_NAGELL_TRUSTED",
-          "NO_BSD_CONCLUSION"
-        ]
-      },
       "result": {
         "additionalProperties": false,
         "properties": {
@@ -227,26 +161,34 @@
         ],
         "type": "object"
       },
-      "scope": {
-        "const": "integral-lutz-nagell-witness-v1",
-        "type": "string"
-      },
-      "task_id": {
-        "const": "jacobian/bsd-infinite-order-certificate"
+      "witness": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/answer.txt"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
   },
-  "task_id": "jacobian/bsd-infinite-order-certificate",
-  "verification_record": null
+  "task_id": "jacobian/bsd-infinite-order-certificate"
 }

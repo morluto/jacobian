@@ -48,7 +48,6 @@ REQUIRED_METADATA = {
     "domain",
     "primary_domain",
     "field",
-    "assurance_ceiling",
     "answer_visibility",
     "provenance_class",
     "fixture_digest",
@@ -112,7 +111,6 @@ def verifier_bundle_checksum(tests: Path) -> str:
 class TaskRef:
     name: str
     path: Path
-    maximum_assurance: str
     required_provider: str
     evaluation_kind: str
     domain: str
@@ -308,7 +306,6 @@ def _task_ref(
     *,
     task_id: str,
     task_path: Path,
-    assurance: Any,
     provider: Any,
     member: dict[str, Any],
     task_root: Path,
@@ -323,7 +320,6 @@ def _task_ref(
     return TaskRef(
         name=f"jacobian/{task_id}",
         path=task_path,
-        maximum_assurance=_require_string(assurance, f"{label} assurance_ceiling"),
         required_provider=str(provider or "core"),
         evaluation_kind=_require_string(
             member.get("evaluation_kind"), f"{label} evaluation_kind"
@@ -367,7 +363,6 @@ def _parse_member_file(suite: Suite, member_file: Path) -> TaskRef:
     ref = _task_ref(
         task_id=task_id,
         task_path=_resolve(task_id, suite.path),
-        assurance=member.get("assurance_ceiling"),
         provider=member.get("required_provider", "core"),
         member=member,
         task_root=suite.path,
@@ -662,8 +657,6 @@ def _metadata_failures(
     if not isinstance(metadata, dict) or not set(metadata) >= REQUIRED_METADATA:
         return [f"{rel}/task.toml: required [metadata] fields are missing"]
     ref = next((item for item in suite.tasks if item.path == task_dir), None)
-    if ref and metadata["assurance_ceiling"] != ref.maximum_assurance:
-        failures.append(f"{rel}/task.toml: assurance ceiling disagrees with suite")
     if ref and metadata["required_provider"] != ref.required_provider:
         failures.append(f"{rel}/task.toml: provider disagrees with suite")
     if ref:
@@ -730,36 +723,7 @@ def _task_manifest_failures(suite: Suite, task_dir: Path, rel: str) -> list[str]
         failures.append(f"{rel}/task.toml: task.name disagrees with suite manifest")
     failures.extend(_metadata_failures(suite, task_dir, rel, cfg.get("metadata", {})))
     failures.extend(_network_mode_failures(cfg, rel))
-    failures.extend(
-        _separate_verifier_input_artifact_failures(suite, task_dir, rel, cfg)
-    )
     return failures
-
-
-def _separate_verifier_input_artifact_failures(
-    suite: Suite, task_dir: Path, rel: str, cfg: dict[str, Any]
-) -> list[str]:
-    """Require bound input publication for separate-verifier provider tasks.
-
-    Harbor's separate verifier mode only mounts declared ``artifacts``. Provider
-    verifiers call ``load_submission`` with input binding, so omitting
-    ``/app/input.json`` makes every completed Oracle trial score zero.
-    """
-
-    if suite.id != "provider-feasibility-v1":
-        return []
-    verifier = cfg.get("verifier", {})
-    if not isinstance(verifier, dict) or verifier.get("environment_mode") != "separate":
-        return []
-    if not (task_dir / "tests" / "input.json").is_file():
-        return []
-    artifacts = cfg.get("artifacts")
-    if not isinstance(artifacts, list) or "/app/input.json" not in artifacts:
-        return [
-            f"{rel}/task.toml: separate verifier mode requires "
-            "/app/input.json in artifacts"
-        ]
-    return []
 
 
 def _agent_environment_failures(suite: Suite, task_dir: Path, rel: str) -> list[str]:

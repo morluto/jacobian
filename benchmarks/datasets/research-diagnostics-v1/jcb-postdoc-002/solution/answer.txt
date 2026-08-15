@@ -1,4 +1,0 @@
-Written on the Wall II Conjecture 200: a 14-vertex exact counterexample
-
-Expected conclusion: COUNTEREXAMPLE_EXISTS.
-Oracle summary: G is connected and bipartite with 36 edges, so all open neighborhoods are independent and lambda_avg=72/14=36/7. Its maximum induced-tree order is 7. A Hamiltonian path is impossible because a bipartite path uses part sizes differing by at most one, whereas the two parts have sizes 6 and 8.

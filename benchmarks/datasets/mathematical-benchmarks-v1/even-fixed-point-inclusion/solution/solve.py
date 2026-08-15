@@ -39,14 +39,8 @@ evidence_path = (
 evidence_path.write_text(json.dumps(evidence, sort_keys=True, separators=(",", ":")))
 digest = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
 submission = {
-    "task_id": "jacobian/even-fixed-point-inclusion",
-    "conclusion": "INCLUSION_EXCLUSION_REPLAYED",
     "result": result,
-    "claimed_assurance": "COMPUTED",
-    "scope": "ALL_8_FACTORIAL_PERMUTATIONS_AND_FIVE_INCLUSION_TERMS",
-    "completeness": "COMPLETE",
-    "evidence": [{"path": "evidence/answer.txt", "sha256": digest}],
-    "limitations": limitations,
+    "witness": [{"path": "evidence/answer.txt", "sha256": digest}],
 }
 (root / "submission.json").write_text(
     json.dumps(submission, sort_keys=True, separators=(",", ":"))

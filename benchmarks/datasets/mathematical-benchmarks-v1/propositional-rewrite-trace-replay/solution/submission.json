@@ -1,1 +1,515 @@
-{"task_id":"jacobian/propositional-rewrite-trace-replay","conclusion":"TARGET_REACHED","result":{"steps":[{"rule":"DE_MORGAN_OR","path":[],"after_ast":{"op":"and","args":[{"op":"not","args":[{"op":"imp","args":[{"op":"atom","name":"Populist(x)"},{"op":"atom","name":"Reformist(x)"}]}]},{"op":"not","args":[{"op":"imp","args":[{"op":"and","args":[{"op":"atom","name":"Authoritarian(x)"},{"op":"atom","name":"Polarizing(x)"}]},{"op":"or","args":[{"op":"atom","name":"Populist(x)"},{"op":"atom","name":"Reformist(x)"}]}]}]},{"op":"not","args":[{"op":"not","args":[{"op":"atom","name":"Authoritarian(x)"}]}]}]}},{"rule":"NOT_IMPLICATION","path":[0],"after_ast":{"op":"and","args":[{"op":"and","args":[{"op":"atom","name":"Populist(x)"},{"op":"not","args":[{"op":"atom","name":"Reformist(x)"}]}]},{"op":"not","args":[{"op":"imp","args":[{"op":"and","args":[{"op":"atom","name":"Authoritarian(x)"},{"op":"atom","name":"Polarizing(x)"}]},{"op":"or","args":[{"op":"atom","name":"Populist(x)"},{"op":"atom","name":"Reformist(x)"}]}]}]},{"op":"not","args":[{"op":"not","args":[{"op":"atom","name":"Authoritarian(x)"}]}]}]}},{"rule":"NOT_IMPLICATION","path":[1],"after_ast":{"op":"and","args":[{"op":"and","args":[{"op":"atom","name":"Populist(x)"},{"op":"not","args":[{"op":"atom","name":"Reformist(x)"}]}]},{"op":"and","args":[{"op":"and","args":[{"op":"atom","name":"Authoritarian(x)"},{"op":"atom","name":"Polarizing(x)"}]},{"op":"not","args":[{"op":"or","args":[{"op":"atom","name":"Populist(x)"},{"op":"atom","name":"Reformist(x)"}]}]}]},{"op":"not","args":[{"op":"not","args":[{"op":"atom","name":"Authoritarian(x)"}]}]}]}},{"rule":"DOUBLE_NEGATION","path":[2],"after_ast":{"op":"and","args":[{"op":"and","args":[{"op":"atom","name":"Populist(x)"},{"op":"not","args":[{"op":"atom","name":"Reformist(x)"}]}]},{"op":"and","args":[{"op":"and","args":[{"op":"atom","name":"Authoritarian(x)"},{"op":"atom","name":"Polarizing(x)"}]},{"op":"not","args":[{"op":"or","args":[{"op":"atom","name":"Populist(x)"},{"op":"atom","name":"Reformist(x)"}]}]}]},{"op":"atom","name":"Authoritarian(x)"}]}},{"rule":"DE_MORGAN_OR","path":[1,1],"after_ast":{"op":"and","args":[{"op":"and","args":[{"op":"atom","name":"Populist(x)"},{"op":"not","args":[{"op":"atom","name":"Reformist(x)"}]}]},{"op":"and","args":[{"op":"and","args":[{"op":"atom","name":"Authoritarian(x)"},{"op":"atom","name":"Polarizing(x)"}]},{"op":"and","args":[{"op":"not","args":[{"op":"atom","name":"Populist(x)"}]},{"op":"not","args":[{"op":"atom","name":"Reformist(x)"}]}]}]},{"op":"atom","name":"Authoritarian(x)"}]}},{"rule":"FLATTEN_ASSOCIATIVE","path":[],"after_ast":{"op":"and","args":[{"op":"atom","name":"Populist(x)"},{"op":"not","args":[{"op":"atom","name":"Reformist(x)"}]},{"op":"and","args":[{"op":"atom","name":"Authoritarian(x)"},{"op":"atom","name":"Polarizing(x)"}]},{"op":"and","args":[{"op":"not","args":[{"op":"atom","name":"Populist(x)"}]},{"op":"not","args":[{"op":"atom","name":"Reformist(x)"}]}]},{"op":"atom","name":"Authoritarian(x)"}]}},{"rule":"FLATTEN_ASSOCIATIVE","path":[],"after_ast":{"op":"and","args":[{"op":"atom","name":"Populist(x)"},{"op":"not","args":[{"op":"atom","name":"Reformist(x)"}]},{"op":"atom","name":"Authoritarian(x)"},{"op":"atom","name":"Polarizing(x)"},{"op":"not","args":[{"op":"atom","name":"Populist(x)"}]},{"op":"not","args":[{"op":"atom","name":"Reformist(x)"}]},{"op":"atom","name":"Authoritarian(x)"}]}},{"rule":"CONTRADICTION","path":[],"after_ast":{"op":"false"}}],"final_ast":{"op":"false"}},"claimed_assurance":"COMPUTED","scope":"FROZEN_PROPOSITIONAL_AST_AND_REGISTERED_LOCAL_RULES","completeness":"COMPLETE","evidence":[{"path":"evidence/rewrite-trace.json","sha256":"sha256:ded802b8b1082c7aaaac1d404ef49960246108404d06b61dd2a28662895d6d53"}],"limitations":["PREDICATE_APPLICATIONS_TREATED_AS_PROPOSITIONAL_ATOMS"]}
+{
+  "result": {
+    "final_ast": {
+      "op": "false"
+    },
+    "steps": [
+      {
+        "after_ast": {
+          "args": [
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "Populist(x)",
+                      "op": "atom"
+                    },
+                    {
+                      "name": "Reformist(x)",
+                      "op": "atom"
+                    }
+                  ],
+                  "op": "imp"
+                }
+              ],
+              "op": "not"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "name": "Authoritarian(x)",
+                          "op": "atom"
+                        },
+                        {
+                          "name": "Polarizing(x)",
+                          "op": "atom"
+                        }
+                      ],
+                      "op": "and"
+                    },
+                    {
+                      "args": [
+                        {
+                          "name": "Populist(x)",
+                          "op": "atom"
+                        },
+                        {
+                          "name": "Reformist(x)",
+                          "op": "atom"
+                        }
+                      ],
+                      "op": "or"
+                    }
+                  ],
+                  "op": "imp"
+                }
+              ],
+              "op": "not"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "Authoritarian(x)",
+                      "op": "atom"
+                    }
+                  ],
+                  "op": "not"
+                }
+              ],
+              "op": "not"
+            }
+          ],
+          "op": "and"
+        },
+        "path": [],
+        "rule": "DE_MORGAN_OR"
+      },
+      {
+        "after_ast": {
+          "args": [
+            {
+              "args": [
+                {
+                  "name": "Populist(x)",
+                  "op": "atom"
+                },
+                {
+                  "args": [
+                    {
+                      "name": "Reformist(x)",
+                      "op": "atom"
+                    }
+                  ],
+                  "op": "not"
+                }
+              ],
+              "op": "and"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "name": "Authoritarian(x)",
+                          "op": "atom"
+                        },
+                        {
+                          "name": "Polarizing(x)",
+                          "op": "atom"
+                        }
+                      ],
+                      "op": "and"
+                    },
+                    {
+                      "args": [
+                        {
+                          "name": "Populist(x)",
+                          "op": "atom"
+                        },
+                        {
+                          "name": "Reformist(x)",
+                          "op": "atom"
+                        }
+                      ],
+                      "op": "or"
+                    }
+                  ],
+                  "op": "imp"
+                }
+              ],
+              "op": "not"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "Authoritarian(x)",
+                      "op": "atom"
+                    }
+                  ],
+                  "op": "not"
+                }
+              ],
+              "op": "not"
+            }
+          ],
+          "op": "and"
+        },
+        "path": [
+          0
+        ],
+        "rule": "NOT_IMPLICATION"
+      },
+      {
+        "after_ast": {
+          "args": [
+            {
+              "args": [
+                {
+                  "name": "Populist(x)",
+                  "op": "atom"
+                },
+                {
+                  "args": [
+                    {
+                      "name": "Reformist(x)",
+                      "op": "atom"
+                    }
+                  ],
+                  "op": "not"
+                }
+              ],
+              "op": "and"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "Authoritarian(x)",
+                      "op": "atom"
+                    },
+                    {
+                      "name": "Polarizing(x)",
+                      "op": "atom"
+                    }
+                  ],
+                  "op": "and"
+                },
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "name": "Populist(x)",
+                          "op": "atom"
+                        },
+                        {
+                          "name": "Reformist(x)",
+                          "op": "atom"
+                        }
+                      ],
+                      "op": "or"
+                    }
+                  ],
+                  "op": "not"
+                }
+              ],
+              "op": "and"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "Authoritarian(x)",
+                      "op": "atom"
+                    }
+                  ],
+                  "op": "not"
+                }
+              ],
+              "op": "not"
+            }
+          ],
+          "op": "and"
+        },
+        "path": [
+          1
+        ],
+        "rule": "NOT_IMPLICATION"
+      },
+      {
+        "after_ast": {
+          "args": [
+            {
+              "args": [
+                {
+                  "name": "Populist(x)",
+                  "op": "atom"
+                },
+                {
+                  "args": [
+                    {
+                      "name": "Reformist(x)",
+                      "op": "atom"
+                    }
+                  ],
+                  "op": "not"
+                }
+              ],
+              "op": "and"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "Authoritarian(x)",
+                      "op": "atom"
+                    },
+                    {
+                      "name": "Polarizing(x)",
+                      "op": "atom"
+                    }
+                  ],
+                  "op": "and"
+                },
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "name": "Populist(x)",
+                          "op": "atom"
+                        },
+                        {
+                          "name": "Reformist(x)",
+                          "op": "atom"
+                        }
+                      ],
+                      "op": "or"
+                    }
+                  ],
+                  "op": "not"
+                }
+              ],
+              "op": "and"
+            },
+            {
+              "name": "Authoritarian(x)",
+              "op": "atom"
+            }
+          ],
+          "op": "and"
+        },
+        "path": [
+          2
+        ],
+        "rule": "DOUBLE_NEGATION"
+      },
+      {
+        "after_ast": {
+          "args": [
+            {
+              "args": [
+                {
+                  "name": "Populist(x)",
+                  "op": "atom"
+                },
+                {
+                  "args": [
+                    {
+                      "name": "Reformist(x)",
+                      "op": "atom"
+                    }
+                  ],
+                  "op": "not"
+                }
+              ],
+              "op": "and"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "Authoritarian(x)",
+                      "op": "atom"
+                    },
+                    {
+                      "name": "Polarizing(x)",
+                      "op": "atom"
+                    }
+                  ],
+                  "op": "and"
+                },
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "name": "Populist(x)",
+                          "op": "atom"
+                        }
+                      ],
+                      "op": "not"
+                    },
+                    {
+                      "args": [
+                        {
+                          "name": "Reformist(x)",
+                          "op": "atom"
+                        }
+                      ],
+                      "op": "not"
+                    }
+                  ],
+                  "op": "and"
+                }
+              ],
+              "op": "and"
+            },
+            {
+              "name": "Authoritarian(x)",
+              "op": "atom"
+            }
+          ],
+          "op": "and"
+        },
+        "path": [
+          1,
+          1
+        ],
+        "rule": "DE_MORGAN_OR"
+      },
+      {
+        "after_ast": {
+          "args": [
+            {
+              "name": "Populist(x)",
+              "op": "atom"
+            },
+            {
+              "args": [
+                {
+                  "name": "Reformist(x)",
+                  "op": "atom"
+                }
+              ],
+              "op": "not"
+            },
+            {
+              "args": [
+                {
+                  "name": "Authoritarian(x)",
+                  "op": "atom"
+                },
+                {
+                  "name": "Polarizing(x)",
+                  "op": "atom"
+                }
+              ],
+              "op": "and"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "Populist(x)",
+                      "op": "atom"
+                    }
+                  ],
+                  "op": "not"
+                },
+                {
+                  "args": [
+                    {
+                      "name": "Reformist(x)",
+                      "op": "atom"
+                    }
+                  ],
+                  "op": "not"
+                }
+              ],
+              "op": "and"
+            },
+            {
+              "name": "Authoritarian(x)",
+              "op": "atom"
+            }
+          ],
+          "op": "and"
+        },
+        "path": [],
+        "rule": "FLATTEN_ASSOCIATIVE"
+      },
+      {
+        "after_ast": {
+          "args": [
+            {
+              "name": "Populist(x)",
+              "op": "atom"
+            },
+            {
+              "args": [
+                {
+                  "name": "Reformist(x)",
+                  "op": "atom"
+                }
+              ],
+              "op": "not"
+            },
+            {
+              "name": "Authoritarian(x)",
+              "op": "atom"
+            },
+            {
+              "name": "Polarizing(x)",
+              "op": "atom"
+            },
+            {
+              "args": [
+                {
+                  "name": "Populist(x)",
+                  "op": "atom"
+                }
+              ],
+              "op": "not"
+            },
+            {
+              "args": [
+                {
+                  "name": "Reformist(x)",
+                  "op": "atom"
+                }
+              ],
+              "op": "not"
+            },
+            {
+              "name": "Authoritarian(x)",
+              "op": "atom"
+            }
+          ],
+          "op": "and"
+        },
+        "path": [],
+        "rule": "FLATTEN_ASSOCIATIVE"
+      },
+      {
+        "after_ast": {
+          "op": "false"
+        },
+        "path": [],
+        "rule": "CONTRADICTION"
+      }
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/rewrite-trace.json",
+      "sha256": "sha256:cde5f49ca75beac53b259af793b38b13c22177e4216b14fc9ed6ae353a3468c0"
+    }
+  ]
+}

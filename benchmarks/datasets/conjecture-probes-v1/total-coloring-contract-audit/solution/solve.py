@@ -22,11 +22,6 @@ EDGES = [
     (3, 8),
     (4, 9),
 ]
-LIMITATIONS = [
-    "ONE_PETERSEN_GRAPH_INSTANCE",
-    "PROJECTED_VALIDATOR_DEFECT_ONLY",
-    "TOTAL_COLORING_CONJECTURE_NOT_ASSESSED",
-]
 
 
 def collisions(vertices: list[int], edges: list[int]) -> list[dict[str, int]]:
@@ -52,7 +47,6 @@ def main() -> None:
         "schema_version": "1",
         "task_id": TASK_ID,
         "result": result,
-        "limitations": LIMITATIONS,
     }
     evidence = root / "evidence/answer.json"
     evidence.parent.mkdir(parents=True, exist_ok=True)
@@ -60,19 +54,13 @@ def main() -> None:
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
     )
     submission = {
-        "task_id": TASK_ID,
-        "conclusion": "PROJECTED_VALIDATOR_IS_UNSOUND_AND_REPAIRED",
         "result": result,
-        "claimed_assurance": "CHECKED",
-        "scope": "petersen-total-coloring-contract-v1",
-        "completeness": "COMPLETE",
-        "evidence": [
+        "witness": [
             {
                 "path": "evidence/answer.json",
                 "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
             }
         ],
-        "limitations": LIMITATIONS,
     }
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 

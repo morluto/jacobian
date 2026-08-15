@@ -3,11 +3,9 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W, E = Path("/app"), Path("/tests")
@@ -150,55 +148,28 @@ def frozen_ok():
 
 def main():
     submission = load_submission()
-    contract = strict_submission_contract(
-        submission,
-        task_id="jacobian/gram-schmidt-nonzero-filter-audit",
-        conclusion="FORMAL_FILTER_INCLUDES_ZERO_RESIDUALS",
-        allowed_assurances=frozenset({"COMPUTED"}),
-        verification_record="forbidden",
-    )
-    result = submission.get("result") if contract else None
+    result = submission.get("result") if isinstance(submission, dict) else None
     math_ok = bool(result_ok(result) and frozen_ok())
+    witness = submission.get("witness") if isinstance(submission, dict) else None
     evidence = (
-        read_evidence_json(
-            submission["evidence"][0], expected_path="evidence/gram-schmidt-audit.json"
-        )
-        if contract
+        read_evidence_json(witness[0], expected_path="evidence/gram-schmidt-audit.json")
+        if isinstance(witness, list) and len(witness) == 1
         else None
     )
     evidence_ok = bool(
         evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and {"schema_version", "task_id", "result"} <= set(evidence)
         and evidence["schema_version"] == "1"
-        and evidence["task_id"] == submission["task_id"]
+        and evidence["task_id"] == "jacobian/gram-schmidt-nonzero-filter-audit"
         and _json_equal(evidence["result"], result)
-        and _json_equal(evidence["limitations"], submission["limitations"])
     )
-    scope_ok = bool(
-        contract
-        and submission["scope"] == "EXACT_RATIONAL_GRAM_SCHMIDT_COUNTERMODEL"
-        and submission["limitations"]
-        == [
-            "LEAN_ELABORATION_NOT_ASSESSED",
-            "NORMALIZATION_OF_NONZERO_RESIDUALS_NOT_REQUIRED",
-        ]
-    )
-    assurance_ok = bool(contract and submission["claimed_assurance"] == "COMPUTED")
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
-    reward = (
-        1.0
-        if math_ok and evidence_ok and scope_ok and assurance_ok and not false_cert
-        else 0.0
-    )
+    reward = float(math_ok and evidence_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
-                "false_certification": false_cert,
+                "witness_validity": float(evidence_ok),
                 "reward": reward,
             }
         )

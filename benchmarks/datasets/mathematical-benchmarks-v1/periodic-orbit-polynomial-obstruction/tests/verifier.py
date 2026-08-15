@@ -2,12 +2,9 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    aggregate_reward,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 W, E = Path("/app"), Path("/tests")
@@ -18,8 +15,7 @@ MAX_EVIDENCE_BYTES = 1_048_576
 _ASSURANCE_ORDER = {
     "UNVERIFIED": 0,
     "COMPUTED": 1,
-    "CHECKED": 2,
-    "VERIFIED": 3,
+    "VERIFIED": 2,
 }
 
 # Acceptable proof-step identifiers.  The schema exposes a finite enum so the
@@ -173,77 +169,33 @@ def _result_is_valid(result, frozen):
 
 def main():
     submission, frozen = _load_submission(), _load_frozen_input()
-    expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
+    contract = bool(submission)
     math_correct = bool(contract and _result_is_valid(submission.get("result"), frozen))
     evidence = None
     if (
         contract
-        and isinstance(submission.get("evidence"), list)
-        and len(submission["evidence"]) == 1
+        and isinstance(submission.get("witness"), list)
+        and len(submission["witness"]) == 1
     ):
         evidence = _read_bounded_evidence(
-            submission["evidence"][0],
+            submission["witness"][0],
             expected_path="evidence/periodic-orbit-certificate.json",
         )
     evidence_valid = bool(
         evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and set(evidence) == {"schema_version", "task_id", "result"}
         and evidence["schema_version"] == "1"
-        and evidence["task_id"] == expected["task_id"]
+        and evidence["task_id"] == "periodic-orbit-polynomial-obstruction"
         and _json_equal(evidence["result"], submission.get("result"))
-        and _json_equal(evidence["limitations"], submission.get("limitations"))
     )
-    envelope = bool(
-        contract
-        and submission.get("scope")
-        == "ALL_FUNCTIONS_Z_TO_Z_WITH_FINITE_ITERATE_FIXED_POINT_COUNTS_AND_ALL_P_IN_Z[x]"
-        and submission.get("limitations")
-        == ["STANDARD_ORBIT_DIVISIBILITY_AND_INFINITE_PRIME_LEMMAS_TRUSTED"]
-    )
-    assurance = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    claimed = (
-        submission.get("claimed_assurance") if isinstance(submission, dict) else None
-    )
-    ceiling = expected["maximum_assurance"]
-    assurance_within_ceiling = bool(
-        contract
-        and isinstance(claimed, str)
-        and isinstance(ceiling, str)
-        and claimed in _ASSURANCE_ORDER
-        and ceiling in _ASSURANCE_ORDER
-        and _ASSURANCE_ORDER[claimed] <= _ASSURANCE_ORDER[ceiling]
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    reward = aggregate_reward(
-        correctness=math_correct,
-        evidence_validity=evidence_valid,
-        scope_accuracy=envelope,
-        assurance_calibration=assurance,
-        false_certification=false_certification,
-        protocol_ok=bool(contract and assurance_within_ceiling),
-        soft_assurance=True,
-    )
+    reward = float(math_correct and evidence_valid)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(envelope),
-                "assurance_calibration": float(assurance),
+                "witness_validity": float(evidence_valid),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

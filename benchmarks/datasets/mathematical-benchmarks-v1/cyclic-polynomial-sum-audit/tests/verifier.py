@@ -4,11 +4,9 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 APP = Path("/app")
@@ -57,21 +55,20 @@ def _poly_value(coefficients: list[int], value: Fraction) -> Fraction:
     return result
 
 
-def _evidence_is_valid(evidence: object, result: object, limitations: object) -> bool:
-    if not isinstance(evidence, list) or len(evidence) != 1:
+def _witness_is_valid(witness: object, result: object) -> bool:
+    if not isinstance(witness, list) or len(witness) != 1:
         return False
     payload = read_evidence_json(
-        evidence[0],
+        witness[0],
         expected_path="evidence/cyclic-elimination-certificate.json",
         max_bytes=MAX_EVIDENCE_BYTES,
     )
     return bool(
         payload
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
+        and {"schema_version", "task_id", "result"} <= set(payload)
         and payload.get("schema_version") == "1"
         and payload.get("task_id") == "jacobian/cyclic-polynomial-sum-audit"
         and _json_equal(payload.get("result"), result)
-        and _json_equal(payload.get("limitations"), limitations)
     )
 
 
@@ -165,48 +162,21 @@ def _result_is_valid(result: object, source: dict[str, object]) -> bool:
 def main() -> None:
     submission = load_submission()
     source = json.loads((TESTS / "input.json").read_text())
-    expected = json.loads((TESTS / "expected.json").read_text())
-    result = submission.get("result") if isinstance(submission, dict) else None
-    structure = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}),
-        verification_record="optional",
+    data = submission if isinstance(submission, dict) else {}
+    result = data.get("result")
+    math_correct = bool(
+        isinstance(submission, dict) and _result_is_valid(result, source)
     )
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
-    mathematical = bool(structure and _result_is_valid(result, source))
-    evidence = bool(
-        structure
-        and _evidence_is_valid(
-            submission.get("evidence"), result, submission.get("limitations")
-        )
-    )
-    scope = bool(structure and submission.get("scope") == expected["required_scope"])
-    assurance = bool(
-        structure
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false = false_verified_claim(submission, verification_record_bound=False)
-    correct = bool(contract and mathematical and not false)
-    reward = 0.0 if not correct or not evidence else 0.8 + 0.1 * scope + 0.1 * assurance
+    witness_ok = bool(math_correct and _witness_is_valid(data.get("witness"), result))
+    correct = bool(math_correct and witness_ok)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
-                "correctness": float(mathematical),
-                "evidence_validity": float(evidence),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
-                "reward": reward,
-                "false_certification": false,
+                "correctness": float(math_correct),
+                "witness_validity": float(witness_ok),
+                "reward": float(correct),
             }
         )
     )

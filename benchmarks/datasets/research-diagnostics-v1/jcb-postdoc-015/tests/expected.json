@@ -1,8 +1,0 @@
-{
-  "task_id": "jacobian/jcb-postdoc-015",
-  "conclusion": "DISPROVED",
-  "maximum_assurance": "COMPUTED",
-  "scope": "jacobian/jcb-postdoc-015 exact finite core for orders 5,6,7 plus public answer-visible universal result",
-  "orders": [5, 6, 7],
-  "candidate_counts": [1, 26, 703]
-}

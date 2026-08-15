@@ -2,12 +2,12 @@ import json
 from pathlib import Path
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
@@ -187,7 +187,11 @@ def _evidence_matches_result(evidence: object, result: dict) -> bool:
             for line in text.splitlines()
             if line.strip() and not line.startswith("RESULT_JSON:")
         ]
-        return bool(len(markers) == 1 and json.loads(markers[0]) == result and prose)
+        return bool(
+            len(markers) == 1
+            and json_value_equal(json.loads(markers[0]), result)
+            and prose
+        )
     except (OSError, UnicodeError, ValueError):
         return False
 
@@ -195,40 +199,19 @@ def _evidence_matches_result(evidence: object, result: dict) -> bool:
 def main() -> None:
     submission = load_submission()
     source = _load_frozen_input()
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
-    result = submission.get("result") if isinstance(submission, dict) else None
-    math_correct = bool(contract and _result_is_valid(result, source))
+    protocol_ok = submission is not None
+    result = submission.get("result") if protocol_ok else None
+    math_correct = bool(protocol_ok and _result_is_valid(result, source))
     evidence_valid = bool(
-        math_correct
+        protocol_ok
+        and math_correct
         and isinstance(result, dict)
-        and _evidence_matches_result(submission["evidence"], result)
+        and _evidence_matches_result(submission.get("witness"), result)
     )
-    scope_correct = bool(
-        contract and submission.get("scope") == expected["required_scope"]
-    )
-    assurance_correct = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations_correct = bool(
-        contract and LIMITATION in submission.get("limitations", [])
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(
-        math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and limitations_correct
-        and not false_certification
+    reward = aggregate_reward(
+        correctness=math_correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
 
     logs = Path("/logs/verifier")
@@ -238,10 +221,7 @@ def main() -> None:
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
-                "reward": float(correct),
-                "false_certification": false_certification,
+                "reward": reward,
             }
         )
     )

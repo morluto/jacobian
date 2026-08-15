@@ -57,28 +57,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
+    "result": {
+      "$ref": "#/$defs/result"
     },
-    "completeness": {
-      "enum": [
-        "COMPLETE",
-        "PARTIAL",
-        "UNKNOWN"
-      ]
-    },
-    "conclusion": {
-      "enum": [
-        "QUANTIFIER_DEFECT_REPAIRED",
-        "INSUFFICIENT_EVIDENCE"
-      ]
-    },
-    "evidence": {
+    "witness": {
       "items": {
         "additionalProperties": false,
         "properties": {
@@ -99,33 +81,11 @@
       "maxItems": 1,
       "minItems": 1,
       "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "SOURCE_FINAL_SUMMATION_NOT_ASSESSED",
-        "INTEGER_RECONSTRUCTION_CHECKED_ONLY_FOR_SUBMITTED_PRIMES"
-      ]
-    },
-    "result": {
-      "$ref": "#/$defs/result"
-    },
-    "scope": {
-      "const": "FROZEN_VALUATION_TRANSLATION_AND_SUBMITTED_TABLES",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/valuation-gcd-quantifier-audit"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

@@ -7,8 +7,7 @@ Assess one exact polynomial-map claim in the one-direction-only-evidence pilot f
 - family: `one-direction-only-evidence`
 - case version: `symbolic-coordination-v1/pilot-1`
 - generator: `symbolic-coordination-pilot-generator@1`
-- fixture digest: `sha256:e255ab52d8a033aab1d507ee84e4944e33785f2e93efce9a67ba4a5a65433e0c`
-- assurance ceiling: `CHECKED`
+- fixture digest: `sha256:06bb37649413b9a05e0ac4731017402dbba1b53bf1bd646b464a54a72acf75c3`
 - note: Three-dimensional supplied material omits one direction.
 
 ## Verification boundary
@@ -16,5 +15,5 @@ Assess one exact polynomial-map claim in the one-direction-only-evidence pilot f
 The task is offline and solvable without Jacobian. The instruction names no
 operation or tool order. The task-local clean-room verifier imports neither
 Jacobian nor the generator; it replays exact rational polynomial arithmetic,
-scope, input and artifact bindings, evidence digest, and assurance. `VERIFIED`
-is unauthorized in this pilot and receives zero reward.
+input and artifact bindings, and the witness digest. Reward is binary: the
+replayed mathematical predicate and every required binding must hold.

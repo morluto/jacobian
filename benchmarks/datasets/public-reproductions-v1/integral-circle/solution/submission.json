@@ -1,1 +1,18 @@
-{"task_id":"jacobian/integral-circle","conclusion":"TRUE","result":{"free_ranks":[1,1],"torsion":[[],[]]},"claimed_assurance":"COMPUTED","scope":"jacobian/integral-circle complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:1b858813dea4a719561b21a545439e939daf0f546dd58eff0bd3b08e01635a07"}],"limitations":[]}
+{
+  "result": {
+    "free_ranks": [
+      1,
+      1
+    ],
+    "torsion": [
+      [],
+      []
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:1b858813dea4a719561b21a545439e939daf0f546dd58eff0bd3b08e01635a07"
+    }
+  ]
+}

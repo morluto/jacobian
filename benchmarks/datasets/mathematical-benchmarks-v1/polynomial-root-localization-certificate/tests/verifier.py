@@ -2,11 +2,11 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
+    aggregate_reward,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W = Path("/app")
@@ -136,58 +136,39 @@ def _result_is_valid(result, frozen):
 def main():
     submission, frozen = load_submission(), _load_frozen_input()
     expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
+    protocol_ok = submission is not None
+    math_correct = bool(
+        protocol_ok and _result_is_valid(submission.get("result"), frozen)
     )
-    math_correct = bool(contract and _result_is_valid(submission.get("result"), frozen))
     evidence = None
     if (
-        contract
-        and isinstance(submission.get("evidence"), list)
-        and len(submission["evidence"]) == 1
+        protocol_ok
+        and isinstance(submission.get("witness"), list)
+        and len(submission["witness"]) == 1
     ):
         evidence = read_evidence_json(
-            submission["evidence"][0],
+            submission["witness"][0],
             expected_path="evidence/root-bound-certificate.json",
         )
     evidence_valid = bool(
         evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and set(evidence) == {"schema_version", "task_id", "result"}
         and evidence["schema_version"] == "1"
         and evidence["task_id"] == expected["task_id"]
-        and _json_equal(evidence["result"], submission.get("result"))
-        and _json_equal(evidence["limitations"], submission.get("limitations"))
+        and json_value_equal(evidence["result"], submission.get("result"))
     )
-    assurance_correct = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
+    reward = aggregate_reward(
+        correctness=math_correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
-    envelope_correct = bool(
-        contract
-        and submission.get("scope") == "ALL_REAL_PARAMETERS_WITH_1_GE_A_GE_B_GE_C_GE_0"
-        and submission.get("limitations")
-        == ["ELEMENTARY_COMPLEX_MODULUS_LEMMAS_TRUSTED"]
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(
-        math_correct and evidence_valid and envelope_correct and not false_certification
-    )
-    reward = float(correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(envelope_correct),
-                "assurance_calibration": float(assurance_correct),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

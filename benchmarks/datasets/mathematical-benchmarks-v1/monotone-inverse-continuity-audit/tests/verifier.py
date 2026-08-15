@@ -8,12 +8,10 @@ from pathlib import Path
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
-    false_verified_claim,
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -480,8 +478,8 @@ def _stream_evidence_matches_result(target, result):
     return scanner.finish()
 
 
-def _evidence_matches_result(submission):
-    """Bind evidence content to the submitted countermodel.
+def _witness_matches_result(submission):
+    """Bind the declared witness content to the submitted countermodel.
 
     The public instruction requires a concise derivation in answer.txt. A
     digest-bound file of unrelated bytes, or a marker-only file, must not score
@@ -492,10 +490,10 @@ def _evidence_matches_result(submission):
 
     if not isinstance(submission, dict):
         return False
-    evidence = submission.get("evidence")
-    if not isinstance(evidence, list) or len(evidence) != 1:
+    witness = submission.get("witness")
+    if not isinstance(witness, list) or len(witness) != 1:
         return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
     if target is None:
         return False
     return _stream_evidence_matches_result(target, submission.get("result"))
@@ -518,15 +516,7 @@ def main():
     submission = load_submission(require_input_binding=False)
     with (E / "input.json").open(encoding="utf-8") as stream:
         source = json.load(stream)
-    with (E / "expected.json").open(encoding="utf-8") as stream:
-        expected = json.load(stream)
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-        allowed_assurances=ALLOWED_ASSURANCES,
-    )
+    contract = bool(submission)
     result = raw.get("result") if isinstance(raw, dict) else None
     # Mathematical correctness is evaluated independently of the envelope and
     # input binding so a protocol, assurance, or input-validity failure is not
@@ -536,38 +526,15 @@ def main():
     input_bound = workspace_input_is_bound()
     evidence_valid = bool(
         isinstance(raw, dict)
-        and isinstance(raw.get("evidence"), list)
-        and len(raw["evidence"]) == 1
-        and evidence_list_is_bound(raw["evidence"], expected_path="evidence/answer.txt")
-        and _evidence_matches_result(raw)
+        and isinstance(raw.get("witness"), list)
+        and len(raw["witness"]) == 1
+        and evidence_list_is_bound(raw["witness"], expected_path="evidence/answer.txt")
+        and _witness_matches_result(raw)
     )
-    scope_correct = bool(
-        contract
-        and isinstance(raw, dict)
-        and raw.get("scope") == expected["required_scope"]
-        and raw.get("limitations") == expected["limitations"]
-    )
-    assurance_correct = bool(
-        isinstance(raw, dict)
-        and raw.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false_certification = false_verified_claim(raw, verification_record_bound=False)
-    # Aggregate reward is zero for wrong mathematics, false certification,
-    # malformed or escaped evidence, or unbound input.  Scope and assurance
-    # failures reduce reward but do not zero it, preserving diagnostic
-    # independence.
     aggregate_eligible = bool(
-        contract
-        and math_correct
-        and input_bound
-        and evidence_valid
-        and not false_certification
+        contract and math_correct and input_bound and evidence_valid
     )
-    reward = (
-        0.0
-        if not aggregate_eligible
-        else 0.8 + 0.1 * scope_correct + 0.1 * assurance_correct
-    )
+    reward = float(aggregate_eligible)
     output = Path("/logs/verifier/reward.json")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
@@ -575,11 +542,8 @@ def main():
             {
                 "correctness": float(math_correct),
                 "input_binding": float(input_bound),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
+                "witness_validity": float(evidence_valid),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

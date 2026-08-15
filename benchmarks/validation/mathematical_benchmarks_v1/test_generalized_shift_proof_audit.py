@@ -6,13 +6,16 @@ import shutil
 from pathlib import Path
 
 import pytest
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1 import (
+    _fixtures,
+    _verifier,
+)
 
 TASK = "generalized-shift-proof-audit"
 
 
 def load_case(tmp_path: Path):
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     shutil.copy2(
         task / "solution" / "audit-certificate.json",
         app / "evidence" / "audit-certificate.json",
@@ -23,16 +26,16 @@ def load_case(tmp_path: Path):
 
 def write_bound(app: Path, submission_path: Path, submission: dict) -> None:
     evidence = app / "evidence" / "audit-certificate.json"
-    support._write_json(evidence, submission["result"])
-    submission["evidence"][0]["sha256"] = (
+    _fixtures._write_json(evidence, submission["result"])
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
     )
-    support._write_json(submission_path, submission)
+    _fixtures._write_json(submission_path, submission)
 
 
 def test_canonical_certificate_receives_full_reward(tmp_path: Path) -> None:
     task, app, logs, _, _ = load_case(tmp_path)
-    result = support._run_verifier(task, app, logs)
+    result = _verifier._run_verifier(task, app, logs)
     assert result.reward == pytest.approx(1.0)
 
 
@@ -64,7 +67,7 @@ def test_alternative_exact_certificates_are_accepted(tmp_path: Path) -> None:
         "radical_domain": {"m": 17, "radicand": -16, "real_status": "NOT_REAL"},
     }
     write_bound(app, submission_path, submission)
-    result = support._run_verifier(task, app, logs)
+    result = _verifier._run_verifier(task, app, logs)
     assert result.reward == pytest.approx(1.0)
 
 
@@ -87,38 +90,9 @@ def test_corrupted_defect_certificates_are_rejected(
     task, app, logs, submission_path, submission = load_case(tmp_path)
     submission["result"][section][field] = bad_value
     write_bound(app, submission_path, submission)
-    result = support._run_verifier(task, app, logs)
+    result = _verifier._run_verifier(task, app, logs)
     assert result.details["correctness"] == 0.0
     assert result.reward == 0.0
-
-
-def test_verified_claim_is_rejected(tmp_path: Path) -> None:
-    task, app, logs, submission_path, submission = load_case(tmp_path)
-    submission["claimed_assurance"] = "VERIFIED"
-    support._write_json(submission_path, submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-
-
-def test_checked_assurance_above_computed_ceiling_is_rejected(
-    tmp_path: Path,
-) -> None:
-    """CHECKED is above the COMPUTED ceiling and must force reward to zero."""
-    task, app, logs, submission_path, submission = load_case(tmp_path)
-    submission["claimed_assurance"] = "CHECKED"
-    write_bound(app, submission_path, submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-
-
-def test_missing_required_limitations_lose_scope_credit(tmp_path: Path) -> None:
-    """Omitting the required limitations must not earn scope credit."""
-    task, app, logs, submission_path, submission = load_case(tmp_path)
-    submission["limitations"] = []
-    write_bound(app, submission_path, submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.details["scope_accuracy"] == 0.0
-    assert result.reward < 1.0
 
 
 def test_undeclared_nested_certificate_field_is_rejected(
@@ -128,7 +102,7 @@ def test_undeclared_nested_certificate_field_is_rejected(
     task, app, logs, submission_path, submission = load_case(tmp_path)
     submission["result"]["fourier_block"]["extra_field"] = 0
     write_bound(app, submission_path, submission)
-    result = support._run_verifier(task, app, logs)
+    result = _verifier._run_verifier(task, app, logs)
     assert result.details["correctness"] == 0.0
     assert result.reward == 0.0
 
@@ -141,12 +115,12 @@ def test_deeply_nested_evidence_is_rejected(tmp_path: Path) -> None:
     for _ in range(10000):
         nested = f"[{nested}]"
     evidence_path.write_text(nested)
-    submission["evidence"][0]["sha256"] = (
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
     )
-    support._write_json(submission_path, submission)
-    result = support._run_verifier(task, app, logs)
-    assert result.details["evidence_validity"] == 0.0
+    _fixtures._write_json(submission_path, submission)
+    result = _verifier._run_verifier(task, app, logs)
+    assert result.reward == 0.0
 
 
 def test_unreduced_rationals_are_accepted(tmp_path: Path) -> None:
@@ -165,7 +139,7 @@ def test_unreduced_rationals_are_accepted(tmp_path: Path) -> None:
         "denominator": 2,
     }
     write_bound(app, submission_path, submission)
-    result = support._run_verifier(task, app, logs)
+    result = _verifier._run_verifier(task, app, logs)
     assert result.reward == pytest.approx(1.0)
 
 
@@ -180,7 +154,7 @@ def test_collision_out_of_bounds_is_rejected(tmp_path: Path) -> None:
         "alpha_second": 0,
     }
     write_bound(app, submission_path, submission)
-    result = support._run_verifier(task, app, logs)
+    result = _verifier._run_verifier(task, app, logs)
     assert result.details["correctness"] == 0.0
     assert result.reward == 0.0
 
@@ -201,7 +175,7 @@ def test_oversized_diagonal_entries_is_rejected(tmp_path: Path) -> None:
         "denominator": 1,
     }
     write_bound(app, submission_path, submission)
-    result = support._run_verifier(task, app, logs)
+    result = _verifier._run_verifier(task, app, logs)
     assert result.details["correctness"] == 0.0
     assert result.reward == 0.0
 
@@ -210,6 +184,6 @@ def test_oversized_submission_is_rejected(tmp_path: Path) -> None:
     """An oversized submission.json must be rejected without crashing."""
     task, app, logs, _submission_path, _submission = load_case(tmp_path)
     (app / "submission.json").write_text('{"a": 1' + ", " * (2 * 1024 * 1024) + "}")
-    result = support._run_verifier(task, app, logs)
+    result = _verifier._run_verifier(task, app, logs)
     assert result.details["correctness"] == 0.0
     assert result.reward == 0.0

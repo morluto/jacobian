@@ -1,1 +1,15 @@
-{"task_id":"jacobian/smith-rectangular","conclusion":"TRUE","result":{"rank":2,"invariant_factors":["2","6"]},"claimed_assurance":"COMPUTED","scope":"jacobian/smith-rectangular complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:ae45ff645ac9664a87f675e02738853b8a847bbb4e9d55a4e5bfb8a3286e29da"}],"limitations":[]}
+{
+  "result": {
+    "invariant_factors": [
+      "2",
+      "6"
+    ],
+    "rank": 2
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:ae45ff645ac9664a87f675e02738853b8a847bbb4e9d55a4e5bfb8a3286e29da"
+    }
+  ]
+}

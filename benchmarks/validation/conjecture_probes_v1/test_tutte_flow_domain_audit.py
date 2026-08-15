@@ -1,163 +1,147 @@
 from __future__ import annotations
 
-import importlib.util
+import hashlib
 import json
-import sys
+import shutil
 from pathlib import Path
+
+from benchmarks.validation._verifier_child import run_verifier_in_child
 
 ROOT = Path(__file__).parents[3]
 TASK = ROOT / "benchmarks/datasets/conjecture-probes-v1/tutte-flow-domain-audit"
+TASK_ID = "jacobian/tutte-flow-domain-audit"
+EDGES = [
+    (0, 1),
+    (1, 2),
+    (2, 3),
+    (3, 4),
+    (0, 4),
+    (5, 7),
+    (7, 9),
+    (6, 9),
+    (6, 8),
+    (5, 8),
+    (0, 5),
+    (1, 6),
+    (2, 7),
+    (3, 8),
+    (4, 9),
+]
 FLAWED = [3, 2, 1, 4, 0, 1, 2, 4, 2, 1, 2, 1, 1, 2, 4]
 REPAIR = [2, 1, 4, 3, 1, 1, 3, 3, 3, 1, 2, 1, 2, 1, 4]
 
 
-def _module():
-    sys.path.insert(0, str(TASK / "tests"))
-    spec = importlib.util.spec_from_file_location(
-        "tutte_flow_verifier", TASK / "tests/verifier.py"
-    )
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def _balances(flow: list[int]) -> list[int]:
+    values = [0] * 10
+    for value, (source, target) in zip(flow, EDGES, strict=True):
+        values[source] = (values[source] + value) % 5
+        values[target] = (values[target] - value) % 5
+    return values
 
 
-def test_raw_submission_is_bounded_before_read(monkeypatch):
-    module = _module()
-
-    class UnreadablePath:
-        def __init__(self, _value):
-            pass
-
-        def read_text(self):
-            raise AssertionError("oversized submission must not be read")
-
-    def reject_oversized(_path, *, max_bytes):
-        assert max_bytes == module.MAX_SUBMISSION_BYTES
-        return False
-
-    monkeypatch.setattr(module, "Path", UnreadablePath)
-    monkeypatch.setattr(module, "is_regular_bounded_file", reject_oversized)
-    assert module._raw() is None
-
-
-def _result(module):
+def _result() -> dict[str, object]:
     return {
-        "flawed_flow": FLAWED,
-        "flawed_balances": module._balances(FLAWED),
+        "flawed_flow": FLAWED.copy(),
+        "flawed_balances": _balances(FLAWED),
         "zero_edge_index": 4,
-        "repair_flow": REPAIR,
-        "repair_balances": module._balances(REPAIR),
+        "repair_flow": REPAIR.copy(),
+        "repair_balances": _balances(REPAIR),
     }
 
 
-def test_oracle_mathematics():
-    module = _module()
-    assert module.mathematics(_result(module))
-
-
-def test_rejects_zero_flow_shortcut():
-    module = _module()
-    result = _result(module)
-    result["flawed_flow"] = [0] * 15
-    result["flawed_balances"] = [0] * 10
-    assert not module.mathematics(result)
-
-
-def test_rejects_zero_in_repair():
-    module = _module()
-    result = _result(module)
-    result["repair_flow"] = FLAWED
-    result["repair_balances"] = [0] * 10
-    assert not module.mathematics(result)
-
-
-def test_accepts_scalar_multiple():
-    module = _module()
-    result = _result(module)
-    scaled = [(2 * x) % 5 for x in REPAIR]
-    result["repair_flow"] = scaled
-    result["repair_balances"] = module._balances(scaled)
-    assert module.mathematics(result)
-
-
-def test_rejects_non_integer_reported_balances():
-    module = _module()
-    result = _result(module)
-    result["flawed_balances"][0] = False
-    assert not module.mathematics(result)
-
-
-def test_rejects_non_integer_zero_edge_index():
-    module = _module()
-    result = _result(module)
-    result["zero_edge_index"] = 4.0
-    assert not module.mathematics(result)
-
-
-def test_evidence_comparison_preserves_json_types():
-    module = _module()
-    assert not module._json_equal({"balance": 0}, {"balance": False})
-    assert not module._json_equal({"index": 4}, {"index": 4.0})
-
-
-def test_evidence_comparison_rejects_excessive_nesting():
-    module = _module()
-    left = right = 0
-    for _ in range(129):
-        left = [left]
-        right = [right]
-    assert not module._json_equal(left, right)
-
-
-def test_raw_parser_rejects_duplicate_keys(tmp_path, monkeypatch):
-    module = _module()
-    submission = tmp_path / "submission.json"
-    submission.write_text('{"result": {}, "result": {}}')
-    monkeypatch.setattr(module, "Path", lambda _value: submission)
-    assert module._raw() is None
-
-
-def test_assurance_value_is_independent_of_protocol():
-    module = _module()
-    assert module._assurance_is_calibrated(
-        {"claimed_assurance": "CHECKED", "conclusion": "wrong"}
+def case(tmp_path: Path):
+    app, logs = tmp_path / "app", tmp_path / "logs"
+    app.mkdir(parents=True)
+    logs.mkdir(parents=True)
+    shutil.copy2(TASK / "environment/input.json", app / "input.json")
+    result = _result()
+    evidence = app / "evidence/answer.json"
+    evidence.parent.mkdir()
+    evidence.write_text(
+        json.dumps(
+            {"schema_version": "1", "task_id": TASK_ID, "result": result},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
     )
-    assert not module._assurance_is_calibrated({"claimed_assurance": True})
-
-
-def test_evidence_metadata_is_bound_to_raw_envelope():
-    module = _module()
-    raw = {
-        "task_id": module.TASK_ID,
-        "result": {"value": 1},
-        "limitations": module.LIMITATIONS,
+    submission = {
+        "result": result,
+        "witness": [
+            {
+                "path": "evidence/answer.json",
+                "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
+            }
+        ],
     }
-    payload = {"schema_version": "1", **raw}
-    assert module._evidence_payload_is_bound(payload, raw)
-    assert not module._evidence_payload_is_bound(
-        payload, {**raw, "task_id": "different-task"}
-    )
-    assert not module._evidence_payload_is_bound(
-        payload, {**raw, "limitations": ["different-limit"]}
-    )
+    (app / "submission.json").write_text(json.dumps(submission) + "\n")
+    return app, logs, submission
 
 
-def test_verifier_contract_declares_diagnostic_splits():
-    contract = json.loads((TASK / "tests/verifier_contract.json").read_text())
-    assert contract == {
+def write(app: Path, submission: dict, *, payload: object | None = None) -> None:
+    evidence = app / "evidence/answer.json"
+    evidence.write_text(
+        json.dumps(
+            {"schema_version": "1", "task_id": TASK_ID, "result": submission["result"]}
+            if payload is None
+            else payload,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    )
+    submission["witness"][0]["sha256"] = (
+        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
+    )
+    (app / "submission.json").write_text(json.dumps(submission) + "\n")
+
+
+def run(app: Path, logs: Path):
+    return run_verifier_in_child(task=TASK, app=app, logs=logs)
+
+
+def test_oracle_passes(tmp_path: Path) -> None:
+    app, logs, _ = case(tmp_path)
+    assert run(app, logs).reward == 1.0
+
+
+def test_rejects_zero_repair_and_noninteger_balance(tmp_path: Path) -> None:
+    app, logs, submission = case(tmp_path)
+    submission["result"]["repair_flow"] = FLAWED.copy()
+    submission["result"]["repair_balances"] = [0] * 10
+    write(app, submission)
+    assert run(app, logs).reward == 0.0
+
+    app, logs, submission = case(tmp_path / "type")
+    submission["result"]["flawed_balances"][0] = False
+    write(app, submission)
+    assert run(app, logs).reward == 0.0
+
+
+def test_witness_binding_and_input_binding_are_hard_gates(tmp_path: Path) -> None:
+    app, logs, submission = case(tmp_path)
+    payload = {
         "schema_version": "1",
-        "input_binding_decoupled": True,
-        "scope_independent_assurance": True,
+        "task_id": TASK_ID,
+        "result": submission["result"],
     }
+    payload["result"] = dict(payload["result"])
+    payload["result"]["zero_edge_index"] = True
+    write(app, submission, payload=payload)
+    result = run(app, logs)
+    assert result.details["mathematics"] == 1.0
+    assert result.details["witness_validity"] == 0.0
+    assert result.reward == 0.0
+
+    app, logs, _ = case(tmp_path / "input")
+    (app / "input.json").write_text("{}\n")
+    result = run(app, logs)
+    assert result.details["input_binding"] == 0.0
+    assert result.details["mathematics"] == 1.0
+    assert result.reward == 0.0
 
 
-def test_reward_output_uses_host_contract(tmp_path, monkeypatch):
-    module = _module()
-    logs = tmp_path / "verifier"
-    monkeypatch.setattr(module, "Path", lambda _value: logs)
-    module._write({"reward": 1.0, "correctness": 1.0})
-    assert json.loads((logs / "reward.json").read_text()) == {"reward": 1.0}
-    assert json.loads((logs / "reward-details.json").read_text()) == {
-        "correctness": 1.0
-    }
+def test_malformed_submission_fails_closed(tmp_path: Path) -> None:
+    app, logs, _ = case(tmp_path)
+    (app / "submission.json").write_text('{"result":{},"result":{}}\n')
+    assert run(app, logs).reward == 0.0

@@ -1,1 +1,32 @@
-{"task_id":"jacobian/polynomial-tail-counterexample","conclusion":"FALSE","result":{"p_coefficients":["2","8/3","2/3","0"],"q_coefficients":["1","1","0"],"p_roots":["-1","-1/3","0"],"q_roots":["-1","0"],"x1":"0","x2":"1/100"},"claimed_assurance":"COMPUTED","scope":"polynomial-tail-counterexample exact rational witness","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:aa9ede3c391511e21bec066034e58157449702793252dd3e1c0bb2027c17c883"}],"limitations":["The witness refutes the universal claim; it does not characterize eventual monotonicity."]}
+{
+  "result": {
+    "p_coefficients": [
+      "2",
+      "8/3",
+      "2/3",
+      "0"
+    ],
+    "p_roots": [
+      "-1",
+      "-1/3",
+      "0"
+    ],
+    "q_coefficients": [
+      "1",
+      "1",
+      "0"
+    ],
+    "q_roots": [
+      "-1",
+      "0"
+    ],
+    "x1": "0",
+    "x2": "1/100"
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:aa9ede3c391511e21bec066034e58157449702793252dd3e1c0bb2027c17c883"
+    }
+  ]
+}

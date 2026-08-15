@@ -1,1 +1,31 @@
-{"task_id":"jacobian/symmetry-colored-reflection","conclusion":"TRUE","result":{"vertex_orbits":[["a","c"],["b"]],"edge_orbits":[[["a","b"],["b","c"]]]},"claimed_assurance":"COMPUTED","scope":"jacobian/symmetry-colored-reflection complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:78d84a45f087078513dd2aef99ea9c7a2784a7b769977cd0bca885c6c2077e07"}],"limitations":[]}
+{
+  "result": {
+    "edge_orbits": [
+      [
+        [
+          "a",
+          "b"
+        ],
+        [
+          "b",
+          "c"
+        ]
+      ]
+    ],
+    "vertex_orbits": [
+      [
+        "a",
+        "c"
+      ],
+      [
+        "b"
+      ]
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:78d84a45f087078513dd2aef99ea9c7a2784a7b769977cd0bca885c6c2077e07"
+    }
+  ]
+}

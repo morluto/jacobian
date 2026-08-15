@@ -19,7 +19,6 @@ REQUIRED_METADATA = {
     "fixture_digest",
     "required_provider",
 }
-ASSURANCE_ORDER = ("UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED")
 
 
 def task_dirs() -> list[Path]:
@@ -64,21 +63,14 @@ def test_mathematical_benchmarks_v1_has_flat_tasks_and_authoritative_members() -
         submission_schema = json.loads(
             (task / "environment" / "submission_schema.json").read_text()
         )
-        # The submission schema accepts the full assurance vocabulary; the
-        # scoreable subset is declared in the task-owned public_contract.json.
-        assert submission_schema["properties"]["claimed_assurance"]["enum"] == list(
-            ASSURANCE_ORDER
-        )
-        public_contract = json.loads(
-            (task / "tests" / "public_contract.json").read_text()
-        )
-        advertised_assurances = public_contract["allowed_assurance"]
-        ceiling_index = ASSURANCE_ORDER.index(metadata["assurance_ceiling"])
-        assert metadata["assurance_ceiling"] in advertised_assurances
-        assert all(
-            assurance in ASSURANCE_ORDER[: ceiling_index + 1]
-            for assurance in advertised_assurances
-        )
+        properties = submission_schema["properties"]
+        assert "result" in properties
+        assert set(properties) <= {"result", "witness"}
+        assert "result" in submission_schema["required"]
+        assert "claimed_assurance" not in properties
+        assert "scope" not in properties
+        assert "completeness" not in properties
+        assert "limitations" not in properties
         assert input_data["task_id"] == config["task"]["name"]
         assert len(metadata["fixture_digest"]) == len("sha256:") + 64
         instruction = (task / "instruction.md").read_text().lower()

@@ -1,4 +1,0 @@
-Equation 834 does not imply Equation 10: an order-eight scale probe
-
-Expected conclusion: DISPROVED.
-Oracle summary: The Equational Theories project contains a formal order-eight magma countermodel, matrix_834_10, and a Lean theorem that Equation 834 does not imply Equation 10.

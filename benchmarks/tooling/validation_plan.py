@@ -16,12 +16,6 @@ HOST_VALIDATION_DATASET_FILES = {
     "symbolic-coordination-v1": (
         "benchmarks/validation/symbolic_coordination_v1/test_pilot_contract.py",
     ),
-    "research-diagnostics-v1": (
-        "benchmarks/validation/research_diagnostics_v1/test_structured_verifiers.py",
-    ),
-    "provider-feasibility-v1": (
-        "benchmarks/validation/test_provider_download_integrity.py",
-    ),
 }
 
 

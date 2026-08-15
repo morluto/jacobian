@@ -58,16 +58,7 @@ Path("/app/evidence").mkdir(parents=True, exist_ok=True)
 Path("/app/evidence/answer.txt").write_text(evidence)
 digest = hashlib.sha256(evidence.encode()).hexdigest()
 submission = {
-    "task_id": "jacobian/marginal-joint-product-audit",
-    "conclusion": "MARGINAL_CONVERGENCE_INSUFFICIENT",
     "result": result,
-    "claimed_assurance": "COMPUTED",
-    "scope": "frozen-four-point-marginal-and-submitted-couplings",
-    "completeness": "COMPLETE",
-    "evidence": [{"path": "evidence/answer.txt", "sha256": f"sha256:{digest}"}],
-    "limitations": [
-        "This exact finite-law countermodel does not machine-verify a general "
-        "weak-convergence theorem or disambiguate the original prose."
-    ],
+    "witness": [{"path": "evidence/answer.txt", "sha256": f"sha256:{digest}"}],
 }
 Path("/app/submission.json").write_text(json.dumps(submission, indent=2) + "\n")

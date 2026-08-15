@@ -6,21 +6,15 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    ASSURANCE_LEVELS,
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-TASK_ID = "jacobian/coin-process-potential"
-CONCLUSION = "TERMINATION_AND_MEAN_CERTIFIED"
-SCOPE = "all 4096 states of the frozen 12-coin process"
-LIMITATION = "This certificate applies only to the frozen 12-coin instance (n=12)."
 N = 12
 
 
@@ -126,58 +120,21 @@ def _evidence(value: object) -> bool:
         return False
 
 
-def _evaluate(submission: object) -> dict[str, float | bool]:
-    # Structural envelope validity accepts any assurance level so that a
-    # false VERIFIED claim corrupts only assurance calibration, not the
-    # independent evidence and scope diagnostics.
-    structure_valid = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion=CONCLUSION,
-        allowed_assurances=ASSURANCE_LEVELS,
-        verification_record="forbidden",
-    )
-    protocol = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion=CONCLUSION,
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    is_submission = isinstance(submission, dict)
+def _evaluate(submission: object) -> dict[str, float]:
+    protocol_ok = isinstance(submission, dict)
     source_bound = _source_is_bound()
-    result_correct = bool(is_submission and _result(submission.get("result")))
-    evidence_valid = bool(
-        structure_valid and is_submission and _evidence(submission.get("evidence"))
+    result_correct = bool(protocol_ok and _result(submission.get("result")))
+    evidence_valid = bool(protocol_ok and _evidence(submission.get("witness")))
+    correct = bool(result_correct and source_bound)
+    reward = aggregate_reward(
+        correctness=correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
-    scope_accurate = bool(
-        structure_valid
-        and is_submission
-        and source_bound
-        and submission.get("scope") == SCOPE
-        and submission.get("completeness") == "COMPLETE"
-        and submission.get("limitations") == [LIMITATION]
-    )
-    assurance_calibrated = bool(
-        protocol
-        and is_submission
-        and submission.get("claimed_assurance") == "COMPUTED"
-        and not false_certification
-    )
-    scores = {
-        "correctness": 1.0 if result_correct and source_bound else 0.0,
-        "evidence_validity": 1.0 if evidence_valid else 0.0,
-        "scope_accuracy": 1.0 if scope_accurate else 0.0,
-        "assurance_calibration": 1.0 if assurance_calibrated else 0.0,
-    }
-    reward = 1.0 if all(score == 1.0 for score in scores.values()) else 0.0
     return {
-        **scores,
+        "correctness": float(correct),
+        "evidence_validity": float(evidence_valid),
         "reward": reward,
-        "false_certification": false_certification,
     }
 
 

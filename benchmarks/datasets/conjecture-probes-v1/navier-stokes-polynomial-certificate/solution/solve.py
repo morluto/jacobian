@@ -36,19 +36,13 @@ def main() -> None:
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
     )
     submission = {
-        "task_id": TASK_ID,
-        "conclusion": "STEADY_INCOMPRESSIBLE_POLYNOMIAL_CERTIFICATE",
         "result": result,
-        "claimed_assurance": "CHECKED",
-        "scope": "steady-affine-2d-polynomial-fields-v1",
-        "completeness": "COMPLETE",
-        "evidence": [
+        "witness": [
             {
                 "path": "evidence/answer.txt",
                 "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
             }
         ],
-        "limitations": LIMITATIONS,
     }
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 

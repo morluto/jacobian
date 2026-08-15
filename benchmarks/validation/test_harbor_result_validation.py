@@ -242,7 +242,7 @@ def test_changed_augmented_task_digest_rejects_old_trial() -> None:
 
 
 def test_augmented_manifest_rejects_context_change(tmp_path) -> None:
-    dataset = "provider-feasibility-v1"
+    dataset = "mathematical-benchmarks-v1"
     current_digest = f"sha256:{'b' * 64}"
     current_digests = {"example-task": current_digest}
     job_identity = _identity(dataset, current_digests)
@@ -282,7 +282,7 @@ def test_augmented_manifest_rejects_context_change(tmp_path) -> None:
 
 
 def test_changed_augmented_digest_cannot_resume_stale_job(tmp_path) -> None:
-    dataset = "provider-feasibility-v1"
+    dataset = "mathematical-benchmarks-v1"
     old_digest = f"sha256:{'a' * 64}"
     current_digest = f"sha256:{'b' * 64}"
     current_digests = {"example-task": current_digest}
@@ -329,7 +329,7 @@ def test_changed_augmented_digest_cannot_resume_stale_job(tmp_path) -> None:
 
 def test_same_experiment_identity_uses_distinct_attempt_names() -> None:
     identity = _identity(
-        "provider-feasibility-v1", {"example-task": f"sha256:{'a' * 64}"}
+        "mathematical-benchmarks-v1", {"example-task": f"sha256:{'a' * 64}"}
     )
 
     first = _augmented_job_name(job_identity=identity, attempt_id="1" * 16)
@@ -345,10 +345,10 @@ def test_same_experiment_identity_uses_distinct_attempt_names() -> None:
 
 def test_execution_configuration_changes_experiment_identity() -> None:
     digests = {"example-task": f"sha256:{'a' * 64}"}
-    baseline = _identity("provider-feasibility-v1", digests)
+    baseline = _identity("mathematical-benchmarks-v1", digests)
 
     changed = _augmented_job_identity(
-        dataset="provider-feasibility-v1",
+        dataset="mathematical-benchmarks-v1",
         digests=digests,
         job_config_digest=_JOB_CONFIG_DIGEST,
         harbor_version=_HARBOR_VERSION,

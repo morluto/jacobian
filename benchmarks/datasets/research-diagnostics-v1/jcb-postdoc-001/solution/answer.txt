@@ -1,4 +1,0 @@
-Exact verification of the three-variable Keller-map collision
-
-Expected conclusion: DISPROVED.
-Oracle summary: The displayed map has constant Jacobian determinant 1 and the two displayed rational points have the same image (-1/8,0,0). This is an explicit non-injectivity witness over Q and hence over characteristic zero; public Lean formalizations establish stronger field-uniform variants.

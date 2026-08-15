@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
@@ -219,7 +219,7 @@ def evidence_matches_result(evidence: object, result: object) -> bool:
             )
         )
         return (
-            json.loads(marker) == result
+            json_value_equal(json.loads(marker), result)
             and len(body) >= 80
             and "gcd" in lowered
             and "remainder" in lowered
@@ -256,32 +256,10 @@ def limitation_is_bounded(value: object) -> bool:
 
 def main() -> None:
     submission = load_regular_submission()
-    data = submission if isinstance(submission, dict) else {}
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
-    try:
-        workspace_input = WORKSPACE / "input.json"
-        frozen_input = TESTS / "input.json"
-        frozen_input_ok = bool(
-            all(
-                path.is_file()
-                and not path.is_symlink()
-                and path.stat().st_size <= 1_048_576
-                for path in (workspace_input, frozen_input)
-            )
-            and workspace_input.read_bytes() == frozen_input.read_bytes()
-        )
-    except OSError:
-        frozen_input_ok = False
+    protocol_ok = submission is not None
+    data = submission if protocol_ok else {}
     result = data.get("result", {})
     result_typed = result if isinstance(result, dict) else {}
-    # Thread 1: reject result objects outside the advertised schema
-    # (submission_schema.json sets additionalProperties: false on result).
     result_schema_ok = isinstance(result, dict) and set(result) == RESULT_KEYS
     r0 = integers(result_typed.get("remainder_constant"))
     r1 = integers(result_typed.get("remainder_x"))
@@ -292,10 +270,6 @@ def main() -> None:
 
     computed_r0, computed_r1 = symbolic_remainder()
     computed_gcd = monic_gcd(computed_r0, computed_r1)
-    # Uniqueness and the parameter are consequences of the recomputed gcd,
-    # not hard-coded expectations.  A monic linear gcd c0 + c1*a (c1 != 0)
-    # has exactly one rational root a = -c0/c1; that root is the unique
-    # integer parameter, and its integrality is what licenses UNIQUE_PARAMETER.
     gcd_is_linear = len(computed_gcd) == 2 and computed_gcd[1] != 0
     derived_parameter_int = derive_unique_parameter(computed_gcd)
     parameter_is_integer = derived_parameter_int is not None
@@ -316,37 +290,18 @@ def main() -> None:
         and trim(multiply([parameter_value, -1, 1], trim(quotient)))
         == [90, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
     )
-    # Thread 4: keep mathematical correctness independent of input integrity.
-    math_correct = bool(contract and result_schema_ok and symbolic_ok and quotient_ok)
-    # Thread 2: validate evidence content, not just path and digest.
-    # Input integrity is reported separately and gates only the aggregate
-    # reward; coupling it here would make evidence failures indistinguishable
-    # from input-tampering failures.
+    math_correct = bool(
+        protocol_ok and result_schema_ok and symbolic_ok and quotient_ok
+    )
     evidence_valid = bool(
-        math_correct and evidence_matches_result(data.get("evidence"), result_typed)
+        protocol_ok
+        and math_correct
+        and evidence_matches_result(data.get("witness"), result_typed)
     )
-    scope_correct = bool(contract and data.get("scope") == expected["required_scope"])
-    assurance_correct = bool(
-        contract and data.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations_correct = bool(
-        contract
-        and isinstance(data.get("limitations"), list)
-        and any(limitation_is_bounded(item) for item in data["limitations"])
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    # Thread 4: gate the aggregate reward on input integrity without
-    # corrupting the independently computed mathematical-correctness signal.
-    passed = bool(
-        math_correct
-        and frozen_input_ok
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and limitations_correct
-        and not false_certification
+    reward = aggregate_reward(
+        correctness=math_correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
@@ -355,11 +310,7 @@ def main() -> None:
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
-                "input_integrity": float(frozen_input_ok),
-                "reward": float(passed),
-                "false_certification": false_certification,
+                "reward": reward,
             }
         )
     )

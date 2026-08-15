@@ -7,8 +7,7 @@ Assess one exact polynomial-map claim in the bounded-collision-scope pilot famil
 - family: `bounded-collision-scope`
 - case version: `symbolic-coordination-v1/pilot-1`
 - generator: `symbolic-coordination-pilot-generator@1`
-- fixture digest: `sha256:6c55f7c8dbc99710bf3d200ad311359aea9f2d29c0b6c2bb123ae4d116919ef8`
-- assurance ceiling: `CHECKED`
+- fixture digest: `sha256:3674b4c2c47d4f5580c0aaf06f5ae3d7e0798d3b898de839af1e240fd97929f3`
 - note: Symmetry yields alternate swap witnesses.
 
 ## Verification boundary
@@ -16,5 +15,5 @@ Assess one exact polynomial-map claim in the bounded-collision-scope pilot famil
 The task is offline and solvable without Jacobian. The instruction names no
 operation or tool order. The task-local clean-room verifier imports neither
 Jacobian nor the generator; it replays exact rational polynomial arithmetic,
-scope, input and artifact bindings, evidence digest, and assurance. `VERIFIED`
-is unauthorized in this pilot and receives zero reward.
+input and artifact bindings, and the witness digest. Reward is binary: the
+replayed mathematical predicate and every required binding must hold.

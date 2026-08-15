@@ -7,7 +7,7 @@ from verifier_support import (
     evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
-    strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 W = Path("/app")
@@ -30,27 +30,14 @@ def q(v):
 def main():
     s = load_submission()
     x = json.loads(next(E.glob("*input*.json")).read_text())
-    e = json.loads((E / "expected.json").read_text())
+    input_binding = workspace_input_is_bound()
     r = s.get("result") if isinstance(s, dict) else None
     r = r if isinstance(r, dict) else {}
     sol = r.get("solution", {})
-    contract = strict_submission_contract(
-        s,
-        task_id=e["task_id"],
-        conclusion=e["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
-    math_contract = strict_submission_contract(
-        s,
-        task_id=e["task_id"],
-        conclusion=e["conclusion"],
-        verification_record="optional",
-    )
 
     values = {k: q(v) for k, v in sol.items()} if isinstance(sol, dict) else {}
-    valid = (
-        math_contract
+    math_ok = bool(
+        isinstance(s, dict)
         and set(values) == set(x["variables"])
         and all(v is not None for v in values.values())
         and all(
@@ -62,30 +49,20 @@ def main():
             for row in x["equations"]
         )
     )
-    math_correct = bool(valid)
-    correct = bool(contract and math_correct)
-    good = bool(math_contract and evidence_list_is_bound(s["evidence"]))
-    scope = bool(math_contract and s["scope"] == " ".join(e["required_scope_terms"]))
-    assurance = bool(math_contract and s["claimed_assurance"] == e["maximum_assurance"])
-    false = bool(isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED")
+    ev_ok = bool(isinstance(s, dict) and evidence_list_is_bound(s.get("witness")))
     reward = aggregate_reward(
-        correctness=correct,
-        evidence_validity=good,
-        scope_accuracy=scope,
-        assurance_calibration=assurance,
-        false_certification=false,
-        soft_assurance=True,
+        correctness=math_ok,
+        evidence_validity=ev_ok,
+        protocol_ok=bool(input_binding and s is not None),
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
-                "correctness": float(math_correct),
-                "evidence_validity": float(good),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
+                "correctness": float(math_ok),
+                "evidence_validity": float(ev_ok),
+                "input_binding": float(input_binding),
                 "reward": reward,
-                "false_certification": false,
             }
         )
     )

@@ -1,1 +1,22 @@
-{"task_id":"jacobian/integral-projective-plane","conclusion":"TRUE","result":{"free_ranks":[1,0,0],"torsion":[[],["2"],[]]},"claimed_assurance":"COMPUTED","scope":"jacobian/integral-projective-plane complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:97101f12c38e01e17629922c495607fdda82c11e26929de2c5d926844c66ac3b"}],"limitations":[]}
+{
+  "result": {
+    "free_ranks": [
+      1,
+      0,
+      0
+    ],
+    "torsion": [
+      [],
+      [
+        "2"
+      ],
+      []
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:97101f12c38e01e17629922c495607fdda82c11e26929de2c5d926844c66ac3b"
+    }
+  ]
+}

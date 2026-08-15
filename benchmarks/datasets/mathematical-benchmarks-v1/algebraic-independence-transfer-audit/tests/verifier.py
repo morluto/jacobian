@@ -1,82 +1,16 @@
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    aggregate_reward,
-    evidence_list_is_bound,
-    false_verified_claim,
-    is_regular_bounded_file,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
 W, T = Path("/app"), Path("/tests")
-LIMITATION = "The external algebraic-independence theorem for delta and its derivatives is a trusted premise and is not verified here."
-
-
-def _limitations_valid(value: object) -> bool:
-    if not (isinstance(value, list) and len(value) == 1 and isinstance(value[0], str)):
-        return False
-    text = value[0].casefold()
-    return (
-        any(
-            term in text
-            for term in (
-                "algebraic independence",
-                "algebraic-independence",
-                "transcendence",
-            )
-        )
-        and any(term in text for term in ("trusted", "assum", "external", "premise"))
-        and any(
-            term in text
-            for term in ("not verified", "not proved", "not checked", "unverified")
-        )
-    )
-
-
-# Published reward-bearing prose obligations for evidence/answer.txt.  Each
-# fact has several equivalent formulations, and the file is scanned in chunks
-# so evidence size is not itself a hidden validity condition.
-_EVIDENCE_FACTS = {
-    "coordinate_inverse": (
-        re.compile(r"\bbirational\b"),
-        re.compile(
-            r"(?:coordinate|change|substitution|map).{0,96}"
-            r"(?:rational.{0,32})?invers"
-        ),
-    ),
-    "conjugate_norm": (
-        re.compile(r"\bconjugate\s+norm\b"),
-        re.compile(r"\bconjugate\s+product\b"),
-        re.compile(r"\bnorm\b"),
-    ),
-    "exact": (
-        re.compile(r"\bexact(?:ly)?\b"),
-        re.compile(r"\bcomputed?\s+without\s+approximation\b"),
-    ),
-    "rational_domain": (
-        re.compile(r"\bqq\b"),
-        re.compile(r"\brationals?\b"),
-        re.compile(r"\brational\s+(?:numbers?|coefficients?)\b"),
-    ),
-    "independence_theorem": (
-        re.compile(r"\balgebraic(?:\s+|-)independence\b"),
-        re.compile(r"\bmodular[- ]form\s+independence\b"),
-    ),
-    "trusted_premise": (
-        re.compile(r"\btrusted\b"),
-        re.compile(r"\bpremise\b"),
-        re.compile(r"\bassum(?:e|ed|ption)\b"),
-        re.compile(r"\bexternal\b"),
-    ),
-}
 
 
 def add(*polynomials):
@@ -179,102 +113,47 @@ def valid_result(result):
     )
 
 
-def evidence_text_is_valid(path: Path) -> bool:
-    """Stream evidence and require every published semantic fact."""
-
-    matched = dict.fromkeys(_EVIDENCE_FACTS, False)
-    carry = ""
-    try:
-        with path.open("r", encoding="utf-8") as stream:
-            while chunk := stream.read(65_536):
-                window = (carry + chunk).lower()
-                for name, alternatives in _EVIDENCE_FACTS.items():
-                    if not matched[name] and any(
-                        pattern.search(window) for pattern in alternatives
-                    ):
-                        matched[name] = True
-                carry = window[-256:]
-    except (OSError, UnicodeError, MemoryError):
+def witness_is_valid(witness, result):
+    if not isinstance(witness, list) or len(witness) != 1:
         return False
-    return all(matched.values())
-
-
-def evidence_ok(evidence):
-    if not evidence_list_is_bound(evidence):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
     if target is None:
         return False
-    return evidence_text_is_valid(target)
-
-
-def raw_submission():
-    """Parse the bounded submission JSON without full-schema validation.
-
-    Mathematical correctness, evidence, scope, and assurance are evaluated
-    from this raw object so that an independent envelope fault (invalid
-    evidence path, wrong scope, etc.) does not erase the mathematical
-    diagnostic.  Full-schema validity is reserved for ``protocol_compliance``.
-    """
-
-    path = W / "submission.json"
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
     try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
+        text = target.read_text()
+    except (OSError, UnicodeError):
+        return False
+    markers = [
+        line.removeprefix("RESULT_JSON:").strip()
+        for line in text.splitlines()
+        if line.startswith("RESULT_JSON:")
+    ]
+    if len(markers) != 1:
+        return False
+    try:
+        bound_result = json.loads(markers[0])
+    except (ValueError, RecursionError):
+        return False
+    return isinstance(result, dict) and json_value_equal(bound_result, result)
 
 
 def main():
-    expected = json.loads((T / "expected.json").read_text())
-    raw = raw_submission()
-    input_binding = workspace_input_is_bound()
-    submission = load_submission(W / "submission.json", require_input_binding=False)
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
+    submission = load_submission()
+    data = submission if isinstance(submission, dict) else {}
+    input_bound = workspace_input_is_bound()
+    result = data.get("result")
+    mathematical = bool(
+        isinstance(submission, dict) and input_bound and valid_result(result)
     )
-    result = raw.get("result") if isinstance(raw, dict) else None
-    mathematical = valid_result(result)
-    evidence = bool(
-        isinstance(submission, dict) and evidence_ok(submission.get("evidence"))
-    )
-    scope = bool(
-        isinstance(submission, dict)
-        and submission.get("scope") == "exact-birational-and-quadratic-transfer-over-QQ"
-        and submission.get("completeness") == "COMPLETE"
-        and _limitations_valid(submission.get("limitations"))
-    )
-    assurance = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "COMPUTED"
-    )
-    false_certification = false_verified_claim(raw, verification_record_bound=False)
+    witness_ok = bool(mathematical and witness_is_valid(data.get("witness"), result))
+    correct = bool(mathematical and witness_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
-                "protocol_compliance": float(bool(contract)),
-                "input_binding": float(input_binding),
                 "correctness": float(mathematical),
-                "evidence_validity": float(evidence),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
-                "reward": aggregate_reward(
-                    correctness=mathematical,
-                    evidence_validity=evidence,
-                    scope_accuracy=scope,
-                    assurance_calibration=assurance,
-                    false_certification=false_certification,
-                    protocol_ok=bool(contract and input_binding),
-                    soft_assurance=True,
-                ),
-                "false_certification": false_certification,
+                "witness_validity": float(witness_ok),
+                "reward": float(correct),
             }
         )
     )

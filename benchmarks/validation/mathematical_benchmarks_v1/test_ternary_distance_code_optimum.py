@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 from copy import deepcopy
 from pathlib import Path
 
 import pytest
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1 import (
+    _fixtures,
+    _verifier,
+)
 
 TASK_NAME = "ternary-distance-code-optimum"
 TASK = (
@@ -17,6 +19,18 @@ TASK = (
     / "mathematical-benchmarks-v1"
     / TASK_NAME
 )
+
+
+def _inject_marker(app: Path, submission: dict) -> None:
+    evidence = app / "evidence" / "answer.txt"
+    text = evidence.read_text()
+    lines = [line for line in text.splitlines() if not line.startswith("RESULT_JSON:")]
+    marker = "RESULT_JSON: " + json.dumps(
+        submission["result"], sort_keys=True, separators=(",", ":")
+    )
+    lines.append(marker)
+    evidence.write_text("\n".join(lines) + "\n")
+    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
 
 
 def _case(
@@ -31,14 +45,12 @@ def _case(
     if tamper_input:
         source = json.loads((app / "input.json").read_text())
         source["claimed_optimum"] = 17
-        support._write_json(app / "input.json", source)
+        _fixtures._write_json(app / "input.json", source)
     evidence = (TASK / "solution" / "answer.txt").read_bytes()
     (app / "evidence" / "answer.txt").write_bytes(evidence)
     submission = deepcopy(submission)
-    submission["evidence"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence).hexdigest()
-    )
-    support._write_json(app / "submission.json", submission)
+    _inject_marker(app, submission)
+    _fixtures._write_json(app / "submission.json", submission)
     return TASK, app, logs
 
 
@@ -47,9 +59,8 @@ def _submission() -> dict:
 
 
 def test_reference_certificate_passes(tmp_path: Path) -> None:
-    result = support._run_verifier(*_case(tmp_path, _submission(), label="reference"))
+    result = _verifier._run_verifier(*_case(tmp_path, _submission(), label="reference"))
     assert result.reward == pytest.approx(1.0)
-    assert result.details["false_certification"] is False
 
 
 def test_alphabet_permutation_is_accepted(tmp_path: Path) -> None:
@@ -58,14 +69,14 @@ def test_alphabet_permutation_is_accepted(tmp_path: Path) -> None:
         "".join(str((int(symbol) + 1) % 3) for symbol in word)
         for word in reversed(submission["result"]["codewords"])
     ]
-    result = support._run_verifier(*_case(tmp_path, submission, label="alternative"))
+    result = _verifier._run_verifier(*_case(tmp_path, submission, label="alternative"))
     assert result.reward == pytest.approx(1.0)
 
 
 def test_pair_distance_corruption_is_rejected(tmp_path: Path) -> None:
     submission = _submission()
     submission["result"]["codewords"][1] = "000001"
-    result = support._run_verifier(*_case(tmp_path, submission, label="distance"))
+    result = _verifier._run_verifier(*_case(tmp_path, submission, label="distance"))
     assert result.details["correctness"] == 0.0
     assert result.reward == 0.0
 
@@ -75,7 +86,7 @@ def test_wrong_dual_multiplier_is_rejected(tmp_path: Path) -> None:
     submission["result"]["upper_bound_certificate"]["dual_multipliers"]["order_1"] = (
         "1/2"
     )
-    result = support._run_verifier(*_case(tmp_path, submission, label="dual"))
+    result = _verifier._run_verifier(*_case(tmp_path, submission, label="dual"))
     assert result.details["correctness"] == 0.0
     assert result.reward == 0.0
 
@@ -88,51 +99,16 @@ def test_noncanonical_rational_is_accepted(tmp_path: Path) -> None:
     submission["result"]["upper_bound_certificate"]["dual_multipliers"]["order_2"] = (
         "2/12"
     )
-    result = support._run_verifier(*_case(tmp_path, submission, label="fraction"))
+    result = _verifier._run_verifier(*_case(tmp_path, submission, label="fraction"))
     assert result.details["correctness"] == 1.0
     assert result.reward == pytest.approx(1.0)
 
 
-def test_verified_claim_is_rejected(tmp_path: Path) -> None:
-    submission = _submission()
-    submission["claimed_assurance"] = "VERIFIED"
-    result = support._run_verifier(*_case(tmp_path, submission, label="verified"))
-    assert result.details["false_certification"] is True
-    assert result.reward == 0.0
-
-
 def test_input_tampering_is_rejected(tmp_path: Path) -> None:
-    result = support._run_verifier(
+    result = _verifier._run_verifier(
         *_case(tmp_path, _submission(), label="input", tamper_input=True)
     )
     assert result.details["correctness"] == 0.0
-    assert result.reward == 0.0
-
-
-def test_evidence_contradictory_distribution_is_rejected(tmp_path: Path) -> None:
-    """Evidence prose that claims distribution values contradicting the
-    certificate is rejected, binding evidence to the submitted result.
-    """
-    submission = _submission()
-    root = tmp_path / "contradictory"
-    app = root / "app"
-    logs = root / "logs"
-    (app / "evidence").mkdir(parents=True)
-    logs.mkdir(parents=True)
-    shutil.copy2(TASK / "environment" / "input.json", app / "input.json")
-    evidence_path = app / "evidence" / "answer.txt"
-    evidence_path.write_text(
-        "An 18-word ternary code exists with pairwise Hamming distance four or "
-        "six. Its distance distribution is A0=1, A4=0, A6=17. The nonnegative "
-        "combination of Delsarte inequalities is a dual certificate proving the "
-        "matching upper bound. This is an exact COMPUTED certificate.\n",
-        encoding="utf-8",
-    )
-    submission = deepcopy(submission)
-    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
-    support._write_json(app / "submission.json", submission)
-    result = support._run_verifier(TASK, app, logs)
-    assert result.details["evidence_validity"] == 0.0
     assert result.reward == 0.0
 
 
@@ -145,7 +121,7 @@ def test_unhashable_codewords_rejected_without_crash(tmp_path: Path) -> None:
         ["0", "0", "0", "0", "0", "0"],
         *submission["result"]["codewords"][1:],
     ]
-    result = support._run_verifier(*_case(tmp_path, submission, label="unhashable"))
+    result = _verifier._run_verifier(*_case(tmp_path, submission, label="unhashable"))
     assert result.details["correctness"] == 0.0
     assert result.reward == 0.0
 
@@ -158,30 +134,47 @@ def test_out_of_alphabet_codewords_rejected(tmp_path: Path) -> None:
     submission["result"]["codewords"] = [
         word.replace("0", "x") for word in submission["result"]["codewords"]
     ]
-    result = support._run_verifier(*_case(tmp_path, submission, label="alphabet"))
+    result = _verifier._run_verifier(*_case(tmp_path, submission, label="alphabet"))
     assert result.details["correctness"] == 0.0
     assert result.reward == 0.0
 
 
-def test_affirmative_formal_proof_limitation_rejected(tmp_path: Path) -> None:
-    """A limitation that affirmatively claims formal proof was checked is
-    rejected, even though it contains the phrase 'formal proof'.
-    """
+def test_witness_without_result_marker_is_rejected(tmp_path: Path) -> None:
+    """Evidence prose without a RESULT_JSON marker is rejected."""
     submission = _submission()
-    submission["limitations"] = [
-        "A formal proof was independently checked, so there are no limitations."
-    ]
-    result = support._run_verifier(*_case(tmp_path, submission, label="affirmative"))
+    root = tmp_path / "no-marker"
+    app = root / "app"
+    logs = root / "logs"
+    (app / "evidence").mkdir(parents=True)
+    logs.mkdir(parents=True)
+    shutil.copy2(TASK / "environment" / "input.json", app / "input.json")
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text(
+        "An 18-word ternary code exists with pairwise Hamming distance four or six.\n",
+        encoding="utf-8",
+    )
+    submission = deepcopy(submission)
+    submission["witness"][0]["sha256"] = _fixtures._digest(evidence_path)
+    _fixtures._write_json(app / "submission.json", submission)
+    result = _verifier._run_verifier(TASK, app, logs)
+    assert result.reward == 0.0
     assert result.reward == 0.0
 
 
-def test_semantically_correct_limitation_accepted(tmp_path: Path) -> None:
-    """A limitation that disclaims formal verification with different wording
-    (e.g. 'No independent checker was run') is accepted.
-    """
+def test_witness_result_mismatch_is_rejected(tmp_path: Path) -> None:
+    """Evidence with a RESULT_JSON marker that doesn't match the result is rejected."""
     submission = _submission()
-    submission["limitations"] = [
-        "No independent checker or proof assistant was run on this certificate."
-    ]
-    result = support._run_verifier(*_case(tmp_path, submission, label="alt-wording"))
-    assert result.reward == pytest.approx(1.0)
+    root = tmp_path / "mismatch"
+    app = root / "app"
+    logs = root / "logs"
+    (app / "evidence").mkdir(parents=True)
+    logs.mkdir(parents=True)
+    shutil.copy2(TASK / "environment" / "input.json", app / "input.json")
+    evidence_path = app / "evidence" / "answer.txt"
+    evidence_path.write_text("RESULT_JSON: {}\n", encoding="utf-8")
+    submission = deepcopy(submission)
+    submission["witness"][0]["sha256"] = _fixtures._digest(evidence_path)
+    _fixtures._write_json(app / "submission.json", submission)
+    result = _verifier._run_verifier(TASK, app, logs)
+    assert result.reward == 0.0
+    assert result.reward == 0.0

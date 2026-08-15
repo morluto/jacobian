@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import tomllib
 from dataclasses import replace
 from pathlib import Path
 
@@ -12,8 +11,6 @@ from benchmarks.tooling.harbor_suite import (
     load_registry,
     validate_global_task_ids,
 )
-
-ASSURANCE_ORDER = ("UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED")
 
 
 def test_every_committed_benchmark_contract_is_valid() -> None:
@@ -49,39 +46,33 @@ def test_inventory_covers_every_registered_task(
     assert "submission_schema_digest" in rendered
 
 
-def test_visible_submission_contracts_match_evidence_and_assurance_limits() -> None:
+def test_visible_submission_contracts_expose_only_result_and_witness() -> None:
+    retired_contract_fields = {
+        "allowed_assurance",
+        "allowed_completeness",
+        "assurance_ceiling",
+        "conclusion",
+        "scope",
+        "verification_record",
+        "limitations",
+    }
     for suite in load_registry():
         for task in suite.tasks:
-            config = tomllib.loads((task.path / "task.toml").read_text())
-            ceiling = config["metadata"]["assurance_ceiling"]
             schema = json.loads(
                 (task.path / "environment" / "submission_schema.json").read_text()
             )
             properties = schema["properties"]
-            evidence = properties["evidence"]
-            assert evidence.get("minItems") == 1, task.path
-            assert evidence.get("maxItems") == 1, task.path
-
-            assurance = properties["claimed_assurance"]
+            assert set(properties) <= {"result", "witness"}, task.path
+            assert "result" in schema["required"], task.path
+            witness = properties.get("witness")
+            if witness is not None:
+                assert witness.get("minItems") in {0, 1}, task.path
+                assert witness.get("maxItems") in {0, 1}, task.path
+                assert witness.get("minItems") <= witness.get("maxItems"), task.path
             contract_path = task.path / "tests" / "public_contract.json"
             if contract_path.is_file():
-                public_contract = json.loads(contract_path.read_text())
-                if "allowed_assurance" in public_contract:
-                    # Modern public contracts advertise the full assurance ladder
-                    # in the agent-visible schema and constrain the ceiling through
-                    # allowed_assurance.
-                    assert assurance.get("enum") == list(ASSURANCE_ORDER), task.path
-                    advertised = public_contract["allowed_assurance"]
-                else:
-                    # Legacy contracts only mirror the submission schema.
-                    advertised = assurance.get("enum", [assurance.get("const")])
-            else:
-                advertised = assurance.get("enum", [assurance.get("const")])
-            ceiling_index = ASSURANCE_ORDER.index(ceiling)
-            assert ceiling in advertised, task.path
-            assert all(
-                value in ASSURANCE_ORDER[: ceiling_index + 1] for value in advertised
-            ), task.path
+                contract = json.loads(contract_path.read_text())
+                assert not (set(contract) & retired_contract_fields), task.path
 
 
 def test_task_gap_records_preserve_only_historical_provenance() -> None:

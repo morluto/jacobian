@@ -1,20 +1,4 @@
 {
-  "allowed_assurance": [
-    "UNVERIFIED",
-    "COMPUTED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE",
-    "PARTIAL",
-    "UNKNOWN"
-  ],
-  "assurance_ceiling": "COMPUTED",
-  "conclusion": {
-    "enum": [
-      "MIXED_REALIZATION_AND_OBSTRUCTION",
-      "INCOMPLETE_AUDIT"
-    ]
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/answer.txt"
@@ -27,13 +11,7 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "limitations": {
-    "items": {
-      "type": "string"
-    },
-    "type": "array"
-  },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.",
   "required_artifact_filenames": [
     "evidence/answer.txt"
   ],
@@ -104,12 +82,6 @@
     }
   },
   "schema_version": "1",
-  "scope": {
-    "const": null,
-    "enum": null,
-    "pattern": null,
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
     "additionalProperties": false,
@@ -198,28 +170,24 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "cases": {
+            "items": {
+              "$ref": "#/$defs/case"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "required": [
+          "cases"
+        ],
+        "type": "object"
       },
-      "completeness": {
-        "enum": [
-          "COMPLETE",
-          "PARTIAL",
-          "UNKNOWN"
-        ]
-      },
-      "conclusion": {
-        "enum": [
-          "MIXED_REALIZATION_AND_OBSTRUCTION",
-          "INCOMPLETE_AUDIT"
-        ]
-      },
-      "evidence": {
+      "witness": {
         "items": {
           "additionalProperties": false,
           "properties": {
@@ -240,49 +208,13 @@
         "maxItems": 1,
         "minItems": 1,
         "type": "array"
-      },
-      "limitations": {
-        "items": {
-          "type": "string"
-        },
-        "type": "array"
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "cases": {
-            "items": {
-              "$ref": "#/$defs/case"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          }
-        },
-        "required": [
-          "cases"
-        ],
-        "type": "object"
-      },
-      "scope": {
-        "type": "string"
-      },
-      "task_id": {
-        "const": "jacobian/erdos-gallai-realization-audit"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
   },
-  "task_id": "jacobian/erdos-gallai-realization-audit",
-  "verification_record": null
+  "task_id": "jacobian/erdos-gallai-realization-audit"
 }

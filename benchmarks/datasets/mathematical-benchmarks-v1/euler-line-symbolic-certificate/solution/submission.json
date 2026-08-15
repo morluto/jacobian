@@ -1,1 +1,187 @@
-{"task_id":"jacobian/euler-line-symbolic-certificate","conclusion":"TRUE","result":{"coordinates":{"O":{"x":{"numerator":[{"coefficient":"1","exponents":[1,0,0]}],"denominator":[{"coefficient":"1","exponents":[0,0,0]}]},"y":{"numerator":[{"coefficient":"1","exponents":[0,2,0]},{"coefficient":"1","exponents":[0,0,2]},{"coefficient":"-1","exponents":[1,1,0]}],"denominator":[{"coefficient":"1","exponents":[0,0,1]}]}},"G":{"x":{"numerator":[{"coefficient":"2/3","exponents":[1,0,0]},{"coefficient":"2/3","exponents":[0,1,0]}],"denominator":[{"coefficient":"1","exponents":[0,0,0]}]},"y":{"numerator":[{"coefficient":"2/3","exponents":[0,0,1]}],"denominator":[{"coefficient":"1","exponents":[0,0,0]}]}},"H":{"x":{"numerator":[{"coefficient":"2","exponents":[0,1,0]}],"denominator":[{"coefficient":"1","exponents":[0,0,0]}]},"y":{"numerator":[{"coefficient":"2","exponents":[1,1,0]},{"coefficient":"-2","exponents":[0,2,0]}],"denominator":[{"coefficient":"1","exponents":[0,0,1]}]}}},"relation_coefficients":["2","-3","1"]},"claimed_assurance":"COMPUTED","scope":"euler-line-symbolic-certificate exact normalized rational-function identities","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:57cd45fb712b5244a2bd87b975d2b64a31a5498d53bbbb7afda2f665510c8a43"}],"limitations":["The certificate uses the declared affine normalization and is valid for u and w nonzero."]}
+{
+  "result": {
+    "coordinates": {
+      "G": {
+        "x": {
+          "denominator": [
+            {
+              "coefficient": "1",
+              "exponents": [
+                0,
+                0,
+                0
+              ]
+            }
+          ],
+          "numerator": [
+            {
+              "coefficient": "2/3",
+              "exponents": [
+                1,
+                0,
+                0
+              ]
+            },
+            {
+              "coefficient": "2/3",
+              "exponents": [
+                0,
+                1,
+                0
+              ]
+            }
+          ]
+        },
+        "y": {
+          "denominator": [
+            {
+              "coefficient": "1",
+              "exponents": [
+                0,
+                0,
+                0
+              ]
+            }
+          ],
+          "numerator": [
+            {
+              "coefficient": "2/3",
+              "exponents": [
+                0,
+                0,
+                1
+              ]
+            }
+          ]
+        }
+      },
+      "H": {
+        "x": {
+          "denominator": [
+            {
+              "coefficient": "1",
+              "exponents": [
+                0,
+                0,
+                0
+              ]
+            }
+          ],
+          "numerator": [
+            {
+              "coefficient": "2",
+              "exponents": [
+                0,
+                1,
+                0
+              ]
+            }
+          ]
+        },
+        "y": {
+          "denominator": [
+            {
+              "coefficient": "1",
+              "exponents": [
+                0,
+                0,
+                1
+              ]
+            }
+          ],
+          "numerator": [
+            {
+              "coefficient": "2",
+              "exponents": [
+                1,
+                1,
+                0
+              ]
+            },
+            {
+              "coefficient": "-2",
+              "exponents": [
+                0,
+                2,
+                0
+              ]
+            }
+          ]
+        }
+      },
+      "O": {
+        "x": {
+          "denominator": [
+            {
+              "coefficient": "1",
+              "exponents": [
+                0,
+                0,
+                0
+              ]
+            }
+          ],
+          "numerator": [
+            {
+              "coefficient": "1",
+              "exponents": [
+                1,
+                0,
+                0
+              ]
+            }
+          ]
+        },
+        "y": {
+          "denominator": [
+            {
+              "coefficient": "1",
+              "exponents": [
+                0,
+                0,
+                1
+              ]
+            }
+          ],
+          "numerator": [
+            {
+              "coefficient": "1",
+              "exponents": [
+                0,
+                2,
+                0
+              ]
+            },
+            {
+              "coefficient": "1",
+              "exponents": [
+                0,
+                0,
+                2
+              ]
+            },
+            {
+              "coefficient": "-1",
+              "exponents": [
+                1,
+                1,
+                0
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "relation_coefficients": [
+      "2",
+      "-3",
+      "1"
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:57cd45fb712b5244a2bd87b975d2b64a31a5498d53bbbb7afda2f665510c8a43"
+    }
+  ]
+}

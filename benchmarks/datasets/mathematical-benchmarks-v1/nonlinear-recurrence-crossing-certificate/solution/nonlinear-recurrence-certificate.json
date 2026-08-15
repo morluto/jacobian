@@ -1,1 +1,73 @@
-{"schema_version":"1","task_id":"jacobian/nonlinear-recurrence-crossing-certificate","result":{"potential_identity_coefficients":[1,-2,1],"initial_potential":3136,"threshold":{"numerator":4,"denominator":1},"decrement_lower_bound":{"numerator":7,"denominator":4},"phase_transitions":1790,"threshold_index_upper":1791,"terminal_bounds":[{"input_lower":{"numerator":0,"denominator":1},"input_upper":{"numerator":2,"denominator":1},"output_lower":"NEGATIVE_INFINITY","output_upper":{"numerator":3,"denominator":2}},{"input_lower":{"numerator":0,"denominator":1},"input_upper":{"numerator":1,"denominator":1},"output_lower":"NEGATIVE_INFINITY","output_upper":{"numerator":0,"denominator":1}},{"input_lower":{"numerator":1,"denominator":1},"input_upper":{"numerator":3,"denominator":2},"output_lower":{"numerator":0,"denominator":1},"output_upper":{"numerator":5,"denominator":6}}],"negative_index_upper":1794},"limitations":["ELEMENTARY_REAL_ORDER_LEMMAS_TRUSTED"]}
+{
+  "schema_version": "1",
+  "task_id": "nonlinear-recurrence-crossing-certificate",
+  "result": {
+    "potential_identity_coefficients": [
+      1,
+      -2,
+      1
+    ],
+    "initial_potential": 3136,
+    "threshold": {
+      "numerator": 4,
+      "denominator": 1
+    },
+    "decrement_lower_bound": {
+      "numerator": 7,
+      "denominator": 4
+    },
+    "phase_transitions": 1790,
+    "threshold_index_upper": 1791,
+    "terminal_bounds": [
+      {
+        "input_lower": {
+          "numerator": 0,
+          "denominator": 1
+        },
+        "input_upper": {
+          "numerator": 2,
+          "denominator": 1
+        },
+        "output_lower": "NEGATIVE_INFINITY",
+        "output_upper": {
+          "numerator": 3,
+          "denominator": 2
+        }
+      },
+      {
+        "input_lower": {
+          "numerator": 0,
+          "denominator": 1
+        },
+        "input_upper": {
+          "numerator": 1,
+          "denominator": 1
+        },
+        "output_lower": "NEGATIVE_INFINITY",
+        "output_upper": {
+          "numerator": 0,
+          "denominator": 1
+        }
+      },
+      {
+        "input_lower": {
+          "numerator": 1,
+          "denominator": 1
+        },
+        "input_upper": {
+          "numerator": 3,
+          "denominator": 2
+        },
+        "output_lower": {
+          "numerator": 0,
+          "denominator": 1
+        },
+        "output_upper": {
+          "numerator": 5,
+          "denominator": 6
+        }
+      }
+    ],
+    "negative_index_upper": 1794
+  }
+}

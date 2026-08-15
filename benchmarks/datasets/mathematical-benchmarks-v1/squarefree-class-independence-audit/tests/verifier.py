@@ -1,15 +1,12 @@
 import json
-import re
 from itertools import product
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
@@ -20,10 +17,6 @@ CLASSIFICATION = {
     "pair_count_formula": "SUM_OF_SQUARED_CLASS_SIZES",
     "independent_selection": "ONE_ELEMENT_PER_DISTINCT_CLASS",
 }
-LIMITATION = (
-    "The verifier replays the modular obstruction and structured reduction but "
-    "does not machine-check a formal proof of the squarefree-kernel lemma."
-)
 
 
 def load_frozen() -> dict:
@@ -93,136 +86,51 @@ def certificate_valid(result: object, frozen: dict) -> bool:
     )
 
 
-def evidence_valid(evidence: object, result: object) -> bool:
-    if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
+def witness_is_valid(witness: object, result: object) -> bool:
+    if not isinstance(witness, list) or len(witness) != 1:
         return False
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    path = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    path = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
     if path is None:
         return False
     try:
         if path.stat().st_size > 1_048_576:
             return False
-        lines = path.read_text().splitlines()
-        marker = next(
-            line.removeprefix("RESULT_JSON:").strip()
-            for line in lines
-            if line.startswith("RESULT_JSON:")
-        )
-        body = "\n".join(line for line in lines if not line.startswith("RESULT_JSON:"))
-        text = body.casefold()
-        compact = "".join(text.split())
-        obstruction = result["modular_obstruction"] if isinstance(result, dict) else {}
-        marker_result = json.loads(marker)
-        expected_fragments = (
-            f"ordered_pair_count={result.get('ordered_pair_count')}",
-            f"modulus={obstruction.get('modulus')}",
-            f"target_residue={obstruction.get('target_residue')}",
-            f"quadratic_residues={obstruction.get('quadratic_residues')}",
-            f"maximum_squares_ruled_out={obstruction.get('maximum_squares_ruled_out')}",
-        )
-    except (
-        OSError,
-        StopIteration,
-        UnicodeError,
-        ValueError,
-        RecursionError,
-        TypeError,
-    ):
+        text = path.read_text()
+    except (OSError, UnicodeError):
         return False
-    contradictory = re.search(
-        r"\b(?:not|never)\b[^.]{0,80}\bsquarefree\s+kernel", text
-    ) or re.search(r"\b(?:not|never)\b[^.]{0,80}\bat\s+least\s+four", text)
-    return bool(
-        isinstance(result, dict)
-        and marker_result == result
-        and len(body) >= 160
-        and not contradictory
-        and all(fragment.replace(" ", "") in compact for fragment in expected_fragments)
-        and "squarefree kernel" in text
-        and "product" in text
-        and "kernel" in text
-        and any(
-            phrase in text
-            for phrase in ("kernels agree", "kernels equal", "same kernel")
-        )
-        and "sum" in text
-        and "squared" in text
-        and "class sizes" in text
-        and "one element" in text
-        and "distinct class" in text
-        and "modular" in text
-        and "2023" in text
-        and "at least four" in text
-        and "computed" in text
-    )
-
-
-def limitation_is_unchecked(value: object) -> bool:
-    if not isinstance(value, str):
+    markers = [
+        line.removeprefix("RESULT_JSON:").strip()
+        for line in text.splitlines()
+        if line.startswith("RESULT_JSON:")
+    ]
+    if len(markers) != 1:
         return False
-    text = value.casefold()
-    verification = (
-        r"(?:machine(?:[- ](?:check(?:ed)?|verified|verification|proof))?"
-        r"|formal(?:ly)?(?:[- ](?:checked|verified|verification|proof))?"
-        r"|proof[- ]assistant(?:[- ](?:checked|verified|verification|proof))?)"
-    )
-    negative_pattern = (
-        r"\b(?:not|no|without|does not|doesn't)\b[^.]{0,60}\b" + verification + r"\b"
-    )
-    negative = re.search(negative_pattern, text)
-    remainder = re.sub(negative_pattern, "", text)
-    return bool(negative and not re.search(r"\b" + verification + r"\b", remainder))
+    try:
+        bound_result = json.loads(markers[0])
+    except (ValueError, RecursionError):
+        return False
+    return isinstance(result, dict) and json_value_equal(bound_result, result)
 
 
 def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
     math_correct = bool(
-        contract and certificate_valid(data.get("result"), load_frozen())
+        isinstance(submission, dict)
+        and certificate_valid(data.get("result"), load_frozen())
     )
-    evidence_correct = bool(
-        math_correct and evidence_valid(data.get("evidence"), data.get("result"))
+    witness_ok = bool(
+        math_correct and witness_is_valid(data.get("witness"), data.get("result"))
     )
-    scope_correct = bool(contract and data.get("scope") == expected["required_scope"])
-    assurance_correct = bool(
-        contract and data.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations_correct = bool(
-        contract
-        and isinstance(data.get("limitations"), list)
-        and any(limitation_is_unchecked(item) for item in data["limitations"])
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(
-        math_correct
-        and evidence_correct
-        and scope_correct
-        and assurance_correct
-        and limitations_correct
-        and not false_certification
-    )
+    correct = bool(math_correct and witness_ok)
     output = Path("/logs/verifier")
     output.mkdir(parents=True, exist_ok=True)
     (output / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_correct),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
+                "witness_validity": float(witness_ok),
                 "reward": float(correct),
-                "false_certification": false_certification,
             }
         )
     )

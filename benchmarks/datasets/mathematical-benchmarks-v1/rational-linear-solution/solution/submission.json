@@ -1,1 +1,14 @@
-{"task_id":"jacobian/rational-linear-solution","conclusion":"UNIQUE_SOLUTION","result":{"solution":{"x":"17/7","y":"5/7"}},"claimed_assurance":"COMPUTED","scope":"jacobian/rational-linear-solution complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:b3ea5d4e64f801ba9838bf7491cf967fd04c09636437de55b5c0c1ebdb7ed1db"}],"limitations":[]}
+{
+  "result": {
+    "solution": {
+      "x": "17/7",
+      "y": "5/7"
+    }
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:b3ea5d4e64f801ba9838bf7491cf967fd04c09636437de55b5c0c1ebdb7ed1db"
+    }
+  ]
+}

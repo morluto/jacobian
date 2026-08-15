@@ -7,8 +7,7 @@ Assess one exact polynomial-map claim in the constant-nonzero-jacobian pilot fam
 - family: `constant-nonzero-jacobian`
 - case version: `symbolic-coordination-v1/pilot-1`
 - generator: `symbolic-coordination-pilot-generator@1`
-- fixture digest: `sha256:faf44d153344d0bf91e484f71a7546776736a5ef0fa1c9ae9314d65ab5511531`
-- assurance ceiling: `CHECKED`
+- fixture digest: `sha256:69c7fea6a76086d9710144ddb3fb11418f1c0107da251185db9914364e6bcf55`
 - note: Constant Jacobian two over QQ.
 
 ## Verification boundary
@@ -16,5 +15,5 @@ Assess one exact polynomial-map claim in the constant-nonzero-jacobian pilot fam
 The task is offline and solvable without Jacobian. The instruction names no
 operation or tool order. The task-local clean-room verifier imports neither
 Jacobian nor the generator; it replays exact rational polynomial arithmetic,
-scope, input and artifact bindings, evidence digest, and assurance. `VERIFIED`
-is unauthorized in this pilot and receives zero reward.
+input and artifact bindings, and the witness digest. Reward is binary: the
+replayed mathematical predicate and every required binding must hold.

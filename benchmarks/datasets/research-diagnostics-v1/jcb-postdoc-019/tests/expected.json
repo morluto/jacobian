@@ -1,8 +1,0 @@
-{
-  "task_id": "jacobian/jcb-postdoc-019",
-  "conclusion": "INFEASIBLE",
-  "maximum_assurance": "COMPUTED",
-  "required_scope": "jacobian/jcb-postdoc-019 complete 12-chart normalized QQ degree-(2,3) slice",
-  "required_limitations": ["PUBLIC_ANSWER_VISIBLE", "BENCHMARK_VERIFIER_NOT_PRODUCT_AUTHORITY"],
-  "evidence_path": "evidence/nullstellensatz-certificate.json"
-}

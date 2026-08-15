@@ -4,20 +4,14 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    evidence_list_is_bound,
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-LIMITATION = (
-    "The checker does not verify Euler-product convergence, the global "
-    "asymptotic-density formula, or the upstream Lean development."
-)
 
 
 def _load_input() -> dict[str, Any]:
@@ -122,64 +116,51 @@ def _result_is_valid(result: object, frozen: dict[str, Any]) -> bool:
     return all(by_id.get(item["case_id"]) == item for item in expected if item)
 
 
-def _evidence_is_valid(evidence: object) -> bool:
-    if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
+def _witness_is_valid(witness: object, result: object) -> bool:
+    if not isinstance(witness, list) or len(witness) != 1:
         return False
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
+    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
     if target is None:
         return False
     try:
         if target.stat().st_size > 1_048_576:
             return False
-        text = target.read_text().strip()
+        text = target.read_text()
     except (OSError, UnicodeError):
         return False
-    return len(text) >= 20
+    markers = [
+        line.removeprefix("RESULT_JSON:").strip()
+        for line in text.splitlines()
+        if line.startswith("RESULT_JSON:")
+    ]
+    if len(markers) != 1:
+        return False
+    try:
+        bound_result = json.loads(markers[0])
+    except (ValueError, RecursionError):
+        return False
+    return isinstance(result, dict) and json_value_equal(bound_result, result)
 
 
 def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
     math_correct = bool(
-        contract and _result_is_valid(data.get("result"), _load_input())
+        isinstance(submission, dict)
+        and _result_is_valid(data.get("result"), _load_input())
     )
-    evidence_valid = bool(math_correct and _evidence_is_valid(data.get("evidence")))
-    scope_correct = bool(contract and data.get("scope") == expected["required_scope"])
-    assurance_correct = bool(
-        contract and data.get("claimed_assurance") == expected["maximum_assurance"]
+    witness_ok = bool(
+        math_correct and _witness_is_valid(data.get("witness"), data.get("result"))
     )
-    limitations_correct = bool(contract and LIMITATION in data.get("limitations", []))
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(
-        math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and limitations_correct
-        and not false_certification
-    )
+    correct = bool(math_correct and witness_ok)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
+                "witness_validity": float(witness_ok),
                 "reward": float(correct),
-                "false_certification": false_certification,
             }
         )
     )

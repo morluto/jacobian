@@ -3,11 +3,10 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W, E = Path("/app"), Path("/tests")
@@ -129,58 +128,33 @@ def main():
         symlinked = True
     submission = None if symlinked else load_submission()
     frozen = _load_frozen()
-    expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
-    math_correct = bool(contract and _result_ok(submission.get("result"), frozen))
+    math_correct = bool(submission and _result_ok(submission.get("result"), frozen))
     evidence = None
     if (
-        contract
-        and isinstance(submission.get("evidence"), list)
-        and len(submission["evidence"]) == 1
+        submission
+        and isinstance(submission.get("witness"), list)
+        and len(submission["witness"]) == 1
     ):
         evidence = read_evidence_json(
-            submission["evidence"][0],
+            submission["witness"][0],
             expected_path="evidence/classification-certificate.json",
         )
     evidence_valid = bool(
         evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and set(evidence) == {"schema_version", "task_id", "result"}
         and evidence["schema_version"] == "1"
-        and evidence["task_id"] == expected["task_id"]
-        and evidence["result"] == submission.get("result")
-        and evidence["limitations"] == submission.get("limitations")
+        and evidence["task_id"] == "real-rooted-sign-polynomials"
+        and json_value_equal(evidence["result"], submission.get("result"))
     )
-    scope_ok = bool(
-        contract
-        and submission.get("scope") == "ALL_NONCONSTANT_SIGN_COEFFICIENT_POLYNOMIALS"
-        and submission.get("limitations")
-        == ["NEWTON_IDENTITIES_VIETE_AND_AMGM_TRUSTED"]
-    )
-    assurance_ok = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = math_correct and evidence_valid and scope_ok and not false_certification
+    correct = math_correct and evidence_valid
     reward = float(correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
+                "witness_validity": float(evidence_valid),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

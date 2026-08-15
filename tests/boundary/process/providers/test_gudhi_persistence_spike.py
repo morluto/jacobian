@@ -14,25 +14,11 @@ from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStat
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 SPIKE = runpy.run_path(
-    str(
-        PROJECT_ROOT
-        / "benchmarks"
-        / "datasets"
-        / "provider-feasibility-v1"
-        / "gudhi"
-        / "environment"
-        / "spike.py"
-    )
+    str(PROJECT_ROOT / "tests" / "fixtures" / "providers" / "gudhi" / "spike.py")
 )
 BASE_PIN = json.loads(
     (
-        PROJECT_ROOT
-        / "benchmarks"
-        / "datasets"
-        / "provider-feasibility-v1"
-        / "gudhi"
-        / "environment"
-        / "pin.json"
+        PROJECT_ROOT / "tests" / "fixtures" / "providers" / "gudhi" / "pin.json"
     ).read_text(encoding="utf-8")
 )
 RunSpike = Callable[..., dict[str, Any]]

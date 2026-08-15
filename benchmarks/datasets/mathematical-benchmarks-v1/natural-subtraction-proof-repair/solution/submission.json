@@ -1,1 +1,27 @@
-{"task_id":"jacobian/natural-subtraction-proof-repair","conclusion":"REPAIR_CERTIFIED","result":{"failed_pattern_occurs":false,"basis_order":["HD","SUB_RECOVERY"],"multipliers":["1","1"],"derived_coefficients":["0","0","-1","1","1"],"side_condition_used":"b<=a"},"claimed_assurance":"COMPUTED","scope":"the frozen natural-subtraction branch and declared equation basis","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:812e1e38ba6789c0b3e6af8a9d9808326872e8f589412312ed3466ca1c0ee2ef"}],"limitations":["The verifier checks the frozen AST and algebraic repair but does not run Lean or certify source-level compilation."]}
+{
+  "result": {
+    "basis_order": [
+      "HD",
+      "SUB_RECOVERY"
+    ],
+    "derived_coefficients": [
+      "0",
+      "0",
+      "-1",
+      "1",
+      "1"
+    ],
+    "failed_pattern_occurs": false,
+    "multipliers": [
+      "1",
+      "1"
+    ],
+    "side_condition_used": "b<=a"
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:812e1e38ba6789c0b3e6af8a9d9808326872e8f589412312ed3466ca1c0ee2ef"
+    }
+  ]
+}

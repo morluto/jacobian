@@ -30,13 +30,12 @@ def case(tmp_path):
 def write(app, s):
     payload = {
         "schema_version": "1",
-        "task_id": s["task_id"],
+        "task_id": "jacobian/hodge-blowup-divisor-certificate",
         "result": s["result"],
-        "limitations": s["limitations"],
     }
     e = app / "evidence/answer.txt"
     e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
-    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
+    s["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
     (app / "submission.json").write_text(json.dumps(s) + "\n")
 
 
@@ -77,18 +76,3 @@ def test_scaled_polynomial_and_wrong_intersection_fail(tmp_path):
     s["result"]["self_intersection"] = 4
     write(app, s)
     assert run(app, logs).details["aggregate_reward"] == 0.0
-
-
-def test_false_verified_and_tampered_input_fail(tmp_path):
-    app, logs, s = case(tmp_path)
-    s["claimed_assurance"] = "VERIFIED"
-    write(app, s)
-    assert run(app, logs).details["false_certification"] is True
-    app, logs, _ = case(tmp_path / "input")
-    (app / "input.json").write_text("{}\n")
-    r = run(app, logs)
-    assert (
-        r.details["input_binding"] == 0.0
-        and r.details["mathematics"] == 1.0
-        and r.details["aggregate_reward"] == 0.0
-    )

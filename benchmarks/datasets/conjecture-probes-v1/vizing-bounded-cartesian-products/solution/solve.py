@@ -34,14 +34,8 @@ def main() -> None:
     )
     digest = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
     submission = {
-        "task_id": TASK_ID,
-        "conclusion": "VIZING_BOUNDED_PROBE",
         "result": result,
-        "claimed_assurance": "CHECKED",
-        "scope": "vizing-bounded-cartesian-products:graphs-v1:pairs-v1",
-        "completeness": "COMPLETE",
-        "evidence": [{"path": "evidence/answer.txt", "sha256": digest}],
-        "limitations": LIMITATIONS,
+        "witness": [{"path": "evidence/answer.txt", "sha256": digest}],
     }
     (root / "submission.json").write_text(
         json.dumps(submission, sort_keys=True, separators=(",", ":")) + "\n"

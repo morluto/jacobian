@@ -5,12 +5,10 @@ from typing import Any
 
 from verifier_support import (
     MAX_INPUT_BYTES,
-    false_verified_claim,
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -358,38 +356,16 @@ def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
     source = _load_frozen_input()
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
     result = data.get("result")
     math_correct = bool(_result_is_valid(result, source))
     evidence_valid = bool(
         isinstance(result, dict)
-        and _evidence_matches_result(data.get("evidence"), result)
-    )
-    scope_correct = bool(contract and data.get("scope") == expected["required_scope"])
-    assurance_correct = bool(
-        data.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations_correct = bool(data.get("limitations") == [LIMITATION])
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
+        and _evidence_matches_result(data.get("witness"), result)
     )
     protocol = bool(
-        contract
-        and _result_shape_is_valid(result)
-        and _evidence_descriptors_ok(data.get("evidence"))
-        and scope_correct
-        and assurance_correct
-        and limitations_correct
+        _result_shape_is_valid(result) and _evidence_descriptors_ok(data.get("witness"))
     )
-    correct = bool(
-        protocol and math_correct and evidence_valid and not false_certification
-    )
+    correct = bool(protocol and math_correct and evidence_valid)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
@@ -397,11 +373,8 @@ def main() -> None:
             {
                 "protocol_compliance": float(protocol),
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
+                "witness_validity": float(evidence_valid),
                 "reward": float(correct),
-                "false_certification": false_certification,
             }
         )
     )

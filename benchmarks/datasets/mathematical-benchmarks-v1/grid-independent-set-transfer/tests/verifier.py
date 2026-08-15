@@ -2,11 +2,9 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -147,68 +145,43 @@ def _evidence_descriptor_ok(descriptor: object) -> bool:
 def main():
     expected = json.loads((T / "expected.json").read_text())
     submission = load_submission(W / "submission.json")
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"COMPUTED"}),
-        verification_record="forbidden",
-    )
     input_bound = workspace_input_is_bound()
     result = submission.get("result") if isinstance(submission, dict) else None
     math_ok = bool(input_bound and result_matches(result))
-    evidence_descriptor = (
-        submission["evidence"][0]
+    witness_descriptor = (
+        submission["witness"][0]
         if isinstance(submission, dict)
-        and isinstance(submission.get("evidence"), list)
-        and len(submission["evidence"]) == 1
+        and isinstance(submission.get("witness"), list)
+        and len(submission["witness"]) == 1
         else None
     )
     evidence = (
-        read_evidence_json(evidence_descriptor, expected_path="evidence/answer.txt")
-        if evidence_descriptor is not None
+        read_evidence_json(witness_descriptor, expected_path="evidence/answer.txt")
+        if witness_descriptor is not None
         else None
     )
     evidence_ok = bool(
         evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+        and set(evidence) == {"schema_version", "task_id", "result"}
         and type(evidence.get("schema_version")) is str
         and evidence.get("schema_version") == "1"
         and type(evidence.get("task_id")) is str
         and evidence.get("task_id") == expected["task_id"]
         and result_matches(evidence.get("result"))
         and exact_value(evidence.get("result"), result)
-        and evidence.get("limitations") == LIMITATIONS
-    )
-    scope_ok = bool(
-        isinstance(submission, dict)
-        and submission.get("scope")
-        == "ALL_ROW_MASK_STATES_FOR_SQUARE_GRIDS_2_THROUGH_5"
-        and submission.get("completeness") == "COMPLETE"
-        and submission.get("limitations") == LIMITATIONS
-    )
-    assurance_ok = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "COMPUTED"
     )
     protocol = bool(
-        contract
-        and _result_shape_ok(result)
-        and _evidence_descriptor_ok(evidence_descriptor)
+        _result_shape_ok(result) and _evidence_descriptor_ok(witness_descriptor)
     )
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
-    correct = bool(protocol and math_ok and evidence_ok and scope_ok and not false_cert)
+    correct = bool(protocol and math_ok and evidence_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "protocol_compliance": float(protocol),
                 "correctness": float(math_ok),
-                "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
+                "witness_validity": float(evidence_ok),
                 "reward": float(correct),
-                "false_certification": false_cert,
             }
         )
     )

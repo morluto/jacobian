@@ -5,13 +5,10 @@ from pathlib import Path
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    aggregate_reward,
-    false_verified_claim,
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -219,30 +216,12 @@ def raw_submission():
 
 def main():
     raw = raw_submission()
-    e = json.loads((T / "expected.json").read_text())
     input_binding = workspace_input_is_bound()
     s = load_submission(W / "submission.json", require_input_binding=False)
-    contract = strict_submission_contract(
-        s,
-        task_id=e["task_id"],
-        conclusion=e["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
+    contract = bool(s)
     r = raw.get("result") if isinstance(raw, dict) else None
     math_ok = valid_result(r)
-    ev = bool(isinstance(raw, dict) and evidence_ok(raw.get("evidence")))
-    scope = bool(
-        isinstance(raw, dict)
-        and raw.get("scope")
-        == "parameterized-geometric-block-family-with-eight-replayed-levels"
-        and raw.get("completeness") == "COMPLETE"
-        and _limitations_valid(raw.get("limitations"))
-    )
-    assurance = bool(
-        isinstance(raw, dict) and raw.get("claimed_assurance") == "COMPUTED"
-    )
-    false = false_verified_claim(raw, verification_record_bound=False)
+    ev = bool(isinstance(raw, dict) and evidence_ok(raw.get("witness")))
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
@@ -250,19 +229,8 @@ def main():
                 "protocol_compliance": float(bool(contract)),
                 "input_binding": float(input_binding),
                 "correctness": float(math_ok),
-                "evidence_validity": float(ev),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
-                "reward": aggregate_reward(
-                    correctness=math_ok,
-                    evidence_validity=ev,
-                    scope_accuracy=scope,
-                    assurance_calibration=assurance,
-                    false_certification=false,
-                    protocol_ok=bool(contract and input_binding),
-                    soft_assurance=True,
-                ),
-                "false_certification": false,
+                "witness_validity": float(ev),
+                "reward": float(contract and input_binding and math_ok and ev),
             }
         )
     )

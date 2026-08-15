@@ -1,4 +1,0 @@
-Density of dead ends in square-free base-b digit walks
-
-Expected conclusion: EXACT_IDENTITY.
-Oracle summary: Writing D_b={0,...,b-1}, the density is sum over S subset D_b of (-1)^|S| times the Euler product over primes p of (1-nu_{p,b}(S)/p^2), where nu counts residues n mod p^2 for which p^2 divides n or at least one bn+d with d in S. The source obtains D_b(X)=c_dead(b)X+O_b(X/sqrt(log X)).

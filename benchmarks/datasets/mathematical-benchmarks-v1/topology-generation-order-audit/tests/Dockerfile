@@ -1,5 +1,5 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
-LABEL jacobian.checksum="0d50a0c1e1a8627b4b3f5936c153336c67995a330e503286f6e9de2f087b5f59"
+LABEL jacobian.checksum="1ce7ab96fb3c88ff1f7627fd1044b1691d7783a0030f045fe14eb012be8d6bef"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 LABEL jacobian.task="jacobian/topology-generation-order-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/

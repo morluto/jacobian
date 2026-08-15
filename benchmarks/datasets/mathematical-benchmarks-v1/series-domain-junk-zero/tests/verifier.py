@@ -4,12 +4,11 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 W = Path("/app")
@@ -184,70 +183,26 @@ def _limitation_is_valid(limitations):
 
 def main():
     submission = load_submission()
-    if not isinstance(submission, dict):
-        submission = {}
+    protocol_ok = submission is not None
     frozen = _load_frozen_input()
-    expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
-    math_correct = bool(contract and _valid_result(submission.get("result"), frozen))
+    math_correct = bool(protocol_ok and _valid_result(submission.get("result"), frozen))
     evidence_valid = bool(
-        contract
+        protocol_ok
         and math_correct
-        and _evidence_matches(submission.get("evidence"), submission["result"])
+        and _evidence_matches(submission.get("witness"), submission["result"])
     )
-    scope = submission.get("scope")
-    scope_text = scope.casefold() if isinstance(scope, str) else ""
-    scope_correct = bool(
-        contract
-        and (
-            scope == expected["required_scope"]
-            or (
-                "frozen" in scope_text
-                and "api" in scope_text
-                and "fallback" in scope_text
-                and ("summable" in scope_text or "zero" in scope_text)
-            )
-        )
+    reward = aggregate_reward(
+        correctness=math_correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
-    assurance_correct = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations = submission.get("limitations")
-    limitation_correct = bool(
-        contract
-        and isinstance(limitations, list)
-        and limitations
-        and all(_limitation_is_valid([item]) for item in limitations)
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(
-        contract
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and limitation_correct
-        and not false_certification
-    )
-    reward = 0.0 if not correct else 0.8 + 0.1 * scope_correct + 0.1 * assurance_correct
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

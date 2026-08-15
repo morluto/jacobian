@@ -46,29 +46,18 @@ def main():
         "chromatic_number": 4,
         "minor_order": 4,
     }
-    payload = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": result,
-        "limitations": LIMITATIONS,
-    }
+    payload = {"schema_version": "1", "task_id": TASK_ID, "result": result}
     e = root / "evidence/answer.txt"
     e.parent.mkdir(parents=True, exist_ok=True)
     e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
     s = {
-        "task_id": TASK_ID,
-        "conclusion": "FINITE_HADWIGER_K4_CERTIFICATE",
         "result": result,
-        "claimed_assurance": "CHECKED",
-        "scope": "triangle-free-11-vertex-hadwiger-instance-v1",
-        "completeness": "COMPLETE",
-        "evidence": [
+        "witness": [
             {
                 "path": "evidence/answer.txt",
                 "sha256": "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest(),
             }
         ],
-        "limitations": LIMITATIONS,
     }
     (root / "submission.json").write_text(json.dumps(s, sort_keys=True) + "\n")
 

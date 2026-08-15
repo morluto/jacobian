@@ -1,16 +1,87 @@
 {
-  "task_id": "jacobian/polynomial-precedence-unboundedness-audit",
-  "conclusion": "FORMALIZATION_CHANGES_SEMANTICS",
   "result": {
-    "x_coefficients": [{"numerator": -7, "denominator": 1}, {"numerator": 0, "denominator": 1}, {"numerator": -1, "denominator": 2}],
-    "y_coefficients": [{"numerator": 0, "denominator": 1}, {"numerator": 1, "denominator": 1}],
-    "formal_coefficients": [{"numerator": 49, "denominator": 1}, {"numerator": 28, "denominator": 1}, {"numerator": -3, "denominator": 1}, {"numerator": 0, "denominator": 1}, {"numerator": -1, "denominator": 4}],
-    "checkpoints": [{"t": 0, "value": {"numerator": 49, "denominator": 1}}, {"t": 1, "value": {"numerator": 295, "denominator": 4}}, {"t": 2, "value": {"numerator": 89, "denominator": 1}}, {"t": 5, "value": {"numerator": -169, "denominator": 4}}],
-    "formal_status": "UNBOUNDED_BELOW"
+    "checkpoints": [
+      {
+        "t": 0,
+        "value": {
+          "denominator": 1,
+          "numerator": 49
+        }
+      },
+      {
+        "t": 1,
+        "value": {
+          "denominator": 4,
+          "numerator": 295
+        }
+      },
+      {
+        "t": 2,
+        "value": {
+          "denominator": 1,
+          "numerator": 89
+        }
+      },
+      {
+        "t": 5,
+        "value": {
+          "denominator": 4,
+          "numerator": -169
+        }
+      }
+    ],
+    "formal_coefficients": [
+      {
+        "denominator": 1,
+        "numerator": 49
+      },
+      {
+        "denominator": 1,
+        "numerator": 28
+      },
+      {
+        "denominator": 1,
+        "numerator": -3
+      },
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 4,
+        "numerator": -1
+      }
+    ],
+    "formal_status": "UNBOUNDED_BELOW",
+    "x_coefficients": [
+      {
+        "denominator": 1,
+        "numerator": -7
+      },
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 2,
+        "numerator": -1
+      }
+    ],
+    "y_coefficients": [
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      }
+    ]
   },
-  "claimed_assurance": "COMPUTED",
-  "scope": "EXACT_RATIONAL_PARAMETRIC_COUNTERMODEL_TO_FORMAL_EXPRESSION",
-  "completeness": "COMPLETE",
-  "evidence": [{"path": "evidence/precedence-audit.json", "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"}],
-  "limitations": ["LEAN_ELABORATION_NOT_ASSESSED", "INFORMAL_MINIMUM_NOT_REPROVED"]
+  "witness": [
+    {
+      "path": "evidence/precedence-audit.json",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
 }

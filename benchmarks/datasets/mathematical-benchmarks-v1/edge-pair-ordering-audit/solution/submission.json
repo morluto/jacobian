@@ -1,1 +1,32 @@
-{"task_id":"jacobian/edge-pair-ordering-audit","conclusion":"SOURCE_FACTOR_OF_TWO_REPAIRED","result":{"pair_semantics":"ORDERED","incident_ordered_pair_factor":"n(n-1)(n-2)","free_edge_factor_exponent":"binom(n,2)-2","formula":"n(n-1)(n-2)*2^(binom(n,2)-2)","probe_values":[{"n":3,"coefficient":12},{"n":4,"coefficient":384},{"n":5,"coefficient":15360},{"n":6,"coefficient":983040}]},"claimed_assurance":"COMPUTED","scope":"ordered edge pairs over all labeled simple graphs","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:5e5bae7789552e54f34e250680c4aceee5a5dab789575c7b32e0eba2f48649f7"}],"limitations":["Finite exhaustive replay covers n=3,4,5,6 only; it does not machine-prove the symbolic formula for every n."]}
+{
+  "result": {
+    "formula": "n(n-1)(n-2)*2^(binom(n,2)-2)",
+    "free_edge_factor_exponent": "binom(n,2)-2",
+    "incident_ordered_pair_factor": "n(n-1)(n-2)",
+    "pair_semantics": "ORDERED",
+    "probe_values": [
+      {
+        "coefficient": 12,
+        "n": 3
+      },
+      {
+        "coefficient": 384,
+        "n": 4
+      },
+      {
+        "coefficient": 15360,
+        "n": 5
+      },
+      {
+        "coefficient": 983040,
+        "n": 6
+      }
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:5e5bae7789552e54f34e250680c4aceee5a5dab789575c7b32e0eba2f48649f7"
+    }
+  ]
+}

@@ -4,15 +4,13 @@ import math
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W, T = Path("/app"), Path("/tests")
-LIMITATIONS = ["FINITE_PERMUTATIONS_OF_SIZE_8", "NO_GENERAL_ROOK_POLYNOMIAL_PROOF"]
 
 
 def derive():
@@ -44,50 +42,33 @@ def frozen():
 def main():
     expected = json.loads((T / "expected.json").read_text())
     submission = load_submission(W / "submission.json")
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"COMPUTED"}),
-        verification_record="forbidden",
-    )
+    protocol_ok = submission is not None
+    witness = submission.get("witness") if protocol_ok else None
     evidence = (
-        read_evidence_json(
-            submission["evidence"][0], expected_path="evidence/answer.txt"
-        )
-        if contract
+        read_evidence_json(witness[0], expected_path="evidence/answer.txt")
+        if isinstance(witness, list) and len(witness) == 1
         else None
     )
     derived = derive()
-    math_ok = bool(contract and frozen() and matches(submission.get("result")))
-    evidence_ok = bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result", "limitations"}
+    input_bound = frozen()
+    math_ok = bool(protocol_ok and input_bound and matches(submission.get("result")))
+    witness_ok = bool(
+        math_ok
+        and evidence
+        and {"schema_version", "task_id", "result"} <= set(evidence)
         and evidence.get("schema_version") == "1"
         and evidence.get("task_id") == expected["task_id"]
-        and evidence.get("result") == derived
-        and evidence.get("limitations") == LIMITATIONS
+        and json_value_equal(evidence.get("result"), derived)
+        and json_value_equal(evidence.get("result"), submission.get("result"))
     )
-    scope_ok = bool(
-        contract
-        and submission.get("scope")
-        == "ALL_8_FACTORIAL_PERMUTATIONS_AND_FIVE_INCLUSION_TERMS"
-        and submission.get("completeness") == "COMPLETE"
-        and submission.get("limitations") == LIMITATIONS
-    )
-    assurance_ok = bool(contract and submission.get("claimed_assurance") == "COMPUTED")
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
-    correct = math_ok and evidence_ok and scope_ok and not false_cert
+    correct = bool(math_ok and witness_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
+                "witness_validity": float(witness_ok),
                 "reward": float(correct),
-                "false_certification": false_cert,
             }
         )
     )

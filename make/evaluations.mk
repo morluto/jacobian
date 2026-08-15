@@ -1,4 +1,4 @@
-.PHONY: agent-eval agent-eval-validate agent-eval-compare codex-visibility codex-tool-context provider-eval
+.PHONY: agent-eval agent-eval-validate agent-eval-compare codex-visibility codex-tool-context
 
 JACOBIAN_ENABLED ?= 1
 ifneq ($(filter 0 1,$(JACOBIAN_ENABLED)),$(JACOBIAN_ENABLED))
@@ -133,13 +133,3 @@ codex-tool-context: ## Measure ALL_TOOLS projection cost in Codex ATIF traces (T
 	@test -n "$(TRAJECTORIES)" || { echo "TRAJECTORIES is required" >&2; exit 2; }
 	$(UV_RUN) python -m benchmarks.tooling.codex_tool_context $(TRAJECTORIES) \
 		$(if $(LABEL),--label "$(LABEL)",) $(if $(OUTPUT),--output "$(OUTPUT)",)
-
-provider-eval: ## Run pinned provider feasibility jobs (PROVIDER=cddlib|cgal|gudhi|nauty|regina).
-	@test -n "$(PROVIDER)" || { echo "PROVIDER is required" >&2; exit 2; }
-	@case "$(PROVIDER)" in cddlib|cgal|gudhi|nauty|regina) ;; *) echo "unknown provider: $(PROVIDER)" >&2; exit 2;; esac
-	@$(MAKE) harbor-check && \
-	$(HARBOR_RUNNER) run \
-		-c benchmarks/datasets/provider-feasibility-v1/jobs/oracle.json \
-		-p benchmarks/datasets/provider-feasibility-v1 \
-		--include-task-name "$(PROVIDER)" \
-		$(EVAL_ARGS)

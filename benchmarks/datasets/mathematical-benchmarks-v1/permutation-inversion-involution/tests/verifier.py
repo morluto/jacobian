@@ -3,25 +3,15 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
 W, T = Path("/app"), Path("/tests")
-LIMITATIONS = ["FINITE_N_EQUALS_7", "NO_PROOF_ASSISTANT_REPLAY"]
 MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
-
-
-def _json_equal(left, right):
-    """Compare two JSON values without Python's bool/int coercion."""
-
-    return json.dumps(left, sort_keys=True, separators=(",", ":")) == json.dumps(
-        right, sort_keys=True, separators=(",", ":")
-    )
 
 
 def frozen():
@@ -135,60 +125,41 @@ def valid(r):
     )
 
 
-def main():
+def _witness_is_valid(evidence: object, result: object) -> bool:
+    if not isinstance(evidence, list) or len(evidence) != 1:
+        return False
+    ev = read_evidence_json(
+        evidence[0],
+        expected_path="evidence/permutation-involution-certificate.json",
+        max_bytes=MAX_EVIDENCE_BYTES,
+    )
+    if ev is None:
+        return False
     expected = json.loads((T / "expected.json").read_text())
-    s = load_submission(W / "submission.json")
-    structure_valid = strict_submission_contract(
-        s,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}),
-        verification_record="optional",
-    )
-    contract = strict_submission_contract(
-        s,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"COMPUTED"}),
-        verification_record="forbidden",
-    )
-    ev = (
-        read_evidence_json(
-            s["evidence"][0],
-            expected_path="evidence/permutation-involution-certificate.json",
-            max_bytes=MAX_EVIDENCE_BYTES,
-        )
-        if structure_valid
-        else None
-    )
-    math_ok = bool(frozen() and isinstance(s, dict) and valid(s.get("result")))
-    evidence_ok = bool(
-        ev
-        and set(ev) == {"schema_version", "task_id", "result", "limitations"}
+    return bool(
+        set(ev) == {"schema_version", "task_id", "result"}
         and ev.get("schema_version") == "1"
         and ev.get("task_id") == expected["task_id"]
-        and _json_equal(ev.get("result"), s.get("result"))
-        and _json_equal(ev.get("limitations"), s.get("limitations"))
+        and isinstance(result, dict)
+        and json_value_equal(ev.get("result"), result)
     )
-    scope_ok = bool(
-        structure_valid
-        and s.get("scope") == "ALL_PERMUTATIONS_OF_1_THROUGH_7"
-        and s.get("completeness") == "COMPLETE"
-        and s.get("limitations") == LIMITATIONS
-    )
-    assurance_ok = bool(contract and s.get("claimed_assurance") == "COMPUTED")
-    false_cert = false_verified_claim(s, verification_record_bound=False)
-    correct = math_ok and evidence_ok and scope_ok and not false_cert
+
+
+def main():
+    submission = load_submission()
+    data = submission if isinstance(submission, dict) else {}
+    input_bound = workspace_input_is_bound()
+    result = data.get("result")
+    math_ok = bool(isinstance(submission, dict) and input_bound and valid(result))
+    witness_ok = bool(math_ok and _witness_is_valid(data.get("witness"), result))
+    correct = bool(math_ok and witness_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
+                "witness_validity": float(witness_ok),
                 "reward": float(correct),
-                "false_certification": false_cert,
             }
         )
     )

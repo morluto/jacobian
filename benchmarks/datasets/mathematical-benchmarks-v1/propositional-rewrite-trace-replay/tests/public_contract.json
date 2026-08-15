@@ -1,20 +1,4 @@
 {
-  "allowed_assurance": [
-    "UNVERIFIED",
-    "COMPUTED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE",
-    "PARTIAL",
-    "UNKNOWN"
-  ],
-  "assurance_ceiling": "COMPUTED",
-  "conclusion": {
-    "enum": [
-      "TARGET_REACHED",
-      "NO_VALID_TRACE"
-    ]
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/rewrite-trace.json"
@@ -27,12 +11,7 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "limitations": {
-    "const": [
-      "PREDICATE_APPLICATIONS_TREATED_AS_PROPOSITIONAL_ATOMS"
-    ]
-  },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.",
   "required_artifact_filenames": [
     "evidence/rewrite-trace.json"
   ],
@@ -171,12 +150,6 @@
     }
   },
   "schema_version": "1",
-  "scope": {
-    "const": "FROZEN_PROPOSITIONAL_AST_AND_REGISTERED_LOCAL_RULES",
-    "enum": null,
-    "pattern": null,
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
     "additionalProperties": false,
@@ -337,54 +310,6 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
-      },
-      "completeness": {
-        "enum": [
-          "COMPLETE",
-          "PARTIAL",
-          "UNKNOWN"
-        ]
-      },
-      "conclusion": {
-        "enum": [
-          "TARGET_REACHED",
-          "NO_VALID_TRACE"
-        ]
-      },
-      "evidence": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/rewrite-trace.json"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
-      },
-      "limitations": {
-        "const": [
-          "PREDICATE_APPLICATIONS_TREATED_AS_PROPOSITIONAL_ATOMS"
-        ]
-      },
       "result": {
         "additionalProperties": false,
         "properties": {
@@ -406,26 +331,34 @@
         ],
         "type": "object"
       },
-      "scope": {
-        "const": "FROZEN_PROPOSITIONAL_AST_AND_REGISTERED_LOCAL_RULES",
-        "type": "string"
-      },
-      "task_id": {
-        "const": "jacobian/propositional-rewrite-trace-replay"
+      "witness": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/rewrite-trace.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
   },
-  "task_id": "jacobian/propositional-rewrite-trace-replay",
-  "verification_record": null
+  "task_id": "jacobian/propositional-rewrite-trace-replay"
 }

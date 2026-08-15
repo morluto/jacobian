@@ -1,1 +1,12 @@
-{"task_id":"jacobian/sat-pigeonhole","conclusion":"UNSATISFIABLE","result":{"status":"UNSATISFIABLE","assignment":{}},"claimed_assurance":"COMPUTED","scope":"jacobian/sat-pigeonhole complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:477f63b19426675a001d10d424487c3d1cdf997e183ca3f45caa79c205618a26"}],"limitations":[]}
+{
+  "result": {
+    "assignment": {},
+    "status": "UNSATISFIABLE"
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:477f63b19426675a001d10d424487c3d1cdf997e183ca3f45caa79c205618a26"
+    }
+  ]
+}

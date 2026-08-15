@@ -1,15 +1,61 @@
 {
-  "task_id":"jacobian/dead-end-local-density-audit",
-  "conclusion":"ALL_LOCAL_FACTORS_AUDITED",
-  "result":{"cases":[
-    {"case_id":"invertible-collisions","branch":"INVERTIBLE","forbidden_residues":[0,12],"valid_count":23,"density_numerator":23,"density_denominator":25},
-    {"case_id":"singly-divisible","branch":"SINGLY_DIVISIBLE","forbidden_residues":[0,1,3,4,6,7],"valid_count":3,"density_numerator":1,"density_denominator":3},
-    {"case_id":"square-divisible-vacuous","branch":"SQUARE_DIVISIBLE","forbidden_residues":[0],"valid_count":3,"density_numerator":3,"density_denominator":4},
-    {"case_id":"square-divisible-obstructed","branch":"SQUARE_DIVISIBLE","forbidden_residues":[0,1,2,3],"valid_count":0,"density_numerator":0,"density_denominator":1}
-  ]},
-  "claimed_assurance":"COMPUTED",
-  "scope":"the four frozen finite local-density cases only",
-  "completeness":"COMPLETE",
-  "evidence":[{"path":"evidence/answer.txt","sha256":"sha256:7664822418c5e9c15fb93aeabb00204944d14d462e25ca844db5a541e9f4da59"}],
-  "limitations":["The checker does not verify Euler-product convergence, the global asymptotic-density formula, or the upstream Lean development."]
+  "result": {
+    "cases": [
+      {
+        "branch": "INVERTIBLE",
+        "case_id": "invertible-collisions",
+        "density_denominator": 25,
+        "density_numerator": 23,
+        "forbidden_residues": [
+          0,
+          12
+        ],
+        "valid_count": 23
+      },
+      {
+        "branch": "SINGLY_DIVISIBLE",
+        "case_id": "singly-divisible",
+        "density_denominator": 3,
+        "density_numerator": 1,
+        "forbidden_residues": [
+          0,
+          1,
+          3,
+          4,
+          6,
+          7
+        ],
+        "valid_count": 3
+      },
+      {
+        "branch": "SQUARE_DIVISIBLE",
+        "case_id": "square-divisible-vacuous",
+        "density_denominator": 4,
+        "density_numerator": 3,
+        "forbidden_residues": [
+          0
+        ],
+        "valid_count": 3
+      },
+      {
+        "branch": "SQUARE_DIVISIBLE",
+        "case_id": "square-divisible-obstructed",
+        "density_denominator": 1,
+        "density_numerator": 0,
+        "forbidden_residues": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "valid_count": 0
+      }
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:7664822418c5e9c15fb93aeabb00204944d14d462e25ca844db5a541e9f4da59"
+    }
+  ]
 }

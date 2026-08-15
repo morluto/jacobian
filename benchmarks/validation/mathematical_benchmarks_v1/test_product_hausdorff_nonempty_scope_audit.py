@@ -3,7 +3,7 @@ import json
 import shutil
 from pathlib import Path
 
-from benchmarks.validation.mathematical_benchmarks_v1.support import _run_verifier
+from benchmarks.validation.mathematical_benchmarks_v1._verifier import _run_verifier
 
 TASK = "product-hausdorff-nonempty-scope-audit"
 
@@ -26,13 +26,12 @@ def verify(tmp_path, submission):
     shutil.copy2(task / "environment/input.json", app / "input.json")
     evidence = {
         "schema_version": "1",
-        "task_id": submission["task_id"],
+        "task_id": f"jacobian/{TASK}",
         "result": submission["result"],
-        "limitations": submission["limitations"],
     }
     p = app / "evidence/product-hausdorff-audit.json"
     p.write_text(json.dumps(evidence, separators=(",", ":")))
-    submission["evidence"][0]["sha256"] = (
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest()
     )
     (app / "submission.json").write_text(json.dumps(submission))
@@ -46,7 +45,7 @@ def test_oracle_and_relabelled_chain_topology_pass(tmp_path):
     assert verify(tmp_path / "alt", alt).reward == 1.0
 
 
-def test_topology_t0_product_and_assurance_attacks_fail(tmp_path):
+def test_topology_t0_product_and_input_attacks_fail(tmp_path):
     bad = oracle()
     bad["result"]["bad_factor_topology"].pop(2)
     assert verify(tmp_path / "topology", bad).reward == 0
@@ -56,9 +55,6 @@ def test_topology_t0_product_and_assurance_attacks_fail(tmp_path):
     bad = oracle()
     bad["result"]["factor_cardinalities"][1] = 1
     assert verify(tmp_path / "product", bad).reward == 0
-    bad = oracle()
-    bad["claimed_assurance"] = "VERIFIED"
-    assert verify(tmp_path / "assurance", bad).reward == 0
 
 
 def test_boolean_and_input_tamper_fail_closed(tmp_path):

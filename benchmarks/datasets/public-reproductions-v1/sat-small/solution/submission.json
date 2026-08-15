@@ -1,1 +1,16 @@
-{"task_id":"jacobian/sat-small","conclusion":"SATISFIABLE","result":{"status":"SATISFIABLE","assignment":{"a":true,"b":false,"c":true}},"claimed_assurance":"COMPUTED","scope":"jacobian/sat-small complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:308f6d98f4f803321122bfbe762661c330ace8a5186b545790c6f43b59d21ab3"}],"limitations":[]}
+{
+  "result": {
+    "assignment": {
+      "a": true,
+      "b": false,
+      "c": true
+    },
+    "status": "SATISFIABLE"
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:308f6d98f4f803321122bfbe762661c330ace8a5186b545790c6f43b59d21ab3"
+    }
+  ]
+}

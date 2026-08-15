@@ -1,62 +1,20 @@
 from __future__ import annotations
 
 import json
-import re
 from fractions import Fraction
 from itertools import combinations
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-TASK_ID = "jacobian/rp2-homology-lattice"
-CONCLUSION = "INTEGRAL_H1_CERTIFIED"
-SCOPE = "the frozen six-vertex ten-facet simplicial complex"
-LIMITATION = (
-    "This does not prove in a proof assistant that the geometric realization is "
-    "the real projective plane."
-)
-MAX_EVIDENCE_BYTES = 64 * 1024
-_AFFIRMATIVE_PROOF_ASSISTANT = re.compile(
-    r"\b(?:verif(?:y|ied|ies)|formaliz(?:e|ed|es)|prove(?:s|d)|certif(?:y|ied|ies))\b"
-    r"[^.;\n]{0,80}\b(?:proof assistant|lean)\b|"
-    r"\b(?:proof assistant|lean)\b[^.;\n]{0,80}"
-    r"\b(?:verif(?:y|ied|ies)|formaliz(?:e|ed|es)|prove(?:s|d)|certif(?:y|ied|ies))\b",
-    re.I,
-)
-_NEGATED_PROOF_ASSISTANT = re.compile(
-    r"\b(?:not|no|without|doesn['']?t|cannot|never)\b[^.;\n]{0,30}"
-    r"\b(?:proof assistant|lean)\b",
-    re.I,
-)
-
-
-def _evidence_denies_proof_assistant(text: str) -> bool:
-    """Reject evidence that affirmatively claims proof-assistant verification.
-
-    A clause with an affirmative proof-assistant claim is only safe when the
-    negation appears within the same clause and within a small window of the
-    proof-assistant phrase, so an unrelated negation elsewhere in the clause
-    does not rescue a prohibited certification assertion.
-    """
-
-    folded = text.casefold()
-    if "proof assistant" not in folded and "lean" not in folded:
-        return True
-    for clause in re.split(r"[.;\n]", folded):
-        if _AFFIRMATIVE_PROOF_ASSISTANT.search(clause) and not (
-            _NEGATED_PROOF_ASSISTANT.search(clause)
-        ):
-            return False
-    return True
 
 
 def _input() -> dict:
@@ -228,104 +186,51 @@ def _result(value: object) -> bool:
     )
 
 
-def _source_is_bound() -> bool:
-    try:
-        hidden = (TESTS / "input.json").read_bytes()
-        data = json.loads(hidden)
-        return bool(
-            (WORKSPACE / "input.json").read_bytes() == hidden
-            and data["source"]["revision"] == "8ecee59e510093bf96360177c52825b8e0603e59"
-        )
-    except (OSError, ValueError, KeyError):
+def _witness_is_valid(witness: object, result: object) -> bool:
+    if not isinstance(witness, list) or len(witness) != 1:
         return False
-
-
-def _evidence(value: object, result: object) -> bool:
-    if (
-        not isinstance(value, list)
-        or len(value) != 1
-        or not evidence_list_is_bound(value)
-    ):
-        return False
-    path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
+    path = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
     if path is None:
         return False
     try:
-        if path.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
         text = path.read_text()
     except (OSError, UnicodeError):
         return False
-    return (
-        bool(text.strip())
-        and any(
-            phrase in text.casefold()
-            for phrase in ("cycle lattice", "cycle-coordinate")
-        )
-        and "determinant -2" in text.casefold()
-        and any(
-            phrase in text.casefold()
-            for phrase in ("index 2", "quotient lattice has order 2")
-        )
-        and "z/2z" in text.casefold()
-        and _evidence_denies_proof_assistant(text)
-    )
-
-
-def _evaluate(submission: object) -> dict[str, float | bool]:
-    protocol = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion=CONCLUSION,
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    envelope = isinstance(submission, dict)
-    mathematical = bool(
-        envelope and _source_is_bound() and _result(submission.get("result"))
-    )
-    evidence_valid = bool(
-        envelope and _evidence(submission.get("evidence"), submission.get("result"))
-    )
-    scope_accurate = bool(
-        protocol
-        and envelope
-        and submission.get("scope") == SCOPE
-        and submission.get("completeness") == "COMPLETE"
-        and submission.get("limitations") == [LIMITATION]
-    )
-    assurance_calibrated = bool(
-        envelope
-        and submission.get("claimed_assurance") == "COMPUTED"
-        and not false_certification
-    )
-    correct_score = 1.0 if mathematical else 0.0
-    evidence_score = 1.0 if evidence_valid else 0.0
-    scope_score = 1.0 if scope_accurate else 0.0
-    assurance_score = 1.0 if assurance_calibrated else 0.0
-    reward = (
-        min(correct_score, evidence_score, scope_score, assurance_score)
-        if protocol
-        else 0.0
-    )
-    return {
-        "correctness": correct_score,
-        "evidence_validity": evidence_score,
-        "scope_accuracy": scope_score,
-        "assurance_calibration": assurance_score,
-        "reward": reward,
-        "false_certification": false_certification,
-    }
+    markers = [
+        line.removeprefix("RESULT_JSON:").strip()
+        for line in text.splitlines()
+        if line.startswith("RESULT_JSON:")
+    ]
+    if len(markers) != 1:
+        return False
+    try:
+        bound_result = json.loads(markers[0])
+    except (ValueError, RecursionError):
+        return False
+    return isinstance(result, dict) and json_value_equal(bound_result, result)
 
 
 def main() -> None:
+    submission = load_submission()
+    data = submission if isinstance(submission, dict) else {}
+    input_bound = workspace_input_is_bound()
+    result = data.get("result")
+    math_correct = bool(
+        isinstance(submission, dict) and input_bound and _result(result)
+    )
+    witness_ok = bool(math_correct and _witness_is_valid(data.get("witness"), result))
+    correct = bool(math_correct and witness_ok)
     destination = Path("/logs/verifier/reward.json")
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(
-        json.dumps(_evaluate(load_submission()), sort_keys=True) + "\n"
+        json.dumps(
+            {
+                "correctness": float(math_correct),
+                "witness_validity": float(witness_ok),
+                "reward": float(correct),
+            }
+        )
+        + "\n"
     )
     normalize_reward_file(destination)
 

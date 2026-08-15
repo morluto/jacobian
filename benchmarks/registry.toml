@@ -55,23 +55,6 @@ oracle_jobs_dir = "benchmarks/results/public-reproductions-v1-oracle"
 oracle = "jobs/oracle.json"
 
 [[datasets]]
-id = "jacobian/research-diagnostics-v1"
-directory = "benchmarks/datasets/research-diagnostics-v1"
-evaluation_kind = "research-diagnostic"
-scored = false
-publication_status = "local"
-required_provider = "core"
-runtime_profile = "core"
-title = "Jacobian research diagnostics"
-purpose = "Answer-visible research challenges for case-level diagnostic runs, never held-out performance claims."
-claim_class = "diagnostic"
-answer_visibility = "public"
-default_execution_profile = "oracle-only"
-oracle_jobs_dir = "benchmarks/results/research-diagnostics-v1-oracle"
-[datasets.jobs]
-oracle = "jobs/oracle.json"
-
-[[datasets]]
 id = "jacobian/conjecture-probes-v1"
 directory = "benchmarks/datasets/conjecture-probes-v1"
 evaluation_kind = "conjecture-probe"
@@ -85,23 +68,6 @@ claim_class = "bounded-conjecture-progress"
 answer_visibility = "public"
 default_execution_profile = "oracle-only"
 oracle_jobs_dir = "benchmarks/results/conjecture-probes-v1-oracle"
-[datasets.jobs]
-oracle = "jobs/oracle.json"
-
-[[datasets]]
-id = "jacobian/provider-feasibility-v1"
-directory = "benchmarks/datasets/provider-feasibility-v1"
-evaluation_kind = "provider-feasibility"
-scored = false
-publication_status = "local"
-required_provider = "optional-pinned"
-runtime_profile = "pinned-provider"
-title = "Jacobian provider feasibility"
-purpose = "Pinned optional-backend feasibility checks with provider-specific expected outcomes."
-claim_class = "provider-feasibility"
-answer_visibility = "public"
-default_execution_profile = "oracle-only"
-oracle_jobs_dir = "benchmarks/results/provider-feasibility-v1-oracle"
 [datasets.jobs]
 oracle = "jobs/oracle.json"
 

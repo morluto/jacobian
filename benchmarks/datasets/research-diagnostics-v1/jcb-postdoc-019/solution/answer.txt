@@ -1,1 +1,0 @@
-INFEASIBLE.  The attached exact QQ certificate supplies one sum(h_i*f_i)=1 identity for each of the complete 12 Rabinowitsch charts.  Assurance is COMPUTED because the public benchmark verifier is not product verification authority.

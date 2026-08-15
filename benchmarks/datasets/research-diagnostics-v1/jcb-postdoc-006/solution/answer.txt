@@ -1,4 +1,0 @@
-Written on the Wall II Conjecture 59 at portfolio scale limits
-
-Expected conclusion: COUNTEREXAMPLE_EXISTS.
-Oracle summary: The 123-vertex graph has degree sequence [122,8^24,1^98], r=101, b=122, and f=111. Thus r*b=12322=111^2+1, so the conjectured lower bound is 112. The artifact gives a structural verifier and a partial Lean certificate with an explicit trust boundary.

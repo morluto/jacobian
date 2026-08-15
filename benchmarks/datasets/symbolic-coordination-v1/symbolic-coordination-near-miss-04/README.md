@@ -7,8 +7,7 @@ Assess one exact polynomial-map claim in the perturbed-near-miss pilot family.
 - family: `perturbed-near-miss`
 - case version: `symbolic-coordination-v1/pilot-1`
 - generator: `symbolic-coordination-pilot-generator@1`
-- fixture digest: `sha256:c3492623f09dd722aa83c0eacc29de5fa7ab204bc688f5fef98120231ff80e93`
-- assurance ceiling: `CHECKED`
+- fixture digest: `sha256:8a61b5bda6610b8d4fe0044103652064c4b41193a1e71bb6992164a2a466f54c`
 - note: Linear inverse denominator perturbed.
 
 ## Verification boundary
@@ -16,5 +15,5 @@ Assess one exact polynomial-map claim in the perturbed-near-miss pilot family.
 The task is offline and solvable without Jacobian. The instruction names no
 operation or tool order. The task-local clean-room verifier imports neither
 Jacobian nor the generator; it replays exact rational polynomial arithmetic,
-scope, input and artifact bindings, evidence digest, and assurance. `VERIFIED`
-is unauthorized in this pilot and receives zero reward.
+input and artifact bindings, and the witness digest. Reward is binary: the
+replayed mathematical predicate and every required binding must hold.

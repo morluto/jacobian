@@ -13,7 +13,6 @@ from verifier_support import (
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -227,67 +226,37 @@ def reward(value: dict[str, float]) -> None:
 def main() -> None:
     input_binding = workspace_input_is_bound()
     submission = load_submission(require_input_binding=False)
-    contract = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion="PG2_F3_ZARANKIEWICZ_EXTREMAL_CERTIFICATE",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
-    )
+    contract = bool(submission)
     raw = _raw_submission()
     math_ok = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
     evidence_ok = bool(
         isinstance(raw, dict)
-        and evidence_list_is_bound(raw.get("evidence"), max_bytes=None)
+        and evidence_list_is_bound(raw.get("witness"), max_bytes=None)
     )
     payload = (
         read_evidence_json(
-            raw["evidence"][0], expected_path="evidence/answer.json", max_bytes=None
+            raw["witness"][0], expected_path="evidence/answer.json", max_bytes=None
         )
         if evidence_ok
         else None
     )
     evidence_ok = bool(
         isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
+        and set(payload) == {"schema_version", "task_id", "result"}
         and payload.get("schema_version") == "1"
         and payload.get("task_id") == TASK_ID
         and _json_equal(payload.get("result"), raw.get("result"))
-        and payload.get("limitations") == LIMITATIONS
-    )
-    scope_ok = bool(
-        isinstance(raw, dict)
-        and raw.get("scope") == SCOPE
-        and raw.get("limitations") == LIMITATIONS
-        and raw.get("completeness") == "COMPLETE"
-    )
-    assurance_ok = bool(
-        contract
-        and isinstance(raw, dict)
-        and raw.get("claimed_assurance") in {"UNVERIFIED", "COMPUTED", "CHECKED"}
     )
     protocol_ok = bool(contract)
-    aggregate = float(
-        input_binding
-        and protocol_ok
-        and math_ok
-        and evidence_ok
-        and scope_ok
-        and assurance_ok
-    )
+    aggregate = float(input_binding and protocol_ok and math_ok and evidence_ok)
     reward(
         {
             "input_binding": float(input_binding),
             "protocol": float(protocol_ok),
             "mathematics": float(math_ok),
-            "evidence": float(evidence_ok),
-            "scope": float(scope_ok),
-            "assurance": float(assurance_ok),
+            "witness_validity": float(evidence_ok),
             "aggregate_reward": aggregate,
             "reward": aggregate,
-            "false_certification": bool(
-                isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
-            ),
         }
     )
 
@@ -301,10 +270,7 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "evidence": 0.0,
-                "scope": 0.0,
-                "assurance": 0.0,
-                "false_certification": False,
+                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

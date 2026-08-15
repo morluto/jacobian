@@ -1,104 +1,98 @@
 {
-  "task_id": "jacobian/vizing-bounded-cartesian-products",
-  "conclusion": "VIZING_BOUNDED_PROBE",
   "result": {
+    "derived_conclusion": "HOLDS_ON_FROZEN_PAIR_SET",
     "graphs": [
       {
-        "id": "P4",
-        "vertex_count": 4,
-        "edge_count": 3,
         "domination_number": 2,
+        "edge_count": 3,
+        "id": "P4",
         "minimum_dominating_set": [
           0,
           2
-        ]
+        ],
+        "vertex_count": 4
       },
       {
-        "id": "C4",
-        "vertex_count": 4,
-        "edge_count": 4,
         "domination_number": 2,
+        "edge_count": 4,
+        "id": "C4",
         "minimum_dominating_set": [
           0,
           1
-        ]
+        ],
+        "vertex_count": 4
       },
       {
-        "id": "P5",
-        "vertex_count": 5,
-        "edge_count": 4,
         "domination_number": 2,
+        "edge_count": 4,
+        "id": "P5",
         "minimum_dominating_set": [
           0,
           3
-        ]
+        ],
+        "vertex_count": 5
       },
       {
-        "id": "C5",
-        "vertex_count": 5,
-        "edge_count": 5,
         "domination_number": 2,
+        "edge_count": 5,
+        "id": "C5",
         "minimum_dominating_set": [
           0,
           2
-        ]
+        ],
+        "vertex_count": 5
       },
       {
+        "domination_number": 2,
+        "edge_count": 6,
         "id": "K2,3",
-        "vertex_count": 5,
-        "edge_count": 6,
-        "domination_number": 2,
         "minimum_dominating_set": [
           0,
           1
-        ]
+        ],
+        "vertex_count": 5
       },
       {
+        "domination_number": 2,
+        "edge_count": 6,
         "id": "house",
-        "vertex_count": 5,
-        "edge_count": 6,
-        "domination_number": 2,
         "minimum_dominating_set": [
           0,
           1
-        ]
+        ],
+        "vertex_count": 5
       },
       {
-        "id": "bull",
-        "vertex_count": 5,
+        "domination_number": 2,
         "edge_count": 5,
-        "domination_number": 2,
+        "id": "bull",
         "minimum_dominating_set": [
           0,
           1
-        ]
+        ],
+        "vertex_count": 5
       },
       {
-        "id": "corona-K3",
-        "vertex_count": 6,
-        "edge_count": 6,
         "domination_number": 3,
+        "edge_count": 6,
+        "id": "corona-K3",
         "minimum_dominating_set": [
           0,
           1,
           2
-        ]
+        ],
+        "vertex_count": 6
       }
     ],
     "pairs": [
       {
-        "left": "P4",
-        "right": "P4",
-        "gamma_left": 2,
-        "gamma_right": 2,
-        "gamma_product": 4,
+        "bound_holds": true,
         "factor_product": 4,
-        "product_vertex_count": 16,
+        "gamma_left": 2,
+        "gamma_product": 4,
+        "gamma_right": 2,
+        "left": "P4",
         "left_minimum_dominating_set": [
-          0,
-          2
-        ],
-        "right_minimum_dominating_set": [
           0,
           2
         ],
@@ -120,23 +114,59 @@
             2
           ]
         ],
-        "bound_holds": true
+        "product_vertex_count": 16,
+        "right": "P4",
+        "right_minimum_dominating_set": [
+          0,
+          2
+        ]
       },
       {
-        "left": "P4",
-        "right": "C4",
-        "gamma_left": 2,
-        "gamma_right": 2,
-        "gamma_product": 4,
+        "bound_holds": true,
         "factor_product": 4,
-        "product_vertex_count": 16,
+        "gamma_left": 2,
+        "gamma_product": 4,
+        "gamma_right": 2,
+        "left": "P4",
         "left_minimum_dominating_set": [
           0,
           2
         ],
+        "product_minimum_dominating_set": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            2,
+            0
+          ],
+          [
+            3,
+            2
+          ]
+        ],
+        "product_vertex_count": 16,
+        "right": "C4",
         "right_minimum_dominating_set": [
           0,
           1
+        ]
+      },
+      {
+        "bound_holds": true,
+        "factor_product": 4,
+        "gamma_left": 2,
+        "gamma_product": 6,
+        "gamma_right": 2,
+        "left": "P4",
+        "left_minimum_dominating_set": [
+          0,
+          2
         ],
         "product_minimum_dominating_set": [
           [
@@ -144,80 +174,44 @@
             0
           ],
           [
-            1,
+            0,
             2
+          ],
+          [
+            1,
+            4
           ],
           [
             2,
             0
           ],
           [
+            2,
+            1
+          ],
+          [
             3,
-            2
+            3
           ]
         ],
-        "bound_holds": true
-      },
-      {
-        "left": "P4",
-        "right": "P5",
-        "gamma_left": 2,
-        "gamma_right": 2,
-        "gamma_product": 6,
-        "factor_product": 4,
         "product_vertex_count": 20,
-        "left_minimum_dominating_set": [
-          0,
-          2
-        ],
+        "right": "P5",
         "right_minimum_dominating_set": [
           0,
           3
-        ],
-        "product_minimum_dominating_set": [
-          [
-            0,
-            0
-          ],
-          [
-            0,
-            2
-          ],
-          [
-            1,
-            4
-          ],
-          [
-            2,
-            0
-          ],
-          [
-            2,
-            1
-          ],
-          [
-            3,
-            3
-          ]
-        ],
-        "bound_holds": true
+        ]
       },
       {
-        "left": "P4",
-        "right": "C5",
-        "gamma_left": 2,
-        "gamma_right": 2,
-        "gamma_product": 6,
+        "bound_holds": true,
         "factor_product": 4,
-        "product_vertex_count": 20,
+        "gamma_left": 2,
+        "gamma_product": 6,
+        "gamma_right": 2,
+        "left": "P4",
         "left_minimum_dominating_set": [
           0,
           2
         ],
-        "right_minimum_dominating_set": [
-          0,
-          2
-        ],
         "product_minimum_dominating_set": [
           [
             0,
@@ -244,97 +238,97 @@
             1
           ]
         ],
-        "bound_holds": true
+        "product_vertex_count": 20,
+        "right": "C5",
+        "right_minimum_dominating_set": [
+          0,
+          2
+        ]
       },
       {
+        "bound_holds": true,
+        "factor_product": 4,
+        "gamma_left": 2,
+        "gamma_product": 4,
+        "gamma_right": 2,
         "left": "P4",
+        "left_minimum_dominating_set": [
+          0,
+          2
+        ],
+        "product_minimum_dominating_set": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            0
+          ],
+          [
+            3,
+            1
+          ]
+        ],
+        "product_vertex_count": 20,
         "right": "K2,3",
-        "gamma_left": 2,
-        "gamma_right": 2,
-        "gamma_product": 4,
-        "factor_product": 4,
-        "product_vertex_count": 20,
-        "left_minimum_dominating_set": [
-          0,
-          2
-        ],
         "right_minimum_dominating_set": [
           0,
           1
-        ],
-        "product_minimum_dominating_set": [
-          [
-            0,
-            0
-          ],
-          [
-            1,
-            1
-          ],
-          [
-            2,
-            0
-          ],
-          [
-            3,
-            1
-          ]
-        ],
-        "bound_holds": true
+        ]
       },
       {
+        "bound_holds": true,
+        "factor_product": 4,
+        "gamma_left": 2,
+        "gamma_product": 5,
+        "gamma_right": 2,
         "left": "C4",
-        "right": "C5",
-        "gamma_left": 2,
-        "gamma_right": 2,
-        "gamma_product": 5,
-        "factor_product": 4,
+        "left_minimum_dominating_set": [
+          0,
+          1
+        ],
+        "product_minimum_dominating_set": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            4
+          ]
+        ],
         "product_vertex_count": 20,
-        "left_minimum_dominating_set": [
-          0,
-          1
-        ],
-        "right_minimum_dominating_set": [
-          0,
-          2
-        ],
-        "product_minimum_dominating_set": [
-          [
-            0,
-            0
-          ],
-          [
-            0,
-            1
-          ],
-          [
-            0,
-            3
-          ],
-          [
-            2,
-            2
-          ],
-          [
-            2,
-            4
-          ]
-        ],
-        "bound_holds": true
-      },
-      {
-        "left": "C5",
         "right": "C5",
-        "gamma_left": 2,
-        "gamma_right": 2,
-        "gamma_product": 5,
-        "factor_product": 4,
-        "product_vertex_count": 25,
-        "left_minimum_dominating_set": [
+        "right_minimum_dominating_set": [
           0,
           2
-        ],
-        "right_minimum_dominating_set": [
+        ]
+      },
+      {
+        "bound_holds": true,
+        "factor_product": 4,
+        "gamma_left": 2,
+        "gamma_product": 5,
+        "gamma_right": 2,
+        "left": "C5",
+        "left_minimum_dominating_set": [
           0,
           2
         ],
@@ -360,242 +354,242 @@
             3
           ]
         ],
-        "bound_holds": true
+        "product_vertex_count": 25,
+        "right": "C5",
+        "right_minimum_dominating_set": [
+          0,
+          2
+        ]
       },
       {
-        "left": "P5",
-        "right": "P5",
+        "bound_holds": true,
+        "factor_product": 4,
         "gamma_left": 2,
-        "gamma_right": 2,
         "gamma_product": 7,
-        "factor_product": 4,
-        "product_vertex_count": 25,
-        "left_minimum_dominating_set": [
-          0,
-          3
-        ],
-        "right_minimum_dominating_set": [
-          0,
-          3
-        ],
-        "product_minimum_dominating_set": [
-          [
-            0,
-            0
-          ],
-          [
-            0,
-            2
-          ],
-          [
-            1,
-            4
-          ],
-          [
-            2,
-            1
-          ],
-          [
-            3,
-            3
-          ],
-          [
-            4,
-            0
-          ],
-          [
-            4,
-            3
-          ]
-        ],
-        "bound_holds": true
-      },
-      {
+        "gamma_right": 2,
         "left": "P5",
-        "right": "house",
-        "gamma_left": 2,
-        "gamma_right": 2,
-        "gamma_product": 5,
-        "factor_product": 4,
-        "product_vertex_count": 25,
         "left_minimum_dominating_set": [
           0,
           3
         ],
-        "right_minimum_dominating_set": [
-          0,
-          1
-        ],
         "product_minimum_dominating_set": [
           [
             0,
-            1
+            0
+          ],
+          [
+            0,
+            2
           ],
           [
             1,
-            3
-          ],
-          [
-            2,
             4
           ],
           [
+            2,
+            1
+          ],
+          [
             3,
+            3
+          ],
+          [
+            4,
             0
           ],
           [
             4,
-            2
+            3
           ]
         ],
-        "bound_holds": true
-      },
-      {
-        "left": "K2,3",
-        "right": "bull",
-        "gamma_left": 2,
-        "gamma_right": 2,
-        "gamma_product": 5,
-        "factor_product": 4,
         "product_vertex_count": 25,
-        "left_minimum_dominating_set": [
-          0,
-          1
-        ],
-        "right_minimum_dominating_set": [
-          0,
-          1
-        ],
-        "product_minimum_dominating_set": [
-          [
-            0,
-            0
-          ],
-          [
-            0,
-            1
-          ],
-          [
-            1,
-            2
-          ],
-          [
-            1,
-            3
-          ],
-          [
-            1,
-            4
-          ]
-        ],
-        "bound_holds": true
-      },
-      {
-        "left": "corona-K3",
-        "right": "P4",
-        "gamma_left": 3,
-        "gamma_right": 2,
-        "gamma_product": 6,
-        "factor_product": 6,
-        "product_vertex_count": 24,
-        "left_minimum_dominating_set": [
-          0,
-          1,
-          2
-        ],
-        "right_minimum_dominating_set": [
-          0,
-          2
-        ],
-        "product_minimum_dominating_set": [
-          [
-            0,
-            0
-          ],
-          [
-            1,
-            0
-          ],
-          [
-            2,
-            3
-          ],
-          [
-            3,
-            2
-          ],
-          [
-            4,
-            2
-          ],
-          [
-            5,
-            1
-          ]
-        ],
-        "bound_holds": true
-      },
-      {
-        "left": "corona-K3",
-        "right": "C4",
-        "gamma_left": 3,
-        "gamma_right": 2,
-        "gamma_product": 6,
-        "factor_product": 6,
-        "product_vertex_count": 24,
-        "left_minimum_dominating_set": [
-          0,
-          1,
-          2
-        ],
-        "right_minimum_dominating_set": [
-          0,
-          1
-        ],
-        "product_minimum_dominating_set": [
-          [
-            0,
-            0
-          ],
-          [
-            1,
-            0
-          ],
-          [
-            2,
-            0
-          ],
-          [
-            3,
-            2
-          ],
-          [
-            4,
-            2
-          ],
-          [
-            5,
-            2
-          ]
-        ],
-        "bound_holds": true
-      },
-      {
-        "left": "corona-K3",
         "right": "P5",
-        "gamma_left": 3,
+        "right_minimum_dominating_set": [
+          0,
+          3
+        ]
+      },
+      {
+        "bound_holds": true,
+        "factor_product": 4,
+        "gamma_left": 2,
+        "gamma_product": 5,
         "gamma_right": 2,
-        "gamma_product": 8,
+        "left": "P5",
+        "left_minimum_dominating_set": [
+          0,
+          3
+        ],
+        "product_minimum_dominating_set": [
+          [
+            0,
+            1
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            3,
+            0
+          ],
+          [
+            4,
+            2
+          ]
+        ],
+        "product_vertex_count": 25,
+        "right": "house",
+        "right_minimum_dominating_set": [
+          0,
+          1
+        ]
+      },
+      {
+        "bound_holds": true,
+        "factor_product": 4,
+        "gamma_left": 2,
+        "gamma_product": 5,
+        "gamma_right": 2,
+        "left": "K2,3",
+        "left_minimum_dominating_set": [
+          0,
+          1
+        ],
+        "product_minimum_dominating_set": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            4
+          ]
+        ],
+        "product_vertex_count": 25,
+        "right": "bull",
+        "right_minimum_dominating_set": [
+          0,
+          1
+        ]
+      },
+      {
+        "bound_holds": true,
         "factor_product": 6,
-        "product_vertex_count": 30,
+        "gamma_left": 3,
+        "gamma_product": 6,
+        "gamma_right": 2,
+        "left": "corona-K3",
         "left_minimum_dominating_set": [
           0,
           1,
           2
         ],
+        "product_minimum_dominating_set": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            0
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            3,
+            2
+          ],
+          [
+            4,
+            2
+          ],
+          [
+            5,
+            1
+          ]
+        ],
+        "product_vertex_count": 24,
+        "right": "P4",
         "right_minimum_dominating_set": [
           0,
-          3
+          2
+        ]
+      },
+      {
+        "bound_holds": true,
+        "factor_product": 6,
+        "gamma_left": 3,
+        "gamma_product": 6,
+        "gamma_right": 2,
+        "left": "corona-K3",
+        "left_minimum_dominating_set": [
+          0,
+          1,
+          2
+        ],
+        "product_minimum_dominating_set": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            0
+          ],
+          [
+            2,
+            0
+          ],
+          [
+            3,
+            2
+          ],
+          [
+            4,
+            2
+          ],
+          [
+            5,
+            2
+          ]
+        ],
+        "product_vertex_count": 24,
+        "right": "C4",
+        "right_minimum_dominating_set": [
+          0,
+          1
+        ]
+      },
+      {
+        "bound_holds": true,
+        "factor_product": 6,
+        "gamma_left": 3,
+        "gamma_product": 8,
+        "gamma_right": 2,
+        "left": "corona-K3",
+        "left_minimum_dominating_set": [
+          0,
+          1,
+          2
         ],
         "product_minimum_dominating_set": [
           [
@@ -631,23 +625,20 @@
             3
           ]
         ],
-        "bound_holds": true
+        "product_vertex_count": 30,
+        "right": "P5",
+        "right_minimum_dominating_set": [
+          0,
+          3
+        ]
       }
     ],
-    "derived_conclusion": "HOLDS_ON_FROZEN_PAIR_SET",
     "scope_identity": "vizing-bounded-cartesian-products:graphs-v1:pairs-v1"
   },
-  "claimed_assurance": "CHECKED",
-  "scope": "vizing-bounded-cartesian-products:graphs-v1:pairs-v1",
-  "completeness": "COMPLETE",
-  "evidence": [
+  "witness": [
     {
       "path": "evidence/answer.txt",
       "sha256": "sha256:4c031bc23a876ebfc214f1be872dcdfa0be2eee422f2e10c365fa243f7a190f4"
     }
-  ],
-  "limitations": [
-    "EIGHT_FROZEN_GRAPHS_THIRTEEN_CARTESIAN_PAIRS",
-    "NO_GLOBAL_VIZING_CONCLUSION"
   ]
 }

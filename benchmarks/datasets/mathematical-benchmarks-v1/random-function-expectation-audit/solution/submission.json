@@ -1,1 +1,14 @@
-{"task_id":"jacobian/random-function-expectation-audit","conclusion":"FALSE","result":{"self_hit_probability":"49/625","other_hit_probability":"24/625","ordered_squared_difference_sum":65000,"expected_value":"2496"},"claimed_assurance":"COMPUTED","scope":"random-function-expectation-audit exact finite expectation","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:4b988852552ee09695a4ef9bf233b70eef30cec65d4a5307286cd87b14d75cef"}],"limitations":["The result is for uniformly random functions on the declared finite labeled set."]}
+{
+  "result": {
+    "expected_value": "2496",
+    "ordered_squared_difference_sum": 65000,
+    "other_hit_probability": "24/625",
+    "self_hit_probability": "49/625"
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:4b988852552ee09695a4ef9bf233b70eef30cec65d4a5307286cd87b14d75cef"
+    }
+  ]
+}

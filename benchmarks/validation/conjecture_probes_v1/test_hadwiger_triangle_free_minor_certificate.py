@@ -31,13 +31,12 @@ def case(tmp_path):
 def write(app, s):
     payload = {
         "schema_version": "1",
-        "task_id": s["task_id"],
+        "task_id": "jacobian/hadwiger-triangle-free-minor-certificate",
         "result": s["result"],
-        "limitations": s["limitations"],
     }
     e = app / "evidence/answer.txt"
     e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
-    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
+    s["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
     (app / "submission.json").write_text(json.dumps(s) + "\n")
 
 
@@ -48,13 +47,12 @@ def run(app, logs):
 def _write_evidence(app, s, result):
     payload = {
         "schema_version": "1",
-        "task_id": s["task_id"],
+        "task_id": "jacobian/hadwiger-triangle-free-minor-certificate",
         "result": result,
-        "limitations": s["limitations"],
     }
     e = app / "evidence/answer.txt"
     e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
-    s["evidence"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
+    s["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
     (app / "submission.json").write_text(json.dumps(s) + "\n")
 
 
@@ -65,13 +63,13 @@ def test_evidence_result_requires_exact_json_types(tmp_path):
     coloring[0] = True
     _write_evidence(app, s, {**s["result"], "four_coloring": coloring})
     r = run(app, logs)
-    assert r.details["mathematics"] == 1.0 and r.details["evidence"] == 0.0
+    assert r.details["mathematics"] == 1.0 and r.details["witness_validity"] == 0.0
     assert r.details["aggregate_reward"] == 0.0
     # An integral float must not compare equal to the integer invariant.
     app, logs, s = case(tmp_path / "float")
     _write_evidence(app, s, {**s["result"], "chromatic_number": 4.0})
     r = run(app, logs)
-    assert r.details["mathematics"] == 1.0 and r.details["evidence"] == 0.0
+    assert r.details["mathematics"] == 1.0 and r.details["witness_validity"] == 0.0
     assert r.details["aggregate_reward"] == 0.0
 
 
@@ -116,23 +114,6 @@ def test_triangle_and_duplicate_edge_fail(tmp_path):
     assert run(app, logs).details["aggregate_reward"] == 0.0
 
 
-def test_malformed_assurance_keeps_diagnostics(tmp_path):
-    app, logs, s = case(tmp_path)
-    # A schema-invalid list/object assurance must not raise TypeError and
-    # erase the otherwise valid mathematics/evidence/scope diagnostics.
-    s["claimed_assurance"] = ["CHECKED"]
-    write(app, s)
-    r = run(app, logs)
-    assert (
-        r.details["mathematics"] == 1.0
-        and r.details["evidence"] == 1.0
-        and r.details["scope"] == 1.0
-        and r.details["assurance"] == 0.0
-        and r.details["aggregate_reward"] == 0.0
-        and "error" not in r.details
-    )
-
-
 def test_nonfinite_json_rejected_in_raw_parse(tmp_path):
     app, logs, s = case(tmp_path)
     # NaN in an extra envelope field is invalid JSON; the raw parser must
@@ -143,24 +124,6 @@ def test_nonfinite_json_rejected_in_raw_parse(tmp_path):
     r = run(app, logs)
     assert (
         r.details["mathematics"] == 0.0
-        and r.details["evidence"] == 0.0
-        and r.details["scope"] == 0.0
-        and r.details["assurance"] == 0.0
         and r.details["aggregate_reward"] == 0.0
         and "error" not in r.details
-    )
-
-
-def test_false_verified_and_tampered_input_fail(tmp_path):
-    app, logs, s = case(tmp_path)
-    s["claimed_assurance"] = "VERIFIED"
-    write(app, s)
-    assert run(app, logs).details["false_certification"] is True
-    app, logs, _ = case(tmp_path / "input")
-    (app / "input.json").write_text("{}\n")
-    r = run(app, logs)
-    assert (
-        r.details["input_binding"] == 0.0
-        and r.details["mathematics"] == 1.0
-        and r.details["aggregate_reward"] == 0.0
     )

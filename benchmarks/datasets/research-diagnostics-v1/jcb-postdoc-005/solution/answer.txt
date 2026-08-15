@@ -1,4 +1,0 @@
-A three-dimensional quartic counterexample to the Gaussian Moments Conjecture
-
-Expected conclusion: EXACT_IDENTITY.
-Oracle summary: For every polynomial A and m>=1, E(A(Z)P^m)=m![z^m]A(z)(1+z)^(m-1). Taking A=1 and A=z gives the two claimed identities. The derivation uses E(W^a R(Z))=a![z^a]R(z), real Gaussian even moments, and the binomial series (1+u)^(-1/2).

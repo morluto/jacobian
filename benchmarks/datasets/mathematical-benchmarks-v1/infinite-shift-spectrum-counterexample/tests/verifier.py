@@ -3,12 +3,11 @@ import re
 from pathlib import Path
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 W = Path("/app")
@@ -229,83 +228,26 @@ def _limitation_is_valid(limitations):
 
 def main():
     submission = load_submission()
-    if submission is None:
-        Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
-        (Path("/logs/verifier/reward.json")).write_text(
-            json.dumps(
-                {
-                    "correctness": 0.0,
-                    "evidence_validity": 0.0,
-                    "scope_accuracy": 0.0,
-                    "assurance_calibration": 0.0,
-                    "reward": 0.0,
-                    "false_certification": False,
-                }
-            )
-        )
-        normalize_reward_file(Path("/logs/verifier/reward.json"))
-        return
+    protocol_ok = submission is not None
     frozen = _load_frozen_input()
-    expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
-    math_correct = bool(contract and _valid_result(submission.get("result"), frozen))
+    math_correct = bool(protocol_ok and _valid_result(submission.get("result"), frozen))
     evidence_valid = bool(
-        contract
+        protocol_ok
         and math_correct
-        and _evidence_matches(submission.get("evidence"), submission["result"])
+        and _evidence_matches(submission.get("witness"), submission["result"])
     )
-    scope_text = (
-        submission.get("scope").casefold()
-        if isinstance(submission.get("scope"), str)
-        else ""
+    reward = aggregate_reward(
+        correctness=math_correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
-    scope_correct = bool(
-        contract
-        and (
-            submission.get("scope") == expected["required_scope"]
-            or (
-                "finitely supported" in scope_text
-                and "rational" in scope_text
-                and "sequence" in scope_text
-                and ("operator" in scope_text or "space" in scope_text)
-            )
-        )
-    )
-    assurance_correct = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitation_correct = bool(
-        contract and _limitation_is_valid(submission.get("limitations"))
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(
-        contract
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and limitation_correct
-        and not false_certification
-    )
-    reward = 0.0 if not correct else 0.8 + 0.1 * scope_correct + 0.1 * assurance_correct
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

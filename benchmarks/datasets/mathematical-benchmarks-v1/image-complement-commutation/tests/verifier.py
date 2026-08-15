@@ -2,17 +2,15 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
+    aggregate_reward,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
     valid_sha256_uri,
-    workspace_input_is_bound,
 )
 
 W, T = Path("/app"), Path("/tests")
-LIMITATIONS = ["FINITE_FROZEN_MAPPINGS", "NO_GENERAL_THEOREM_PROOF"]
 _CLASSIFICATIONS = frozenset(
     {"BIJECTIVE", "INJECTIVE_NOT_SURJECTIVE", "SURJECTIVE_NOT_INJECTIVE"}
 )
@@ -152,22 +150,14 @@ def valid(result):
 
 def main():
     expected = json.loads((T / "expected.json").read_text())
-    s = load_submission(W / "submission.json")
-    contract = strict_submission_contract(
-        s,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"COMPUTED"}),
-        verification_record="forbidden",
-    )
-    input_bound = workspace_input_is_bound()
-    result = s.get("result") if isinstance(s, dict) else None
-    math_ok = bool(input_bound and valid(result))
+    submission = load_submission(W / "submission.json")
+    protocol_ok = submission is not None
+    data = submission if isinstance(submission, dict) else {}
+    result = data.get("result")
+    math_ok = bool(protocol_ok and valid(result))
     evidence_descriptor = (
-        s["evidence"][0]
-        if isinstance(s, dict)
-        and isinstance(s.get("evidence"), list)
-        and len(s["evidence"]) == 1
+        data["witness"][0]
+        if isinstance(data.get("witness"), list) and len(data["witness"]) == 1
         else None
     )
     ev = (
@@ -179,48 +169,28 @@ def main():
         if evidence_descriptor is not None
         else None
     )
-    evidence_ok = bool(
-        ev
-        and set(ev) == {"schema_version", "task_id", "result", "limitations"}
+    ev_ok = bool(
+        protocol_ok
+        and ev
+        and set(ev) == {"schema_version", "task_id", "result"}
         and type(ev.get("schema_version")) is str
         and ev.get("schema_version") == "1"
         and type(ev.get("task_id")) is str
         and ev.get("task_id") == expected["task_id"]
-        and ev.get("task_id") == s.get("task_id")
-        and valid(ev.get("result"))
-        and ev.get("result") == s.get("result")
-        and ev.get("limitations") == LIMITATIONS
-        and ev.get("limitations") == s.get("limitations")
+        and json_value_equal(ev.get("result"), data.get("result"))
     )
-    protocol_ok = bool(
-        contract
-        and _result_schema_ok(result)
-        and _evidence_descriptor_ok(evidence_descriptor)
-    )
-    scope_ok = bool(
-        isinstance(s, dict)
-        and s.get("scope") == "ALL_SUBSETS_OF_ALL_THREE_FROZEN_MAPPINGS"
-        and s.get("completeness") == "COMPLETE"
-        and s.get("limitations") == LIMITATIONS
-    )
-    assurance_ok = bool(
-        isinstance(s, dict) and s.get("claimed_assurance") == "COMPUTED"
-    )
-    false_cert = false_verified_claim(s, verification_record_bound=False)
-    correct = bool(
-        protocol_ok and math_ok and evidence_ok and scope_ok and not false_cert
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=ev_ok,
+        protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
-                "protocol_compliance": float(protocol_ok),
                 "correctness": float(math_ok),
-                "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
-                "reward": float(correct),
-                "false_certification": false_cert,
+                "evidence_validity": float(ev_ok),
+                "reward": reward,
             }
         )
     )

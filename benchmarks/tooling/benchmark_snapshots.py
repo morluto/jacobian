@@ -230,7 +230,6 @@ def _task_records(
                 "id": ref.path.name,
                 "name": ref.name,
                 "digest": _normalize_digest(digest_fn(ref.path)),
-                "assurance_ceiling": ref.maximum_assurance,
                 "required_provider": ref.required_provider,
                 "environment_profile": env_profile.name,
                 "environment": _environment_dict(env_profile),

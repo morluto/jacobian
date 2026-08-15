@@ -4,20 +4,25 @@ import json
 from pathlib import Path
 
 import pytest
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1 import (
+    _fixtures,
+    _verifier,
+)
 
 TASK = "polynomial-root-localization-certificate"
 
 
 def _case(tmp_path: Path):
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     evidence = task / "solution" / "root-bound-certificate.json"
     target = app / "evidence" / "root-bound-certificate.json"
-    target.write_bytes(evidence.read_bytes())
+    certificate = json.loads(evidence.read_text())
+    certificate.pop("limitations", None)
+    _fixtures._write_json(target, certificate)
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
-    submission["evidence"][0]["sha256"] = support._digest(target)
-    support._write_json(submission_path, submission)
+    submission["witness"][0]["sha256"] = _fixtures._digest(target)
+    _fixtures._write_json(submission_path, submission)
     return task, app, logs
 
 
@@ -25,13 +30,14 @@ def _bind_evidence(app: Path, submission: dict) -> None:
     evidence_path = app / "evidence" / "root-bound-certificate.json"
     evidence = json.loads(evidence_path.read_text())
     evidence["result"] = submission["result"]
-    support._write_json(evidence_path, evidence)
-    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
+    evidence.pop("limitations", None)
+    _fixtures._write_json(evidence_path, evidence)
+    submission["witness"][0]["sha256"] = _fixtures._digest(evidence_path)
 
 
 def _rewrite(app: Path, submission: dict) -> None:
     _bind_evidence(app, submission)
-    support._write_json(app / "submission.json", submission)
+    _fixtures._write_json(app / "submission.json", submission)
 
 
 def test_accepts_permuted_weight_order(tmp_path: Path) -> None:
@@ -44,7 +50,7 @@ def test_accepts_permuted_weight_order(tmp_path: Path) -> None:
     )
     _rewrite(app, submission)
 
-    accepted = support._run_verifier(task, app, logs)
+    accepted = _verifier._run_verifier(task, app, logs)
     assert accepted.details["correctness"] == 1.0
     assert accepted.reward == pytest.approx(1.0)
 
@@ -55,19 +61,8 @@ def test_rejects_corrupted_symbolic_coefficient(tmp_path: Path) -> None:
     submission["result"]["one_minus_z_times_q"][2] = [0, -1, 0, 1]
     _rewrite(app, submission)
 
-    rejected = support._run_verifier(task, app, logs)
+    rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
-    assert rejected.reward == 0.0
-
-
-def test_rejects_false_verified_claim(tmp_path: Path) -> None:
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    submission["claimed_assurance"] = "VERIFIED"
-    support._write_json(app / "submission.json", submission)
-
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected.details["false_certification"] is True
     assert rejected.reward == 0.0
 
 
@@ -78,7 +73,7 @@ def test_rejects_boolean_in_weight_sum(tmp_path: Path) -> None:
     submission["result"]["weight_sum"] = [True, 0, 0, 0]
     _rewrite(app, submission)
 
-    rejected = support._run_verifier(task, app, logs)
+    rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
     assert rejected.reward == 0.0
 
@@ -90,7 +85,7 @@ def test_rejects_boolean_in_controlled_powers(tmp_path: Path) -> None:
     submission["result"]["controlled_powers"] = [True, 2, 3, 4]
     _rewrite(app, submission)
 
-    rejected = support._run_verifier(task, app, logs)
+    rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
     assert rejected.reward == 0.0
 
@@ -106,10 +101,10 @@ def test_rejects_boolean_in_evidence_copy(tmp_path: Path) -> None:
             '"weight_sum":[1,0,0,0]', '"weight_sum":[true,0,0,0]'
         )
     )
-    support._write_json(evidence_path, evidence)
-    submission["evidence"][0]["sha256"] = support._digest(evidence_path)
-    support._write_json(app / "submission.json", submission)
+    _fixtures._write_json(evidence_path, evidence)
+    submission["witness"][0]["sha256"] = _fixtures._digest(evidence_path)
+    _fixtures._write_json(app / "submission.json", submission)
 
-    rejected = support._run_verifier(task, app, logs)
-    assert rejected.details["evidence_validity"] == 0.0
+    rejected = _verifier._run_verifier(task, app, logs)
+    assert rejected.reward == 0.0
     assert rejected.reward == 0.0

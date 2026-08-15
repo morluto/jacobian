@@ -1,19 +1,12 @@
 {
-  "task_id": "jacobian/fractional-ratio-proof-repair",
-  "conclusion": "PUBLIC_PROOF_INVALID_REPAIR_CERTIFIED",
   "result": {
+    "attained_ratio": "19/9",
+    "constant_residual": -146,
     "contract_mismatches": [
       "OBJECTIVE_REPLACED",
       "BINARY_DOMAIN_RELAXED",
       "UNDECLARED_BUDGET_ADDED"
     ],
-    "selected_indices": [
-      0,
-      2,
-      4
-    ],
-    "attained_ratio": "19/9",
-    "constant_residual": -146,
     "item_residuals": [
       {
         "index": 0,
@@ -112,24 +105,23 @@
         "value": -1042
       }
     ],
+    "maximum_residual_sum": 0,
     "positive_residual_indices": [
       0,
       2,
       4
     ],
-    "maximum_residual_sum": 0,
-    "repair_method": "EXACT_FRACTIONAL_RESIDUAL_CERTIFICATE"
+    "repair_method": "EXACT_FRACTIONAL_RESIDUAL_CERTIFICATE",
+    "selected_indices": [
+      0,
+      2,
+      4
+    ]
   },
-  "claimed_assurance": "COMPUTED",
-  "scope": "frozen-24-item-binary-fractional-ratio-instance",
-  "completeness": "COMPLETE",
-  "evidence": [
+  "witness": [
     {
       "path": "evidence/answer.txt",
       "sha256": "sha256:162971e7d079353dc7dcd875ce9545329b161457b02d51b56d10f7425d6b5f9b"
     }
-  ],
-  "limitations": [
-    "The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem."
   ]
 }

@@ -4,20 +4,19 @@ from pathlib import Path
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
 W = Path("/app")
 E = Path("/tests")
 ALLOWED_ASSURANCES = frozenset({"COMPUTED"})
-SCHEMA_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"})
+SCHEMA_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "VERIFIED"})
 
 
 def _frozen_source():
@@ -233,62 +232,27 @@ def _raw_submission():
 
 def main():
     raw = _raw_submission()
-    submission, source = load_submission(require_input_binding=False), _frozen_source()
-    expected = json.loads((E / "expected.json").read_text())
-    input_bound = workspace_input_is_bound(W / "input.json", tests=E)
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=ALLOWED_ASSURANCES,
-        verification_record="forbidden",
-    )
+    source = _frozen_source()
+    input_binding = workspace_input_is_bound(W / "input.json", tests=E)
+    submission = load_submission(require_input_binding=False)
     result = raw.get("result") if isinstance(raw, dict) else None
-    math_correct = bool(_valid(result, source))
-    evidence_valid = bool(
-        isinstance(raw, dict) and _evidence(raw.get("evidence"), raw.get("result"))
+    math_ok = bool(_valid(result, source))
+    ev_ok = bool(
+        isinstance(raw, dict) and _evidence(raw.get("witness"), raw.get("result"))
     )
-    assurance_field_valid = bool(
-        isinstance(raw, dict)
-        and isinstance(raw.get("claimed_assurance"), str)
-        and raw.get("claimed_assurance") in SCHEMA_ASSURANCES
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=ev_ok,
+        protocol_ok=bool(input_binding and submission is not None),
     )
-    scope_correct = bool(
-        isinstance(raw, dict)
-        and assurance_field_valid
-        and raw.get("scope") == expected["required_scope"]
-    )
-    assurance_correct = bool(
-        isinstance(raw, dict)
-        and raw.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations = raw.get("limitations", []) if isinstance(raw, dict) else []
-    limitations_correct = _limitations_valid(limitations)
-    false_certification = false_verified_claim(raw, verification_record_bound=False)
-    correct = bool(
-        contract
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and limitations_correct
-        and input_bound
-        and not false_certification
-    )
-    reward = 1.0 if correct else 0.0
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
-                "correctness": float(math_correct),
-                "input_binding": float(input_bound),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
-                "limitation_accuracy": float(limitations_correct),
-                "protocol_compliance": float(contract),
+                "correctness": float(math_ok),
+                "evidence_validity": float(ev_ok),
+                "input_binding": float(input_binding),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

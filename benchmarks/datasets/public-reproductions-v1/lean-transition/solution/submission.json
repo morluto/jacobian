@@ -1,1 +1,12 @@
-{"task_id":"jacobian/lean-transition","conclusion":"TRUE","result":{"goal_count":2,"completed":false},"claimed_assurance":"COMPUTED","scope":"jacobian/lean-transition complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:e04548209e6822d57048d17867769bb56de3743affb954ec6c7a63b1ae7d1ad0"}],"limitations":[]}
+{
+  "result": {
+    "completed": false,
+    "goal_count": 2
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:e04548209e6822d57048d17867769bb56de3743affb954ec6c7a63b1ae7d1ad0"
+    }
+  ]
+}

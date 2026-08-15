@@ -2,12 +2,12 @@ import json
 from pathlib import Path
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
+    workspace_input_is_bound,
 )
 
 W = Path("/app")
@@ -92,47 +92,29 @@ def _evidence_matches_result(evidence, result):
 
 def main():
     submission = load_submission()
-    expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
+    input_binding = workspace_input_is_bound()
+    math_ok = bool(
+        submission is not None and _complete_obstruction(submission.get("result"))
     )
-    math_correct = bool(contract and _complete_obstruction(submission.get("result")))
-    evidence_valid = bool(
-        contract
-        and _evidence_matches_result(submission["evidence"], submission["result"])
+    ev_ok = bool(
+        submission is not None
+        and _evidence_matches_result(
+            submission.get("witness"), submission.get("result")
+        )
     )
-    scope_correct = bool(
-        contract and submission.get("scope") == expected["required_scope"]
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=ev_ok,
+        protocol_ok=bool(input_binding and submission is not None),
     )
-    assurance_correct = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(
-        contract and math_correct and scope_correct and not false_certification
-    )
-    reward = (
-        0.0
-        if not correct or not evidence_valid
-        else 0.8 + 0.1 * scope_correct + 0.1 * assurance_correct
-    )
-
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
-                "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
+                "correctness": float(math_ok),
+                "evidence_validity": float(ev_ok),
+                "input_binding": float(input_binding),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

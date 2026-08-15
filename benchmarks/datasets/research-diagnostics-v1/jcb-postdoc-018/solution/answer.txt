@@ -1,4 +1,0 @@
-WOWII Conjecture 18: detect a semantic mismatch between two graph invariants
-
-Expected conclusion: DISPROVED.
-Oracle summary: The graph has M={4}, alpha(G)=4, b(G)=5, eccSet(M)=2, and dist_max(M)=0. Thus 4+ceil(sqrt(2))=6 is not <=5, while 4+ceil(sqrt(0))=4 is <=5. The counterexample targets the misformalized invariant, not the intended solved conjecture.

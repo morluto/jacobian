@@ -5,18 +5,17 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    false_verified_claim,
+    aggregate_reward,
+    json_value_equal,
     load_submission_raw,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
     valid_sha256_uri,
     workspace_input_is_bound,
 )
 
 WORKSPACE, TESTS = Path("/app"), Path("/tests")
 EVIDENCE_PATH = "evidence/distance-audit.json"
-LIMITATION = "The verifier replays exact rational instances and trusts the standard theorem that locally finite Euclidean subsets are closed; it does not machine-prove the universal topological argument."
 _CANONICAL_RATIONAL = re.compile(r"-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?\Z")
 _RATIONAL = re.compile(r"[+-]?[0-9]+(?:/[+-]?[1-9][0-9]*)?\Z")
 MAX_RATIONAL_TEXT = 128
@@ -237,22 +236,15 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
 
 
 def _evidence(submission: dict[str, Any]) -> bool:
-    evidence = submission.get("evidence")
+    evidence = submission.get("witness")
     if not isinstance(evidence, list) or len(evidence) != 1:
         return False
     payload = read_evidence_json(evidence[0], expected_path=EVIDENCE_PATH)
     return bool(
         isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
-        and payload["schema_version"] == "1"
-        and payload["task_id"] == submission.get("task_id")
-        and payload["result"] == submission.get("result")
-        and payload["limitations"] == submission.get("limitations")
+        and payload.get("schema_version") == "1"
+        and json_value_equal(payload.get("result"), submission.get("result"))
     )
-
-
-def _limitations_schema(value: object) -> bool:
-    return value == [LIMITATION]
 
 
 def _evidence_schema(value: object) -> bool:
@@ -269,46 +261,20 @@ def _evidence_schema(value: object) -> bool:
 def main() -> None:
     submission = load_submission_raw(require_input_binding=False)
     data = submission if isinstance(submission, dict) else {}
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = bool(
-        isinstance(submission, dict)
-        and isinstance(submission.get("claimed_assurance"), str)
-        and strict_submission_contract(
-            submission,
-            task_id=expected["task_id"],
-            conclusion=expected["conclusion"],
-            allowed_assurances=frozenset(
-                {"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}
-            ),
-            min_limitations=1,
-            verification_record="forbidden",
-        )
-    )
     input_bound = workspace_input_is_bound()
     math_correct = bool(_result(data.get("result"), _frozen()))
     evidence_valid = bool(_evidence(data))
-    protocol = bool(
-        contract
+    protocol_ok = bool(
+        isinstance(submission, dict)
+        and set(data) == {"result", "witness"}
         and _result_schema(data.get("result"))
-        and _limitations_schema(data.get("limitations"))
-        and _evidence_schema(data.get("evidence"))
+        and _evidence_schema(data.get("witness"))
     )
-    scope_correct = bool(data.get("scope") == expected["required_scope"])
-    assurance_correct = bool(
-        data.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(
-        protocol
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and input_bound
-        and _limitations_schema(data.get("limitations"))
-        and not false_certification
+    correct = bool(protocol_ok and input_bound and math_correct)
+    reward = aggregate_reward(
+        correctness=correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
     out = Path("/logs/verifier")
     out.mkdir(parents=True, exist_ok=True)
@@ -318,11 +284,8 @@ def main() -> None:
                 "correctness": float(math_correct),
                 "input_binding": float(input_bound),
                 "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
-                "protocol_compliance": float(protocol),
-                "reward": float(correct),
-                "false_certification": false_certification,
+                "protocol_compliance": float(protocol_ok),
+                "reward": reward,
             }
         )
     )

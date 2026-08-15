@@ -5,11 +5,10 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    evidence_list_is_bound,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
@@ -223,106 +222,55 @@ def _result_is_valid(value: object, source: dict[str, Any]) -> bool:
     return len(pairs) == len(source_fiber) and pairs == set(forward.items())
 
 
-def _evidence_is_valid(value: object, result: object) -> bool:
-    if (
-        not isinstance(value, list)
-        or len(value) != 1
-        or not evidence_list_is_bound(value)
-    ):
+def _witness_is_valid(value: object, result: object) -> bool:
+    if not isinstance(value, list) or len(value) != 1:
         return False
     target = resolve_evidence(value[0], expected_path="evidence/answer.txt")
     if target is None:
         return False
     try:
-        text = target.read_text().lower()
+        text = target.read_text()
     except (OSError, UnicodeError):
         return False
-    if not isinstance(result, dict) or not isinstance(result.get("bijection"), list):
+    markers = [
+        line.removeprefix("RESULT_JSON:").strip()
+        for line in text.splitlines()
+        if line.startswith("RESULT_JSON:")
+    ]
+    if len(markers) != 1:
         return False
-    return bool(
-        all(
-            term in text for term in ("unique", "reversed path", "bijection", "inverse")
-        )
-        and not any(
-            marker in text for marker in ("not a bijection", "not unique", "no inverse")
-        )
-        and all(
-            str(pair.get(key, "")).casefold() in text
-            for pair in result["bijection"]
-            if isinstance(pair, dict)
-            for key in ("source", "target")
-        )
-    )
+    try:
+        bound_result = json.loads(markers[0])
+    except (ValueError, RecursionError):
+        return False
+    return isinstance(result, dict) and json_value_equal(bound_result, result)
 
 
 def main() -> None:
     submission = load_submission()
-    expected = json.loads((TESTS / "expected.json").read_text())
     source = _load_bound_input()
-    math_contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="optional",
-    )
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
-    )
+    data = submission if isinstance(submission, dict) else {}
     source_ok = (
         source.get("source", {}).get("row_sha256")
         == "sha256:a0b2d9c381ca5ac7596b5940810c19b09be1cbe8f3cc1d123e0eba398f2a00c2"
     )
     math_correct = bool(
-        math_contract
-        and source_ok
-        and submission.get("completeness") == "COMPLETE"
-        and _result_is_valid(submission.get("result"), source)
-    )
-    evidence = bool(
-        math_contract
-        and _evidence_is_valid(submission.get("evidence"), submission.get("result"))
-    )
-    scope = bool(
-        math_contract
-        and isinstance(submission.get("scope"), str)
-        and all(
-            term in submission["scope"].casefold()
-            for term in ("finite", "graph", "cover", "fiber", "path")
-        )
-        and not any(
-            marker in submission["scope"].casefold()
-            for marker in ("not ", "without", "cannot", "does not")
-        )
-    )
-    assurance = bool(
-        math_contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false_certification = bool(
         isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "VERIFIED"
+        and source_ok
+        and _result_is_valid(data.get("result"), source)
     )
-    correct = bool(contract and math_correct and evidence and scope and assurance)
-    reward = (
-        0.0
-        if not correct or false_certification
-        else 0.8 + 0.1 * scope + 0.1 * assurance
+    witness_ok = bool(
+        math_correct and _witness_is_valid(data.get("witness"), data.get("result"))
     )
+    correct = bool(math_correct and witness_ok)
     output = Path("/logs/verifier/reward.json")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
-                "reward": reward,
-                "false_certification": false_certification,
+                "witness_validity": float(witness_ok),
+                "reward": float(correct),
             }
         )
     )

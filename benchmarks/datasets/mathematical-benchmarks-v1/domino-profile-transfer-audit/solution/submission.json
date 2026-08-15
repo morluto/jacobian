@@ -1,26 +1,291 @@
 {
-  "task_id": "jacobian/domino-profile-transfer-audit",
-  "conclusion": "PROPOSED_REMAINDER_INCORRECT_REPAIRED",
   "result": {
-    "removed_row": 0,
-    "transition_matrix": [[0,1,0,0,1,0,0,1],[1,0,0,0,0,0,1,0],[0,0,0,0,0,1,0,0],[0,0,0,0,1,0,0,0],[1,0,0,1,0,0,0,0],[0,0,1,0,0,0,0,0],[0,1,0,0,0,0,0,0],[1,0,0,0,0,0,0,0]],
-    "initial_vector": [0,1,0,0,0,0,0,0],
+    "diagnosis": "PROPOSED_DECOMPOSITION_DOES_NOT_PARTITION_ALL_TILINGS",
     "exponentiation_trace": [
-      {"bit":0,"before":[0,1,0,0,0,0,0,0],"after":[1,0,0,0,0,0,1,0]},
-      {"bit":2,"before":[1,0,0,0,0,0,1,0],"after":[15,0,0,5,0,0,6,0]},
-      {"bit":5,"before":[15,0,0,5,0,0,6,0],"after":[18,0,0,1,0,0,2,0]},
-      {"bit":6,"before":[18,0,0,1,0,0,2,0],"after":[1,0,0,0,0,0,1,0]},
-      {"bit":7,"before":[1,0,0,0,0,0,1,0],"after":[0,0,0,0,0,0,1,0]},
-      {"bit":8,"before":[0,0,0,0,0,0,1,0],"after":[15,0,0,5,0,0,6,0]},
-      {"bit":9,"before":[15,0,0,5,0,0,6,0],"after":[18,0,0,1,0,0,2,0]},
-      {"bit":10,"before":[18,0,0,1,0,0,2,0],"after":[1,0,0,0,0,0,1,0]}
+      {
+        "after": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+        "before": [
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "bit": 0
+      },
+      {
+        "after": [
+          15,
+          0,
+          0,
+          5,
+          0,
+          0,
+          6,
+          0
+        ],
+        "before": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+        "bit": 2
+      },
+      {
+        "after": [
+          18,
+          0,
+          0,
+          1,
+          0,
+          0,
+          2,
+          0
+        ],
+        "before": [
+          15,
+          0,
+          0,
+          5,
+          0,
+          0,
+          6,
+          0
+        ],
+        "bit": 5
+      },
+      {
+        "after": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+        "before": [
+          18,
+          0,
+          0,
+          1,
+          0,
+          0,
+          2,
+          0
+        ],
+        "bit": 6
+      },
+      {
+        "after": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+        "before": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+        "bit": 7
+      },
+      {
+        "after": [
+          15,
+          0,
+          0,
+          5,
+          0,
+          0,
+          6,
+          0
+        ],
+        "before": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+        "bit": 8
+      },
+      {
+        "after": [
+          18,
+          0,
+          0,
+          1,
+          0,
+          0,
+          2,
+          0
+        ],
+        "before": [
+          15,
+          0,
+          0,
+          5,
+          0,
+          0,
+          6,
+          0
+        ],
+        "bit": 9
+      },
+      {
+        "after": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+        "before": [
+          18,
+          0,
+          0,
+          1,
+          0,
+          0,
+          2,
+          0
+        ],
+        "bit": 10
+      }
+    ],
+    "initial_vector": [
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
     ],
     "remainder": 1,
-    "diagnosis": "PROPOSED_DECOMPOSITION_DOES_NOT_PARTITION_ALL_TILINGS"
+    "removed_row": 0,
+    "transition_matrix": [
+      [
+        0,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1
+      ],
+      [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    ]
   },
-  "claimed_assurance": "COMPUTED",
-  "scope": "domino-profile-transfer-audit exact modulo-19 certificate",
-  "completeness": "COMPLETE",
-  "evidence": [{"path":"evidence/profile-transfer-certificate.json","sha256":"sha256:6ee66ff4f53c6ea4af66559c700aa42f153cfc80b4843542e19e72ff5396fc2a"}],
-  "limitations": ["The verifier proves the exact finite-state modulo-19 computation; it does not formalize the source narrative in a proof assistant."]
+  "witness": [
+    {
+      "path": "evidence/profile-transfer-certificate.json",
+      "sha256": "sha256:7d6225ba7b8982d1ffa7d4bd58835979e0b8cf1e58c88fe6d26872f4e7b73ee2"
+    }
+  ]
 }

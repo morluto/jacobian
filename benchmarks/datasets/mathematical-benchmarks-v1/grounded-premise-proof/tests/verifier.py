@@ -4,10 +4,8 @@ from pathlib import Path
 
 from verifier_support import (
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
-    strict_submission_contract,
 )
 
 W = Path("/app")
@@ -131,50 +129,27 @@ def _replay_proof(result, source):
 def main():
     submission = load_submission()
     source = json.loads(next(E.glob("*input*.json")).read_text())
-    expected = json.loads((E / "expected.json").read_text())
     input_contract = source == json.loads(next(E.glob("*input*.json")).read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
     math_correct = bool(
-        contract and input_contract and _replay_proof(submission.get("result"), source)
+        input_contract
+        and isinstance(submission, dict)
+        and _replay_proof(submission.get("result"), source)
     )
-    evidence_valid = bool(
-        contract
+    witness_valid = bool(
+        isinstance(submission, dict)
         and evidence_list_is_bound(
-            submission.get("evidence"), expected_path="evidence/answer.txt"
+            submission.get("witness"), expected_path="evidence/answer.txt"
         )
     )
-    scope_correct = bool(
-        contract and submission.get("scope") == expected["required_scope"]
-    )
-    assurance_correct = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(contract and math_correct and not false_certification)
-    reward = (
-        0.0
-        if not correct or not evidence_valid
-        else 0.8 + 0.1 * scope_correct + 0.1 * assurance_correct
-    )
+    correct = math_correct and witness_valid
 
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
-                "reward": reward,
-                "false_certification": false_certification,
+                "witness_validity": float(witness_valid),
+                "reward": float(correct),
             }
         )
     )

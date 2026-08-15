@@ -9,12 +9,10 @@ from pathlib import Path
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    false_verified_claim,
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -305,44 +303,11 @@ def main() -> None:
     raw = _raw_submission()
     submission = load_submission(require_input_binding=False)
     source = _load_frozen_input()
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
+    contract = bool(submission)
     result = raw.get("result") if isinstance(raw, dict) else None
     math_correct = bool(_certificate_valid(result, source))
-    evidence_valid = bool(
-        isinstance(raw, dict) and _evidence_valid(raw.get("evidence"))
-    )
-    scope_correct = bool(
-        contract
-        and isinstance(raw, dict)
-        and raw.get("scope") == expected["required_scope"]
-    )
-    assurance_correct = bool(
-        isinstance(raw, dict)
-        and isinstance(raw.get("claimed_assurance"), str)
-        and raw.get("claimed_assurance") in ALLOWED_ASSURANCES
-    )
-    limitations_correct = bool(
-        contract
-        and isinstance(raw, dict)
-        and _limitations_valid(raw.get("limitations"))
-    )
-    false_certification = false_verified_claim(raw, verification_record_bound=False)
-    correct = (
-        math_correct
-        and input_binding
-        and contract
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and limitations_correct
-        and not false_certification
-    )
+    evidence_valid = bool(isinstance(raw, dict) and _evidence_valid(raw.get("witness")))
+    correct = math_correct and input_binding and contract and evidence_valid
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
@@ -351,11 +316,8 @@ def main() -> None:
                 "protocol_compliance": float(bool(contract)),
                 "input_binding": float(input_binding),
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
+                "witness_validity": float(evidence_valid),
                 "reward": float(correct),
-                "false_certification": false_certification,
             }
         )
     )

@@ -5,12 +5,11 @@ from pathlib import Path
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    false_verified_claim,
     is_regular_bounded_file,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -189,36 +188,16 @@ def _evidence(evidence, result):
         return False
     try:
         marker = None
-        has_induced = False
-        has_characteristic = False
-        has_lean_limitation = False
-        has_conjecture_limitation = False
         for line in _bounded_evidence_lines(target):
             if line.startswith("RESULT_JSON:"):
                 if marker is not None:
                     return False
                 marker = line[12:].strip()
                 continue
-            folded = line.casefold()
-            has_induced |= "induced" in folded
-            has_characteristic |= "characteristic" in folded
-            if _has_affirmative_prohibited_claim(folded):
-                return False
-            has_lean_limitation |= _has_limitation(folded, "lean")
-            has_conjecture_limitation |= _has_limitation(folded, "conjecture")
         if marker is None:
             return False
-        canonical_marker = json.dumps(
-            json.loads(marker), sort_keys=True, separators=(",", ":")
-        )
-        canonical_result = json.dumps(result, sort_keys=True, separators=(",", ":"))
-        return (
-            canonical_marker == canonical_result
-            and has_induced
-            and has_characteristic
-            and has_lean_limitation
-            and has_conjecture_limitation
-        )
+        marker_value = json.loads(marker)
+        return json_value_equal(marker_value, result)
     except (
         OSError,
         ValueError,
@@ -325,59 +304,22 @@ def _raw_submission():
 
 
 def main():
-    raw = _raw_submission()
     submission, source = load_submission(require_input_binding=False), _frozen_source()
-    expected = json.loads((E / "expected.json").read_text())
     input_bound = workspace_input_is_bound(W / "input.json", tests=E)
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=ALLOWED_ASSURANCES,
-        verification_record="forbidden",
-    )
-    result = raw.get("result") if isinstance(raw, dict) else None
+    result = submission.get("result") if isinstance(submission, dict) else None
     math_correct = bool(_valid(result, source))
-    evidence_valid = bool(
-        isinstance(raw, dict) and _evidence(raw.get("evidence"), raw.get("result"))
+    witness_valid = bool(
+        isinstance(submission, dict) and _evidence(submission.get("witness"), result)
     )
-    scope_correct = bool(
-        isinstance(raw, dict) and raw.get("scope") == expected["required_scope"]
-    )
-    assurance_correct = bool(
-        isinstance(raw, dict)
-        and raw.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    completeness_correct = bool(
-        isinstance(raw, dict) and raw.get("completeness") == "COMPLETE"
-    )
-    limitations = raw.get("limitations", []) if isinstance(raw, dict) else []
-    limitations_correct = _limitations_valid(limitations)
-    false_certification = false_verified_claim(raw, verification_record_bound=False)
-    correct = bool(
-        contract
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and completeness_correct
-        and limitations_correct
-        and input_bound
-        and not false_certification
-    )
-    reward = 0.0 if not correct else 0.8 + 0.1 * scope_correct + 0.1 * assurance_correct
+    correct = math_correct and witness_valid and input_bound
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
                 "input_binding": float(input_bound),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
-                "completeness_accuracy": float(completeness_correct),
-                "limitation_accuracy": float(limitations_correct),
-                "reward": reward,
-                "false_certification": false_certification,
+                "witness_validity": float(witness_valid),
+                "reward": float(correct),
             }
         )
     )

@@ -4,11 +4,9 @@ from typing import Any
 
 from verifier_support import (
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
@@ -136,40 +134,17 @@ def _evidence(value: object) -> bool:
 def main() -> None:
     s = load_submission()
     d = s if isinstance(s, dict) else {}
-    e = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        s,
-        task_id=e["task_id"],
-        conclusion=e["conclusion"],
-        verification_record="forbidden",
-    )
-    math_correct = bool(contract and _result(d.get("result"), _load()))
-    evidence_valid = bool(math_correct and _evidence(d.get("evidence")))
-    scope_correct = bool(contract and d.get("scope") == e["required_scope"])
-    assurance_correct = bool(
-        contract and d.get("claimed_assurance") == e["maximum_assurance"]
-    )
-    limitations_correct = bool(contract and LIMITATION in d.get("limitations", []))
-    false_certification = false_verified_claim(s, verification_record_bound=False)
-    correct = (
-        math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and limitations_correct
-        and not false_certification
-    )
+    math_correct = bool(_result(d.get("result"), _load()))
+    witness_valid = bool(math_correct and _evidence(d.get("witness")))
+    correct = math_correct and witness_valid
     p = Path("/logs/verifier")
     p.mkdir(parents=True, exist_ok=True)
     (p / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
+                "witness_validity": float(witness_valid),
                 "reward": float(correct),
-                "false_certification": false_certification,
             }
         )
     )

@@ -1,1 +1,49 @@
-{"task_id":"jacobian/modular-cubic-obstruction","conclusion":"NO_INTEGER_SOLUTIONS","result":{"modulus":7,"target_residue":1,"residue_cases":[{"x_residue":0,"x_cube_residue":0,"lhs_residue":0},{"x_residue":1,"x_cube_residue":1,"lhs_residue":4},{"x_residue":2,"x_cube_residue":1,"lhs_residue":4},{"x_residue":3,"x_cube_residue":6,"lhs_residue":3},{"x_residue":4,"x_cube_residue":1,"lhs_residue":4},{"x_residue":5,"x_cube_residue":6,"lhs_residue":3},{"x_residue":6,"x_cube_residue":6,"lhs_residue":3}]},"claimed_assurance":"COMPUTED","scope":"modular-cubic-obstruction all integer x and y","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:955cacb2832a379a8aced764c8e3ed8dd21ab2de3267d90ac8aec6e5a7543e48"}],"limitations":["The certificate establishes impossibility by exhaustive residue analysis modulo 7."]}
+{
+  "result": {
+    "modulus": 7,
+    "residue_cases": [
+      {
+        "lhs_residue": 0,
+        "x_cube_residue": 0,
+        "x_residue": 0
+      },
+      {
+        "lhs_residue": 4,
+        "x_cube_residue": 1,
+        "x_residue": 1
+      },
+      {
+        "lhs_residue": 4,
+        "x_cube_residue": 1,
+        "x_residue": 2
+      },
+      {
+        "lhs_residue": 3,
+        "x_cube_residue": 6,
+        "x_residue": 3
+      },
+      {
+        "lhs_residue": 4,
+        "x_cube_residue": 1,
+        "x_residue": 4
+      },
+      {
+        "lhs_residue": 3,
+        "x_cube_residue": 6,
+        "x_residue": 5
+      },
+      {
+        "lhs_residue": 3,
+        "x_cube_residue": 6,
+        "x_residue": 6
+      }
+    ],
+    "target_residue": 1
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:955cacb2832a379a8aced764c8e3ed8dd21ab2de3267d90ac8aec6e5a7543e48"
+    }
+  ]
+}

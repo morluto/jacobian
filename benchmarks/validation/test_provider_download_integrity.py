@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-PROVIDERS = ROOT / "benchmarks" / "datasets" / "provider-feasibility-v1"
+PROVIDERS = ROOT / "tests" / "fixtures" / "providers"
 _CURL_OUTPUT = re.compile(r"\bcurl\s+-fsSL\s+\S+\s+-o\s+(\S+)")
 # Split Dockerfile RUN chains into individual commands so that ordering can be
 # checked across logical commands, not just physical lines.

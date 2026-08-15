@@ -1,14 +1,4 @@
 {
-  "allowed_assurance": [
-    "COMPUTED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE"
-  ],
-  "assurance_ceiling": "COMPUTED",
-  "conclusion": {
-    "const": "OPTIMUM_CERTIFIED"
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/distinct-parity-certificate.json"
@@ -21,44 +11,11 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "limitations": {
-    "const": [
-      "FINITE_INTEGER_OPTIMIZATION",
-      "NO_PROOF_ASSISTANT_REPLAY"
-    ]
-  },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.",
   "required_artifact_filenames": [
     "evidence/distinct-parity-certificate.json"
   ],
   "schema_definitions": {
-    "evidence_envelope": {
-      "additionalProperties": false,
-      "properties": {
-        "limitations": {
-          "const": [
-            "FINITE_INTEGER_OPTIMIZATION",
-            "NO_PROOF_ASSISTANT_REPLAY"
-          ]
-        },
-        "result": {
-          "$ref": "#/$defs/result"
-        },
-        "schema_version": {
-          "const": "1"
-        },
-        "task_id": {
-          "const": "jacobian/distinct-parity-primal-dual"
-        }
-      },
-      "required": [
-        "schema_version",
-        "task_id",
-        "result",
-        "limitations"
-      ],
-      "type": "object"
-    },
     "result": {
       "additionalProperties": false,
       "properties": {
@@ -129,12 +86,6 @@
     }
   },
   "schema_version": "1",
-  "scope": {
-    "const": "ALL_DISTINCT_POSITIVE_PARITY_LISTS_SUMMING_TO_2025",
-    "enum": null,
-    "pattern": null,
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
     "additionalProperties": false,
@@ -206,33 +157,6 @@
   },
   "submission_schema": {
     "$defs": {
-      "evidence_envelope": {
-        "additionalProperties": false,
-        "properties": {
-          "limitations": {
-            "const": [
-              "FINITE_INTEGER_OPTIMIZATION",
-              "NO_PROOF_ASSISTANT_REPLAY"
-            ]
-          },
-          "result": {
-            "$ref": "#/$defs/result"
-          },
-          "schema_version": {
-            "const": "1"
-          },
-          "task_id": {
-            "const": "jacobian/distinct-parity-primal-dual"
-          }
-        },
-        "required": [
-          "schema_version",
-          "task_id",
-          "result",
-          "limitations"
-        ],
-        "type": "object"
-      },
       "result": {
         "additionalProperties": false,
         "properties": {
@@ -305,48 +229,6 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
-      },
-      "completeness": {
-        "const": "COMPLETE"
-      },
-      "conclusion": {
-        "const": "OPTIMUM_CERTIFIED"
-      },
-      "evidence": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/distinct-parity-certificate.json"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
-      },
-      "limitations": {
-        "const": [
-          "FINITE_INTEGER_OPTIMIZATION",
-          "NO_PROOF_ASSISTANT_REPLAY"
-        ]
-      },
       "result": {
         "additionalProperties": false,
         "properties": {
@@ -415,26 +297,34 @@
         ],
         "type": "object"
       },
-      "scope": {
-        "const": "ALL_DISTINCT_POSITIVE_PARITY_LISTS_SUMMING_TO_2025",
-        "type": "string"
-      },
-      "task_id": {
-        "const": "jacobian/distinct-parity-primal-dual"
+      "witness": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "evidence/distinct-parity-certificate.json"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "type": "array"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
+      "witness"
     ],
     "type": "object"
   },
-  "task_id": "jacobian/distinct-parity-primal-dual",
-  "verification_record": null
+  "task_id": "jacobian/distinct-parity-primal-dual"
 }

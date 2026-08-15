@@ -5,15 +5,12 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W, T = Path("/app"), Path("/tests")
-LIMITATIONS = ["S4_CLASSIFICATION_NOT_REPROVED", "CHEBOTAREV_THEOREM_TRUSTED"]
 
 
 def frozen():
@@ -172,18 +169,11 @@ def valid(r):
 def main():
     expected = json.loads((T / "expected.json").read_text())
     s = load_submission(W / "submission.json")
-    contract = strict_submission_contract(
-        s,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"COMPUTED"}),
-        verification_record="forbidden",
-    )
     evidence_descriptor = (
-        s["evidence"][0]
+        s["witness"][0]
         if isinstance(s, dict)
-        and isinstance(s.get("evidence"), list)
-        and len(s.get("evidence", [])) == 1
+        and isinstance(s.get("witness"), list)
+        and len(s.get("witness", [])) == 1
         else None
     )
     ev = (
@@ -196,33 +186,21 @@ def main():
     math_ok = bool(frozen() and isinstance(s, dict) and valid(s.get("result")))
     evidence_ok = bool(
         ev
-        and set(ev) == {"schema_version", "task_id", "result", "limitations"}
+        and set(ev) == {"schema_version", "task_id", "result"}
         and ev.get("schema_version") == "1"
         and ev.get("task_id") == expected["task_id"]
         and exact_value(
             ev.get("result"), s.get("result") if isinstance(s, dict) else None
         )
-        and ev.get("limitations") == LIMITATIONS
     )
-    scope_ok = bool(
-        contract
-        and s.get("scope") == "CONDITIONAL_ON_FROZEN_S4_PREMISE"
-        and s.get("completeness") == "COMPLETE"
-        and s.get("limitations") == LIMITATIONS
-    )
-    assurance_ok = bool(contract and s.get("claimed_assurance") == "COMPUTED")
-    false_cert = false_verified_claim(s, verification_record_bound=False)
-    correct = math_ok and evidence_ok and scope_ok and not false_cert
+    correct = math_ok and evidence_ok
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
+                "witness_validity": float(evidence_ok),
                 "reward": float(correct),
-                "false_certification": false_cert,
             }
         )
     )

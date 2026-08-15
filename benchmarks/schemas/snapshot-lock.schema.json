@@ -98,7 +98,6 @@
           "id",
           "name",
           "digest",
-          "assurance_ceiling",
           "required_provider",
           "environment_profile",
           "environment",

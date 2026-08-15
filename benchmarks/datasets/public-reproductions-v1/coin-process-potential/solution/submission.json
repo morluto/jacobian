@@ -1,7 +1,9 @@
 {
-  "task_id": "jacobian/coin-process-potential",
-  "conclusion": "TERMINATION_AND_MEAN_CERTIFIED",
   "result": {
+    "average_stopping_time": {
+      "denominator": 1,
+      "numerator": 39
+    },
     "linear_weights": [
       1,
       3,
@@ -16,7 +18,6 @@
       21,
       23
     ],
-    "pair_coefficient": -2,
     "minimum_by_head_count": [
       0,
       1,
@@ -33,23 +34,14 @@
       12
     ],
     "nonterminal_delta": -1,
+    "pair_coefficient": -2,
     "state_count": 4096,
-    "total_stopping_time": 159744,
-    "average_stopping_time": {
-      "numerator": 39,
-      "denominator": 1
-    }
+    "total_stopping_time": 159744
   },
-  "claimed_assurance": "COMPUTED",
-  "scope": "all 4096 states of the frozen 12-coin process",
-  "completeness": "COMPLETE",
-  "evidence": [
+  "witness": [
     {
       "path": "evidence/answer.txt",
       "sha256": "sha256:2b37181de4dc3d1c3287844a23e304da9b1ed03f1f8899617b3a2d10bc5d3c9b"
     }
-  ],
-  "limitations": [
-    "This certificate applies only to the frozen 12-coin instance (n=12)."
   ]
 }

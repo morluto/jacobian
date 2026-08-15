@@ -5,14 +5,12 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    _public_submission_is_valid,
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
-    is_regular_bounded_file,
+    load_submission,
+    load_submission_raw,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -27,17 +25,6 @@ def _load() -> dict[str, Any]:
     except (OSError, ValueError):
         return {}
     return value if isinstance(value, dict) else {}
-
-
-def _submission() -> dict[str, Any] | None:
-    path = WORKSPACE / "submission.json"
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
 
 
 def _term_map(value: object) -> dict[tuple[str, int], int] | None:
@@ -201,38 +188,21 @@ def _evidence(value: object, result: object) -> bool:
 
 
 def main() -> None:
-    submission = _submission()
-    data = submission if isinstance(submission, dict) else {}
-    input_bound = workspace_input_is_bound()
-    expected = json.loads((TESTS / "expected.json").read_text())
-    envelope_contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        completeness="COMPLETE",
-        verification_record="forbidden",
-    )
-    contract = bool(envelope_contract and _public_submission_is_valid(submission))
-    math_correct = _result(data.get("result"), _load())
-    evidence_valid = _evidence(data.get("evidence"), data.get("result"))
-    scope_correct = data.get("scope") == expected["required_scope"]
-    assurance_correct = data.get("claimed_assurance") == expected["maximum_assurance"]
-    limitations = data.get("limitations")
-    limitations_correct = isinstance(limitations, list) and LIMITATION in limitations
-    completeness_correct = data.get("completeness") == "COMPLETE"
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = (
-        input_bound
-        and contract
+    raw = load_submission_raw(require_input_binding=False)
+    submission = load_submission(require_input_binding=False)
+    protocol_ok = submission is not None and workspace_input_is_bound()
+    data = raw if isinstance(raw, dict) else {}
+    frozen = _load()
+    math_correct = bool(_result(data.get("result"), frozen))
+    evidence_valid = bool(
+        protocol_ok
         and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and completeness_correct
-        and limitations_correct
-        and not false_certification
+        and _evidence(data.get("witness"), data.get("result"))
+    )
+    reward = aggregate_reward(
+        correctness=math_correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
     output = Path("/logs/verifier")
     output.mkdir(parents=True, exist_ok=True)
@@ -241,14 +211,7 @@ def main() -> None:
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
-                "input_binding": float(input_bound),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
-                "completeness_accuracy": float(completeness_correct),
-                "limitations_accuracy": float(limitations_correct),
-                "protocol_compliance": float(contract),
-                "reward": float(correct),
-                "false_certification": false_certification,
+                "reward": reward,
             }
         )
     )

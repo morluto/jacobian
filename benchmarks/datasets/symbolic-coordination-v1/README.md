@@ -23,7 +23,7 @@ normalization, both map compositions, Jacobian determinants, finite grids, and
 collision witnesses. It also binds the exact input, claim, map, subject,
 semantics, scope, checker identity, evidence path, and evidence digest.
 
-The pilot caps submissions at `CHECKED`. No operator-authorized Jacobian
+The pilot caps submissions at `COMPUTED`. No operator-authorized Jacobian
 checker record is part of PR1, so a `VERIFIED` claim is false certification and
 receives zero reward. A constant nonzero Jacobian does not itself license a
 global-invertibility claim. Grid exhaustion licenses only the declared finite

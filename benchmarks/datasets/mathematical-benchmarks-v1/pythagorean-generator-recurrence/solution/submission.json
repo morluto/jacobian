@@ -1,1 +1,112 @@
-{"claimed_assurance":"COMPUTED","completeness":"COMPLETE","conclusion":"VALID_RECURRENCE_CERTIFICATE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:8af5740d41970f05bdae35dd9635d0aa378f3836f6faf82c3c4ad86d9cba0939"}],"limitations":["EIGHT_STAGE_TRACE_ONLY","STANDARD_PYTHAGOREAN_PARAMETERIZATION_TRUSTED","NO_PROOF_ASSISTANT_VERIFICATION"],"result":{"invariant_multiplier":-1,"stages":[{"a":4,"b":3,"c":5,"gcd":1,"m":2,"n":1,"parity_opposite":true,"q":-1,"stage":0},{"a":20,"b":21,"c":29,"gcd":1,"m":5,"n":2,"parity_opposite":true,"q":1,"stage":1},{"a":120,"b":119,"c":169,"gcd":1,"m":12,"n":5,"parity_opposite":true,"q":-1,"stage":2},{"a":696,"b":697,"c":985,"gcd":1,"m":29,"n":12,"parity_opposite":true,"q":1,"stage":3},{"a":4060,"b":4059,"c":5741,"gcd":1,"m":70,"n":29,"parity_opposite":true,"q":-1,"stage":4},{"a":23660,"b":23661,"c":33461,"gcd":1,"m":169,"n":70,"parity_opposite":true,"q":1,"stage":5},{"a":137904,"b":137903,"c":195025,"gcd":1,"m":408,"n":169,"parity_opposite":true,"q":-1,"stage":6},{"a":803760,"b":803761,"c":1136689,"gcd":1,"m":985,"n":408,"parity_opposite":true,"q":1,"stage":7}],"transform_determinant":-1,"transform_matrix":[[2,1],[1,0]]},"scope":"EIGHT_EXACT_GENERATOR_STAGES","task_id":"jacobian/pythagorean-generator-recurrence"}
+{
+  "result": {
+    "invariant_multiplier": -1,
+    "stages": [
+      {
+        "a": 4,
+        "b": 3,
+        "c": 5,
+        "gcd": 1,
+        "m": 2,
+        "n": 1,
+        "parity_opposite": true,
+        "q": -1,
+        "stage": 0
+      },
+      {
+        "a": 20,
+        "b": 21,
+        "c": 29,
+        "gcd": 1,
+        "m": 5,
+        "n": 2,
+        "parity_opposite": true,
+        "q": 1,
+        "stage": 1
+      },
+      {
+        "a": 120,
+        "b": 119,
+        "c": 169,
+        "gcd": 1,
+        "m": 12,
+        "n": 5,
+        "parity_opposite": true,
+        "q": -1,
+        "stage": 2
+      },
+      {
+        "a": 696,
+        "b": 697,
+        "c": 985,
+        "gcd": 1,
+        "m": 29,
+        "n": 12,
+        "parity_opposite": true,
+        "q": 1,
+        "stage": 3
+      },
+      {
+        "a": 4060,
+        "b": 4059,
+        "c": 5741,
+        "gcd": 1,
+        "m": 70,
+        "n": 29,
+        "parity_opposite": true,
+        "q": -1,
+        "stage": 4
+      },
+      {
+        "a": 23660,
+        "b": 23661,
+        "c": 33461,
+        "gcd": 1,
+        "m": 169,
+        "n": 70,
+        "parity_opposite": true,
+        "q": 1,
+        "stage": 5
+      },
+      {
+        "a": 137904,
+        "b": 137903,
+        "c": 195025,
+        "gcd": 1,
+        "m": 408,
+        "n": 169,
+        "parity_opposite": true,
+        "q": -1,
+        "stage": 6
+      },
+      {
+        "a": 803760,
+        "b": 803761,
+        "c": 1136689,
+        "gcd": 1,
+        "m": 985,
+        "n": 408,
+        "parity_opposite": true,
+        "q": 1,
+        "stage": 7
+      }
+    ],
+    "transform_determinant": -1,
+    "transform_matrix": [
+      [
+        2,
+        1
+      ],
+      [
+        1,
+        0
+      ]
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:8af5740d41970f05bdae35dd9635d0aa378f3836f6faf82c3c4ad86d9cba0939"
+    }
+  ]
+}

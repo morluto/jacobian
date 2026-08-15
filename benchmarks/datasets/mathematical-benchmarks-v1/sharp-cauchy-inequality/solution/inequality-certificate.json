@@ -1,1 +1,502 @@
-{"schema_version":"1","task_id":"jacobian/sharp-cauchy-inequality","result":{"constant":{"numerator":2,"denominator":1},"proof_mode":"AMGM_SQUARES","certificate":{"d":[{"exponents":[0,0,1,0,0,1],"coefficient":1},{"exponents":[0,1,0,0,1,0],"coefficient":1},{"exponents":[1,0,0,1,0,0],"coefficient":1}],"u":[{"exponents":[0,1,1,0,0,0],"coefficient":1},{"exponents":[1,0,1,0,0,0],"coefficient":1},{"exponents":[1,1,0,0,0,0],"coefficient":1}],"v":[{"exponents":[0,0,0,0,1,1],"coefficient":1},{"exponents":[0,0,0,1,0,1],"coefficient":1},{"exponents":[0,0,0,1,1,0],"coefficient":1}],"residual":[{"exponents":[0,0,0,0,0,0],"coefficient":1},{"exponents":[0,0,0,0,1,1],"coefficient":-1},{"exponents":[0,0,0,1,0,1],"coefficient":-1},{"exponents":[0,0,0,1,1,0],"coefficient":-1},{"exponents":[0,0,1,0,0,1],"coefficient":-1},{"exponents":[0,1,0,0,1,0],"coefficient":-1},{"exponents":[0,1,1,0,0,0],"coefficient":-1},{"exponents":[1,0,0,1,0,0],"coefficient":-1},{"exponents":[1,0,1,0,0,0],"coefficient":-1},{"exponents":[1,1,0,0,0,0],"coefficient":-1}],"sos_twice":[{"exponents":[0,0,0,0,0,2],"coefficient":1},{"exponents":[0,0,0,0,2,0],"coefficient":1},{"exponents":[0,0,0,2,0,0],"coefficient":1},{"exponents":[0,0,1,0,0,1],"coefficient":-2},{"exponents":[0,0,2,0,0,0],"coefficient":1},{"exponents":[0,1,0,0,1,0],"coefficient":-2},{"exponents":[0,2,0,0,0,0],"coefficient":1},{"exponents":[1,0,0,1,0,0],"coefficient":-2},{"exponents":[2,0,0,0,0,0],"coefficient":1}],"constraint_residual":[{"exponents":[0,0,0,0,0,0],"coefficient":2},{"exponents":[0,0,0,0,0,2],"coefficient":-1},{"exponents":[0,0,0,0,1,1],"coefficient":-2},{"exponents":[0,0,0,0,2,0],"coefficient":-1},{"exponents":[0,0,0,1,0,1],"coefficient":-2},{"exponents":[0,0,0,1,1,0],"coefficient":-2},{"exponents":[0,0,0,2,0,0],"coefficient":-1},{"exponents":[0,0,2,0,0,0],"coefficient":-1},{"exponents":[0,1,1,0,0,0],"coefficient":-2},{"exponents":[0,2,0,0,0,0],"coefficient":-1},{"exponents":[1,0,1,0,0,0],"coefficient":-2},{"exponents":[1,1,0,0,0,0],"coefficient":-2},{"exponents":[2,0,0,0,0,0],"coefficient":-1}]},"equality_witness":{"a":{"numerator":1,"denominator":3},"b":{"numerator":1,"denominator":3},"c":{"numerator":1,"denominator":3},"x":{"numerator":1,"denominator":3},"y":{"numerator":1,"denominator":3},"z":{"numerator":1,"denominator":3}}},"limitations":["ELEMENTARY_REAL_ORDER_AND_SQUARE_ROOT_LEMMAS_TRUSTED","POSITIVE_HOMOGENEITY_NORMALIZATION_TRUSTED"]}
+{
+  "schema_version": "1",
+  "task_id": "jacobian/sharp-cauchy-inequality",
+  "result": {
+    "constant": {
+      "numerator": 2,
+      "denominator": 1
+    },
+    "proof_mode": "AMGM_SQUARES",
+    "certificate": {
+      "d": [
+        {
+          "exponents": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            1
+          ],
+          "coefficient": 1
+        },
+        {
+          "exponents": [
+            0,
+            1,
+            0,
+            0,
+            1,
+            0
+          ],
+          "coefficient": 1
+        },
+        {
+          "exponents": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "coefficient": 1
+        }
+      ],
+      "u": [
+        {
+          "exponents": [
+            0,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "coefficient": 1
+        },
+        {
+          "exponents": [
+            1,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          "coefficient": 1
+        },
+        {
+          "exponents": [
+            1,
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          "coefficient": 1
+        }
+      ],
+      "v": [
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            1
+          ],
+          "coefficient": 1
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            1
+          ],
+          "coefficient": 1
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          "coefficient": 1
+        }
+      ],
+      "residual": [
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "coefficient": 1
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            1
+          ],
+          "coefficient": -1
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            1
+          ],
+          "coefficient": -1
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          "coefficient": -1
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            1
+          ],
+          "coefficient": -1
+        },
+        {
+          "exponents": [
+            0,
+            1,
+            0,
+            0,
+            1,
+            0
+          ],
+          "coefficient": -1
+        },
+        {
+          "exponents": [
+            0,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "coefficient": -1
+        },
+        {
+          "exponents": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "coefficient": -1
+        },
+        {
+          "exponents": [
+            1,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          "coefficient": -1
+        },
+        {
+          "exponents": [
+            1,
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          "coefficient": -1
+        }
+      ],
+      "sos_twice": [
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            2
+          ],
+          "coefficient": 1
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            0,
+            2,
+            0
+          ],
+          "coefficient": 1
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            2,
+            0,
+            0
+          ],
+          "coefficient": 1
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            1
+          ],
+          "coefficient": -2
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            2,
+            0,
+            0,
+            0
+          ],
+          "coefficient": 1
+        },
+        {
+          "exponents": [
+            0,
+            1,
+            0,
+            0,
+            1,
+            0
+          ],
+          "coefficient": -2
+        },
+        {
+          "exponents": [
+            0,
+            2,
+            0,
+            0,
+            0,
+            0
+          ],
+          "coefficient": 1
+        },
+        {
+          "exponents": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "coefficient": -2
+        },
+        {
+          "exponents": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "coefficient": 1
+        }
+      ],
+      "constraint_residual": [
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "coefficient": 2
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            2
+          ],
+          "coefficient": -1
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            0,
+            1,
+            1
+          ],
+          "coefficient": -2
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            0,
+            2,
+            0
+          ],
+          "coefficient": -1
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            1
+          ],
+          "coefficient": -2
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          "coefficient": -2
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            0,
+            2,
+            0,
+            0
+          ],
+          "coefficient": -1
+        },
+        {
+          "exponents": [
+            0,
+            0,
+            2,
+            0,
+            0,
+            0
+          ],
+          "coefficient": -1
+        },
+        {
+          "exponents": [
+            0,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "coefficient": -2
+        },
+        {
+          "exponents": [
+            0,
+            2,
+            0,
+            0,
+            0,
+            0
+          ],
+          "coefficient": -1
+        },
+        {
+          "exponents": [
+            1,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          "coefficient": -2
+        },
+        {
+          "exponents": [
+            1,
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          "coefficient": -2
+        },
+        {
+          "exponents": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "coefficient": -1
+        }
+      ]
+    },
+    "equality_witness": {
+      "a": {
+        "numerator": 1,
+        "denominator": 3
+      },
+      "b": {
+        "numerator": 1,
+        "denominator": 3
+      },
+      "c": {
+        "numerator": 1,
+        "denominator": 3
+      },
+      "x": {
+        "numerator": 1,
+        "denominator": 3
+      },
+      "y": {
+        "numerator": 1,
+        "denominator": 3
+      },
+      "z": {
+        "numerator": 1,
+        "denominator": 3
+      }
+    }
+  }
+}

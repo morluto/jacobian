@@ -1,1 +1,366 @@
-{"schema_version":"1","task_id":"jacobian/real-rooted-sign-polynomials","result":{"normalized_second_coefficient":-1,"second_power_sum":3,"root_product_square":1,"maximum_degree":3,"candidate_audit":[{"coefficients":[-1,-1],"degree":1,"discriminant":null,"all_roots_real":true},{"coefficients":[1,-1],"degree":1,"discriminant":null,"all_roots_real":true},{"coefficients":[-1,1],"degree":1,"discriminant":null,"all_roots_real":true},{"coefficients":[1,1],"degree":1,"discriminant":null,"all_roots_real":true},{"coefficients":[-1,-1,-1],"degree":2,"discriminant":-3,"all_roots_real":false},{"coefficients":[1,-1,-1],"degree":2,"discriminant":5,"all_roots_real":true},{"coefficients":[-1,1,-1],"degree":2,"discriminant":-3,"all_roots_real":false},{"coefficients":[1,1,-1],"degree":2,"discriminant":5,"all_roots_real":true},{"coefficients":[-1,-1,1],"degree":2,"discriminant":5,"all_roots_real":true},{"coefficients":[1,-1,1],"degree":2,"discriminant":-3,"all_roots_real":false},{"coefficients":[-1,1,1],"degree":2,"discriminant":5,"all_roots_real":true},{"coefficients":[1,1,1],"degree":2,"discriminant":-3,"all_roots_real":false},{"coefficients":[-1,-1,-1,-1],"degree":3,"discriminant":-16,"all_roots_real":false},{"coefficients":[1,-1,-1,-1],"degree":3,"discriminant":-44,"all_roots_real":false},{"coefficients":[-1,1,-1,-1],"degree":3,"discriminant":-44,"all_roots_real":false},{"coefficients":[1,1,-1,-1],"degree":3,"discriminant":0,"all_roots_real":true},{"coefficients":[-1,-1,1,-1],"degree":3,"discriminant":-44,"all_roots_real":false},{"coefficients":[1,-1,1,-1],"degree":3,"discriminant":-16,"all_roots_real":false},{"coefficients":[-1,1,1,-1],"degree":3,"discriminant":0,"all_roots_real":true},{"coefficients":[1,1,1,-1],"degree":3,"discriminant":-44,"all_roots_real":false},{"coefficients":[-1,-1,-1,1],"degree":3,"discriminant":-44,"all_roots_real":false},{"coefficients":[1,-1,-1,1],"degree":3,"discriminant":0,"all_roots_real":true},{"coefficients":[-1,1,-1,1],"degree":3,"discriminant":-16,"all_roots_real":false},{"coefficients":[1,1,-1,1],"degree":3,"discriminant":-44,"all_roots_real":false},{"coefficients":[-1,-1,1,1],"degree":3,"discriminant":0,"all_roots_real":true},{"coefficients":[1,-1,1,1],"degree":3,"discriminant":-44,"all_roots_real":false},{"coefficients":[-1,1,1,1],"degree":3,"discriminant":-44,"all_roots_real":false},{"coefficients":[1,1,1,1],"degree":3,"discriminant":-16,"all_roots_real":false}],"classified_polynomials":[[-1,-1],[1,-1],[-1,1],[1,1],[1,-1,-1],[1,1,-1],[-1,-1,1],[-1,1,1],[1,1,-1,-1],[-1,1,1,-1],[1,-1,-1,1],[-1,-1,1,1]]},"limitations":["NEWTON_IDENTITIES_VIETE_AND_AMGM_TRUSTED"]}
+{
+  "schema_version": "1",
+  "task_id": "real-rooted-sign-polynomials",
+  "result": {
+    "normalized_second_coefficient": -1,
+    "second_power_sum": 3,
+    "root_product_square": 1,
+    "maximum_degree": 3,
+    "candidate_audit": [
+      {
+        "coefficients": [
+          -1,
+          -1
+        ],
+        "degree": 1,
+        "discriminant": null,
+        "all_roots_real": true
+      },
+      {
+        "coefficients": [
+          1,
+          -1
+        ],
+        "degree": 1,
+        "discriminant": null,
+        "all_roots_real": true
+      },
+      {
+        "coefficients": [
+          -1,
+          1
+        ],
+        "degree": 1,
+        "discriminant": null,
+        "all_roots_real": true
+      },
+      {
+        "coefficients": [
+          1,
+          1
+        ],
+        "degree": 1,
+        "discriminant": null,
+        "all_roots_real": true
+      },
+      {
+        "coefficients": [
+          -1,
+          -1,
+          -1
+        ],
+        "degree": 2,
+        "discriminant": -3,
+        "all_roots_real": false
+      },
+      {
+        "coefficients": [
+          1,
+          -1,
+          -1
+        ],
+        "degree": 2,
+        "discriminant": 5,
+        "all_roots_real": true
+      },
+      {
+        "coefficients": [
+          -1,
+          1,
+          -1
+        ],
+        "degree": 2,
+        "discriminant": -3,
+        "all_roots_real": false
+      },
+      {
+        "coefficients": [
+          1,
+          1,
+          -1
+        ],
+        "degree": 2,
+        "discriminant": 5,
+        "all_roots_real": true
+      },
+      {
+        "coefficients": [
+          -1,
+          -1,
+          1
+        ],
+        "degree": 2,
+        "discriminant": 5,
+        "all_roots_real": true
+      },
+      {
+        "coefficients": [
+          1,
+          -1,
+          1
+        ],
+        "degree": 2,
+        "discriminant": -3,
+        "all_roots_real": false
+      },
+      {
+        "coefficients": [
+          -1,
+          1,
+          1
+        ],
+        "degree": 2,
+        "discriminant": 5,
+        "all_roots_real": true
+      },
+      {
+        "coefficients": [
+          1,
+          1,
+          1
+        ],
+        "degree": 2,
+        "discriminant": -3,
+        "all_roots_real": false
+      },
+      {
+        "coefficients": [
+          -1,
+          -1,
+          -1,
+          -1
+        ],
+        "degree": 3,
+        "discriminant": -16,
+        "all_roots_real": false
+      },
+      {
+        "coefficients": [
+          1,
+          -1,
+          -1,
+          -1
+        ],
+        "degree": 3,
+        "discriminant": -44,
+        "all_roots_real": false
+      },
+      {
+        "coefficients": [
+          -1,
+          1,
+          -1,
+          -1
+        ],
+        "degree": 3,
+        "discriminant": -44,
+        "all_roots_real": false
+      },
+      {
+        "coefficients": [
+          1,
+          1,
+          -1,
+          -1
+        ],
+        "degree": 3,
+        "discriminant": 0,
+        "all_roots_real": true
+      },
+      {
+        "coefficients": [
+          -1,
+          -1,
+          1,
+          -1
+        ],
+        "degree": 3,
+        "discriminant": -44,
+        "all_roots_real": false
+      },
+      {
+        "coefficients": [
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "degree": 3,
+        "discriminant": -16,
+        "all_roots_real": false
+      },
+      {
+        "coefficients": [
+          -1,
+          1,
+          1,
+          -1
+        ],
+        "degree": 3,
+        "discriminant": 0,
+        "all_roots_real": true
+      },
+      {
+        "coefficients": [
+          1,
+          1,
+          1,
+          -1
+        ],
+        "degree": 3,
+        "discriminant": -44,
+        "all_roots_real": false
+      },
+      {
+        "coefficients": [
+          -1,
+          -1,
+          -1,
+          1
+        ],
+        "degree": 3,
+        "discriminant": -44,
+        "all_roots_real": false
+      },
+      {
+        "coefficients": [
+          1,
+          -1,
+          -1,
+          1
+        ],
+        "degree": 3,
+        "discriminant": 0,
+        "all_roots_real": true
+      },
+      {
+        "coefficients": [
+          -1,
+          1,
+          -1,
+          1
+        ],
+        "degree": 3,
+        "discriminant": -16,
+        "all_roots_real": false
+      },
+      {
+        "coefficients": [
+          1,
+          1,
+          -1,
+          1
+        ],
+        "degree": 3,
+        "discriminant": -44,
+        "all_roots_real": false
+      },
+      {
+        "coefficients": [
+          -1,
+          -1,
+          1,
+          1
+        ],
+        "degree": 3,
+        "discriminant": 0,
+        "all_roots_real": true
+      },
+      {
+        "coefficients": [
+          1,
+          -1,
+          1,
+          1
+        ],
+        "degree": 3,
+        "discriminant": -44,
+        "all_roots_real": false
+      },
+      {
+        "coefficients": [
+          -1,
+          1,
+          1,
+          1
+        ],
+        "degree": 3,
+        "discriminant": -44,
+        "all_roots_real": false
+      },
+      {
+        "coefficients": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "degree": 3,
+        "discriminant": -16,
+        "all_roots_real": false
+      }
+    ],
+    "classified_polynomials": [
+      [
+        -1,
+        -1
+      ],
+      [
+        1,
+        -1
+      ],
+      [
+        -1,
+        1
+      ],
+      [
+        1,
+        1
+      ],
+      [
+        1,
+        -1,
+        -1
+      ],
+      [
+        1,
+        1,
+        -1
+      ],
+      [
+        -1,
+        -1,
+        1
+      ],
+      [
+        -1,
+        1,
+        1
+      ],
+      [
+        1,
+        1,
+        -1,
+        -1
+      ],
+      [
+        -1,
+        1,
+        1,
+        -1
+      ],
+      [
+        1,
+        -1,
+        -1,
+        1
+      ],
+      [
+        -1,
+        -1,
+        1,
+        1
+      ]
+    ]
+  }
+}

@@ -5,7 +5,7 @@
   "description": "Authoritative membership and provenance record for one direct Harbor task bundle.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "task_id", "task_name", "evaluation_kind", "domain", "primary_domain", "field", "provenance_class", "provenance_ref", "assurance_ceiling", "required_provider", "environment_profile", "verifier_contract_version", "evaluation_owner"],
+  "required": ["schema_version", "task_id", "task_name", "evaluation_kind", "domain", "primary_domain", "field", "provenance_class", "provenance_ref", "required_provider", "environment_profile", "verifier_contract_version", "evaluation_owner"],
   "properties": {
     "schema_version": {"const": "2"},
     "task_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
@@ -16,7 +16,7 @@
     "field": {"type": "string", "minLength": 1},
     "provenance_class": {"type": "string", "minLength": 1},
     "provenance_ref": {"type": "string", "minLength": 1},
-    "assurance_ceiling": {"enum": ["UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"]},
+    "assurance_ceiling": {"enum": ["UNVERIFIED", "COMPUTED", "VERIFIED"]},
     "required_provider": {"type": "string", "minLength": 1},
     "environment_profile": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
     "verifier_contract_version": {"type": "string", "pattern": "^[0-9]+$"},

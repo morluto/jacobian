@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="69a42fa5a59b6eb9f3c8e6e74d703f87fff52226914d5d9461b9dd1d88c7eb00"
+LABEL jacobian.checksum="72d33d8cb7c9c8b50aadd1988ad2736d6605584871c4b084cecbbea7eef8e7b3"
 LABEL jacobian.task="jacobian/exact-farkas-ldl-slice"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

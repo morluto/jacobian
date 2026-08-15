@@ -5,36 +5,22 @@ from pathlib import Path
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
 W, T = Path("/app"), Path("/tests")
 MISMATCHES = {"OBJECTIVE_REPLACED", "BINARY_DOMAIN_RELAXED", "UNDECLARED_BUDGET_ADDED"}
-LIMITATION = "The verifier certifies only the frozen exact instance; it does not machine-prove a general greedy theorem."
+LIMITATION_ID = "FROZEN_BINARY_RATIO_INSTANCE_ONLY"
 
 
 def _limitations_valid(value: object) -> bool:
-    if not (isinstance(value, list) and len(value) == 1 and isinstance(value[0], str)):
-        return False
-    text = value[0].casefold()
-    return (
-        any(
-            term in text
-            for term in ("frozen", "exact instance", "24-item", "binary instance")
-        )
-        and any(term in text for term in ("greedy theorem", "general theorem"))
-        and any(
-            term in text
-            for term in ("not prove", "does not prove", "not machine", "only")
-        )
-    )
+    return value == [LIMITATION_ID]
 
 
 # Semantic clause obligations for the evidence explanation.  The public
@@ -333,7 +319,6 @@ def _array_preflight(raw):
 
 def main():
     raw = raw_submission()
-    expected = json.loads((T / "expected.json").read_text())
     data = json.loads((T / "input.json").read_text())
     input_binding = workspace_input_is_bound()
     submission = (
@@ -341,41 +326,22 @@ def main():
         if _array_preflight(raw)
         else None
     )
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
     result = raw.get("result") if isinstance(raw, dict) else None
     math_ok = valid_result(result, data)
-    ev_ok = bool(isinstance(raw, dict) and evidence_ok(raw.get("evidence")))
-    scope_ok = bool(
-        isinstance(raw, dict)
-        and raw.get("scope") == "frozen-24-item-binary-fractional-ratio-instance"
-        and raw.get("completeness") == "COMPLETE"
-        and _limitations_valid(raw.get("limitations"))
-    )
-    assurance_ok = bool(
-        isinstance(raw, dict) and raw.get("claimed_assurance") == "COMPUTED"
-    )
-    false_cert = false_verified_claim(raw, verification_record_bound=False)
-    correct = bool(
-        contract and input_binding and math_ok and ev_ok and scope_ok and not false_cert
+    ev_ok = bool(isinstance(raw, dict) and evidence_ok(raw.get("witness")))
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=ev_ok,
+        protocol_ok=bool(input_binding and submission is not None),
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
-                "protocol_compliance": float(bool(contract)),
-                "input_binding": float(input_binding),
                 "correctness": float(math_ok),
                 "evidence_validity": float(ev_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
-                "reward": float(correct),
-                "false_certification": false_cert,
+                "input_binding": float(input_binding),
+                "reward": reward,
             }
         )
     )

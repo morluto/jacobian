@@ -5,7 +5,8 @@ import shutil
 from pathlib import Path
 
 import pytest
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.public_reproductions_v1._fixtures import _write_json
+from benchmarks.validation.public_reproductions_v1._verifier import _run_verifier
 
 ROOT = Path(__file__).parents[2]
 TASK = (
@@ -33,9 +34,9 @@ def test_rejects_prose_in_place_of_schur_certificates(tmp_path: Path) -> None:
         "lower_bound_evidence": "A 4-coloring of 1 through 44 exists.",
         "upper_bound_evidence": "An exhaustive proof for 45 exists.",
     }
-    support._write_json(submission_path, submission)
+    _write_json(submission_path, submission)
 
-    result = support._run_verifier(task, app, logs)
+    result = _run_verifier(task, app, logs)
 
     assert result.details["correctness"] == 0.0
     assert result.reward == 0.0
@@ -57,8 +58,8 @@ def test_accepts_explicit_sum_free_partition_and_independent_upper_check(
         ],
         "upper_bound_method": "INDEPENDENT_EXHAUSTIVE_CSP",
     }
-    support._write_json(submission_path, submission)
+    _write_json(submission_path, submission)
 
-    accepted = support._run_verifier(task, app, logs)
+    accepted = _run_verifier(task, app, logs)
     assert accepted.details["correctness"] == 1.0
     assert accepted.reward == pytest.approx(1.0)

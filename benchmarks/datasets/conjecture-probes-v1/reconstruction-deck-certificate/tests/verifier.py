@@ -11,10 +11,10 @@ from verifier_support import (
     MAX_SUBMISSION_BYTES,
     evidence_list_is_bound,
     is_regular_bounded_file,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -25,7 +25,7 @@ LIMITATIONS = [
     "EXACT_CARD_EMBEDDINGS",
     "NO_GLOBAL_RECONSTRUCTION_CONCLUSION",
 ]
-scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
+scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED"})
 
 
 def frozen():
@@ -156,16 +156,7 @@ def main():
     data = frozen()
     raw = _raw_submission()
     s = load_submission(require_input_binding=False)
-    c = bool(
-        isinstance(raw, dict)
-        and strict_submission_contract(
-            s,
-            task_id=TASK_ID,
-            conclusion="FINITE_GRAPH_DECK_RECONSTRUCTION",
-            allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-            verification_record="forbidden",
-        )
-    )
+    c = bool(isinstance(raw, dict) and s)
     m = bool(
         isinstance(raw, dict)
         and isinstance(data, dict)
@@ -173,11 +164,11 @@ def main():
     )
     e = bool(
         isinstance(raw, dict)
-        and evidence_list_is_bound(raw.get("evidence"), max_bytes=None)
+        and evidence_list_is_bound(raw.get("witness"), max_bytes=None)
     )
     payload = (
         read_evidence_json(
-            raw["evidence"][0],
+            raw["witness"][0],
             expected_path="evidence/answer.txt",
             max_bytes=None,
         )
@@ -186,34 +177,22 @@ def main():
     )
     e = bool(
         isinstance(payload, dict)
-        and payload
-        == {
-            "schema_version": "1",
-            "task_id": TASK_ID,
-            "result": raw.get("result"),
-            "limitations": LIMITATIONS,
-        }
+        and json_value_equal(
+            payload,
+            {
+                "schema_version": "1",
+                "task_id": TASK_ID,
+                "result": raw.get("result"),
+            },
+        )
     )
-    sc = bool(
-        isinstance(raw, dict)
-        and raw.get("scope") == SCOPE
-        and raw.get("limitations") == LIMITATIONS
-    )
-    claimed_assurance = raw.get("claimed_assurance") if isinstance(raw, dict) else None
-    a = bool(
-        isinstance(claimed_assurance, str) and claimed_assurance in scoreable_assurances
-    )
-    f = bool(isinstance(claimed_assurance, str) and claimed_assurance == "VERIFIED")
-    agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
+    agg = float(all((ib, c, m, e)))
     reward(
         {
             "protocol": 1.0 if c else 0.0,
             "input_binding": 1.0 if ib else 0.0,
             "mathematics": 1.0 if m else 0.0,
-            "evidence": 1.0 if e else 0.0,
-            "scope": 1.0 if sc else 0.0,
-            "assurance": 1.0 if a else 0.0,
-            "false_certification": f,
+            "witness_validity": 1.0 if e else 0.0,
             "aggregate_reward": agg,
             "reward": agg,
         }
@@ -229,10 +208,7 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "evidence": 0.0,
-                "scope": 0.0,
-                "assurance": 0.0,
-                "false_certification": False,
+                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

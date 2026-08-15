@@ -1,1 +1,116 @@
-{"task_id":"jacobian/diophantine-ratio-family-repair","conclusion":"FROZEN_PROOF_REPAIRED","result":{"source_audit":{"invalid_step":"VIETA_PARTNER_INTEGRALITY","k":"d^2-1","claimed_partner":"d^2/(d^2-1)","status_for_d_ge_2":"NONINTEGER","downstream_recurrence_status":"UNSUPPORTED"},"family":{"a":[0,0,1],"b":[1],"d":[0,-1,0,1],"x":[0,0,0,-1,0,1],"y":[0,-1,0,1],"norm":[1,0,-1,0,1],"square_congruence_factor":[-1,0,1],"quotient":[-1,0,-1,0,1],"divisibility_quotient":[0,0,-1,0,-1,0,1],"ratio":[0,0,1]},"probes":[{"t":2,"x":24,"y":6,"divisor":468,"multiple":20592,"ratio":[4,1]},{"t":3,"x":216,"y":24,"divisor":42048,"multiple":26868672,"ratio":[9,1]},{"t":5,"x":3000,"y":120,"divisor":8654400,"multiple":129599640000,"ratio":[25,1]}],"conclusion":"INFINITELY_MANY_DISTINCT_RATIOS_CERTIFIED"},"claimed_assurance":"COMPUTED","scope":"the submitted integer polynomial family for t>=2","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:467da316e0070f74d048022adc5796ceab47018a5e983ec0d9b846159b04be25"}],"limitations":["The checker proves the submitted polynomial-family identities over Z; it does not classify every solution of the original divisibility condition."]}
+{
+  "result": {
+    "conclusion": "INFINITELY_MANY_DISTINCT_RATIOS_CERTIFIED",
+    "family": {
+      "a": [
+        0,
+        0,
+        1
+      ],
+      "b": [
+        1
+      ],
+      "d": [
+        0,
+        -1,
+        0,
+        1
+      ],
+      "divisibility_quotient": [
+        0,
+        0,
+        -1,
+        0,
+        -1,
+        0,
+        1
+      ],
+      "norm": [
+        1,
+        0,
+        -1,
+        0,
+        1
+      ],
+      "quotient": [
+        -1,
+        0,
+        -1,
+        0,
+        1
+      ],
+      "ratio": [
+        0,
+        0,
+        1
+      ],
+      "square_congruence_factor": [
+        -1,
+        0,
+        1
+      ],
+      "x": [
+        0,
+        0,
+        0,
+        -1,
+        0,
+        1
+      ],
+      "y": [
+        0,
+        -1,
+        0,
+        1
+      ]
+    },
+    "probes": [
+      {
+        "divisor": 468,
+        "multiple": 20592,
+        "ratio": [
+          4,
+          1
+        ],
+        "t": 2,
+        "x": 24,
+        "y": 6
+      },
+      {
+        "divisor": 42048,
+        "multiple": 26868672,
+        "ratio": [
+          9,
+          1
+        ],
+        "t": 3,
+        "x": 216,
+        "y": 24
+      },
+      {
+        "divisor": 8654400,
+        "multiple": 129599640000,
+        "ratio": [
+          25,
+          1
+        ],
+        "t": 5,
+        "x": 3000,
+        "y": 120
+      }
+    ],
+    "source_audit": {
+      "claimed_partner": "d^2/(d^2-1)",
+      "downstream_recurrence_status": "UNSUPPORTED",
+      "invalid_step": "VIETA_PARTNER_INTEGRALITY",
+      "k": "d^2-1",
+      "status_for_d_ge_2": "NONINTEGER"
+    }
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:467da316e0070f74d048022adc5796ceab47018a5e983ec0d9b846159b04be25"
+    }
+  ]
+}

@@ -17,8 +17,5 @@
     ],
     "remainder": 1,
     "diagnosis": "PROPOSED_DECOMPOSITION_DOES_NOT_PARTITION_ALL_TILINGS"
-  },
-  "limitations": [
-    "The verifier proves the exact finite-state modulo-19 computation; it does not formalize the source narrative in a proof assistant."
-  ]
+  }
 }

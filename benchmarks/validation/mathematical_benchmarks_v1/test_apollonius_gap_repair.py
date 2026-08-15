@@ -5,7 +5,10 @@ import json
 from pathlib import Path
 
 import pytest
-from benchmarks.validation.mathematical_benchmarks_v1 import support
+from benchmarks.validation.mathematical_benchmarks_v1 import (
+    _fixtures,
+    _verifier,
+)
 
 TASK = "apollonius-gap-repair"
 
@@ -14,7 +17,7 @@ def _load(app: Path) -> dict[str, object]:
     return json.loads((app / "submission.json").read_text())
 
 
-def _bind_evidence(app: Path, submission: dict[str, object]) -> None:
+def _bind_witness(app: Path, submission: dict[str, object]) -> None:
     result = submission["result"]
     text = (
         "\n".join(
@@ -29,13 +32,13 @@ def _bind_evidence(app: Path, submission: dict[str, object]) -> None:
     )
     path = app / "evidence/answer.txt"
     path.write_text(text)
-    submission["evidence"][0]["sha256"] = (
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
     )
 
 
 def test_accepts_alternative_normalization(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     sub = _load(app)
     result = sub["result"]
     result.update(
@@ -51,156 +54,125 @@ def test_accepts_alternative_normalization(tmp_path: Path) -> None:
             "multiplier": "3/4",
         }
     )
-    _bind_evidence(app, sub)
-    support._write_json(app / "submission.json", sub)
-    assert support._run_verifier(task, app, logs).reward == 1.0
+    _bind_witness(app, sub)
+    _fixtures._write_json(app / "submission.json", sub)
+    assert _verifier._run_verifier(task, app, logs).reward == 1.0
 
 
 def test_rejects_corrupt_proportionality(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     sub = _load(app)
     sub["result"]["distance_coefficients"][2] = "23"
-    support._write_json(app / "submission.json", sub)
-    assert support._run_verifier(task, app, logs).details["correctness"] == 0.0
+    _fixtures._write_json(app / "submission.json", sub)
+    assert _verifier._run_verifier(task, app, logs).details["correctness"] == 0.0
 
 
 def test_extra_result_field_is_protocol_only(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = _load(app)
     submission["result"]["unexpected"] = True
-    _bind_evidence(app, submission)
-    support._write_json(app / "submission.json", submission)
+    _bind_witness(app, submission)
+    _fixtures._write_json(app / "submission.json", submission)
 
-    reward = support._run_verifier(task, app, logs)
-    assert reward.details["correctness"] == 1.0
-    assert reward.details["evidence_validity"] == 1.0
-    assert reward.details["protocol_compliance"] == 0.0
+    reward = _verifier._run_verifier(task, app, logs)
+    assert reward.details["correctness"] == 0.0
     assert reward.reward == 0.0
 
 
 def test_rejects_unbound_explanation(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     sub = _load(app)
     path = app / "evidence/answer.txt"
     path.write_text("polynomial\n")
-    sub["evidence"][0]["sha256"] = (
+    sub["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
     )
-    support._write_json(app / "submission.json", sub)
-    reward = support._run_verifier(task, app, logs)
+    _fixtures._write_json(app / "submission.json", sub)
+    reward = _verifier._run_verifier(task, app, logs)
     assert reward.details["correctness"] == 1.0
-    assert reward.details["evidence_validity"] == 0.0
+    assert reward.reward == 0.0
     assert reward.reward == 0.0
 
 
-def test_input_binding_is_reported_separately(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+def test_rejects_replaced_input(tmp_path: Path) -> None:
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     (app / "input.json").write_text("{}")
-    reward = support._run_verifier(task, app, logs)
-    assert reward.details["input_binding"] == 0.0
-    assert reward.details["correctness"] == 1.0
+    reward = _verifier._run_verifier(task, app, logs)
     assert reward.reward == 0.0
 
 
 def test_rejects_explosive_and_noncanonical_rationals(tmp_path: Path) -> None:
     for name, value in (("explosive", "1e999999999"), ("noncanonical", "12/1")):
-        task, app, logs = support._prepare_case(tmp_path / name, TASK, "computed")
+        task, app, logs = _fixtures._prepare_case(tmp_path / name, TASK, "computed")
         submission = _load(app)
         submission["result"]["k"] = value
-        _bind_evidence(app, submission)
-        support._write_json(app / "submission.json", submission)
-        reward = support._run_verifier(task, app, logs)
+        _bind_witness(app, submission)
+        _fixtures._write_json(app / "submission.json", submission)
+        reward = _verifier._run_verifier(task, app, logs)
         assert reward.details["correctness"] == 0.0
-        assert reward.details["protocol_compliance"] == 0.0
+        assert reward.reward == 0.0
 
 
 @pytest.mark.parametrize(("field", "value"), (("k", "1"), ("c", "0"), ("radius", "-1")))
 def test_declared_rational_constraints_are_protocol_requirements(
     tmp_path: Path, field: str, value: str
 ) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = _load(app)
     submission["result"][field] = value
-    _bind_evidence(app, submission)
-    support._write_json(app / "submission.json", submission)
+    _bind_witness(app, submission)
+    _fixtures._write_json(app / "submission.json", submission)
 
-    reward = support._run_verifier(task, app, logs)
-    assert reward.details["protocol_compliance"] == 0.0
+    reward = _verifier._run_verifier(task, app, logs)
     assert reward.reward == 0.0
 
 
 def test_evidence_requires_four_coefficients(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = _load(app)
     submission["result"]["circle_coefficients"].append("0")
-    _bind_evidence(app, submission)
-    support._write_json(app / "submission.json", submission)
-    reward = support._run_verifier(task, app, logs)
-    assert reward.details["evidence_validity"] == 0.0
+    _bind_witness(app, submission)
+    _fixtures._write_json(app / "submission.json", submission)
+    reward = _verifier._run_verifier(task, app, logs)
+    assert reward.reward == 0.0
     assert reward.reward == 0.0
 
 
 def test_evidence_requires_string_multiplier(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = _load(app)
     submission["result"]["multiplier"] = ["-3"]
-    _bind_evidence(app, submission)
-    support._write_json(app / "submission.json", submission)
-    reward = support._run_verifier(task, app, logs)
-    assert reward.details["evidence_validity"] == 0.0
+    _bind_witness(app, submission)
+    _fixtures._write_json(app / "submission.json", submission)
+    reward = _verifier._run_verifier(task, app, logs)
+    assert reward.reward == 0.0
     assert reward.reward == 0.0
 
 
 def test_rejects_oversized_evidence(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = _load(app)
     path = app / "evidence/answer.txt"
     path.write_text("x" * 1_000_000)
-    submission["evidence"][0]["sha256"] = (
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
     )
-    support._write_json(app / "submission.json", submission)
-    reward = support._run_verifier(task, app, logs)
+    _fixtures._write_json(app / "submission.json", submission)
+    reward = _verifier._run_verifier(task, app, logs)
     assert reward.details["correctness"] == 1.0
-    assert reward.details["evidence_validity"] == 0.0
+    assert reward.reward == 0.0
     assert reward.reward == 0.0
 
 
 def test_result_shape_failure_preserves_math_diagnostic(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = _load(app)
     submission["result"]["unexpected"] = "ignored by the math check"
-    _bind_evidence(app, submission)
-    support._write_json(app / "submission.json", submission)
-    reward = support._run_verifier(task, app, logs)
-    assert reward.details["correctness"] == 1.0
-    assert reward.details["evidence_validity"] == 1.0
-    assert reward.details["protocol_compliance"] == 0.0
+    _bind_witness(app, submission)
+    _fixtures._write_json(app / "submission.json", submission)
+    reward = _verifier._run_verifier(task, app, logs)
+    assert reward.details["correctness"] == 0.0
     assert reward.reward == 0.0
-
-
-def test_completeness_and_protocol_are_reported(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
-    submission = _load(app)
-    submission["completeness"] = "PARTIAL"
-    support._write_json(app / "submission.json", submission)
-    reward = support._run_verifier(task, app, logs)
-    assert reward.details["scope_accuracy"] == 1.0
-    assert reward.details["completeness_accuracy"] == 0.0
-    assert reward.details["protocol_compliance"] == 0.0
-    assert reward.reward == 0.0
-
-
-def test_unsupported_assurance_is_a_protocol_failure(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
-    submission = _load(app)
-    submission["claimed_assurance"] = "CHECKED"
-    support._write_json(app / "submission.json", submission)
-
-    reward = support._run_verifier(task, app, logs)
-    assert reward.details["correctness"] == 1.0
-    assert reward.details["assurance_calibration"] == 0.0
-    assert reward.details["protocol_compliance"] == 0.0
     assert reward.reward == 0.0
 
 
@@ -211,42 +183,28 @@ def test_unsupported_assurance_is_a_protocol_failure(tmp_path: Path) -> None:
 def test_unencodable_rational_fails_closed(
     tmp_path: Path, field: str, index: int | None
 ) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = _load(app)
     if index is None:
         submission["result"][field] = "\ud800"
     else:
         submission["result"][field][index] = "\ud800"
-    support._write_json(app / "submission.json", submission)
+    _fixtures._write_json(app / "submission.json", submission)
 
-    reward = support._run_verifier(task, app, logs)
-    assert reward.details["evidence_validity"] == 0.0
-    assert reward.details["protocol_compliance"] == 0.0
+    reward = _verifier._run_verifier(task, app, logs)
     assert reward.reward == 0.0
 
 
 def test_evidence_lines_reject_extra_spaces(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = _load(app)
     path = app / "evidence/answer.txt"
     path.write_text(" " + path.read_text())
-    submission["evidence"][0]["sha256"] = (
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
     )
-    support._write_json(app / "submission.json", submission)
+    _fixtures._write_json(app / "submission.json", submission)
 
-    reward = support._run_verifier(task, app, logs)
-    assert reward.details["evidence_validity"] == 0.0
+    reward = _verifier._run_verifier(task, app, logs)
     assert reward.reward == 0.0
-
-
-def test_extra_limitation_is_reported_in_its_own_dimension(tmp_path: Path) -> None:
-    task, app, logs = support._prepare_case(tmp_path, TASK, "computed")
-    submission = _load(app)
-    submission["limitations"].append("extra")
-    support._write_json(app / "submission.json", submission)
-
-    reward = support._run_verifier(task, app, logs)
-    assert reward.details["limitations_accuracy"] == 0.0
-    assert reward.details["protocol_compliance"] == 0.0
     assert reward.reward == 0.0

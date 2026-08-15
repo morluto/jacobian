@@ -7,7 +7,7 @@ import json
 import math
 import stat
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
@@ -17,19 +17,6 @@ WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 MAX_SUBMISSION_BYTES = 16 * 1024 * 1024
 MAX_INPUT_BYTES = 16 * 1024 * 1024
-SUBMISSION_FIELDS = frozenset(
-    {
-        "task_id",
-        "conclusion",
-        "result",
-        "claimed_assurance",
-        "scope",
-        "completeness",
-        "evidence",
-        "limitations",
-    }
-)
-ASSURANCE_LEVELS = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"})
 
 
 def is_regular_bounded_file(path: Path, *, max_bytes: int | None) -> bool:
@@ -110,7 +97,13 @@ def load_submission(
     *,
     require_input_binding: bool = True,
 ) -> dict[str, Any] | None:
-    """Parse and completely validate one bounded submission object."""
+    """Parse and completely validate one bounded result/witness submission.
+
+    The public protocol is a typed ``result`` plus an optional task-specific
+    ``witness`` array. The parsed object is validated against the task's
+    agent-visible JSON Schema and returned verbatim. No generic envelope,
+    assurance, scope, completeness, or limitations fields are accepted.
+    """
 
     if require_input_binding and not workspace_input_is_bound():
         return None
@@ -207,48 +200,6 @@ def workspace_input_is_bound(
         return False
 
 
-def strict_submission_contract(
-    submission: object,
-    *,
-    task_id: str,
-    conclusion: str,
-    completeness: str = "COMPLETE",
-    evidence_count: int = 1,
-    min_limitations: int = 0,
-    allowed_assurances: frozenset[str] = ASSURANCE_LEVELS,
-    verification_record: Literal[
-        "required_when_verified", "optional", "forbidden"
-    ] = "required_when_verified",
-) -> bool:
-    """Validate the shared submission envelope without interpreting mathematics."""
-
-    if not isinstance(submission, dict):
-        return False
-    verified = submission.get("claimed_assurance") == "VERIFIED"
-    expected_fields = {frozenset(SUBMISSION_FIELDS)}
-    if verification_record == "required_when_verified" and verified:
-        expected_fields = {frozenset(SUBMISSION_FIELDS | {"verification_record_uri"})}
-    elif verification_record == "optional":
-        expected_fields.add(frozenset(SUBMISSION_FIELDS | {"verification_record_uri"}))
-    limitations = submission.get("limitations", [])
-    return bool(
-        _public_submission_is_valid(submission)
-        and frozenset(submission) in expected_fields
-        and submission.get("task_id") == task_id
-        and submission.get("conclusion") == conclusion
-        and submission.get("completeness") == completeness
-        and isinstance(submission.get("result"), dict)
-        and isinstance(submission.get("scope"), str)
-        and isinstance(limitations, list)
-        and len(limitations) >= min_limitations
-        and all(type(item) is str for item in limitations)
-        and isinstance(submission.get("evidence"), list)
-        and len(submission.get("evidence", [])) == evidence_count
-        and isinstance(submission.get("claimed_assurance"), str)
-        and submission.get("claimed_assurance") in allowed_assurances
-    )
-
-
 def resolve_evidence(
     descriptor: object,
     *,
@@ -318,6 +269,23 @@ def read_evidence_json(
     return value if isinstance(value, dict) else None
 
 
+def json_value_equal(left: object, right: object) -> bool:
+    """Compare JSON values recursively without Python's numeric coercion."""
+
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return left.keys() == right.keys() and all(
+            json_value_equal(left[key], right[key]) for key in left
+        )
+    if isinstance(left, list):
+        return len(left) == len(right) and all(
+            json_value_equal(item, expected)
+            for item, expected in zip(left, right, strict=True)
+        )
+    return left == right
+
+
 def evidence_list_is_bound(
     evidence: object,
     *,
@@ -338,59 +306,12 @@ def evidence_list_is_bound(
     )
 
 
-def authorized_record_is_bound(
-    descriptor: object,
-    *,
-    authorized_path: Path,
-    dynamic_fields: frozenset[str] = frozenset({"environment_digest"}),
-) -> bool:
-    """Bind an exact hidden authorization record while allowing named identities."""
-
-    actual = read_evidence_json(
-        descriptor,
-        expected_path="evidence/verification-record.json",
-    )
-    try:
-        authorized = json.loads(
-            authorized_path.read_text(),
-            object_pairs_hook=_reject_duplicate_keys,
-        )
-    except (OSError, ValueError):
-        return False
-    if not isinstance(actual, dict) or not isinstance(authorized, dict):
-        return False
-    if set(actual) != set(authorized):
-        return False
-    for key, value in authorized.items():
-        if key not in dynamic_fields and actual.get(key) != value:
-            return False
-    for key in dynamic_fields:
-        value = actual.get(key)
-        if not valid_sha256_uri(value):
-            return False
-    return True
-
-
 def valid_sha256_uri(value: object) -> bool:
     return bool(
         isinstance(value, str)
         and len(value) == 71
         and value.startswith("sha256:")
         and all(character in "0123456789abcdef" for character in value[7:])
-    )
-
-
-def false_verified_claim(
-    submission: object,
-    *,
-    verification_record_bound: bool,
-) -> bool:
-    """Fail closed when VERIFIED is asserted without exact authorized binding."""
-
-    return bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "VERIFIED"
-        and not verification_record_bound
     )
 
 
@@ -409,73 +330,30 @@ def aggregate_reward(
     *,
     correctness: float | bool,
     evidence_validity: float | bool,
-    scope_accuracy: float | bool = 1.0,
-    assurance_calibration: float | bool = 1.0,
-    false_certification: bool = False,
     protocol_ok: bool = True,
-    require_scope: bool = True,
-    soft_assurance: bool = False,
-    soft_assurance_base: float = 0.9,
-    soft_assurance_weight: float = 0.1,
 ) -> float:
-    """Compute fail-closed aggregate reward from independent diagnostics.
+    """Binary fail-closed reward from the mathematical predicate and witness.
 
-    Mandatory hard gates (protocol, correctness, evidence, and required scope)
-    always force ``0.0`` when they fail, as does ``false_certification``.
-    When ``soft_assurance`` is false, assurance is also a hard gate and the
-    successful aggregate is ``1.0``. When ``soft_assurance`` is true and every
-    hard gate passes, the aggregate is
-    ``soft_assurance_base + soft_assurance_weight * assurance`` so under-
-    claimed assurance can receive documented partial credit without diluting
-    evidence or protocol failures.
+    Returns ``1.0`` only when the protocol gate, the replayed mathematical
+    correctness diagnostic, and the witness-validity diagnostic are all fully
+    satisfied; otherwise ``0.0``. There is no soft-assurance, scope, or
+    completeness path: diagnostics never earn partial credit.
     """
 
-    if false_certification or not protocol_ok:
+    if not protocol_ok:
         return 0.0
-    correctness_score = _as_unit_score(correctness)
-    evidence_score = _as_unit_score(evidence_validity)
-    scope_score = _as_unit_score(scope_accuracy)
-    assurance_score = _as_unit_score(assurance_calibration)
+    try:
+        correctness_score = _as_unit_score(correctness)
+        evidence_score = _as_unit_score(evidence_validity)
+    except ValueError:
+        return 0.0
     if correctness_score < 1.0 or evidence_score < 1.0:
         return 0.0
-    if require_scope and scope_score < 1.0:
-        return 0.0
-    if not soft_assurance:
-        return 1.0 if assurance_score >= 1.0 else 0.0
-    if soft_assurance_base < 0.0 or soft_assurance_weight < 0.0:
-        raise ValueError("soft assurance weights must be non-negative")
-    if soft_assurance_base + soft_assurance_weight > 1.0 + 1e-12:
-        raise ValueError("soft assurance weights must not exceed 1.0 in total")
-    return soft_assurance_base + soft_assurance_weight * assurance_score
-
-
-__all__ = [
-    "ASSURANCE_LEVELS",
-    "MAX_INPUT_BYTES",
-    "MAX_SUBMISSION_BYTES",
-    "SUBMISSION_FIELDS",
-    "TESTS",
-    "WORKSPACE",
-    "aggregate_reward",
-    "authorized_record_is_bound",
-    "evidence_list_is_bound",
-    "false_verified_claim",
-    "is_regular_bounded_file",
-    "load_submission",
-    "normalize_reward_file",
-    "read_evidence_json",
-    "resolve_evidence",
-    "sha256_uri",
-    "strict_submission_contract",
-    "valid_sha256_uri",
-    "workspace_input_is_bound",
-]
+    return 1.0
 
 
 def normalize_reward_file(reward_path: Path) -> None:
     """Split a verifier's completed reward payload into scalar and details files."""
-
-    import json
 
     def reject_duplicates(pairs):
         value = {}
@@ -488,9 +366,8 @@ def normalize_reward_file(reward_path: Path) -> None:
     def reject_constant(value):
         raise RuntimeError(f"non-finite verifier reward value: {value}")
 
-    path = reward_path
     payload = json.loads(
-        path.read_text(encoding="utf-8"),
+        reward_path.read_text(encoding="utf-8"),
         object_pairs_hook=reject_duplicates,
         parse_constant=reject_constant,
     )
@@ -508,10 +385,31 @@ def normalize_reward_file(reward_path: Path) -> None:
     ):
         raise RuntimeError("verifier reward must be a finite numeric scalar")
     details = {key: value for key, value in payload.items() if key != "reward"}
-    (path.parent / "reward-details.json").write_text(
+    (reward_path.parent / "reward-details.json").write_text(
         json.dumps(details, sort_keys=True, allow_nan=False), encoding="utf-8"
     )
-    path.write_text(
+    reward_path.write_text(
         json.dumps({"reward": reward}, sort_keys=True, allow_nan=False),
         encoding="utf-8",
     )
+
+
+__all__ = [
+    "MAX_INPUT_BYTES",
+    "MAX_SUBMISSION_BYTES",
+    "TESTS",
+    "WORKSPACE",
+    "aggregate_reward",
+    "evidence_list_is_bound",
+    "is_regular_bounded_file",
+    "json_value_equal",
+    "load_submission",
+    "load_submission_raw",
+    "normalize_reward_file",
+    "read_evidence_json",
+    "resolve_evidence",
+    "sha256_uri",
+    "submission_matches_public_schema",
+    "valid_sha256_uri",
+    "workspace_input_is_bound",
+]

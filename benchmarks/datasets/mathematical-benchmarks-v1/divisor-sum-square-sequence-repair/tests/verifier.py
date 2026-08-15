@@ -3,11 +3,9 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W, E = Path("/app"), Path("/tests")
@@ -127,14 +125,12 @@ def _frozen_ok():
         return False
 
 
-def _evidence_is_valid(
-    evidence: Any, expected: dict, result: Any, submission: Any
-) -> bool:
+def _witness_is_valid(evidence: Any, expected: dict, result: Any) -> bool:
     """Check evidence certificate shape and exact equality, fail closed on recursion."""
 
     if not evidence or not isinstance(evidence, dict):
         return False
-    if set(evidence) != {"schema_version", "task_id", "result", "limitations"}:
+    if not {"schema_version", "task_id", "result"} <= set(evidence):
         return False
     if type(evidence["schema_version"]) is not str or evidence["schema_version"] != "1":
         return False
@@ -144,9 +140,7 @@ def _evidence_is_valid(
     ):
         return False
     try:
-        return _json_exact_equal(evidence.get("result"), result) and _json_exact_equal(
-            evidence.get("limitations"), submission.get("limitations")
-        )
+        return _json_exact_equal(evidence.get("result"), result)
     except RecursionError:
         return False
 
@@ -154,17 +148,6 @@ def _evidence_is_valid(
 def main():
     submission = load_submission()
     expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED"}),
-        verification_record="forbidden",
-    )
-    # Evaluate the mathematical result independently of the protocol contract so
-    # a false-certification (e.g. unsupported VERIFIED) does not collapse a
-    # shape-safe correct mathematical result into a mathematical failure.  The
-    # aggregate reward is still forced to zero below when the contract fails.
     shape_safe = isinstance(submission, dict) and isinstance(
         submission.get("result"), dict
     )
@@ -172,38 +155,23 @@ def main():
     math_ok = bool(_result_ok(result) and _frozen_ok())
     evidence = (
         read_evidence_json(
-            submission["evidence"][0],
+            submission["witness"][0],
             expected_path="evidence/sequence-construction.json",
         )
         if shape_safe
-        and isinstance(submission.get("evidence"), list)
-        and len(submission["evidence"]) == 1
+        and isinstance(submission.get("witness"), list)
+        and len(submission["witness"]) == 1
         else None
     )
-    evidence_ok = _evidence_is_valid(evidence, expected, result, submission)
-    scope_ok = bool(
-        contract
-        and shape_safe
-        and submission.get("scope") == "DECLARED_SEQUENCE_FORMULA_AND_PRIME_PROBES"
-        and submission.get("limitations")
-        == [
-            "INFINITE_PRIMES_THEOREM_TRUSTED",
-            "QUANTIFIED_SEQUENCE_MEMBERSHIP_NOT_PROOF_ASSISTANT_VERIFIED",
-        ]
-    )
-    assurance_ok = bool(contract and submission.get("claimed_assurance") == "COMPUTED")
-    false_cert = false_verified_claim(submission, verification_record_bound=False)
-    correct = bool(contract and math_ok and evidence_ok and scope_ok and not false_cert)
+    witness_ok = _witness_is_valid(evidence, expected, result)
+    correct = bool(math_ok and witness_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
+                "witness_validity": float(witness_ok),
                 "reward": float(correct),
-                "false_certification": false_cert,
             }
         )
     )

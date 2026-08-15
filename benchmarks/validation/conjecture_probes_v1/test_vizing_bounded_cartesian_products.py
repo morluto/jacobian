@@ -30,14 +30,13 @@ def _write(app: Path, submission: dict) -> None:
     evidence = app / "evidence/answer.txt"
     payload = {
         "schema_version": "1",
-        "task_id": submission["task_id"],
+        "task_id": "jacobian/vizing-bounded-cartesian-products",
         "result": submission["result"],
-        "limitations": submission["limitations"],
     }
     evidence.write_text(
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
     )
-    submission["evidence"][0]["sha256"] = (
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
     )
     (app / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
@@ -73,22 +72,6 @@ def test_alternate_minimum_witnesses_pass(tmp_path: Path) -> None:
     assert _run(app, logs).details["aggregate_reward"] == 1.0
 
 
-def test_wrong_scope_and_false_assurance_fail_closed(tmp_path: Path) -> None:
-    app, logs, submission = _case(tmp_path)
-    submission["scope"] = "global-vizing-conjecture"
-    _write(app, submission)
-    reward = _run(app, logs)
-    assert reward.details["scope"] == 0.0 and reward.details["aggregate_reward"] == 0.0
-    app, logs, submission = _case(tmp_path / "verified")
-    submission["claimed_assurance"] = "VERIFIED"
-    _write(app, submission)
-    reward = _run(app, logs)
-    assert (
-        reward.details["false_certification"] is True
-        and reward.details["aggregate_reward"] == 0.0
-    )
-
-
 def test_wrong_values_omissions_duplicates_and_boolean_integers_fail(
     tmp_path: Path,
 ) -> None:
@@ -118,11 +101,12 @@ def test_tampered_input_and_bad_evidence_binding_are_separate(tmp_path: Path) ->
         and reward.details["aggregate_reward"] == 0.0
     )
     app, logs, submission = _case(tmp_path / "evidence")
-    submission["evidence"][0]["path"] = "evidence/../answer.txt"
+    submission["witness"][0]["path"] = "evidence/../answer.txt"
     _write(app, submission)
     reward = _run(app, logs)
     assert (
-        reward.details["evidence"] == 0.0 and reward.details["aggregate_reward"] == 0.0
+        reward.details["witness_validity"] == 0.0
+        and reward.details["aggregate_reward"] == 0.0
     )
 
 
@@ -131,12 +115,12 @@ def test_malformed_bound_evidence_fails_closed(tmp_path: Path) -> None:
     _write(app, submission)
     evidence = app / "evidence/answer.txt"
     evidence.write_text("{")
-    submission["evidence"][0]["sha256"] = (
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
     )
     (app / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
     reward = _run(app, logs)
-    assert reward.details["evidence"] == 0.0
+    assert reward.details["witness_validity"] == 0.0
     assert reward.details["aggregate_reward"] == 0.0
 
 

@@ -12,22 +12,16 @@ different cycle sums must occur. The resulting total must be divisible by `p` bu
 Report the exact p-adic valuations of `m` and of the total, the local/global statuses, and the
 missing proof obligation. Write `/app/submission.json` and one digest-bound JSON evidence file at
 `evidence/divisibility-audit.json`. The evidence object must contain exactly
-`schema_version: "1"`, the task ID, the result, and the limitations, with the latter three values
-matching the submission. Maximum assurance is `COMPUTED`; this audit invalidates one proof step and
-does not disprove the source theorem.
+`schema_version: "1"`, the task ID, and the result, with the result matching
+the submission. This audit invalidates one proof step and does not
+disprove the source theorem.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier reports protocol dimensions separately. The JSON evidence object must contain exactly schema_version (the string "1"), task_id, result, and limitations; result and limitations must exactly repeat the submission with JSON types preserved. JSON numbers with integral values are valid wherever the submission schema declares type integer; booleans and non-integral numbers are not.
+The JSON evidence object must contain exactly schema_version (the string "1"), task_id, and result; result must exactly repeat the submission with JSON types preserved. JSON numbers with integral values are valid wherever the submission schema declares type integer; booleans and non-integral numbers are not.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 
-- **Conclusion:** exactly `PRIMEWISE_TO_MODULUS_INFERENCE_INVALID`
-- **Assurance:** scoreable values are `COMPUTED` (ceiling `COMPUTED`); the submission schema accepts any of `UNVERIFIED`, `COMPUTED`, `CHECKED`, `VERIFIED` but only scoreable assurances receive credit.
-- **Scope:** the exact value declared in `submission_schema.json`
-- **Completeness:** `COMPLETE`.
-- **Evidence:** 1-1 item(s); allowed path(s): `evidence/divisibility-audit.json`; digest must match `^sha256:[0-9a-f]{64}$`.
-- **Evidence media types:** `application/json`.
-- **Required artifact filenames:** `evidence/divisibility-audit.json`.
+- **Witness:** 1-1 item(s); allowed path(s): `evidence/divisibility-audit.json`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `application/json`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

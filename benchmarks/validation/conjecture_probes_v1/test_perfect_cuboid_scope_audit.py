@@ -35,14 +35,13 @@ def _write(app: Path, submission: dict) -> None:
     evidence = app / "evidence/answer.txt"
     payload = {
         "schema_version": "1",
-        "task_id": submission["task_id"],
+        "task_id": "jacobian/perfect-cuboid-scope-audit",
         "result": submission["result"],
-        "limitations": submission["limitations"],
     }
     evidence.write_text(
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
     )
-    submission["evidence"][0]["sha256"] = (
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
     )
     (app / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
@@ -98,20 +97,6 @@ def test_wrong_root_omission_and_duplicate_fail_closed(tmp_path: Path) -> None:
     assert _run(app, logs).details["aggregate_reward"] == 0.0
 
 
-def test_false_global_scope_and_verified_claim_fail_closed(tmp_path: Path) -> None:
-    app, logs, submission = _case(tmp_path)
-    submission["scope"] = "all-positive-integer-cuboids"
-    _write(app, submission)
-    assert _run(app, logs).details["aggregate_reward"] == 0.0
-
-    app, logs, submission = _case(tmp_path / "verified")
-    submission["claimed_assurance"] = "VERIFIED"
-    _write(app, submission)
-    reward = _run(app, logs)
-    assert reward.details["false_certification"] is True
-    assert reward.details["aggregate_reward"] == 0.0
-
-
 def test_tampered_input_and_evidence_are_rejected(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
     frozen = json.loads((app / "input.json").read_text())
@@ -127,18 +112,20 @@ def test_tampered_input_and_evidence_are_rejected(tmp_path: Path) -> None:
     _write(app, submission)
     (app / "evidence/answer.txt").write_text("{}\n")
     reward = _run(app, logs)
-    assert reward.details["evidence"] == 0.0
+    assert reward.details["witness_validity"] == 0.0
     assert reward.details["aggregate_reward"] == 0.0
 
 
-def test_oversized_evidence_fails_closed(tmp_path: Path) -> None:
+def test_large_declared_witness_remains_valid_without_an_arbitrary_byte_cap(
+    tmp_path: Path,
+) -> None:
     app, logs, submission = _case(tmp_path)
     evidence = app / "evidence/answer.txt"
-    evidence.write_bytes(b" " * (2 * 1024 * 1024 + 1))
-    submission["evidence"][0]["sha256"] = (
+    evidence.write_bytes(evidence.read_bytes() + (b" \n" * (2 * 1024 * 1024)))
+    submission["witness"][0]["sha256"] = (
         "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
     )
     (app / "submission.json").write_text(json.dumps(submission) + "\n")
     reward = _run(app, logs)
-    assert reward.details["evidence"] == 0.0
-    assert reward.details["aggregate_reward"] == 0.0
+    assert reward.details["witness_validity"] == 1.0
+    assert reward.details["aggregate_reward"] == 1.0

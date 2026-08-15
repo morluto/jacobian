@@ -14,8 +14,8 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    SUBMISSION_FIELDS,
     is_regular_bounded_file,
+    json_value_equal,
     load_submission_raw,
     normalize_reward_file,
     read_evidence_json,
@@ -29,8 +29,6 @@ MAX_TERMS = 128
 MAX_INTERMEDIATE_TERMS = 4096
 CHECKER_ID = "symbolic-coordination-v1.clean-room-polynomial-map-checker@1"
 SEMANTICS_ID = "exact-sparse-polynomial-maps-over-QQ@1"
-ASSURANCE_LEVELS = {"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}
-SCOREABLE_ASSURANCE_LEVELS = {"UNVERIFIED", "COMPUTED", "CHECKED"}
 
 
 def _load_json(path: Path, *, maximum_bytes: int) -> object | None:
@@ -333,7 +331,6 @@ def _computed_bindings(data: dict[str, object]) -> dict[str, str]:
         "binding_schema_version": "1",
         "claim_id": str(data["claim_id"]),
         "semantics_id": SEMANTICS_ID,
-        "scope_id": str(data["scope_id"]),
         "forward_map_sha256": _sha256_object(data["forward_map"]),
         "subject_sha256": _sha256_object(subject),
         "checker_id": CHECKER_ID,
@@ -551,38 +548,6 @@ def _assessment(data: dict[str, object], result: object):
     return bool(shape), math_ok, verdict
 
 
-def _expected_conclusion(verdict: str | None) -> str | None:
-    return {
-        "VALID_TWO_SIDED_INVERSE": "TRUE",
-        "INVALID_INVERSE_CANDIDATE": "FALSE",
-        "KELLER_CONDITION_ONLY": "TRUE",
-        "NOT_KELLER": "FALSE",
-        "COLLISION_FOUND": "TRUE",
-        "NO_COLLISION_IN_DECLARED_GRID": "FALSE",
-        "UNKNOWN": "UNKNOWN",
-    }.get(verdict)
-
-
-def _required_completeness(result: object, data: dict[str, object]) -> str:
-    if (
-        isinstance(result, dict)
-        and isinstance(result.get("certificate"), dict)
-        and result["certificate"].get("kind") == "COLLISION_WITNESS_REPLAY"
-    ):
-        return "COMPLETE"
-    return str(data["expected_completeness"])
-
-
-def _required_limitations(result: object, data: dict[str, object]) -> object:
-    if (
-        isinstance(result, dict)
-        and isinstance(result.get("certificate"), dict)
-        and result["certificate"].get("kind") == "COLLISION_WITNESS_REPLAY"
-    ):
-        return ["NO_CLAIM_OUTSIDE_EXACT_COLLISION_WITNESS"]
-    return data.get("required_limitations")
-
-
 def main() -> None:
     frozen_value = _load_json(T / "input.json", maximum_bytes=16 * 1024 * 1024)
     data = frozen_value if isinstance(frozen_value, dict) else {}
@@ -603,105 +568,41 @@ def main() -> None:
         frozen_binding_ok and workspace_input_is_bound(W / "input.json", tests=T)
     )
 
-    shape_ok, math_ok, expected_verdict = _assessment(data, result)
-    expected_conclusion = _expected_conclusion(expected_verdict)
-    expected_completeness = _required_completeness(result, data) if data else ""
-    expected_limitations = _required_limitations(result, data) if data else None
-    envelope_ok = bool(
-        isinstance(submission, dict)
-        and set(submission) == set(SUBMISSION_FIELDS)
-        and submission.get("task_id") == data.get("task_id")
-        and type(submission.get("conclusion")) is str
-        and submission.get("conclusion") in {"TRUE", "FALSE", "UNKNOWN"}
-        and type(submission.get("claimed_assurance")) is str
-        and submission.get("claimed_assurance") in ASSURANCE_LEVELS
-        and type(submission.get("scope")) is str
-        and type(submission.get("completeness")) is str
-        and submission.get("completeness") in {"COMPLETE", "PARTIAL", "UNKNOWN"}
-        and isinstance(submission.get("evidence"), list)
-        and len(submission["evidence"]) == 1
-        and isinstance(submission.get("limitations"), list)
-        and all(type(value) is str for value in submission["limitations"])
-    )
-    protocol_ok = bool(
-        envelope_ok
-        and schema_ok
-        and shape_ok
-        and submission.get("claimed_assurance") in SCOREABLE_ASSURANCE_LEVELS
-    )
+    shape_ok, math_ok, _expected_verdict = _assessment(data, result)
+    protocol_ok = bool(schema_ok and shape_ok)
     artifact_binding_ok = bool(
-        isinstance(result, dict) and result.get("bindings") == expected_bindings
-    )
-    conclusion_ok = bool(
-        isinstance(submission, dict)
-        and submission.get("conclusion") == expected_conclusion
+        isinstance(result, dict)
+        and json_value_equal(result.get("bindings"), expected_bindings)
     )
 
     evidence = None
     evidence_descriptor_ok = bool(
         isinstance(submission, dict)
-        and isinstance(submission.get("evidence"), list)
-        and len(submission["evidence"]) == 1
+        and isinstance(submission.get("witness"), list)
+        and len(submission["witness"]) == 1
     )
     if evidence_descriptor_ok:
         evidence = read_evidence_json(
-            submission["evidence"][0], expected_path="evidence/certificate.json"
+            submission["witness"][0], expected_path="evidence/certificate.json"
         )
     evidence_ok = bool(
         isinstance(evidence, dict)
-        and set(evidence)
-        == {
-            "schema_version",
-            "task_id",
-            "result",
-            "scope",
-            "completeness",
-            "limitations",
-        }
+        and set(evidence) == {"schema_version", "task_id", "result"}
         and evidence.get("schema_version") == "1"
         and evidence.get("task_id") == data.get("task_id")
-        and evidence.get("result") == result
-        and isinstance(submission, dict)
-        and evidence.get("scope") == submission.get("scope")
-        and evidence.get("completeness") == submission.get("completeness")
-        and evidence.get("limitations") == submission.get("limitations")
-    )
-    scope_ok = bool(
-        isinstance(submission, dict)
-        and submission.get("scope") == data.get("required_scope")
-        and submission.get("completeness") == expected_completeness
-        and submission.get("limitations") == expected_limitations
-    )
-    assurance_ok = bool(
-        isinstance(submission, dict)
-        and type(submission.get("claimed_assurance")) is str
-        and submission.get("claimed_assurance") in SCOREABLE_ASSURANCE_LEVELS
-    )
-    false_certification = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "VERIFIED"
+        and json_value_equal(evidence.get("result"), result)
     )
     accepted = bool(
-        protocol_ok
-        and math_ok
-        and conclusion_ok
-        and input_bound
-        and artifact_binding_ok
-        and evidence_ok
-        and scope_ok
-        and assurance_ok
-        and not false_certification
+        protocol_ok and math_ok and input_bound and artifact_binding_ok and evidence_ok
     )
     output = {
-        "protocol_compliance": float(protocol_ok),
-        "correctness": float(math_ok and conclusion_ok),
+        "protocol": float(protocol_ok),
+        "mathematics": float(math_ok),
         "input_binding": float(input_bound),
         "artifact_binding": float(artifact_binding_ok),
-        "evidence_validity": float(evidence_ok),
-        "scope_accuracy": float(scope_ok),
-        "assurance_calibration": float(assurance_ok),
+        "witness_validity": float(evidence_ok),
+        "aggregate_reward": float(accepted),
         "reward": 1.0 if accepted else 0.0,
-        "false_certification": false_certification,
     }
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(

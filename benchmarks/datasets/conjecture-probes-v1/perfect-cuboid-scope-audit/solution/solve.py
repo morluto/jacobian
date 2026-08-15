@@ -63,12 +63,7 @@ def main() -> None:
         "contains_perfect_cuboid": counts["PERFECT_CUBOID"] > 0,
         "scope_identity": SCOPE,
     }
-    evidence = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": result,
-        "limitations": LIMITATIONS,
-    }
+    evidence = {"schema_version": "1", "task_id": TASK_ID, "result": result}
     evidence_path = root / "evidence/answer.txt"
     evidence_path.parent.mkdir(parents=True, exist_ok=True)
     evidence_path.write_text(
@@ -76,14 +71,8 @@ def main() -> None:
     )
     digest = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
     submission = {
-        "task_id": TASK_ID,
-        "conclusion": "PERFECT_CUBOID_FINITE_SCOPE_AUDIT",
         "result": result,
-        "claimed_assurance": "CHECKED",
-        "scope": SCOPE,
-        "completeness": "COMPLETE",
-        "evidence": [{"path": "evidence/answer.txt", "sha256": digest}],
-        "limitations": LIMITATIONS,
+        "witness": [{"path": "evidence/answer.txt", "sha256": digest}],
     }
     (root / "submission.json").write_text(
         json.dumps(submission, sort_keys=True, separators=(",", ":")) + "\n"

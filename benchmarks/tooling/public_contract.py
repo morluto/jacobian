@@ -54,14 +54,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 # ---------------------------------------------------------------------------
 
 SCHEMA_VERSION = "1"
-ASSURANCE_VALUES = ("UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED")
-ASSURANCE_ORDER = {value: i for i, value in enumerate(ASSURANCE_VALUES)}
-COMPLETENESS_VALUES = (
-    "COMPLETE",
-    "PARTIAL",
-    "UNKNOWN",
-    "COMPLETE_FOR_DECLARED_FAMILY",
-)
 DIGEST_PATTERN = r"^sha256:[0-9a-f]{64}$"
 TASK_ID_PATTERN = r"^jacobian/[a-z0-9-]+$"
 JSON_SCHEMA_DRAFT = "https://json-schema.org/draft/2020-12/schema"
@@ -73,42 +65,6 @@ SUBMISSION_BLOCK_END = "<!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->"
 # ---------------------------------------------------------------------------
 # Pydantic models (strict, extra=forbid)
 # ---------------------------------------------------------------------------
-
-
-class ScopeRule(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    type: str = Field(default="string")
-    const: str | None = None
-    enum: list[str] | None = None
-    pattern: str | None = None
-
-    @field_validator("type")
-    @classmethod
-    def _type_ok(cls, v: str) -> str:
-        if v not in ("string", "object"):
-            raise ValueError("scope.type must be 'string' or 'object'")
-        return v
-
-    @model_validator(mode="after")
-    def _exactly_one_constraint(self) -> ScopeRule:
-        constraints = sum(
-            1 for value in (self.const, self.enum, self.pattern) if value is not None
-        )
-        if constraints > 1:
-            raise ValueError("scope may set at most one of const, enum, pattern")
-        return self
-
-    def to_schema(self) -> dict[str, Any]:
-        """Render the scope as a JSON Schema fragment."""
-        fragment: dict[str, Any] = {"type": self.type}
-        if self.const is not None:
-            fragment["const"] = self.const
-        elif self.enum is not None:
-            fragment["enum"] = list(self.enum)
-        elif self.pattern is not None:
-            fragment["pattern"] = self.pattern
-        return fragment
 
 
 # JSON Schema document keywords. ``payload_shape`` is a map of evidence-item
@@ -133,17 +89,25 @@ _PAYLOAD_SHAPE_SCHEMA_DOCUMENT_KEYS = frozenset(
 class EvidenceRule(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    min_items: int = Field(ge=1)
-    max_items: int = Field(ge=1)
-    allowed_paths: list[str] = Field(min_length=1)
+    min_items: int = Field(ge=0)
+    max_items: int = Field(ge=0)
+    allowed_paths: list[str] = Field(default_factory=list)
     digest_pattern: str = Field(default=DIGEST_PATTERN)
-    media_types: list[str] = Field(min_length=1)
+    media_types: list[str] = Field(default_factory=list)
     payload_shape: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def _max_ge_min(self) -> EvidenceRule:
         if self.max_items < self.min_items:
             raise ValueError("evidence.max_items must be >= min_items")
+        if self.max_items == 0 and (self.allowed_paths or self.media_types):
+            raise ValueError(
+                "evidence with max_items=0 must not declare paths or media types"
+            )
+        if self.max_items > 0 and (not self.allowed_paths or not self.media_types):
+            raise ValueError(
+                "evidence with max_items>0 requires allowed_paths and media_types"
+            )
         return self
 
     @model_validator(mode="after")
@@ -164,6 +128,8 @@ class EvidenceRule(BaseModel):
 
     def item_schema(self) -> dict[str, Any]:
         """Render the per-evidence-item JSON Schema."""
+        if not self.allowed_paths:
+            raise ValueError("evidence without allowed paths has no item schema")
         properties: dict[str, Any] = {
             "path": (
                 {"const": self.allowed_paths[0]}
@@ -189,38 +155,16 @@ class EvidenceRule(BaseModel):
         }
 
 
-class VerificationRecordRule(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    path: str = Field(min_length=1)
-    required_for_assurance: str = Field(default="VERIFIED")
-    schema_ref: str | None = None
-
-    @field_validator("required_for_assurance")
-    @classmethod
-    def _rfa(cls, v: str) -> str:
-        if v != "VERIFIED":
-            raise ValueError("required_for_assurance must be 'VERIFIED'")
-        return v
-
-
 class PublicContract(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     schema_version: str = Field(default=SCHEMA_VERSION)
     task_id: str = Field(min_length=1, pattern=TASK_ID_PATTERN)
     submission_path: str = Field(pattern=r"^/app/[a-z0-9._/-]+$")
-    assurance_ceiling: str
-    allowed_assurance: list[str] = Field(min_length=1)
-    allowed_completeness: list[str] = Field(min_length=1)
-    conclusion: dict[str, Any]
-    scope: ScopeRule
     evidence: EvidenceRule
-    verification_record: VerificationRecordRule | None = None
-    required_artifact_filenames: list[str] = Field(min_length=1)
+    required_artifact_filenames: list[str] = Field(default_factory=list)
     public_notes: str = Field(min_length=1)
     submission_result: dict[str, Any]
-    limitations: dict[str, Any] | None = None
     schema_definitions: dict[str, Any] = Field(default_factory=dict)
     submission_schema: dict[str, Any] = Field(default_factory=dict)
 
@@ -232,51 +176,6 @@ class PublicContract(BaseModel):
         if v != SCHEMA_VERSION:
             raise ValueError(f"schema_version must be '{SCHEMA_VERSION}'")
         return v
-
-    @field_validator("assurance_ceiling")
-    @classmethod
-    def _ceiling(cls, v: str) -> str:
-        if v not in ASSURANCE_VALUES:
-            raise ValueError(f"assurance_ceiling must be one of {ASSURANCE_VALUES}")
-        return v
-
-    @field_validator("allowed_assurance")
-    @classmethod
-    def _allowed_assurance(cls, v: list[str]) -> list[str]:
-        for value in v:
-            if value not in ASSURANCE_VALUES:
-                raise ValueError(f"allowed_assurance contains unknown value: {value!r}")
-        ordered = sorted(v, key=lambda a: ASSURANCE_ORDER[a])
-        if ordered != v:
-            raise ValueError(
-                "allowed_assurance must be ordered UNVERIFIED<COMPUTED<CHECKED<VERIFIED"
-            )
-        return v
-
-    @field_validator("allowed_completeness")
-    @classmethod
-    def _allowed_completeness(cls, v: list[str]) -> list[str]:
-        for value in v:
-            if value not in COMPLETENESS_VALUES:
-                raise ValueError(
-                    f"allowed_completeness contains unknown value: {value!r}"
-                )
-        return v
-
-    @field_validator("conclusion")
-    @classmethod
-    def _conclusion(cls, v: dict[str, Any]) -> dict[str, Any]:
-        if not isinstance(v, dict) or not v:
-            raise ValueError("conclusion must be a non-empty object")
-        keys = set(v.keys())
-        if keys == {"const"}:
-            return v
-        if keys == {"enum"}:
-            enum = v["enum"]
-            if not isinstance(enum, list) or not enum:
-                raise ValueError("conclusion.enum must be a non-empty list")
-            return v
-        raise ValueError("conclusion must have exactly one of 'const' or 'enum'")
 
     @field_validator("required_artifact_filenames")
     @classmethod
@@ -294,18 +193,6 @@ class PublicContract(BaseModel):
     # -- model validators --------------------------------------------------
 
     @model_validator(mode="after")
-    def _ceiling_in_allowed(self) -> PublicContract:
-        if self.assurance_ceiling not in self.allowed_assurance:
-            raise ValueError("assurance_ceiling must appear in allowed_assurance")
-        return self
-
-    @model_validator(mode="after")
-    def _verify_record_when_verified(self) -> PublicContract:
-        if "VERIFIED" in self.allowed_assurance and self.verification_record is None:
-            raise ValueError("verification_record is required when VERIFIED is allowed")
-        return self
-
-    @model_validator(mode="after")
     def _evidence_paths_in_artifacts(self) -> PublicContract:
         artifacts = set(self.required_artifact_filenames)
         for ev_path in self.evidence.allowed_paths:
@@ -313,15 +200,6 @@ class PublicContract(BaseModel):
                 raise ValueError(
                     f"evidence path {ev_path!r} is not in required_artifact_filenames"
                 )
-        if (
-            self.verification_record is not None
-            and self.verification_record.path not in artifacts
-        ):
-            raise ValueError(
-                f"verification_record path "
-                f"{self.verification_record.path!r} is not in "
-                f"required_artifact_filenames"
-            )
         return self
 
     @model_validator(mode="after")
@@ -344,48 +222,17 @@ def _dump_json(value: Any) -> str:
 
 
 def _declared_schema(contract: PublicContract) -> dict[str, Any]:
-    properties: dict[str, Any] = {
-        "task_id": {"const": contract.task_id},
-        "conclusion": dict(contract.conclusion),
-        "result": dict(contract.submission_result),
-        "claimed_assurance": {"enum": list(ASSURANCE_VALUES)},
-        "scope": contract.scope.to_schema(),
-        "evidence": {
+    properties: dict[str, Any] = {"result": dict(contract.submission_result)}
+    if contract.evidence.max_items:
+        properties["witness"] = {
             "type": "array",
             "minItems": contract.evidence.min_items,
             "maxItems": contract.evidence.max_items,
             "items": contract.evidence.item_schema(),
-        },
-        "limitations": dict(
-            contract.limitations
-            if contract.limitations is not None
-            else {"type": "array", "items": {"type": "string"}}
-        ),
-    }
-    if len(contract.allowed_completeness) == 1:
-        properties["completeness"] = {"const": contract.allowed_completeness[0]}
-    else:
-        properties["completeness"] = {"enum": list(contract.allowed_completeness)}
-    if contract.verification_record is not None:
-        properties["verification_record_uri"] = {
-            "type": "object",
-            "additionalProperties": False,
-            "required": ["path", "sha256"],
-            "properties": {
-                "path": {"const": contract.verification_record.path},
-                "sha256": {"type": "string", "pattern": DIGEST_PATTERN},
-            },
         }
-    required = [
-        "task_id",
-        "conclusion",
-        "result",
-        "claimed_assurance",
-        "scope",
-        "completeness",
-        "evidence",
-        "limitations",
-    ]
+    required = ["result"]
+    if contract.evidence.min_items:
+        required.append("witness")
     schema: dict[str, Any] = {
         "$schema": JSON_SCHEMA_DRAFT,
         "type": "object",
@@ -395,13 +242,6 @@ def _declared_schema(contract: PublicContract) -> dict[str, Any]:
     }
     if contract.schema_definitions:
         schema["$defs"] = contract.schema_definitions
-    if contract.verification_record is not None:
-        schema["if"] = {
-            "properties": {
-                "claimed_assurance": {"const": "VERIFIED"},
-            }
-        }
-        schema["then"] = {"required": ["verification_record_uri"]}
     return schema
 
 
@@ -409,22 +249,6 @@ def render_submission_schema(contract: PublicContract) -> str:
     """Render the complete ``environment/submission_schema.json`` text."""
 
     return _dump_json(_declared_schema(contract))
-
-
-def _conclusion_label(conclusion: dict[str, Any]) -> str:
-    if "const" in conclusion:
-        return f"exactly `{conclusion['const']}`"
-    return "one of " + ", ".join(f"`{v}`" for v in conclusion["enum"])
-
-
-def _scope_label(scope: ScopeRule) -> str:
-    if scope.const is not None:
-        return "the exact value declared in `submission_schema.json`"
-    if scope.enum is not None:
-        return "one of the values declared in `submission_schema.json`"
-    if scope.pattern is not None:
-        return f"a string matching `{scope.pattern}`"
-    return f"a {scope.type} value"
 
 
 def render_submission_block(contract: PublicContract) -> str:
@@ -435,46 +259,21 @@ def render_submission_block(contract: PublicContract) -> str:
         contract.public_notes.strip(),
         "",
         f"Write `{contract.submission_path}` to the exact schema in "
-        f"`environment/submission_schema.json`. The submission envelope requires "
-        f"`task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, "
-        f"`completeness`, `evidence`, and `limitations`.",
+        f"`environment/submission_schema.json`. The submission requires a typed "
+        f"`result`"
+        + (" and the declared `witness`." if contract.evidence.min_items else "."),
         "",
-        f"- **Conclusion:** {_conclusion_label(contract.conclusion)}",
-        "- **Assurance:** scoreable values are "
-        + ", ".join(f"`{a}`" for a in contract.allowed_assurance)
-        + f" (ceiling `{contract.assurance_ceiling}`); the submission schema "
-        "accepts any of "
-        + ", ".join(f"`{a}`" for a in ASSURANCE_VALUES)
-        + " but only scoreable assurances receive credit.",
-        f"- **Scope:** {_scope_label(contract.scope)}",
-        "- **Completeness:** "
-        + (
-            f"`{contract.allowed_completeness[0]}`"
-            if len(contract.allowed_completeness) == 1
-            else "one of " + ", ".join(f"`{c}`" for c in contract.allowed_completeness)
-        )
-        + ".",
-        f"- **Evidence:** {contract.evidence.min_items}"
-        f"-{contract.evidence.max_items} item(s); allowed path(s): "
-        + ", ".join(f"`{p}`" for p in contract.evidence.allowed_paths)
-        + f"; digest must match `{contract.evidence.digest_pattern}`.",
     ]
-    if contract.evidence.media_types:
+    if contract.evidence.max_items:
         lines.append(
-            "- **Evidence media types:** "
+            "- **Witness:** "
+            f"{contract.evidence.min_items}-{contract.evidence.max_items} item(s); "
+            "allowed path(s): "
+            + ", ".join(f"`{p}`" for p in contract.evidence.allowed_paths)
+            + f"; digest must match `{contract.evidence.digest_pattern}`; media "
+            "type(s): "
             + ", ".join(f"`{m}`" for m in contract.evidence.media_types)
             + "."
-        )
-    lines.append(
-        "- **Required artifact filenames:** "
-        + ", ".join(f"`{f}`" for f in contract.required_artifact_filenames)
-        + "."
-    )
-    if contract.verification_record is not None:
-        lines.append(
-            f"- **Verification record:** write "
-            f"`{contract.verification_record.path}` and bind it through "
-            f"`verification_record_uri` when claiming `VERIFIED`."
         )
     block = "\n".join(lines)
     return f"{SUBMISSION_BLOCK_START}\n{block}\n{SUBMISSION_BLOCK_END}"
@@ -691,8 +490,6 @@ if __name__ == "__main__":
 
 
 __all__ = [
-    "ASSURANCE_VALUES",
-    "COMPLETENESS_VALUES",
     "SCHEMA_VERSION",
     "ContractError",
     "PublicContract",

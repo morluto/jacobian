@@ -1,1 +1,72 @@
-{"task_id":"jacobian/grounded-premise-proof","conclusion":"QUOTIENT_GROUP_IS_ABELIAN","result":{"selected_premises":["subgroup_of_abelian_is_normal","coset_product_definition"],"proof_steps":[{"id":"s1","rule":"APPLY_NORMALITY_PREMISE","inputs":["G_ABELIAN","N_SUBGROUP"],"output":"N_NORMAL"},{"id":"s2","rule":"FORM_QUOTIENT","inputs":["N_NORMAL"],"output":"QUOTIENT_EXISTS"},{"id":"s3","rule":"EXPAND_XY_COSET_PRODUCT","inputs":["QUOTIENT_EXISTS","X_EQ_xN","Y_EQ_yN"],"output":"XY_EQ_xyN"},{"id":"s4","rule":"COMMUTE_REPRESENTATIVES","inputs":["G_ABELIAN","XY_EQ_xyN"],"output":"XY_EQ_yxN"},{"id":"s5","rule":"COLLAPSE_YX_COSET_PRODUCT","inputs":["QUOTIENT_EXISTS","Y_EQ_yN","X_EQ_xN"],"output":"yxN_EQ_YX"},{"id":"s6","rule":"CHAIN_EQUALITIES","inputs":["XY_EQ_yxN","yxN_EQ_YX"],"output":"XY_EQ_YX"}],"target_fact":"XY_EQ_YX"},"claimed_assurance":"COMPUTED","scope":"grounded premise selection and proof-DAG reconstruction for the frozen quotient-group claim","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:ff3ee9fa855d94709bd3f24eee36b3132ee9d50eb7b3f9aa75272cdae391014f"}],"limitations":["The proof is checked in the frozen abstract rule system, not by an external proof assistant."]}
+{
+  "result": {
+    "proof_steps": [
+      {
+        "id": "s1",
+        "inputs": [
+          "G_ABELIAN",
+          "N_SUBGROUP"
+        ],
+        "output": "N_NORMAL",
+        "rule": "APPLY_NORMALITY_PREMISE"
+      },
+      {
+        "id": "s2",
+        "inputs": [
+          "N_NORMAL"
+        ],
+        "output": "QUOTIENT_EXISTS",
+        "rule": "FORM_QUOTIENT"
+      },
+      {
+        "id": "s3",
+        "inputs": [
+          "QUOTIENT_EXISTS",
+          "X_EQ_xN",
+          "Y_EQ_yN"
+        ],
+        "output": "XY_EQ_xyN",
+        "rule": "EXPAND_XY_COSET_PRODUCT"
+      },
+      {
+        "id": "s4",
+        "inputs": [
+          "G_ABELIAN",
+          "XY_EQ_xyN"
+        ],
+        "output": "XY_EQ_yxN",
+        "rule": "COMMUTE_REPRESENTATIVES"
+      },
+      {
+        "id": "s5",
+        "inputs": [
+          "QUOTIENT_EXISTS",
+          "Y_EQ_yN",
+          "X_EQ_xN"
+        ],
+        "output": "yxN_EQ_YX",
+        "rule": "COLLAPSE_YX_COSET_PRODUCT"
+      },
+      {
+        "id": "s6",
+        "inputs": [
+          "XY_EQ_yxN",
+          "yxN_EQ_YX"
+        ],
+        "output": "XY_EQ_YX",
+        "rule": "CHAIN_EQUALITIES"
+      }
+    ],
+    "selected_premises": [
+      "subgroup_of_abelian_is_normal",
+      "coset_product_definition"
+    ],
+    "target_fact": "XY_EQ_YX"
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:ff3ee9fa855d94709bd3f24eee36b3132ee9d50eb7b3f9aa75272cdae391014f"
+    }
+  ]
+}

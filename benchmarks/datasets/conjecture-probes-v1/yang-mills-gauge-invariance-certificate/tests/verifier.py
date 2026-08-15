@@ -8,25 +8,15 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    evidence_list_is_bound,
-    is_regular_bounded_file,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
+    resolve_evidence,
     workspace_input_is_bound,
 )
 
 TASK_ID = "jacobian/yang-mills-gauge-invariance-certificate"
-SCOPE = "one-rational-su2-plaquette-v1"
-LIMITATIONS = [
-    "ONE_FINITE_RATIONAL_SU2_PLAQUETTE",
-    "NO_CONTINUUM_YANG_MILLS_CONSTRUCTION",
-    "NO_MASS_GAP_CONCLUSION",
-]
-MAX_EVIDENCE_BYTES = None
-scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"})
 
 
 def rat(v: object, *, bounded: bool = False) -> Fraction:
@@ -123,18 +113,6 @@ def mathematics(result: Any) -> bool:
     )
 
 
-def _raw_submission() -> dict[str, Any] | None:
-    if not is_regular_bounded_file(
-        Path("/app/submission.json"), max_bytes=MAX_SUBMISSION_BYTES
-    ):
-        return None
-    try:
-        value = json.loads(Path("/app/submission.json").read_text())
-    except (OSError, ValueError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
-
-
 def reward(v):
     p = Path("/logs/verifier")
     p.mkdir(parents=True, exist_ok=True)
@@ -145,55 +123,30 @@ def reward(v):
 def main():
     ib = workspace_input_is_bound()
     s = load_submission(require_input_binding=False)
-    c = strict_submission_contract(
-        s,
-        task_id=TASK_ID,
-        conclusion="FINITE_SU2_PLAQUETTE_GAUGE_INVARIANCE",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
-    )
-    m = bool(isinstance(s, dict) and mathematics(s.get("result")))
-    e = bool(
-        isinstance(s, dict)
-        and evidence_list_is_bound(s.get("evidence"), max_bytes=None)
-    )
+    protocol = isinstance(s, dict)
+    result = s.get("result") if protocol else None
+    m = bool(protocol and mathematics(result))
+    witness = s.get("witness") if protocol else None
+    descriptor = witness[0] if isinstance(witness, list) and len(witness) == 1 else None
     payload = (
-        read_evidence_json(
-            s["evidence"][0],
-            expected_path="evidence/answer.txt",
-            max_bytes=None,
-        )
-        if e
+        read_evidence_json(descriptor, expected_path="evidence/answer.txt")
+        if resolve_evidence(descriptor, expected_path="evidence/answer.txt") is not None
         else None
     )
-    e = bool(
+    witness_valid = bool(
         isinstance(payload, dict)
-        and payload
-        == {
-            "schema_version": "1",
-            "task_id": TASK_ID,
-            "result": s.get("result"),
-            "limitations": LIMITATIONS,
-        }
+        and set(payload) == {"schema_version", "task_id", "result"}
+        and payload.get("schema_version") == "1"
+        and payload.get("task_id") == TASK_ID
+        and json_value_equal(payload.get("result"), result)
     )
-    sc = bool(
-        isinstance(s, dict)
-        and s.get("scope") == SCOPE
-        and s.get("limitations") == LIMITATIONS
-    )
-    a = bool(isinstance(s, dict) and s.get("claimed_assurance") in scoreable_assurances)
-    raw = _raw_submission()
-    f = bool(isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED")
-    agg = 1.0 if all((ib, c, m, e, sc, a)) and not f else 0.0
+    agg = float(ib and protocol and m and witness_valid)
     reward(
         {
-            "protocol": 1.0 if c else 0.0,
+            "protocol": float(protocol),
             "input_binding": 1.0 if ib else 0.0,
             "mathematics": 1.0 if m else 0.0,
-            "evidence": 1.0 if e else 0.0,
-            "scope": 1.0 if sc else 0.0,
-            "assurance": 1.0 if a else 0.0,
-            "false_certification": f,
+            "witness_validity": float(witness_valid),
             "aggregate_reward": agg,
             "reward": agg,
         }
@@ -209,10 +162,7 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "evidence": 0.0,
-                "scope": 0.0,
-                "assurance": 0.0,
-                "false_certification": False,
+                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

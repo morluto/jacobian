@@ -1,9 +1,7 @@
 """Fixture preparation and task catalog constants.
 
-Owns the curated task-selection registries used by generic verifier tests
-(verification-record, rational, resource-derived, single-evidence, and the
-full verifier-task list) plus the canonical submission/evidence fixture
-builder ``_prepare_case`` and its helpers.
+Owns the task catalog and canonical result/witness fixture builder used by
+validation tests.
 """
 
 from __future__ import annotations
@@ -11,48 +9,11 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-from collections.abc import Mapping
 from pathlib import Path
 
 from benchmarks.validation.mathematical_benchmarks_v1._paths import AGENT_TASKS, TASKS
-from jsonschema import Draft202012Validator
 
-VERIFICATION_RECORD_TASKS = (
-    "finite-partition",
-    "hermite-normal-form",
-    "polynomial-map-collision",
-    "polynomial-normalization",
-    "sat-witness",
-)
 RATIONAL_TASK = "rational-linear-solution"
-# Curated COMPUTED-ceiling sample for oracle + naked-VERIFIED assurance checks.
-# Do not auto-expand to every COMPUTED task; add a name only when that contract
-# is the intended coverage and no leaf already owns the smoke.
-RESOURCE_DERIVED_TASKS = (
-    "elementwise-fixed-no-global-invariant",
-    "autoformalization-semantic-audit",
-    "calendar-good-days-audit",
-    "finite-magma-countermodel",
-    "gaussian-moment-generality-audit",
-    "generated-lemma-vacuity-audit",
-    "inverse-distance-remainder-audit",
-    "lagrangian-projection-proof-audit",
-    "lcm-highly-abundant-scope-audit",
-    "lean-transitive-axiom-audit",
-    "log-exponent-recovery",
-    "matrix-square-zero-counterexample",
-    "metric-tsp-proof-repair",
-    "noncompact-lefschetz-proof-audit",
-    "parameterized-sharp-bound-audit",
-    "polynomial-divisibility-uniqueness",
-    "polynomial-tail-counterexample",
-    "putnam-2adic-induction-audit",
-    "random-function-expectation-audit",
-    "research-status-evidence-audit",
-    "squarefree-class-independence-audit",
-    "subspace-direct-sum-counterexample",
-    "well-total-domination-counterexample",
-)
 VERIFIER_TASKS = tuple(
     sorted(
         ref.path.name
@@ -65,7 +26,9 @@ SINGLE_EVIDENCE_TASKS = tuple(
     for task_name in VERIFIER_TASKS
     if json.loads(
         (TASKS / task_name / "environment" / "submission_schema.json").read_text()
-    )["properties"]["evidence"].get("maxItems")
+    )["properties"]
+    .get("witness", {})
+    .get("maxItems")
     == 1
 )
 
@@ -119,34 +82,7 @@ def _bind_result_evidence(app: Path, submission: dict) -> None:
         )
         + "\n"
     )
-    submission["evidence"][0]["sha256"] = _digest(evidence_path)
-
-
-def _sat_record(task: Path, app: Path, submission: Mapping[str, object]) -> dict:
-    input_data = json.loads((task / "environment" / "input.json").read_text())
-    result = submission["result"]
-    assert isinstance(result, dict)
-    assignment = result["assignment"]
-    assert isinstance(assignment, dict)
-    key = ",".join("1" if assignment[name] else "0" for name in input_data["variables"])
-    authorized = json.loads((task / "tests" / "authorized_records.json").read_text())[
-        key
-    ]
-    return {
-        "task_id": input_data["task_id"],
-        "input_sha256": _digest(app / "input.json"),
-        "conclusion": "TRUE",
-        "status": "VERIFIED_SATISFYING",
-        "assignment": assignment,
-        "scope": submission["scope"],
-        "verification_record": authorized,
-    }
-
-
-def _bound_record(task_name: str, task: Path, app: Path, submission: dict) -> dict:
-    if task_name == "sat-witness":
-        return _sat_record(task, app, submission)
-    return json.loads((task / "tests" / "authorized_record.json").read_text())
+    submission["witness"][0]["sha256"] = _digest(evidence_path)
 
 
 def _prepare_case(
@@ -163,7 +99,7 @@ def _prepare_case(
     shutil.copy2(task / "environment" / "input.json", app / "input.json")
     submission = json.loads((task / "solution" / "submission.json").read_text())
     submission.pop("verification_record_uri", None)
-    for descriptor in submission["evidence"]:
+    for descriptor in submission.get("witness", []):
         evidence_path = Path(descriptor["path"])
         assert not evidence_path.is_absolute() and ".." not in evidence_path.parts
         destination = app / evidence_path
@@ -176,9 +112,8 @@ def _prepare_case(
                 destination,
                 {
                     "schema_version": "1",
-                    "task_id": submission["task_id"],
+                    "task_id": f"jacobian/{task_name}",
                     "result": submission["result"],
-                    "limitations": submission["limitations"],
                 },
             )
             descriptor["sha256"] = _digest(destination)
@@ -186,26 +121,40 @@ def _prepare_case(
             shutil.copy2(task / "solution" / "answer.txt", destination)
             descriptor["sha256"] = _digest(destination)
 
-    if scenario == "computed":
-        submission["claimed_assurance"] = "COMPUTED"
-    else:
-        submission["claimed_assurance"] = "VERIFIED"
-    if scenario in {"bound", "invalid"}:
-        record = (
-            _bound_record(task_name, task, app, submission)
-            if scenario == "bound"
-            else {}
-        )
-        record_path = app / "evidence" / "verification-record.json"
-        _write_json(record_path, record)
-        if scenario == "bound":
-            schema = json.loads(
-                (task / "environment" / "verification_record_schema.json").read_text()
-            )
-            Draft202012Validator(schema).validate(record)
-        submission["verification_record_uri"] = {
-            "path": "evidence/verification-record.json",
-            "sha256": _digest(record_path),
-        }
     _write_json(app / "submission.json", submission)
     return task, app, logs
+
+
+def assert_result_witness_protocol(tmp_path: Path, task_name: str) -> None:
+    """Exercise a task's public result-and-witness boundary."""
+
+    from benchmarks.validation.mathematical_benchmarks_v1 import _verifier
+
+    task, app, logs = _prepare_case(tmp_path, task_name, "computed")
+    assert _verifier._run_verifier(task, app, logs).reward == 1.0
+
+    canonical = json.loads((task / "solution" / "submission.json").read_text())
+    malformed_result = dict(canonical)
+    malformed_result["result"] = True
+    _write_json(app / "submission.json", malformed_result)
+    assert _verifier._run_verifier(task, app, logs).reward == 0.0
+
+    malformed_submission = dict(canonical)
+    malformed_submission["legacy_metadata"] = "rejected"
+    _write_json(app / "submission.json", malformed_submission)
+    assert _verifier._run_verifier(task, app, logs).reward == 0.0
+
+    schema = json.loads((task / "environment" / "submission_schema.json").read_text())
+    if "witness" in schema["properties"]:
+        _write_json(app / "submission.json", {"result": canonical["result"]})
+        assert _verifier._run_verifier(task, app, logs).reward == 0.0
+
+        descriptor = canonical["witness"][0]
+        witness_path = app / descriptor["path"]
+        witness_path.write_text("{}", encoding="utf-8")
+        _write_json(app / "submission.json", canonical)
+        assert _verifier._run_verifier(task, app, logs).reward == 0.0
+
+    task, app, logs = _prepare_case(tmp_path, task_name, "input-tamper")
+    _write_json(app / "input.json", {})
+    assert _verifier._run_verifier(task, app, logs).reward == 0.0

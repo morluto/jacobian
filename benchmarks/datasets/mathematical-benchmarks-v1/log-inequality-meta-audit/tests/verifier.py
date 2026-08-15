@@ -2,12 +2,11 @@ import json
 from pathlib import Path
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 W = Path("/app")
@@ -131,38 +130,19 @@ def _valid_layered_audit(result, source):
 
 def main():
     submission = load_submission()
+    protocol_ok = submission is not None
     source = json.loads(next(E.glob("*input*.json")).read_text())
-    expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
     math_correct = bool(
-        contract and _valid_layered_audit(submission.get("result"), source)
+        protocol_ok and _valid_layered_audit(submission.get("result"), source)
     )
     evidence_valid = bool(
-        contract
-        and evidence_matches_result(
-            submission.get("evidence"), submission.get("result")
-        )
+        protocol_ok
+        and evidence_matches_result(submission.get("witness"), submission.get("result"))
     )
-    scope_correct = bool(
-        contract and submission.get("scope") == expected["required_scope"]
-    )
-    assurance_correct = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(contract and math_correct and not false_certification)
-    reward = (
-        0.0
-        if not correct or not evidence_valid
-        else 0.8 + 0.1 * scope_correct + 0.1 * assurance_correct
+    reward = aggregate_reward(
+        correctness=math_correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
 
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -171,10 +151,7 @@ def main():
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

@@ -1,15 +1,4 @@
 {
-  "allowed_assurance": [
-    "UNVERIFIED",
-    "COMPUTED"
-  ],
-  "allowed_completeness": [
-    "COMPLETE"
-  ],
-  "assurance_ceiling": "COMPUTED",
-  "conclusion": {
-    "const": "PUBLIC_PROOF_INVALID_REPAIR_CERTIFIED"
-  },
   "evidence": {
     "allowed_paths": [
       "evidence/answer.txt"
@@ -22,25 +11,18 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "limitations": {
-    "items": {"minLength": 1, "type": "string"},
-    "maxItems": 1,
-    "minItems": 1,
-    "type": "array"
-  },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. In the solver's own words, the limitations array must disclose that the certificate covers only the frozen exact instance and does not prove a general greedy theorem.",
+  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The required limitation is the exact ID `FROZEN_BINARY_RATIO_INSTANCE_ONLY`.",
   "required_artifact_filenames": [
     "evidence/answer.txt"
   ],
   "schema_definitions": {
     "residual": {
-      "type": "object",
       "additionalProperties": false,
       "properties": {
         "index": {
-          "type": "integer",
+          "maximum": 23,
           "minimum": 0,
-          "maximum": 23
+          "type": "integer"
         },
         "value": {
           "type": "integer"
@@ -49,75 +31,69 @@
       "required": [
         "index",
         "value"
-      ]
+      ],
+      "type": "object"
     }
   },
   "schema_version": "1",
-  "scope": {
-    "const": "frozen-24-item-binary-fractional-ratio-instance",
-    "enum": null,
-    "pattern": null,
-    "type": "string"
-  },
   "submission_path": "/app/submission.json",
   "submission_result": {
-    "type": "object",
     "additionalProperties": false,
     "properties": {
+      "attained_ratio": {
+        "maxLength": 64,
+        "pattern": "^[1-9][0-9]*/[1-9][0-9]*$",
+        "type": "string"
+      },
+      "constant_residual": {
+        "type": "integer"
+      },
       "contract_mismatches": {
-        "type": "array",
-        "minItems": 3,
-        "maxItems": 3,
-        "uniqueItems": true,
         "items": {
           "enum": [
             "OBJECTIVE_REPLACED",
             "BINARY_DOMAIN_RELAXED",
             "UNDECLARED_BUDGET_ADDED"
           ]
-        }
-      },
-      "selected_indices": {
-        "type": "array",
-        "maxItems": 24,
-        "items": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 23
         },
+        "maxItems": 3,
+        "minItems": 3,
+        "type": "array",
         "uniqueItems": true
-      },
-      "attained_ratio": {
-        "type": "string",
-        "maxLength": 64,
-        "pattern": "^[1-9][0-9]*/[1-9][0-9]*$"
-      },
-      "constant_residual": {
-        "type": "integer"
       },
       "item_residuals": {
-        "type": "array",
-        "minItems": 24,
-        "maxItems": 24,
         "items": {
           "$ref": "#/$defs/residual"
-        }
-      },
-      "positive_residual_indices": {
-        "type": "array",
-        "maxItems": 24,
-        "items": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 23
         },
-        "uniqueItems": true
+        "maxItems": 24,
+        "minItems": 24,
+        "type": "array"
       },
       "maximum_residual_sum": {
         "const": 0
       },
+      "positive_residual_indices": {
+        "items": {
+          "maximum": 23,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxItems": 24,
+        "type": "array",
+        "uniqueItems": true
+      },
       "repair_method": {
         "const": "EXACT_FRACTIONAL_RESIDUAL_CERTIFICATE"
+      },
+      "selected_indices": {
+        "items": {
+          "maximum": 23,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxItems": 24,
+        "type": "array",
+        "uniqueItems": true
       }
     },
     "required": [
@@ -129,21 +105,18 @@
       "positive_residual_indices",
       "maximum_residual_sum",
       "repair_method"
-    ]
+    ],
+    "type": "object"
   },
   "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "type": "object",
-    "additionalProperties": false,
     "$defs": {
       "residual": {
-        "type": "object",
         "additionalProperties": false,
         "properties": {
           "index": {
-            "type": "integer",
+            "maximum": 23,
             "minimum": 0,
-            "maximum": 23
+            "type": "integer"
           },
           "value": {
             "type": "integer"
@@ -152,74 +125,70 @@
         "required": [
           "index",
           "value"
-        ]
+        ],
+        "type": "object"
       }
     },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
     "properties": {
-      "task_id": {
-        "const": "jacobian/fractional-ratio-proof-repair"
-      },
-      "conclusion": {
-        "const": "PUBLIC_PROOF_INVALID_REPAIR_CERTIFIED"
-      },
       "result": {
-        "type": "object",
         "additionalProperties": false,
         "properties": {
+          "attained_ratio": {
+            "maxLength": 64,
+            "pattern": "^[1-9][0-9]*/[1-9][0-9]*$",
+            "type": "string"
+          },
+          "constant_residual": {
+            "type": "integer"
+          },
           "contract_mismatches": {
-            "type": "array",
-            "minItems": 3,
-            "maxItems": 3,
-            "uniqueItems": true,
             "items": {
               "enum": [
                 "OBJECTIVE_REPLACED",
                 "BINARY_DOMAIN_RELAXED",
                 "UNDECLARED_BUDGET_ADDED"
               ]
-            }
-          },
-          "selected_indices": {
-            "type": "array",
-            "maxItems": 24,
-            "items": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 23
             },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array",
             "uniqueItems": true
-          },
-          "attained_ratio": {
-            "type": "string",
-            "maxLength": 64,
-            "pattern": "^[1-9][0-9]*/[1-9][0-9]*$"
-          },
-          "constant_residual": {
-            "type": "integer"
           },
           "item_residuals": {
-            "type": "array",
-            "minItems": 24,
-            "maxItems": 24,
             "items": {
               "$ref": "#/$defs/residual"
-            }
-          },
-          "positive_residual_indices": {
-            "type": "array",
-            "maxItems": 24,
-            "items": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 23
             },
-            "uniqueItems": true
+            "maxItems": 24,
+            "minItems": 24,
+            "type": "array"
           },
           "maximum_residual_sum": {
             "const": 0
           },
+          "positive_residual_indices": {
+            "items": {
+              "maximum": 23,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 24,
+            "type": "array",
+            "uniqueItems": true
+          },
           "repair_method": {
             "const": "EXACT_FRACTIONAL_RESIDUAL_CERTIFICATE"
+          },
+          "selected_indices": {
+            "items": {
+              "maximum": 23,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 24,
+            "type": "array",
+            "uniqueItems": true
           }
         },
         "required": [
@@ -231,63 +200,37 @@
           "positive_residual_indices",
           "maximum_residual_sum",
           "repair_method"
-        ]
+        ],
+        "type": "object"
       },
-      "claimed_assurance": {
-        "enum": [
-          "UNVERIFIED",
-          "COMPUTED",
-          "CHECKED",
-          "VERIFIED"
-        ]
-      },
-      "scope": {
-        "const": "frozen-24-item-binary-fractional-ratio-instance",
-        "type": "string"
-      },
-      "completeness": {
-        "const": "COMPLETE"
-      },
-      "evidence": {
-        "type": "array",
-        "minItems": 1,
-        "maxItems": 1,
+      "witness": {
         "items": {
-          "type": "object",
           "additionalProperties": false,
           "properties": {
             "path": {
               "const": "evidence/answer.txt"
             },
             "sha256": {
-              "type": "string",
-              "pattern": "^sha256:[0-9a-f]{64}$"
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
             }
           },
           "required": [
             "path",
             "sha256"
-          ]
-        }
-      },
-      "limitations": {
-        "items": {"minLength": 1, "type": "string"},
+          ],
+          "type": "object"
+        },
         "maxItems": 1,
         "minItems": 1,
         "type": "array"
       }
     },
     "required": [
-      "task_id",
-      "conclusion",
       "result",
-      "claimed_assurance",
-      "scope",
-      "completeness",
-      "evidence",
-      "limitations"
-    ]
+      "witness"
+    ],
+    "type": "object"
   },
-  "task_id": "jacobian/fractional-ratio-proof-repair",
-  "verification_record": null
+  "task_id": "jacobian/fractional-ratio-proof-repair"
 }

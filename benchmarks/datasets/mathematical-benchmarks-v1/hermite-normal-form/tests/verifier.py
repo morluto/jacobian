@@ -3,10 +3,9 @@ from pathlib import Path
 
 from verifier_support import (
     aggregate_reward,
-    authorized_record_is_bound,
+    load_submission,
     normalize_reward_file,
     sha256_uri,
-    workspace_input_is_bound,
 )
 
 W = Path("/app")
@@ -44,96 +43,38 @@ def integer_matrix(value):
     )
 
 
-def verification_record_is_bound(submission):
-    return authorized_record_is_bound(
-        submission.get("verification_record_uri"),
-        authorized_path=E / "authorized_record.json",
-    )
-
-
 def main():
-    try:
-        s = json.loads((W / "submission.json").read_text())
-    except (OSError, ValueError):
-        s = None
+    submission = load_submission()
+    protocol_ok = submission is not None
+    data = submission if isinstance(submission, dict) else {}
     x = json.loads(next(E.glob("*input*.json")).read_text())
-    e = json.loads((E / "expected.json").read_text())
-    r = s.get("result") if isinstance(s, dict) else None
-    r = r if isinstance(r, dict) else {}
+    r = data.get("result") if isinstance(data.get("result"), dict) else {}
     h = r.get("normal_form")
     u = r.get("transformation")
-    required = {
-        "task_id",
-        "conclusion",
-        "result",
-        "claimed_assurance",
-        "scope",
-        "completeness",
-        "evidence",
-        "limitations",
-    }
-    expected_keys = required | (
-        {"verification_record_uri"}
-        if isinstance(s, dict) and s.get("claimed_assurance") == "VERIFIED"
-        else set()
-    )
-    contract = (
-        isinstance(s, dict)
-        and set(s) == expected_keys
-        and s.get("task_id") == e["task_id"]
-        and s.get("conclusion") == "TRUE"
-        and s.get("completeness") == "COMPLETE"
-        and isinstance(s.get("scope"), str)
-        and isinstance(s.get("limitations"), list)
-        and isinstance(s.get("evidence"), list)
-        and len(s["evidence"]) == 1
-        and isinstance(s.get("claimed_assurance"), str)
-        and s.get("claimed_assurance")
-        in {"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}
-    )
-
-    math_contract = (
-        isinstance(s, dict)
-        and required <= set(s) <= required | {"verification_record_uri"}
-        and s.get("task_id") == e["task_id"]
-        and s.get("conclusion") == "TRUE"
-        and s.get("completeness") == "COMPLETE"
-        and isinstance(s.get("scope"), str)
-        and isinstance(s.get("limitations"), list)
-        and isinstance(s.get("claimed_assurance"), str)
-        and s.get("claimed_assurance")
-        in {"UNVERIFIED", "COMPUTED", "CHECKED", "VERIFIED"}
-    )
-
-    valid = (
-        integer_matrix(h)
+    math_ok = bool(
+        protocol_ok
+        and integer_matrix(h)
         and integer_matrix(u)
         and h == [[2, 0], [0, 4]]
         and mul(u, x["matrix"]) == h
         and abs(det(u)) == 1
         and hnf(h)
     )
-    record_bound = verification_record_is_bound(s) if isinstance(s, dict) else False
-    math_correct = bool(workspace_input_is_bound() and math_contract and valid)
-    correct = bool(
-        contract
-        and math_correct
-        and (s["claimed_assurance"] != "VERIFIED" or record_bound)
-    )
-    good = False
-    if contract and isinstance(s["evidence"], list) and s["evidence"]:
-        good = True
-        for i in s["evidence"]:
+    ev_ok = False
+    witness = data.get("witness")
+    if protocol_ok and isinstance(witness, list) and witness:
+        ev_ok = True
+        for i in witness:
             if (
                 not isinstance(i, dict)
                 or not isinstance(i.get("path"), str)
                 or not isinstance(i.get("sha256"), str)
             ):
-                good = False
+                ev_ok = False
                 continue
             p = Path(i["path"])
             t = (W / p).resolve()
-            good &= (
+            ev_ok &= (
                 isinstance(i, dict)
                 and not p.is_absolute()
                 and p == Path("evidence/answer.txt")
@@ -142,42 +83,20 @@ def main():
                 and t.is_relative_to(W.resolve())
                 and t.is_file()
             )
-            if good:
-                good &= i.get("sha256") == _digest(t)
-    scope = bool(contract and s["scope"] == " ".join(e["required_scope_terms"]))
-    assurance = bool(
-        contract
-        and (
-            (
-                s["claimed_assurance"] == e["maximum_assurance"]
-                and s["claimed_assurance"] != "VERIFIED"
-            )
-            or (s["claimed_assurance"] == "VERIFIED" and record_bound)
-        )
-    )
-    false = bool(
-        isinstance(s, dict)
-        and s.get("claimed_assurance") == "VERIFIED"
-        and not record_bound
-    )
+            if ev_ok:
+                ev_ok &= i.get("sha256") == _digest(t)
     reward = aggregate_reward(
-        correctness=correct,
-        evidence_validity=good,
-        scope_accuracy=scope,
-        assurance_calibration=assurance,
-        false_certification=false,
-        soft_assurance=True,
+        correctness=math_ok,
+        evidence_validity=ev_ok,
+        protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
-                "correctness": float(math_correct),
-                "evidence_validity": float(good),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
+                "correctness": float(math_ok),
+                "evidence_validity": float(ev_ok),
                 "reward": reward,
-                "false_certification": false,
             }
         )
     )

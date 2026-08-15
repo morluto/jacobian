@@ -1,5 +1,0 @@
-services:
-  main:
-    build:
-      context: ../../../../
-      dockerfile: datasets/provider-feasibility-v1/nauty/environment/Dockerfile

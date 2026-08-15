@@ -6,12 +6,11 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 ORDER = [(0, 0), (1, 0), (0, 1), (2, 0), (1, 1), (0, 2), (3, 0), (2, 1), (1, 2), (0, 3)]
@@ -232,47 +231,28 @@ def valid_result(result):
 
 def main():
     submission = load_submission()
-    contract = strict_submission_contract(
-        submission,
-        task_id="jacobian/closed-one-form-polynomial-classification",
-        conclusion="SOURCE_CHAIN_RULE_REPAIRED",
-        verification_record="forbidden",
-    )
+    protocol_ok = submission is not None
     data = submission if isinstance(submission, dict) else {}
-    math_correct = bool(valid_result(data.get("result")))
+    math_correct = bool(protocol_ok and valid_result(data.get("result")))
     evidence_valid = bool(
-        evidence_list_is_bound(
-            data.get("evidence"), expected_path="evidence/answer.txt"
+        protocol_ok
+        and evidence_list_is_bound(
+            data.get("witness"), expected_path="evidence/answer.txt"
         )
-        and _valid_derivation_evidence(data.get("evidence"))
+        and _valid_derivation_evidence(data.get("witness"))
     )
-    scope_correct = bool(contract and _valid_scope(data.get("scope")))
-    limitations_correct = _valid_limitations(data.get("limitations"))
-    assurance_correct = (
-        data.get("claimed_assurance") == "COMPUTED" and limitations_correct
+    reward = aggregate_reward(
+        correctness=math_correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = (
-        contract
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and not false_certification
-    )
-    reward = 1.0 if correct else 0.0
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
                 "reward": reward,
-                "false_certification": bool(false_certification),
             }
         )
     )

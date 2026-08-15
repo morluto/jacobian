@@ -1,1 +1,11 @@
-{"task_id":"jacobian/recurrence-rational-series","conclusion":"TRUE","result":{"selected_operation":"combinatorics.generating_function.coefficients.compute"},"claimed_assurance":"COMPUTED","scope":"jacobian/recurrence-rational-series complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:097fb17c25e3f82e977e747a6d74f1e4a722d1977c05508b769aae8458d8a79e"}],"limitations":[]}
+{
+  "result": {
+    "selected_operation": "combinatorics.generating_function.coefficients.compute"
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:097fb17c25e3f82e977e747a6d74f1e4a722d1977c05508b769aae8458d8a79e"
+    }
+  ]
+}

@@ -1,1 +1,0 @@
-{"task_id":"jacobian/jcb-postdoc-012","conclusion":"COUNTEREXAMPLE_EXISTS","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/jcb-postdoc-012","answer-visible diagnostic"],"expected_conclusion":"COUNTEREXAMPLE_EXISTS","expected_key_facts":{"construction":"weakly-quasi-complete not quasi-complete Noetherian local ring"}}

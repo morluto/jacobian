@@ -3,27 +3,19 @@ from __future__ import annotations
 import json
 from itertools import combinations
 from pathlib import Path
-from typing import Any
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    evidence_list_is_bound,
-    is_regular_bounded_file,
+    json_value_equal,
     load_submission,
+    normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
+    resolve_evidence,
     workspace_input_is_bound,
 )
 
 TASK_ID = "jacobian/thrackle-local-maximality-certificate"
-SCOPE = "five-point-thrackle-local-maximality-v1"
 POINTS = [(0, 0), (4, 0), (5, 3), (2, 5), (-1, 3)]
 ALL = list(combinations(range(5), 2))
-LIMITATIONS = [
-    "ONE_FIVE_POINT_CONFIGURATION",
-    "LOCAL_MAXIMALITY_INSIDE_FROZEN_K5",
-    "THRACKLE_CONJECTURE_NOT_ASSESSED",
-]
 
 
 def _orient(a, b, c):
@@ -54,21 +46,6 @@ def _edge(value):
     return tuple(value)
 
 
-def _json_equal(left: Any, right: Any) -> bool:
-    """Compare JSON values without equating booleans, integers, and floats."""
-    if type(left) is not type(right):
-        return False
-    if isinstance(left, dict):
-        return set(left) == set(right) and all(
-            _json_equal(left[key], right[key]) for key in left
-        )
-    if isinstance(left, list):
-        return len(left) == len(right) and all(
-            _json_equal(a, b) for a, b in zip(left, right, strict=True)
-        )
-    return left == right
-
-
 def mathematics(result):
     if not isinstance(result, dict) or set(result) != {
         "selected_edges",
@@ -88,9 +65,9 @@ def mathematics(result):
         {"left": list(e), "right": list(f), "relation": _relation(e, f)}
         for e, f in combinations(selected, 2)
     ]
-    if any(row["relation"] == "DISJOINT" for row in expected_pairs) or not _json_equal(
-        result["pair_classifications"], expected_pairs
-    ):
+    if any(
+        row["relation"] == "DISJOINT" for row in expected_pairs
+    ) or not json_value_equal(result["pair_classifications"], expected_pairs):
         return False
     excluded = [e for e in ALL if e not in selected]
     expected = []
@@ -105,87 +82,47 @@ def mathematics(result):
         expected.append(
             {"excluded": list(edge), "disjoint_selected": list(disjoint[0])}
         )
-    return _json_equal(result["excluded_edge_witnesses"], expected)
-
-
-def _raw():
-    path = Path("/app/submission.json")
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError, MemoryError, RecursionError):
-        return None
-    return value if isinstance(value, dict) else None
+    return json_value_equal(result["excluded_edge_witnesses"], expected)
 
 
 def _write(values):
     path = Path("/logs/verifier")
     path.mkdir(parents=True, exist_ok=True)
     (path / "reward.json").write_text(json.dumps(values, sort_keys=True))
+    normalize_reward_file(path / "reward.json")
 
 
 def main():
-    raw = _raw()
     submission = load_submission(require_input_binding=False)
-    contract = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion="LOCAL_THRACKLE_CERTIFIED",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
-    )
-    evidence_ok = bool(
-        isinstance(raw, dict)
-        and evidence_list_is_bound(raw.get("evidence"), max_bytes=None)
-    )
+    protocol = isinstance(submission, dict)
+    result = submission.get("result") if protocol else None
+    witness = submission.get("witness") if protocol else None
+    descriptor = witness[0] if isinstance(witness, list) and len(witness) == 1 else None
     payload = (
-        read_evidence_json(
-            raw["evidence"][0], expected_path="evidence/answer.json", max_bytes=None
-        )
-        if evidence_ok
+        read_evidence_json(descriptor, expected_path="evidence/answer.json")
+        if resolve_evidence(descriptor, expected_path="evidence/answer.json")
+        is not None
         else None
     )
-    evidence_ok = bool(
+    witness_valid = bool(
         isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result", "limitations"}
+        and set(payload) == {"schema_version", "task_id", "result"}
         and payload.get("schema_version") == "1"
         and payload.get("task_id") == TASK_ID
-        and _json_equal(payload.get("result"), raw.get("result"))
-        and payload.get("limitations") == LIMITATIONS
+        and json_value_equal(payload.get("result"), result)
     )
+    mathematics_valid = bool(protocol and mathematics(result))
     values = {
         "input_binding": float(workspace_input_is_bound()),
-        "protocol": float(bool(contract)),
-        "mathematics": float(
-            bool(isinstance(raw, dict) and mathematics(raw.get("result")))
-        ),
-        "evidence": float(evidence_ok),
-        "scope": float(
-            bool(
-                isinstance(raw, dict)
-                and raw.get("scope") == SCOPE
-                and raw.get("completeness") == "COMPLETE"
-                and raw.get("limitations") == LIMITATIONS
-            )
-        ),
-        "assurance": float(
-            bool(
-                contract
-                and isinstance(raw, dict)
-                and raw.get("claimed_assurance")
-                in {"UNVERIFIED", "COMPUTED", "CHECKED"}
-            )
-        ),
+        "protocol": float(protocol),
+        "mathematics": float(mathematics_valid),
+        "witness_validity": float(witness_valid),
     }
     reward = float(all(values.values()))
     values.update(
         {
             "aggregate_reward": reward,
             "reward": reward,
-            "false_certification": bool(
-                isinstance(raw, dict) and raw.get("claimed_assurance") == "VERIFIED"
-            ),
         }
     )
     _write(values)
@@ -200,12 +137,9 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "evidence": 0.0,
-                "scope": 0.0,
-                "assurance": 0.0,
+                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
-                "false_certification": False,
                 "error": type(exc).__name__,
             }
         )

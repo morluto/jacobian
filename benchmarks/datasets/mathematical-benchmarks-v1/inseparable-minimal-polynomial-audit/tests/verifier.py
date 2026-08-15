@@ -4,12 +4,11 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
+    aggregate_reward,
     evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
@@ -140,50 +139,23 @@ def _evidence(value: object) -> bool:
 
 def main() -> None:
     submission = load_submission()
+    protocol_ok = submission is not None
     data = submission if isinstance(submission, dict) else {}
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
-    correct = bool(contract and _result(data.get("result"), _source()))
-    evidence = bool(correct and _evidence(data.get("evidence")))
-    scope = bool(contract and data.get("scope") == expected["required_scope"])
-    assurance = bool(
-        contract and data.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations = bool(
-        contract
-        and isinstance(data.get("limitations"), list)
-        and any(
-            isinstance(item, str)
-            and "proof assistant" in item.casefold()
-            and "not" in item.casefold()
-            for item in data["limitations"]
-        )
-    )
-    false_verified = false_verified_claim(submission, verification_record_bound=False)
-    passed = bool(
-        correct
-        and evidence
-        and scope
-        and assurance
-        and limitations
-        and not false_verified
+    math_ok = bool(protocol_ok and _result(data.get("result"), _source()))
+    ev_ok = bool(protocol_ok and math_ok and _evidence(data.get("witness")))
+    reward = aggregate_reward(
+        correctness=math_ok,
+        evidence_validity=ev_ok,
+        protocol_ok=protocol_ok,
     )
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
-                "correctness": float(correct),
-                "evidence_validity": float(evidence),
-                "scope_accuracy": float(scope),
-                "assurance_calibration": float(assurance),
-                "reward": float(passed),
-                "false_certification": false_verified,
+                "correctness": float(math_ok),
+                "evidence_validity": float(ev_ok),
+                "reward": reward,
             },
             sort_keys=True,
         )

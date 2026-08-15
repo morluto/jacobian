@@ -1,1 +1,48 @@
-{"task_id":"jacobian/graph-counterexample","conclusion":"FALSE","result":{"vertices":["0","1","2","3","4","5"],"edges":[["0","1"],["0","4"],["0","5"],["1","2"],["2","3"],["2","5"],["3","4"]]},"claimed_assurance":"COMPUTED","scope":"jacobian/graph-counterexample complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:21a2269173643372ec64c18a14d4fb8b7cb254a6a72db29ec146e0a8cbe5de7f"}],"limitations":["The conclusion is about the supplied finite hypotheses only."]}
+{
+  "result": {
+    "edges": [
+      [
+        "0",
+        "1"
+      ],
+      [
+        "0",
+        "4"
+      ],
+      [
+        "0",
+        "5"
+      ],
+      [
+        "1",
+        "2"
+      ],
+      [
+        "2",
+        "3"
+      ],
+      [
+        "2",
+        "5"
+      ],
+      [
+        "3",
+        "4"
+      ]
+    ],
+    "vertices": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5"
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:21a2269173643372ec64c18a14d4fb8b7cb254a6a72db29ec146e0a8cbe5de7f"
+    }
+  ]
+}

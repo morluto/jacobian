@@ -1,1 +1,17 @@
-{"task_id":"jacobian/log-exponent-recovery","conclusion":"SOLVED","result":{"value":60,"reciprocal_log_contributions":{"x":"1/24","y":"1/40","z":"1/60","xyz":"1/12"}},"claimed_assurance":"COMPUTED","scope":"log-exponent-recovery exact rational derivation","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:fb23c5ad5ee340f750ecbb7c44941879278deab3a188d8c78e5d45447a4c3ee6"}],"limitations":["The computation uses exact rational logarithm identities."]}
+{
+  "result": {
+    "reciprocal_log_contributions": {
+      "x": "1/24",
+      "xyz": "1/12",
+      "y": "1/40",
+      "z": "1/60"
+    },
+    "value": 60
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:fb23c5ad5ee340f750ecbb7c44941879278deab3a188d8c78e5d45447a4c3ee6"
+    }
+  ]
+}

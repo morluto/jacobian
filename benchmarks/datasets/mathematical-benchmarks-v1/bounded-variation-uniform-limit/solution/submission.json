@@ -1,1 +1,68 @@
-{"task_id":"jacobian/bounded-variation-uniform-limit","conclusion":"UNIFORM_CONVERGENCE_DOES_NOT_FORCE_VARIATION_CONVERGENCE","result":{"scale_q":3,"sequence":"sin(q*n*x)/(q*n)","limit_function":"0","argument":{"uniform_convergence":"SUP_NORM_1_OVER_QN_TENDS_TO_ZERO","variation_behavior":"TOTAL_VARIATION_IS_CONSTANTLY_FOUR","implication":"UNIFORM_CONVERGENCE_DOES_NOT_FORCE_VARIATION_CONVERGENCE"},"uniform_certificate":{"sup_norm_numerator":1,"sup_norm_denominator_coefficient":3,"tends_to_zero":true},"variation_formula":{"endpoint_segment_count":2,"interior_segment_count":"2*q*n-1","endpoint_jump_multiplier":1,"interior_jump_multiplier":2,"total_variation":"4"},"checkpoints":[{"n":1,"frequency":3,"amplitude":"1/3","interior_segments":5,"endpoint_contribution":"2/3","interior_contribution":"10/3","total_variation":"4"},{"n":2,"frequency":6,"amplitude":"1/6","interior_segments":11,"endpoint_contribution":"1/3","interior_contribution":"11/3","total_variation":"4"},{"n":5,"frequency":15,"amplitude":"1/15","interior_segments":29,"endpoint_contribution":"2/15","interior_contribution":"58/15","total_variation":"4"},{"n":11,"frequency":33,"amplitude":"1/33","interior_segments":65,"endpoint_contribution":"2/33","interior_contribution":"130/33","total_variation":"4"}]},"claimed_assurance":"COMPUTED","scope":"the full sequence on [0,2*pi] and all submitted exact checkpoints","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:da06657cddec7c0e9698ee4828219f0bedc23226438e3208b38d3b71f8fc11a1"}],"limitations":["NO_PROOF_ASSISTANT_VERIFICATION"]}
+{
+  "result": {
+    "argument": {
+      "implication": "UNIFORM_CONVERGENCE_DOES_NOT_FORCE_VARIATION_CONVERGENCE",
+      "uniform_convergence": "SUP_NORM_1_OVER_QN_TENDS_TO_ZERO",
+      "variation_behavior": "TOTAL_VARIATION_IS_CONSTANTLY_FOUR"
+    },
+    "checkpoints": [
+      {
+        "amplitude": "1/3",
+        "endpoint_contribution": "2/3",
+        "frequency": 3,
+        "interior_contribution": "10/3",
+        "interior_segments": 5,
+        "n": 1,
+        "total_variation": "4"
+      },
+      {
+        "amplitude": "1/6",
+        "endpoint_contribution": "1/3",
+        "frequency": 6,
+        "interior_contribution": "11/3",
+        "interior_segments": 11,
+        "n": 2,
+        "total_variation": "4"
+      },
+      {
+        "amplitude": "1/15",
+        "endpoint_contribution": "2/15",
+        "frequency": 15,
+        "interior_contribution": "58/15",
+        "interior_segments": 29,
+        "n": 5,
+        "total_variation": "4"
+      },
+      {
+        "amplitude": "1/33",
+        "endpoint_contribution": "2/33",
+        "frequency": 33,
+        "interior_contribution": "130/33",
+        "interior_segments": 65,
+        "n": 11,
+        "total_variation": "4"
+      }
+    ],
+    "limit_function": "0",
+    "scale_q": 3,
+    "sequence": "sin(q*n*x)/(q*n)",
+    "uniform_certificate": {
+      "sup_norm_denominator_coefficient": 3,
+      "sup_norm_numerator": 1,
+      "tends_to_zero": true
+    },
+    "variation_formula": {
+      "endpoint_jump_multiplier": 1,
+      "endpoint_segment_count": 2,
+      "interior_jump_multiplier": 2,
+      "interior_segment_count": "2*q*n-1",
+      "total_variation": "4"
+    }
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:da06657cddec7c0e9698ee4828219f0bedc23226438e3208b38d3b71f8fc11a1"
+    }
+  ]
+}

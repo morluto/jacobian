@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
+    aggregate_reward,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W = Path("/app")
@@ -272,69 +272,40 @@ def _replay(result: object, source: dict[str, object]) -> bool:
 
 
 def _evidence_valid(submission: dict[str, object]) -> bool:
-    evidence = submission.get("evidence")
+    evidence = submission.get("witness")
     if not isinstance(evidence, list) or len(evidence) != 1:
         return False
     payload = read_evidence_json(
         evidence[0], expected_path="evidence/resolution-proof.json"
     )
-    return payload == {
-        "schema_version": "1",
-        "task_id": submission.get("task_id"),
-        "result": submission.get("result"),
-        "limitations": submission.get("limitations"),
-    }
+    return bool(
+        isinstance(payload, dict)
+        and payload.get("schema_version") == "1"
+        and json_value_equal(payload.get("result"), submission.get("result"))
+    )
 
 
 def main() -> None:
     submission = load_submission()
+    protocol_ok = submission is not None
     source = json.loads(next(E.glob("*input*.json")).read_text())
-    expected = json.loads((E / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
     input_bound = source == json.loads(next(E.glob("*input*.json")).read_text())
     math_correct = bool(
-        contract and input_bound and _replay(submission.get("result"), source)
+        protocol_ok and input_bound and _replay(submission.get("result"), source)
     )
-    evidence_valid = bool(contract and _evidence_valid(submission))
-    scope_correct = bool(
-        contract and submission.get("scope") == expected["required_scope"]
+    evidence_valid = bool(protocol_ok and _evidence_valid(submission))
+    reward = aggregate_reward(
+        correctness=math_correct,
+        evidence_validity=evidence_valid,
+        protocol_ok=protocol_ok,
     )
-    assurance_correct = bool(
-        contract
-        and submission.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations_correct = bool(
-        contract and submission.get("limitations") == [expected["required_limitation"]]
-    )
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(
-        math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and limitations_correct
-        and not false_certification
-    )
-    reward = 1.0 if correct else 0.0
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
                 "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(
-                    assurance_correct and limitations_correct
-                ),
                 "reward": reward,
-                "false_certification": false_certification,
             }
         )
     )

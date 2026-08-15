@@ -4,25 +4,16 @@ Choose distinct positive even integers and distinct positive odd integers whose 
 
 Submit both sides of an optimality certificate: any valid optimal construction, and the complete frontier for every possible odd count `n=1,3,...,45`. Each frontier row must give the largest feasible even count under the unavoidable minimum sum `m(m+1)+n^2`, that minimum sum, and its objective. Frontier rows may appear in any order; the verifier matches them by `odd_count`. Write `/app/submission.json` and `/app/evidence/distinct-parity-certificate.json` according to the schema. Claim only `COMPUTED`; the verifier independently checks the construction and reconstructs the entire upper-bound frontier.
 
-The digest-bound evidence file must be a JSON object with exactly four keys:
-`schema_version` (the string `"1"`), `task_id` (the task identifier),
-`result` (the same result object placed in `submission.json`), and
-`limitations` (the same limitations list placed in `submission.json`).
-The evidence file must be a regular file of at most 16 MiB; larger or
-non-regular files are rejected before hashing.
+The digest-bound witness file must be a JSON object with exactly three keys:
+`schema_version` (the string `"1"`), `task_id` (the task identifier), and
+`result` (the same result object placed in `submission.json`).
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission envelope requires `task_id`, `conclusion`, `result`, `claimed_assurance`, `scope`, `completeness`, `evidence`, and `limitations`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 
-- **Conclusion:** exactly `OPTIMUM_CERTIFIED`
-- **Assurance:** scoreable values are `COMPUTED` (ceiling `COMPUTED`); the submission schema accepts any of `UNVERIFIED`, `COMPUTED`, `CHECKED`, `VERIFIED` but only scoreable assurances receive credit.
-- **Scope:** the exact value declared in `submission_schema.json`
-- **Completeness:** `COMPLETE`.
-- **Evidence:** 1-1 item(s); allowed path(s): `evidence/distinct-parity-certificate.json`; digest must match `^sha256:[0-9a-f]{64}$`.
-- **Evidence media types:** `application/json`.
-- **Required artifact filenames:** `evidence/distinct-parity-certificate.json`.
+- **Witness:** 1-1 item(s); allowed path(s): `evidence/distinct-parity-certificate.json`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `application/json`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

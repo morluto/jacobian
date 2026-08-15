@@ -3,15 +3,13 @@ import math
 from pathlib import Path
 
 from verifier_support import (
-    false_verified_claim,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
 )
 
 W, T = Path("/app"), Path("/tests")
-LIMITATIONS = ["FINITE_INTEGER_OPTIMIZATION", "NO_PROOF_ASSISTANT_REPLAY"]
 
 
 def frozen():
@@ -111,59 +109,33 @@ def valid(r):
 def main():
     expected = json.loads((T / "expected.json").read_text())
     s = load_submission(W / "submission.json")
-    contract = strict_submission_contract(
-        s,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        allowed_assurances=frozenset({"COMPUTED"}),
-        verification_record="forbidden",
-    )
-    ev = (
-        read_evidence_json(
-            s["evidence"][0], expected_path="evidence/distinct-parity-certificate.json"
-        )
-        if contract
-        else None
-    )
     input_bound = frozen()
     math_ok = bool(isinstance(s, dict) and valid(s.get("result")))
-    evidence_ok = bool(
-        contract
-        and input_bound
-        and ev
-        and set(ev) == {"schema_version", "task_id", "result", "limitations"}
-        and ev.get("schema_version") == "1"
-        and ev.get("task_id") == expected["task_id"]
-        and ev.get("result") == s.get("result")
-        and ev.get("limitations") == LIMITATIONS
+    witness = s.get("witness") if isinstance(s, dict) else None
+    witness_obj = (
+        read_evidence_json(
+            witness[0], expected_path="evidence/distinct-parity-certificate.json"
+        )
+        if isinstance(witness, list) and witness
+        else None
     )
-    scope_ok = bool(
-        contract
+    witness_ok = bool(
+        math_ok
         and input_bound
-        and s.get("scope") == "ALL_DISTINCT_POSITIVE_PARITY_LISTS_SUMMING_TO_2025"
-        and s.get("completeness") == "COMPLETE"
-        and s.get("limitations") == LIMITATIONS
+        and witness_obj
+        and {"schema_version", "task_id", "result"} <= set(witness_obj)
+        and witness_obj.get("schema_version") == "1"
+        and witness_obj.get("task_id") == expected["task_id"]
+        and json_value_equal(witness_obj.get("result"), s.get("result"))
     )
-    assurance_ok = bool(contract and s.get("claimed_assurance") == "COMPUTED")
-    false_cert = false_verified_claim(s, verification_record_bound=False)
-    correct = bool(
-        contract
-        and input_bound
-        and math_ok
-        and evidence_ok
-        and scope_ok
-        and not false_cert
-    )
+    correct = bool(input_bound and math_ok and witness_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(evidence_ok),
-                "scope_accuracy": float(scope_ok),
-                "assurance_calibration": float(assurance_ok),
+                "witness_validity": float(witness_ok),
                 "reward": float(correct),
-                "false_certification": false_cert,
             }
         )
     )

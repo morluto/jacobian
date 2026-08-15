@@ -33,33 +33,6 @@
       ],
       "type": "object"
     },
-    "evidence_envelope": {
-      "additionalProperties": false,
-      "properties": {
-        "limitations": {
-          "const": [
-            "S4_CLASSIFICATION_NOT_REPROVED",
-            "CHEBOTAREV_THEOREM_TRUSTED"
-          ]
-        },
-        "result": {
-          "$ref": "#/$defs/result"
-        },
-        "schema_version": {
-          "const": "1"
-        },
-        "task_id": {
-          "const": "jacobian/chebotarev-fixed-point-proof-audit"
-        }
-      },
-      "required": [
-        "schema_version",
-        "task_id",
-        "result",
-        "limitations"
-      ],
-      "type": "object"
-    },
     "result": {
       "additionalProperties": false,
       "properties": {
@@ -132,29 +105,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "claimed_assurance": {
-      "enum": [
-        "UNVERIFIED",
-        "COMPUTED",
-        "CHECKED",
-        "VERIFIED"
-      ]
+    "result": {
+      "$ref": "#/$defs/result"
     },
-    "completeness": {
-      "enum": [
-        "COMPLETE",
-        "PARTIAL",
-        "UNKNOWN"
-      ]
-    },
-    "conclusion": {
-      "enum": [
-        "PUBLISHED_SOLUTION_CONTAINS_MULTIPLE_FATAL_ERRORS",
-        "PUBLISHED_SOLUTION_CORRECT",
-        "INSUFFICIENT_EVIDENCE"
-      ]
-    },
-    "evidence": {
+    "witness": {
       "items": {
         "additionalProperties": false,
         "properties": {
@@ -175,33 +129,11 @@
       "maxItems": 1,
       "minItems": 1,
       "type": "array"
-    },
-    "limitations": {
-      "const": [
-        "S4_CLASSIFICATION_NOT_REPROVED",
-        "CHEBOTAREV_THEOREM_TRUSTED"
-      ]
-    },
-    "result": {
-      "$ref": "#/$defs/result"
-    },
-    "scope": {
-      "const": "CONDITIONAL_ON_FROZEN_S4_PREMISE",
-      "type": "string"
-    },
-    "task_id": {
-      "const": "jacobian/chebotarev-fixed-point-proof-audit"
     }
   },
   "required": [
-    "task_id",
-    "conclusion",
     "result",
-    "claimed_assurance",
-    "scope",
-    "completeness",
-    "evidence",
-    "limitations"
+    "witness"
   ],
   "type": "object"
 }

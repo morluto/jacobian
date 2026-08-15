@@ -94,17 +94,8 @@ def build_submission(output_root: Path) -> dict[str, object]:
     )
     digest = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
     return {
-        "task_id": input_data["task_id"],
-        "conclusion": "PROOF_REPAIRED_AND_REPLAYED",
         "result": result,
-        "claimed_assurance": "COMPUTED",
-        "scope": "FROZEN_METAMATH_STYLE_ASSERTION_REGISTRY",
-        "completeness": "COMPLETE",
-        "evidence": [{"path": "evidence/answer.txt", "sha256": digest}],
-        "limitations": [
-            "FROZEN_FRAGMENT_NOT_FULL_UPSTREAM_DATABASE",
-            "NO_EXTERNAL_METAMATH_KERNEL_REPLAY",
-        ],
+        "witness": [{"path": "evidence/answer.txt", "sha256": digest}],
     }
 
 

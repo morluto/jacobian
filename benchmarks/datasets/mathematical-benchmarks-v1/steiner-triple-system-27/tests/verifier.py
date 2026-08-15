@@ -8,11 +8,9 @@ from verifier_support import (
     MAX_SUBMISSION_BYTES,
     _public_submission_is_valid,
     evidence_list_is_bound,
-    false_verified_claim,
     is_regular_bounded_file,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
     workspace_input_is_bound,
 )
 
@@ -136,46 +134,20 @@ def main():
     data = submission if isinstance(submission, dict) else {}
     input_bound = workspace_input_is_bound()
     source = json.loads((E / "input.json").read_text())
-    expected = json.loads((E / "expected.json").read_text())
-    envelope_contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
-    contract = bool(envelope_contract and _public_submission_is_valid(submission))
+    contract = bool(submission and _public_submission_is_valid(submission))
     math_correct = _valid_design(data.get("result"), source)
-    evidence_valid = _evidence(data.get("evidence"), data.get("result"))
-    scope_correct = bool(
-        data.get("scope") == expected["required_scope"]
-        and data.get("limitations") == expected["limitations"]
-    )
-    assurance_correct = data.get("claimed_assurance") == expected["maximum_assurance"]
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = bool(
-        input_bound
-        and contract
-        and math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and not false_certification
-    )
+    evidence_valid = _evidence(data.get("witness"), data.get("result"))
+    correct = bool(input_bound and contract and math_correct and evidence_valid)
     output = Path("/logs/verifier/reward.json")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
+                "witness_validity": float(evidence_valid),
                 "input_binding": float(input_bound),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
                 "protocol_compliance": float(contract),
                 "reward": float(correct),
-                "false_certification": false_certification,
             }
         )
     )

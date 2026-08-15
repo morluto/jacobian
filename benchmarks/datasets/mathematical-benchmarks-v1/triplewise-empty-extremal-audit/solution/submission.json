@@ -1,1 +1,162 @@
-{"task_id":"jacobian/triplewise-empty-extremal-audit","conclusion":"SOURCE_BOUND_REPAIRED","result":{"maximum_formula":"1+n+floor(n/2)","upper_bound_certificate":{"element_frequency_cap":2,"singleton_cap":"n","nonsingleton_incidence_floor":2},"constructions":[{"n":7,"family":[[],[0],[1],[2],[3],[4],[5],[6],[0,1],[2,3],[4,5]]},{"n":8,"family":[[],[0],[1],[2],[3],[4],[5],[6],[7],[0,1],[2,3],[4,5],[6,7]]},{"n":11,"family":[[],[0],[1],[2],[3],[4],[5],[6],[7],[8],[9],[10],[0,1],[2,3],[4,5],[6,7],[8,9]]}]},"claimed_assurance":"COMPUTED","scope":"families of distinct subsets with triplewise empty intersection","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:be239317f1937c4014257cac6e572284575099dae8474bc069300f2b23a79a53"}],"limitations":["The verifier checks three finite extremal constructions and a typed general incidence certificate."]}
+{
+  "result": {
+    "constructions": [
+      {
+        "family": [
+          [],
+          [
+            0
+          ],
+          [
+            1
+          ],
+          [
+            2
+          ],
+          [
+            3
+          ],
+          [
+            4
+          ],
+          [
+            5
+          ],
+          [
+            6
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            4,
+            5
+          ]
+        ],
+        "n": 7
+      },
+      {
+        "family": [
+          [],
+          [
+            0
+          ],
+          [
+            1
+          ],
+          [
+            2
+          ],
+          [
+            3
+          ],
+          [
+            4
+          ],
+          [
+            5
+          ],
+          [
+            6
+          ],
+          [
+            7
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            4,
+            5
+          ],
+          [
+            6,
+            7
+          ]
+        ],
+        "n": 8
+      },
+      {
+        "family": [
+          [],
+          [
+            0
+          ],
+          [
+            1
+          ],
+          [
+            2
+          ],
+          [
+            3
+          ],
+          [
+            4
+          ],
+          [
+            5
+          ],
+          [
+            6
+          ],
+          [
+            7
+          ],
+          [
+            8
+          ],
+          [
+            9
+          ],
+          [
+            10
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            4,
+            5
+          ],
+          [
+            6,
+            7
+          ],
+          [
+            8,
+            9
+          ]
+        ],
+        "n": 11
+      }
+    ],
+    "maximum_formula": "1+n+floor(n/2)",
+    "upper_bound_certificate": {
+      "element_frequency_cap": 2,
+      "nonsingleton_incidence_floor": 2,
+      "singleton_cap": "n"
+    }
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:be239317f1937c4014257cac6e572284575099dae8474bc069300f2b23a79a53"
+    }
+  ]
+}

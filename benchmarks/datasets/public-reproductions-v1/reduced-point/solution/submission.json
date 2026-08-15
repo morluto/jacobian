@@ -1,1 +1,16 @@
-{"task_id":"jacobian/reduced-point","conclusion":"TRUE","result":{"free_ranks":[0],"torsion":[[]]},"claimed_assurance":"COMPUTED","scope":"jacobian/reduced-point complete finite input","completeness":"COMPLETE","evidence":[{"path":"evidence/answer.txt","sha256":"sha256:cd8a135cb9d80e5016024e095fa788c0576a5afa2b3443feeb9ad290a21fe812"}],"limitations":[]}
+{
+  "result": {
+    "free_ranks": [
+      0
+    ],
+    "torsion": [
+      []
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/answer.txt",
+      "sha256": "sha256:cd8a135cb9d80e5016024e095fa788c0576a5afa2b3443feeb9ad290a21fe812"
+    }
+  ]
+}

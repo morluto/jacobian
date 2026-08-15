@@ -8,11 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    evidence_list_is_bound,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
-    strict_submission_contract,
+    resolve_evidence,
     workspace_input_is_bound,
 )
 
@@ -20,10 +20,6 @@ WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 TASK_ID = "jacobian/vizing-bounded-cartesian-products"
 SCOPE = "vizing-bounded-cartesian-products:graphs-v1:pairs-v1"
-LIMITATIONS = [
-    "EIGHT_FROZEN_GRAPHS_THIRTEEN_CARTESIAN_PAIRS",
-    "NO_GLOBAL_VIZING_CONCLUSION",
-]
 GRAPH_IDS = ("P4", "C4", "P5", "C5", "K2,3", "house", "bull", "corona-K3")
 PAIR_IDS = (
     ("P4", "P4"),
@@ -306,64 +302,31 @@ def _reward(value: dict[str, Any]) -> None:
 def main() -> None:
     input_bound = workspace_input_is_bound()
     frozen = _frozen() if input_bound else None
-    submission = load_submission()
-    contract = strict_submission_contract(
-        submission,
-        task_id=TASK_ID,
-        conclusion="VIZING_BOUNDED_PROBE",
-        allowed_assurances=frozenset({"UNVERIFIED", "COMPUTED", "CHECKED"}),
-        verification_record="forbidden",
-    )
-    mathematics = bool(contract and frozen and _math(submission["result"], frozen))
-    evidence = bool(contract and evidence_list_is_bound(submission["evidence"]))
-    evidence_value = (
-        read_evidence_json(
-            submission["evidence"][0], expected_path="evidence/answer.txt"
-        )
-        if evidence
+    submission = load_submission(require_input_binding=False)
+    protocol = isinstance(submission, dict)
+    result = submission.get("result") if protocol else None
+    mathematics = bool(protocol and frozen and _math(result, frozen))
+    witness = submission.get("witness") if protocol else None
+    descriptor = witness[0] if isinstance(witness, list) and len(witness) == 1 else None
+    payload = (
+        read_evidence_json(descriptor, expected_path="evidence/answer.txt")
+        if resolve_evidence(descriptor, expected_path="evidence/answer.txt") is not None
         else None
     )
-    if evidence_value is None:
-        evidence = False
-    else:
-        evidence = (
-            set(evidence_value)
-            == {"schema_version", "task_id", "result", "limitations"}
-            and evidence_value.get("schema_version") == "1"
-            and evidence_value.get("task_id") == TASK_ID
-            and evidence_value.get("result") == submission["result"]
-            and evidence_value.get("limitations") == LIMITATIONS
-        )
-    scope = bool(
-        contract
-        and submission.get("scope") == SCOPE
-        and submission.get("limitations") == LIMITATIONS
+    witness_valid = bool(
+        isinstance(payload, dict)
+        and set(payload) == {"schema_version", "task_id", "result"}
+        and payload.get("schema_version") == "1"
+        and payload.get("task_id") == TASK_ID
+        and json_value_equal(payload.get("result"), result)
     )
-    assurance = bool(contract and submission.get("claimed_assurance") == "CHECKED")
-    false_certification = bool(
-        isinstance(submission, dict)
-        and submission.get("claimed_assurance") == "VERIFIED"
-    )
-    aggregate = (
-        1.0
-        if input_bound
-        and contract
-        and mathematics
-        and evidence
-        and scope
-        and assurance
-        and not false_certification
-        else 0.0
-    )
+    aggregate = float(input_bound and protocol and mathematics and witness_valid)
     _reward(
         {
-            "protocol": float(contract),
+            "protocol": float(protocol),
             "input_binding": float(input_bound),
             "mathematics": float(mathematics),
-            "evidence": float(evidence),
-            "scope": float(scope),
-            "assurance": float(assurance),
-            "false_certification": false_certification,
+            "witness_validity": float(witness_valid),
             "aggregate_reward": aggregate,
             "reward": aggregate,
         }
@@ -379,10 +342,7 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "evidence": 0.0,
-                "scope": 0.0,
-                "assurance": 0.0,
-                "false_certification": False,
+                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

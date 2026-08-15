@@ -1,1 +1,61 @@
-{"task_id":"jacobian/image-complement-commutation","conclusion":"FINITE_CONFORMANCE_CLASSIFIED","result":{"cases":[{"id":"permuted_bijection","classification":"BIJECTIVE","commutes":true,"checked_subsets":32,"first_failure":null,"left_image":null,"right_complement":null},{"id":"injective_not_surjective","classification":"INJECTIVE_NOT_SURJECTIVE","commutes":false,"checked_subsets":16,"first_failure":[],"left_image":[0,1,2,3],"right_complement":[0,1,2,3,4]},{"id":"surjective_not_injective","classification":"SURJECTIVE_NOT_INJECTIVE","commutes":false,"checked_subsets":32,"first_failure":[3],"left_image":[0,1,2,3],"right_complement":[0,1,2]}]},"claimed_assurance":"COMPUTED","scope":"ALL_SUBSETS_OF_ALL_THREE_FROZEN_MAPPINGS","completeness":"COMPLETE","evidence":[{"path":"evidence/image-complement-certificate.json","sha256":"sha256:7d662c0efacbf65794793422f10311ea1bc6099220e1553ea0ee678e2f58b633"}],"limitations":["FINITE_FROZEN_MAPPINGS","NO_GENERAL_THEOREM_PROOF"]}
+{
+  "result": {
+    "cases": [
+      {
+        "checked_subsets": 32,
+        "classification": "BIJECTIVE",
+        "commutes": true,
+        "first_failure": null,
+        "id": "permuted_bijection",
+        "left_image": null,
+        "right_complement": null
+      },
+      {
+        "checked_subsets": 16,
+        "classification": "INJECTIVE_NOT_SURJECTIVE",
+        "commutes": false,
+        "first_failure": [],
+        "id": "injective_not_surjective",
+        "left_image": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "right_complement": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "checked_subsets": 32,
+        "classification": "SURJECTIVE_NOT_INJECTIVE",
+        "commutes": false,
+        "first_failure": [
+          3
+        ],
+        "id": "surjective_not_injective",
+        "left_image": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "right_complement": [
+          0,
+          1,
+          2
+        ]
+      }
+    ]
+  },
+  "witness": [
+    {
+      "path": "evidence/image-complement-certificate.json",
+      "sha256": "sha256:7d662c0efacbf65794793422f10311ea1bc6099220e1553ea0ee678e2f58b633"
+    }
+  ]
+}

@@ -4,17 +4,13 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    evidence_list_is_bound,
-    false_verified_claim,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
-    strict_submission_contract,
 )
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-LIMITATION = "The witness proves neither minimality nor claims about other exponents or numbers of summands."
 
 
 def _load() -> dict[str, Any]:
@@ -80,9 +76,7 @@ def _result(result: object, frozen: dict[str, Any]) -> bool:
     )
 
 
-def _evidence(value: object) -> bool:
-    if not evidence_list_is_bound(value, expected_path="evidence/answer.txt"):
-        return False
+def _witness(value: object) -> bool:
     if not isinstance(value, list) or len(value) != 1:
         return False
     path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
@@ -98,42 +92,17 @@ def _evidence(value: object) -> bool:
 def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
-    expected = json.loads((TESTS / "expected.json").read_text())
-    contract = strict_submission_contract(
-        submission,
-        task_id=expected["task_id"],
-        conclusion=expected["conclusion"],
-        verification_record="forbidden",
-    )
-    math_correct = bool(contract and _result(data.get("result"), _load()))
-    evidence_valid = bool(math_correct and _evidence(data.get("evidence")))
-    scope_correct = bool(contract and data.get("scope") == expected["required_scope"])
-    assurance_correct = bool(
-        contract and data.get("claimed_assurance") == expected["maximum_assurance"]
-    )
-    limitations_correct = bool(contract and LIMITATION in data.get("limitations", []))
-    false_certification = false_verified_claim(
-        submission, verification_record_bound=False
-    )
-    correct = (
-        math_correct
-        and evidence_valid
-        and scope_correct
-        and assurance_correct
-        and limitations_correct
-        and not false_certification
-    )
+    math_correct = _result(data.get("result"), _load())
+    witness_valid = _witness(data.get("witness"))
+    correct = bool(math_correct and witness_valid)
     output = Path("/logs/verifier")
     output.mkdir(parents=True, exist_ok=True)
     (output / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
-                "scope_accuracy": float(scope_correct),
-                "assurance_calibration": float(assurance_correct),
+                "witness_validity": float(witness_valid),
                 "reward": float(correct),
-                "false_certification": false_certification,
             }
         )
     )

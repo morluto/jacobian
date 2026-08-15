@@ -32,7 +32,6 @@ from benchmarks.tooling.strict_boundaries import (
 from pydantic import ValidationError
 from tests.unit.tooling.harbor_suite_support import (
     _make_suite_with_task,
-    patch_harbor_root,
 )
 
 # ---------------------------------------------------------------------------
@@ -177,11 +176,6 @@ def test_raise_strict_model_raises_harbor_suite_error() -> None:
 # ---------------------------------------------------------------------------
 # harbor_suite integration: strict task/environment sections
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def patched_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    return patch_harbor_root(monkeypatch, tmp_path)
 
 
 def test_topology_reports_strict_failure_for_extra_environment_field(

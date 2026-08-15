@@ -224,7 +224,17 @@ def task_host_validation(
                     timings=timings,
                 ),
             )
-        return ()
+        return (
+            _entry(
+                name=f"{task}-input-binding",
+                selector=(
+                    "benchmarks/validation/mathematical_benchmarks_v1/"
+                    "test_input_binding_contracts.py"
+                ),
+                keyword=task,
+                timings=timings,
+            ),
+        )
     if dataset == "conjecture-probes-v1":
         dedicated = (
             root

@@ -29,6 +29,7 @@ from benchmarks.tooling.public_contract import (
     render_submission_schema,
     sync,
 )
+from jsonschema import Draft202012Validator
 
 # ---------------------------------------------------------------------------
 # Fixture builders
@@ -76,6 +77,22 @@ def _make_task_dir(tmp_path: Path, name: str = "task") -> Path:
 def test_task_template_contract_is_current() -> None:
     task = Path("benchmarks/templates/task")
     assert check(task / "tests" / "public_contract.json", task) == []
+
+
+def test_checked_in_schema_accepts_current_result_and_witness_contracts() -> None:
+    schema = json.loads(
+        Path("benchmarks/schemas/public-contract.schema.json").read_text()
+    )
+    result_only = json.loads(
+        Path("benchmarks/templates/task/tests/public_contract.json").read_text()
+    )
+    witness_contract = _base_contract_dict()
+    witness_contract["submission_schema"] = json.loads(
+        render_submission_schema(PublicContract.model_validate(witness_contract))
+    )
+    validator = Draft202012Validator(schema)
+    assert list(validator.iter_errors(result_only)) == []
+    assert list(validator.iter_errors(witness_contract)) == []
 
 
 # ---------------------------------------------------------------------------

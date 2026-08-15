@@ -235,6 +235,15 @@ def _validate_task(suite: Suite, task_dir: Path) -> list[str]:
             f"{schema_path.relative_to(ROOT)}: invalid JSON Schema: {exc.message}"
         )
         return failures
+    contract_path = task_dir / "tests" / "public_contract.json"
+    if contract_path.is_file():
+        failures.extend(
+            _validate(
+                _read_json(contract_path),
+                "public-contract.schema.json",
+                contract_path,
+            )
+        )
     solution_path = task_dir / "solution" / "submission.json"
     if not solution_path.is_file():
         # Measurement and provider tasks construct their Oracle submission at

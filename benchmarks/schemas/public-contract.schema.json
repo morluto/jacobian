@@ -9,8 +9,6 @@
     "schema_version",
     "task_id",
     "submission_path",
-    "evidence",
-    "required_artifact_filenames",
     "public_notes",
     "submission_result",
     "submission_schema"
@@ -19,10 +17,10 @@
     "schema_version": {"const": "1"},
     "task_id": {"type": "string", "pattern": "^jacobian/[a-z0-9-]+$"},
     "submission_path": {"type": "string", "pattern": "^/app/[a-z0-9._/-]+$"},
-    "evidence": {
+    "witness": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["min_items", "max_items", "allowed_paths", "digest_pattern", "media_types"],
+      "required": ["min_items", "max_items", "allowed_paths", "media_types"],
       "properties": {
         "min_items": {"type": "integer", "minimum": 0},
         "max_items": {"type": "integer", "minimum": 0},
@@ -32,7 +30,10 @@
         "payload_shape": {"type": ["object", "null"]}
       }
     },
-    "required_artifact_filenames": {"type": "array", "items": {"type": "string"}},
+    "required_witness_filenames": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
     "public_notes": {"type": "string", "minLength": 1},
     "submission_result": {"type": "object"},
     "schema_definitions": {"type": "object"},

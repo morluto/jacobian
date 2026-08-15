@@ -30,6 +30,27 @@ def test_task_change_selects_only_its_owned_leaf(tmp_path: Path) -> None:
     assert all(reason.startswith("focused host validation:") for reason in plan.reasons)
 
 
+def test_task_change_without_a_leaf_uses_the_input_binding_fallback(
+    tmp_path: Path,
+) -> None:
+    task = "task-without-a-leaf"
+    suite = SimpleNamespace(tasks=(SimpleNamespace(path=Path(task)),))
+
+    plan = host_validation_plan(
+        tmp_path,
+        [f"benchmarks/datasets/mathematical-benchmarks-v1/{task}/tests/verifier.py"],
+        {"mathematical-benchmarks-v1": suite},
+    )
+
+    assert [(entry.selector, entry.keyword) for entry in plan.entries] == [
+        (
+            "benchmarks/validation/mathematical_benchmarks_v1/"
+            "test_input_binding_contracts.py",
+            task,
+        ),
+    ]
+
+
 def test_shared_harness_change_explains_full_validation(tmp_path: Path) -> None:
     support = tmp_path / "benchmarks/validation/mathematical_benchmarks_v1/support.py"
     support.parent.mkdir(parents=True)

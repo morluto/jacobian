@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-import re
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -16,17 +15,15 @@ from verifier_support import (
     workspace_input_is_bound,
 )
 
-Q_PATTERN = re.compile(r"^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$")
-MAX_Q_CHARS = 128
-
 
 def _q(x):
-    if not isinstance(x, str) or len(x) > MAX_Q_CHARS or Q_PATTERN.fullmatch(x) is None:
+    if not isinstance(x, dict) or set(x) != {"numerator", "denominator"}:
         raise ValueError
-    q = Fraction(x)
-    if str(q) != x:
+    numerator = x["numerator"]
+    denominator = x["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         raise ValueError
-    return q
+    return Fraction(numerator, denominator)
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

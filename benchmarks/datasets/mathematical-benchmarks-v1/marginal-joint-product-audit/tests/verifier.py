@@ -1,5 +1,4 @@
 import json
-import re
 from collections import defaultdict
 from fractions import Fraction
 from pathlib import Path
@@ -19,16 +18,17 @@ ATTAINABLE_PRODUCTS = frozenset(x * y for x in SUPPORT for y in SUPPORT)
 
 
 def canonical_fraction(value):
-    if (
-        not isinstance(value, str)
-        or re.fullmatch(r"(?:0|1|[1-9][0-9]*/[1-9][0-9]*)", value) is None
-    ):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        parsed = Fraction(value)
+        parsed = Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    if parsed < 0 or parsed > 1 or str(parsed) != value:
+    if parsed < 0 or parsed > 1:
         return None
     return parsed
 

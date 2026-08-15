@@ -17,7 +17,10 @@ result = {
         "UNDECLARED_BUDGET_ADDED",
     ],
     "selected_indices": selected,
-    "attained_ratio": str(ratio),
+    "attained_ratio": {
+        "numerator": ratio.numerator,
+        "denominator": ratio.denominator,
+    },
     "constant_residual": q * data["alpha"] - p * data["beta"],
     "item_residuals": [
         {"index": index, "value": value} for index, value in enumerate(residuals)

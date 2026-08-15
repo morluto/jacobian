@@ -8,7 +8,7 @@ negative branch `-B/2` for vertex 5, where
 `At=(33+s)/6`, `Bt=(33-s)/6`, and `AB=8/3`.
 
 Audit all 21 unordered vertex pairs exactly. Express each squared distance as
-`a+b*s` using canonical rational strings, identify every claimed edge that is
+`a+b*s` using structured `{numerator, denominator}` objects, identify every claimed edge that is
 not unit under the corrupted branch, then repair vertex 5 to `+B/2` and submit
 the complete corrected pair table and exact 11-edge unit-distance graph.
 Pair-table rows and edge collections may appear in any order, and either endpoint

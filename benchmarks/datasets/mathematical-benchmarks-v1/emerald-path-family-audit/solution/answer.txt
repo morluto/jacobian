@@ -3,4 +3,4 @@ alpha: 3/2
 beta: 1/2
 even_offset: 0
 odd_offset: 1/2
-trace_sha256: cab5c5c268a28a9390690cf842cffb505d2d6902a9fb32d3f893bedd2d78deaa
+trace_sha256: 626775c15ce5b8c547a39c5348efd7c21de2f09ff4b7b97309f9ebd4161fe2a4

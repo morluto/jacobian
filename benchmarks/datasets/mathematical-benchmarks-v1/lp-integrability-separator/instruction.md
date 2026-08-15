@@ -9,14 +9,13 @@ Use the frozen two-tail family
 
 `f(x) = x^(-1/2) (log x)^(-beta)` for `x > e`,
 
-but choose your own canonical rational `beta > 1/2`. Submit exact transformed
+but choose your own structured rational `beta > 1/2`. Submit exact transformed
 `p=2` integrals and a regime certificate for the origin obstruction at every
 `p>2` and infinity obstruction at every `0<p<2`. Do not use numeric sampling.
 
-Every rational field (`beta`, `p2_log_exponent`, `p2_integral_each`) is limited
-to 80 characters and accepts any mathematically equivalent rational written in
-canonical or non-canonical form (for example `1`, `1/1`, `2/1`, `-2`, `-2/1`
-are all accepted); the verifier compares exact values, not lexical strings.
+Every rational field (`beta`, `p2_log_exponent`, `p2_integral_each`) is a
+`{numerator, denominator}` object. Equivalent encodings such as `2/2` and `1`
+are accepted after exact `Fraction` normalization.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

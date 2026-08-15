@@ -39,7 +39,7 @@ def test_accepts_exact_symbolic_repair(tmp_path: Path) -> None:
 def test_rejects_corrupted_polynomial_certificate(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
-    submission["result"]["root_sum"] = "4/2010"
+    submission["result"]["root_sum"] = {"numerator": 4, "denominator": 2010}
     _rewrite(app, submission)
     assert _verifier._run_verifier(task, app, logs).reward == 0.0
 
@@ -50,7 +50,10 @@ def test_witness_binds_result_without_limitations(tmp_path: Path) -> None:
     payload = {
         "schema_version": "1",
         "task_id": TASK_ID,
-        "result": {**submission["result"], "root_sum": "4/2010"},
+        "result": {
+            **submission["result"],
+            "root_sum": {"numerator": 4, "denominator": 2010},
+        },
     }
     _rewrite(app, submission, payload=payload)
     result = _verifier._run_verifier(task, app, logs)

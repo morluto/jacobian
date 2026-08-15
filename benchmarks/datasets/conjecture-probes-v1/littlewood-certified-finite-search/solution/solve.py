@@ -16,6 +16,10 @@ LIMITATIONS = [
 SCALE = 10**80
 
 
+def _encode(value: Fraction) -> dict[str, int]:
+    return {"numerator": value.numerator, "denominator": value.denominator}
+
+
 def bounds(d, n):
     root = isqrt(d * SCALE * SCALE)
     lo = Fraction(root, SCALE)
@@ -33,8 +37,8 @@ def row(n):
         "n": n,
         "floors": [a[0], b[0]],
         "nearest": [a[1], b[1]],
-        "lower": str(n * a[2] * b[2]),
-        "upper": str(n * a[3] * b[3]),
+        "lower": _encode(n * a[2] * b[2]),
+        "upper": _encode(n * a[3] * b[3]),
     }
 
 
@@ -46,7 +50,13 @@ def main():
     best = None
     for n in range(1, 2001):
         current = row(n)
-        if best is None or Fraction(current["upper"]) < Fraction(best["lower"]):
+        upper = Fraction(current["upper"]["numerator"], current["upper"]["denominator"])
+        lower = (
+            None
+            if best is None
+            else Fraction(best["lower"]["numerator"], best["lower"]["denominator"])
+        )
+        if best is None or upper < lower:
             records.append(current)
             best = current
     result = {

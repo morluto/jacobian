@@ -5,8 +5,9 @@ Construct a non-irrotational steady two-dimensional polynomial velocity field
 `QQ`, such that `div(u)=0` and `(u·grad)u + grad(p) - Δu = 0`.
 
 Use the monomial orders frozen in `/app/input.json`. Submit every coefficient
-as a canonical rational string (`0`, `-3`, `5/7`; reduced denominator positive)
-and include the independently checkable coefficient vectors for divergence,
+as a structured `{numerator, denominator}` object. Equivalent encodings such as
+`10/14` and `5/7` are accepted after exact `Fraction` normalization. Include
+the independently checkable coefficient vectors for divergence,
 both momentum residuals, and scalar vorticity `∂x u2 - ∂y u1`. The vorticity
 must be nonzero, so the zero field and pure-gradient shortcuts are rejected.
 

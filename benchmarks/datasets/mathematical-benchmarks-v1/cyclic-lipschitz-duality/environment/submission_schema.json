@@ -25,7 +25,7 @@
       "additionalProperties": false,
       "properties": {
         "dual_value": {
-          "const": "15"
+          "$ref": "#/$defs/rational"
         },
         "flow": {
           "items": {
@@ -36,7 +36,7 @@
           "type": "array"
         },
         "primal_value": {
-          "const": "15"
+          "$ref": "#/$defs/rational"
         },
         "sequence": {
           "items": {

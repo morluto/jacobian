@@ -2,7 +2,10 @@
   "result": {
     "d2_delta_denominator": [
       {
-        "coefficient": "12",
+        "coefficient": {
+          "numerator": 12,
+          "denominator": 1
+        },
         "exponents": [
           0,
           0,
@@ -12,7 +15,10 @@
     ],
     "d2_delta_numerator": [
       {
-        "coefficient": "13",
+        "coefficient": {
+          "numerator": 13,
+          "denominator": 1
+        },
         "exponents": [
           1,
           2,
@@ -20,7 +26,10 @@
         ]
       },
       {
-        "coefficient": "-1",
+        "coefficient": {
+          "numerator": -1,
+          "denominator": 1
+        },
         "exponents": [
           1,
           0,
@@ -30,7 +39,10 @@
     ],
     "d_delta_inverse": [
       {
-        "coefficient": "1",
+        "coefficient": {
+          "numerator": 1,
+          "denominator": 1
+        },
         "exponents": [
           1,
           1,
@@ -40,7 +52,10 @@
     ],
     "delta_inverse": [
       {
-        "coefficient": "1",
+        "coefficient": {
+          "numerator": 1,
+          "denominator": 1
+        },
         "exponents": [
           0,
           3,
@@ -48,7 +63,10 @@
         ]
       },
       {
-        "coefficient": "-1",
+        "coefficient": {
+          "numerator": -1,
+          "denominator": 1
+        },
         "exponents": [
           0,
           0,
@@ -58,7 +76,10 @@
     ],
     "norm_polynomial": [
       {
-        "coefficient": "1",
+        "coefficient": {
+          "numerator": 1,
+          "denominator": 1
+        },
         "exponents": [
           4,
           0,
@@ -66,7 +87,10 @@
         ]
       },
       {
-        "coefficient": "-2",
+        "coefficient": {
+          "numerator": -2,
+          "denominator": 1
+        },
         "exponents": [
           2,
           1,
@@ -74,7 +98,10 @@
         ]
       },
       {
-        "coefficient": "1",
+        "coefficient": {
+          "numerator": 1,
+          "denominator": 1
+        },
         "exponents": [
           0,
           2,
@@ -82,7 +109,10 @@
         ]
       },
       {
-        "coefficient": "-1",
+        "coefficient": {
+          "numerator": -1,
+          "denominator": 1
+        },
         "exponents": [
           2,
           0,
@@ -90,7 +120,10 @@
         ]
       },
       {
-        "coefficient": "-2",
+        "coefficient": {
+          "numerator": -2,
+          "denominator": 1
+        },
         "exponents": [
           1,
           1,
@@ -98,7 +131,10 @@
         ]
       },
       {
-        "coefficient": "-1",
+        "coefficient": {
+          "numerator": -1,
+          "denominator": 1
+        },
         "exponents": [
           0,
           2,
@@ -106,7 +142,10 @@
         ]
       },
       {
-        "coefficient": "-2",
+        "coefficient": {
+          "numerator": -2,
+          "denominator": 1
+        },
         "exponents": [
           1,
           0,
@@ -114,7 +153,10 @@
         ]
       },
       {
-        "coefficient": "-2",
+        "coefficient": {
+          "numerator": -2,
+          "denominator": 1
+        },
         "exponents": [
           0,
           1,
@@ -122,7 +164,10 @@
         ]
       },
       {
-        "coefficient": "-1",
+        "coefficient": {
+          "numerator": -1,
+          "denominator": 1
+        },
         "exponents": [
           0,
           0,
@@ -132,7 +177,10 @@
     ],
     "p_denominator": [
       {
-        "coefficient": "1",
+        "coefficient": {
+          "numerator": 1,
+          "denominator": 1
+        },
         "exponents": [
           1,
           0,
@@ -142,7 +190,10 @@
     ],
     "p_numerator": [
       {
-        "coefficient": "1",
+        "coefficient": {
+          "numerator": 1,
+          "denominator": 1
+        },
         "exponents": [
           0,
           1,
@@ -152,7 +203,10 @@
     ],
     "q_denominator": [
       {
-        "coefficient": "1",
+        "coefficient": {
+          "numerator": 1,
+          "denominator": 1
+        },
         "exponents": [
           2,
           0,
@@ -162,7 +216,10 @@
     ],
     "q_numerator": [
       {
-        "coefficient": "13",
+        "coefficient": {
+          "numerator": 13,
+          "denominator": 1
+        },
         "exponents": [
           0,
           2,
@@ -170,7 +227,10 @@
         ]
       },
       {
-        "coefficient": "-12",
+        "coefficient": {
+          "numerator": -12,
+          "denominator": 1
+        },
         "exponents": [
           1,
           0,
@@ -180,7 +240,10 @@
     ],
     "s_forward": [
       {
-        "coefficient": "1",
+        "coefficient": {
+          "numerator": 1,
+          "denominator": 1
+        },
         "exponents": [
           0,
           0,
@@ -188,7 +251,10 @@
         ]
       },
       {
-        "coefficient": "-1",
+        "coefficient": {
+          "numerator": -1,
+          "denominator": 1
+        },
         "exponents": [
           1,
           0,

@@ -11,12 +11,13 @@ E = Path("/tests")
 
 
 def parse_fraction(value):
-    if not isinstance(value, str) or len(value) > 80:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
         raise ValueError
-    parsed = Fraction(value)
-    if str(parsed) != value:
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         raise ValueError
-    return parsed
+    return Fraction(numerator, denominator)
 
 
 def evaluate(coefficients, x):

@@ -7,41 +7,119 @@
       "properties": {
         "p_coefficients": {
           "items": {
-            "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
           },
           "minItems": 3,
           "type": "array"
         },
         "p_roots": {
           "items": {
-            "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
           },
           "type": "array"
         },
         "q_coefficients": {
           "items": {
-            "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
           },
           "minItems": 2,
           "type": "array"
         },
         "q_roots": {
           "items": {
-            "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
           },
           "type": "array"
         },
         "x1": {
-          "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "denominator": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "numerator": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
         },
         "x2": {
-          "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "denominator": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "numerator": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
         }
       },
       "required": [

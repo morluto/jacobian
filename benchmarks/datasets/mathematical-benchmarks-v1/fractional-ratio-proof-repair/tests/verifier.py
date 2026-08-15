@@ -1,5 +1,4 @@
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -41,17 +40,19 @@ def _selected_indices_ok(selected, data):
 
 
 def _parse_ratio(ratio_text):
-    if (
-        not isinstance(ratio_text, str)
-        or len(ratio_text) > 64
-        or re.fullmatch(r"[1-9][0-9]*/[1-9][0-9]*", ratio_text) is None
-    ):
+    if not isinstance(ratio_text, dict) or set(ratio_text) != {
+        "numerator",
+        "denominator",
+    }:
+        return None
+    numerator = ratio_text["numerator"]
+    denominator = ratio_text["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        ratio = Fraction(ratio_text)
+        return Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    return ratio if str(ratio) == ratio_text else None
 
 
 def _residuals_ok(submitted, residuals):

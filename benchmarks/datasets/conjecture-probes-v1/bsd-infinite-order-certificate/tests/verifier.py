@@ -22,14 +22,14 @@ TASK_ID = "jacobian/bsd-infinite-order-certificate"
 
 
 def _rat(value: object) -> Fraction:
-    if not isinstance(value, str) or len(value) > 128:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
         raise ValueError
-    number = Fraction(value)
-    if (
-        str(number) != value
-        or len(str(abs(number.numerator))) > 80
-        or len(str(number.denominator)) > 80
-    ):
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        raise ValueError
+    number = Fraction(numerator, denominator)
+    if len(str(abs(number.numerator))) > 80 or len(str(number.denominator)) > 80:
         raise ValueError
     return number
 

@@ -1,16 +1,4 @@
 {
-  "witness": {
-    "allowed_paths": [
-      "evidence/answer.txt"
-    ],
-    "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "max_items": 1,
-    "media_types": [
-      "text/plain"
-    ],
-    "min_items": 1,
-    "payload_shape": null
-  },
   "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.",
   "required_witness_filenames": [
     "evidence/answer.txt"
@@ -22,17 +10,56 @@
     "additionalProperties": false,
     "properties": {
       "c": {
-        "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-        "type": "string"
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
       },
       "center": {
-        "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-        "type": "string"
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
       },
       "circle_coefficients": {
         "items": {
-          "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "denominator": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "numerator": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
         },
         "maxItems": 4,
         "minItems": 4,
@@ -40,32 +67,110 @@
       },
       "distance_coefficients": {
         "items": {
-          "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "denominator": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "numerator": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
         },
         "maxItems": 4,
         "minItems": 4,
         "type": "array"
       },
       "k": {
-        "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-        "type": "string"
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
       },
       "multiplier": {
-        "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-        "type": "string"
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
       },
       "p": {
-        "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-        "type": "string"
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
       },
       "q": {
-        "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-        "type": "string"
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
       },
       "radius": {
-        "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-        "type": "string"
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
       }
     },
     "required": [
@@ -89,17 +194,56 @@
         "additionalProperties": false,
         "properties": {
           "c": {
-            "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
           },
           "center": {
-            "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
           },
           "circle_coefficients": {
             "items": {
-              "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-              "type": "string"
+              "additionalProperties": false,
+              "properties": {
+                "denominator": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "numerator": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "numerator",
+                "denominator"
+              ],
+              "type": "object"
             },
             "maxItems": 4,
             "minItems": 4,
@@ -107,32 +251,110 @@
           },
           "distance_coefficients": {
             "items": {
-              "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-              "type": "string"
+              "additionalProperties": false,
+              "properties": {
+                "denominator": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "numerator": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "numerator",
+                "denominator"
+              ],
+              "type": "object"
             },
             "maxItems": 4,
             "minItems": 4,
             "type": "array"
           },
           "k": {
-            "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
           },
           "multiplier": {
-            "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
           },
           "p": {
-            "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
           },
           "q": {
-            "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
           },
           "radius": {
-            "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
           }
         },
         "required": [
@@ -177,5 +399,17 @@
     ],
     "type": "object"
   },
-  "task_id": "jacobian/apollonius-gap-repair"
+  "task_id": "jacobian/apollonius-gap-repair",
+  "witness": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  }
 }

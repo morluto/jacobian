@@ -1,4 +1,6 @@
 {
+  "schema_version": "1",
+  "task_id": "jacobian/rational-pole-vieta-audit",
   "result": {
     "cleared_polynomial_coefficients": [
       0,
@@ -51,8 +53,9 @@
         "residual": 24
       }
     ],
-    "root_sum": "2/1005"
-  },
-  "schema_version": "1",
-  "task_id": "jacobian/rational-pole-vieta-audit"
+    "root_sum": {
+      "numerator": 2,
+      "denominator": 1005
+    }
+  }
 }

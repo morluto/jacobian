@@ -1,24 +1,25 @@
 {
-  "witness": {
-    "allowed_paths": [
-      "evidence/answer.txt"
-    ],
-    "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "max_items": 1,
-    "media_types": [
-      "application/json"
-    ],
-    "min_items": 1,
-    "payload_shape": null
-  },
   "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.",
   "required_witness_filenames": [
     "evidence/answer.txt"
   ],
   "schema_definitions": {
     "rat": {
-      "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$",
-      "type": "string"
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
     },
     "record": {
       "additionalProperties": false,
@@ -103,8 +104,21 @@
   "submission_schema": {
     "$defs": {
       "rat": {
-        "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$",
-        "type": "string"
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
       },
       "record": {
         "additionalProperties": false,
@@ -216,5 +230,17 @@
     ],
     "type": "object"
   },
-  "task_id": "jacobian/littlewood-certified-finite-search"
+  "task_id": "jacobian/littlewood-certified-finite-search",
+  "witness": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  }
 }

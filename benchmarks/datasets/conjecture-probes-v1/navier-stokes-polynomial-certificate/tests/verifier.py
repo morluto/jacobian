@@ -22,14 +22,14 @@ MAX_EVIDENCE_BYTES = None
 
 
 def _rat(value: object, num_bound: int = 50, den_bound: int = 20) -> Fraction:
-    if not isinstance(value, str) or len(value) > 32:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
         raise ValueError
-    parsed = Fraction(value)
-    if (
-        str(parsed) != value
-        or abs(parsed.numerator) > num_bound
-        or parsed.denominator > den_bound
-    ):
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        raise ValueError
+    parsed = Fraction(numerator, denominator)
+    if abs(parsed.numerator) > num_bound or parsed.denominator > den_bound:
         raise ValueError
     return parsed
 

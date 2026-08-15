@@ -1,7 +1,6 @@
 # Exact rational linear solution
 
-Solve the exact linear system in `input.json` over the rationals. Return one
-canonical rational string for each declared variable. Write `submission.json`
+Solve the exact linear system in `input.json` over the rationals. Return one structured `{numerator, denominator}` object for each declared variable. Equivalent encodings such as `34/14` and `17/7` are accepted after exact `Fraction` normalization. Write `submission.json`
 and the declared task-specific witness at `evidence/answer.txt` to the exact
 agent-visible schema.
 

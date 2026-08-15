@@ -37,6 +37,19 @@ CLAIMED = {
 }
 
 
+def _q(value):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        return None
+    try:
+        return Fraction(numerator, denominator)
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
 def _qadd(x, y):
     return x[0] + y[0], x[1] + y[1]
 
@@ -113,18 +126,14 @@ def _table(
         if (
             not isinstance(distance, list)
             or len(distance) != 2
-            or any(not isinstance(x, str) for x in distance)
             or type(unit) is not bool
         ):
             return False
-        try:
-            parsed = Fraction(distance[0]), Fraction(distance[1])
-        except (ValueError, ZeroDivisionError):
+        parsed = tuple(_q(part) for part in distance)
+        if any(part is None for part in parsed):
             return False
         key = tuple(sorted(pair))
         if key in seen or parsed != expected[key] or unit != (parsed == (1, 0)):
-            return False
-        if any(str(part) != raw for part, raw in zip(parsed, distance, strict=True)):
             return False
         seen.add(key)
     return seen == set(expected)

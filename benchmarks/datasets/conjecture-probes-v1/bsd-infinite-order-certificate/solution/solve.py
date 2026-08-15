@@ -19,8 +19,12 @@ def add(
     return x3, slope * (x1 - x3) - y1
 
 
-def pair(point: tuple[Fraction, Fraction]) -> list[str]:
-    return [str(point[0]), str(point[1])]
+def encode(value: Fraction) -> dict[str, int]:
+    return {"numerator": value.numerator, "denominator": value.denominator}
+
+
+def pair(point: tuple[Fraction, Fraction]) -> list[dict[str, int]]:
+    return [encode(point[0]), encode(point[1])]
 
 
 def main() -> None:

@@ -22,14 +22,26 @@
     ],
     "distance_distribution": {
       "A0": "1",
-      "A4": "15",
-      "A6": "2"
+      "A4": {
+        "numerator": 15,
+        "denominator": 1
+      },
+      "A6": {
+        "numerator": 2,
+        "denominator": 1
+      }
     },
     "upper_bound_certificate": {
       "bound": 18,
       "dual_multipliers": {
-        "order_1": {"denominator": 12, "numerator": 7},
-        "order_2": {"denominator": 6, "numerator": 1}
+        "order_1": {
+          "denominator": 12,
+          "numerator": 7
+        },
+        "order_2": {
+          "denominator": 6,
+          "numerator": 1
+        }
       },
       "krawtchouk_rows": [
         {

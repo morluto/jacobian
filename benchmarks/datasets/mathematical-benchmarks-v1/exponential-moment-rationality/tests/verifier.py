@@ -86,6 +86,19 @@ def _monomial(exponents, coefficient=1):
     return {tuple(exponents): Fraction(coefficient)}
 
 
+def _parse_coefficient(value):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        return None
+    try:
+        return Fraction(numerator, denominator)
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
 def _parse_polynomial(value, maximum_degree):
     if not isinstance(value, list) or not value or len(value) > 70:
         return None
@@ -101,16 +114,9 @@ def _parse_polynomial(value, maximum_degree):
             or sum(exponents) > maximum_degree
         ):
             return None
-        try:
-            coefficient = Fraction(term["coefficient"])
-        except (TypeError, ValueError, ZeroDivisionError):
-            return None
+        coefficient = _parse_coefficient(term["coefficient"])
         exponent = tuple(exponents)
-        if (
-            coefficient == 0
-            or str(coefficient) != term["coefficient"]
-            or exponent in result
-        ):
+        if coefficient is None or coefficient == 0 or exponent in result:
             return None
         result[exponent] = coefficient
     return result

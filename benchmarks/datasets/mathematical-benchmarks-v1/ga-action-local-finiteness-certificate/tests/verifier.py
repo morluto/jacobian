@@ -2,7 +2,6 @@
 
 import json
 import math
-import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -15,9 +14,6 @@ from verifier_support import (
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 DIMENSION = 5
-
-
-_RATIONAL_PATTERN = re.compile(r"^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$")
 
 
 def _load_frozen_input() -> dict:
@@ -33,19 +29,16 @@ def _load_frozen_input() -> dict:
 
 
 def _rational(value: object) -> Fraction | None:
-    if not isinstance(value, str) or not _RATIONAL_PATTERN.match(value):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        return Fraction(value)
-    except (ValueError, ZeroDivisionError, MemoryError):
+        return Fraction(numerator, denominator)
+    except (ValueError, ZeroDivisionError):
         return None
-
-
-def _canonical_rational(value: object) -> Fraction | None:
-    result = _rational(value)
-    if result is None:
-        return None
-    return result if str(result) == value else None
 
 
 def _xy_poly(value: object) -> dict[tuple[int, int], Fraction] | None:
@@ -61,7 +54,7 @@ def _xy_poly(value: object) -> dict[tuple[int, int], Fraction] | None:
         }:
             return None
         x_degree, y_degree = term["x_degree"], term["y_degree"]
-        coefficient = _canonical_rational(term["coefficient"])
+        coefficient = _rational(term["coefficient"])
         exponent = (x_degree, y_degree)
         if (
             not isinstance(x_degree, int)
@@ -89,7 +82,7 @@ def _t_poly(value: object) -> dict[int, Fraction] | None:
         if not isinstance(term, dict) or set(term) != {"coefficient", "degree"}:
             return None
         degree = term["degree"]
-        coefficient = _canonical_rational(term["coefficient"])
+        coefficient = _rational(term["coefficient"])
         if (
             not isinstance(degree, int)
             or isinstance(degree, bool)

@@ -1,6 +1,9 @@
 {
   "result": {
-    "beta": "1",
+    "beta": {
+      "numerator": 1,
+      "denominator": 1
+    },
     "critical_p": "2",
     "infinity_power_coefficient": "-1/2",
     "lower_regime": {
@@ -8,8 +11,14 @@
       "p_interval": "0<p<2"
     },
     "origin_power_coefficient": "-1/2",
-    "p2_integral_each": "1",
-    "p2_log_exponent": "-2",
+    "p2_integral_each": {
+      "numerator": 1,
+      "denominator": 1
+    },
+    "p2_log_exponent": {
+      "numerator": -2,
+      "denominator": 1
+    },
     "upper_regime": {
       "obstruction": "ORIGIN_POWER_SINGULARITY",
       "p_interval": "p>2"

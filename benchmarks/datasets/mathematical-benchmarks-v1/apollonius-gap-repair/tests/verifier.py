@@ -1,5 +1,4 @@
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -12,7 +11,6 @@ from verifier_support import (
 )
 
 WORKSPACE, TESTS = Path("/app"), Path("/tests")
-RATIONAL = re.compile(r"^-?(?:0|[1-9][0-9]{0,5})(?:/[1-9][0-9]{0,5})?$")
 
 
 def _load() -> dict[str, Any]:
@@ -24,13 +22,23 @@ def _load() -> dict[str, Any]:
 
 
 def _q(value: object) -> Fraction | None:
-    if not isinstance(value, str) or RATIONAL.fullmatch(value) is None:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        parsed = Fraction(value)
+        return Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    return parsed if str(parsed) == value else None
+
+
+def _format_q(value: object) -> str | None:
+    parsed = _q(value)
+    if parsed is None:
+        return None
+    return str(parsed)
 
 
 def _qs(value: object) -> list[Fraction] | None:
@@ -188,19 +196,22 @@ def _evidence(value: object, result: object) -> bool:
         return False
     circle = result.get("circle_coefficients")
     distance = result.get("distance_coefficients")
-    multiplier = result.get("multiplier")
-    if not all(
-        isinstance(items, list)
-        and len(items) == 4
-        and all(isinstance(item, str) for item in items)
-        for items in (circle, distance)
-    ) or not isinstance(multiplier, str):
+    multiplier = _format_q(result.get("multiplier"))
+    if (
+        not isinstance(circle, list)
+        or not isinstance(distance, list)
+        or multiplier is None
+    ):
+        return False
+    circle_text = [_format_q(item) for item in circle]
+    distance_text = [_format_q(item) for item in distance]
+    if None in circle_text or None in distance_text:
         return False
     certificate = [
         "apollonius-coefficient-certificate-v1",
         f"multiplier: {multiplier}",
-        "circle_coefficients: " + ",".join(circle),
-        "distance_coefficients: " + ",".join(distance),
+        "circle_coefficients: " + ",".join(circle_text),
+        "distance_coefficients: " + ",".join(distance_text),
     ]
     encoded_certificate = _encode_certificate_lines(certificate)
     if encoded_certificate is None:

@@ -1,24 +1,69 @@
 {
   "result": {
-    "c": "3",
-    "center": "4",
+    "c": {
+      "numerator": 3,
+      "denominator": 1
+    },
+    "center": {
+      "numerator": 4,
+      "denominator": 1
+    },
     "circle_coefficients": [
-      "1",
-      "1",
-      "-8",
-      "12"
+      {
+        "numerator": 1,
+        "denominator": 1
+      },
+      {
+        "numerator": 1,
+        "denominator": 1
+      },
+      {
+        "numerator": -8,
+        "denominator": 1
+      },
+      {
+        "numerator": 12,
+        "denominator": 1
+      }
     ],
     "distance_coefficients": [
-      "-3",
-      "-3",
-      "24",
-      "-36"
+      {
+        "numerator": -3,
+        "denominator": 1
+      },
+      {
+        "numerator": -3,
+        "denominator": 1
+      },
+      {
+        "numerator": 24,
+        "denominator": 1
+      },
+      {
+        "numerator": -36,
+        "denominator": 1
+      }
     ],
-    "k": "2",
-    "multiplier": "-3",
-    "p": "2",
-    "q": "6",
-    "radius": "2"
+    "k": {
+      "numerator": 2,
+      "denominator": 1
+    },
+    "multiplier": {
+      "numerator": -3,
+      "denominator": 1
+    },
+    "p": {
+      "numerator": 2,
+      "denominator": 1
+    },
+    "q": {
+      "numerator": 6,
+      "denominator": 1
+    },
+    "radius": {
+      "numerator": 2,
+      "denominator": 1
+    }
   },
   "witness": [
     {

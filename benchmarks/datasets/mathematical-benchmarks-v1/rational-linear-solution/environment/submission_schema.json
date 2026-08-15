@@ -9,12 +9,38 @@
           "additionalProperties": false,
           "properties": {
             "x": {
-              "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
-              "type": "string"
+              "additionalProperties": false,
+              "properties": {
+                "denominator": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "numerator": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "numerator",
+                "denominator"
+              ],
+              "type": "object"
             },
             "y": {
-              "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
-              "type": "string"
+              "additionalProperties": false,
+              "properties": {
+                "denominator": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "numerator": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "numerator",
+                "denominator"
+              ],
+              "type": "object"
             }
           },
           "required": [

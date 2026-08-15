@@ -1,8 +1,14 @@
 {
   "result": {
     "solution": {
-      "x": "17/7",
-      "y": "5/7"
+      "x": {
+        "numerator": 17,
+        "denominator": 7
+      },
+      "y": {
+        "numerator": 5,
+        "denominator": 7
+      }
     }
   },
   "witness": [

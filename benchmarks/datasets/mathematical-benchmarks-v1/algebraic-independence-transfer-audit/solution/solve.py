@@ -1,9 +1,17 @@
 import json
+from fractions import Fraction
 from pathlib import Path
 
 
 def term(coefficient, exponents):
-    return {"coefficient": str(coefficient), "exponents": exponents}
+    parsed = Fraction(coefficient)
+    return {
+        "coefficient": {
+            "numerator": parsed.numerator,
+            "denominator": parsed.denominator,
+        },
+        "exponents": exponents,
+    }
 
 
 result = {

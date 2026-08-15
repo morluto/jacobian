@@ -1,6 +1,9 @@
 {
   "result": {
-    "dual_value": "15",
+    "dual_value": {
+      "numerator": 15,
+      "denominator": 1
+    },
     "flow": [
       {
         "denominator": 8,
@@ -243,7 +246,10 @@
         "numerator": 11
       }
     ],
-    "primal_value": "15",
+    "primal_value": {
+      "numerator": 15,
+      "denominator": 1
+    },
     "sequence": [
       {
         "denominator": 1,

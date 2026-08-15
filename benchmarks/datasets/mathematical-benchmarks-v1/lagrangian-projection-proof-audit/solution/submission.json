@@ -2,129 +2,285 @@
   "result": {
     "D": [
       [
-        "1",
-        "0"
+        {
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "numerator": 0,
+          "denominator": 1
+        }
       ],
       [
-        "0",
-        "1"
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 1,
+          "denominator": 1
+        }
       ],
       [
-        "0",
-        "1/2"
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 1,
+          "denominator": 2
+        }
       ],
       [
-        "0",
-        "0"
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 0,
+          "denominator": 1
+        }
       ]
     ],
     "P": [
       [
-        "1",
-        "0"
+        {
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "numerator": 0,
+          "denominator": 1
+        }
       ],
       [
-        "0",
-        "1"
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 1,
+          "denominator": 1
+        }
       ]
     ],
     "Q": [
       [
-        "1",
-        "0"
+        {
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "numerator": 0,
+          "denominator": 1
+        }
       ],
       [
-        "0",
-        "1"
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 1,
+          "denominator": 1
+        }
       ]
     ],
     "W": [
       [
-        "1",
-        "2/5"
+        {
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "numerator": 2,
+          "denominator": 5
+        }
       ],
       [
-        "0",
-        "1"
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 1,
+          "denominator": 1
+        }
       ],
       [
-        "-1",
-        "1/2"
+        {
+          "numerator": -1,
+          "denominator": 1
+        },
+        {
+          "numerator": 1,
+          "denominator": 2
+        }
       ],
       [
-        "0",
-        "-4/5"
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": -4,
+          "denominator": 5
+        }
       ]
     ],
     "corrected_first_projection": [
       [
-        "1",
-        "2/5"
+        {
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "numerator": 2,
+          "denominator": 5
+        }
       ],
       [
-        "-2/5",
-        "1"
+        {
+          "numerator": -2,
+          "denominator": 5
+        },
+        {
+          "numerator": 1,
+          "denominator": 1
+        }
       ]
     ],
     "corrected_second_projection": [
       [
-        "1",
-        "-1/2"
+        {
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "numerator": -1,
+          "denominator": 2
+        }
       ],
       [
-        "1/2",
-        "1"
+        {
+          "numerator": 1,
+          "denominator": 2
+        },
+        {
+          "numerator": 1,
+          "denominator": 1
+        }
       ]
     ],
     "error_location": "ARBITRARY_D_ASSUMED_LAGRANGIAN",
     "gram": [
       [
-        "1",
-        "0"
+        {
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "numerator": 0,
+          "denominator": 1
+        }
       ],
       [
-        "0",
-        "5/4"
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 5,
+          "denominator": 4
+        }
       ]
     ],
     "inverse_gram": [
       [
-        "1",
-        "0"
+        {
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "numerator": 0,
+          "denominator": 1
+        }
       ],
       [
-        "0",
-        "4/5"
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 4,
+          "denominator": 5
+        }
       ]
     ],
     "lagrangian_defect": [
       [
-        "0",
-        "1/2"
+        {
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "numerator": 1,
+          "denominator": 2
+        }
       ],
       [
-        "-1/2",
-        "0"
+        {
+          "numerator": -1,
+          "denominator": 2
+        },
+        {
+          "numerator": 0,
+          "denominator": 1
+        }
       ]
     ],
     "naive_P": [
       [
-        "1",
-        "2/5"
+        {
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "numerator": 2,
+          "denominator": 5
+        }
       ],
       [
-        "-2/5",
-        "1"
+        {
+          "numerator": -2,
+          "denominator": 5
+        },
+        {
+          "numerator": 1,
+          "denominator": 1
+        }
       ]
     ],
     "naive_Q": [
       [
-        "1",
-        "-1/2"
+        {
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "numerator": -1,
+          "denominator": 2
+        }
       ],
       [
-        "1/2",
-        "1"
+        {
+          "numerator": 1,
+          "denominator": 2
+        },
+        {
+          "numerator": 1,
+          "denominator": 1
+        }
       ]
     ]
   }

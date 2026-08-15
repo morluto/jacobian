@@ -6,7 +6,7 @@ Submit the three finite roots of `t(1-t^2)`, their exact parametrized points, th
 
 `4*y*h - x*k - 3*x*y`
 
-at `(h,k)=(0,0)`. Rational values must be canonical strings. The verifier independently evaluates the finite parametrization, its homogeneous extension, the ellipse equation, and the normal condition. Ordering is canonical by point coordinates.
+at `(h,k)=(0,0)`. Rational values are `{numerator, denominator}` objects. Equivalent encodings such as `2/2` and `1` are accepted after exact `Fraction` normalization. The verifier independently evaluates the finite parametrization, its homogeneous extension, the ellipse equation, and the normal condition. Ordering is canonical by point coordinates.
 
 This Assurance audit certifies one chart-completeness defect on one ellipse. It does not establish any general concurrent-normals conjecture. Claim at most `COMPUTED`.
 

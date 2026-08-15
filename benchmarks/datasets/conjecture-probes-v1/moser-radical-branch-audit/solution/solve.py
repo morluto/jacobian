@@ -81,7 +81,10 @@ def table(corrupted: bool):
             rows.append(
                 {
                     "pair": [i, j],
-                    "distance_squared": [str(a), str(b)],
+                    "distance_squared": [
+                        {"numerator": a.numerator, "denominator": a.denominator},
+                        {"numerator": b.numerator, "denominator": b.denominator},
+                    ],
                     "unit": a == 1 and b == 0,
                 }
             )

@@ -16,10 +16,10 @@ For the frozen `2 x 3` matrix, compute a generating set for the ideal of all
 `2 x 2` minors, which cuts out the locus where the cokernel fiber dimension is
 at least one. You may submit any nonzero sparse rational polynomials generating
 the same ideal; order and choice of generators are not prescribed. A sparse
-term has a canonical rational `coefficient` and `exponents: [x_power,y_power]`.
-Duplicate monomials within one polynomial are forbidden. Canonical rationals
-are reduced integers or fractions with no leading zeros, exponent notation, or
-denominator `1`.
+term has a structured `{numerator, denominator}` `coefficient` and
+`exponents: [x_power,y_power]`. Duplicate monomials within one polynomial are
+forbidden. Equivalent encodings such as `2/2` and `1` are accepted after exact
+`Fraction` normalization.
 
 For every point listed in `input.json`, submit the exact specialized matrix
 rank and cokernel dimension. Each point must occur exactly once.

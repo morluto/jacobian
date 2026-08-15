@@ -1,16 +1,4 @@
 {
-  "witness": {
-    "allowed_paths": [
-      "evidence/answer.txt"
-    ],
-    "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "max_items": 1,
-    "media_types": [
-      "text/plain"
-    ],
-    "min_items": 1,
-    "payload_shape": null
-  },
   "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.",
   "required_witness_filenames": [
     "evidence/answer.txt"
@@ -40,7 +28,7 @@
     "additionalProperties": false,
     "properties": {
       "dual_value": {
-        "const": "15"
+        "$ref": "#/$defs/rational"
       },
       "flow": {
         "items": {
@@ -51,7 +39,7 @@
         "type": "array"
       },
       "primal_value": {
-        "const": "15"
+        "$ref": "#/$defs/rational"
       },
       "sequence": {
         "items": {
@@ -71,7 +59,6 @@
     "type": "object"
   },
   "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$defs": {
       "rational": {
         "additionalProperties": false,
@@ -91,13 +78,14 @@
         "type": "object"
       }
     },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
       "result": {
         "additionalProperties": false,
         "properties": {
           "dual_value": {
-            "const": "15"
+            "$ref": "#/$defs/rational"
           },
           "flow": {
             "items": {
@@ -108,7 +96,7 @@
             "type": "array"
           },
           "primal_value": {
-            "const": "15"
+            "$ref": "#/$defs/rational"
           },
           "sequence": {
             "items": {
@@ -156,5 +144,17 @@
     ],
     "type": "object"
   },
-  "task_id": "jacobian/cyclic-lipschitz-duality"
+  "task_id": "jacobian/cyclic-lipschitz-duality",
+  "witness": {
+    "allowed_paths": [
+      "evidence/answer.txt"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "text/plain"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  }
 }

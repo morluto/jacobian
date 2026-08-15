@@ -1,16 +1,4 @@
 {
-  "witness": {
-    "allowed_paths": [
-      "evidence/answer.json"
-    ],
-    "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "max_items": 1,
-    "media_types": [
-      "application/json"
-    ],
-    "min_items": 1,
-    "payload_shape": null
-  },
   "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.",
   "required_witness_filenames": [
     "evidence/answer.json"
@@ -25,8 +13,21 @@
       "type": "array"
     },
     "rational": {
-      "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
-      "type": "string"
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
     }
   },
   "schema_version": "1",
@@ -85,8 +86,21 @@
         "type": "array"
       },
       "rational": {
-        "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
-        "type": "string"
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
       }
     },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -164,5 +178,17 @@
     ],
     "type": "object"
   },
-  "task_id": "jacobian/mahler-leading-coefficient-audit"
+  "task_id": "jacobian/mahler-leading-coefficient-audit",
+  "witness": {
+    "allowed_paths": [
+      "evidence/answer.json"
+    ],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 1,
+    "media_types": [
+      "application/json"
+    ],
+    "min_items": 1,
+    "payload_shape": null
+  }
 }

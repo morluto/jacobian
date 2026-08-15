@@ -5,6 +5,7 @@ import json
 import shutil
 import subprocess
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 from benchmarks.validation._verifier_child import run_verifier_in_child
@@ -14,6 +15,15 @@ TASK = (
     ROOT
     / "benchmarks/datasets/conjecture-probes-v1/navier-stokes-polynomial-certificate"
 )
+
+
+def _q(value) -> dict[str, int]:
+    parsed = Fraction(value)
+    return {"numerator": parsed.numerator, "denominator": parsed.denominator}
+
+
+def _qs(values: list[object]) -> list[dict[str, int]]:
+    return [_q(item) for item in values]
 
 
 def _case(tmp_path: Path) -> tuple[Path, Path, dict]:
@@ -52,12 +62,12 @@ def test_oracle_and_alternative_scaled_rotation_pass(tmp_path: Path) -> None:
     assert _run(app, logs).reward == 1.0
     app, logs, submission = _case(tmp_path / "alt")
     submission["result"] = {
-        "velocity": [["0", "0", "-2"], ["0", "2", "0"]],
-        "pressure": ["0", "0", "0", "2", "0", "2"],
-        "divergence": ["0"],
-        "momentum_x": ["0", "0", "0"],
-        "momentum_y": ["0", "0", "0"],
-        "vorticity": "4",
+        "velocity": [_qs(["0", "0", "-2"]), _qs(["0", "2", "0"])],
+        "pressure": _qs(["0", "0", "0", "2", "0", "2"]),
+        "divergence": _qs(["0"]),
+        "momentum_x": _qs(["0", "0", "0"]),
+        "momentum_y": _qs(["0", "0", "0"]),
+        "vorticity": _q("4"),
     }
     _write(app, submission)
     assert _run(app, logs).reward == 1.0
@@ -65,13 +75,13 @@ def test_oracle_and_alternative_scaled_rotation_pass(tmp_path: Path) -> None:
 
 def test_zero_field_and_wrong_residual_fail(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
-    submission["result"]["velocity"] = [["0"] * 3, ["0"] * 3]
-    submission["result"]["pressure"] = ["0"] * 6
-    submission["result"]["vorticity"] = "0"
+    submission["result"]["velocity"] = [_qs(["0"] * 3), _qs(["0"] * 3)]
+    submission["result"]["pressure"] = _qs(["0"] * 6)
+    submission["result"]["vorticity"] = _q("0")
     _write(app, submission)
     assert _run(app, logs).details["correctness"] == 0.0
     app, logs, submission = _case(tmp_path / "residual")
-    submission["result"]["momentum_x"][1] = "1"
+    submission["result"]["momentum_x"][1] = _q("1")
     _write(app, submission)
     assert _run(app, logs).reward == 0.0
 

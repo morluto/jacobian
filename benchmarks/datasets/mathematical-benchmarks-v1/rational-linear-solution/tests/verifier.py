@@ -15,16 +15,16 @@ E = Path("/tests")
 
 
 def q(v):
-    if not isinstance(v, str):
+    if not isinstance(v, dict) or set(v) != {"numerator", "denominator"}:
+        return None
+    numerator = v["numerator"]
+    denominator = v["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        value = Fraction(v)
-    except (ValueError, TypeError, ZeroDivisionError):
+        return Fraction(numerator, denominator)
+    except (ValueError, ZeroDivisionError):
         return None
-    canonical = str(value.numerator)
-    if value.denominator != 1:
-        canonical += f"/{value.denominator}"
-    return value if v == canonical else None
 
 
 def main():

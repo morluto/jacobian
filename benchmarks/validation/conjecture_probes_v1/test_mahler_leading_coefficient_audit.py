@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from fractions import Fraction
 from pathlib import Path
 
 from benchmarks.validation._source_module import load_task_verifier
@@ -14,13 +15,27 @@ def _module():
     return load_task_verifier(TASK, module_name="mahler_verifier")
 
 
+def _q(value) -> dict[str, int]:
+    parsed = Fraction(value)
+    return {"numerator": parsed.numerator, "denominator": parsed.denominator}
+
+
+def _pair(values) -> list[dict[str, int]]:
+    return [_q(item) for item in values]
+
+
 def _result():
     return {
         "factors": [[1, -3, 1], [1, -1, 1], [1, 1, 1], [2, -5, 2]],
-        "outside_contributions": [["3/2", "1/2"], ["1", "0"], ["1", "0"], ["2", "0"]],
-        "flawed_monic_result": ["3", "1"],
-        "leading_coefficient": "2",
-        "corrected_mahler_measure": ["6", "2"],
+        "outside_contributions": [
+            _pair(["3/2", "1/2"]),
+            _pair(["1", "0"]),
+            _pair(["1", "0"]),
+            _pair(["2", "0"]),
+        ],
+        "flawed_monic_result": _pair(["3", "1"]),
+        "leading_coefficient": _q("2"),
+        "corrected_mahler_measure": _pair(["6", "2"]),
     }
 
 
@@ -30,7 +45,7 @@ def test_oracle_mathematics():
 
 def test_rejects_missing_leading_coefficient():
     result = _result()
-    result["corrected_mahler_measure"] = ["3", "1"]
+    result["corrected_mahler_measure"] = _pair(["3", "1"])
     assert not _module().mathematics(result)
 
 
@@ -42,7 +57,10 @@ def test_rejects_corrupted_factor():
 
 def test_accepts_equivalent_public_rational_encoding():
     result = _result()
-    result["outside_contributions"][0] = ["6/4", "1/2"]
+    result["outside_contributions"][0] = [
+        {"numerator": 6, "denominator": 4},
+        {"numerator": 1, "denominator": 2},
+    ]
     assert _module().mathematics(result)
 
 
@@ -52,7 +70,7 @@ def test_rejects_malformed_contribution_collection_without_crashing():
     assert not _module().mathematics(result)
 
 
-def test_rejects_exponent_syntax_before_fraction_construction(monkeypatch):
+def test_rejects_string_rational_before_fraction_construction(monkeypatch):
     module = _module()
 
     def unexpected_fraction(_value):
@@ -64,7 +82,7 @@ def test_rejects_exponent_syntax_before_fraction_construction(monkeypatch):
     except ValueError:
         pass
     else:
-        raise AssertionError("exponent syntax must be rejected")
+        raise AssertionError("string rational was accepted")
 
 
 def test_evidence_comparison_preserves_json_types():

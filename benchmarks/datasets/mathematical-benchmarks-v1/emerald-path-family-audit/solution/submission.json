@@ -1,119 +1,179 @@
 {
   "result": {
-    "alpha": "3/2",
-    "beta": "1/2",
-    "even_offset": "0",
-    "odd_offset": "1/2",
+    "alpha": {
+      "numerator": 3,
+      "denominator": 2
+    },
+    "beta": {
+      "numerator": 1,
+      "denominator": 2
+    },
+    "even_offset": {
+      "numerator": 0,
+      "denominator": 1
+    },
+    "odd_offset": {
+      "numerator": 1,
+      "denominator": 2
+    },
     "trace": [
       {
         "floor": 0,
         "n": 0,
-        "value": "0",
+        "value": {
+          "numerator": 0,
+          "denominator": 1
+        },
         "x": 0,
         "y": 0
       },
       {
         "floor": 1,
         "n": 1,
-        "value": "3/2",
+        "value": {
+          "numerator": 3,
+          "denominator": 2
+        },
         "x": 1,
         "y": 0
       },
       {
         "floor": 2,
         "n": 2,
-        "value": "2",
+        "value": {
+          "numerator": 2,
+          "denominator": 1
+        },
         "x": 1,
         "y": 1
       },
       {
         "floor": 3,
         "n": 3,
-        "value": "7/2",
+        "value": {
+          "numerator": 7,
+          "denominator": 2
+        },
         "x": 2,
         "y": 1
       },
       {
         "floor": 4,
         "n": 4,
-        "value": "4",
+        "value": {
+          "numerator": 4,
+          "denominator": 1
+        },
         "x": 2,
         "y": 2
       },
       {
         "floor": 5,
         "n": 5,
-        "value": "11/2",
+        "value": {
+          "numerator": 11,
+          "denominator": 2
+        },
         "x": 3,
         "y": 2
       },
       {
         "floor": 6,
         "n": 6,
-        "value": "6",
+        "value": {
+          "numerator": 6,
+          "denominator": 1
+        },
         "x": 3,
         "y": 3
       },
       {
         "floor": 7,
         "n": 7,
-        "value": "15/2",
+        "value": {
+          "numerator": 15,
+          "denominator": 2
+        },
         "x": 4,
         "y": 3
       },
       {
         "floor": 8,
         "n": 8,
-        "value": "8",
+        "value": {
+          "numerator": 8,
+          "denominator": 1
+        },
         "x": 4,
         "y": 4
       },
       {
         "floor": 9,
         "n": 9,
-        "value": "19/2",
+        "value": {
+          "numerator": 19,
+          "denominator": 2
+        },
         "x": 5,
         "y": 4
       },
       {
         "floor": 10,
         "n": 10,
-        "value": "10",
+        "value": {
+          "numerator": 10,
+          "denominator": 1
+        },
         "x": 5,
         "y": 5
       },
       {
         "floor": 11,
         "n": 11,
-        "value": "23/2",
+        "value": {
+          "numerator": 23,
+          "denominator": 2
+        },
         "x": 6,
         "y": 5
       },
       {
         "floor": 12,
         "n": 12,
-        "value": "12",
+        "value": {
+          "numerator": 12,
+          "denominator": 1
+        },
         "x": 6,
         "y": 6
       },
       {
         "floor": 13,
         "n": 13,
-        "value": "27/2",
+        "value": {
+          "numerator": 27,
+          "denominator": 2
+        },
         "x": 7,
         "y": 6
       },
       {
         "floor": 14,
         "n": 14,
-        "value": "14",
+        "value": {
+          "numerator": 14,
+          "denominator": 1
+        },
         "x": 7,
         "y": 7
       },
       {
         "floor": 15,
         "n": 15,
-        "value": "31/2",
+        "value": {
+          "numerator": 31,
+          "denominator": 2
+        },
         "x": 8,
         "y": 7
       }
@@ -122,7 +182,7 @@
   "witness": [
     {
       "path": "evidence/answer.txt",
-      "sha256": "sha256:612a634384f168f250529f949b9564e3be7e477f77fa622af7f4767e441d63b7"
+      "sha256": "sha256:60509e6baf1f8461bc2d4f69d466a579413123a27c3d8d8c81de8ce61d1b1a25"
     }
   ]
 }

@@ -19,8 +19,21 @@
       "type": "object"
     },
     "rational": {
-      "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-      "type": "string"
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
     },
     "term": {
       "additionalProperties": false,
@@ -136,8 +149,21 @@
         "type": "object"
       },
       "rational": {
-        "pattern": "^-?(?:0|[1-9][0-9]{0,5})(?:/[2-9]|/[1-9][0-9]{1,5})?$",
-        "type": "string"
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
       },
       "term": {
         "additionalProperties": false,

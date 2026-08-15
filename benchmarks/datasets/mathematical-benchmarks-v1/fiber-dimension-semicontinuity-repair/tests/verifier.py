@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -15,7 +14,6 @@ from verifier_support import (
 
 WORKSPACE, TESTS = Path("/app"), Path("/tests")
 X, Y = symbols("x y")
-RATIONAL = re.compile(r"^-?(?:0|[1-9][0-9]{0,5})(?:/[1-9][0-9]{0,5})?$")
 TENSOR_REPAIR = "RIGHT_EXACTNESS_SUFFICES_RESIDUE_FIELD_NOT_FLAT_IN_GENERAL"
 GLOBAL_REPAIR = "GLOBAL_FITTING_IDEAL_REPLACES_ARBITRARY_UNION"
 
@@ -28,13 +26,16 @@ def _load_json(path: Path) -> object:
 
 
 def _q(value: object) -> Fraction | None:
-    if not isinstance(value, str) or RATIONAL.fullmatch(value) is None:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        parsed = Fraction(value)
+        return Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    return parsed if str(parsed) == value else None
 
 
 def _poly(value: object) -> Poly | None:

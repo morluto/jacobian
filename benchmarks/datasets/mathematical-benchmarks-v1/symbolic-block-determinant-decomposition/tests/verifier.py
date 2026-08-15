@@ -32,13 +32,16 @@ def _load_frozen_input() -> dict:
 
 
 def _rational(value: object) -> Fraction | None:
-    if not isinstance(value, str) or len(value) > 80:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        parsed = Fraction(value)
+        return Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    return parsed if str(parsed) == value else None
 
 
 def _parse_matrix(value: object) -> list[list[Fraction]] | None:

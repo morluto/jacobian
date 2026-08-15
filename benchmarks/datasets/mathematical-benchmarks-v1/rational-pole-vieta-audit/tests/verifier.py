@@ -56,13 +56,16 @@ def _add(a: list[int], b: list[int]) -> list[int]:
 
 
 def _canonical_fraction(value: object) -> Fraction | None:
-    if not isinstance(value, str):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        parsed = Fraction(value)
+        return Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    return parsed if str(parsed) == value else None
 
 
 def _evidence_valid(value: object, result: object) -> bool:

@@ -1,26 +1,68 @@
 {
   "result": {
     "p_coefficients": [
-      "2",
-      "8/3",
-      "2/3",
-      "0"
+      {
+        "numerator": 2,
+        "denominator": 1
+      },
+      {
+        "numerator": 8,
+        "denominator": 3
+      },
+      {
+        "numerator": 2,
+        "denominator": 3
+      },
+      {
+        "numerator": 0,
+        "denominator": 1
+      }
     ],
     "p_roots": [
-      "-1",
-      "-1/3",
-      "0"
+      {
+        "numerator": -1,
+        "denominator": 1
+      },
+      {
+        "numerator": -1,
+        "denominator": 3
+      },
+      {
+        "numerator": 0,
+        "denominator": 1
+      }
     ],
     "q_coefficients": [
-      "1",
-      "1",
-      "0"
+      {
+        "numerator": 1,
+        "denominator": 1
+      },
+      {
+        "numerator": 1,
+        "denominator": 1
+      },
+      {
+        "numerator": 0,
+        "denominator": 1
+      }
     ],
     "q_roots": [
-      "-1",
-      "0"
+      {
+        "numerator": -1,
+        "denominator": 1
+      },
+      {
+        "numerator": 0,
+        "denominator": 1
+      }
     ],
-    "x1": "0",
-    "x2": "1/100"
+    "x1": {
+      "numerator": 0,
+      "denominator": 1
+    },
+    "x2": {
+      "numerator": 1,
+      "denominator": 100
+    }
   }
 }

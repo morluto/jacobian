@@ -3,7 +3,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from fractions import Fraction
 from pathlib import Path
+
+
+def rat(value) -> dict[str, int]:
+    parsed = Fraction(value)
+    return {"numerator": parsed.numerator, "denominator": parsed.denominator}
+
 
 TASK_ID = "jacobian/navier-stokes-polynomial-certificate"
 LIMITATIONS = [
@@ -17,12 +24,15 @@ def main() -> None:
     parser.add_argument("--root", type=Path, default=Path("/app"))
     root = parser.parse_args().root
     result = {
-        "velocity": [["0", "0", "-1"], ["0", "1", "0"]],
-        "pressure": ["0", "0", "0", "1/2", "0", "1/2"],
-        "divergence": ["0"],
-        "momentum_x": ["0", "0", "0"],
-        "momentum_y": ["0", "0", "0"],
-        "vorticity": "2",
+        "velocity": [
+            [rat(0), rat(0), rat(-1)],
+            [rat(0), rat(1), rat(0)],
+        ],
+        "pressure": [rat(0), rat(0), rat(0), rat("1/2"), rat(0), rat("1/2")],
+        "divergence": [rat(0)],
+        "momentum_x": [rat(0), rat(0), rat(0)],
+        "momentum_y": [rat(0), rat(0), rat(0)],
+        "vorticity": rat(2),
     }
     payload = {
         "schema_version": "1",

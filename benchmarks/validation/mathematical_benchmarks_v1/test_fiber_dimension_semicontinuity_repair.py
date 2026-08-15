@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+from fractions import Fraction
 from pathlib import Path
 
 from benchmarks.validation.mathematical_benchmarks_v1._verifier import _run_verifier
@@ -40,8 +41,15 @@ def _rewrite(app: Path, submission: dict) -> None:
     _write_json(app / "submission.json", submission)
 
 
-def _term(coefficient: str, x_power: int, y_power: int) -> dict[str, object]:
-    return {"coefficient": coefficient, "exponents": [x_power, y_power]}
+def _term(coefficient: object, x_power: int, y_power: int) -> dict[str, object]:
+    parsed = Fraction(coefficient)
+    return {
+        "coefficient": {
+            "numerator": parsed.numerator,
+            "denominator": parsed.denominator,
+        },
+        "exponents": [x_power, y_power],
+    }
 
 
 def test_accepts_alternative_ideal_generators_and_fiber_order(tmp_path: Path) -> None:

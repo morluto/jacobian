@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -15,13 +14,16 @@ from verifier_support import (
 )
 
 TARGET = [2, -11, 21, -22, 23, -22, 21, -11, 2]
-RATIONAL = re.compile(r"^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$")
 
 
 def _q(value):
-    if not isinstance(value, str) or RATIONAL.fullmatch(value) is None:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
         raise ValueError
-    return Fraction(value)
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        raise ValueError
+    return Fraction(numerator, denominator)
 
 
 def _pair(value):

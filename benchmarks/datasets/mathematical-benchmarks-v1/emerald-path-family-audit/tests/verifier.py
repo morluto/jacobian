@@ -1,6 +1,5 @@
 import hashlib
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -15,7 +14,6 @@ from verifier_support import (
 
 TESTS = Path("/tests")
 LIMITATION = "The certificate refutes the published singleton claim and proves sufficiency for its submitted family member; it does not independently prove necessity for every possible trip."
-RATIONAL = re.compile(r"^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$")
 RESULT_FIELDS = frozenset({"alpha", "beta", "even_offset", "odd_offset", "trace"})
 TRACE_FIELDS = frozenset({"n", "x", "y", "value", "floor"})
 
@@ -29,13 +27,23 @@ def _load() -> dict[str, Any]:
 
 
 def _fraction(value: object) -> Fraction | None:
-    if type(value) is not str or RATIONAL.fullmatch(value) is None:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        parsed = Fraction(value)
-    except (MemoryError, OverflowError, ValueError, ZeroDivisionError):
+        return Fraction(numerator, denominator)
+    except (ValueError, ZeroDivisionError):
         return None
-    return parsed
+
+
+def _format_q(value: object) -> str | None:
+    parsed = _fraction(value)
+    if parsed is None:
+        return None
+    return str(parsed)
 
 
 def _result(value: object, frozen: dict[str, Any]) -> bool:
@@ -60,7 +68,7 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
         not isinstance(item, dict)
         or not TRACE_FIELDS.issubset(item)
         or any(type(item[field]) is not int for field in ("n", "x", "y", "floor"))
-        or not isinstance(item["value"], str)
+        or _fraction(item["value"]) is None
         for item in trace
     ):
         return False
@@ -85,7 +93,7 @@ def _result_protocol_valid(value: object) -> bool:
     if not isinstance(value, dict) or set(value) != RESULT_FIELDS:
         return False
     if not all(
-        isinstance(value[name], str) and _fraction(value[name]) is not None
+        _fraction(value[name]) is not None
         for name in ("alpha", "beta", "even_offset", "odd_offset")
     ):
         return False
@@ -97,7 +105,6 @@ def _result_protocol_valid(value: object) -> bool:
             isinstance(item, dict)
             and set(item) == TRACE_FIELDS
             and all(type(item[field]) is int for field in ("n", "x", "y", "floor"))
-            and isinstance(item["value"], str)
             and _fraction(item["value"]) is not None
             for item in trace
         )
@@ -142,14 +149,13 @@ def _witness(value: object, result: object) -> bool:
             not isinstance(item, dict)
             or set(item) != TRACE_FIELDS
             or any(type(item[field]) is not int for field in ("n", "x", "y", "floor"))
-            or not isinstance(item["value"], str)
             or _fraction(item["value"]) is None
             for item in trace
         )
     ):
         return False
     if not all(
-        isinstance(result.get(name), str) and _fraction(result[name]) is not None
+        _fraction(result.get(name)) is not None
         for name in ("alpha", "beta", "even_offset", "odd_offset")
     ) or not isinstance(result.get("trace"), list):
         return False
@@ -159,12 +165,18 @@ def _witness(value: object, result: object) -> bool:
         ).hexdigest()
     except (TypeError, ValueError, RecursionError, MemoryError):
         return False
+    alpha = _format_q(result.get("alpha"))
+    beta = _format_q(result.get("beta"))
+    even_offset = _format_q(result.get("even_offset"))
+    odd_offset = _format_q(result.get("odd_offset"))
+    if None in {alpha, beta, even_offset, odd_offset}:
+        return False
     certificate = [
         "emerald-path-family-certificate-v1",
-        f"alpha: {result.get('alpha')}",
-        f"beta: {result.get('beta')}",
-        f"even_offset: {result.get('even_offset')}",
-        f"odd_offset: {result.get('odd_offset')}",
+        f"alpha: {alpha}",
+        f"beta: {beta}",
+        f"even_offset: {even_offset}",
+        f"odd_offset: {odd_offset}",
         f"trace_sha256: {trace_digest}",
     ]
     max_bytes = sum(len(line.encode()) + 1 for line in certificate)

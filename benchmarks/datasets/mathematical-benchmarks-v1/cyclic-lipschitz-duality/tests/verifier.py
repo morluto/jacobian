@@ -120,7 +120,9 @@ def valid(result, instance=None):
             and sum(sequence[i] for i in marks) == optimum
             and all(flow[i] - flow[i - 1] == weights[i] for i in range(cycle_size))
             and sum(abs(value) for value in flow) == optimum
-            and result["primal_value"] == result["dual_value"] == str(optimum)
+            and fraction(result["primal_value"])
+            == fraction(result["dual_value"])
+            == optimum
         )
     except (KeyError, TypeError, ValueError, ZeroDivisionError, OverflowError):
         return False
@@ -137,8 +139,8 @@ def result_contract(result, instance):
         and len(result["flow"]) == cycle_size
         and all(fraction(value) is not None for value in result["sequence"])
         and all(fraction(value) is not None for value in result["flow"])
-        and type(result["primal_value"]) is str
-        and type(result["dual_value"]) is str
+        and fraction(result["primal_value"]) is not None
+        and fraction(result["dual_value"]) is not None
     )
 
 

@@ -25,7 +25,10 @@ from benchmarks.tooling.strict_boundaries import (
     HarborJobSelection,
     strict_model_failures,
 )
-from benchmarks.tooling.verifier_audits import fraction_coprimality_failures
+from benchmarks.tooling.verifier_audits import (
+    canonical_string_rational_schema_failures,
+    fraction_coprimality_failures,
+)
 
 SCHEMAS = BENCHMARKS / "schemas"
 SNAPSHOTS = BENCHMARKS / "snapshots"
@@ -246,6 +249,7 @@ def _validate_task(suite: Suite, task_dir: Path) -> list[str]:
             )
         )
     failures.extend(fraction_coprimality_failures(task_dir / "tests" / "verifier.py"))
+    failures.extend(canonical_string_rational_schema_failures(schema_path))
     solution_path = task_dir / "solution" / "submission.json"
     if not solution_path.is_file():
         # Measurement and provider tasks construct their Oracle submission at

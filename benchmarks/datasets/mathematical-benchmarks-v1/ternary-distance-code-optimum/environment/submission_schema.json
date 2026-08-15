@@ -41,12 +41,38 @@
               "const": "1"
             },
             "A4": {
-              "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$",
-              "type": "string"
+              "additionalProperties": false,
+              "properties": {
+                "denominator": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "numerator": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "numerator",
+                "denominator"
+              ],
+              "type": "object"
             },
             "A6": {
-              "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$",
-              "type": "string"
+              "additionalProperties": false,
+              "properties": {
+                "denominator": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "numerator": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "numerator",
+                "denominator"
+              ],
+              "type": "object"
             }
           },
           "required": [

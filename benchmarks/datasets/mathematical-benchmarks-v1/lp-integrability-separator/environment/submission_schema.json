@@ -6,9 +6,21 @@
       "additionalProperties": false,
       "properties": {
         "beta": {
-          "maxLength": 80,
-          "pattern": "^-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?$",
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "denominator": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "numerator": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
         },
         "critical_p": {
           "const": "2"
@@ -26,14 +38,38 @@
           "const": "-1/2"
         },
         "p2_integral_each": {
-          "maxLength": 80,
-          "pattern": "^-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?$",
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "denominator": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "numerator": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
         },
         "p2_log_exponent": {
-          "maxLength": 80,
-          "pattern": "^-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?$",
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "denominator": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "numerator": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
         },
         "upper_regime": {
           "const": {

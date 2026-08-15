@@ -4,8 +4,14 @@
       "distinguishing_index": 0,
       "intended_truth": true,
       "limsup_values": [
-        "1/2",
-        "2"
+        {
+          "numerator": 1,
+          "denominator": 2
+        },
+        {
+          "numerator": 2,
+          "denominator": 1
+        }
       ],
       "proposed_truth": false
     },
@@ -13,8 +19,14 @@
       "distinguishing_index": 0,
       "intended_truth": false,
       "limsup_values": [
-        "3/2",
-        "2"
+        {
+          "numerator": 3,
+          "denominator": 2
+        },
+        {
+          "numerator": 2,
+          "denominator": 1
+        }
       ],
       "proposed_truth": true
     },

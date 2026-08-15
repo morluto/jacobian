@@ -20,6 +20,20 @@ UNREDUCED_RATIONAL_TASKS = (
     "natural-subtraction-proof-repair",
     "monotone-inverse-continuity-audit",
     "gaussian-moment-generality-audit",
+    "algebraic-independence-transfer-audit",
+    "exponential-moment-rationality",
+    "fiber-dimension-semicontinuity-repair",
+    "ga-action-local-finiteness-certificate",
+    "lagrangian-projection-proof-audit",
+    "limsup-quantifier-alignment",
+    "lp-integrability-separator",
+    "marginal-joint-product-audit",
+    "polynomial-tail-counterexample",
+    "symbolic-block-determinant-decomposition",
+    "fractional-ratio-proof-repair",
+    "ternary-distance-code-optimum",
+    "apollonius-gap-repair",
+    "emerald-path-family-audit",
 )
 
 

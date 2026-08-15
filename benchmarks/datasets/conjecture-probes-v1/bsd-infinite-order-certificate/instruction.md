@@ -3,7 +3,7 @@
 Choose integers `A,B` and a nonzero integral point `P=(x,y)` within the bounds
 in `/app/input.json` on the nonsingular curve `y^2=x^3+A*x+B`. Supply the exact
 discriminant `-16(4A^3+27B^2)`, `y^2`, and the exact rational coordinates of
-`2P` and `3P` using canonical reduced rational strings.
+`2P` and `3P` as structured `{numerator, denominator}` rationals. Equivalent encodings such as `2/2` and `1` are accepted after exact `Fraction` normalization.
 
 Your certificate must satisfy the Lutz–Nagell obstruction: `y != 0` and `y^2`
 does not divide the absolute discriminant. The verifier independently checks

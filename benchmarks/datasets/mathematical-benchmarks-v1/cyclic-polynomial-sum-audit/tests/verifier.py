@@ -39,13 +39,25 @@ def _json_equal(left: object, right: object) -> bool:
 
 
 def _fraction(value: object) -> Fraction | None:
-    if not isinstance(value, str):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        result = Fraction(value)
+        return Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    return result if str(result) == value else None
+
+
+def _frozen_fraction(value: object) -> Fraction | None:
+    if type(value) is not str or any(marker in value for marker in ".eE"):
+        return None
+    try:
+        return Fraction(value)
+    except (ValueError, ZeroDivisionError):
+        return None
 
 
 def _poly_value(coefficients: list[int], value: Fraction) -> Fraction:
@@ -107,19 +119,26 @@ def _branch_is_valid(value: object) -> bool:
 
 
 def _roots_are_valid(value: object) -> bool:
+    if not isinstance(value, list) or len(value) != 2:
+        return False
     expected = [
-        {
-            "rational": "-1/2",
-            "radical_coefficient": "-1/2",
-            "radicand": 17,
-        },
-        {
-            "rational": "-1/2",
-            "radical_coefficient": "1/2",
-            "radicand": 17,
-        },
+        (Fraction(-1, 2), Fraction(-1, 2), 17),
+        (Fraction(-1, 2), Fraction(1, 2), 17),
     ]
-    return value == expected
+    for item, (rational, coefficient, radicand) in zip(value, expected, strict=True):
+        if not isinstance(item, dict) or set(item) != {
+            "rational",
+            "radical_coefficient",
+            "radicand",
+        }:
+            return False
+        if (
+            _fraction(item["rational"]) != rational
+            or _fraction(item["radical_coefficient"]) != coefficient
+            or item["radicand"] != radicand
+        ):
+            return False
+    return True
 
 
 def _result_is_valid(result: object, source: dict[str, object]) -> bool:
@@ -140,13 +159,14 @@ def _result_is_valid(result: object, source: dict[str, object]) -> bool:
     proposed = source.get("adversarial_claimed_sums")
     if not isinstance(proposed, list):
         return False
-    parsed = [_fraction(item) for item in proposed]
+    parsed = [_frozen_fraction(item) for item in proposed]
     if any(item is None for item in parsed):
         return False
     evaluations = [
         _poly_value(coefficients, item) for item in parsed if item is not None
     ]
-    if result["proposed_evaluations"] != [str(item) for item in evaluations]:
+    submitted = [_fraction(item) for item in result["proposed_evaluations"]]
+    if submitted != evaluations:
         return False
     expected_classes = [
         "PASSES_NECESSARY_CONDITION" if item == 0 else "FAILS_NECESSARY_CONDITION"

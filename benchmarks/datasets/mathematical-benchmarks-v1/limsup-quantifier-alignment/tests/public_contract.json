@@ -14,8 +14,21 @@
         },
         "limsup_values": {
           "items": {
-            "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
           },
           "maxItems": 8,
           "minItems": 2,
@@ -71,8 +84,21 @@
           },
           "limsup_values": {
             "items": {
-              "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
-              "type": "string"
+              "additionalProperties": false,
+              "properties": {
+                "denominator": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "numerator": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "numerator",
+                "denominator"
+              ],
+              "type": "object"
             },
             "maxItems": 8,
             "minItems": 2,

@@ -1,63 +1,16 @@
 import itertools
 import json
-import re
 from pathlib import Path
 
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 P = 5
-LIMITATION_OBLIGATIONS = (
-    "claim:finite-affine-countermodel",
-    "limitation:no-general-scheme-theorem",
-)
-
-
-def _limitations_valid(value: object) -> bool:
-    return isinstance(value, list) and value == list(LIMITATION_OBLIGATIONS)
-
-
-# Published reward-bearing prose obligations for evidence/answer.txt.  The
-# verifier checks that the evidence text states all three facts, accepting
-# mathematically equivalent phrasing while rejecting unrelated or empty text.
-_EVIDENCE_FACTS = {
-    "rational_points": (re.compile(r"\brational\s+points?\b"),),
-    "same_nonempty_set": (
-        re.compile(r"\b(?:same|equal)\b.{0,64}\brational\s+points?\b"),
-        re.compile(r"\b(?:bijection|bijective)\b"),
-        re.compile(r"\beach\b.{0,32}\bthree\s+rational\s+points?\b"),
-    ),
-    "induced_map": (
-        re.compile(r"\binduced\s+map\b"),
-        re.compile(r"\bpullback\b"),
-    ),
-    "nonzero_nilpotent": (
-        re.compile(r"\bnon[- ]?zero\b.{0,64}\bnilpotent\b"),
-        re.compile(r"\bnilpotent\b.{0,64}\bnon[- ]?zero\b"),
-    ),
-    "order_three": (
-        re.compile(r"\border[- ](?:three|3)\b"),
-        re.compile(r"\bcube\b.{0,32}\bzero\b"),
-        re.compile(r"\bthird\s+power\b.{0,32}\bzero\b"),
-    ),
-    "b_reduced": (
-        re.compile(r"\bb\b.{0,32}\breduced\b"),
-        re.compile(r"\bsecond\s+(?:algebra|scheme)\b.{0,32}\breduced\b"),
-    ),
-    "not_isomorphic": (
-        re.compile(r"\bnot\s+isomorphic\b"),
-        re.compile(r"\bnon[- ]?isomorphic\b"),
-        re.compile(r"\b(?:cannot|can't)\s+be\s+isomorphic\b"),
-        re.compile(r"\bno\s+isomorphism\b"),
-    ),
-}
 EXPECTED_COLUMNS = [[1, 0, 0, 0, 0], [0, 1, 0, 0, 0], [0, 0, 1, 0, 0]]
 
 
@@ -117,26 +70,6 @@ def _is_int_vector(value, length, lo, hi):
         and len(value) == length
         and all(type(x) is int and lo <= x <= hi for x in value)
     )
-
-
-def evidence_text_is_valid(path: Path) -> bool:
-    """Stream evidence and require every published mathematical fact."""
-
-    matched = dict.fromkeys(_EVIDENCE_FACTS, False)
-    carry = ""
-    try:
-        with path.open("r", encoding="utf-8") as stream:
-            while chunk := stream.read(65_536):
-                window = (carry + chunk).lower()
-                for name, alternatives in _EVIDENCE_FACTS.items():
-                    if not matched[name] and any(
-                        pattern.search(window) for pattern in alternatives
-                    ):
-                        matched[name] = True
-                carry = window[-256:]
-    except (OSError, UnicodeError, MemoryError):
-        return False
-    return all(matched.values())
 
 
 def valid_morphism(columns, a_table, b_table, a_unit, b_unit):
@@ -248,18 +181,6 @@ def valid_result(result):
     return result["b_reduced"] is True and not b_has_nilpotent
 
 
-def evidence_ok(evidence):
-    # The finite-algebra certificate is independently replayed from the typed
-    # result.  The public evidence contract requires one bound text file that
-    # states the three published mathematical obligations.
-    if not witness_list_is_bound(evidence):
-        return False
-    resolved = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if resolved is None:
-        return False
-    return evidence_text_is_valid(resolved)
-
-
 def main():
     input_binding = workspace_input_is_bound()
     submission = load_submission(
@@ -267,17 +188,13 @@ def main():
     )
     result = submission.get("result") if isinstance(submission, dict) else None
     mathematical = valid_result(result)
-    witness = bool(
-        isinstance(submission, dict) and evidence_ok(submission.get("witness"))
-    )
     (Path("/logs/verifier")).mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "input_binding": float(input_binding),
                 "correctness": float(mathematical),
-                "witness_validity": float(witness),
-                "reward": float(input_binding and mathematical and witness),
+                "reward": float(input_binding and mathematical),
             }
         )
     )

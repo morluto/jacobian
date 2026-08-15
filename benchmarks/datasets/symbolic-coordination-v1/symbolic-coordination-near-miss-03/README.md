@@ -6,7 +6,7 @@ Assess one exact polynomial-map claim in the perturbed-near-miss pilot family.
 
 - family: `perturbed-near-miss`
 - case version: `symbolic-coordination-v1/pilot-1`
-- generator: `symbolic-coordination-pilot-generator@1`
+- generator: `symbolic-coordination-pilot-generator@2`
 - fixture digest: `sha256:911107a7b5541f60863a602a25f52798564f22f5cae782f51eed5d63ad5d7dd7`
 - note: Affine inverse constant perturbed.
 

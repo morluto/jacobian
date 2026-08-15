@@ -6,7 +6,7 @@ Assess one exact polynomial-map claim in the constant-nonzero-jacobian pilot fam
 
 - family: `constant-nonzero-jacobian`
 - case version: `symbolic-coordination-v1/pilot-1`
-- generator: `symbolic-coordination-pilot-generator@1`
+- generator: `symbolic-coordination-pilot-generator@2`
 - fixture digest: `sha256:158db6bb2b3517a50158320829f707e8912cc7309513ade63c6fd163a58f5672`
 - note: Three-variable unit Jacobian triangular map.
 

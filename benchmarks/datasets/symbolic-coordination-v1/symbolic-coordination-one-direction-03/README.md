@@ -6,7 +6,7 @@ Assess one exact polynomial-map claim in the one-direction-only-evidence pilot f
 
 - family: `one-direction-only-evidence`
 - case version: `symbolic-coordination-v1/pilot-1`
-- generator: `symbolic-coordination-pilot-generator@1`
+- generator: `symbolic-coordination-pilot-generator@2`
 - fixture digest: `sha256:06bb37649413b9a05e0ac4731017402dbba1b53bf1bd646b464a54a72acf75c3`
 - note: Three-dimensional supplied material omits one direction.
 

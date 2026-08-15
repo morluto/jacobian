@@ -6,7 +6,7 @@ Assess one exact polynomial-map claim in the perturbed-near-miss pilot family.
 
 - family: `perturbed-near-miss`
 - case version: `symbolic-coordination-v1/pilot-1`
-- generator: `symbolic-coordination-pilot-generator@1`
+- generator: `symbolic-coordination-pilot-generator@2`
 - fixture digest: `sha256:925f7ca8e00ccba6c77e69896eb376de68286ca264f220f8349c5b6a4cfc226e`
 - note: Quadratic inverse coefficient perturbed.
 

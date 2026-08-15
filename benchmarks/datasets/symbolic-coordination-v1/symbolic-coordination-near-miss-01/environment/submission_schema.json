@@ -1,26 +1,5 @@
 {
   "$defs": {
-    "grid": {
-      "additionalProperties": false,
-      "properties": {
-        "max_denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "max_numerator": {
-          "type": "integer"
-        },
-        "min_numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "min_numerator",
-        "max_numerator",
-        "max_denominator"
-      ],
-      "type": "object"
-    },
     "map": {
       "additionalProperties": false,
       "properties": {
@@ -54,14 +33,6 @@
         "coordinates"
       ],
       "type": "object"
-    },
-    "point": {
-      "items": {
-        "$ref": "#/$defs/rational"
-      },
-      "maxItems": 3,
-      "minItems": 1,
-      "type": "array"
     },
     "polynomial": {
       "additionalProperties": false,
@@ -160,189 +131,63 @@
           "const": "symbolic-coordination-near-miss-01"
         },
         "certificate": {
-          "oneOf": [
-            {
-              "additionalProperties": false,
-              "properties": {
-                "checked_directions": {
-                  "const": [
-                    "INVERSE_AFTER_FORWARD",
-                    "FORWARD_AFTER_INVERSE"
-                  ]
-                },
-                "forward_after_inverse_residuals": {
-                  "items": {
-                    "$ref": "#/$defs/polynomial"
-                  },
-                  "maxItems": 3,
-                  "minItems": 1,
-                  "type": "array"
-                },
-                "inverse_after_forward_residuals": {
-                  "items": {
-                    "$ref": "#/$defs/polynomial"
-                  },
-                  "maxItems": 3,
-                  "minItems": 1,
-                  "type": "array"
-                },
-                "inverse_map": {
-                  "$ref": "#/$defs/map"
-                },
-                "kind": {
-                  "const": "TWO_SIDED_COMPOSITION_REPLAY"
-                },
-                "source_variables": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "maxItems": 3,
-                  "minItems": 1,
-                  "type": "array"
-                },
-                "target_variables": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "maxItems": 3,
-                  "minItems": 1,
-                  "type": "array"
-                }
-              },
-              "required": [
-                "kind",
-                "source_variables",
-                "target_variables",
-                "inverse_map",
-                "inverse_after_forward_residuals",
-                "forward_after_inverse_residuals",
-                "checked_directions"
-              ],
-              "type": "object"
+          "additionalProperties": false,
+          "properties": {
+            "checked_directions": {
+              "const": [
+                "INVERSE_AFTER_FORWARD",
+                "FORWARD_AFTER_INVERSE"
+              ]
             },
-            {
-              "additionalProperties": false,
-              "properties": {
-                "determinant": {
-                  "$ref": "#/$defs/polynomial"
-                },
-                "global_invertibility": {
-                  "const": "NOT_ESTABLISHED_BY_KELLER_CERTIFICATE"
-                },
-                "keller_condition": {
-                  "type": "boolean"
-                },
-                "kind": {
-                  "const": "KELLER_DETERMINANT_REPLAY"
-                },
-                "variable_order": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "maxItems": 3,
-                  "minItems": 1,
-                  "type": "array"
-                }
+            "forward_after_inverse_residuals": {
+              "items": {
+                "$ref": "#/$defs/polynomial"
               },
-              "required": [
-                "kind",
-                "variable_order",
-                "determinant",
-                "keller_condition",
-                "global_invertibility"
-              ],
-              "type": "object"
+              "maxItems": 3,
+              "minItems": 1,
+              "type": "array"
             },
-            {
-              "additionalProperties": false,
-              "properties": {
-                "common_image": {
-                  "$ref": "#/$defs/point"
-                },
-                "first_point": {
-                  "$ref": "#/$defs/point"
-                },
-                "global_consequence": {
-                  "const": "MAP_NOT_INJECTIVE_OVER_QQ"
-                },
-                "grid": {
-                  "$ref": "#/$defs/grid"
-                },
-                "kind": {
-                  "const": "COLLISION_WITNESS_REPLAY"
-                },
-                "second_point": {
-                  "$ref": "#/$defs/point"
-                }
+            "inverse_after_forward_residuals": {
+              "items": {
+                "$ref": "#/$defs/polynomial"
               },
-              "required": [
-                "kind",
-                "grid",
-                "first_point",
-                "second_point",
-                "common_image",
-                "global_consequence"
-              ],
-              "type": "object"
+              "maxItems": 3,
+              "minItems": 1,
+              "type": "array"
             },
-            {
-              "additionalProperties": false,
-              "properties": {
-                "examined_point_count": {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "global_consequence": {
-                  "const": "NOT_ESTABLISHED"
-                },
-                "grid": {
-                  "$ref": "#/$defs/grid"
-                },
-                "kind": {
-                  "const": "BOUNDED_GRID_EXHAUSTION_REPLAY"
-                }
-              },
-              "required": [
-                "kind",
-                "grid",
-                "examined_point_count",
-                "global_consequence"
-              ],
-              "type": "object"
+            "inverse_map": {
+              "$ref": "#/$defs/map"
             },
-            {
-              "additionalProperties": false,
-              "properties": {
-                "examined_point_count": {
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "global_consequence": {
-                  "const": "NOT_ESTABLISHED"
-                },
-                "grid": {
-                  "$ref": "#/$defs/grid"
-                },
-                "kind": {
-                  "const": "SEARCH_NONCONCLUSION"
-                },
-                "stop_reason": {
-                  "enum": [
-                    "TIMEOUT",
-                    "INCOMPLETE"
-                  ]
-                }
+            "kind": {
+              "const": "TWO_SIDED_COMPOSITION_REPLAY"
+            },
+            "source_variables": {
+              "items": {
+                "type": "string"
               },
-              "required": [
-                "kind",
-                "grid",
-                "stop_reason",
-                "examined_point_count",
-                "global_consequence"
-              ],
-              "type": "object"
+              "maxItems": 3,
+              "minItems": 1,
+              "type": "array"
+            },
+            "target_variables": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 3,
+              "minItems": 1,
+              "type": "array"
             }
-          ]
+          },
+          "required": [
+            "kind",
+            "source_variables",
+            "target_variables",
+            "inverse_map",
+            "inverse_after_forward_residuals",
+            "forward_after_inverse_residuals",
+            "checked_directions"
+          ],
+          "type": "object"
         },
         "family": {
           "const": "perturbed-near-miss"
@@ -350,12 +195,7 @@
         "verdict": {
           "enum": [
             "VALID_TWO_SIDED_INVERSE",
-            "INVALID_INVERSE_CANDIDATE",
-            "KELLER_CONDITION_ONLY",
-            "NOT_KELLER",
-            "COLLISION_FOUND",
-            "NO_COLLISION_IN_DECLARED_GRID",
-            "UNKNOWN"
+            "INVALID_INVERSE_CANDIDATE"
           ]
         }
       },

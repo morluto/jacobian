@@ -1,5 +1,5 @@
 {
-  "public_notes": "Submit the terminal certificate inside result. The verifier replays the exact polynomial-map predicate and checks the frozen claim bindings carried by the result.",
+  "public_notes": "Submit the family-licensed terminal certificate inside result. The verifier replays the exact polynomial-map predicate and checks the frozen claim bindings carried by the result.",
   "required_witness_filenames": [],
   "schema_definitions": {
     "grid": {
@@ -23,40 +23,6 @@
       ],
       "type": "object"
     },
-    "map": {
-      "additionalProperties": false,
-      "properties": {
-        "coordinates": {
-          "items": {
-            "$ref": "#/$defs/polynomial"
-          },
-          "maxItems": 3,
-          "minItems": 1,
-          "type": "array"
-        },
-        "domain": {
-          "const": "QQ"
-        },
-        "map_schema_version": {
-          "const": "1"
-        },
-        "variables": {
-          "items": {
-            "type": "string"
-          },
-          "maxItems": 3,
-          "minItems": 1,
-          "type": "array"
-        }
-      },
-      "required": [
-        "map_schema_version",
-        "domain",
-        "variables",
-        "coordinates"
-      ],
-      "type": "object"
-    },
     "point": {
       "items": {
         "$ref": "#/$defs/rational"
@@ -64,42 +30,6 @@
       "maxItems": 3,
       "minItems": 1,
       "type": "array"
-    },
-    "polynomial": {
-      "additionalProperties": false,
-      "properties": {
-        "terms": {
-          "items": {
-            "additionalProperties": false,
-            "properties": {
-              "coefficient": {
-                "$ref": "#/$defs/rational"
-              },
-              "exponents": {
-                "items": {
-                  "maximum": 32,
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "maxItems": 3,
-                "minItems": 1,
-                "type": "array"
-              }
-            },
-            "required": [
-              "coefficient",
-              "exponents"
-            ],
-            "type": "object"
-          },
-          "maxItems": 128,
-          "type": "array"
-        }
-      },
-      "required": [
-        "terms"
-      ],
-      "type": "object"
     },
     "rational": {
       "additionalProperties": false,
@@ -161,202 +91,43 @@
         "const": "symbolic-coordination-collision-found-01"
       },
       "certificate": {
-        "oneOf": [
-          {
-            "additionalProperties": false,
-            "properties": {
-              "checked_directions": {
-                "const": [
-                  "INVERSE_AFTER_FORWARD",
-                  "FORWARD_AFTER_INVERSE"
-                ]
-              },
-              "forward_after_inverse_residuals": {
-                "items": {
-                  "$ref": "#/$defs/polynomial"
-                },
-                "maxItems": 3,
-                "minItems": 1,
-                "type": "array"
-              },
-              "inverse_after_forward_residuals": {
-                "items": {
-                  "$ref": "#/$defs/polynomial"
-                },
-                "maxItems": 3,
-                "minItems": 1,
-                "type": "array"
-              },
-              "inverse_map": {
-                "$ref": "#/$defs/map"
-              },
-              "kind": {
-                "const": "TWO_SIDED_COMPOSITION_REPLAY"
-              },
-              "source_variables": {
-                "items": {
-                  "type": "string"
-                },
-                "maxItems": 3,
-                "minItems": 1,
-                "type": "array"
-              },
-              "target_variables": {
-                "items": {
-                  "type": "string"
-                },
-                "maxItems": 3,
-                "minItems": 1,
-                "type": "array"
-              }
-            },
-            "required": [
-              "kind",
-              "source_variables",
-              "target_variables",
-              "inverse_map",
-              "inverse_after_forward_residuals",
-              "forward_after_inverse_residuals",
-              "checked_directions"
-            ],
-            "type": "object"
+        "additionalProperties": false,
+        "properties": {
+          "common_image": {
+            "$ref": "#/$defs/point"
           },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "determinant": {
-                "$ref": "#/$defs/polynomial"
-              },
-              "global_invertibility": {
-                "const": "NOT_ESTABLISHED_BY_KELLER_CERTIFICATE"
-              },
-              "keller_condition": {
-                "type": "boolean"
-              },
-              "kind": {
-                "const": "KELLER_DETERMINANT_REPLAY"
-              },
-              "variable_order": {
-                "items": {
-                  "type": "string"
-                },
-                "maxItems": 3,
-                "minItems": 1,
-                "type": "array"
-              }
-            },
-            "required": [
-              "kind",
-              "variable_order",
-              "determinant",
-              "keller_condition",
-              "global_invertibility"
-            ],
-            "type": "object"
+          "first_point": {
+            "$ref": "#/$defs/point"
           },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "common_image": {
-                "$ref": "#/$defs/point"
-              },
-              "first_point": {
-                "$ref": "#/$defs/point"
-              },
-              "global_consequence": {
-                "const": "MAP_NOT_INJECTIVE_OVER_QQ"
-              },
-              "grid": {
-                "$ref": "#/$defs/grid"
-              },
-              "kind": {
-                "const": "COLLISION_WITNESS_REPLAY"
-              },
-              "second_point": {
-                "$ref": "#/$defs/point"
-              }
-            },
-            "required": [
-              "kind",
-              "grid",
-              "first_point",
-              "second_point",
-              "common_image",
-              "global_consequence"
-            ],
-            "type": "object"
+          "global_consequence": {
+            "const": "MAP_NOT_INJECTIVE_OVER_QQ"
           },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "examined_point_count": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "global_consequence": {
-                "const": "NOT_ESTABLISHED"
-              },
-              "grid": {
-                "$ref": "#/$defs/grid"
-              },
-              "kind": {
-                "const": "BOUNDED_GRID_EXHAUSTION_REPLAY"
-              }
-            },
-            "required": [
-              "kind",
-              "grid",
-              "examined_point_count",
-              "global_consequence"
-            ],
-            "type": "object"
+          "grid": {
+            "$ref": "#/$defs/grid"
           },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "examined_point_count": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "global_consequence": {
-                "const": "NOT_ESTABLISHED"
-              },
-              "grid": {
-                "$ref": "#/$defs/grid"
-              },
-              "kind": {
-                "const": "SEARCH_NONCONCLUSION"
-              },
-              "stop_reason": {
-                "enum": [
-                  "TIMEOUT",
-                  "INCOMPLETE"
-                ]
-              }
-            },
-            "required": [
-              "kind",
-              "grid",
-              "stop_reason",
-              "examined_point_count",
-              "global_consequence"
-            ],
-            "type": "object"
+          "kind": {
+            "const": "COLLISION_WITNESS_REPLAY"
+          },
+          "second_point": {
+            "$ref": "#/$defs/point"
           }
-        ]
+        },
+        "required": [
+          "kind",
+          "grid",
+          "first_point",
+          "second_point",
+          "common_image",
+          "global_consequence"
+        ],
+        "type": "object"
       },
       "family": {
         "const": "bounded-collision-scope"
       },
       "verdict": {
         "enum": [
-          "VALID_TWO_SIDED_INVERSE",
-          "INVALID_INVERSE_CANDIDATE",
-          "KELLER_CONDITION_ONLY",
-          "NOT_KELLER",
-          "COLLISION_FOUND",
-          "NO_COLLISION_IN_DECLARED_GRID",
-          "UNKNOWN"
+          "COLLISION_FOUND"
         ]
       }
     },
@@ -392,40 +163,6 @@
         ],
         "type": "object"
       },
-      "map": {
-        "additionalProperties": false,
-        "properties": {
-          "coordinates": {
-            "items": {
-              "$ref": "#/$defs/polynomial"
-            },
-            "maxItems": 3,
-            "minItems": 1,
-            "type": "array"
-          },
-          "domain": {
-            "const": "QQ"
-          },
-          "map_schema_version": {
-            "const": "1"
-          },
-          "variables": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 3,
-            "minItems": 1,
-            "type": "array"
-          }
-        },
-        "required": [
-          "map_schema_version",
-          "domain",
-          "variables",
-          "coordinates"
-        ],
-        "type": "object"
-      },
       "point": {
         "items": {
           "$ref": "#/$defs/rational"
@@ -433,42 +170,6 @@
         "maxItems": 3,
         "minItems": 1,
         "type": "array"
-      },
-      "polynomial": {
-        "additionalProperties": false,
-        "properties": {
-          "terms": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "coefficient": {
-                  "$ref": "#/$defs/rational"
-                },
-                "exponents": {
-                  "items": {
-                    "maximum": 32,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "maxItems": 3,
-                  "minItems": 1,
-                  "type": "array"
-                }
-              },
-              "required": [
-                "coefficient",
-                "exponents"
-              ],
-              "type": "object"
-            },
-            "maxItems": 128,
-            "type": "array"
-          }
-        },
-        "required": [
-          "terms"
-        ],
-        "type": "object"
       },
       "rational": {
         "additionalProperties": false,
@@ -531,202 +232,43 @@
             "const": "symbolic-coordination-collision-found-01"
           },
           "certificate": {
-            "oneOf": [
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "checked_directions": {
-                    "const": [
-                      "INVERSE_AFTER_FORWARD",
-                      "FORWARD_AFTER_INVERSE"
-                    ]
-                  },
-                  "forward_after_inverse_residuals": {
-                    "items": {
-                      "$ref": "#/$defs/polynomial"
-                    },
-                    "maxItems": 3,
-                    "minItems": 1,
-                    "type": "array"
-                  },
-                  "inverse_after_forward_residuals": {
-                    "items": {
-                      "$ref": "#/$defs/polynomial"
-                    },
-                    "maxItems": 3,
-                    "minItems": 1,
-                    "type": "array"
-                  },
-                  "inverse_map": {
-                    "$ref": "#/$defs/map"
-                  },
-                  "kind": {
-                    "const": "TWO_SIDED_COMPOSITION_REPLAY"
-                  },
-                  "source_variables": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "maxItems": 3,
-                    "minItems": 1,
-                    "type": "array"
-                  },
-                  "target_variables": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "maxItems": 3,
-                    "minItems": 1,
-                    "type": "array"
-                  }
-                },
-                "required": [
-                  "kind",
-                  "source_variables",
-                  "target_variables",
-                  "inverse_map",
-                  "inverse_after_forward_residuals",
-                  "forward_after_inverse_residuals",
-                  "checked_directions"
-                ],
-                "type": "object"
+            "additionalProperties": false,
+            "properties": {
+              "common_image": {
+                "$ref": "#/$defs/point"
               },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "determinant": {
-                    "$ref": "#/$defs/polynomial"
-                  },
-                  "global_invertibility": {
-                    "const": "NOT_ESTABLISHED_BY_KELLER_CERTIFICATE"
-                  },
-                  "keller_condition": {
-                    "type": "boolean"
-                  },
-                  "kind": {
-                    "const": "KELLER_DETERMINANT_REPLAY"
-                  },
-                  "variable_order": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "maxItems": 3,
-                    "minItems": 1,
-                    "type": "array"
-                  }
-                },
-                "required": [
-                  "kind",
-                  "variable_order",
-                  "determinant",
-                  "keller_condition",
-                  "global_invertibility"
-                ],
-                "type": "object"
+              "first_point": {
+                "$ref": "#/$defs/point"
               },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "common_image": {
-                    "$ref": "#/$defs/point"
-                  },
-                  "first_point": {
-                    "$ref": "#/$defs/point"
-                  },
-                  "global_consequence": {
-                    "const": "MAP_NOT_INJECTIVE_OVER_QQ"
-                  },
-                  "grid": {
-                    "$ref": "#/$defs/grid"
-                  },
-                  "kind": {
-                    "const": "COLLISION_WITNESS_REPLAY"
-                  },
-                  "second_point": {
-                    "$ref": "#/$defs/point"
-                  }
-                },
-                "required": [
-                  "kind",
-                  "grid",
-                  "first_point",
-                  "second_point",
-                  "common_image",
-                  "global_consequence"
-                ],
-                "type": "object"
+              "global_consequence": {
+                "const": "MAP_NOT_INJECTIVE_OVER_QQ"
               },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "examined_point_count": {
-                    "minimum": 1,
-                    "type": "integer"
-                  },
-                  "global_consequence": {
-                    "const": "NOT_ESTABLISHED"
-                  },
-                  "grid": {
-                    "$ref": "#/$defs/grid"
-                  },
-                  "kind": {
-                    "const": "BOUNDED_GRID_EXHAUSTION_REPLAY"
-                  }
-                },
-                "required": [
-                  "kind",
-                  "grid",
-                  "examined_point_count",
-                  "global_consequence"
-                ],
-                "type": "object"
+              "grid": {
+                "$ref": "#/$defs/grid"
               },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "examined_point_count": {
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "global_consequence": {
-                    "const": "NOT_ESTABLISHED"
-                  },
-                  "grid": {
-                    "$ref": "#/$defs/grid"
-                  },
-                  "kind": {
-                    "const": "SEARCH_NONCONCLUSION"
-                  },
-                  "stop_reason": {
-                    "enum": [
-                      "TIMEOUT",
-                      "INCOMPLETE"
-                    ]
-                  }
-                },
-                "required": [
-                  "kind",
-                  "grid",
-                  "stop_reason",
-                  "examined_point_count",
-                  "global_consequence"
-                ],
-                "type": "object"
+              "kind": {
+                "const": "COLLISION_WITNESS_REPLAY"
+              },
+              "second_point": {
+                "$ref": "#/$defs/point"
               }
-            ]
+            },
+            "required": [
+              "kind",
+              "grid",
+              "first_point",
+              "second_point",
+              "common_image",
+              "global_consequence"
+            ],
+            "type": "object"
           },
           "family": {
             "const": "bounded-collision-scope"
           },
           "verdict": {
             "enum": [
-              "VALID_TWO_SIDED_INVERSE",
-              "INVALID_INVERSE_CANDIDATE",
-              "KELLER_CONDITION_ONLY",
-              "NOT_KELLER",
-              "COLLISION_FOUND",
-              "NO_COLLISION_IN_DECLARED_GRID",
-              "UNKNOWN"
+              "COLLISION_FOUND"
             ]
           }
         },

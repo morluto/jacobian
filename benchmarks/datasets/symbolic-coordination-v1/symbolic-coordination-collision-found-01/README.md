@@ -6,7 +6,7 @@ Assess one exact polynomial-map claim in the bounded-collision-scope pilot famil
 
 - family: `bounded-collision-scope`
 - case version: `symbolic-coordination-v1/pilot-1`
-- generator: `symbolic-coordination-pilot-generator@1`
+- generator: `symbolic-coordination-pilot-generator@2`
 - fixture digest: `sha256:3674b4c2c47d4f5580c0aaf06f5ae3d7e0798d3b898de839af1e240fd97929f3`
 - note: Symmetry yields alternate swap witnesses.
 

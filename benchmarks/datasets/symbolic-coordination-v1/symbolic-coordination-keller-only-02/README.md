@@ -6,7 +6,7 @@ Assess one exact polynomial-map claim in the constant-nonzero-jacobian pilot fam
 
 - family: `constant-nonzero-jacobian`
 - case version: `symbolic-coordination-v1/pilot-1`
-- generator: `symbolic-coordination-pilot-generator@1`
+- generator: `symbolic-coordination-pilot-generator@2`
 - fixture digest: `sha256:69c7fea6a76086d9710144ddb3fb11418f1c0107da251185db9914364e6bcf55`
 - note: Constant Jacobian two over QQ.
 

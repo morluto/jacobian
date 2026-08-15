@@ -6,7 +6,7 @@ Assess one exact polynomial-map claim in the valid-two-sided-inverse pilot famil
 
 - family: `valid-two-sided-inverse`
 - case version: `symbolic-coordination-v1/pilot-1`
-- generator: `symbolic-coordination-pilot-generator@1`
+- generator: `symbolic-coordination-pilot-generator@2`
 - fixture digest: `sha256:94e307fab75fd385476d04490d2552da100ead22e0e85b4f14d27dca2977429b`
 - note: Triangular shear in the second coordinate.
 

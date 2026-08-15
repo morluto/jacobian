@@ -6,7 +6,7 @@ Assess one exact polynomial-map claim in the valid-two-sided-inverse pilot famil
 
 - family: `valid-two-sided-inverse`
 - case version: `symbolic-coordination-v1/pilot-1`
-- generator: `symbolic-coordination-pilot-generator@1`
+- generator: `symbolic-coordination-pilot-generator@2`
 - fixture digest: `sha256:bca5b39f6101cf26f3b5cff541fae35c1f5297db5c05898e83e3a3c2b67f68e9`
 - note: Affine translation and shear.
 

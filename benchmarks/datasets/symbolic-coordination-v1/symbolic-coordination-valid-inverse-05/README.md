@@ -6,7 +6,7 @@ Assess one exact polynomial-map claim in the valid-two-sided-inverse pilot famil
 
 - family: `valid-two-sided-inverse`
 - case version: `symbolic-coordination-v1/pilot-1`
-- generator: `symbolic-coordination-pilot-generator@1`
+- generator: `symbolic-coordination-pilot-generator@2`
 - fixture digest: `sha256:65858bcc4591b0f8661c56d0be2d180c4b2695e2191f8e570ea91e630009bf8c`
 - note: Three-variable triangular composition.
 

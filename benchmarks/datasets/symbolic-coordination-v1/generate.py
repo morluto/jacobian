@@ -31,7 +31,7 @@ TEMPLATE_SUPPORT = (
 )
 VERIFIER_TEMPLATE = DATASET / "verifier_template.py"
 IMAGE = "python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de"
-GENERATOR_VERSION = "symbolic-coordination-pilot-generator@1"
+GENERATOR_VERSION = "symbolic-coordination-pilot-generator@2"
 CASE_VERSION = "symbolic-coordination-v1/pilot-1"
 CHECKER_ID = "symbolic-coordination-v1.clean-room-polynomial-map-checker@1"
 SEMANTICS_ID = "exact-sparse-polynomial-maps-over-QQ@1"
@@ -822,6 +822,113 @@ def solution(data: dict[str, object]) -> dict[str, object]:
     return {"result": result}
 
 
+ALL_CERTIFICATE_KINDS = (
+    "TWO_SIDED_COMPOSITION_REPLAY",
+    "KELLER_DETERMINANT_REPLAY",
+    "COLLISION_WITNESS_REPLAY",
+    "BOUNDED_GRID_EXHAUSTION_REPLAY",
+    "SEARCH_NONCONCLUSION",
+)
+
+
+def licensed_certificate_kinds(data: dict[str, object]) -> tuple[str, ...]:
+    """Return the certificate kinds the public claim family can reward."""
+
+    case_type = data["case_type"]
+    if case_type == "inverse":
+        return ("TWO_SIDED_COMPOSITION_REPLAY",)
+    if case_type == "keller":
+        return ("KELLER_DETERMINANT_REPLAY",)
+    record = data["search_record"]
+    if not isinstance(record, dict):
+        raise ValueError(f"{data.get('case_id')} is missing a search record")
+    stop_reason = record.get("stop_reason")
+    if stop_reason == "FOUND":
+        return ("COLLISION_WITNESS_REPLAY",)
+    if stop_reason == "GRID_EXHAUSTED":
+        return ("BOUNDED_GRID_EXHAUSTION_REPLAY",)
+    if stop_reason in {"TIMEOUT", "INCOMPLETE"}:
+        return ("SEARCH_NONCONCLUSION", "COLLISION_WITNESS_REPLAY")
+    raise ValueError(f"{data.get('case_id')} has unsupported stop_reason")
+
+
+def licensed_certificate_kind(data: dict[str, object]) -> str:
+    """Return the gold certificate kind for a task with one licensed kind."""
+
+    kinds = licensed_certificate_kinds(data)
+    if len(kinds) != 1:
+        raise ValueError(
+            f"{data.get('case_id')} licenses {kinds}; use licensed_certificate_kinds"
+        )
+    return kinds[0]
+
+
+def licensed_verdicts(data: dict[str, object]) -> tuple[str, ...]:
+    """Return verdicts that can appear with the licensed certificate kinds."""
+
+    kinds = licensed_certificate_kinds(data)
+    verdicts: list[str] = []
+    for kind in kinds:
+        if kind == "TWO_SIDED_COMPOSITION_REPLAY":
+            verdicts.extend(("VALID_TWO_SIDED_INVERSE", "INVALID_INVERSE_CANDIDATE"))
+        elif kind == "KELLER_DETERMINANT_REPLAY":
+            verdicts.extend(("KELLER_CONDITION_ONLY", "NOT_KELLER"))
+        elif kind == "COLLISION_WITNESS_REPLAY":
+            verdicts.append("COLLISION_FOUND")
+        elif kind == "BOUNDED_GRID_EXHAUSTION_REPLAY":
+            verdicts.append("NO_COLLISION_IN_DECLARED_GRID")
+        elif kind == "SEARCH_NONCONCLUSION":
+            verdicts.append("UNKNOWN")
+        else:
+            raise ValueError(kind)
+    return tuple(verdicts)
+
+
+def family_instruction(data: dict[str, object]) -> str:
+    """Describe only the certificates the public family can submit."""
+
+    kinds = licensed_certificate_kinds(data)
+    if kinds == ("TWO_SIDED_COMPOSITION_REPLAY",):
+        return (
+            "This inverse claim licenses only a `TWO_SIDED_COMPOSITION_REPLAY` "
+            "certificate exposing both ordered composition residual families. "
+            "The terminal `verdict` is `VALID_TWO_SIDED_INVERSE` or "
+            "`INVALID_INVERSE_CANDIDATE`."
+        )
+    if kinds == ("KELLER_DETERMINANT_REPLAY",):
+        return (
+            "This Keller-condition claim licenses only a "
+            "`KELLER_DETERMINANT_REPLAY` certificate. That object decides the "
+            "exact constant nonzero Jacobian claim; `global_invertibility` "
+            "remains `NOT_ESTABLISHED_BY_KELLER_CERTIFICATE`. The terminal "
+            "`verdict` is `KELLER_CONDITION_ONLY` or `NOT_KELLER`."
+        )
+    if kinds == ("COLLISION_WITNESS_REPLAY",):
+        return (
+            "This bounded-search claim licenses only a "
+            "`COLLISION_WITNESS_REPLAY` certificate. Any mathematically valid "
+            "collision witness in the declared grid is acceptable. The "
+            "terminal `verdict` is `COLLISION_FOUND`."
+        )
+    if kinds == ("BOUNDED_GRID_EXHAUSTION_REPLAY",):
+        return (
+            "This bounded-search claim licenses only a "
+            "`BOUNDED_GRID_EXHAUSTION_REPLAY` certificate for complete "
+            "declared-grid exhaustion. That object does not establish a "
+            "global collision or inverse. The terminal `verdict` is "
+            "`NO_COLLISION_IN_DECLARED_GRID`."
+        )
+    record = data["search_record"]
+    stop_reason = record["stop_reason"] if isinstance(record, dict) else "TIMEOUT"
+    return (
+        f"This bounded-search claim licenses a `SEARCH_NONCONCLUSION` "
+        f"certificate whose `stop_reason` is `{stop_reason}`, or a "
+        "`COLLISION_WITNESS_REPLAY` if an exact collision in the declared "
+        "grid is found. Do not promote an incomplete search to grid "
+        "exhaustion. The terminal `verdict` is `UNKNOWN` or `COLLISION_FOUND`."
+    )
+
+
 def submission_schema_parts(data: dict[str, object]) -> dict[str, object]:
     rational_schema = {
         "type": "object",
@@ -901,162 +1008,207 @@ def submission_schema_parts(data: dict[str, object]) -> dict[str, object]:
         "maxItems": 3,
         "items": {"$ref": "#/$defs/rational"},
     }
-    certificate_variants = [
-        {
-            "type": "object",
-            "additionalProperties": False,
-            "required": [
-                "kind",
-                "source_variables",
-                "target_variables",
-                "inverse_map",
-                "inverse_after_forward_residuals",
-                "forward_after_inverse_residuals",
-                "checked_directions",
-            ],
-            "properties": {
-                "kind": {"const": "TWO_SIDED_COMPOSITION_REPLAY"},
-                "source_variables": {
-                    "type": "array",
-                    "minItems": 1,
-                    "maxItems": 3,
-                    "items": {"type": "string"},
-                },
-                "target_variables": {
-                    "type": "array",
-                    "minItems": 1,
-                    "maxItems": 3,
-                    "items": {"type": "string"},
-                },
-                "inverse_map": {"$ref": "#/$defs/map"},
-                "inverse_after_forward_residuals": {
-                    "type": "array",
-                    "minItems": 1,
-                    "maxItems": 3,
-                    "items": {"$ref": "#/$defs/polynomial"},
-                },
-                "forward_after_inverse_residuals": {
-                    "type": "array",
-                    "minItems": 1,
-                    "maxItems": 3,
-                    "items": {"$ref": "#/$defs/polynomial"},
-                },
-                "checked_directions": {
-                    "const": ["INVERSE_AFTER_FORWARD", "FORWARD_AFTER_INVERSE"]
-                },
+    two_sided = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "kind",
+            "source_variables",
+            "target_variables",
+            "inverse_map",
+            "inverse_after_forward_residuals",
+            "forward_after_inverse_residuals",
+            "checked_directions",
+        ],
+        "properties": {
+            "kind": {"const": "TWO_SIDED_COMPOSITION_REPLAY"},
+            "source_variables": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {"type": "string"},
+            },
+            "target_variables": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {"type": "string"},
+            },
+            "inverse_map": {"$ref": "#/$defs/map"},
+            "inverse_after_forward_residuals": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {"$ref": "#/$defs/polynomial"},
+            },
+            "forward_after_inverse_residuals": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {"$ref": "#/$defs/polynomial"},
+            },
+            "checked_directions": {
+                "const": ["INVERSE_AFTER_FORWARD", "FORWARD_AFTER_INVERSE"]
             },
         },
-        {
+    }
+    keller = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "kind",
+            "variable_order",
+            "determinant",
+            "keller_condition",
+            "global_invertibility",
+        ],
+        "properties": {
+            "kind": {"const": "KELLER_DETERMINANT_REPLAY"},
+            "variable_order": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {"type": "string"},
+            },
+            "determinant": {"$ref": "#/$defs/polynomial"},
+            "keller_condition": {"type": "boolean"},
+            "global_invertibility": {"const": "NOT_ESTABLISHED_BY_KELLER_CERTIFICATE"},
+        },
+    }
+    collision = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "kind",
+            "grid",
+            "first_point",
+            "second_point",
+            "common_image",
+            "global_consequence",
+        ],
+        "properties": {
+            "kind": {"const": "COLLISION_WITNESS_REPLAY"},
+            "grid": {"$ref": "#/$defs/grid"},
+            "first_point": {"$ref": "#/$defs/point"},
+            "second_point": {"$ref": "#/$defs/point"},
+            "common_image": {"$ref": "#/$defs/point"},
+            "global_consequence": {"const": "MAP_NOT_INJECTIVE_OVER_QQ"},
+        },
+    }
+    grid_exhaustion = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["kind", "grid", "examined_point_count", "global_consequence"],
+        "properties": {
+            "kind": {"const": "BOUNDED_GRID_EXHAUSTION_REPLAY"},
+            "grid": {"$ref": "#/$defs/grid"},
+            "examined_point_count": {"type": "integer", "minimum": 1},
+            "global_consequence": {"const": "NOT_ESTABLISHED"},
+        },
+    }
+    record = data.get("search_record")
+    stop_reason = record.get("stop_reason") if isinstance(record, dict) else None
+    search_nonconclusion = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "kind",
+            "grid",
+            "stop_reason",
+            "examined_point_count",
+            "global_consequence",
+        ],
+        "properties": {
+            "kind": {"const": "SEARCH_NONCONCLUSION"},
+            "grid": {"$ref": "#/$defs/grid"},
+            "stop_reason": (
+                {"const": stop_reason}
+                if stop_reason in {"TIMEOUT", "INCOMPLETE"}
+                else {"enum": ["TIMEOUT", "INCOMPLETE"]}
+            ),
+            "examined_point_count": {"type": "integer", "minimum": 0},
+            "global_consequence": {"const": "NOT_ESTABLISHED"},
+        },
+    }
+    kind_defs = {
+        "TWO_SIDED_COMPOSITION_REPLAY": (two_sided, ("rational", "polynomial", "map")),
+        "KELLER_DETERMINANT_REPLAY": (keller, ("rational", "polynomial")),
+        "COLLISION_WITNESS_REPLAY": (collision, ("rational", "grid", "point")),
+        "BOUNDED_GRID_EXHAUSTION_REPLAY": (grid_exhaustion, ("grid",)),
+        "SEARCH_NONCONCLUSION": (search_nonconclusion, ("grid",)),
+    }
+    kinds = licensed_certificate_kinds(data)
+    needed_defs: list[str] = []
+    for kind in kinds:
+        _schema, defs = kind_defs[kind]
+        for name in defs:
+            if name not in needed_defs:
+                needed_defs.append(name)
+    verdict_for_kind = {
+        "TWO_SIDED_COMPOSITION_REPLAY": [
+            "VALID_TWO_SIDED_INVERSE",
+            "INVALID_INVERSE_CANDIDATE",
+        ],
+        "KELLER_DETERMINANT_REPLAY": ["KELLER_CONDITION_ONLY", "NOT_KELLER"],
+        "COLLISION_WITNESS_REPLAY": ["COLLISION_FOUND"],
+        "BOUNDED_GRID_EXHAUSTION_REPLAY": ["NO_COLLISION_IN_DECLARED_GRID"],
+        "SEARCH_NONCONCLUSION": ["UNKNOWN"],
+    }
+    shared_properties = {
+        "case_id": {"const": data["case_id"]},
+        "family": {"const": data["family"]},
+        "bindings": binding_schema,
+    }
+    if len(kinds) == 1:
+        certificate_schema = kind_defs[kinds[0]][0]
+        result_schema: dict[str, object] = {
             "type": "object",
             "additionalProperties": False,
-            "required": [
-                "kind",
-                "variable_order",
-                "determinant",
-                "keller_condition",
-                "global_invertibility",
-            ],
+            "required": ["case_id", "family", "verdict", "bindings", "certificate"],
             "properties": {
-                "kind": {"const": "KELLER_DETERMINANT_REPLAY"},
-                "variable_order": {
-                    "type": "array",
-                    "minItems": 1,
-                    "maxItems": 3,
-                    "items": {"type": "string"},
-                },
-                "determinant": {"$ref": "#/$defs/polynomial"},
-                "keller_condition": {"type": "boolean"},
-                "global_invertibility": {
-                    "const": "NOT_ESTABLISHED_BY_KELLER_CERTIFICATE"
-                },
+                **shared_properties,
+                "verdict": {"enum": list(licensed_verdicts(data))},
+                "certificate": certificate_schema,
             },
-        },
-        {
-            "type": "object",
-            "additionalProperties": False,
-            "required": [
-                "kind",
-                "grid",
-                "first_point",
-                "second_point",
-                "common_image",
-                "global_consequence",
-            ],
-            "properties": {
-                "kind": {"const": "COLLISION_WITNESS_REPLAY"},
-                "grid": {"$ref": "#/$defs/grid"},
-                "first_point": {"$ref": "#/$defs/point"},
-                "second_point": {"$ref": "#/$defs/point"},
-                "common_image": {"$ref": "#/$defs/point"},
-                "global_consequence": {"const": "MAP_NOT_INJECTIVE_OVER_QQ"},
-            },
-        },
-        {
-            "type": "object",
-            "additionalProperties": False,
-            "required": ["kind", "grid", "examined_point_count", "global_consequence"],
-            "properties": {
-                "kind": {"const": "BOUNDED_GRID_EXHAUSTION_REPLAY"},
-                "grid": {"$ref": "#/$defs/grid"},
-                "examined_point_count": {"type": "integer", "minimum": 1},
-                "global_consequence": {"const": "NOT_ESTABLISHED"},
-            },
-        },
-        {
-            "type": "object",
-            "additionalProperties": False,
-            "required": [
-                "kind",
-                "grid",
-                "stop_reason",
-                "examined_point_count",
-                "global_consequence",
-            ],
-            "properties": {
-                "kind": {"const": "SEARCH_NONCONCLUSION"},
-                "grid": {"$ref": "#/$defs/grid"},
-                "stop_reason": {"enum": ["TIMEOUT", "INCOMPLETE"]},
-                "examined_point_count": {"type": "integer", "minimum": 0},
-                "global_consequence": {"const": "NOT_ESTABLISHED"},
-            },
-        },
-    ]
+        }
+    else:
+        result_schema = {
+            "oneOf": [
+                {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": [
+                        "case_id",
+                        "family",
+                        "verdict",
+                        "bindings",
+                        "certificate",
+                    ],
+                    "properties": {
+                        **shared_properties,
+                        "verdict": {"enum": verdict_for_kind[kind]},
+                        "certificate": kind_defs[kind][0],
+                    },
+                }
+                for kind in kinds
+            ]
+        }
+    definitions = {
+        "rational": rational_schema,
+        "polynomial": polynomial_schema,
+        "map": map_schema,
+        "grid": grid_schema,
+        "point": point_schema,
+    }
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "additionalProperties": False,
         "required": ["result"],
         "properties": {
-            "result": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["case_id", "family", "verdict", "bindings", "certificate"],
-                "properties": {
-                    "case_id": {"const": data["case_id"]},
-                    "family": {"const": data["family"]},
-                    "verdict": {
-                        "enum": [
-                            "VALID_TWO_SIDED_INVERSE",
-                            "INVALID_INVERSE_CANDIDATE",
-                            "KELLER_CONDITION_ONLY",
-                            "NOT_KELLER",
-                            "COLLISION_FOUND",
-                            "NO_COLLISION_IN_DECLARED_GRID",
-                            "UNKNOWN",
-                        ]
-                    },
-                    "bindings": binding_schema,
-                    "certificate": {"oneOf": certificate_variants},
-                },
-            },
+            "result": result_schema,
         },
-        "$defs": {
-            "rational": rational_schema,
-            "polynomial": polynomial_schema,
-            "map": map_schema,
-            "grid": grid_schema,
-            "point": point_schema,
-        },
+        "$defs": {name: definitions[name] for name in needed_defs},
     }
 
 
@@ -1070,9 +1222,9 @@ def public_contract(data: dict[str, object]) -> PublicContract:
         "task_id": data["task_id"],
         "submission_path": "/app/submission.json",
         "public_notes": (
-            "Submit the terminal certificate inside result. The verifier replays "
-            "the exact polynomial-map predicate and checks the frozen claim "
-            "bindings carried by the result."
+            "Submit the family-licensed terminal certificate inside result. "
+            "The verifier replays the exact polynomial-map predicate and "
+            "checks the frozen claim bindings carried by the result."
         ),
         "submission_result": properties["result"],
         "schema_definitions": schema["$defs"],
@@ -1171,14 +1323,9 @@ terminal certificate in the `result` described by `submission_schema.json`.
 Its bindings must identify the exact claim, map, subject, semantics, and
 checker identities frozen in the input.
 
-For an inverse claim, the certificate must expose both ordered composition
-residual families. A Keller-condition certificate licenses only its exact
-constant nonzero Jacobian claim. A bounded search licenses only an exact
-collision witness, complete declared-grid exhaustion, or an honest
-non-conclusion matching timeout or incomplete execution. Any mathematically
-valid collision witness in the declared grid is acceptable. The terminal
-`verdict` is a semantic field of the mathematical result; do not add a
-separate generic conclusion or assurance claim.
+{family_instruction(data)} That `verdict` is a semantic field of the
+mathematical result; do not add a separate generic conclusion or assurance
+claim.
 
 Use any mathematical method. No external service or special tool is required.
 """

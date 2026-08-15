@@ -28,13 +28,21 @@ def _load_frozen_input():
 
 
 def _canonical_fraction(value):
-    if not isinstance(value, str):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        parsed = Fraction(value)
+        parsed = Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    return parsed if str(parsed) == value else None
+    return (
+        parsed
+        if parsed.numerator == numerator and parsed.denominator == denominator
+        else None
+    )
 
 
 def _valid_blocks(blocks, q, start, end):

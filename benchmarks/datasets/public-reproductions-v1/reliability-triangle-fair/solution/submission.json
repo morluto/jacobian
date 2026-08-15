@@ -1,8 +1,8 @@
 {
   "result": {
     "probability": {
-      "den": "8",
-      "num": "5"
+      "den": 8,
+      "num": 5
     },
     "states": 8
   },

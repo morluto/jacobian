@@ -7,4 +7,3 @@ import hashlib,json
 from pathlib import Path
 s=json.loads(Path('/app/submission.json').read_text()); e={'schema_version':'1','task_id':'jacobian/chebotarev-fixed-point-proof-audit','result':s['result']}; raw=json.dumps(e,separators=(',',':')).encode(); Path('/app/evidence/chebotarev-audit.json').write_bytes(raw); s['witness'][0]['sha256']='sha256:'+hashlib.sha256(raw).hexdigest(); Path('/app/submission.json').write_text(json.dumps(s,separators=(',',':')))
 PY
-cp /solution/answer.txt /app/answer.txt

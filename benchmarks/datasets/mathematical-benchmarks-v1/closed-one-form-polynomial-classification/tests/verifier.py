@@ -19,13 +19,21 @@ def _integer(value):
 
 
 def _canonical_fraction(value):
-    if not isinstance(value, str):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        fraction = Fraction(value)
+        fraction = Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    return fraction if str(fraction) == value else None
+    return (
+        fraction
+        if fraction.numerator == numerator and fraction.denominator == denominator
+        else None
+    )
 
 
 def _valid_vector(vector):
@@ -90,7 +98,9 @@ def rank(matrix):
 def derivative(terms, axis):
     result = {}
     for term in terms:
-        coefficient = Fraction(term["coefficient"])
+        coefficient = _canonical_fraction(term["coefficient"])
+        if coefficient is None:
+            raise ValueError
         x_power, y_power = term["x_power"], term["y_power"]
         power = x_power if axis == 0 else y_power
         if not power:

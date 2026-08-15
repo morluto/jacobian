@@ -93,14 +93,43 @@ def _base_is_valid(base: object) -> bool:
 
 
 def _difference_identity_is_valid(value: object) -> bool:
-    if value != {"left": "f(a)-f(b)", "right_factors": ["a-b", "a+b+1"]}:
+    if not isinstance(value, dict) or set(value) != {
+        "left_function_coefficients",
+        "right_factors",
+    }:
+        return False
+    coefficients = value["left_function_coefficients"]
+    factors = value["right_factors"]
+    if (
+        not isinstance(coefficients, list)
+        or len(coefficients) != 3
+        or not all(type(coefficient) is int for coefficient in coefficients)
+        or not isinstance(factors, list)
+        or len(factors) != 2
+        or any(
+            not isinstance(factor, dict)
+            or set(factor) != {"a_coefficient", "b_coefficient", "constant"}
+            or not all(type(coefficient) is int for coefficient in factor.values())
+            for factor in factors
+        )
+    ):
         return False
     # Both sides have degree at most two in each variable; exact evaluation on
     # this grid independently catches any coefficient mismatch.
     for a in range(-3, 4):
         for b in range(-3, 4):
-            left = (a * a + a + 2) - (b * b + b + 2)
-            if left != (a - b) * (a + b + 1):
+            left = sum(
+                coefficient * (a**power - b**power)
+                for power, coefficient in enumerate(coefficients)
+            )
+            right = 1
+            for factor in factors:
+                right *= (
+                    factor["a_coefficient"] * a
+                    + factor["b_coefficient"] * b
+                    + factor["constant"]
+                )
+            if left != right:
                 return False
     return True
 
@@ -133,7 +162,7 @@ def _induction_is_valid(value: object) -> bool:
         sub_terms == expected_sub
         and _strictly_above(sub_terms[1], sub_terms[0])
         and value["add_one_reason"]
-        == "P_2n_minus_1_divisible_by_8_implies_P_2n_plus_1_has_v2_1"
+        == {"premise_minimum_v2": 3, "conclusion_exact_v2": 1}
         and u_terms == expected_u
         and _strictly_above(u_terms[1], u_terms[0])
         and successor == expected_successor == shifted_hypotheses
@@ -199,8 +228,17 @@ def _result_is_valid(result: object, source: dict[str, Any]) -> bool:
         and _difference_identity_is_valid(result["difference_identity"])
         and identities
         == {
-            "taylor": "u_2n-2*u_n=u_n*(P_n-1)+u_n^2*K",
-            "product": "P_2n=P_n*(P_n+2*u_n*Delta)",
+            "taylor": {
+                "u_2n": 1,
+                "u_n": -1,
+                "u_n_times_P_n": -1,
+                "u_n_squared_times_K": -1,
+            },
+            "product": {
+                "P_2n": 1,
+                "P_n_squared": -1,
+                "P_n_times_u_n_times_delta": -2,
+            },
         }
         and _induction_is_valid(result["valuation_induction"])
         and _target_is_valid(result["target_transfer"])

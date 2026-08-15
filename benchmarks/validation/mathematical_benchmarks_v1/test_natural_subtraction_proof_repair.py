@@ -20,6 +20,15 @@ def test_schema_requires_both_basis_entries() -> None:
         Draft202012Validator(schema).validate(submission)
 
     submission = json.loads((task / "solution" / "submission.json").read_text())
-    submission["result"]["multipliers"] = ["1"]
+    submission["result"]["multipliers"] = [{"numerator": 1, "denominator": 1}]
+    with pytest.raises(ValidationError):
+        Draft202012Validator(schema).validate(submission)
+
+
+def test_schema_rejects_string_coerced_rationals() -> None:
+    task = _fixtures._task(TASK)
+    schema = json.loads((task / "environment" / "submission_schema.json").read_text())
+    submission = json.loads((task / "solution" / "submission.json").read_text())
+    submission["result"]["derived_coefficients"][0] = "0"
     with pytest.raises(ValidationError):
         Draft202012Validator(schema).validate(submission)

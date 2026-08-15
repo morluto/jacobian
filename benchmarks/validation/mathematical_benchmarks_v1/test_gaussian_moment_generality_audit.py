@@ -14,8 +14,19 @@ TASK = "gaussian-moment-generality-audit"
 def test_rejects_corrupted_coefficient(tmp_path: Path) -> None:
     task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())
-    submission["result"]["v_coefficients"][2] = "-1/3"
+    submission["result"]["v_coefficients"][2] = {
+        "numerator": -1,
+        "denominator": 3,
+    }
     _fixtures._write_json(app / "submission.json", submission)
     rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
     assert rejected.reward == 0.0
+
+
+def test_rejects_string_coerced_coefficient(tmp_path: Path) -> None:
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "string")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["parameter_a"] = "1"
+    _fixtures._write_json(app / "submission.json", submission)
+    assert _verifier._run_verifier(task, app, logs).reward == 0.0

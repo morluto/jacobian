@@ -1,1 +1,1 @@
-{"task_id":"jacobian/smith-rank-deficient","conclusion":"TRUE","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/smith-rank-deficient","complete finite input"],"expected_rank":1,"expected_invariant_factors":["2"]}
+{"task_id":"jacobian/smith-rank-deficient","conclusion":"TRUE","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/smith-rank-deficient","complete finite input"],"expected_rank":1,"expected_invariant_factors":[2]}

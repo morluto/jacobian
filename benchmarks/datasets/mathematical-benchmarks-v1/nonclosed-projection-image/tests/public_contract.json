@@ -1,6 +1,16 @@
 {
   "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
+  "schema_definitions": {
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {"minimum": 1, "type": "integer"},
+        "numerator": {"type": "integer"}
+      },
+      "required": ["numerator", "denominator"],
+      "type": "object"
+    }
+  },
   "schema_version": "1",
   "submission_path": "/app/submission.json",
   "submission_result": {
@@ -8,33 +18,33 @@
     "properties": {
       "limit_coordinates": {
         "items": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "minItems": 100,
         "type": "array"
       },
       "operator_bound": {
-        "type": "string"
+        "$ref": "#/$defs/rational"
       },
       "prefixes": {
         "items": {
           "additionalProperties": false,
           "properties": {
             "limit_norm_sq_partial": {
-              "type": "string"
+              "$ref": "#/$defs/rational"
             },
             "n": {
               "minimum": 1,
               "type": "integer"
             },
             "preimage_coordinate": {
-              "type": "string"
+              "$ref": "#/$defs/rational"
             },
             "preimage_norm_sq_partial": {
-              "type": "string"
+              "$ref": "#/$defs/rational"
             },
             "weight": {
-              "type": "string"
+              "$ref": "#/$defs/rational"
             }
           },
           "required": [
@@ -52,7 +62,7 @@
         "additionalProperties": false,
         "properties": {
           "bound_coefficient": {
-            "type": "string"
+            "$ref": "#/$defs/rational"
           },
           "bound_exponent": {
             "minimum": 1,
@@ -69,7 +79,7 @@
         "additionalProperties": false,
         "properties": {
           "bound_coefficient": {
-            "type": "string"
+            "$ref": "#/$defs/rational"
           },
           "bound_exponent": {
             "minimum": 1,
@@ -105,6 +115,17 @@
   },
   "submission_schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+      "rational": {
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {"minimum": 1, "type": "integer"},
+          "numerator": {"type": "integer"}
+        },
+        "required": ["numerator", "denominator"],
+        "type": "object"
+      }
+    },
     "additionalProperties": false,
     "properties": {
       "result": {
@@ -112,33 +133,33 @@
         "properties": {
           "limit_coordinates": {
             "items": {
-              "type": "string"
+              "$ref": "#/$defs/rational"
             },
             "minItems": 100,
             "type": "array"
           },
           "operator_bound": {
-            "type": "string"
+            "$ref": "#/$defs/rational"
           },
           "prefixes": {
             "items": {
               "additionalProperties": false,
               "properties": {
                 "limit_norm_sq_partial": {
-                  "type": "string"
+                  "$ref": "#/$defs/rational"
                 },
                 "n": {
                   "minimum": 1,
                   "type": "integer"
                 },
                 "preimage_coordinate": {
-                  "type": "string"
+                  "$ref": "#/$defs/rational"
                 },
                 "preimage_norm_sq_partial": {
-                  "type": "string"
+                  "$ref": "#/$defs/rational"
                 },
                 "weight": {
-                  "type": "string"
+                  "$ref": "#/$defs/rational"
                 }
               },
               "required": [
@@ -156,7 +177,7 @@
             "additionalProperties": false,
             "properties": {
               "bound_coefficient": {
-                "type": "string"
+                "$ref": "#/$defs/rational"
               },
               "bound_exponent": {
                 "minimum": 1,
@@ -173,7 +194,7 @@
             "additionalProperties": false,
             "properties": {
               "bound_coefficient": {
-                "type": "string"
+                "$ref": "#/$defs/rational"
               },
               "bound_exponent": {
                 "minimum": 1,

@@ -8,6 +8,9 @@ Submit an exact incidence factorization.  Choose and describe a valid
 the diagonal weights in that basis.  Also provide the determinant parity trace
 for every `n` through `trace_max_n`, including the number of nonempty even-cardinality
 subsets and the resulting determinant.
+Encode the general even-count expression by its power base, exponent offset,
+and constant offset, and encode the general determinant by its value at `n=1`
+and its value otherwise.
 
 The public determinant values alone are insufficient.  The verifier rebuilds
 the intersection matrix and checks the submitted factorization exactly, then

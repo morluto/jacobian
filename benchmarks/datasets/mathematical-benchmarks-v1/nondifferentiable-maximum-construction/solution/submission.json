@@ -1,12 +1,12 @@
 {
   "result": {
-    "left_derivative": "3",
-    "left_slope": "3",
-    "left_value_at_join": "2",
-    "peak": "2",
-    "right_derivative": "-1/2",
-    "right_slope": "-1/2",
-    "right_value_at_join": "2"
+    "left_derivative": {"denominator": 1, "numerator": 3},
+    "left_slope": {"denominator": 1, "numerator": 3},
+    "left_value_at_join": {"denominator": 1, "numerator": 2},
+    "peak": {"denominator": 1, "numerator": 2},
+    "right_derivative": {"denominator": 2, "numerator": -1},
+    "right_slope": {"denominator": 2, "numerator": -1},
+    "right_value_at_join": {"denominator": 1, "numerator": 2}
   },
   "witness": [
     {

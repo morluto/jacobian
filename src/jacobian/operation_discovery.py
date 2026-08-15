@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from typing import Protocol
 
 from jacobian.contracts.operations import (
     OperationBrowseCard,
     OperationBrowseResult,
-    OperationCatalogSnapshot,
     OperationDiscoveryMatch,
     OperationDiscoveryRequest,
     OperationDiscoveryResult,
@@ -40,17 +40,16 @@ class SearchableOperation(Protocol):
 
 
 def discover_operations(
-    catalog: OperationCatalogSnapshot,
+    operations: Sequence[SearchableOperation],
     request: OperationDiscoveryRequest,
 ) -> OperationDiscoveryResult:
-    """Search an immutable operation snapshot deterministically."""
+    """Search immutable operation declarations deterministically."""
 
-    descriptors = catalog.operations
     normalized_domain = (
         normalize_domain(request.domain) if request.domain is not None else None
     )
     ranked: list[tuple[int, OperationDiscoveryMatch]] = []
-    for descriptor in descriptors:
+    for descriptor in operations:
         if normalized_domain is not None and not matches_domain(
             descriptor, normalized_domain
         ):
@@ -99,7 +98,7 @@ def discover_operations(
 
 
 def browse_operations(
-    catalog: OperationCatalogSnapshot,
+    searchable_operations: Sequence[SearchableOperation],
     *,
     domain: str | None,
     limit: int,
@@ -115,7 +114,9 @@ def browse_operations(
             description=descriptor.description,
             tags=descriptor.tags,
         )
-        for descriptor in catalog.operations
+        for descriptor in sorted(
+            searchable_operations, key=lambda operation: operation.operation_id
+        )
         if normalized_domain is None or matches_domain(descriptor, normalized_domain)
     )
     start = 0

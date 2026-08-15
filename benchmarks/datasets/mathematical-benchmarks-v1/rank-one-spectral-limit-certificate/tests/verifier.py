@@ -62,6 +62,42 @@ def _checkpoints_valid(checkpoints: object) -> list[int] | None:
     return ns
 
 
+def _root_formula_valid(value: object, ns: list[int]) -> bool:
+    if not isinstance(value, dict) or set(value) != {
+        "coefficient",
+        "numerator_offsets",
+        "denominator_offsets",
+    }:
+        return False
+    coefficient = value["coefficient"]
+    numerator_offsets = value["numerator_offsets"]
+    denominator_offsets = value["denominator_offsets"]
+    if (
+        type(coefficient) is not int
+        or not isinstance(numerator_offsets, list)
+        or not isinstance(denominator_offsets, list)
+        or len(numerator_offsets) != 2
+        or len(denominator_offsets) != 2
+        or not all(type(offset) is int for offset in numerator_offsets)
+        or not all(type(offset) is int for offset in denominator_offsets)
+    ):
+        return False
+    if (
+        coefficient != 4
+        or sorted(numerator_offsets) != [0, 1]
+        or sorted(denominator_offsets) != [-1, 2]
+    ):
+        return False
+    return all(
+        Fraction(
+            coefficient * math.prod(n + offset for offset in numerator_offsets),
+            math.prod(n + offset for offset in denominator_offsets),
+        )
+        == 1 / sum((Fraction(1, k**3 - k) for k in range(2, n + 1)), Fraction())
+        for n in ns
+    )
+
+
 def certificate_valid(result: object) -> bool:
     if not isinstance(result, dict) or set(result) != {
         "rank_one_sign",
@@ -96,7 +132,7 @@ def certificate_valid(result: object) -> bool:
     return bool(
         len(ns) == len(set(ns))
         and result["rank_one_sign"] == "DIAGONAL_MINUS_LAMBDA_ONES"
-        and result["root_formula"] == "4*n*(n+1)/((n-1)*(n+2))"
+        and _root_formula_valid(result["root_formula"], ns)
         and rat(result["limit"]) == 4
     )
 

@@ -54,6 +54,13 @@ it must not duplicate `result` or carry a narrative explanation. Do not add
 generic `claimed_assurance`, scope, completeness, limitations, or proof prose.
 Ordinary mathematics tasks do not need authorization claims.
 
+A typed result represents a mathematical value, not one JSON or textual
+rendering. Normalize and compare equivalent results—such as unreduced
+rationals, scaled rational functions, and unordered factors—unless the public
+task explicitly makes canonicalization an outcome. Declare every intentional
+normal-form or ordering rule in the public instruction and schema. Never use
+`answer.txt` as the authoritative answer channel.
+
 The agent-visible instruction and schema are the complete public protocol:
 required result fields, exact types, scope, and any task-specific witness rule.
 Do not hide a validity requirement in a README or task metadata. Keep solution,

@@ -56,9 +56,6 @@
           "minimum": 0,
           "type": "integer"
         },
-        "prime_formula": {
-          "type": "string"
-        },
         "probes": {
           "items": {
             "$ref": "#/$defs/probe"
@@ -66,16 +63,11 @@
           "maxItems": 10,
           "minItems": 4,
           "type": "array"
-        },
-        "threshold_rule": {
-          "type": "string"
         }
       },
       "required": [
         "a_1",
         "default_exponent_offset",
-        "prime_formula",
-        "threshold_rule",
         "probes"
       ],
       "type": "object"
@@ -128,9 +120,6 @@
             "minimum": 0,
             "type": "integer"
           },
-          "prime_formula": {
-            "type": "string"
-          },
           "probes": {
             "items": {
               "$ref": "#/$defs/probe"
@@ -138,16 +127,11 @@
             "maxItems": 10,
             "minItems": 4,
             "type": "array"
-          },
-          "threshold_rule": {
-            "type": "string"
           }
         },
         "required": [
           "a_1",
           "default_exponent_offset",
-          "prime_formula",
-          "threshold_rule",
           "probes"
         ],
         "type": "object"

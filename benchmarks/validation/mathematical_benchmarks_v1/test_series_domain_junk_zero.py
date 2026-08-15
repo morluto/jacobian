@@ -24,7 +24,7 @@ def test_accepts_alternative_denominator(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     result = submission["result"]
     result["reciprocal_denominator"] = 5
-    result["real_part"] = "1/5"
+    result["real_part"] = {"numerator": 1, "denominator": 5}
     result["general_block_power_exponent"] = {
         "level_coefficient": 4,
         "constant": -1,
@@ -47,6 +47,14 @@ def test_rejects_corrupted_general_bound(tmp_path: Path) -> None:
     rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
     assert rejected.reward == 0.0
+
+
+def test_rejects_string_coerced_real_part(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["real_part"] = "1/3"
+    _rewrite(app, submission)
+    assert _verifier._run_verifier(task, app, logs).reward == 0.0
 
 
 def test_uses_result_only_protocol(tmp_path: Path) -> None:

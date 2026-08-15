@@ -1,4 +1,23 @@
 {
+  "$defs": {
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
@@ -43,7 +62,7 @@
                   "additionalProperties": false,
                   "properties": {
                     "coefficient": {
-                      "type": "string"
+                      "$ref": "#/$defs/rational"
                     },
                     "x_power": {
                       "maximum": 4,

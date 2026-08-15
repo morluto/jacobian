@@ -33,6 +33,7 @@ from jacobian.contracts.graph_optimization import (
 )
 from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
+from jacobian.domains.graph_optimization._budget import remaining_ms as _remaining_ms
 from jacobian.domains.graph_optimization.operations import build_simple_graph
 from jacobian.math_tools import MathTool
 
@@ -277,9 +278,7 @@ def _maximum_cardinality(
         if len(tested) >= request.resource_budget.max_solver_calls:
             termination = "SOLVER_CALL_LIMIT"
             break
-        remaining_ms = int(
-            (request.resource_budget.wall_seconds - (time.monotonic() - started)) * 1000
-        )
+        remaining_ms = _remaining_ms(started, request.resource_budget.wall_seconds)
         if remaining_ms <= 0:
             termination = "WALL_TIME"
             break

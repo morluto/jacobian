@@ -16,6 +16,23 @@
       ],
       "type": "object"
     },
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
     "rational_function": {
       "additionalProperties": false,
       "properties": {
@@ -46,7 +63,7 @@
       "additionalProperties": false,
       "properties": {
         "coefficient": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "exponents": {
           "items": {
@@ -94,7 +111,7 @@
         },
         "relation_coefficients": {
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/rational"
           },
           "maxItems": 3,
           "minItems": 3,

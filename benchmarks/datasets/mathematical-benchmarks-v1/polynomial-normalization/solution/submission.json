@@ -2,14 +2,14 @@
   "result": {
     "terms": [
       {
-        "coefficient": "3",
+        "coefficient": {"denominator": 1, "numerator": 3},
         "exponents": [
           1,
           2
         ]
       },
       {
-        "coefficient": "5",
+        "coefficient": {"denominator": 1, "numerator": 5},
         "exponents": [
           0,
           0

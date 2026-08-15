@@ -1,5 +1,6 @@
 import itertools
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -49,25 +50,40 @@ def _exact_json_equal(left: object, right: object) -> bool:
     return left == right
 
 
+def _formula_shape_is_valid(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != {
+        "incident_vertex_offsets",
+        "free_edge_base",
+        "free_edge_exponent",
+    }:
+        return False
+    offsets = value["incident_vertex_offsets"]
+    exponent = value["free_edge_exponent"]
+    return bool(
+        isinstance(offsets, list)
+        and len(offsets) == 3
+        and len(set(offsets)) == 3
+        and all(type(offset) is int for offset in offsets)
+        and type(value["free_edge_base"]) is int
+        and isinstance(exponent, dict)
+        and set(exponent) == {"binomial_order", "offset"}
+        and type(exponent["binomial_order"]) is int
+        and type(exponent["offset"]) is int
+    )
+
+
 def _result_shape_is_valid(result: object) -> bool:
     if not isinstance(result, dict) or set(result) != {
         "pair_semantics",
-        "incident_ordered_pair_factor",
-        "free_edge_factor_exponent",
         "formula",
         "probe_values",
     }:
         return False
     if not isinstance(result["pair_semantics"], str):
         return False
-    if result["pair_semantics"] not in {"ORDERED", "UNORDERED"} or not all(
-        type(result[field]) is str and bool(result[field].strip())
-        for field in (
-            "incident_ordered_pair_factor",
-            "free_edge_factor_exponent",
-            "formula",
-        )
-    ):
+    if result["pair_semantics"] not in {"ORDERED", "UNORDERED"}:
+        return False
+    if not _formula_shape_is_valid(result["formula"]):
         return False
     probes = result["probe_values"]
     if not isinstance(probes, list) or len(probes) != 4:
@@ -127,18 +143,25 @@ def _mathematical_result_is_valid(result: object, source: dict[str, Any]) -> boo
             if type(n) is not int or type(coefficient) is not int:
                 return False
             values[n] = coefficient
+        formula = result["formula"]
+        offsets = formula["incident_vertex_offsets"]
+        base = formula["free_edge_base"]
+        exponent = formula["free_edge_exponent"]
+
+        def submitted_formula(n: int) -> int:
+            incident_factor = math.prod(n + offset for offset in offsets)
+            free_edge_exponent = (
+                math.comb(n, exponent["binomial_order"]) + exponent["offset"]
+            )
+            return incident_factor * base**free_edge_exponent
+
         return bool(
             result["pair_semantics"] == "ORDERED"
-            and result["incident_ordered_pair_factor"] == "n(n-1)(n-2)"
-            and result["free_edge_factor_exponent"] == "binom(n,2)-2"
-            and result["formula"] == "n(n-1)(n-2)*2^(binom(n,2)-2)"
+            and sorted(offsets) == [-2, -1, 0]
+            and base == 2
+            and exponent == {"binomial_order": 2, "offset": -2}
             and set(values) == {3, 4, 5, 6}
-            and all(
-                values[n]
-                == exhaustive(n)
-                == n * (n - 1) * (n - 2) * 2 ** (n * (n - 1) // 2 - 2)
-                for n in values
-            )
+            and all(values[n] == exhaustive(n) == submitted_formula(n) for n in values)
         )
     except (KeyError, TypeError, ValueError):
         return False

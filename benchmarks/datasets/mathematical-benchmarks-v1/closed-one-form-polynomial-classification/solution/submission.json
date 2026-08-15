@@ -129,12 +129,18 @@
       {
         "terms": [
           {
-            "coefficient": "1",
+            "coefficient": {
+              "denominator": 1,
+              "numerator": 1
+            },
             "x_power": 1,
             "y_power": 0
           },
           {
-            "coefficient": "1",
+            "coefficient": {
+              "denominator": 1,
+              "numerator": 1
+            },
             "x_power": 0,
             "y_power": 1
           }
@@ -143,12 +149,18 @@
       {
         "terms": [
           {
-            "coefficient": "1/2",
+            "coefficient": {
+              "denominator": 2,
+              "numerator": 1
+            },
             "x_power": 2,
             "y_power": 0
           },
           {
-            "coefficient": "1/2",
+            "coefficient": {
+              "denominator": 2,
+              "numerator": 1
+            },
             "x_power": 0,
             "y_power": 2
           }
@@ -157,7 +169,10 @@
       {
         "terms": [
           {
-            "coefficient": "1",
+            "coefficient": {
+              "denominator": 1,
+              "numerator": 1
+            },
             "x_power": 1,
             "y_power": 1
           }
@@ -166,12 +181,18 @@
       {
         "terms": [
           {
-            "coefficient": "1/3",
+            "coefficient": {
+              "denominator": 3,
+              "numerator": 1
+            },
             "x_power": 3,
             "y_power": 0
           },
           {
-            "coefficient": "1/3",
+            "coefficient": {
+              "denominator": 3,
+              "numerator": 1
+            },
             "x_power": 0,
             "y_power": 3
           }
@@ -180,12 +201,18 @@
       {
         "terms": [
           {
-            "coefficient": "1",
+            "coefficient": {
+              "denominator": 1,
+              "numerator": 1
+            },
             "x_power": 2,
             "y_power": 1
           },
           {
-            "coefficient": "1",
+            "coefficient": {
+              "denominator": 1,
+              "numerator": 1
+            },
             "x_power": 1,
             "y_power": 2
           }
@@ -194,12 +221,18 @@
       {
         "terms": [
           {
-            "coefficient": "1/4",
+            "coefficient": {
+              "denominator": 4,
+              "numerator": 1
+            },
             "x_power": 4,
             "y_power": 0
           },
           {
-            "coefficient": "1/4",
+            "coefficient": {
+              "denominator": 4,
+              "numerator": 1
+            },
             "x_power": 0,
             "y_power": 4
           }
@@ -208,7 +241,10 @@
       {
         "terms": [
           {
-            "coefficient": "1/2",
+            "coefficient": {
+              "denominator": 2,
+              "numerator": 1
+            },
             "x_power": 2,
             "y_power": 2
           }
@@ -217,12 +253,18 @@
       {
         "terms": [
           {
-            "coefficient": "1",
+            "coefficient": {
+              "denominator": 1,
+              "numerator": 1
+            },
             "x_power": 3,
             "y_power": 1
           },
           {
-            "coefficient": "1",
+            "coefficient": {
+              "denominator": 1,
+              "numerator": 1
+            },
             "x_power": 1,
             "y_power": 3
           }

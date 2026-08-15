@@ -2,7 +2,12 @@
 
 Audit the frozen Vieta-jumping proof for positive integer pairs satisfying `x^2-xy+y^2 | xy(xy-1)`. Identify the first invalid integrality step, then replace the broken recurrence with one integer-polynomial parameter family proving infinitely many distinct ratios.
 
-The `source_audit` object must use the following exact tokens: `invalid_step` is `"VIETA_PARTNER_INTEGRALITY"`, `k` is `"d^2-1"`, `claimed_partner` is `"d^2/(d^2-1)"`, `status_for_d_ge_2` is `"NONINTEGER"`, and `downstream_recurrence_status` is `"UNSUPPORTED"`.
+The `source_audit` object must use the following exact categorical tokens:
+`invalid_step` is `"VIETA_PARTNER_INTEGRALITY"`, `status_for_d_ge_2` is
+`"NONINTEGER"`, and `downstream_recurrence_status` is `"UNSUPPORTED"`.
+Represent `k=d^2-1` as an ascending coefficient array in `d`, and represent
+the claimed partner `d^2/(d^2-1)` by separate ascending numerator and
+denominator coefficient arrays.
 
 Submit ascending coefficient arrays in the parameter `t` for the reduced variables `a,b,d`, the original pair `x,y`, the norm, both exact identity quotients, the final divisibility quotient, and the ratio polynomial. The verifier binds `x` to `ratio*y` as a polynomial identity, so any valid integer-polynomial parameterization is allowed; do not assume the Oracle's `t^2` parameterization is required.
 

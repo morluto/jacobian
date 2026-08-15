@@ -1,8 +1,17 @@
 {
   "result": {
-    "formula": "n(n-1)(n-2)*2^(binom(n,2)-2)",
-    "free_edge_factor_exponent": "binom(n,2)-2",
-    "incident_ordered_pair_factor": "n(n-1)(n-2)",
+    "formula": {
+      "free_edge_base": 2,
+      "free_edge_exponent": {
+        "binomial_order": 2,
+        "offset": -2
+      },
+      "incident_vertex_offsets": [
+        0,
+        -1,
+        -2
+      ]
+    },
     "pair_semantics": "ORDERED",
     "probe_values": [
       {

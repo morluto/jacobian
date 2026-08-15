@@ -13,28 +13,58 @@
       "square_root_branch": "CONSTANT_TERM_ONE"
     },
     "h_coefficients": [
-      "1",
-      "1"
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      }
     ],
     "moment_conclusion": {
       "mixed": "M_FACTORIAL",
       "ordinary": "ZERO",
       "quantifier": "EVERY_INTEGER_M_AT_LEAST_ONE"
     },
-    "parameter_a": "1",
+    "parameter_a": {
+      "denominator": 1,
+      "numerator": 1
+    },
     "v_coefficients": [
-      "-1",
-      "-3/2",
-      "-1/2"
+      {
+        "denominator": 1,
+        "numerator": -1
+      },
+      {
+        "denominator": 2,
+        "numerator": -3
+      },
+      {
+        "denominator": 2,
+        "numerator": -1
+      }
     ],
     "zeta": {
       "denominator": [
-        "1",
-        "-1"
+        {
+          "denominator": 1,
+          "numerator": 1
+        },
+        {
+          "denominator": 1,
+          "numerator": -1
+        }
       ],
       "numerator": [
-        "0",
-        "1"
+        {
+          "denominator": 1,
+          "numerator": 0
+        },
+        {
+          "denominator": 1,
+          "numerator": 1
+        }
       ]
     }
   }

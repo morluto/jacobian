@@ -45,7 +45,13 @@
     },
     "encoded_answer": 508,
     "fixed_point_total": 15,
-    "mod2_factor": "(x+1)^4"
+    "mod2_factor": {
+      "factor_coefficients": [
+        1,
+        1
+      ],
+      "multiplicity": 4
+    }
   },
   "witness": [
     {

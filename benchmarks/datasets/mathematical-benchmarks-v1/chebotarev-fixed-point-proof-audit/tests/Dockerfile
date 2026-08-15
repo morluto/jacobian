@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact verifier for a conditional Chebotarev proof audit.
 LABEL jacobian.task="jacobian/chebotarev-fixed-point-proof-audit" \
-      jacobian.checksum="0d3be31cf220a3b4e6ce91c7facf53fb4fdf973d7529bddf38ee10920a44e2b4"
+      jacobian.checksum="cc8ef05208a6a16925e246b6545119040558739762b29152e4b8e505b5b7d99e"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

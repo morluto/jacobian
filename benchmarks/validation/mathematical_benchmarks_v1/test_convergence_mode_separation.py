@@ -32,6 +32,37 @@ def _case(tmp_path: Path):
     return TASK, app, logs
 
 
+def test_typed_oracle_and_unreduced_event_mass_pass(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path / "oracle")
+    assert _run_verifier(task, app, logs).reward == pytest.approx(1.0)
+
+    task, app, logs = _case(tmp_path / "unreduced")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["levels"][0]["event_mass"] = {
+        "numerator": 2,
+        "denominator": 4,
+    }
+    _write_json(app / "submission.json", submission)
+    assert _run_verifier(task, app, logs).reward == pytest.approx(1.0)
+
+
+def test_string_or_noncanonical_probe_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path / "string")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["probes"][0]["point"] = "1/3"
+    _write_json(app / "submission.json", submission)
+    assert _run_verifier(task, app, logs).reward == pytest.approx(0.0)
+
+    task, app, logs = _case(tmp_path / "noncanonical")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["probes"][0]["point"] = {
+        "numerator": 2,
+        "denominator": 6,
+    }
+    _write_json(app / "submission.json", submission)
+    assert _run_verifier(task, app, logs).reward == pytest.approx(0.0)
+
+
 def test_rejects_unbounded_research_status_fact(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())

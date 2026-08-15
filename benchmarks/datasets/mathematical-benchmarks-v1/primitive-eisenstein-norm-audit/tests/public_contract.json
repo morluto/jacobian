@@ -102,8 +102,36 @@
           "type": "object"
         },
         "repaired_criterion": {
-          "minLength": 1,
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "three_exponent_maximum": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "forbidden_prime_residue": {
+              "additionalProperties": false,
+              "properties": {
+                "modulus": {
+                  "minimum": 2,
+                  "type": "integer"
+                },
+                "residue": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "modulus",
+                "residue"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "three_exponent_maximum",
+            "forbidden_prime_residue"
+          ],
+          "type": "object"
         }
       },
       "required": [
@@ -207,8 +235,36 @@
             "type": "object"
           },
           "repaired_criterion": {
-            "minLength": 1,
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "three_exponent_maximum": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "forbidden_prime_residue": {
+                "additionalProperties": false,
+                "properties": {
+                  "modulus": {
+                    "minimum": 2,
+                    "type": "integer"
+                  },
+                  "residue": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "modulus",
+                  "residue"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "three_exponent_maximum",
+              "forbidden_prime_residue"
+            ],
+            "type": "object"
           }
         },
         "required": [

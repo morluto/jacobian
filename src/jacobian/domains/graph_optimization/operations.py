@@ -10,6 +10,7 @@ from jacobian.contracts.graph_coloring import (
     ChromaticSearchStep,
     GraphChromaticNumberOutput,
 )
+from jacobian.domains.graph_optimization._budget import remaining_ms as _remaining_ms
 
 
 def canonical_graph(graph: ChromaticGraph) -> ChromaticGraph:
@@ -133,7 +134,7 @@ def solve_chromatic_number(
     tested: list[ChromaticSearchStep] = []
     encoded_graph = canonical_graph(graph)
     for colors in range(lower_bound, upper_bound + 1):
-        remaining_ms = int((wall_seconds - (time.monotonic() - started)) * 1000)
+        remaining_ms = _remaining_ms(started, wall_seconds)
         if remaining_ms <= 0:
             return _unknown_chromatic_result(
                 vertices=vertices,

@@ -9,6 +9,7 @@ univariate elimination polynomial, classifies every real root against the
 principal-root domain constraints, reconstructs every surviving `(a,b,c)`
 triple, and checks all three original equations exactly. You may choose the
 valid elimination parameterization and algebraic route.
+Represent each replayed equation value as an integer `left`/`right` object.
 Write `submission.json` according to `submission_schema.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->

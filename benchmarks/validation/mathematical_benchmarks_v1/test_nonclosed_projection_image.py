@@ -1,5 +1,26 @@
-from ._fixtures import assert_result_witness_protocol
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from benchmarks.validation.mathematical_benchmarks_v1 import _fixtures, _verifier
+
+TASK = "nonclosed-projection-image"
 
 
-def test_result_protocol(tmp_path):
-    assert_result_witness_protocol(tmp_path, "nonclosed-projection-image")
+def test_result_protocol(tmp_path: Path) -> None:
+    _fixtures.assert_result_witness_protocol(tmp_path, TASK)
+
+
+def test_rejects_string_and_noncanonical_rationals(tmp_path: Path) -> None:
+    for scenario, value in (
+        ("string", "1"),
+        ("noncanonical", {"numerator": 2, "denominator": 2}),
+        ("oversized", {"numerator": 1 << 1_024, "denominator": 1}),
+    ):
+        task, app, logs = _fixtures._prepare_case(tmp_path / scenario, TASK, "computed")
+        submission_path = app / "submission.json"
+        submission = json.loads(submission_path.read_text())
+        submission["result"]["operator_bound"] = value
+        _fixtures._write_json(submission_path, submission)
+        assert _verifier._run_verifier(task, app, logs).reward == 0.0

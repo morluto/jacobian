@@ -3,6 +3,8 @@
 Solve the exact problem in the offline input. Return the integer value of
 `log_z(w)` and the three rational reciprocal-log contributions relative to
 `ln(w)`.
+Represent each exact rational as an integer `numerator` and positive integer
+`denominator`.
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`.
 

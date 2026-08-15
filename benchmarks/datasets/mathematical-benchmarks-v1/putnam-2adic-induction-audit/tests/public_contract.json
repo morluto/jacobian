@@ -86,14 +86,34 @@
       "difference_identity": {
         "additionalProperties": false,
         "properties": {
-          "left": {
-            "minLength": 1,
-            "type": "string"
+          "left_function_coefficients": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
           },
           "right_factors": {
             "items": {
-              "minLength": 1,
-              "type": "string"
+              "additionalProperties": false,
+              "properties": {
+                "a_coefficient": {
+                  "type": "integer"
+                },
+                "b_coefficient": {
+                  "type": "integer"
+                },
+                "constant": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "a_coefficient",
+                "b_coefficient",
+                "constant"
+              ],
+              "type": "object"
             },
             "maxItems": 2,
             "minItems": 2,
@@ -101,7 +121,7 @@
           }
         },
         "required": [
-          "left",
+          "left_function_coefficients",
           "right_factors"
         ],
         "type": "object"
@@ -109,13 +129,49 @@
       "doubling_identities": {
         "additionalProperties": false,
         "properties": {
-          "product": {
-            "minLength": 1,
-            "type": "string"
-          },
           "taylor": {
-            "minLength": 1,
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "u_2n": {
+                "type": "integer"
+              },
+              "u_n": {
+                "type": "integer"
+              },
+              "u_n_times_P_n": {
+                "type": "integer"
+              },
+              "u_n_squared_times_K": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "u_2n",
+              "u_n",
+              "u_n_times_P_n",
+              "u_n_squared_times_K"
+            ],
+            "type": "object"
+          },
+          "product": {
+            "additionalProperties": false,
+            "properties": {
+              "P_2n": {
+                "type": "integer"
+              },
+              "P_n_squared": {
+                "type": "integer"
+              },
+              "P_n_times_u_n_times_delta": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "P_2n",
+              "P_n_squared",
+              "P_n_times_u_n_times_delta"
+            ],
+            "type": "object"
           }
         },
         "required": [
@@ -165,8 +221,22 @@
         "additionalProperties": false,
         "properties": {
           "add_one_reason": {
-            "minLength": 1,
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "premise_minimum_v2": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "conclusion_exact_v2": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "premise_minimum_v2",
+              "conclusion_exact_v2"
+            ],
+            "type": "object"
           },
           "hypotheses": {
             "$ref": "#/$defs/triple"
@@ -289,14 +359,34 @@
           "difference_identity": {
             "additionalProperties": false,
             "properties": {
-              "left": {
-                "minLength": 1,
-                "type": "string"
+              "left_function_coefficients": {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
               },
               "right_factors": {
                 "items": {
-                  "minLength": 1,
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "a_coefficient": {
+                      "type": "integer"
+                    },
+                    "b_coefficient": {
+                      "type": "integer"
+                    },
+                    "constant": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "a_coefficient",
+                    "b_coefficient",
+                    "constant"
+                  ],
+                  "type": "object"
                 },
                 "maxItems": 2,
                 "minItems": 2,
@@ -304,7 +394,7 @@
               }
             },
             "required": [
-              "left",
+              "left_function_coefficients",
               "right_factors"
             ],
             "type": "object"
@@ -312,13 +402,49 @@
           "doubling_identities": {
             "additionalProperties": false,
             "properties": {
-              "product": {
-                "minLength": 1,
-                "type": "string"
-              },
               "taylor": {
-                "minLength": 1,
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "u_2n": {
+                    "type": "integer"
+                  },
+                  "u_n": {
+                    "type": "integer"
+                  },
+                  "u_n_times_P_n": {
+                    "type": "integer"
+                  },
+                  "u_n_squared_times_K": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "u_2n",
+                  "u_n",
+                  "u_n_times_P_n",
+                  "u_n_squared_times_K"
+                ],
+                "type": "object"
+              },
+              "product": {
+                "additionalProperties": false,
+                "properties": {
+                  "P_2n": {
+                    "type": "integer"
+                  },
+                  "P_n_squared": {
+                    "type": "integer"
+                  },
+                  "P_n_times_u_n_times_delta": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "P_2n",
+                  "P_n_squared",
+                  "P_n_times_u_n_times_delta"
+                ],
+                "type": "object"
               }
             },
             "required": [
@@ -368,8 +494,22 @@
             "additionalProperties": false,
             "properties": {
               "add_one_reason": {
-                "minLength": 1,
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "premise_minimum_v2": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "conclusion_exact_v2": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "premise_minimum_v2",
+                  "conclusion_exact_v2"
+                ],
+                "type": "object"
               },
               "hypotheses": {
                 "$ref": "#/$defs/triple"

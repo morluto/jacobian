@@ -16,21 +16,28 @@ TASK_NAME = "continuous-spike-integral-separation"
 
 
 def load_verifier():
-    sys.path.insert(0, str(TASK / "tests"))
-    spec = importlib.util.spec_from_file_location(
-        "continuous_spike_verifier", TASK / "tests/verifier.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
-    spec.loader.exec_module(module)
-    sys.modules.pop("verifier_support", None)
-    return module
+    saved_path = sys.path[:]
+    saved_modules = dict(sys.modules)
+    try:
+        sys.path.insert(0, str(TASK / "tests"))
+        spec = importlib.util.spec_from_file_location(
+            "continuous_spike_verifier", TASK / "tests/verifier.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(module)
+        sys.modules.pop("verifier_support", None)
+        return module
+    finally:
+        sys.path[:] = saved_path
+        sys.modules.clear()
+        sys.modules.update(saved_modules)
 
 
 def candidate(alpha=Fraction(1, 4)):
     verifier = load_verifier()
     return {
-        "alpha": str(alpha),
+        "alpha": verifier.encoded(alpha),
         "baseline_power": 2,
         "spike_height": "1",
         "spikes": [verifier.expected_spike(n, alpha) for n in range(1, 13)],
@@ -83,10 +90,13 @@ def test_accepts_permuted_spike_order():
     assert verifier.valid_result(good)
 
 
-def test_rejects_rational_exceeding_published_bound():
+def test_rejects_noncanonical_rational_and_string_coercion():
     verifier = load_verifier()
     bad = candidate()
-    bad["alpha"] = "1/" + "0" * 100
+    bad["alpha"] = {"numerator": 2, "denominator": 8}
+    assert not verifier.valid_result(bad)
+    bad = candidate()
+    bad["alpha"] = "1/4"
     assert not verifier.valid_result(bad)
 
 

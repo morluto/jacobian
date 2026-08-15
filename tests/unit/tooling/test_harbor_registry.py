@@ -13,15 +13,9 @@ from tests.unit.tooling.harbor_suite_support import (
     _make_minimal_task,
     _write_registry,
     _write_suite_toml,
-    patch_harbor_root,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
-
-
-@pytest.fixture
-def patched_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    return patch_harbor_root(monkeypatch, tmp_path)
 
 
 def test_load_registry_returns_unique_well_formed_datasets() -> None:

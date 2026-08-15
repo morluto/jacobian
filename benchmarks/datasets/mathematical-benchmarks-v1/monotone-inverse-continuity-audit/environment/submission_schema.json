@@ -1,4 +1,23 @@
 {
+  "$defs": {
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
@@ -6,31 +25,31 @@
       "additionalProperties": false,
       "properties": {
         "gap_witness": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "jump": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "left_endpoint_value": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "left_limit": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "left_slope": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "offset": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "right_breakpoint_value": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "right_endpoint_value": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "right_slope": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         }
       },
       "required": [

@@ -1,1 +1,1 @@
-{"task_id":"jacobian/reliability-series-path","conclusion":"TRUE","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/reliability-series-path","complete finite input"],"expected_probability":{"num":"1","den":"3"},"expected_states":4}
+{"task_id":"jacobian/reliability-series-path","conclusion":"TRUE","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/reliability-series-path","complete finite input"],"expected_probability":{"num":1,"den":3},"expected_states":4}

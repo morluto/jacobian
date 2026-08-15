@@ -1,5 +1,4 @@
 import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -71,16 +70,20 @@ def _trace_valid(trace: list, expected_trace: list) -> bool:
     return trace_by_n == {entry["n"]: entry for entry in expected_trace}
 
 
-def _general_determinant_valid(value: object) -> bool:
-    """Accept canonical and exact parity notations induced by the proof."""
-    if not isinstance(value, str):
+def _general_formulas_valid(even_count: object, determinant: object) -> bool:
+    if (
+        not isinstance(even_count, dict)
+        or set(even_count) != {"base", "exponent_offset", "constant_offset"}
+        or not all(type(value) is int for value in even_count.values())
+        or not isinstance(determinant, dict)
+        or set(determinant) != {"n_equals_1", "otherwise"}
+        or not all(_is_int(value) for value in determinant.values())
+    ):
         return False
-    compact = re.sub(r"\s+", "", value).casefold()
-    return compact in {
-        "1_if_n_eq_1_else_minus_1",
-        "(-1)^(2^(n-1)-1)",
-        "(-1)**(2**(n-1)-1)",
-    }
+    return bool(
+        even_count == {"base": 2, "exponent_offset": -1, "constant_offset": -1}
+        and determinant == {"n_equals_1": 1, "otherwise": -1}
+    )
 
 
 def _result(value: object, source: dict[str, Any]) -> bool:
@@ -131,9 +134,8 @@ def _result(value: object, source: dict[str, Any]) -> bool:
     ]
     if not _trace_valid(trace, expected_trace):
         return False
-    return bool(
-        value["general_even_count"] == "2^(n-1)-1"
-        and _general_determinant_valid(value["general_determinant"])
+    return _general_formulas_valid(
+        value["general_even_count"], value["general_determinant"]
     )
 
 

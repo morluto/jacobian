@@ -5,12 +5,13 @@ import json
 import lzma
 import runpy
 import tarfile
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
 from typing import Any, cast
 
-from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
+from _spike_support import _result, _runner
+from benchmarks.tooling.command_runner import ToolCommandResult
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 SPIKE = runpy.run_path(
@@ -28,32 +29,6 @@ BASE_PIN = json.loads(
 )
 RunSpike = Callable[..., dict[str, Any]]
 RUN_SPIKE = cast(RunSpike, SPIKE["run_spike"])
-
-
-def _result(
-    *,
-    stdout: bytes = b"",
-    returncode: int | None = 0,
-    timed_out: bool = False,
-) -> ToolCommandResult:
-    status = ToolCommandStatus.TIMED_OUT if timed_out else ToolCommandStatus.EXITED
-    return ToolCommandResult(
-        status=status,
-        exit_code=returncode,
-        stdout=stdout,
-        stderr=b"",
-    )
-
-
-def _runner(
-    outcomes: Sequence[ToolCommandResult],
-) -> Callable[..., ToolCommandResult]:
-    remaining = iter(outcomes)
-
-    def run(*_args: object, **_kwargs: object) -> ToolCommandResult:
-        return next(remaining)
-
-    return run
 
 
 def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:

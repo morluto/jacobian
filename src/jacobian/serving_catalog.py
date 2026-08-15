@@ -45,7 +45,7 @@ class ServingCatalog:
         return _descriptor(operation)
 
     def search(self, request: OperationDiscoveryRequest) -> OperationDiscoveryResult:
-        return discover_operations(self.snapshot(), request)
+        return discover_operations(tuple(self._operations.values()), request)
 
     def browse(
         self,
@@ -57,7 +57,7 @@ class ServingCatalog:
         """Return a fresh compact page from the immutable declaration snapshot."""
 
         return browse_operations(
-            self.snapshot(),
+            tuple(self._operations.values()),
             domain=domain,
             limit=limit,
             cursor=cursor,

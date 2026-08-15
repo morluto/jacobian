@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import importlib.util
-import sys
 from itertools import product
 from pathlib import Path
+
+from benchmarks.validation._source_module import load_task_verifier
 
 ROOT = Path(__file__).parents[3]
 TASK = ROOT / "benchmarks/datasets/conjecture-probes-v1/illumination-strictness-audit"
@@ -11,21 +11,7 @@ VERTICES = list(product((-1, 1), repeat=3))
 
 
 def _module():
-    saved_path = sys.path[:]
-    saved_modules = dict(sys.modules)
-    try:
-        sys.path.insert(0, str(TASK / "tests"))
-        spec = importlib.util.spec_from_file_location(
-            "illumination_verifier", TASK / "tests/verifier.py"
-        )
-        assert spec and spec.loader
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
-    finally:
-        sys.path[:] = saved_path
-        sys.modules.clear()
-        sys.modules.update(saved_modules)
+    return load_task_verifier(TASK, module_name="illumination_verifier")
 
 
 def _result(module):

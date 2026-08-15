@@ -1,22 +1,15 @@
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
+
+from benchmarks.validation._source_module import load_task_verifier
 
 ROOT = Path(__file__).parents[3]
 TASK = ROOT / "benchmarks/datasets/conjecture-probes-v1/normal-projective-chart-audit"
 
 
 def _module():
-    sys.path.insert(0, str(TASK / "tests"))
-    spec = importlib.util.spec_from_file_location(
-        "normal_chart_verifier", TASK / "tests/verifier.py"
-    )
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_task_verifier(TASK, module_name="normal_chart_verifier")
 
 
 def _result():

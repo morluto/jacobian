@@ -13,13 +13,7 @@ from benchmarks.tooling.harbor_suite import (
 )
 from tests.unit.tooling.harbor_suite_support import (
     _make_suite_with_task,
-    patch_harbor_root,
 )
-
-
-@pytest.fixture
-def patched_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    return patch_harbor_root(monkeypatch, tmp_path)
 
 
 def test_validate_task_topology_passes_for_minimal_task(

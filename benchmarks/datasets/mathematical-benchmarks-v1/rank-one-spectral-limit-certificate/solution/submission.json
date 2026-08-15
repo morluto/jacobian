@@ -48,12 +48,22 @@
       }
     },
     "rank_one_sign": "DIAGONAL_MINUS_LAMBDA_ONES",
-    "root_formula": "4*n*(n+1)/((n-1)*(n+2))"
+    "root_formula": {
+      "coefficient": 4,
+      "denominator_offsets": [
+        -1,
+        2
+      ],
+      "numerator_offsets": [
+        0,
+        1
+      ]
+    }
   },
   "witness": [
     {
       "path": "evidence/spectral-certificate.json",
-      "sha256": "sha256:b072a77d9b2640512258dc5ce5fa8f1c8febfd2c3cddf23a8bf9b3e62a4a60f4"
+      "sha256": "sha256:da16f396f2a41299c4653f2fd479d02d289c3382ed05ed64eefcac54e23cb904"
     }
   ]
 }

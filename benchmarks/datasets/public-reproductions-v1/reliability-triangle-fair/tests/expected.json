@@ -1,1 +1,1 @@
-{"task_id":"jacobian/reliability-triangle-fair","conclusion":"TRUE","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/reliability-triangle-fair","complete finite input"],"expected_probability":{"num":"5","den":"8"},"expected_states":8}
+{"task_id":"jacobian/reliability-triangle-fair","conclusion":"TRUE","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/reliability-triangle-fair","complete finite input"],"expected_probability":{"num":5,"den":8},"expected_states":8}

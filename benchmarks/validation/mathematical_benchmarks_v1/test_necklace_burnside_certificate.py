@@ -18,14 +18,21 @@ LIMITATIONS = ["FINITE_LENGTH_16_INSTANCE", "NO_GENERAL_ENUMERATION_THEOREM"]
 
 
 def load_verifier():
-    sys.path.insert(0, str(TASK / "tests"))
-    spec = importlib.util.spec_from_file_location(
-        "necklace_verifier", TASK / "tests/verifier.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
-    spec.loader.exec_module(module)
-    return module
+    saved_path = sys.path[:]
+    saved_modules = dict(sys.modules)
+    try:
+        sys.path.insert(0, str(TASK / "tests"))
+        spec = importlib.util.spec_from_file_location(
+            "necklace_verifier", TASK / "tests/verifier.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path[:] = saved_path
+        sys.modules.clear()
+        sys.modules.update(saved_modules)
 
 
 def _digest(path: Path) -> str:

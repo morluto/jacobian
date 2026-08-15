@@ -1,4 +1,23 @@
 {
+  "$defs": {
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
@@ -47,10 +66,10 @@
               "additionalProperties": false,
               "properties": {
                 "order_1": {
-                  "type": "string"
+                  "$ref": "#/$defs/rational"
                 },
                 "order_2": {
-                  "type": "string"
+                  "$ref": "#/$defs/rational"
                 }
               },
               "required": [

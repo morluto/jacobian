@@ -1,5 +1,4 @@
 import json
-import re
 from fractions import Fraction
 from itertools import pairwise
 from pathlib import Path
@@ -10,18 +9,23 @@ from verifier_support import (
 )
 
 W, T = Path("/app"), Path("/tests")
-MAX_RATIONAL_LEN = 100
 
 
 def fraction(value):
-    if not isinstance(value, str) or len(value) > MAX_RATIONAL_LEN:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
         raise ValueError
-    if re.fullmatch(r"-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?", value) is None:
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         raise ValueError
-    parsed = Fraction(value)
-    if str(parsed) != value:
+    parsed = Fraction(numerator, denominator)
+    if parsed.numerator != numerator or parsed.denominator != denominator:
         raise ValueError
     return parsed
+
+
+def encoded(value):
+    return {"numerator": value.numerator, "denominator": value.denominator}
 
 
 def expected_spike(n, alpha):
@@ -29,12 +33,12 @@ def expected_spike(n, alpha):
     width = alpha / n
     return {
         "n": n,
-        "center": str(center),
-        "half_width": str(width),
-        "left": str(center - width),
-        "right": str(center + width),
-        "area": str(width),
-        "integer_sample": str(Fraction(1, n * n)),
+        "center": encoded(center),
+        "half_width": encoded(width),
+        "left": encoded(center - width),
+        "right": encoded(center + width),
+        "area": encoded(width),
+        "integer_sample": encoded(Fraction(1, n * n)),
     }
 
 

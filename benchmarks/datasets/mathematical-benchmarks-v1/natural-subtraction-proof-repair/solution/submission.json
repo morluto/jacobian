@@ -5,16 +5,16 @@
       "SUB_RECOVERY"
     ],
     "derived_coefficients": [
-      "0",
-      "0",
-      "-1",
-      "1",
-      "1"
+      {"denominator": 1, "numerator": 0},
+      {"denominator": 1, "numerator": 0},
+      {"denominator": 1, "numerator": -1},
+      {"denominator": 1, "numerator": 1},
+      {"denominator": 1, "numerator": 1}
     ],
     "failed_pattern_occurs": false,
     "multipliers": [
-      "1",
-      "1"
+      {"denominator": 1, "numerator": 1},
+      {"denominator": 1, "numerator": 1}
     ],
     "side_condition_used": "b<=a"
   },

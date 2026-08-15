@@ -124,10 +124,6 @@
       "elimination": {
         "additionalProperties": false,
         "properties": {
-          "hypothesis_factorization": {
-            "minLength": 1,
-            "type": "string"
-          },
           "sum_polynomial": {
             "$ref": "#/$defs/polynomial"
           },
@@ -323,10 +319,6 @@
           "elimination": {
             "additionalProperties": false,
             "properties": {
-              "hypothesis_factorization": {
-                "minLength": 1,
-                "type": "string"
-              },
               "sum_polynomial": {
                 "$ref": "#/$defs/polynomial"
               },

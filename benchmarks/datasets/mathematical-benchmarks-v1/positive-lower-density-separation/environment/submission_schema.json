@@ -7,13 +7,13 @@
           "type": "integer"
         },
         "excluded_density": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "excluded_endpoint": {
           "type": "integer"
         },
         "included_density": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "included_endpoint": {
           "type": "integer"
@@ -31,6 +31,23 @@
         "cumulative_count",
         "included_density",
         "excluded_density"
+      ],
+      "type": "object"
+    },
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
       ],
       "type": "object"
     }
@@ -61,7 +78,7 @@
           "type": "array"
         },
         "lower_density": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "lower_density_positive": {
           "const": true
@@ -73,7 +90,7 @@
           "const": "FORMALIZED_PREDICATE_STRICTLY_STRONGER"
         },
         "upper_density": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         }
       },
       "required": [

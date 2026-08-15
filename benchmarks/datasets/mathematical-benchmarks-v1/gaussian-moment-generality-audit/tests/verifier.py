@@ -82,15 +82,14 @@ ONE_MINUS_T = RationalFunction([Fraction(1), Fraction(-1)], [Fraction(1)])
 
 
 def canonical_fraction(value: object) -> Fraction:
-    if not isinstance(value, str) or not value or value.strip() != value:
-        raise ValueError("non-string rational")
-    parsed = Fraction(value)
-    canonical = (
-        str(parsed.numerator)
-        if parsed.denominator == 1
-        else f"{parsed.numerator}/{parsed.denominator}"
-    )
-    if value != canonical:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        raise ValueError("invalid rational object")
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        raise ValueError("invalid rational components")
+    parsed = Fraction(numerator, denominator)
+    if parsed.numerator != numerator or parsed.denominator != denominator:
         raise ValueError("noncanonical rational")
     return parsed
 

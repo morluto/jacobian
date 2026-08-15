@@ -89,21 +89,11 @@ def test_float_probe_values_rejected(tmp_path):
     assert _verify(tmp_path / "float_a_p", sub).reward == 0
 
 
-def test_old_threshold_rule_string_accepted(tmp_path):
-    """The threshold_rule is a descriptive label; the verifier checks math."""
-
-    sub = _oracle()
-    sub["result"]["threshold_rule"] = "n>=k_implies_a_n_divisible_by_2^k"
-    assert _verify(tmp_path / "old_threshold", sub).reward == 1.0
-
-
 def test_alternate_piecewise_construction_accepted(tmp_path):
     """A different valid power-of-two construction must earn full reward."""
 
     sub = _oracle()
     sub["result"]["default_exponent_offset"] = 0
-    sub["result"]["prime_formula"] = "2^n"
-    sub["result"]["threshold_rule"] = "n>=max(2,k)_implies_2^k_divides_a_n"
     sub["result"]["probes"] = [_alternate_probe(p) for p in (3, 5, 7, 11)]
     assert _verify(tmp_path / "alt_construction", sub).reward == 1.0
 
@@ -153,21 +143,21 @@ def test_completeness_partial_rejected(tmp_path):
     assert _verify(tmp_path / "partial", sub).reward == 0
 
 
-def test_garbage_prime_formula_rejected(tmp_path):
-    """A prime_formula that is not a power-of-two expression must fail."""
+def test_legacy_prime_formula_field_rejected(tmp_path):
+    """The removed decorative formula field must not bypass the typed contract."""
 
     sub = _oracle()
-    sub["result"]["prime_formula"] = "not a formula"
+    sub["result"]["prime_formula"] = "2^(p+1)+p*2^(2p)"
     result = _verify(tmp_path / "garbage_formula", sub)
     assert result.details["correctness"] == 0.0
     assert result.reward == 0
 
 
-def test_garbage_threshold_rule_rejected(tmp_path):
-    """A threshold_rule that does not describe the divisibility property must fail."""
+def test_legacy_threshold_rule_field_rejected(tmp_path):
+    """The removed prose rule field must not bypass the typed contract."""
 
     sub = _oracle()
-    sub["result"]["threshold_rule"] = "false"
+    sub["result"]["threshold_rule"] = "n>=max(2,k)_implies_2^k_divides_a_n"
     result = _verify(tmp_path / "garbage_threshold", sub)
     assert result.details["correctness"] == 0.0
     assert result.reward == 0

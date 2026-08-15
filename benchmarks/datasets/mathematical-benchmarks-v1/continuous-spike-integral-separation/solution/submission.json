@@ -1,6 +1,9 @@
 {
   "result": {
-    "alpha": "1/4",
+    "alpha": {
+      "denominator": 4,
+      "numerator": 1
+    },
     "baseline_power": 2,
     "integral_classification": {
       "spike_area_series": "alpha*sum(1/n)",
@@ -13,112 +16,328 @@
     "spike_height": "1",
     "spikes": [
       {
-        "area": "1/4",
-        "center": "3/2",
-        "half_width": "1/4",
-        "integer_sample": "1",
-        "left": "5/4",
+        "area": {
+          "denominator": 4,
+          "numerator": 1
+        },
+        "center": {
+          "denominator": 2,
+          "numerator": 3
+        },
+        "half_width": {
+          "denominator": 4,
+          "numerator": 1
+        },
+        "integer_sample": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "left": {
+          "denominator": 4,
+          "numerator": 5
+        },
         "n": 1,
-        "right": "7/4"
+        "right": {
+          "denominator": 4,
+          "numerator": 7
+        }
       },
       {
-        "area": "1/8",
-        "center": "5/2",
-        "half_width": "1/8",
-        "integer_sample": "1/4",
-        "left": "19/8",
+        "area": {
+          "denominator": 8,
+          "numerator": 1
+        },
+        "center": {
+          "denominator": 2,
+          "numerator": 5
+        },
+        "half_width": {
+          "denominator": 8,
+          "numerator": 1
+        },
+        "integer_sample": {
+          "denominator": 4,
+          "numerator": 1
+        },
+        "left": {
+          "denominator": 8,
+          "numerator": 19
+        },
         "n": 2,
-        "right": "21/8"
+        "right": {
+          "denominator": 8,
+          "numerator": 21
+        }
       },
       {
-        "area": "1/12",
-        "center": "7/2",
-        "half_width": "1/12",
-        "integer_sample": "1/9",
-        "left": "41/12",
+        "area": {
+          "denominator": 12,
+          "numerator": 1
+        },
+        "center": {
+          "denominator": 2,
+          "numerator": 7
+        },
+        "half_width": {
+          "denominator": 12,
+          "numerator": 1
+        },
+        "integer_sample": {
+          "denominator": 9,
+          "numerator": 1
+        },
+        "left": {
+          "denominator": 12,
+          "numerator": 41
+        },
         "n": 3,
-        "right": "43/12"
+        "right": {
+          "denominator": 12,
+          "numerator": 43
+        }
       },
       {
-        "area": "1/16",
-        "center": "9/2",
-        "half_width": "1/16",
-        "integer_sample": "1/16",
-        "left": "71/16",
+        "area": {
+          "denominator": 16,
+          "numerator": 1
+        },
+        "center": {
+          "denominator": 2,
+          "numerator": 9
+        },
+        "half_width": {
+          "denominator": 16,
+          "numerator": 1
+        },
+        "integer_sample": {
+          "denominator": 16,
+          "numerator": 1
+        },
+        "left": {
+          "denominator": 16,
+          "numerator": 71
+        },
         "n": 4,
-        "right": "73/16"
+        "right": {
+          "denominator": 16,
+          "numerator": 73
+        }
       },
       {
-        "area": "1/20",
-        "center": "11/2",
-        "half_width": "1/20",
-        "integer_sample": "1/25",
-        "left": "109/20",
+        "area": {
+          "denominator": 20,
+          "numerator": 1
+        },
+        "center": {
+          "denominator": 2,
+          "numerator": 11
+        },
+        "half_width": {
+          "denominator": 20,
+          "numerator": 1
+        },
+        "integer_sample": {
+          "denominator": 25,
+          "numerator": 1
+        },
+        "left": {
+          "denominator": 20,
+          "numerator": 109
+        },
         "n": 5,
-        "right": "111/20"
+        "right": {
+          "denominator": 20,
+          "numerator": 111
+        }
       },
       {
-        "area": "1/24",
-        "center": "13/2",
-        "half_width": "1/24",
-        "integer_sample": "1/36",
-        "left": "155/24",
+        "area": {
+          "denominator": 24,
+          "numerator": 1
+        },
+        "center": {
+          "denominator": 2,
+          "numerator": 13
+        },
+        "half_width": {
+          "denominator": 24,
+          "numerator": 1
+        },
+        "integer_sample": {
+          "denominator": 36,
+          "numerator": 1
+        },
+        "left": {
+          "denominator": 24,
+          "numerator": 155
+        },
         "n": 6,
-        "right": "157/24"
+        "right": {
+          "denominator": 24,
+          "numerator": 157
+        }
       },
       {
-        "area": "1/28",
-        "center": "15/2",
-        "half_width": "1/28",
-        "integer_sample": "1/49",
-        "left": "209/28",
+        "area": {
+          "denominator": 28,
+          "numerator": 1
+        },
+        "center": {
+          "denominator": 2,
+          "numerator": 15
+        },
+        "half_width": {
+          "denominator": 28,
+          "numerator": 1
+        },
+        "integer_sample": {
+          "denominator": 49,
+          "numerator": 1
+        },
+        "left": {
+          "denominator": 28,
+          "numerator": 209
+        },
         "n": 7,
-        "right": "211/28"
+        "right": {
+          "denominator": 28,
+          "numerator": 211
+        }
       },
       {
-        "area": "1/32",
-        "center": "17/2",
-        "half_width": "1/32",
-        "integer_sample": "1/64",
-        "left": "271/32",
+        "area": {
+          "denominator": 32,
+          "numerator": 1
+        },
+        "center": {
+          "denominator": 2,
+          "numerator": 17
+        },
+        "half_width": {
+          "denominator": 32,
+          "numerator": 1
+        },
+        "integer_sample": {
+          "denominator": 64,
+          "numerator": 1
+        },
+        "left": {
+          "denominator": 32,
+          "numerator": 271
+        },
         "n": 8,
-        "right": "273/32"
+        "right": {
+          "denominator": 32,
+          "numerator": 273
+        }
       },
       {
-        "area": "1/36",
-        "center": "19/2",
-        "half_width": "1/36",
-        "integer_sample": "1/81",
-        "left": "341/36",
+        "area": {
+          "denominator": 36,
+          "numerator": 1
+        },
+        "center": {
+          "denominator": 2,
+          "numerator": 19
+        },
+        "half_width": {
+          "denominator": 36,
+          "numerator": 1
+        },
+        "integer_sample": {
+          "denominator": 81,
+          "numerator": 1
+        },
+        "left": {
+          "denominator": 36,
+          "numerator": 341
+        },
         "n": 9,
-        "right": "343/36"
+        "right": {
+          "denominator": 36,
+          "numerator": 343
+        }
       },
       {
-        "area": "1/40",
-        "center": "21/2",
-        "half_width": "1/40",
-        "integer_sample": "1/100",
-        "left": "419/40",
+        "area": {
+          "denominator": 40,
+          "numerator": 1
+        },
+        "center": {
+          "denominator": 2,
+          "numerator": 21
+        },
+        "half_width": {
+          "denominator": 40,
+          "numerator": 1
+        },
+        "integer_sample": {
+          "denominator": 100,
+          "numerator": 1
+        },
+        "left": {
+          "denominator": 40,
+          "numerator": 419
+        },
         "n": 10,
-        "right": "421/40"
+        "right": {
+          "denominator": 40,
+          "numerator": 421
+        }
       },
       {
-        "area": "1/44",
-        "center": "23/2",
-        "half_width": "1/44",
-        "integer_sample": "1/121",
-        "left": "505/44",
+        "area": {
+          "denominator": 44,
+          "numerator": 1
+        },
+        "center": {
+          "denominator": 2,
+          "numerator": 23
+        },
+        "half_width": {
+          "denominator": 44,
+          "numerator": 1
+        },
+        "integer_sample": {
+          "denominator": 121,
+          "numerator": 1
+        },
+        "left": {
+          "denominator": 44,
+          "numerator": 505
+        },
         "n": 11,
-        "right": "507/44"
+        "right": {
+          "denominator": 44,
+          "numerator": 507
+        }
       },
       {
-        "area": "1/48",
-        "center": "25/2",
-        "half_width": "1/48",
-        "integer_sample": "1/144",
-        "left": "599/48",
+        "area": {
+          "denominator": 48,
+          "numerator": 1
+        },
+        "center": {
+          "denominator": 2,
+          "numerator": 25
+        },
+        "half_width": {
+          "denominator": 48,
+          "numerator": 1
+        },
+        "integer_sample": {
+          "denominator": 144,
+          "numerator": 1
+        },
+        "left": {
+          "denominator": 48,
+          "numerator": 599
+        },
         "n": 12,
-        "right": "601/48"
+        "right": {
+          "denominator": 48,
+          "numerator": 601
+        }
       }
     ]
   }

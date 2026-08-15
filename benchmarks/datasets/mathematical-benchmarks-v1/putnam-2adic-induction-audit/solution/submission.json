@@ -23,15 +23,36 @@
       }
     },
     "difference_identity": {
-      "left": "f(a)-f(b)",
+      "left_function_coefficients": [
+        2,
+        1,
+        1
+      ],
       "right_factors": [
-        "a-b",
-        "a+b+1"
+        {
+          "a_coefficient": 1,
+          "b_coefficient": -1,
+          "constant": 0
+        },
+        {
+          "a_coefficient": 1,
+          "b_coefficient": 1,
+          "constant": 1
+        }
       ]
     },
     "doubling_identities": {
-      "product": "P_2n=P_n*(P_n+2*u_n*Delta)",
-      "taylor": "u_2n-2*u_n=u_n*(P_n-1)+u_n^2*K"
+      "product": {
+        "P_2n": 1,
+        "P_n_squared": -1,
+        "P_n_times_u_n_times_delta": -2
+      },
+      "taylor": {
+        "u_2n": 1,
+        "u_n": -1,
+        "u_n_squared_times_K": -1,
+        "u_n_times_P_n": -1
+      }
     },
     "finite_testing_role": "SANITY_ONLY_NOT_UNIVERSAL_PROOF",
     "target_transfer": {
@@ -64,7 +85,10 @@
       ]
     },
     "valuation_induction": {
-      "add_one_reason": "P_2n_minus_1_divisible_by_8_implies_P_2n_plus_1_has_v2_1",
+      "add_one_reason": {
+        "conclusion_exact_v2": 1,
+        "premise_minimum_v2": 3
+      },
       "hypotheses": [
         [
           1,

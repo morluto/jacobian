@@ -136,7 +136,10 @@ def certificate_valid(result: object, frozen: dict) -> bool:
         == sorted(expected_pairs, key=lambda p: (p["x"], p["y"]))
         and inert.get("square_primitive_status") == "IMPOSSIBLE"
         and result.get("repaired_criterion")
-        == "THREE_EXPONENT_AT_MOST_ONE_AND_NO_PRIME_TWO_MOD_THREE"
+        == {
+            "three_exponent_maximum": 1,
+            "forbidden_prime_residue": {"modulus": 3, "residue": 2},
+        }
     )
 
 

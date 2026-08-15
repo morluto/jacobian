@@ -4,19 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from benchmarks.tooling.harbor_suite import check_verifier_support
 from tests.unit.tooling.harbor_suite_support import (
     _make_suite_with_task,
-    patch_harbor_root,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
-
-
-@pytest.fixture
-def patched_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    return patch_harbor_root(monkeypatch, tmp_path)
 
 
 def test_check_verifier_support_allows_task_owned_contents(

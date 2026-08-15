@@ -82,7 +82,20 @@
               },
               "equation_values": {
                 "items": {
-                  "type": "string"
+                  "additionalProperties": false,
+                  "properties": {
+                    "left": {
+                      "type": "integer"
+                    },
+                    "right": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "left",
+                    "right"
+                  ],
+                  "type": "object"
                 },
                 "maxItems": 3,
                 "minItems": 3,

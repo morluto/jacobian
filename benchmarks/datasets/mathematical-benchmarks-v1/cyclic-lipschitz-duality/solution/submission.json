@@ -2,129 +2,489 @@
   "result": {
     "dual_value": "15",
     "flow": [
-      "3/8",
-      "7/24",
-      "5/24",
-      "1/8",
-      "1/24",
-      "-1/24",
-      "-1/8",
-      "-5/24",
-      "-7/24",
-      "-3/8",
-      "-11/24",
-      "11/24",
-      "3/8",
-      "7/24",
-      "5/24",
-      "1/8",
-      "1/24",
-      "-1/24",
-      "-1/8",
-      "-5/24",
-      "-7/24",
-      "-3/8",
-      "-11/24",
-      "11/24",
-      "3/8",
-      "7/24",
-      "5/24",
-      "1/8",
-      "1/24",
-      "-1/24",
-      "-1/8",
-      "-5/24",
-      "-7/24",
-      "-3/8",
-      "-11/24",
-      "11/24",
-      "3/8",
-      "7/24",
-      "5/24",
-      "1/8",
-      "1/24",
-      "-1/24",
-      "-1/8",
-      "-5/24",
-      "-7/24",
-      "-3/8",
-      "-11/24",
-      "11/24",
-      "3/8",
-      "7/24",
-      "5/24",
-      "1/8",
-      "1/24",
-      "-1/24",
-      "-1/8",
-      "-5/24",
-      "-7/24",
-      "-3/8",
-      "-11/24",
-      "11/24"
+      {
+        "denominator": 8,
+        "numerator": 3
+      },
+      {
+        "denominator": 24,
+        "numerator": 7
+      },
+      {
+        "denominator": 24,
+        "numerator": 5
+      },
+      {
+        "denominator": 8,
+        "numerator": 1
+      },
+      {
+        "denominator": 24,
+        "numerator": 1
+      },
+      {
+        "denominator": 24,
+        "numerator": -1
+      },
+      {
+        "denominator": 8,
+        "numerator": -1
+      },
+      {
+        "denominator": 24,
+        "numerator": -5
+      },
+      {
+        "denominator": 24,
+        "numerator": -7
+      },
+      {
+        "denominator": 8,
+        "numerator": -3
+      },
+      {
+        "denominator": 24,
+        "numerator": -11
+      },
+      {
+        "denominator": 24,
+        "numerator": 11
+      },
+      {
+        "denominator": 8,
+        "numerator": 3
+      },
+      {
+        "denominator": 24,
+        "numerator": 7
+      },
+      {
+        "denominator": 24,
+        "numerator": 5
+      },
+      {
+        "denominator": 8,
+        "numerator": 1
+      },
+      {
+        "denominator": 24,
+        "numerator": 1
+      },
+      {
+        "denominator": 24,
+        "numerator": -1
+      },
+      {
+        "denominator": 8,
+        "numerator": -1
+      },
+      {
+        "denominator": 24,
+        "numerator": -5
+      },
+      {
+        "denominator": 24,
+        "numerator": -7
+      },
+      {
+        "denominator": 8,
+        "numerator": -3
+      },
+      {
+        "denominator": 24,
+        "numerator": -11
+      },
+      {
+        "denominator": 24,
+        "numerator": 11
+      },
+      {
+        "denominator": 8,
+        "numerator": 3
+      },
+      {
+        "denominator": 24,
+        "numerator": 7
+      },
+      {
+        "denominator": 24,
+        "numerator": 5
+      },
+      {
+        "denominator": 8,
+        "numerator": 1
+      },
+      {
+        "denominator": 24,
+        "numerator": 1
+      },
+      {
+        "denominator": 24,
+        "numerator": -1
+      },
+      {
+        "denominator": 8,
+        "numerator": -1
+      },
+      {
+        "denominator": 24,
+        "numerator": -5
+      },
+      {
+        "denominator": 24,
+        "numerator": -7
+      },
+      {
+        "denominator": 8,
+        "numerator": -3
+      },
+      {
+        "denominator": 24,
+        "numerator": -11
+      },
+      {
+        "denominator": 24,
+        "numerator": 11
+      },
+      {
+        "denominator": 8,
+        "numerator": 3
+      },
+      {
+        "denominator": 24,
+        "numerator": 7
+      },
+      {
+        "denominator": 24,
+        "numerator": 5
+      },
+      {
+        "denominator": 8,
+        "numerator": 1
+      },
+      {
+        "denominator": 24,
+        "numerator": 1
+      },
+      {
+        "denominator": 24,
+        "numerator": -1
+      },
+      {
+        "denominator": 8,
+        "numerator": -1
+      },
+      {
+        "denominator": 24,
+        "numerator": -5
+      },
+      {
+        "denominator": 24,
+        "numerator": -7
+      },
+      {
+        "denominator": 8,
+        "numerator": -3
+      },
+      {
+        "denominator": 24,
+        "numerator": -11
+      },
+      {
+        "denominator": 24,
+        "numerator": 11
+      },
+      {
+        "denominator": 8,
+        "numerator": 3
+      },
+      {
+        "denominator": 24,
+        "numerator": 7
+      },
+      {
+        "denominator": 24,
+        "numerator": 5
+      },
+      {
+        "denominator": 8,
+        "numerator": 1
+      },
+      {
+        "denominator": 24,
+        "numerator": 1
+      },
+      {
+        "denominator": 24,
+        "numerator": -1
+      },
+      {
+        "denominator": 8,
+        "numerator": -1
+      },
+      {
+        "denominator": 24,
+        "numerator": -5
+      },
+      {
+        "denominator": 24,
+        "numerator": -7
+      },
+      {
+        "denominator": 8,
+        "numerator": -3
+      },
+      {
+        "denominator": 24,
+        "numerator": -11
+      },
+      {
+        "denominator": 24,
+        "numerator": 11
+      }
     ],
     "primal_value": "15",
     "sequence": [
-      "2",
-      "1",
-      "0",
-      "-1",
-      "-2",
-      "-3",
-      "-2",
-      "-1",
-      "0",
-      "1",
-      "2",
-      "3",
-      "2",
-      "1",
-      "0",
-      "-1",
-      "-2",
-      "-3",
-      "-2",
-      "-1",
-      "0",
-      "1",
-      "2",
-      "3",
-      "2",
-      "1",
-      "0",
-      "-1",
-      "-2",
-      "-3",
-      "-2",
-      "-1",
-      "0",
-      "1",
-      "2",
-      "3",
-      "2",
-      "1",
-      "0",
-      "-1",
-      "-2",
-      "-3",
-      "-2",
-      "-1",
-      "0",
-      "1",
-      "2",
-      "3",
-      "2",
-      "1",
-      "0",
-      "-1",
-      "-2",
-      "-3",
-      "-2",
-      "-1",
-      "0",
-      "1",
-      "2",
-      "3"
+      {
+        "denominator": 1,
+        "numerator": 2
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 1,
+        "numerator": -1
+      },
+      {
+        "denominator": 1,
+        "numerator": -2
+      },
+      {
+        "denominator": 1,
+        "numerator": -3
+      },
+      {
+        "denominator": 1,
+        "numerator": -2
+      },
+      {
+        "denominator": 1,
+        "numerator": -1
+      },
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 2
+      },
+      {
+        "denominator": 1,
+        "numerator": 3
+      },
+      {
+        "denominator": 1,
+        "numerator": 2
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 1,
+        "numerator": -1
+      },
+      {
+        "denominator": 1,
+        "numerator": -2
+      },
+      {
+        "denominator": 1,
+        "numerator": -3
+      },
+      {
+        "denominator": 1,
+        "numerator": -2
+      },
+      {
+        "denominator": 1,
+        "numerator": -1
+      },
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 2
+      },
+      {
+        "denominator": 1,
+        "numerator": 3
+      },
+      {
+        "denominator": 1,
+        "numerator": 2
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 1,
+        "numerator": -1
+      },
+      {
+        "denominator": 1,
+        "numerator": -2
+      },
+      {
+        "denominator": 1,
+        "numerator": -3
+      },
+      {
+        "denominator": 1,
+        "numerator": -2
+      },
+      {
+        "denominator": 1,
+        "numerator": -1
+      },
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 2
+      },
+      {
+        "denominator": 1,
+        "numerator": 3
+      },
+      {
+        "denominator": 1,
+        "numerator": 2
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 1,
+        "numerator": -1
+      },
+      {
+        "denominator": 1,
+        "numerator": -2
+      },
+      {
+        "denominator": 1,
+        "numerator": -3
+      },
+      {
+        "denominator": 1,
+        "numerator": -2
+      },
+      {
+        "denominator": 1,
+        "numerator": -1
+      },
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 2
+      },
+      {
+        "denominator": 1,
+        "numerator": 3
+      },
+      {
+        "denominator": 1,
+        "numerator": 2
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 1,
+        "numerator": -1
+      },
+      {
+        "denominator": 1,
+        "numerator": -2
+      },
+      {
+        "denominator": 1,
+        "numerator": -3
+      },
+      {
+        "denominator": 1,
+        "numerator": -2
+      },
+      {
+        "denominator": 1,
+        "numerator": -1
+      },
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 2
+      },
+      {
+        "denominator": 1,
+        "numerator": 3
+      }
     ]
   },
   "witness": [

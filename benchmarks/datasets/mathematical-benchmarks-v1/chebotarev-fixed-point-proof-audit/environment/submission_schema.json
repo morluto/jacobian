@@ -87,7 +87,30 @@
           "type": "integer"
         },
         "mod2_factor": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "factor_coefficients": {
+              "items": {
+                "enum": [
+                  0,
+                  1
+                ]
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "multiplicity": {
+              "maximum": 8,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "factor_coefficients",
+            "multiplicity"
+          ],
+          "type": "object"
         }
       },
       "required": [

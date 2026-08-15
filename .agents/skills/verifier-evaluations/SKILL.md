@@ -31,6 +31,12 @@ authorizes it and reject a false claim. If a boundary affects score, use a
 closed structured obligation ID, not a phrase, keyword count, or negation
 heuristic.
 
+Treat a typed result as the represented mathematical value, not a frozen JSON
+layout or string rendering. Normalize and compare equivalent rational, scaled,
+or unordered representations unless canonicalization is an explicit public
+task outcome with an exact stated rule. `answer.txt` is never an authoritative
+submission format.
+
 The visible schema and instructions must describe every field, type, bound,
 scope rule, and witness requirement the verifier enforces. Do not expose hidden
 solutions, Oracle fixtures, or verifier implementation merely to explain the
@@ -54,8 +60,8 @@ At each boundary, malformed data must yield a deterministic false predicate and
 a reward artifact, not an exception. Check `type(value) is int` when booleans
 are invalid integers; reject non-finite numbers; validate nested shapes before
 indexing or hashing; compare JSON values recursively with type-strict equality;
-and accept mathematically equivalent rational, reordered, or scaled witnesses
-when the task permits them.
+and accept mathematically equivalent rational, reordered, or scaled results and
+witnesses when the task permits them.
 
 Read and bound submissions and visible/frozen inputs before parsing. A witness
 artifact needs a published finite bound only when its encoding or task mechanics

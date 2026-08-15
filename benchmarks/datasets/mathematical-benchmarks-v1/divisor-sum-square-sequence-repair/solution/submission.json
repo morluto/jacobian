@@ -2,7 +2,6 @@
   "result": {
     "a_1": 1,
     "default_exponent_offset": 1,
-    "prime_formula": "2^(p+1)+p*2^(2p)",
     "probes": [
       {
         "a_p": 208,
@@ -28,13 +27,12 @@
         "prime": 11,
         "square_root": 22529
       }
-    ],
-    "threshold_rule": "n>=max(2,k)_implies_2^k_divides_a_n"
+    ]
   },
   "witness": [
     {
       "path": "evidence/sequence-construction.json",
-      "sha256": "sha256:9a6168200ff6e2bc8d2ce605f6f5d9251a2ea3b3e7df0029f69b1cc9bbf79818"
+      "sha256": "sha256:132881fea3cbe22ed5b648895c8f5ce2b54a1912b5909e299fe15c8e0d07fef1"
     }
   ]
 }

@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact verifier for a series-domain fallback audit.
 LABEL jacobian.task="jacobian/series-domain-junk-zero" \
-      jacobian.checksum="0f7881060f99e87ff6b3be9ba0f13284533da6ec7a51aa74392138cfa02d1a91"
+      jacobian.checksum="5a6d561a9de4bc1c4a5d7d4a46313ef30f5b19287a9a32bade5aceb8b4f19c69"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

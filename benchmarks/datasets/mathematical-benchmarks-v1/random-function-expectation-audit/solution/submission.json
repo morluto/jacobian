@@ -1,8 +1,8 @@
 {
   "result": {
-    "expected_value": "2496",
+    "expected_value": {"denominator": 1, "numerator": 2496},
     "ordered_squared_difference_sum": 65000,
-    "other_hit_probability": "24/625",
-    "self_hit_probability": "49/625"
+    "other_hit_probability": {"denominator": 625, "numerator": 24},
+    "self_hit_probability": {"denominator": 625, "numerator": 49}
   }
 }

@@ -84,7 +84,6 @@ def test_does_not_require_prescribed_recurrence(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     submission["result"].pop("recurrence")
-    submission["result"]["elimination"].pop("hypothesis_factorization")
     schema = json.loads((TASK / "environment" / "submission_schema.json").read_text())
     Draft202012Validator(schema).validate(submission)
     _rewrite(app, submission)
@@ -92,3 +91,9 @@ def test_does_not_require_prescribed_recurrence(tmp_path: Path) -> None:
     accepted = _run_verifier(task, app, logs)
     assert accepted.details["correctness"] == 1.0
     assert accepted.reward == pytest.approx(1.0)
+
+
+def test_elimination_schema_has_no_redundant_formula_string() -> None:
+    schema = json.loads((TASK / "environment" / "submission_schema.json").read_text())
+    elimination = schema["properties"]["result"]["properties"]["elimination"]
+    assert "hypothesis_factorization" not in elimination["properties"]

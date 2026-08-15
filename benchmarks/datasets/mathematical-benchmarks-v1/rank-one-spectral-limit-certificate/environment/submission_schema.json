@@ -81,8 +81,34 @@
           "const": "DIAGONAL_MINUS_LAMBDA_ONES"
         },
         "root_formula": {
-          "minLength": 1,
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "coefficient": {
+              "type": "integer"
+            },
+            "denominator_offsets": {
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "numerator_offsets": {
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            }
+          },
+          "required": [
+            "coefficient",
+            "numerator_offsets",
+            "denominator_offsets"
+          ],
+          "type": "object"
         }
       },
       "required": [

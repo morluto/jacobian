@@ -22,6 +22,10 @@ is at least that affine value; `hypotheses`, `successor`, `u_difference`, and
 `b_difference` assert exact valuations. The doubling identities are frozen source premises;
 your certificate must use them to establish the required affine valuation
 relations and strict gaps symbolically, not only for selected values of `k`.
+Encode the difference identity using ascending coefficients of `f` and two
+linear factors in `a,b`. Encode each doubling identity as coefficients of its
+named monomials after moving every term to the left-hand side. Encode the
+add-one valuation implication by its premise lower bound and exact conclusion.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

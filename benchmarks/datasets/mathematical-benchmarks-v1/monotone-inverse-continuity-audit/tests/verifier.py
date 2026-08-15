@@ -27,6 +27,19 @@ def _fraction(value):
     return parsed
 
 
+def _result_fraction(value):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        raise ValueError
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        raise ValueError
+    parsed = Fraction(numerator, denominator)
+    if parsed.numerator != numerator or parsed.denominator != denominator:
+        raise ValueError
+    return parsed
+
+
 def _valid_countermodel(result, source):
     keys = {
         "left_slope",
@@ -42,7 +55,7 @@ def _valid_countermodel(result, source):
     if not isinstance(result, dict) or set(result) != keys:
         return False
     try:
-        value = {key: _fraction(item) for key, item in result.items()}
+        value = {key: _result_fraction(item) for key, item in result.items()}
         bounds = source["parameter_bounds"]
         left = _fraction(source["interval"]["left"])
         right = _fraction(source["interval"]["right"])

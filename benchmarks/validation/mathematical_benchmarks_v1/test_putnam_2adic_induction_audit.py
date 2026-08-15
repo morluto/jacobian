@@ -34,6 +34,11 @@ def test_oracle_passes(tmp_path: Path) -> None:
     [
         (("valuation_induction", "sub_one_term_lower_bounds", 1), [1, 2]),
         (("target_transfer", "b_difference"), [2, 3]),
+        (("difference_identity", "left_function_coefficients"), "f(a)-f(b)"),
+        (
+            ("valuation_induction", "add_one_reason"),
+            "P_2n_minus_1_divisible_by_8_implies_P_2n_plus_1_has_v2_1",
+        ),
         (("finite_testing_role",), "FINITE_CASES_PROVE_ALL_K"),
     ],
 )

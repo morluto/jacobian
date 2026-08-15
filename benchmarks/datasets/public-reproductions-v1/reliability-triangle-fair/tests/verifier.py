@@ -14,7 +14,20 @@ W = Path("/app")
 E = Path("/tests")
 
 
-def _frac(v):
+def _submission_frac(v):
+    if not isinstance(v, dict) or set(v) != {"num", "den"}:
+        return None
+    num, den = v.get("num"), v.get("den")
+    if type(num) is not int or type(den) is not int or den <= 0:
+        return None
+    try:
+        value = Fraction(num, den)
+    except (OverflowError, ValueError, ZeroDivisionError):
+        return None
+    return value
+
+
+def _input_frac(v):
     if not isinstance(v, dict) or set(v) != {"num", "den"}:
         return None
     num, den = v.get("num"), v.get("den")
@@ -26,10 +39,9 @@ def _frac(v):
     ):
         return None
     try:
-        value = Fraction(int(num), int(den))
+        return Fraction(int(num), int(den))
     except (OverflowError, ValueError, ZeroDivisionError):
         return None
-    return value
 
 
 def _graph_parts(x):
@@ -54,7 +66,7 @@ def _probabilities_by_edge(probabilities, edges):
         if not isinstance(item, dict) or set(item) != {"edge", "open_probability"}:
             return None
         edge = item["edge"]
-        probability = _frac(item["open_probability"])
+        probability = _input_frac(item["open_probability"])
         if (
             not isinstance(edge, list)
             or len(edge) != 2
@@ -121,7 +133,9 @@ def _math(s, x, e):
     ):
         return False
     probability, states = expected
-    return _frac(r.get("probability")) == probability and r["states"] == states
+    return (
+        _submission_frac(r.get("probability")) == probability and r["states"] == states
+    )
 
 
 def main():

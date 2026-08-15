@@ -17,3 +17,9 @@ shared Harbor tooling, schemas, registry, suite policy, or another
 control-plane file. Create a snapshot lock only when freezing an intentional
 evaluation or publication set; do not hand-edit or commit a dataset-root
 `dataset.toml`.
+
+The result represents a mathematical value, not a preferred JSON or textual
+rendering. Normalize and compare equivalent values unless the task explicitly
+evaluates canonicalization; declare any such ordering or normal-form rule in
+the public contract. Do not use `answer.txt` as an answer channel. Keep it only
+as non-authoritative source material, if it is needed at all.

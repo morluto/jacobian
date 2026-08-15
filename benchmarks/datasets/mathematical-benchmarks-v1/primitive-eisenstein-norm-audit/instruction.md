@@ -8,7 +8,13 @@ Submit two local certificates:
 1. choose coprime nonzero integers `x,y` in the declared bounds whose norm is divisible by 3, and report its exact 3-adic valuation;
 2. choose one allowed inert prime, report all residue pairs modulo that prime for which `Q` vanishes, and use the result to classify whether its square can have a primitive representation.
 
-Then state the repaired prime-factor criterion. Write `/app/submission.json` following the schema and bind a matching copy of the result at `evidence/local-audit.json`. The task-specific witness file must be a JSON object with exactly the fields `schema_version` (the string `"1"`), `task_id` (the task identifier), and `result` (matching the submission's `result`). Do not solve or certify the source's cubic-form counting problem.
+Then state the repaired prime-factor criterion through the maximum allowed
+exponent of 3 and the modulus/residue class of forbidden inert primes. Write
+`/app/submission.json` following the schema and bind a matching copy of the
+result at `evidence/local-audit.json`. The task-specific witness file must be a
+JSON object with exactly the fields `schema_version` (the string `"1"`),
+`task_id` (the task identifier), and `result` (matching the submission's
+`result`). Do not solve or certify the source's cubic-form counting problem.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

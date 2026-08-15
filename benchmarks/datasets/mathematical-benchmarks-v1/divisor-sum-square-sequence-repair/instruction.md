@@ -10,6 +10,9 @@ positive `k`, every `a_n` with `n>=max(2,k)` is divisible by `2^k`, and
 therefore only finitely many can equal `k mod 2^k`. Also submit at least four
 freely chosen distinct odd-prime probes where `b_p = sum_{d|p} d*a_d` is an
 exact square.
+Encode the default power-of-two branch by its exponent offset. The verifier
+checks each odd-prime branch semantically from the submitted exact probes; no
+decorative formula or threshold-rule string is required.
 
 Use `/app/submission.json` and bind an identical certificate at
 `evidence/sequence-construction.json`. The certificate must be a JSON object

@@ -202,15 +202,11 @@ def _recurrence_is_valid(value: object, expected_powers: dict[str, Poly]) -> boo
 
 
 def _elimination_is_valid(value: object, expected_powers: dict[str, Poly]) -> bool:
-    if (
-        not isinstance(value, dict)
-        or not {"sum_polynomial", "target_polynomial"} <= set(value)
-        or not set(value)
-        <= {"sum_polynomial", "hypothesis_factorization", "target_polynomial"}
-    ):
+    if not isinstance(value, dict) or set(value) != {
+        "sum_polynomial",
+        "target_polynomial",
+    }:
         return False
-    expected_factorization = "A4-2*A3=-(s^2/2)*(s^2-10*s+8)"
-    factorization = value.get("hypothesis_factorization")
     difference = _padd(
         expected_powers["4"], _pscale(expected_powers["3"], Fraction(-2))
     )
@@ -222,7 +218,6 @@ def _elimination_is_valid(value: object, expected_powers: dict[str, Poly]) -> bo
         _poly(value["sum_polynomial"]) == (Fraction(8), Fraction(-10), Fraction(1))
         and _poly(value["target_polynomial"])
         == (Fraction(32), Fraction(-20), Fraction(1))
-        and factorization in {None, expected_factorization}
         and difference == factorized
     )
 

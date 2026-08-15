@@ -68,9 +68,10 @@ def test_pair_distance_corruption_is_rejected(tmp_path: Path) -> None:
 
 def test_wrong_dual_multiplier_is_rejected(tmp_path: Path) -> None:
     submission = _submission()
-    submission["result"]["upper_bound_certificate"]["dual_multipliers"]["order_1"] = (
-        "1/2"
-    )
+    submission["result"]["upper_bound_certificate"]["dual_multipliers"]["order_1"] = {
+        "numerator": 1,
+        "denominator": 2,
+    }
     result = _verifier._run_verifier(*_case(tmp_path, submission, label="dual"))
     assert result.details["correctness"] == 0.0
     assert result.reward == 0.0
@@ -81,12 +82,23 @@ def test_noncanonical_rational_is_accepted(tmp_path: Path) -> None:
     the same nonnegative rational value.
     """
     submission = _submission()
-    submission["result"]["upper_bound_certificate"]["dual_multipliers"]["order_2"] = (
-        "2/12"
-    )
+    submission["result"]["upper_bound_certificate"]["dual_multipliers"]["order_2"] = {
+        "numerator": 2,
+        "denominator": 12,
+    }
     result = _verifier._run_verifier(*_case(tmp_path, submission, label="fraction"))
     assert result.details["correctness"] == 1.0
     assert result.reward == pytest.approx(1.0)
+
+
+def test_string_coerced_multiplier_is_rejected(tmp_path: Path) -> None:
+    submission = _submission()
+    submission["result"]["upper_bound_certificate"]["dual_multipliers"]["order_2"] = (
+        "1/6"
+    )
+    result = _verifier._run_verifier(*_case(tmp_path, submission, label="string"))
+    assert result.details["correctness"] == 0.0
+    assert result.reward == 0.0
 
 
 def test_input_tampering_is_rejected(tmp_path: Path) -> None:

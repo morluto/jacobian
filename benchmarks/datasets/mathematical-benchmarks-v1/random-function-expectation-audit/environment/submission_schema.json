@@ -1,4 +1,23 @@
 {
+  "$defs": {
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
@@ -6,20 +25,20 @@
       "additionalProperties": false,
       "properties": {
         "expected_value": {
-          "description": "The expectation of (f(f(x))-x)^2 over ordered x and f",
-          "type": "string"
+          "$ref": "#/$defs/rational",
+          "description": "The expectation of (f(f(x))-x)^2 over ordered x and f"
         },
         "ordered_squared_difference_sum": {
           "minimum": 0,
           "type": "integer"
         },
         "other_hit_probability": {
-          "description": "P(f(f(x))=y) for one fixed y != x",
-          "type": "string"
+          "$ref": "#/$defs/rational",
+          "description": "P(f(f(x))=y) for one fixed y != x"
         },
         "self_hit_probability": {
-          "description": "P(f(f(x))=x) for a fixed x",
-          "type": "string"
+          "$ref": "#/$defs/rational",
+          "description": "P(f(f(x))=x) for a fixed x"
         }
       },
       "required": [

@@ -31,7 +31,8 @@ from jacobian.contracts.topology import (
     face_closure,
     simplicial_complex_digest,
 )
-from jacobian.domains._certified_snf import (
+from jacobian.domains._examples import example
+from jacobian.domains.certified_snf._kernel import (
     certificate_from_reduction,
     inverse_unimodular,
     matrix_columns,
@@ -39,7 +40,6 @@ from jacobian.domains._certified_snf import (
     matrix_vector_multiply,
     smith_reduce,
 )
-from jacobian.domains._examples import example
 from jacobian.math import prime_field_linear_algebra as prime_field
 from jacobian.math_tools import MathTool
 

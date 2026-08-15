@@ -1,4 +1,23 @@
 {
+  "$defs": {
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
@@ -20,7 +39,7 @@
         },
         "derived_coefficients": {
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/rational"
           },
           "maxItems": 5,
           "minItems": 5,
@@ -34,10 +53,10 @@
           "minItems": 2,
           "prefixItems": [
             {
-              "type": "string"
+              "$ref": "#/$defs/rational"
             },
             {
-              "type": "string"
+              "$ref": "#/$defs/rational"
             }
           ],
           "type": "array"

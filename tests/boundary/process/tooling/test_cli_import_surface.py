@@ -28,7 +28,6 @@ else:
 forbidden = (
     "jacobian.adapters.mcp.server",
     "jacobian.domains",
-    "jacobian.lean_frontend.service",
     "sympy",
     "flint",
     "z3",

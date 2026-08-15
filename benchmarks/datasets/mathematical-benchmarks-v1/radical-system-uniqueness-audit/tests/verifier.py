@@ -1,5 +1,4 @@
 import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -111,22 +110,26 @@ def _solution_is_exact(value: object) -> bool:
         and a == c * (u**2 - 1) ** 4
     )
     expected_values = [
-        f"{a // c}={b - u**3 + c}",
-        f"{u**3 + 1}={u**3 + 1}",
-        f"{u**2 - 1}={u**2 - 1}",
+        {"left": a // c, "right": b - u**3 + c},
+        {"left": u**3 + 1, "right": u**3 + 1},
+        {"left": u**2 - 1, "right": u**2 - 1},
     ]
     submitted_values = value["equation_values"]
     if not isinstance(submitted_values, list) or len(submitted_values) != 3:
         return False
-
-    def normalize(item: str) -> str:
-        return re.sub(r"\s+", "", item)
-
-    return (
-        all(isinstance(item, str) and "=" in item for item in submitted_values)
-        and equations_hold
-        and [normalize(item) for item in submitted_values]
-        == [normalize(item) for item in expected_values]
+    submitted_pairs = [
+        (item["left"], item["right"])
+        for item in submitted_values
+        if isinstance(item, dict)
+        and set(item) == {"left", "right"}
+        and type(item["left"]) is int
+        and type(item["right"]) is int
+    ]
+    expected_pairs = [(item["left"], item["right"]) for item in expected_values]
+    return bool(
+        equations_hold
+        and len(submitted_pairs) == len(expected_pairs)
+        and sorted(submitted_pairs) == sorted(expected_pairs)
     )
 
 

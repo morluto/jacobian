@@ -8,8 +8,9 @@ certificate that:
 3. returns both and only the possible target values as quadratic surds; and
 4. certifies that each submitted branch is achievable.
 
-The optional `recurrence` and `hypothesis_factorization` fields describe one
-accepted exact certificate format; they are not required.
+The optional `recurrence` field describes one accepted exact certificate
+format; it is not required. The submitted sum and target polynomials provide
+the elimination identity directly.
 
 The two algebraic branches may appear in either order. Rational numbers must be
 reduced with positive denominators. Write the result to `/app/submission.json`

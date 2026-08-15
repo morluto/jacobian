@@ -22,7 +22,7 @@ def _math(s, x, e):
     ):
         return False
     ifs = r.get("invariant_factors")
-    if not isinstance(ifs, list) or any(not isinstance(value, str) for value in ifs):
+    if not isinstance(ifs, list) or any(type(value) is not int for value in ifs):
         return False
     matrix = x.get("matrix")
     try:
@@ -53,9 +53,9 @@ def _math(s, x, e):
     invariant_factors = (
         []
         if rank == 0
-        else [str(entry_gcd)]
+        else [entry_gcd]
         if rank == 1
-        else [str(entry_gcd), str(minor_gcd // entry_gcd)]
+        else [entry_gcd, minor_gcd // entry_gcd]
     )
     return r["rank"] == rank and ifs == invariant_factors
 

@@ -1,5 +1,4 @@
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -13,17 +12,26 @@ from verifier_support import (
 T = Path("/tests")
 
 
-def q(text):
-    if (
-        not isinstance(text, str)
-        or re.fullmatch(r"(?:0|1|[1-9][0-9]*/[1-9][0-9]*)", text) is None
-    ):
+def q(value):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        value = Fraction(text)
+        parsed = Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    return value if str(value) == text else None
+    return (
+        parsed
+        if parsed.numerator == numerator and parsed.denominator == denominator
+        else None
+    )
+
+
+def encoded(value):
+    return {"numerator": value.numerator, "denominator": value.denominator}
 
 
 def valid_result(result):
@@ -57,8 +65,8 @@ def valid_result(result):
                 "included_endpoint": high,
                 "excluded_endpoint": low,
                 "cumulative_count": count,
-                "included_density": str(Fraction(count, high)),
-                "excluded_density": str(Fraction(count, low)),
+                "included_density": encoded(Fraction(count, high)),
+                "excluded_density": encoded(Fraction(count, low)),
             }
         )
     levels = result.get("levels")

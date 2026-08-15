@@ -4,7 +4,7 @@ from random import Random
 
 import pytest
 
-from jacobian.domains._certified_snf import (
+from jacobian.domains.certified_snf._kernel import (
     identity_matrix,
     inverse_unimodular,
     matrix_multiply,

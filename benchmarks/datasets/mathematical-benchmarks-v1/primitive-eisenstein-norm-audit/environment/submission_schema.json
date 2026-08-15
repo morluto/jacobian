@@ -86,8 +86,36 @@
           "type": "object"
         },
         "repaired_criterion": {
-          "minLength": 1,
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "forbidden_prime_residue": {
+              "additionalProperties": false,
+              "properties": {
+                "modulus": {
+                  "minimum": 2,
+                  "type": "integer"
+                },
+                "residue": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "modulus",
+                "residue"
+              ],
+              "type": "object"
+            },
+            "three_exponent_maximum": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "three_exponent_maximum",
+            "forbidden_prime_residue"
+          ],
+          "type": "object"
         }
       },
       "required": [

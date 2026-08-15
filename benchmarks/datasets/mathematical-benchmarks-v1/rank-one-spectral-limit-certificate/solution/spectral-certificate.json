@@ -2,54 +2,64 @@
   "schema_version": "1",
   "task_id": "jacobian/rank-one-spectral-limit-certificate",
   "result": {
-    "rank_one_sign": "DIAGONAL_MINUS_LAMBDA_ONES",
-    "partial_fraction": {
-      "scale": {
-        "numerator": 1,
-        "denominator": 2
-      },
-      "left_coefficient": 1,
-      "right_coefficient": -1
-    },
     "checkpoints": [
       {
         "n": 4,
         "reciprocal_sum": {
-          "numerator": 9,
-          "denominator": 40
+          "denominator": 40,
+          "numerator": 9
         },
         "root": {
-          "numerator": 40,
-          "denominator": 9
+          "denominator": 9,
+          "numerator": 40
         }
       },
       {
         "n": 7,
         "reciprocal_sum": {
-          "numerator": 27,
-          "denominator": 112
+          "denominator": 112,
+          "numerator": 27
         },
         "root": {
-          "numerator": 112,
-          "denominator": 27
+          "denominator": 27,
+          "numerator": 112
         }
       },
       {
         "n": 12,
         "reciprocal_sum": {
-          "numerator": 77,
-          "denominator": 312
+          "denominator": 312,
+          "numerator": 77
         },
         "root": {
-          "numerator": 312,
-          "denominator": 77
+          "denominator": 77,
+          "numerator": 312
         }
       }
     ],
-    "root_formula": "4*n*(n+1)/((n-1)*(n+2))",
     "limit": {
-      "numerator": 4,
-      "denominator": 1
+      "denominator": 1,
+      "numerator": 4
+    },
+    "partial_fraction": {
+      "left_coefficient": 1,
+      "right_coefficient": -1,
+      "scale": {
+        "denominator": 2,
+        "numerator": 1
+      }
+    },
+    "rank_one_sign": "DIAGONAL_MINUS_LAMBDA_ONES",
+    "root_formula": {
+      "coefficient": 4,
+      "denominator_offsets": [
+        -1,
+        2
+      ],
+      "numerator_offsets": [
+        0,
+        1
+      ]
     }
   }
 }

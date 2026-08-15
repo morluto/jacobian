@@ -100,10 +100,25 @@
       }
     ],
     "source_audit": {
-      "claimed_partner": "d^2/(d^2-1)",
+      "claimed_partner": {
+        "denominator": [
+          -1,
+          0,
+          1
+        ],
+        "numerator": [
+          0,
+          0,
+          1
+        ]
+      },
       "downstream_recurrence_status": "UNSUPPORTED",
       "invalid_step": "VIETA_PARTNER_INTEGRALITY",
-      "k": "d^2-1",
+      "k": [
+        -1,
+        0,
+        1
+      ],
       "status_for_d_ge_2": "NONINTEGER"
     }
   }

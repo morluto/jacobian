@@ -21,6 +21,15 @@ def test_rejects_wrong_countermodel(tmp_path: Path) -> None:
     task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     path = app / "submission.json"
     submission = json.loads(path.read_text())
-    submission["result"]["gap_witness"] = "0"
+    submission["result"]["gap_witness"] = {"numerator": 0, "denominator": 1}
+    _fixtures._write_json(path, submission)
+    assert _verifier._run_verifier(task, app, logs).reward == 0.0
+
+
+def test_rejects_string_coerced_parameter(tmp_path: Path) -> None:
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "string")
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    submission["result"]["jump"] = "2"
     _fixtures._write_json(path, submission)
     assert _verifier._run_verifier(task, app, logs).reward == 0.0

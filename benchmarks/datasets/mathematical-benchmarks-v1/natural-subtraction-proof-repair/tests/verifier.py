@@ -26,6 +26,19 @@ def _fraction(value):
     return parsed
 
 
+def _result_fraction(value):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        raise ValueError
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        raise ValueError
+    parsed = Fraction(numerator, denominator)
+    if parsed.numerator != numerator or parsed.denominator != denominator:
+        raise ValueError
+    return parsed
+
+
 def _load_frozen_input():
     try:
         workspace = W / "input.json"
@@ -72,9 +85,9 @@ def _repair_is_valid(result, source):
     ).get("hypotheses", []):
         return False
     try:
-        multipliers = [_fraction(value) for value in result["multipliers"]]
+        multipliers = [_result_fraction(value) for value in result["multipliers"]]
         vectors = [[_fraction(value) for value in row["coefficients"]] for row in basis]
-        claimed = [_fraction(value) for value in result["derived_coefficients"]]
+        claimed = [_result_fraction(value) for value in result["derived_coefficients"]]
         goal = [_fraction(value) for value in source["goal_coefficients"]]
     except (KeyError, TypeError, ValueError, ZeroDivisionError):
         return False

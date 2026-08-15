@@ -1,4 +1,23 @@
 {
+  "$defs": {
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
@@ -6,8 +25,7 @@
       "additionalProperties": false,
       "properties": {
         "alpha": {
-          "maxLength": 100,
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "baseline_power": {
           "const": 2
@@ -32,24 +50,19 @@
             "additionalProperties": false,
             "properties": {
               "area": {
-                "maxLength": 100,
-                "type": "string"
+                "$ref": "#/$defs/rational"
               },
               "center": {
-                "maxLength": 100,
-                "type": "string"
+                "$ref": "#/$defs/rational"
               },
               "half_width": {
-                "maxLength": 100,
-                "type": "string"
+                "$ref": "#/$defs/rational"
               },
               "integer_sample": {
-                "maxLength": 100,
-                "type": "string"
+                "$ref": "#/$defs/rational"
               },
               "left": {
-                "maxLength": 100,
-                "type": "string"
+                "$ref": "#/$defs/rational"
               },
               "n": {
                 "maximum": 12,
@@ -57,8 +70,7 @@
                 "type": "integer"
               },
               "right": {
-                "maxLength": 100,
-                "type": "string"
+                "$ref": "#/$defs/rational"
               }
             },
             "required": [

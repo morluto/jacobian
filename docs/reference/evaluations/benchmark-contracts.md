@@ -46,6 +46,21 @@ data in `result`, and never require a duplicate result file or natural-language
 explanation. Generic assurance, scope, completeness, limitation, and
 verification-record fields are not part of ordinary mathematical submissions.
 
+### Mathematical representations
+
+The typed result represents a mathematical object, not a preferred rendering of
+one. Parse and compare the represented value: accept equivalent rationals,
+scaled rational functions, and unordered factors or claims whenever order and
+normal form are not part of the task. A task may require a canonical form only
+when canonicalization is itself a stated mathematical outcome; the public
+instruction and schema must then declare that requirement and its exact rule.
+
+`answer.txt` is never the authoritative submission interface. A task may retain
+human-readable text as non-authoritative source material, but its hidden gold
+solution and agent submission use the same structured contract. A witness file
+is justified only when the verifier needs an external finite object for replay;
+it must not duplicate the typed result or carry a prose explanation.
+
 ## Generated output
 
 Task bundles and member records are reproducibility anchors and remain tracked.

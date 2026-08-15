@@ -317,19 +317,19 @@ def test_shutil_import_without_which_is_not_flagged(tmp_path: Path) -> None:
 def test_dict_os_environ_in_product_is_flagged(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        "src/jacobian/lean_frontend/exploration.py",
+        "src/jacobian/worker_environment.py",
         "import os\n\nenv = dict(os.environ)\n",
     )
     report = check_architecture(tmp_path)
     env = [v for v in report.violations if v.code == "environ-spreading"]
     assert len(env) == 1
-    assert env[0].path == "src/jacobian/lean_frontend/exploration.py"
+    assert env[0].path == "src/jacobian/worker_environment.py"
 
 
 def test_os_environ_copy_in_product_is_flagged(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        "src/jacobian/runtime/services.py",
+        "src/jacobian/validation_diagnostics.py",
         "import os\n\nenv = os.environ.copy()\n",
     )
     report = check_architecture(tmp_path)

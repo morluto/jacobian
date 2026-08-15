@@ -169,17 +169,29 @@ def _result_shape_is_valid(result: object) -> bool:
     }:
         return False
     audit = result["source_audit"]
+    if not isinstance(audit, dict) or set(audit) != {
+        "invalid_step",
+        "k",
+        "claimed_partner",
+        "status_for_d_ge_2",
+        "downstream_recurrence_status",
+    }:
+        return False
+    partner = audit["claimed_partner"]
     return bool(
-        isinstance(audit, dict)
-        and set(audit)
-        == {
-            "invalid_step",
-            "k",
-            "claimed_partner",
-            "status_for_d_ge_2",
-            "downstream_recurrence_status",
-        }
-        and all(type(value) is str and value for value in audit.values())
+        all(
+            type(audit[field]) is str and audit[field]
+            for field in (
+                "invalid_step",
+                "status_for_d_ge_2",
+                "downstream_recurrence_status",
+            )
+        )
+        and _poly(audit["k"]) is not None
+        and isinstance(partner, dict)
+        and set(partner) == {"numerator", "denominator"}
+        and _poly(partner["numerator"]) is not None
+        and _poly(partner["denominator"]) is not None
         and _family_shape(result["family"])
         and _probes_shape(result["probes"])
         and type(result["conclusion"]) is str
@@ -280,8 +292,11 @@ def _result_is_valid(result: object, source: dict[str, Any]) -> bool:
     audit = result["source_audit"]
     if not isinstance(audit, dict) or audit != {
         "invalid_step": "VIETA_PARTNER_INTEGRALITY",
-        "k": "d^2-1",
-        "claimed_partner": "d^2/(d^2-1)",
+        "k": [-1, 0, 1],
+        "claimed_partner": {
+            "numerator": [0, 0, 1],
+            "denominator": [-1, 0, 1],
+        },
         "status_for_d_ge_2": "NONINTEGER",
         "downstream_recurrence_status": "UNSUPPORTED",
     }:

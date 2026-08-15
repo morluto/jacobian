@@ -5,6 +5,8 @@ the offline input. Return exact coordinates for `O`, `G`, and `H`, together
 with nonzero relation coefficients in the declared point order. The
 coordinates must satisfy every defining identity and the submitted relation
 as rational-function identities under the declared nonzero assumption.
+Represent every submitted coefficient as an integer `numerator` and positive
+integer `denominator`.
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`.
 

@@ -84,7 +84,6 @@
       }
     ],
     "elimination": {
-      "hypothesis_factorization": "A4-2*A3=-(s^2/2)*(s^2-10*s+8)",
       "sum_polynomial": [
         {
           "denominator": 1,

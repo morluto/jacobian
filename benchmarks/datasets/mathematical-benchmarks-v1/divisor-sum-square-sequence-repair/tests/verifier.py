@@ -35,24 +35,6 @@ def _json_exact_equal(left: object, right: object) -> bool:
     return left == right
 
 
-def _is_valid_prime_formula(s: str) -> bool:
-    """The prime formula must describe a power-of-two expression."""
-
-    return "2" in s and "^" in s
-
-
-def _is_valid_threshold_rule(s: str) -> bool:
-    """The threshold rule must describe the global divisibility property."""
-
-    lower = s.casefold()
-    return (
-        "n" in lower
-        and "k" in lower
-        and "2" in lower
-        and ("divisible" in lower or "divides" in lower)
-    )
-
-
 def _result_ok(result: Any) -> bool:
     """Validate the piecewise construction semantically.
 
@@ -65,8 +47,6 @@ def _result_ok(result: Any) -> bool:
     if not isinstance(result, dict) or set(result) != {
         "a_1",
         "default_exponent_offset",
-        "prime_formula",
-        "threshold_rule",
         "probes",
     }:
         return False
@@ -75,10 +55,6 @@ def _result_ok(result: Any) -> bool:
         or result["a_1"] != 1
         or type(result["default_exponent_offset"]) is not int
         or result["default_exponent_offset"] < 0
-        or not isinstance(result["prime_formula"], str)
-        or not _is_valid_prime_formula(result["prime_formula"])
-        or not isinstance(result["threshold_rule"], str)
-        or not _is_valid_threshold_rule(result["threshold_rule"])
     ):
         return False
     probes = result["probes"]

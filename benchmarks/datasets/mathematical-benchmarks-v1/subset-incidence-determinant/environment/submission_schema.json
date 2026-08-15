@@ -15,10 +15,47 @@
           "type": "array"
         },
         "general_determinant": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "n_equals_1": {
+              "enum": [
+                -1,
+                1
+              ]
+            },
+            "otherwise": {
+              "enum": [
+                -1,
+                1
+              ]
+            }
+          },
+          "required": [
+            "n_equals_1",
+            "otherwise"
+          ],
+          "type": "object"
         },
         "general_even_count": {
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "minimum": 2,
+              "type": "integer"
+            },
+            "constant_offset": {
+              "type": "integer"
+            },
+            "exponent_offset": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "base",
+            "exponent_offset",
+            "constant_offset"
+          ],
+          "type": "object"
         },
         "mask_order": {
           "items": {

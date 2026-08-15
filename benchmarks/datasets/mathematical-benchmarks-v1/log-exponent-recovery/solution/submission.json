@@ -1,10 +1,10 @@
 {
   "result": {
     "reciprocal_log_contributions": {
-      "x": "1/24",
-      "xyz": "1/12",
-      "y": "1/40",
-      "z": "1/60"
+      "x": {"denominator": 24, "numerator": 1},
+      "xyz": {"denominator": 12, "numerator": 1},
+      "y": {"denominator": 40, "numerator": 1},
+      "z": {"denominator": 60, "numerator": 1}
     },
     "value": 60
   }

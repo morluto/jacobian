@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import runpy
 import tarfile
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
 from typing import Any, cast
 
-from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
+from _spike_support import _canonical, _result, _runner, _sha256
+from benchmarks.tooling.command_runner import ToolCommandResult
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 SPIKE = runpy.run_path(
@@ -23,44 +23,6 @@ BASE_PIN = json.loads(
 RunSpike = Callable[..., dict[str, Any]]
 RUN_SPIKE = cast(RunSpike, SPIKE["run_spike"])
 EXPECTED_MATHEMATICAL = SPIKE["_expected_mathematical"](BASE_PIN)
-
-
-def _sha256(payload: bytes) -> str:
-    return "sha256:" + hashlib.sha256(payload).hexdigest()
-
-
-def _canonical(payload: object) -> bytes:
-    return (
-        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-        + "\n"
-    ).encode("ascii")
-
-
-def _result(
-    *,
-    stdout: bytes = b"",
-    stderr: bytes = b"",
-    returncode: int | None = 0,
-    timed_out: bool = False,
-) -> ToolCommandResult:
-    status = ToolCommandStatus.TIMED_OUT if timed_out else ToolCommandStatus.EXITED
-    return ToolCommandResult(
-        status=status,
-        exit_code=returncode,
-        stdout=stdout,
-        stderr=stderr,
-    )
-
-
-def _runner(
-    outcomes: Sequence[ToolCommandResult],
-) -> Callable[..., ToolCommandResult]:
-    remaining = iter(outcomes)
-
-    def run(*_args: object, **_kwargs: object) -> ToolCommandResult:
-        return next(remaining)
-
-    return run
 
 
 def _provider_output(

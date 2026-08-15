@@ -17,12 +17,18 @@
       "x": 1,
       "y": 4
     },
-    "repaired_criterion": "THREE_EXPONENT_AT_MOST_ONE_AND_NO_PRIME_TWO_MOD_THREE"
+    "repaired_criterion": {
+      "forbidden_prime_residue": {
+        "modulus": 3,
+        "residue": 2
+      },
+      "three_exponent_maximum": 1
+    }
   },
   "witness": [
     {
       "path": "evidence/local-audit.json",
-      "sha256": "sha256:93de0a3babbb4f446683213365029ec278f5c40fc075197c72047a8d38d073a4"
+      "sha256": "sha256:3dcdea39cb4cf85ba5ee489391e8e740bd099e3812f05dc60a9807b102a6e3e2"
     }
   ]
 }

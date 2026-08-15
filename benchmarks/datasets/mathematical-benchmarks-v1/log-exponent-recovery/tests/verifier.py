@@ -1,5 +1,4 @@
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -9,7 +8,16 @@ from verifier_support import (
 )
 
 E = Path("/tests")
-RATIONAL_PATTERN = re.compile(r"-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?")
+
+
+def _fraction(value):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        raise ValueError
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        raise ValueError
+    return Fraction(numerator, denominator)
 
 
 def witness_ok(result):
@@ -26,13 +34,7 @@ def witness_ok(result):
     ):
         return False
     try:
-        if any(
-            not isinstance(values[key], str)
-            or RATIONAL_PATTERN.fullmatch(values[key]) is None
-            for key in ("x", "y", "z", "xyz")
-        ):
-            return False
-        x, y, z, xyz = (Fraction(values[key]) for key in ("x", "y", "z", "xyz"))
+        x, y, z, xyz = (_fraction(values[key]) for key in ("x", "y", "z", "xyz"))
     except (TypeError, ValueError, ZeroDivisionError):
         return False
     return (

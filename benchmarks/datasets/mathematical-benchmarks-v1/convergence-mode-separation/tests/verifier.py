@@ -1,5 +1,4 @@
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -34,16 +33,22 @@ def _load_bounded_submission():
         return None
 
 
-def _fraction(text, *, canonical=True):
-    if not isinstance(text, str) or len(text) > 128:
+def _fraction(value, *, canonical=True):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
         return None
-    if not re.fullmatch(r"[+-]?(?:\d+(?:/\d+)?|\d+\.\d+)", text):
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        value = Fraction(text)
+        parsed = Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError, OverflowError):
         return None
-    return value if not canonical or str(value) == text else None
+    if canonical and (
+        parsed.numerator != numerator or parsed.denominator != denominator
+    ):
+        return None
+    return parsed
 
 
 def _valid_levels(levels, start, end):

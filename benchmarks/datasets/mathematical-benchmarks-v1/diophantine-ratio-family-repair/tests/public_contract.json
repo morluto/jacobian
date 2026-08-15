@@ -121,8 +121,20 @@
         "additionalProperties": false,
         "properties": {
           "claimed_partner": {
-            "minLength": 1,
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "numerator": {
+                "$ref": "#/$defs/poly"
+              },
+              "denominator": {
+                "$ref": "#/$defs/poly"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
           },
           "downstream_recurrence_status": {
             "minLength": 1,
@@ -133,8 +145,7 @@
             "type": "string"
           },
           "k": {
-            "minLength": 1,
-            "type": "string"
+            "$ref": "#/$defs/poly"
           },
           "status_for_d_ge_2": {
             "minLength": 1,
@@ -282,8 +293,20 @@
             "additionalProperties": false,
             "properties": {
               "claimed_partner": {
-                "minLength": 1,
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "numerator": {
+                    "$ref": "#/$defs/poly"
+                  },
+                  "denominator": {
+                    "$ref": "#/$defs/poly"
+                  }
+                },
+                "required": [
+                  "numerator",
+                  "denominator"
+                ],
+                "type": "object"
               },
               "downstream_recurrence_status": {
                 "minLength": 1,
@@ -294,8 +317,7 @@
                 "type": "string"
               },
               "k": {
-                "minLength": 1,
-                "type": "string"
+                "$ref": "#/$defs/poly"
               },
               "status_for_d_ge_2": {
                 "minLength": 1,

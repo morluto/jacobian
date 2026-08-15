@@ -1,5 +1,4 @@
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -14,17 +13,21 @@ E = Path("/tests")
 
 
 def q(value):
-    if (
-        not isinstance(value, str)
-        or re.fullmatch(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]{1,40}|/[1-9][0-9]*)?", value)
-        is None
-    ):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        parsed = Fraction(value)
+        parsed = Fraction(numerator, denominator)
     except (ValueError, TypeError, ZeroDivisionError):
         return None
-    return parsed
+    return (
+        parsed
+        if parsed.numerator == numerator and parsed.denominator == denominator
+        else None
+    )
 
 
 def main():

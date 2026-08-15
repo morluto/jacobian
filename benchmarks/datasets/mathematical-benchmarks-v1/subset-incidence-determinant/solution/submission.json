@@ -33,8 +33,15 @@
       -1,
       1
     ],
-    "general_determinant": "1_if_n_eq_1_else_minus_1",
-    "general_even_count": "2^(n-1)-1",
+    "general_determinant": {
+      "n_equals_1": 1,
+      "otherwise": -1
+    },
+    "general_even_count": {
+      "base": 2,
+      "constant_offset": -1,
+      "exponent_offset": -1
+    },
     "mask_order": [
       1,
       2,

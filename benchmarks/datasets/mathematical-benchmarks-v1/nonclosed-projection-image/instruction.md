@@ -16,7 +16,9 @@ fields (`boundedness`, `closedness`, `range_identification`, `convergence`, and
 `absent_preimage`).
 
 A finite-dimensional matrix, a bare theorem citation, or a single approximate
-sequence is insufficient. Fractions must be canonical.
+sequence is insufficient. Submit every exact rational as a
+`{"numerator": integer, "denominator": positive integer}` object in lowest
+terms.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

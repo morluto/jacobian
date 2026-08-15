@@ -5,7 +5,8 @@ attained at `0` but which is not differentiable there. Use the two-branch family
 declared in the input and choose any rational peak and slopes satisfying the
 requirements.
 
-Return exact rational parameters and the branch values at the join. The
+Return exact rational parameters as integer `numerator`/positive integer
+`denominator` objects in lowest terms and the branch values at the join. The
 verifier independently checks continuity at zero, monotonicity toward and away
 from the peak, and the unequal one-sided derivatives. Write `submission.json`
 to the exact `submission_schema.json` contract, Write the task-specific witness to

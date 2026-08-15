@@ -1,1 +1,1 @@
-{"task_id":"jacobian/reliability-single-edge","conclusion":"TRUE","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/reliability-single-edge","complete finite input"],"expected_probability":{"num":"1","den":"3"},"expected_states":2}
+{"task_id":"jacobian/reliability-single-edge","conclusion":"TRUE","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/reliability-single-edge","complete finite input"],"expected_probability":{"num":1,"den":3},"expected_states":2}

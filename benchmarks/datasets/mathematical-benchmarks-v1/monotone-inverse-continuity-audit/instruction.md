@@ -5,7 +5,8 @@ function on a compact interval.  Within the declared two-branch rational family,
 construct a strictly increasing function with a jump at zero and certify that its
 image omits a rational point lying strictly between its endpoint values.
 
-Submit canonical rational parameters, the four boundary values listed in the
+Submit canonical rational parameters as integer `numerator`/positive integer
+`denominator` objects in lowest terms, the four boundary values listed in the
 schema, and any canonical rational gap witness.  The witness must lie strictly
 between the left limit and the right value at zero.  This simultaneously refutes
 the claimed interval-image conclusion and the existence of a two-sided inverse

@@ -6,16 +6,47 @@
       "additionalProperties": false,
       "properties": {
         "formula": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "free_edge_factor_exponent": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "incident_ordered_pair_factor": {
-          "minLength": 1,
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "free_edge_base": {
+              "maximum": 10,
+              "minimum": 2,
+              "type": "integer"
+            },
+            "free_edge_exponent": {
+              "additionalProperties": false,
+              "properties": {
+                "binomial_order": {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "offset": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "binomial_order",
+                "offset"
+              ],
+              "type": "object"
+            },
+            "incident_vertex_offsets": {
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array",
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "incident_vertex_offsets",
+            "free_edge_base",
+            "free_edge_exponent"
+          ],
+          "type": "object"
         },
         "pair_semantics": {
           "enum": [
@@ -51,8 +82,6 @@
       },
       "required": [
         "pair_semantics",
-        "incident_ordered_pair_factor",
-        "free_edge_factor_exponent",
         "formula",
         "probe_values"
       ],

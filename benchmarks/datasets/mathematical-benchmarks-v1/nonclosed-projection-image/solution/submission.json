@@ -1,196 +1,646 @@
 {
   "result": {
     "limit_coordinates": [
-      "1",
-      "1/2",
-      "1/3",
-      "1/4",
-      "1/5",
-      "1/6",
-      "1/7",
-      "1/8",
-      "1/9",
-      "1/10",
-      "1/11",
-      "1/12",
-      "1/13",
-      "1/14",
-      "1/15",
-      "1/16",
-      "1/17",
-      "1/18",
-      "1/19",
-      "1/20",
-      "1/21",
-      "1/22",
-      "1/23",
-      "1/24",
-      "1/25",
-      "1/26",
-      "1/27",
-      "1/28",
-      "1/29",
-      "1/30",
-      "1/31",
-      "1/32",
-      "1/33",
-      "1/34",
-      "1/35",
-      "1/36",
-      "1/37",
-      "1/38",
-      "1/39",
-      "1/40",
-      "1/41",
-      "1/42",
-      "1/43",
-      "1/44",
-      "1/45",
-      "1/46",
-      "1/47",
-      "1/48",
-      "1/49",
-      "1/50",
-      "1/51",
-      "1/52",
-      "1/53",
-      "1/54",
-      "1/55",
-      "1/56",
-      "1/57",
-      "1/58",
-      "1/59",
-      "1/60",
-      "1/61",
-      "1/62",
-      "1/63",
-      "1/64",
-      "1/65",
-      "1/66",
-      "1/67",
-      "1/68",
-      "1/69",
-      "1/70",
-      "1/71",
-      "1/72",
-      "1/73",
-      "1/74",
-      "1/75",
-      "1/76",
-      "1/77",
-      "1/78",
-      "1/79",
-      "1/80",
-      "1/81",
-      "1/82",
-      "1/83",
-      "1/84",
-      "1/85",
-      "1/86",
-      "1/87",
-      "1/88",
-      "1/89",
-      "1/90",
-      "1/91",
-      "1/92",
-      "1/93",
-      "1/94",
-      "1/95",
-      "1/96",
-      "1/97",
-      "1/98",
-      "1/99",
-      "1/100"
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 2,
+        "numerator": 1
+      },
+      {
+        "denominator": 3,
+        "numerator": 1
+      },
+      {
+        "denominator": 4,
+        "numerator": 1
+      },
+      {
+        "denominator": 5,
+        "numerator": 1
+      },
+      {
+        "denominator": 6,
+        "numerator": 1
+      },
+      {
+        "denominator": 7,
+        "numerator": 1
+      },
+      {
+        "denominator": 8,
+        "numerator": 1
+      },
+      {
+        "denominator": 9,
+        "numerator": 1
+      },
+      {
+        "denominator": 10,
+        "numerator": 1
+      },
+      {
+        "denominator": 11,
+        "numerator": 1
+      },
+      {
+        "denominator": 12,
+        "numerator": 1
+      },
+      {
+        "denominator": 13,
+        "numerator": 1
+      },
+      {
+        "denominator": 14,
+        "numerator": 1
+      },
+      {
+        "denominator": 15,
+        "numerator": 1
+      },
+      {
+        "denominator": 16,
+        "numerator": 1
+      },
+      {
+        "denominator": 17,
+        "numerator": 1
+      },
+      {
+        "denominator": 18,
+        "numerator": 1
+      },
+      {
+        "denominator": 19,
+        "numerator": 1
+      },
+      {
+        "denominator": 20,
+        "numerator": 1
+      },
+      {
+        "denominator": 21,
+        "numerator": 1
+      },
+      {
+        "denominator": 22,
+        "numerator": 1
+      },
+      {
+        "denominator": 23,
+        "numerator": 1
+      },
+      {
+        "denominator": 24,
+        "numerator": 1
+      },
+      {
+        "denominator": 25,
+        "numerator": 1
+      },
+      {
+        "denominator": 26,
+        "numerator": 1
+      },
+      {
+        "denominator": 27,
+        "numerator": 1
+      },
+      {
+        "denominator": 28,
+        "numerator": 1
+      },
+      {
+        "denominator": 29,
+        "numerator": 1
+      },
+      {
+        "denominator": 30,
+        "numerator": 1
+      },
+      {
+        "denominator": 31,
+        "numerator": 1
+      },
+      {
+        "denominator": 32,
+        "numerator": 1
+      },
+      {
+        "denominator": 33,
+        "numerator": 1
+      },
+      {
+        "denominator": 34,
+        "numerator": 1
+      },
+      {
+        "denominator": 35,
+        "numerator": 1
+      },
+      {
+        "denominator": 36,
+        "numerator": 1
+      },
+      {
+        "denominator": 37,
+        "numerator": 1
+      },
+      {
+        "denominator": 38,
+        "numerator": 1
+      },
+      {
+        "denominator": 39,
+        "numerator": 1
+      },
+      {
+        "denominator": 40,
+        "numerator": 1
+      },
+      {
+        "denominator": 41,
+        "numerator": 1
+      },
+      {
+        "denominator": 42,
+        "numerator": 1
+      },
+      {
+        "denominator": 43,
+        "numerator": 1
+      },
+      {
+        "denominator": 44,
+        "numerator": 1
+      },
+      {
+        "denominator": 45,
+        "numerator": 1
+      },
+      {
+        "denominator": 46,
+        "numerator": 1
+      },
+      {
+        "denominator": 47,
+        "numerator": 1
+      },
+      {
+        "denominator": 48,
+        "numerator": 1
+      },
+      {
+        "denominator": 49,
+        "numerator": 1
+      },
+      {
+        "denominator": 50,
+        "numerator": 1
+      },
+      {
+        "denominator": 51,
+        "numerator": 1
+      },
+      {
+        "denominator": 52,
+        "numerator": 1
+      },
+      {
+        "denominator": 53,
+        "numerator": 1
+      },
+      {
+        "denominator": 54,
+        "numerator": 1
+      },
+      {
+        "denominator": 55,
+        "numerator": 1
+      },
+      {
+        "denominator": 56,
+        "numerator": 1
+      },
+      {
+        "denominator": 57,
+        "numerator": 1
+      },
+      {
+        "denominator": 58,
+        "numerator": 1
+      },
+      {
+        "denominator": 59,
+        "numerator": 1
+      },
+      {
+        "denominator": 60,
+        "numerator": 1
+      },
+      {
+        "denominator": 61,
+        "numerator": 1
+      },
+      {
+        "denominator": 62,
+        "numerator": 1
+      },
+      {
+        "denominator": 63,
+        "numerator": 1
+      },
+      {
+        "denominator": 64,
+        "numerator": 1
+      },
+      {
+        "denominator": 65,
+        "numerator": 1
+      },
+      {
+        "denominator": 66,
+        "numerator": 1
+      },
+      {
+        "denominator": 67,
+        "numerator": 1
+      },
+      {
+        "denominator": 68,
+        "numerator": 1
+      },
+      {
+        "denominator": 69,
+        "numerator": 1
+      },
+      {
+        "denominator": 70,
+        "numerator": 1
+      },
+      {
+        "denominator": 71,
+        "numerator": 1
+      },
+      {
+        "denominator": 72,
+        "numerator": 1
+      },
+      {
+        "denominator": 73,
+        "numerator": 1
+      },
+      {
+        "denominator": 74,
+        "numerator": 1
+      },
+      {
+        "denominator": 75,
+        "numerator": 1
+      },
+      {
+        "denominator": 76,
+        "numerator": 1
+      },
+      {
+        "denominator": 77,
+        "numerator": 1
+      },
+      {
+        "denominator": 78,
+        "numerator": 1
+      },
+      {
+        "denominator": 79,
+        "numerator": 1
+      },
+      {
+        "denominator": 80,
+        "numerator": 1
+      },
+      {
+        "denominator": 81,
+        "numerator": 1
+      },
+      {
+        "denominator": 82,
+        "numerator": 1
+      },
+      {
+        "denominator": 83,
+        "numerator": 1
+      },
+      {
+        "denominator": 84,
+        "numerator": 1
+      },
+      {
+        "denominator": 85,
+        "numerator": 1
+      },
+      {
+        "denominator": 86,
+        "numerator": 1
+      },
+      {
+        "denominator": 87,
+        "numerator": 1
+      },
+      {
+        "denominator": 88,
+        "numerator": 1
+      },
+      {
+        "denominator": 89,
+        "numerator": 1
+      },
+      {
+        "denominator": 90,
+        "numerator": 1
+      },
+      {
+        "denominator": 91,
+        "numerator": 1
+      },
+      {
+        "denominator": 92,
+        "numerator": 1
+      },
+      {
+        "denominator": 93,
+        "numerator": 1
+      },
+      {
+        "denominator": 94,
+        "numerator": 1
+      },
+      {
+        "denominator": 95,
+        "numerator": 1
+      },
+      {
+        "denominator": 96,
+        "numerator": 1
+      },
+      {
+        "denominator": 97,
+        "numerator": 1
+      },
+      {
+        "denominator": 98,
+        "numerator": 1
+      },
+      {
+        "denominator": 99,
+        "numerator": 1
+      },
+      {
+        "denominator": 100,
+        "numerator": 1
+      }
     ],
-    "operator_bound": "1",
+    "operator_bound": {
+      "denominator": 1,
+      "numerator": 1
+    },
     "prefixes": [
       {
-        "limit_norm_sq_partial": "1",
+        "limit_norm_sq_partial": {
+          "denominator": 1,
+          "numerator": 1
+        },
         "n": 1,
-        "preimage_coordinate": "1",
-        "preimage_norm_sq_partial": "1",
-        "weight": "1"
+        "preimage_coordinate": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "preimage_norm_sq_partial": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "weight": {
+          "denominator": 1,
+          "numerator": 1
+        }
       },
       {
-        "limit_norm_sq_partial": "5/4",
+        "limit_norm_sq_partial": {
+          "denominator": 4,
+          "numerator": 5
+        },
         "n": 2,
-        "preimage_coordinate": "1",
-        "preimage_norm_sq_partial": "2",
-        "weight": "1/2"
+        "preimage_coordinate": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "preimage_norm_sq_partial": {
+          "denominator": 1,
+          "numerator": 2
+        },
+        "weight": {
+          "denominator": 2,
+          "numerator": 1
+        }
       },
       {
-        "limit_norm_sq_partial": "49/36",
+        "limit_norm_sq_partial": {
+          "denominator": 36,
+          "numerator": 49
+        },
         "n": 3,
-        "preimage_coordinate": "1",
-        "preimage_norm_sq_partial": "3",
-        "weight": "1/3"
+        "preimage_coordinate": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "preimage_norm_sq_partial": {
+          "denominator": 1,
+          "numerator": 3
+        },
+        "weight": {
+          "denominator": 3,
+          "numerator": 1
+        }
       },
       {
-        "limit_norm_sq_partial": "205/144",
+        "limit_norm_sq_partial": {
+          "denominator": 144,
+          "numerator": 205
+        },
         "n": 4,
-        "preimage_coordinate": "1",
-        "preimage_norm_sq_partial": "4",
-        "weight": "1/4"
+        "preimage_coordinate": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "preimage_norm_sq_partial": {
+          "denominator": 1,
+          "numerator": 4
+        },
+        "weight": {
+          "denominator": 4,
+          "numerator": 1
+        }
       },
       {
-        "limit_norm_sq_partial": "5269/3600",
+        "limit_norm_sq_partial": {
+          "denominator": 3600,
+          "numerator": 5269
+        },
         "n": 5,
-        "preimage_coordinate": "1",
-        "preimage_norm_sq_partial": "5",
-        "weight": "1/5"
+        "preimage_coordinate": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "preimage_norm_sq_partial": {
+          "denominator": 1,
+          "numerator": 5
+        },
+        "weight": {
+          "denominator": 5,
+          "numerator": 1
+        }
       },
       {
-        "limit_norm_sq_partial": "5369/3600",
+        "limit_norm_sq_partial": {
+          "denominator": 3600,
+          "numerator": 5369
+        },
         "n": 6,
-        "preimage_coordinate": "1",
-        "preimage_norm_sq_partial": "6",
-        "weight": "1/6"
+        "preimage_coordinate": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "preimage_norm_sq_partial": {
+          "denominator": 1,
+          "numerator": 6
+        },
+        "weight": {
+          "denominator": 6,
+          "numerator": 1
+        }
       },
       {
-        "limit_norm_sq_partial": "266681/176400",
+        "limit_norm_sq_partial": {
+          "denominator": 176400,
+          "numerator": 266681
+        },
         "n": 7,
-        "preimage_coordinate": "1",
-        "preimage_norm_sq_partial": "7",
-        "weight": "1/7"
+        "preimage_coordinate": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "preimage_norm_sq_partial": {
+          "denominator": 1,
+          "numerator": 7
+        },
+        "weight": {
+          "denominator": 7,
+          "numerator": 1
+        }
       },
       {
-        "limit_norm_sq_partial": "1077749/705600",
+        "limit_norm_sq_partial": {
+          "denominator": 705600,
+          "numerator": 1077749
+        },
         "n": 8,
-        "preimage_coordinate": "1",
-        "preimage_norm_sq_partial": "8",
-        "weight": "1/8"
+        "preimage_coordinate": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "preimage_norm_sq_partial": {
+          "denominator": 1,
+          "numerator": 8
+        },
+        "weight": {
+          "denominator": 8,
+          "numerator": 1
+        }
       },
       {
-        "limit_norm_sq_partial": "9778141/6350400",
+        "limit_norm_sq_partial": {
+          "denominator": 6350400,
+          "numerator": 9778141
+        },
         "n": 9,
-        "preimage_coordinate": "1",
-        "preimage_norm_sq_partial": "9",
-        "weight": "1/9"
+        "preimage_coordinate": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "preimage_norm_sq_partial": {
+          "denominator": 1,
+          "numerator": 9
+        },
+        "weight": {
+          "denominator": 9,
+          "numerator": 1
+        }
       },
       {
-        "limit_norm_sq_partial": "1968329/1270080",
+        "limit_norm_sq_partial": {
+          "denominator": 1270080,
+          "numerator": 1968329
+        },
         "n": 10,
-        "preimage_coordinate": "1",
-        "preimage_norm_sq_partial": "10",
-        "weight": "1/10"
+        "preimage_coordinate": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "preimage_norm_sq_partial": {
+          "denominator": 1,
+          "numerator": 10
+        },
+        "weight": {
+          "denominator": 10,
+          "numerator": 1
+        }
       },
       {
-        "limit_norm_sq_partial": "239437889/153679680",
+        "limit_norm_sq_partial": {
+          "denominator": 153679680,
+          "numerator": 239437889
+        },
         "n": 11,
-        "preimage_coordinate": "1",
-        "preimage_norm_sq_partial": "11",
-        "weight": "1/11"
+        "preimage_coordinate": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "preimage_norm_sq_partial": {
+          "denominator": 1,
+          "numerator": 11
+        },
+        "weight": {
+          "denominator": 11,
+          "numerator": 1
+        }
       },
       {
-        "limit_norm_sq_partial": "240505109/153679680",
+        "limit_norm_sq_partial": {
+          "denominator": 153679680,
+          "numerator": 240505109
+        },
         "n": 12,
-        "preimage_coordinate": "1",
-        "preimage_norm_sq_partial": "12",
-        "weight": "1/12"
+        "preimage_coordinate": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "preimage_norm_sq_partial": {
+          "denominator": 1,
+          "numerator": 12
+        },
+        "weight": {
+          "denominator": 12,
+          "numerator": 1
+        }
       }
     ],
     "tail_bound": {
-      "bound_coefficient": "1",
+      "bound_coefficient": {
+        "denominator": 1,
+        "numerator": 1
+      },
       "bound_exponent": 1,
       "verification_terms": 100
     },

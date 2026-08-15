@@ -21,7 +21,8 @@ def _math(s, x, e):
     return (
         rank == e["expected_rank"]
         and isinstance(ifs, list)
-        and [str(v) for v in ifs] == [str(v) for v in e["expected_invariant_factors"]]
+        and all(type(value) is int for value in ifs)
+        and ifs == e["expected_invariant_factors"]
     )
 
 

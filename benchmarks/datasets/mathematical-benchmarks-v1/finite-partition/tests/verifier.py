@@ -39,7 +39,7 @@ def _validate_groups(groups, x):
         except TypeError:
             valid = False
     expected = {
-        f"residue-{r}": frozenset(n for n in x["universe"] if int(n) % 3 == r)
+        f"residue-{r}": frozenset(int(n) for n in x["universe"] if int(n) % 3 == r)
         for r in range(3)
     }
     return members, actual, expected
@@ -76,10 +76,10 @@ def main():
     x = json.loads(next(E.glob("*input*.json")).read_text())
     groups = s.get("result", {}).get("cases", []) if isinstance(s, dict) else []
     members, actual, expected = _validate_groups(groups, x)
-    wanted = set(x["universe"])
+    wanted = {int(member) for member in x["universe"]}
     math_correct = bool(
         workspace_input_is_bound()
-        and all(type(member) is str for member in members)
+        and all(type(member) is int for member in members)
         and len(members) == len(set(members))
         and set(members) == wanted
         and actual == expected

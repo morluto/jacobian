@@ -1,1 +1,1 @@
-{"task_id":"jacobian/smith-rectangular","conclusion":"TRUE","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/smith-rectangular","complete finite input"],"expected_rank":2,"expected_invariant_factors":["2","6"]}
+{"task_id":"jacobian/smith-rectangular","conclusion":"TRUE","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/smith-rectangular","complete finite input"],"expected_rank":2,"expected_invariant_factors":[2,6]}

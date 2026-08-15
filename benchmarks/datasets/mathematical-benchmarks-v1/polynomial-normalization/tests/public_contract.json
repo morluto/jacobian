@@ -16,7 +16,17 @@
     "evidence/answer.txt",
     "evidence/verification-record.json"
   ],
-  "schema_definitions": {},
+  "schema_definitions": {
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {"minimum": 1, "type": "integer"},
+        "numerator": {"type": "integer"}
+      },
+      "required": ["numerator", "denominator"],
+      "type": "object"
+    }
+  },
   "schema_version": "1",
   "submission_path": "/app/submission.json",
   "submission_result": {
@@ -27,7 +37,7 @@
           "additionalProperties": false,
           "properties": {
             "coefficient": {
-              "type": "string"
+              "$ref": "#/$defs/rational"
             },
             "exponents": {
               "items": {
@@ -54,6 +64,17 @@
   },
   "submission_schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+      "rational": {
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {"minimum": 1, "type": "integer"},
+          "numerator": {"type": "integer"}
+        },
+        "required": ["numerator", "denominator"],
+        "type": "object"
+      }
+    },
     "additionalProperties": false,
     "properties": {
       "result": {
@@ -64,7 +85,7 @@
               "additionalProperties": false,
               "properties": {
                 "coefficient": {
-                  "type": "string"
+                  "$ref": "#/$defs/rational"
                 },
                 "exponents": {
                   "items": {

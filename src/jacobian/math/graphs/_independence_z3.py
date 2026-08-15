@@ -97,6 +97,19 @@ def solve_independence_number(
                 termination_reason="OPTIMUM_ESTABLISHED",
                 detail="bounded Z3 optimization seeded by a NetworkX feasible witness",
             )
+    elif status == z3.unsat:
+        return IndependenceNumberResult(
+            status="UNKNOWN",
+            order=order,
+            optimum_value=None,
+            incumbent_value=len(incumbent),
+            lower_bound=len(incumbent),
+            upper_bound=order,
+            witness_vertices=incumbent,
+            termination_reason="SOLVER_UNSAT",
+            detail="bounded Z3 optimization returned unsat, which is unexpected "
+            "for an independence-number problem that always has a feasible witness",
+        )
     else:
         upper_bound = order
 

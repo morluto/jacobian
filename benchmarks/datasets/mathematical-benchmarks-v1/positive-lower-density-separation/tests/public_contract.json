@@ -1,6 +1,15 @@
 {
   "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
   "schema_definitions": {
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {"minimum": 1, "type": "integer"},
+        "numerator": {"type": "integer"}
+      },
+      "required": ["numerator", "denominator"],
+      "type": "object"
+    },
     "level": {
       "additionalProperties": false,
       "properties": {
@@ -8,13 +17,13 @@
           "type": "integer"
         },
         "excluded_density": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "excluded_endpoint": {
           "type": "integer"
         },
         "included_density": {
-          "type": "string"
+          "$ref": "#/$defs/rational"
         },
         "included_endpoint": {
           "type": "integer"
@@ -61,7 +70,7 @@
         "type": "array"
       },
       "lower_density": {
-        "type": "string"
+        "$ref": "#/$defs/rational"
       },
       "lower_density_positive": {
         "const": true
@@ -73,7 +82,7 @@
         "const": "FORMALIZED_PREDICATE_STRICTLY_STRONGER"
       },
       "upper_density": {
-        "type": "string"
+        "$ref": "#/$defs/rational"
       }
     },
     "required": [
@@ -91,6 +100,15 @@
   },
   "submission_schema": {
     "$defs": {
+      "rational": {
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {"minimum": 1, "type": "integer"},
+          "numerator": {"type": "integer"}
+        },
+        "required": ["numerator", "denominator"],
+        "type": "object"
+      },
       "level": {
         "additionalProperties": false,
         "properties": {
@@ -98,13 +116,13 @@
             "type": "integer"
           },
           "excluded_density": {
-            "type": "string"
+            "$ref": "#/$defs/rational"
           },
           "excluded_endpoint": {
             "type": "integer"
           },
           "included_density": {
-            "type": "string"
+            "$ref": "#/$defs/rational"
           },
           "included_endpoint": {
             "type": "integer"
@@ -152,7 +170,7 @@
             "type": "array"
           },
           "lower_density": {
-            "type": "string"
+            "$ref": "#/$defs/rational"
           },
           "lower_density_positive": {
             "const": true
@@ -164,7 +182,7 @@
             "const": "FORMALIZED_PREDICATE_STRICTLY_STRONGER"
           },
           "upper_density": {
-            "type": "string"
+            "$ref": "#/$defs/rational"
           }
         },
         "required": [

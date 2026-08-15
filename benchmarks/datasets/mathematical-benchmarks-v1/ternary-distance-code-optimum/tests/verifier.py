@@ -35,6 +35,19 @@ def _fraction(value: object) -> Fraction | None:
         return None
 
 
+def _result_fraction(value: object) -> Fraction | None:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        return None
+    try:
+        return Fraction(numerator, denominator)
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
 def _krawtchouk(order: int, distance: int, *, q: int = 3, n: int = 6) -> int:
     total = 0
     for h in range(order + 1):
@@ -144,8 +157,8 @@ def _upper_bound(value: object, a4: Fraction, a6: Fraction) -> bool:
     multipliers = value["dual_multipliers"]
     if not isinstance(multipliers, dict) or set(multipliers) != {"order_1", "order_2"}:
         return False
-    m1 = _fraction(multipliers["order_1"])
-    m2 = _fraction(multipliers["order_2"])
+    m1 = _result_fraction(multipliers["order_1"])
+    m2 = _result_fraction(multipliers["order_2"])
     if m1 is None or m2 is None or m1 < 0 or m2 < 0:
         return False
     combined = tuple(

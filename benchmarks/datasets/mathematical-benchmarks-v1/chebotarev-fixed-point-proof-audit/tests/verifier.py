@@ -126,6 +126,35 @@ def cycle_table_matches(actual, expected_table):
     return True
 
 
+def mod2_factor_valid(value):
+    if not isinstance(value, dict) or set(value) != {
+        "factor_coefficients",
+        "multiplicity",
+    }:
+        return False
+    factor = value["factor_coefficients"]
+    multiplicity = value["multiplicity"]
+    if (
+        not isinstance(factor, list)
+        or len(factor) != 2
+        or any(
+            type(coefficient) is not int or coefficient not in {0, 1}
+            for coefficient in factor
+        )
+        or type(multiplicity) is not int
+        or not 1 <= multiplicity <= 8
+    ):
+        return False
+    product = [1]
+    for _ in range(multiplicity):
+        expanded = [0] * (len(product) + 1)
+        for i, left in enumerate(product):
+            for j, right in enumerate(factor):
+                expanded[i + j] = (expanded[i + j] + left * right) % 2
+        product = expanded
+    return product == [1, 0, 0, 0, 1]
+
+
 def valid(r):
     expected_table = table()
     defects = {
@@ -146,8 +175,7 @@ def valid(r):
             "encoded_answer",
             "defects",
         }
-        and exact_value(r["mod2_factor"], "(x+1)^4")
-        and [1, 0, 0, 0, 1] == [1, 4 % 2, 6 % 2, 4 % 2, 1]
+        and mod2_factor_valid(r["mod2_factor"])
         and exact_value(r["actual_discriminant"], discriminant())
         and r["actual_discriminant"] == -6656
         and cycle_table_matches(r["cycle_types"], expected_table)

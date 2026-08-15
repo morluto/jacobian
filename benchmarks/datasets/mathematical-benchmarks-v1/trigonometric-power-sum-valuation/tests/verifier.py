@@ -1,6 +1,5 @@
 import json
 import math
-import re
 from pathlib import Path
 
 from verifier_support import (
@@ -135,16 +134,7 @@ def _result_is_valid(result, frozen):
         and result["recurrence_coefficients"] == [7, -14, 7]
         and _terms_are_valid(result["terms"], values)
         and _induction_is_valid(result["induction_cases"])
-        and isinstance(result["conclusion"], str)
-        and re.search(
-            r"(?:\b|_)divis(?:ible|ibility)(?:\b|_)", result["conclusion"], re.I
-        )
-        and re.search(r"(?:\b|_)(?:positive|all)(?:\b|_)", result["conclusion"], re.I)
-        and not re.search(
-            r"\b(?:not|without|cannot|unknown|insufficient|fail(?:s|ure)?)\b",
-            result["conclusion"],
-            re.I,
-        )
+        and result["conclusion"] == "DIVISIBLE_FOR_ALL_POSITIVE_N"
     )
 
 

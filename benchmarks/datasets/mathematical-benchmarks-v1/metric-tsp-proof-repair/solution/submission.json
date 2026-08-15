@@ -1,6 +1,6 @@
 {
   "result": {
-    "corrected_claim": "TWO_APPROXIMATION",
+    "corrected_claim": "DOUBLE_TREE_TWO_APPROXIMATION",
     "euler_walk": [
       "A",
       "B",

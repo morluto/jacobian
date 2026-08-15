@@ -1,5 +1,4 @@
 import json
-import re
 from collections import Counter
 from itertools import combinations, pairwise, permutations
 from pathlib import Path
@@ -11,7 +10,6 @@ from verifier_support import (
 
 W = Path("/app")
 E = Path("/tests")
-MAX_EVIDENCE_BYTES = 1_048_576
 
 
 def _load_frozen_input():
@@ -31,27 +29,6 @@ def _load_frozen_input():
 
 def edge_key(left, right):
     return tuple(sorted((left, right)))
-
-
-def _is_two_approximation_claim(value):
-    if not isinstance(value, str):
-        return False
-    normalized = re.sub(r"[_-]+", " ", " ".join(value.casefold().split()))
-    match = re.search(
-        r"\b(?:factor\s*(?:of\s*)?2|two|2)\s+approximation\b",
-        normalized,
-    )
-    if match is None:
-        return False
-    surrounding = normalized[max(0, match.start() - 80) : match.end() + 80]
-    return (
-        re.search(
-            r"\b(?:not|never|cannot|can\s+not|false|invalid|reject|unsupported|"
-            r"unproven|does\s+not|doesn\'t|isn\'t)\b",
-            surrounding,
-        )
-        is None
-    )
 
 
 def is_tree(vertices, edges):
@@ -232,7 +209,7 @@ def main():
         and metric
         and result.get("flaw_location") == "STEP_4"
         and result.get("invalid_inference") == "SHORTCUTTING_PRESERVES_EXACT_COST"
-        and _is_two_approximation_claim(result.get("corrected_claim"))
+        and result.get("corrected_claim") == "DOUBLE_TREE_TWO_APPROXIMATION"
         and tree
         and tree_weight == minimum_tree_weight
         and euler_valid

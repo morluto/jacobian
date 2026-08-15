@@ -1,5 +1,4 @@
 import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -10,8 +9,6 @@ from verifier_support import (
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-MAX_EVIDENCE_BYTES = 1_048_576
-LIMITATION = "The verifier derives semantic classifications from frozen facts but does not run Lean or certify the upstream linter implementation."
 
 
 def _source() -> dict[str, Any]:
@@ -75,45 +72,12 @@ def _result_item_ok(item, case):
     derived = _derive(case)
     if derived is None:
         return False
-    findings, _reason = derived
-    submitted_reason = item.get("reason")
-    if not isinstance(submitted_reason, str) or len(submitted_reason.strip()) < 12:
-        return False
-    reason_text = submitted_reason.casefold()
-    if (
-        findings
-        and "DIVISION_BY_ZERO" in findings
-        and (
-            not ("zero" in reason_text or "divisor" in reason_text)
-            or re.search(
-                r"(?:division|divisor|zero)[^.;\n]{0,60}"
-                r"(?:impossible|not possible|cannot|can['']?t|safe|never)\b",
-                reason_text,
-            )
-            or re.search(
-                r"\b(?:no|not)\b[^.;\n]{0,40}\bdivision\s+by\s+zero\b",
-                reason_text,
-            )
-        )
-    ):
-        return False
-    if (
-        findings
-        and "INTEGER_DIVISION_TRUNCATION" in findings
-        and (
-            "truncat" not in reason_text
-            or re.search(
-                r"\b(?:no|not|never|doesn['']?t|cannot)\b[^.;\n]{0,30}truncat",
-                reason_text,
-            )
-        )
-    ):
-        return False
-    if not findings and not any(
-        term in reason_text for term in ("proof", "statement", "term")
-    ):
-        return False
-    return not (item.get("id") != case.get("id") or item.get("findings") != findings)
+    findings, reason = derived
+    return not (
+        item.get("id") != case.get("id")
+        or item.get("findings") != findings
+        or item.get("reason") != reason
+    )
 
 
 def _result(value: object, source: dict[str, Any]) -> bool:

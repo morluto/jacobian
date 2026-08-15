@@ -34,6 +34,17 @@ def test_rejects_corrupted_recurrence_term(tmp_path: Path) -> None:
     assert rejected.reward == 0.0
 
 
+def test_rejects_wrong_conclusion(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["conclusion"] = "INDETERMINATE"
+    _rewrite(app, submission)
+
+    rejected = _verifier._run_verifier(task, app, logs)
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
+
+
 def test_rejects_corrupted_induction_case(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())

@@ -31,7 +31,7 @@ from jacobian.contracts.topology import (
     face_closure,
     simplicial_complex_digest,
 )
-from jacobian.domains._certified_snf import (
+from jacobian.domains.certified_snf._kernel import (
     certificate_from_reduction,
     inverse_unimodular,
     matrix_columns,

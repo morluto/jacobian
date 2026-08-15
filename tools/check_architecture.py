@@ -1004,34 +1004,12 @@ def _public_contract_drift_violations(root: Path) -> tuple[Violation, ...]:
 
 _CONTRACT_FORBIDDEN_IMPORT_PREFIXES = (
     "jacobian.domains",
-    "jacobian.runtime",
-    "jacobian.providers",
-    "jacobian.persistence",
-    "jacobian.artifacts",
     "jacobian.adapters.mcp",
-    "jacobian.catalog",
     "jacobian.operation_adapters",
-    "jacobian.operation_binding",
-    "jacobian.operation_catalog",
-    "jacobian.operation_declarations",
-    "jacobian.operation_registry",
-    "jacobian.operation_installation",
-    "jacobian.installation",
 )
 _NATIVE_MATH_FORBIDDEN_IMPORT_PREFIXES = (
-    "jacobian.runtime",
-    "jacobian.providers",
-    "jacobian.persistence",
-    "jacobian.artifacts",
     "jacobian.adapters.mcp",
-    "jacobian.catalog",
     "jacobian.operation_adapters",
-    "jacobian.operation_binding",
-    "jacobian.operation_catalog",
-    "jacobian.operation_declarations",
-    "jacobian.operation_registry",
-    "jacobian.operation_installation",
-    "jacobian.installation",
 )
 _PRIVATE_MATH_BACKEND_PREFIXES = (
     "jacobian.math.finite_fields._flint",
@@ -1157,44 +1135,6 @@ def _native_math_boundary_violations(
                 )
     return tuple(violations)
 
-
-_INLINE_EXECUTOR_PATH = PurePosixPath("src/jacobian/inline_execution.py")
-_INLINE_EXECUTOR_FORBIDDEN_IMPORT_PREFIXES = (
-    "jacobian.storage",
-    "jacobian.verification",
-    "jacobian.sat_smt",
-    "jacobian.lean_frontend",
-    "jacobian.adapters.mcp",
-    "jacobian.tenant",
-    "jacobian.artifacts",
-    "jacobian.registry",
-    "jacobian.operation_binding",
-    "jacobian.operation_catalog",
-    "jacobian.operation_publication",
-)
-
-
-def _inline_executor_boundary_violations(
-    relative: PurePosixPath, tree: ast.AST
-) -> tuple[Violation, ...]:
-    if relative != _INLINE_EXECUTOR_PATH:
-        return ()
-    violations: list[Violation] = []
-    for node in _walk_nodes(tree):
-        if not isinstance(node, (ast.Import, ast.ImportFrom)):
-            continue
-        for reference in _import_references(relative, node):
-            if _imports_prefix(reference, _INLINE_EXECUTOR_FORBIDDEN_IMPORT_PREFIXES):
-                violations.append(
-                    Violation(
-                        str(relative),
-                        "inline-executor-boundary",
-                        "the inline executor must not import storage, checkers, "
-                        "SAT/SMT, Lean, MCP, tenant, or binder machinery",
-                        node.lineno,
-                    )
-                )
-    return tuple(violations)
 
 
 def _private_math_backend_violations(
@@ -1646,7 +1586,6 @@ def _check_python_file(root: Path, path: Path) -> tuple[Violation, ...]:
     violations.extend(_unsafe_canonical_conversion_violations(relative, tree))
     violations.extend(_contract_dependency_leaf_violations(relative, tree))
     violations.extend(_native_math_boundary_violations(relative, tree))
-    violations.extend(_inline_executor_boundary_violations(relative, tree))
     violations.extend(_private_math_backend_violations(relative, tree))
     violations.extend(_checker_producer_isolation_violations(relative, tree))
     violations.extend(_erased_contract_operation_violations(relative, tree))

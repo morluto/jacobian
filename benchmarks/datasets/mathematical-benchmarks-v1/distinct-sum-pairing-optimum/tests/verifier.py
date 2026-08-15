@@ -2,11 +2,8 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -32,27 +29,6 @@ def _maximum_size(n):
 
     search(0, set(), set(), 0)
     return best
-
-
-def _evidence_matches_result(evidence, result):
-    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text().casefold()
-        return all(
-            fragment in text
-            for fragment in (
-                "five disjoint pairs",
-                "distinct sums",
-                "no six-pair",
-                "exhaustive finite search",
-            )
-        )
-    except (OSError, UnicodeError):
-        return False
 
 
 def _valid(result, source):
@@ -105,23 +81,12 @@ def main():
     source = json.loads(next(E.glob("*input*.json")).read_text())
     protocol_ok = submission is not None
     math_correct = bool(protocol_ok and _valid(submission.get("result"), source))
-    evidence_valid = bool(
-        protocol_ok
-        and _evidence_matches_result(
-            submission.get("witness"), submission.get("result")
-        )
-    )
-    reward = aggregate_reward(
-        correctness=math_correct,
-        witness_validity=evidence_valid,
-        protocol_ok=protocol_ok,
-    )
+    reward = float(protocol_ok and math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

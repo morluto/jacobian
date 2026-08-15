@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exhaustive finite optimizer for canonical distinct-sum pairings.
 LABEL jacobian.task="jacobian/distinct-sum-pairing-optimum" \
-      jacobian.checksum="2ef0bb668a6e1c7599094f274a17cf741c841f6d5202cf2c605e0127b6390f2b"
+      jacobian.checksum="42ab870e316d96c87206e8cd5080b0c8fe41a459f387e73e9cc317c0d998742f"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

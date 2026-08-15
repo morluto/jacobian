@@ -32,8 +32,8 @@ def module():
             sys.modules["verifier_support"] = previous_support
 
 
-def test_valid_alternative_matching():
-    family = [[], *[[i] for i in range(7)], [0, 2], [1, 4], [3, 6]]
+def test_accepts_unsorted_family_elements():
+    family = [[], *[[i] for i in range(7)], [2, 0], [4, 1], [6, 3]]
     assert module().valid_family(7, family)
 
 

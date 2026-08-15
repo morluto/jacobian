@@ -2,7 +2,7 @@
 
 The frozen source claims the maximum family size is `2n`. Audit that argument for distinct subsets, including the empty set.
 
-Submit the corrected general formula, the incidence-budget facts used for the upper bound, and extremal families on ground sets of sizes 7, 8, and 11. Represent each subset as a sorted list of zero-based elements. The verifier independently checks uniqueness, range, triplewise-empty intersections, element frequencies, and the claimed maximum size.
+Submit the corrected general formula, the incidence-budget facts used for the upper bound, and extremal families on ground sets of sizes 7, 8, and 11. Represent each subset as a list of distinct zero-based elements; element order is not scored. The verifier independently checks uniqueness, range, triplewise-empty intersections, element frequencies, and the claimed maximum size.
 
 The general symbolic incidence argument is replayed through its typed certificate and the finite constructions are checked directly.
 

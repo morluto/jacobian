@@ -4,8 +4,8 @@ For the matrix indexed by nonempty subsets of `[n]`, with entry one exactly
 when two subsets intersect, derive its determinant for every `n>=1`.
 
 Submit an exact incidence factorization.  Choose and describe a valid
-`sample_n`, provide a cardinality-then-mask ordering of all nonzero bitmasks and
-the diagonal weights in that basis.  Also provide the determinant parity trace
+`sample_n`, provide any inclusion-linear order of all nonzero bitmasks and
+the diagonal weights in that basis. One privileged listing of the same masks is not required.  Also provide the determinant parity trace
 for every `n` through `trace_max_n`, including the number of nonempty even-cardinality
 subsets and the resulting determinant.
 Encode the general even-count expression by its power base, exponent offset,

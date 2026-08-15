@@ -43,10 +43,12 @@ def test_rejects_corrupted_normal_residual():
     assert not _module().mathematics(result)
 
 
-def test_rejects_parameter_order_for_coordinate_sorted_points():
+def test_accepts_permuted_points_and_records():
     result = _result()
-    result["finite_points"] = [["0", "-1"], ["2", "0"], ["0", "1"]]
-    assert not _module().mathematics(result)
+    result["finite_parameters"] = ["1", "0", "-1"]
+    result["finite_points"] = [["2", "0"], ["0", "1"], ["0", "-1"]]
+    result["footpoint_records"] = list(reversed(result["footpoint_records"]))
+    assert _module().mathematics(result)
 
 
 def test_rejects_noncanonical_rational():

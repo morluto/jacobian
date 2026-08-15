@@ -19,12 +19,10 @@ def valid_family(n, raw_family):
         ):
             return False
         family = [tuple(item) for item in raw_family]
-        if len(family) != len(set(family)):
+        family_sets = [frozenset(item) for item in family]
+        if len(family_sets) != len(set(family_sets)):
             return False
-        if any(
-            tuple(sorted(item)) != item or len(item) != len(set(item))
-            for item in family
-        ):
+        if any(len(item) != len(set(item)) for item in family):
             return False
         if any(value < 0 or value >= n for item in family for value in item):
             return False

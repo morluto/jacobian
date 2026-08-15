@@ -33,7 +33,7 @@ def _load_frozen():
 def _poly(terms):
     if not isinstance(terms, list):
         return None
-    out, order = {}, []
+    out = {}
     for term in terms:
         if not isinstance(term, dict) or set(term) != {"exponents", "coefficient"}:
             return None
@@ -49,8 +49,8 @@ def _poly(terms):
         key = tuple(exps)
         if key in out:
             return None
-        out[key], order = coefficient, [*order, key]
-    return out if order == sorted(order) else None
+        out[key] = coefficient
+    return out
 
 
 def _add(*parts):

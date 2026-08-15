@@ -34,20 +34,21 @@ def canonical_fraction(value):
 
 
 def parse_joint(entries):
-    expected_pairs = [(x, y) for x in SUPPORT for y in SUPPORT]
+    expected_pairs = {(x, y) for x in SUPPORT for y in SUPPORT}
     if not isinstance(entries, list) or len(entries) != len(expected_pairs):
         return None
     table = {}
-    for entry, pair in zip(entries, expected_pairs, strict=True):
+    for entry in entries:
         if not isinstance(entry, dict) or set(entry) != {"x", "y", "mass"}:
             return None
-        if (entry.get("x"), entry.get("y")) != pair:
+        pair = (entry.get("x"), entry.get("y"))
+        if pair not in expected_pairs or pair in table:
             return None
         mass = canonical_fraction(entry.get("mass"))
         if mass is None:
             return None
         table[pair] = mass
-    return table if sum(table.values()) == 1 else None
+    return table if set(table) == expected_pairs and sum(table.values()) == 1 else None
 
 
 def marginals(table):
@@ -71,15 +72,12 @@ def parse_product(entries):
     if not isinstance(entries, list) or not entries:
         return None
     distribution = {}
-    prior = None
     for entry in entries:
         if not isinstance(entry, dict) or set(entry) != {"value", "mass"}:
             return None
         value = entry.get("value")
         mass = canonical_fraction(entry.get("mass"))
-        if type(value) is not int or mass is None:
-            return None
-        if prior is not None and value <= prior:
+        if type(value) is not int or mass is None or value in distribution:
             return None
         # Zero-mass entries are allowed only for attainable product values
         # (values in {x * y for x, y in SUPPORT}); unattainable zero entries
@@ -87,7 +85,6 @@ def parse_product(entries):
         if mass == 0 and value not in ATTAINABLE_PRODUCTS:
             return None
         distribution[value] = mass
-        prior = value
     if sum(distribution.values()) != 1:
         return None
     return {value: mass for value, mass in distribution.items() if mass}

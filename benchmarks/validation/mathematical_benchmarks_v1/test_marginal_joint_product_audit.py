@@ -114,6 +114,18 @@ def test_rejects_noncanonical_mass(tmp_path: Path) -> None:
     assert _run(tmp_path, mutate).reward == 0.0
 
 
+def test_accepts_permuted_joint_rows(tmp_path: Path) -> None:
+    def mutate(submission):
+        submission["result"]["prelimit_joint"] = list(
+            reversed(submission["result"]["prelimit_joint"])
+        )
+        submission["result"]["limit_product_distribution"] = list(
+            reversed(submission["result"]["limit_product_distribution"])
+        )
+
+    assert _run(tmp_path, mutate).reward == 1.0
+
+
 def test_unattainable_zero_mass_product_value_is_rejected(tmp_path: Path) -> None:
     def mutate(submission):
         entries = submission["result"]["limit_product_distribution"]

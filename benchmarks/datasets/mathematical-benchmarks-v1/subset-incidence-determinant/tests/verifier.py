@@ -113,10 +113,11 @@ def _result(value: object, source: dict[str, Any]) -> bool:
     # Thread PRRT_kwDOThEfjc6VuwyR: reject booleans in diagonal_weights.
     if not isinstance(weights, list) or not all(_is_int(w) for w in weights):
         return False
-    expected_order = sorted(range(1, 2**n), key=lambda mask: (mask.bit_count(), mask))
-    expected_weights = [1 if mask.bit_count() % 2 else -1 for mask in expected_order]
+    expected_masks = set(range(1, 2**n))
+    expected_weights = [1 if mask.bit_count() % 2 else -1 for mask in order]
     if (
-        order != expected_order
+        set(order) != expected_masks
+        or len(order) != len(expected_masks)
         or weights != expected_weights
         or not _factorization(order, weights)
     ):

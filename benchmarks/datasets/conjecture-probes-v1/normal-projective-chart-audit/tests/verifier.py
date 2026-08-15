@@ -81,17 +81,20 @@ def mathematics(result):
     except (ValueError, ZeroDivisionError):
         return False
     if (
-        params != [Fraction(-1), Fraction(0), Fraction(1)]
-        or points != sorted(_param(t) for t in params)
+        set(params) != {Fraction(-1), Fraction(0), Fraction(1)}
+        or len(params) != 3
+        or set(points) != {_param(t) for t in params}
+        or len(points) != 3
         or projective != [Fraction(1), Fraction(0)]
         or missing != (Fraction(-2), Fraction(0))
     ):
         return False
-    expected_points = sorted([missing, *points])
+    expected_residuals = {point: _residuals(point) for point in {missing, *points}}
     records = result["footpoint_records"]
-    if not isinstance(records, list) or len(records) != 4:
+    if not isinstance(records, list) or len(records) != len(expected_residuals):
         return False
-    for row, point in zip(records, expected_points, strict=True):
+    submitted_residuals = {}
+    for row in records:
         if not isinstance(row, dict) or set(row) != {
             "point",
             "ellipse_residual",
@@ -104,9 +107,14 @@ def mathematics(result):
             nr = _q(row["normal_residual"])
         except (ValueError, ZeroDivisionError):
             return False
-        if submitted != point or (er, nr) != _residuals(point) or er or nr:
+        if submitted in submitted_residuals or (er, nr) != expected_residuals.get(
+            submitted, (None, None)
+        ):
             return False
-    return True
+        submitted_residuals[submitted] = (er, nr)
+    return submitted_residuals == expected_residuals and all(
+        not residual[0] and not residual[1] for residual in submitted_residuals.values()
+    )
 
 
 def _write(values):

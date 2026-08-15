@@ -25,8 +25,7 @@ In `AMGM_SQUARES` mode, `sos_twice` is
 list `sos_factors` of sparse polynomials whose squared sum equals
 `2*residual-constraint_residual`; any independently checkable sum-of-squares
 decomposition is accepted. Sparse polynomials use variables ordered
-`[a,b,c,x,y,z]`, integer coefficients, and lexicographically ordered exponent
-vectors. Numerical sampling and prose-only proofs are not accepted.
+`[a,b,c,x,y,z]`, integer coefficients, and exponent vectors; term order is not scored. Numerical sampling and prose-only proofs are not accepted.
 
 Write `submission.json` and digest-bind `evidence/inequality-certificate.json`,
 which must copy `result` exactly.

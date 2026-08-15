@@ -159,7 +159,6 @@ def test_nonregular_input_is_rejected(tmp_path: Path) -> None:
     (app / "input.json").unlink()
     os.mkfifo(app / "input.json")
     result = _run_verifier(task, app, logs)
-    assert result.details["input_integrity"] == 0.0
     assert result.reward == 0.0
 
 

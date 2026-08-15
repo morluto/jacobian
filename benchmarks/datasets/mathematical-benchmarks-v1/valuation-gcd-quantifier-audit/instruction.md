@@ -4,12 +4,11 @@ The frozen proof translates `gcd(a,b,c,d)=1` into: “the minimum of the four
 valuations is zero for at least one prime dividing `n`.” Audit this translation.
 
 Write `/app/submission.json` following the supplied schema and one bound JSON
-evidence file at `evidence/valuation-audit.json`.
+task-specific witness file at `evidence/valuation-audit.json`.
 
-The evidence file must be a JSON object with exactly these keys:
+The task-specific witness file must be a JSON object with exactly these keys:
 `schema_version` (the string `"1"`), `task_id` (matching the submission's
 `task_id`), `result` (the same result object as the submission), and
-`limitations` (the same limitations array as the submission).
 
 Submit:
 
@@ -22,12 +21,11 @@ Submit:
 
 Prime rows must be strictly increasing and exponents are ordered as `(a,b,c,d)`.
 Use at least two different zero-coordinate positions in the repaired system.
-The maximum permitted assurance is `COMPUTED`; do not claim `VERIFIED`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

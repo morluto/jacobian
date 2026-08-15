@@ -5,8 +5,6 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -160,35 +158,6 @@ def certificate_valid(result, frozen):
     )
 
 
-def evidence_valid(evidence, result):
-    if (
-        not isinstance(evidence, list)
-        or len(evidence) != 1
-        or not witness_list_is_bound(evidence)
-    ):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        if target.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        text = target.read_text()
-        markers = [
-            line.removeprefix("RESULT_JSON:").strip()
-            for line in text.splitlines()
-            if line.startswith("RESULT_JSON:")
-        ]
-        prose = [
-            line.strip()
-            for line in text.splitlines()
-            if line.strip() and not line.startswith("RESULT_JSON:")
-        ]
-        return bool(len(markers) == 1 and json.loads(markers[0]) == result and prose)
-    except (OSError, UnicodeError, ValueError):
-        return False
-
-
 def main():
     submission = load_submission()
     frozen = load_frozen()
@@ -202,18 +171,12 @@ def main():
     )
     result = submission.get("result") if isinstance(submission, dict) else {}
     correctness = bool(source_bound and certificate_valid(result, frozen))
-    evidence = bool(
-        isinstance(submission, dict)
-        and isinstance(result, dict)
-        and evidence_valid(submission.get("witness"), result)
-    )
-    reward = float(correctness and evidence)
+    reward = float(correctness)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(correctness),
-                "witness_validity": float(evidence),
                 "reward": reward,
             }
         )

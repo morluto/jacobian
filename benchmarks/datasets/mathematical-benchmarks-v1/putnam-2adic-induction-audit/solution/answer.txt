@@ -1,9 +1,0 @@
-The recurrence for u is f(t)=t^2+t+2, so f(a)-f(b)=(a-b)(a+b+1).
-At n=2, (u_2,P_2)=(8,5), giving valuations (3,2,1).  The Taylor
-and product-doubling identities propagate these to (k+3,k+2,1) at the
-successor.  In the target Taylor formula the leading term has valuation
-2k+3 and the remainder has valuation at least 2k+4, hence the u-difference
-has valuation 2k+3.  Since u=2b, the b-difference has valuation 2k+2,
-which is exactly the required divisibility and non-divisibility boundary.
-Finite recurrence values are sanity checks only and cannot establish the
-universal induction.

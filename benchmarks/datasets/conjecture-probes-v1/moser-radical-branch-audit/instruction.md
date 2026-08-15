@@ -26,9 +26,7 @@ assurance contributes `1.0` for `COMPUTED`, `0.5` for `COMPUTED`, and `0.25` for
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Exact radical-sign repair for one Moser embedding only; no plane chromatic-number conclusion.
-
-The evidence file must be a JSON object with exactly four fields: `schema_version` must be `"1"`, `task_id` must equal the submission task ID, `result` must be an exact JSON copy of `submission.json`'s result object, and `limitations` must be an exact JSON copy of its limitations list.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

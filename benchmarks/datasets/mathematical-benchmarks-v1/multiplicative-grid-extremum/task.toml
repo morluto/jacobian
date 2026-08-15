@@ -21,7 +21,7 @@ category = "mathematics"
 tags = ["combinatorics", "construction", "upper-bound", "offline-verification"]
 case_version = "mathematical-benchmarks-v1"
 contamination_class = "public-answer-visible-certificate-required"
-fixture_digest = "sha256:d811ae53a4ff930ac42f41f54138291f839d51619b043ec067a884a723a0a8c5"
+fixture_digest = "sha256:b64db0c61b2eaf02e40bdcfdb7ed17cf16e5eceb853adb7e8302c13c78e0a224"
 derivation = "Derived from AI-MO/CombiBench test_with_solution row 60 (izho_2014_p3) at revision 882ba08befd0856f5364db1e53d58c7e2cf704f9."
 
 [agent]

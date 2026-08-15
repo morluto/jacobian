@@ -12,11 +12,6 @@ from verifier_support import (
 W = Path("/app")
 T = Path("/tests")
 MAX_INPUT_BYTES = 1_048_576
-LIMITATIONS = [
-    "CUBIC_FORM_INTERSECTION_COUNT_NOT_ASSESSED",
-    "GENERAL_CRITERION_NOT_PROOF_ASSISTANT_VERIFIED",
-    "GENERAL_CRITERION_ONLY_LOCALLY_DEMONSTRATED",
-]
 
 
 def _json_equal(left: object, right: object) -> bool:

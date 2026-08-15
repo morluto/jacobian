@@ -6,8 +6,6 @@ from typing import Any
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
@@ -136,55 +134,17 @@ def _result(value: object, source: dict[str, Any]) -> bool:
     return True
 
 
-def _evidence(value: object, result: object) -> bool:
-    if (
-        not isinstance(value, list)
-        or len(value) != 1
-        or not witness_list_is_bound(value)
-    ):
-        return False
-    path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
-    if path is None:
-        return False
-    try:
-        if path.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        raw_text = path.read_text()
-    except (OSError, UnicodeError):
-        return False
-    markers = [
-        line.removeprefix("RESULT_JSON:").strip()
-        for line in raw_text.splitlines()
-        if line.startswith("RESULT_JSON:")
-    ]
-    if len(markers) != 1:
-        return False
-    try:
-        if json.loads(markers[0]) != result:
-            return False
-    except (ValueError, RecursionError):
-        return False
-    text = raw_text.casefold()
-    return all(
-        term in text
-        for term in ("full proof-state", "allzero", "proof-term", "computed")
-    )
-
-
 def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
     correct = bool(_result(data.get("result"), _source()))
-    witness = bool(correct and _evidence(data.get("witness"), data.get("result")))
-    passed = correct and witness
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(correct),
-                "witness_validity": float(witness),
-                "reward": float(passed),
+                "reward": float(correct),
             },
             sort_keys=True,
         )

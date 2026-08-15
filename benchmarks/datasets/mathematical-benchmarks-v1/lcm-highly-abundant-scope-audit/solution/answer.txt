@@ -1,6 +1,0 @@
-The counterexample claim at index 97 is valid: the submitted exponent changes
-produce a smaller integer with a strictly larger exact divisor sum. The claim
-that 97 is the smallest such index is false, because the independent earlier
-counterexample at index 71 satisfies the same two strict inequalities. This
-refutes 97-minimality but does not by itself prove that 71 is the actual first
-index.

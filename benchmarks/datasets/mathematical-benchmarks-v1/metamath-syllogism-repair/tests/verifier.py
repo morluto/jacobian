@@ -24,10 +24,10 @@ def main() -> None:
     except (OSError, ValueError, RecursionError, MemoryError):
         frozen_input = {}
     try:
-        result = verify_submission(workspace, submission, frozen_input)
+        result = verify_submission(submission, frozen_input)
     except Exception as exc:  # fail closed at the verifier boundary
-        result = VerifyResult(False, False, f"verifier error: {exc}")
-    accepted = bool(frozen_ok and result.correctness and result.witness_validity)
+        result = VerifyResult(False, f"verifier error: {exc}")
+    accepted = bool(frozen_ok and result.correctness)
     reward = 1.0 if accepted else 0.0
     message = "frozen input mismatch" if not frozen_ok else result.message
     logs = Path("/logs/verifier")
@@ -36,7 +36,6 @@ def main() -> None:
         json.dumps(
             {
                 "correctness": float(result.correctness),
-                "witness_validity": float(result.witness_validity),
                 "reward": reward,
             }
         )

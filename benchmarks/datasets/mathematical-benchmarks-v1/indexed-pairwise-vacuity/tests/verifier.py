@@ -1,5 +1,4 @@
 import json
-import re
 from decimal import Decimal, DecimalException
 from pathlib import Path
 
@@ -10,12 +9,6 @@ from verifier_support import (
 )
 
 E = Path("/tests")
-
-_ASSURANCE_ORDER = {
-    "UNVERIFIED": 0,
-    "COMPUTED": 1,
-    "VERIFIED": 2,
-}
 
 
 def _is_integer(value):
@@ -187,31 +180,6 @@ def _valid_result(result, source):
         and _valid_cover(result, source["bounds"])
         and _valid_predicates(result)
     )
-
-
-_CONJECTURE_KINDS = ("open conjecture", "underlying conjecture")
-_DISCLAIMERS = (
-    "does not settle",
-    "does not resolve",
-    "does not prove",
-    "does not establish",
-    "not settle",
-    "not resolve",
-    "not prove",
-    "not establish",
-    "doesn't settle",
-    "doesn't resolve",
-    "is insufficient to resolve",
-    "is insufficient to settle",
-)
-# An affirmative settlement claim ("settles the open conjecture", etc.) that is
-# not preceded by a negation. The fixed-width negative lookbehinds exclude
-# "not settle ..." and "n't settle ..." while still matching bare overclaims.
-_AFFIRMATIVE_SETTLEMENT = re.compile(
-    r"(?<!not )(?<!n't )"
-    r"(?:settle|settles|resolve|resolves|prove|proves|establish|establishes)"
-    r" the (?:open|underlying) conjecture"
-)
 
 
 def _load_exact_submission():

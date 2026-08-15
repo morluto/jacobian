@@ -21,7 +21,7 @@ category = "mathematics"
 tags = ["formalization-audit", "modular-branches", "exact-enumeration", "offline"]
 case_version = "mathematical-benchmarks-v1"
 contamination_class = "public-formalization-derived"
-fixture_digest = "sha256:b0ebcffb9dfb93af8024c2879d44d0753148d6073f0706198cd3c6b84bca55b0"
+fixture_digest = "sha256:690995d1cea66171a9b8e35746c5be593252ecffee39fbed3d362a03fc7bc33b"
 derivation = "Derived from AxiomMath/dead-ends commit 80fc9124841a1f37a167d227d00780479d04f701, spreadsheet Resources row 239."
 
 [agent]

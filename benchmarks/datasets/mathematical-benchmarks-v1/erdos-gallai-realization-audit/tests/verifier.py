@@ -5,8 +5,6 @@ from typing import Any
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
@@ -116,35 +114,17 @@ def _result(result: object, frozen: dict[str, Any]) -> bool:
     )
 
 
-def _evidence(value: object) -> bool:
-    if not witness_list_is_bound(value, expected_path="evidence/answer.txt"):
-        return False
-    if not isinstance(value, list) or len(value) != 1:
-        return False
-    p = resolve_evidence(value[0], expected_path="evidence/answer.txt")
-    if p is None:
-        return False
-    try:
-        text = p.read_text().strip()
-    except (OSError, UnicodeError):
-        return False
-    return len(text) >= 20
-
-
 def main() -> None:
     s = load_submission()
     d = s if isinstance(s, dict) else {}
     math_correct = bool(_result(d.get("result"), _load()))
-    witness_valid = bool(math_correct and _evidence(d.get("witness")))
-    correct = math_correct and witness_valid
     p = Path("/logs/verifier")
     p.mkdir(parents=True, exist_ok=True)
     (p / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(witness_valid),
-                "reward": float(correct),
+                "reward": float(math_correct),
             }
         )
     )

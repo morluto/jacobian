@@ -23,13 +23,6 @@ def _json_equal(left, right):
     )
 
 
-_ASSURANCE_ORDER = {
-    "UNVERIFIED": 0,
-    "COMPUTED": 1,
-    "VERIFIED": 2,
-}
-
-
 def _integer_value(value):
     """Accept any schema-valid integral JSON number while rejecting booleans.
 

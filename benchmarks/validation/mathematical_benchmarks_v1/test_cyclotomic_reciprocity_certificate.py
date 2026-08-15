@@ -24,19 +24,6 @@ def _write_json(path: Path, value: object) -> None:
     )
 
 
-def _inject_result_json(app: Path, submission: dict) -> None:
-    """Append a RESULT_JSON marker binding the witness to the submission result."""
-    evidence_path = app / "evidence" / "answer.txt"
-    text = evidence_path.read_text()
-    lines = [line for line in text.splitlines() if not line.startswith("RESULT_JSON:")]
-    lines.append(
-        "RESULT_JSON:"
-        + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))
-    )
-    evidence_path.write_text("\n".join(lines) + "\n")
-    submission["witness"][0]["sha256"] = _digest(evidence_path)
-
-
 def _case(tmp_path: Path):
     root = tmp_path / TASK / "computed"
     app = root / "app"
@@ -45,18 +32,11 @@ def _case(tmp_path: Path):
     logs.mkdir(parents=True)
     shutil.copy2(TASK_PATH / "environment" / "input.json", app / "input.json")
     submission = json.loads((TASK_PATH / "solution" / "submission.json").read_text())
-    for descriptor in submission["witness"]:
-        evidence_path = Path(descriptor["path"])
-        destination = app / evidence_path
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(TASK_PATH / "solution" / evidence_path.name, destination)
-    _inject_result_json(app, submission)
     _write_json(app / "submission.json", submission)
     return TASK_PATH, app, logs
 
 
 def _rewrite(app: Path, submission: dict) -> None:
-    _inject_result_json(app, submission)
     _write_json(app / "submission.json", submission)
 
 

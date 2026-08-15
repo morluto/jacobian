@@ -13,27 +13,13 @@ on the full endpoint interval.  The verifier independently checks the parameter
 bounds, strict monotonicity across both branches and the jump, every submitted
 value, and the omitted-image witness.
 
-Write `submission.json` according to `submission_schema.json`. Put a concise
-derivation in `evidence/answer.txt` and bind exactly that file with its SHA-256
-digest. The derivation must explain all four steps: both affine branches are
-strictly increasing because their slopes are positive; the positive jump makes
-cross-branch comparisons strict; the image is the union of the two branch
-ranges with a missing gap; and the gap witness lies strictly between the left
-limit and the right breakpoint value, so it has no preimage and the claimed
-full-interval image or two-sided inverse fails. Equivalent mathematical wording
-is accepted. Include one line beginning `RESULT_JSON:` followed by a JSON object
-whose parsed value exactly matches the complete submitted `result` object; this
-machine-readable line is part of the public evidence contract and binds the
-derivation to the witness. The maximum permitted assurance is `COMPUTED`; this
-task does not run a proof assistant or certify arbitrary real functions outside
-the declared family.
+Write `submission.json` according to `submission_schema.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. Evidence prose must explain that both branches are strictly increasing, the positive jump creates an omitted image gap, and the gap witness has no preimage, so the full-interval inverse conclusion fails; RESULT_JSON binds the submitted values but does not replace this derivation.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

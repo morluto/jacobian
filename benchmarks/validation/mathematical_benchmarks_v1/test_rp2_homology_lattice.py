@@ -16,20 +16,7 @@ def _case(tmp_path: Path):
     return _fixtures._prepare_case(tmp_path, TASK, "computed")
 
 
-def _inject_marker(app: Path, submission: dict) -> None:
-    evidence = app / "evidence" / "answer.txt"
-    text = evidence.read_text()
-    lines = [line for line in text.splitlines() if not line.startswith("RESULT_JSON:")]
-    marker = "RESULT_JSON: " + json.dumps(
-        submission["result"], sort_keys=True, separators=(",", ":")
-    )
-    lines.append(marker)
-    evidence.write_text("\n".join(lines) + "\n")
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-
-
 def _rewrite(app: Path, submission: dict) -> None:
-    _inject_marker(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
 
 
@@ -122,25 +109,6 @@ def test_transposed_coordinate_matrix_is_accepted(tmp_path: Path) -> None:
     submission["result"]["cycle_coordinate_matrix"] = transposed
     _rewrite(app, submission)
     assert _verifier._run_verifier(task, app, logs).reward == 1.0
-
-
-def test_witness_without_result_marker_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _case(tmp_path)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_witness_result_mismatch_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    evidence.write_text("RESULT_JSON: {}\n")
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0.0
 
 
 def test_input_tampering_is_rejected(tmp_path: Path) -> None:

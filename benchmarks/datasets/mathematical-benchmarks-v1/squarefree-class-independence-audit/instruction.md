@@ -8,16 +8,11 @@ Prove the frozen universal claim by connecting three layers rather than by const
 
 You may choose any modulus within the frozen bounds. Submit its complete, sorted set of quadratic residues and the exact target residue. The verifier will independently enumerate all zero-, one-, two-, and three-square residue sums; checking only selected decompositions is insufficient.
 
-Write `/app/submission.json` matching the supplied schema. Bind one concise derivation at `/app/evidence/answer.txt`. Do not claim machine verification or a classification beyond the frozen theorem.
-
-Include one line beginning `RESULT_JSON:` in the evidence file, followed by the JSON serialization of the submitted `result` object. The derivation must state the squarefree-kernel product equivalence, the class-size count identity, the distinct-class transversal step, and the concrete modular certificate.
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

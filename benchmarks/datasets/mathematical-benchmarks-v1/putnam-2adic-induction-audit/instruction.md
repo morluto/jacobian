@@ -23,20 +23,11 @@ is at least that affine value; `hypotheses`, `successor`, `u_difference`, and
 your certificate must use them to establish the required affine valuation
 relations and strict gaps symbolically, not only for selected values of `k`.
 
-Write `/app/submission.json` and bind a concise explanation at
-`/app/evidence/answer.txt` by SHA-256. The explanation must include the
-difference factorization, base valuation triple, successor step, target
-valuation transfer, and why finite recurrence values are only sanity checks.
-Do not claim `VERIFIED`: the verifier is
-an independent exact certificate checker, but it does not replay the Lean
-kernel proof.
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

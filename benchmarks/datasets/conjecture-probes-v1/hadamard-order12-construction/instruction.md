@@ -16,7 +16,7 @@ Claim `COMPUTED` only for this order-12 certificate.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks one complete normalized order-12 matrix; this finite construction does not prove the general conjecture.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

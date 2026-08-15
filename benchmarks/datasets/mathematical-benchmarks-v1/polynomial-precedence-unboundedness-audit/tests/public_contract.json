@@ -11,7 +11,7 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "public_notes": "Exact rational symbolic replay; Lean elaboration and the informal minimum remain outside scope.",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.",
   "required_witness_filenames": [
     "evidence/precedence-audit.json"
   ],

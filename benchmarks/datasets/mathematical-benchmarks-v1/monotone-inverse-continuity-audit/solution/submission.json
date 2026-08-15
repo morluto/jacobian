@@ -9,11 +9,5 @@
     "right_breakpoint_value": "2",
     "right_endpoint_value": "6",
     "right_slope": "2"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:6e7d04071f8179a34e6a14f56a56af6ec48063b77b0fc9cae7442f0b4abbbb26"
-    }
-  ]
+  }
 }

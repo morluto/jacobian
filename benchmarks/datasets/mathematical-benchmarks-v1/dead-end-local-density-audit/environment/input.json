@@ -11,10 +11,47 @@
   },
   "definition": "mu_p(b,T) is the fraction of residues r modulo p^2 for which p^2 does not divide r and does not divide b*r+d for every d in T",
   "cases": [
-    {"case_id":"invertible-collisions","p":5,"b":27,"digits":[0,1,25,26]},
-    {"case_id":"singly-divisible","p":3,"b":6,"digits":[0,1,3,4]},
-    {"case_id":"square-divisible-vacuous","p":2,"b":8,"digits":[1,2,3]},
-    {"case_id":"square-divisible-obstructed","p":2,"b":8,"digits":[0,1,2]}
-  ],
-  "assurance_ceiling": "COMPUTED"
+    {
+      "case_id": "invertible-collisions",
+      "p": 5,
+      "b": 27,
+      "digits": [
+        0,
+        1,
+        25,
+        26
+      ]
+    },
+    {
+      "case_id": "singly-divisible",
+      "p": 3,
+      "b": 6,
+      "digits": [
+        0,
+        1,
+        3,
+        4
+      ]
+    },
+    {
+      "case_id": "square-divisible-vacuous",
+      "p": 2,
+      "b": 8,
+      "digits": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "case_id": "square-divisible-obstructed",
+      "p": 2,
+      "b": 8,
+      "digits": [
+        0,
+        1,
+        2
+      ]
+    }
+  ]
 }

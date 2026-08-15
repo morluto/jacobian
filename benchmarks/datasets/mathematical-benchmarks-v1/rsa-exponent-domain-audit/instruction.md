@@ -23,17 +23,13 @@ eligible residues for odd primes up to 43 and exponents up to 80. Those tests
 are sanity evidence only; acceptance also requires the symbolic branch
 certificate.
 
-Write `/app/submission.json` and bind a concise explanation at
-`/app/evidence/answer.txt` by SHA-256. Do not claim `VERIFIED`: this task does
-not replay a proof assistant or certify the universal theorem beyond the
-explicit certificate checker.
+Write `/app/submission.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

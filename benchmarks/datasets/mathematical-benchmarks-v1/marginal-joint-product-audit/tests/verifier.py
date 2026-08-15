@@ -5,10 +5,8 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
     workspace_input_is_bound,
 )
 
@@ -95,30 +93,6 @@ def parse_product(entries):
     return {value: mass for value, mass in distribution.items() if mass}
 
 
-def witness_is_valid(witness, result):
-    if not isinstance(witness, list) or len(witness) != 1:
-        return False
-    path = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
-    if path is None:
-        return False
-    try:
-        text = path.read_text()
-    except (OSError, UnicodeError):
-        return False
-    markers = [
-        line.removeprefix("RESULT_JSON:").strip()
-        for line in text.splitlines()
-        if line.startswith("RESULT_JSON:")
-    ]
-    if len(markers) != 1:
-        return False
-    try:
-        bound_result = json.loads(markers[0])
-    except (ValueError, RecursionError):
-        return False
-    return isinstance(result, dict) and json_value_equal(bound_result, result)
-
-
 def result_is_valid(result):
     if not isinstance(result, dict) or set(result) != {
         "diagnosis",
@@ -174,14 +148,12 @@ def main():
     math_ok = bool(
         isinstance(submission, dict) and input_bound and result_is_valid(result)
     )
-    witness_ok = bool(math_ok and witness_is_valid(data.get("witness"), result))
-    correct = bool(math_ok and witness_ok)
+    correct = math_ok
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(witness_ok),
                 "reward": float(correct),
             }
         )

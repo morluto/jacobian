@@ -121,11 +121,5 @@
         "right": "601/48"
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:762c617812f5b74991a97127034f96d580a3ee443fc5a1ff5369822102520f84"
-    }
-  ]
+  }
 }

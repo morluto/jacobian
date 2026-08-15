@@ -42,11 +42,5 @@
     ],
     "right_fourth_power": 31858749840007945920321,
     "target_base": 422481
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:5d2d19208d959800b4ff1327b000e3e9fffaa63da49d6d5b25cbb91b2f0856ce"
-    }
-  ]
+  }
 }

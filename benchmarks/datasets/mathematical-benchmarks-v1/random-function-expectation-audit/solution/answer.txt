@@ -1,2 +1,0 @@
-Fix x. With probability 1/25, f(x)=x and then f(f(x))=x. Otherwise f(x) differs from x and its image is an independent uniform value. Hence P(f(f(x))=x)=1/25+24/625=49/625, while P(f(f(x))=y)=24/625 for each y different from x. The ordered sum of (y-x)^2 over x,y in {1,...,25} is 65000. Therefore the expectation is (24/625)*65000=2496, so the claimed value 2025 is false.
-RESULT_JSON: {"self_hit_probability":"49/625","other_hit_probability":"24/625","ordered_squared_difference_sum":65000,"expected_value":"2496"}

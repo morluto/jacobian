@@ -19,7 +19,7 @@ counterexample; no prose explanation or duplicate artifact is required.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier independently generates the finite group, checks determinant one and every elementwise fixed vector, and computes the common fixed-space intersection.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

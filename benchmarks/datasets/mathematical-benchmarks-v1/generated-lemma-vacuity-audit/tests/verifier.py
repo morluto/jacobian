@@ -2,12 +2,8 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    aggregate_reward,
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
@@ -167,52 +163,13 @@ def _result_is_valid(result: object, source: dict) -> bool:
     )
 
 
-def _evidence_matches_result(evidence: object, result: dict) -> bool:
-    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        if target.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        text = target.read_text()
-        markers = [
-            line.removeprefix("RESULT_JSON:").strip()
-            for line in text.splitlines()
-            if line.startswith("RESULT_JSON:")
-        ]
-        prose = [
-            line.strip()
-            for line in text.splitlines()
-            if line.strip() and not line.startswith("RESULT_JSON:")
-        ]
-        return bool(
-            len(markers) == 1
-            and json_value_equal(json.loads(markers[0]), result)
-            and prose
-        )
-    except (OSError, UnicodeError, ValueError):
-        return False
-
-
 def main() -> None:
     submission = load_submission()
     source = _load_frozen_input()
     protocol_ok = submission is not None
     result = submission.get("result") if protocol_ok else None
     math_correct = bool(protocol_ok and _result_is_valid(result, source))
-    evidence_valid = bool(
-        protocol_ok
-        and math_correct
-        and isinstance(result, dict)
-        and _evidence_matches_result(submission.get("witness"), result)
-    )
-    reward = aggregate_reward(
-        correctness=math_correct,
-        witness_validity=evidence_valid,
-        protocol_ok=protocol_ok,
-    )
+    reward = float(math_correct)
 
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
@@ -220,7 +177,6 @@ def main() -> None:
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

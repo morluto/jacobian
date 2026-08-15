@@ -1,2 +1,0 @@
-Take A = [[0, 1], [0, 0]]. Its square is [[0, 0], [0, 0]], while A is nonzero and A transpose = [[0, 0], [1, 0]] is different from A.
-RESULT_JSON: {"matrix":[[0,1],[0,0]]}

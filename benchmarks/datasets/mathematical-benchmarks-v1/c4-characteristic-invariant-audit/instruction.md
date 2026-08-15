@@ -15,18 +15,13 @@ Graphs use vertices `0..vertex_count-1`; every edge is a strictly increasing
 pair and the edge list is lexicographically sorted. Respect each witness's
 vertex bounds. Report the exact induced-C4 count and characteristic value.
 
-Do not claim the upstream Lean theorem compiles or that the source-corrected
-conjecture is proved. State both limitations in the `limitations` field. Write
-the exact schema to `submission.json`. Put a concise audit in
-`evidence/answer.txt`, include a `RESULT_JSON:` line containing the submitted
-result as JSON, and bind its SHA-256 digest.
+Write the exact schema to `submission.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, exact finite scope, completeness, digest-bound evidence, limitation claims, and assurance as separate protocol dimensions. State both that Lean compilation is not assessed and that proof of the source-corrected conjecture is not claimed.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

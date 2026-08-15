@@ -1,3 +1,0 @@
-The common block-index channel produces A+2B, while two independent sum-zero channels produce A-B. The submitted rational matrices are exact inverses and the full symbolic similarity identity is replayed over the declared polynomial ring. The unrestricted theorem remains outside this frozen scope.
-
-RESULT_JSON: {"basis_change":[["1","1","1"],["1","-1","0"],["1","0","-1"]],"basis_change_inverse":[["1/3","1/3","1/3"],["1/3","-2/3","1/3"],["1/3","1/3","-2/3"]],"channels":["A+2B","A-B","A-B"],"determinant_identity":"det(C)=det(A-B)^2*det(A+2B)","invertibility_assumption":"NOT_REQUIRED_FOR_POLYNOMIAL_IDENTITY"}

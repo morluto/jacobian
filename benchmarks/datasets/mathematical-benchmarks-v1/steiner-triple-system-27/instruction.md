@@ -21,13 +21,12 @@ order: <submitted order>
 block_count: <number of submitted blocks>
 ```
 
-The assurance ceiling is `COMPUTED`: the finite design is exhaustively checked,
 but the general source theorem is not machine-proved.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier reports mathematical, evidence, input-binding, scope, and assurance dimensions separately.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

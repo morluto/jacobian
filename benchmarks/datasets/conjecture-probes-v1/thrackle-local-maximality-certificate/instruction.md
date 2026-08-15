@@ -11,9 +11,7 @@ This Regression certificate proves only a five-edge thrackle locally maximal ins
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Exact five-edge thrackle and local-maximality certificate inside one frozen K5 universe.
-
-The evidence file must be a JSON object with exactly four fields: `schema_version` must be `"1"`, `task_id` must equal the submission task ID, `result` must be an exact JSON copy of `submission.json`'s result object, and `limitations` must be an exact JSON copy of its limitations list.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

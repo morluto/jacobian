@@ -9,7 +9,7 @@
     ],
     "min_items": 1
   },
-  "public_notes": "Submit the result and the required replay artifact. The verifier recomputes the task-specific mathematical claim from the frozen input.",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.",
   "required_witness_filenames": [
     "evidence/answer.txt"
   ],

@@ -1,5 +1,4 @@
 import importlib.util
-import json
 import sys
 from pathlib import Path
 
@@ -47,7 +46,6 @@ def _case(tmp_path: Path):
 
 
 def _rewrite(app: Path, submission: dict) -> None:
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
 
 
@@ -108,110 +106,6 @@ def test_reference_passes(tmp_path: Path) -> None:
     assert result.reward == 1.0
 
 
-def test_large_evidence_without_result_binding_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    (app / "evidence" / "answer.txt").write_text(
-        "recurrence coprime pythagorean " + "x" * 65536
-    )
-    submission["witness"][0]["sha256"] = _fixtures._digest(
-        app / "evidence" / "answer.txt"
-    )
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_oversized_result_marker_is_rejected_without_buffering_it(
-    tmp_path: Path,
-) -> None:
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    evidence.write_text("RESULT_JSON:" + "x" * 65_537, encoding="utf-8")
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-    _fixtures._write_json(app / "submission.json", submission)
-
-    result = _verifier._run_verifier(task, app, logs)
-
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_large_evidence_with_result_binding_is_accepted(tmp_path: Path) -> None:
-    """Evidence above the former 64 KiB ceiling with a valid RESULT_JSON
-    binding must be accepted now that the arbitrary cap is removed."""
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    marker = "RESULT_JSON:" + json.dumps(
-        submission["result"], sort_keys=True, separators=(",", ":")
-    )
-    evidence.write_text(
-        "recurrence coprime pythagorean explanation. "
-        + "x" * 65536
-        + "\n"
-        + marker
-        + "\n"
-    )
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 1.0
-    assert result.reward == 1.0
-
-
-def test_keyword_only_evidence_without_result_binding_is_rejected(
-    tmp_path: Path,
-) -> None:
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    evidence.write_text("recurrence coprime pythagorean\n")
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_evidence_with_wrong_result_json_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    wrong = json.loads(json.dumps(submission["result"]))
-    wrong["transform_determinant"] = 1
-    evidence.write_text(
-        "recurrence coprime pythagorean\n"
-        "RESULT_JSON:" + json.dumps(wrong, sort_keys=True, separators=(",", ":")) + "\n"
-    )
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_boolean_in_result_json_evidence_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    coerced = json.loads(json.dumps(submission["result"]))
-    coerced["stages"][0]["gcd"] = True
-    assert coerced == submission["result"]  # Python coerces True == 1
-    evidence.write_text(
-        "recurrence coprime pythagorean\n"
-        "RESULT_JSON:"
-        + json.dumps(coerced, sort_keys=True, separators=(",", ":"))
-        + "\n"
-    )
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-
-
 def test_symlinked_workspace_input_is_rejected(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     original = app / "input-original.json"
@@ -229,25 +123,3 @@ def test_input_tamper_preserves_math_correctness(tmp_path: Path) -> None:
     result = _verifier._run_verifier(task, app, logs)
     assert result.details["correctness"] == 1.0
     assert result.reward == 0.0
-
-
-def test_multiple_result_json_markers_are_rejected(tmp_path: Path) -> None:
-    """More than one RESULT_JSON marker must fail evidence binding rather than
-    silently picking the first, exercising the streaming scanner's count."""
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    marker = "RESULT_JSON:" + json.dumps(
-        submission["result"], sort_keys=True, separators=(",", ":")
-    )
-    evidence.write_text(f"recurrence coprime pythagorean\n{marker}\n{marker}\n")
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_instruction_documents_evidence_binding():
-    text = (TASK / "instruction.md").read_text().casefold()
-    assert "result_json" in text

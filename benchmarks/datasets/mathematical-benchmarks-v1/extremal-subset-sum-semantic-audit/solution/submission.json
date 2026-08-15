@@ -35,11 +35,5 @@
       "second_multiplier": 2,
       "target": 1
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:25ee48000da3378460959dbc40dbc8c6b4e35ee70ac59d427d1cb5e0e32b8b72"
-    }
-  ]
+  }
 }

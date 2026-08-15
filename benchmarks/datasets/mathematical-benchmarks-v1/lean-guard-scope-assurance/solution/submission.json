@@ -35,11 +35,5 @@
         "reason": "ZERO_NUMERATOR_IS_EXACT_BUT_DIVISOR_IS_UNGUARDED"
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:e3e0d3a9eb9494ac6f159275b09fefa2e61be90077aff0a0d25d017ef3b88347"
-    }
-  ]
+  }
 }

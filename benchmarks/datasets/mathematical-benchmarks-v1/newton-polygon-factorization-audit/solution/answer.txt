@@ -1,2 +1,0 @@
-At p=2 the product is 32+8x^2+4x^4+x^6, with finite valuation points (0,5),(2,3),(4,2),(6,0). Its lower hull has primitive negative edges from (0,5) to (2,3) and from (2,3) to (6,0). The old right-edge hypotheses hold at ell=2 and j=6, but the factor constant valuations are 2 and 3, not zero. The corrected left-edge primitivity fails because gcd(5-3,2)=2.
-RESULT_JSON:{"ell":2,"factor_left":["4","0","1"],"factor_right":["8","0","0","0","1"],"j":6,"prime":2}

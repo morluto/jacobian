@@ -2,12 +2,11 @@
 
 The frozen solution derives `(x-n)(y-n)=n^2` correctly, but then makes invalid divisibility claims and reports 2022 qualifying integers through 2025. The flawed derivation is provided in the frozen input. Diagnose each defect and recompute the exact classification from the equation and constraints.
 
-Submit the complete membership vector for `n=1..2025` as a 508-character little-endian bit-packed hexadecimal string (bit `n-1`; unused final bits zero), the corrected count, at least ten distinct valid `(n,d)` witnesses, three required nonmember counterexamples, and all diagnosed defects. The evidence artifact must be a JSON object with exactly `schema_version`, `task_id`, `result`, and `limitations`, using `schema_version: "1"`, the submitted task identifier, and exact copies of the submitted `result` and `limitations`; keep it at or below 16 MiB. The verifier independently enumerates every divisor condition and reconstructs `(x,y)` for each witness.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

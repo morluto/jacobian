@@ -13,7 +13,6 @@ REQUIRED_METADATA = {
     "domain",
     "primary_domain",
     "field",
-    "assurance_ceiling",
     "answer_visibility",
     "provenance_class",
     "fixture_digest",

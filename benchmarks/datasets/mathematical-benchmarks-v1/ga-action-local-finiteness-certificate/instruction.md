@@ -23,17 +23,11 @@ trusting a preferred basis:
 3. `R(0)=I`;
 4. `R(s+t)=R(s)R(t)` as an exact polynomial identity.
 
-Write a concise explanation to `/app/evidence/answer.txt` distinguishing the
-finite coefficient expansion from the coaction/group-law argument that proves
-invariance. Do not claim the unrestricted theorem or a formal proof-assistant
-certificate.
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Submit one non-singular degree-four basis, exact coordinates, and its full additive-group action matrix. Sparse terms use canonical reduced rationals and unique ascending exponents. In the solver's own words, the limitations array must disclose that the frozen degree-four certificate does not prove the general local-finiteness theorem.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

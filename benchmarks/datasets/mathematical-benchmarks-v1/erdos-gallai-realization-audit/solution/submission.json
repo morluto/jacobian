@@ -57,11 +57,5 @@
         ]
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:9e6179842f104a249f90d554b4a73f32866ae60c03c09a413bfafeaf21b3262e"
-    }
-  ]
+  }
 }

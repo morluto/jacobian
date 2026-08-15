@@ -26,7 +26,7 @@ product. This checks a finite family, not the open Vizing conjecture.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The clean-room verifier reconstructs all frozen Cartesian products and independently recomputes domination numbers; the finite result does not imply a global Vizing conclusion.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

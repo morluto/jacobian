@@ -21,11 +21,5 @@
       ],
       "v_u_u": 1
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:f902ea716a2d7953601bc72d1556435bcf7fdfd9af85f8ce3a5204fae4f85133"
-    }
-  ]
+  }
 }

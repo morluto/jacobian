@@ -15,21 +15,14 @@ integer matrix, its determinant, and the homology conclusion.
 
 The verifier reconstructs the one-skeleton, checks the tree, boundary-of-
 boundary identities, independently derives every cycle coordinate, and
-computes the determinant exactly.  Alternative spanning trees and orderings
-are accepted.  Submit `/app/submission.json` following the supplied schema and
-one bound explanation at `/app/evidence/answer.txt` that states the cycle
-lattice calculation, determinant `-2`, lattice index `2`, and `Z/2Z`
-conclusion.
-
-Do not claim proof-assistant verification.  This task provides exact finite
-chain-complex computation only.
+computes the determinant exactly. Alternative spanning trees and orderings are
+accepted. This task provides exact finite chain-complex computation only.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

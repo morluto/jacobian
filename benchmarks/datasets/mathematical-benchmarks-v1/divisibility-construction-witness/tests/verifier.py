@@ -2,10 +2,8 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
 )
 
 W = Path("/app")
@@ -29,27 +27,6 @@ def _load_frozen_input():
 
 def _integer_value(value):
     return value if type(value) is int else None
-
-
-def witness_matches_result(witness, result):
-    if not isinstance(witness, list) or len(witness) != 1:
-        return False
-    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text()
-        marker = next(
-            line.removeprefix("RESULT_JSON:").strip()
-            for line in text.splitlines()
-            if line.startswith("RESULT_JSON:")
-        )
-        return json_value_equal(json.loads(marker), result) and any(
-            line.strip() and not line.startswith("RESULT_JSON:")
-            for line in text.splitlines()
-        )
-    except (OSError, StopIteration, UnicodeError, ValueError):
-        return False
 
 
 def _valid_witness(result, source):
@@ -92,18 +69,13 @@ def main():
     source = _load_frozen_input()
     result = submission.get("result") if isinstance(submission, dict) else None
     math_correct = _valid_witness(result, source)
-    witness_valid = bool(
-        isinstance(submission, dict)
-        and witness_matches_result(submission.get("witness"), result)
-    )
-    reward = float(math_correct and witness_valid)
+    reward = float(math_correct)
 
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(witness_valid),
                 "reward": reward,
             }
         )

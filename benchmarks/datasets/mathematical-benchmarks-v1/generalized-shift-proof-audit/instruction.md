@@ -20,12 +20,12 @@ does not trust the generated solution.
 
 This task audits the proof trace only. It does not determine the true
 shift-complexity supremum. Write `submission.json` and digest-bind
-`evidence/audit-certificate.json`. Claim at most `COMPUTED`.
+`evidence/audit-certificate.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

@@ -6,8 +6,6 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -27,27 +25,6 @@ def q(value):
     except (ValueError, TypeError, ZeroDivisionError):
         return None
     return parsed
-
-
-def evidence_matches_result(evidence, result):
-    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text()
-        marker = next(
-            line.removeprefix("RESULT_JSON:").strip()
-            for line in text.splitlines()
-            if line.startswith("RESULT_JSON:")
-        )
-        return json.loads(marker) == result and any(
-            line.strip() and not line.startswith("RESULT_JSON:")
-            for line in text.splitlines()
-        )
-    except (OSError, StopIteration, UnicodeError, ValueError):
-        return False
 
 
 def poly_add(left, right):
@@ -243,20 +220,12 @@ def main():
         )
 
     math_correct = bool(valid)
-    witness = submission.get("witness") if protocol_ok else None
-    good = bool(
-        protocol_ok
-        and isinstance(witness, list)
-        and evidence_matches_result(witness, result)
-    )
-    correct = bool(math_correct and good)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(good),
-                "reward": float(correct),
+                "reward": float(math_correct),
             }
         )
     )

@@ -6,15 +6,13 @@ nonempty finite magmas. If not, return a smallest countermodel, a valuation
 that refutes the target, and the smaller carrier orders exhaustively checked.
 
 Write `submission.json` to the exact agent-visible `submission_schema.json`.
-Put a short calculation or independently replayable witness in
-`evidence/answer.txt`. It must describe the operation, the refuting assignment,
-and the one-element minimality check. Include that file's SHA-256 digest in the
-submission.
+The submitted operation, refuting assignment, and smaller-carrier check are the
+certificate.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

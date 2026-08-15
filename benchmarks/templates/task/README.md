@@ -2,10 +2,11 @@
 
 Copy this directory into a registered dataset and replace every placeholder.
 Keep `instruction.md` and `environment/` agent-visible; keep `solution/` and
-`tests/` Oracle/verifier-only. Add task-specific schemas without weakening the
-common submission envelope or assurance ceiling. Add one
-verifier-owned `tests/public_contract.json` and generate the marked submission
-block plus `environment/submission_schema.json` with the internal
+`tests/` Oracle/verifier-only. Start with a typed `result`; add a finite,
+task-specific `witness` only when replay genuinely needs external mathematical
+data. Never add generic assurance, scope, completeness, limitations, or prose
+explanation fields. Add one verifier-owned `tests/public_contract.json` and
+generate the marked submission block plus `environment/submission_schema.json` with the internal
 `benchmarks.tooling.public_contract` command; do not hand-maintain duplicate
 protocol declarations. Add one
 `members/<task-id>.toml` record and run the exact leaf gate:

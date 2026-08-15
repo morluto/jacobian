@@ -7,8 +7,6 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -29,28 +27,6 @@ def _load_frozen_input():
     except (OSError, ValueError, UnicodeError):
         return {}
     return value if isinstance(value, dict) else {}
-
-
-def witness_matches_result(witness, result):
-    if not witness_list_is_bound(witness):
-        return False
-    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        if target.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        lines = target.read_text().splitlines()
-        marker = next(
-            line.removeprefix("RESULT_JSON:").strip()
-            for line in lines
-            if line.startswith("RESULT_JSON:")
-        )
-        return json.loads(marker) == result and any(
-            line.strip() and not line.startswith("RESULT_JSON:") for line in lines
-        )
-    except (OSError, StopIteration, UnicodeError, ValueError):
-        return False
 
 
 def edge_key(left, right):
@@ -278,16 +254,12 @@ def main():
     )
 
     math_correct = bool(valid)
-    good = bool(
-        math_correct and witness_matches_result(submission.get("witness"), result)
-    )
-    reward = float(math_correct and good)
+    reward = float(math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(good),
                 "reward": reward,
             }
         )

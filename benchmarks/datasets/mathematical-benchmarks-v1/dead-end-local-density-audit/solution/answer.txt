@@ -1,6 +1,0 @@
-The invertible case has collisions: digits congruent modulo 25 can forbid the
-same residue, and digit zero overlaps the square-free obstruction at residue
-zero.  When 3 divides 6 but 9 does not, only digits divisible by 3 create
-solutions and each creates a residue class modulo 3.  When 4 divides 8, each
-extension is constant modulo 4: nonzero digits are vacuous, while digit zero
-obstructs every residue.  These are finite local computations only.

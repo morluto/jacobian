@@ -58,17 +58,6 @@ def test_rejects_boolean_sample_n(tmp_path: Path) -> None:
     assert rejected.reward == 0.0
 
 
-def test_rejects_duplicate_evidence_descriptors(tmp_path: Path) -> None:
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    submission["witness"].append(dict(submission["witness"][0]))
-    _fixtures._write_json(app / "submission.json", submission)
-
-    rejected = _verifier._run_verifier(task, app, logs)
-    assert rejected.reward == 0.0
-    assert rejected.reward == 0.0
-
-
 def test_accepts_parity_formula_notation_from_agent_evaluation(tmp_path: Path) -> None:
     """The exact parity expression must not be rejected as prose variance."""
     task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")

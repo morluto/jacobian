@@ -1,19 +1,15 @@
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 W = Path("/app")
 E = Path("/tests")
 ZERO = (0, 0, 0, 0)
-MAX_EVIDENCE_BYTES = 1_048_576
 
 
 def _load_frozen_input():
@@ -138,45 +134,17 @@ def _result_is_valid(result, frozen):
     )
 
 
-def _evidence_matches(evidence):
-    if (
-        not isinstance(evidence, list)
-        or len(evidence) != 1
-        or not witness_list_is_bound(evidence, expected_path="evidence/answer.txt")
-    ):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        if target.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        text = target.read_text().casefold()
-    except (OSError, UnicodeError):
-        return False
-    return (
-        len(text) >= 120
-        and all(word in text for word in ("identity", "coefficient", "divisible"))
-        and re.search(r"(?:linear|quadratic).{0,120}(?:generator|multiple)", text)
-        and re.search(r"(?:integral|integer).{0,120}(?:divis|modular)", text)
-    )
-
-
 def main():
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
     frozen = _load_frozen_input()
     math_correct = bool(submission and _result_is_valid(data.get("result"), frozen))
-    evidence_valid = bool(math_correct and _evidence_matches(data.get("witness")))
-    correct = bool(math_correct and evidence_valid)
-    reward = float(correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
-                "reward": reward,
+                "reward": float(math_correct),
             }
         )
     )

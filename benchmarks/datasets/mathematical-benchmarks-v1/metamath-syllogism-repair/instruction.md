@@ -16,20 +16,13 @@ consistently, instantiates the conclusion, and requires one final stack item
 equal to the target. Merely naming the two repaired labels or asserting the
 target is insufficient.
 
-Write `submission.json` to the provided schema. Write `evidence/answer.txt`
-with exactly one line beginning `RESULT_JSON:` followed by the exact compact
-JSON serialization of `result`. The other text must explain the assertion
-applications using the ordered stack and its variable unification/substitution;
-unrelated or marker-only text is not evidence. Digest-bind that file and claim
-at most `COMPUTED`.
-The evidence file must not exceed 16 MiB.
+Write `submission.json` to the provided schema.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

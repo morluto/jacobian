@@ -1,4 +1,0 @@
-Both shallow reports are incomplete. The first omits dependencies occurring in
-the type of axiom A2, while the second omits the compiler-trust primitive
-referenced through Lean.ofReduceBool. A trust audit needs transitive closure.
-This is a frozen graph audit, not a claim about current Lean behavior.

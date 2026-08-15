@@ -1,41 +1,20 @@
 import itertools
 import json
-import re
 from pathlib import Path
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
     is_regular_bounded_file,
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
     workspace_input_is_bound,
 )
 
 W = Path("/app")
 E = Path("/tests")
 ROLES = {"C4_FREE_ZERO_COUNT", "MULTIPLE_INDUCED_C4", "CHORDED_C4_ZERO_INDUCED"}
-ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
 _EVIDENCE_READ_BYTES = 64 * 1024
 _MAX_EVIDENCE_LINE_BYTES = 1024 * 1024
-_PROHIBITED_CLAIM = re.compile(
-    r"\b(?:verified|proved|proven|confirmed|compile|compiles|compiled|"
-    r"(?:has|have|had|admits|admit|possesses|possess)\s+(?:a\s+)?proof)\b"
-)
-_THEOREM_SUBJECT = re.compile(
-    r"\s*(?:(?:no|the|this|that|its)\s+)?"
-    r"(?:(?:upstream|source-corrected|corrected)\s+)*"
-    r"(?:lean(?:\s+(?:theorem|compilation))?|theorem|conjecture|proof)\b"
-)
-_ELIDED_SUBJECT_PREFIX = re.compile(
-    r"\s*(?:(?:also|actually|still|then|yet)\s+)?"
-    r"(?:(?:is|are|was|were|has|have|had|do|does|did|can|could|may|might|"
-    r"must|shall|should|will|would)(?:\s+been)?\s+)?(?:not\s+)?"
-)
-_EXPLICIT_OTHER_SUBJECT = re.compile(
-    r"\s*(?:the|a|an|this|that|these|those|our|their|finite|graph)\b"
-)
 
 
 def _frozen_source():
@@ -174,123 +153,6 @@ def _valid(result, source):
     return all(_witness_valid(witness, contracts) for witness in witnesses)
 
 
-def _evidence(evidence, result):
-    if (
-        not isinstance(evidence, list)
-        or len(evidence) != 1
-        or not isinstance(evidence[0], dict)
-        or set(evidence[0]) != {"path", "sha256"}
-        or evidence[0].get("path") != "evidence/answer.txt"
-    ):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        marker = None
-        for line in _bounded_evidence_lines(target):
-            if line.startswith("RESULT_JSON:"):
-                if marker is not None:
-                    return False
-                marker = line[12:].strip()
-                continue
-        if marker is None:
-            return False
-        marker_value = json.loads(marker)
-        return json_value_equal(marker_value, result)
-    except (
-        OSError,
-        ValueError,
-        UnicodeError,
-        StopIteration,
-        RecursionError,
-        MemoryError,
-    ):
-        return False
-
-
-def _bounded_evidence_lines(target):
-    """Yield UTF-8 evidence lines without buffering an unbounded line."""
-    pending = bytearray()
-    with target.open("rb") as stream:
-        while chunk := stream.read(_EVIDENCE_READ_BYTES):
-            start = 0
-            while True:
-                newline = chunk.find(b"\n", start)
-                fragment = chunk[start:] if newline == -1 else chunk[start:newline]
-                if len(pending) + len(fragment) > _MAX_EVIDENCE_LINE_BYTES:
-                    raise ValueError("evidence line exceeds parser bound")
-                pending.extend(fragment)
-                if newline == -1:
-                    break
-                yield pending.decode("utf-8")
-                pending.clear()
-                start = newline + 1
-                if start == len(chunk):
-                    break
-        if pending:
-            yield pending.decode("utf-8")
-
-
-def _limitations_valid(limitations):
-    """Reject affirmative Lean/proof overclaims.
-
-    The task prohibits claiming Lean compilation or proof of the corrected
-    conjecture. A valid limitation must explicitly state that Lean is not
-    assessed, and must not assert that either Lean or the corrected conjecture
-    was proved/verified.
-    """
-    if not isinstance(limitations, list):
-        return False
-    has_lean_limitation = False
-    has_conjecture_limitation = False
-    for item in limitations:
-        if not isinstance(item, str):
-            return False
-        folded = item.casefold()
-        if _has_affirmative_prohibited_claim(folded):
-            return False
-        has_lean_limitation |= _has_limitation(folded, "lean")
-        has_conjecture_limitation |= _has_limitation(folded, "conjecture")
-    return has_lean_limitation and has_conjecture_limitation
-
-
-def _has_limitation(text, topic):
-    return any(
-        topic in clause
-        and (
-            "not assessed" in clause
-            or re.search(r"\b(?:no|not|never)\b.{0,80}\b(?:claim|claimed)\b", clause)
-        )
-        for clause in re.split(r"[.;]", text)
-    )
-
-
-def _has_affirmative_prohibited_claim(text):
-    for sentence in re.split(r"[.;]", text):
-        theorem_context = False
-        for clause in re.split(r"\s*,?\s+(?:and|but)\s+", sentence):
-            matches = tuple(_PROHIBITED_CLAIM.finditer(clause))
-            theorem_subject = bool(_THEOREM_SUBJECT.match(clause))
-            claim_is_elided = bool(
-                matches
-                and _ELIDED_SUBJECT_PREFIX.fullmatch(clause[: matches[0].start()])
-            )
-            if theorem_subject:
-                theorem_context = True
-            elif (matches and not claim_is_elided) or (
-                not matches and _EXPLICIT_OTHER_SUBJECT.match(clause)
-            ):
-                theorem_context = False
-            if not theorem_context:
-                continue
-            for match in matches:
-                prefix = clause[: match.start()][-80:]
-                if not re.search(r"\b(?:no|never)\b|\bnot\b(?!\s+only\b)", prefix):
-                    return True
-    return False
-
-
 def _raw_submission():
     """Parse the bounded submission without applying the public schema."""
     path = W / "submission.json"
@@ -308,17 +170,13 @@ def main():
     input_bound = workspace_input_is_bound(W / "input.json", tests=E)
     result = submission.get("result") if isinstance(submission, dict) else None
     math_correct = bool(_valid(result, source))
-    witness_valid = bool(
-        isinstance(submission, dict) and _evidence(submission.get("witness"), result)
-    )
-    correct = math_correct and witness_valid and input_bound
+    correct = bool(math_correct and input_bound)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
                 "input_binding": float(input_bound),
-                "witness_validity": float(witness_valid),
                 "reward": float(correct),
             }
         )

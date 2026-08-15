@@ -48,10 +48,11 @@ Use one of these submission shapes:
 3. **Formal proof:** use only a deliberately supported formal language and a
    real checker. Do not score natural-language proof prose automatically.
 
-Do not add generic `claimed_assurance`, evidence artifacts, or limitations
-prose. Declare a witness artifact only when replay needs it. Declare an
-assurance claim only when an independent authorization record can verify it;
-ordinary mathematics tasks do not need one.
+Put small structured mathematical certificates in `result`. Declare a witness
+artifact only when an external finite object is genuinely needed for replay;
+it must not duplicate `result` or carry a narrative explanation. Do not add
+generic `claimed_assurance`, scope, completeness, limitations, or proof prose.
+Ordinary mathematics tasks do not need authorization claims.
 
 The agent-visible instruction and schema are the complete public protocol:
 required result fields, exact types, scope, and any task-specific witness rule.
@@ -95,9 +96,12 @@ protocol validity or reward eligibility. Store every such exception in that
 task's closed `tests/verifier_contract.json`; never use a global task-name
 registry.
 
-Evidence has no arbitrary byte cap. If a task declares evidence, require exact
-relative paths, regular non-symlink files inside the verifier workspace, the
-declared digest, and a semantic connection to the submitted claim.
+Bound raw submissions and visible/frozen inputs before parsing. If a task needs
+a witness artifact, publish a finite bound only when its encoding or task
+mechanics justify one; never impose a universal default merely to copy a
+result. Require exact relative paths, regular non-symlink files inside the
+verifier workspace, the declared digest, and a semantic connection to the
+submitted claim.
 
 ## Validate
 

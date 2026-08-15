@@ -1,5 +1,0 @@
-The repeated-root annihilating polynomial is not automatically the minimal
-polynomial.  The missing irreducible step follows from the u-adic valuation:
-a p-th power in K(u) has valuation divisible by p, but u has valuation one.
-Thus X^p-u is irreducible, is the minimal polynomial of t, and has zero formal
-derivative and one root of multiplicity p.  The assurance remains COMPUTED.

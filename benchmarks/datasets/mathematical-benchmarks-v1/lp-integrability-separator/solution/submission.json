@@ -14,11 +14,5 @@
       "obstruction": "ORIGIN_POWER_SINGULARITY",
       "p_interval": "p>2"
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:0247600af02fa3e35c65ade41d5f49111eef47f3ced13276207be1d7765a6abd"
-    }
-  ]
+  }
 }

@@ -10,19 +10,13 @@ For the repair, submit the coefficient vectors (constant term first) of
 modular polynomial arithmetic, the degree-four Rabin conditions
 `gcd(f,x^(p^2)-x)=1` and `x^(p^4)-x=0 mod f`, and the bad-prime factorization.
 
-Evidence must be a regular file no larger than 1 MiB, contain exactly one
-`RESULT_JSON:` line equal to `result`, and provide at least 140 characters
-explaining why the original implication is invalid and why the replacement
-proves irreducibility over `Q`. Do not claim proof-assistant verification.
-
-Use this exact limitations entry: `The verifier does not assess the source
-proof's later Galois-group or density claims and does not invoke a proof
-assistant.`
+The submitted factorization and Rabin data must establish both why the original
+implication is invalid and why the replacement proves irreducibility over `Q`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

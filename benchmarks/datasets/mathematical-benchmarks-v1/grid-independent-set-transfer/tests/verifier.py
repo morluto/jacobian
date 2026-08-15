@@ -9,7 +9,6 @@ from verifier_support import (
 )
 
 W, T = Path("/app"), Path("/tests")
-LIMITATIONS = ["FINITE_GRIDS_N_2_THROUGH_5", "NO_GENERAL_GRID_FORMULA"]
 REQUIRED_N = (2, 3, 4, 5)
 
 

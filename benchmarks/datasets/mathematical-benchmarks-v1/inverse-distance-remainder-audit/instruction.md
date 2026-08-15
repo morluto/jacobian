@@ -18,19 +18,14 @@ frame);
 
 Directions may have dimension two, three, or four. They need not match the
 Oracle directions. Rational numbers use reduced numerator/positive-denominator
-objects. Write the structured result to `/app/submission.json`, place a concise
-derivation in `/app/evidence/answer.txt`, and bind that file by SHA-256.
-The derivation must display the normalized quadratic term, both signed
-directional coefficients, and the two order-analysis defects it identifies.
-
-Do not claim `VERIFIED`: the clean-room checker establishes exact algebraic and
-series-coefficient facts only; it is not an external proof assistant or a
-general asymptotic-analysis verifier.
+objects. Write the structured result to `/app/submission.json`; it must display
+the normalized quadratic term, both signed directional coefficients, and the
+two order-analysis defects it identifies.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

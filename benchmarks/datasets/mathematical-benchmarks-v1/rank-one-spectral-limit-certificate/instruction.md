@@ -5,12 +5,11 @@ The requested outcome is the exact root formula for the declared matrix family a
 
 Choose at least three distinct checkpoint values of `n` in the declared bounds and report both the reduced reciprocal sum and determinant root at each checkpoint. Supply the partial-fraction coefficients rather than a prose label.
 
-Write `/app/submission.json` following the schema and bind the identical result at `evidence/spectral-certificate.json`. Do not use floating-point eigenvalue sampling or claim proof-assistant verification. Assurance is `COMPUTED`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier independently replays exact rational sums and freely selected checkpoints; the determinant lemma and rational limit inference remain trusted.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

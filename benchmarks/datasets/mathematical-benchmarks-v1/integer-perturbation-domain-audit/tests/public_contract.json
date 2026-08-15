@@ -1,14 +1,5 @@
 {
-  "witness": {
-    "allowed_paths": [],
-    "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "max_items": 0,
-    "media_types": [],
-    "min_items": 0,
-    "payload_shape": null
-  },
-  "public_notes": "The verifier checks the declared result, exact domain-semantics scope, completeness, digest-bound evidence, limitation claims, and assurance as separate protocol dimensions. State both that Lean compilation is not assessed and that no irrationality theorem is claimed.",
-  "required_witness_filenames": [],
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
   "schema_version": "1",
   "submission_path": "/app/submission.json",
   "submission_result": {

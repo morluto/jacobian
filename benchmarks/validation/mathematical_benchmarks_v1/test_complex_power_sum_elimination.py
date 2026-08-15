@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -12,10 +11,6 @@ from jsonschema import Draft202012Validator
 TASK = Path(__file__).resolve().parents[3] / (
     "benchmarks/datasets/mathematical-benchmarks-v1/complex-power-sum-elimination"
 )
-
-
-def _digest(path: Path) -> str:
-    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _write_json(path: Path, value: object) -> None:
@@ -33,19 +28,11 @@ def _case(tmp_path: Path) -> tuple[Path, Path, Path]:
     logs.mkdir(parents=True)
     shutil.copy2(TASK / "environment" / "input.json", app / "input.json")
     submission = json.loads((TASK / "solution" / "submission.json").read_text())
-    for descriptor in submission["witness"]:
-        evidence_path = Path(descriptor["path"])
-        destination = app / evidence_path
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(TASK / "solution" / evidence_path.name, destination)
-        descriptor["sha256"] = _digest(destination)
     _write_json(app / "submission.json", submission)
     return TASK, app, logs
 
 
 def _rewrite(app: Path, submission: dict) -> None:
-    evidence_path = app / "evidence" / "answer.txt"
-    submission["witness"][0]["sha256"] = _digest(evidence_path)
     _write_json(app / "submission.json", submission)
 
 

@@ -1,6 +1,4 @@
 {
   "conclusion": "OLD_LEMMA_REFUTED_WITH_REPAIR_BOUNDARY",
-  "maximum_assurance": "COMPUTED",
-  "required_scope": "FROZEN_DVR_LEMMA_EXACT_INTEGER_WITNESS",
   "task_id": "jacobian/newton-polygon-factorization-audit"
 }

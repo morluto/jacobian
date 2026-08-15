@@ -4,11 +4,5 @@
     "ordered_squared_difference_sum": 65000,
     "other_hit_probability": "24/625",
     "self_hit_probability": "49/625"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:4b988852552ee09695a4ef9bf233b70eef30cec65d4a5307286cd87b14d75cef"
-    }
-  ]
+  }
 }

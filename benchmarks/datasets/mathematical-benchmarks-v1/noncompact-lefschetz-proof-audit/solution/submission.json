@@ -29,11 +29,5 @@
       "invalid_step": "COMPACTLY_SUPPORTED_DIAGONAL_THOM_CLASS",
       "repair_boundary": "REQUIRES_ADDITIONAL_HYPOTHESES_OR_DIFFERENT_ARGUMENT"
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:c47d5ccb38b7aab614cc7c9233b9c2113080e4b15f7f7d2dedd2db8b5efaf54d"
-    }
-  ]
+  }
 }

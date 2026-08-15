@@ -33,11 +33,5 @@
         "status": "INCOMPLETE"
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:84f723acce3d593b74d0e53f0d190c0035ccd6e6ef6a7b4a206957dab4f0af34"
-    }
-  ]
+  }
 }

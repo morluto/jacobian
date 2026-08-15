@@ -1,7 +1,7 @@
 Construct an optimal set of answer strings for the frozen six-question,
 three-option problem in `/app/input.json`.
 
-Submit `/app/submission.json` and `/app/evidence/answer.txt`. Your JSON must:
+Your JSON must:
 
 1. give 18 distinct ternary words of length six, with every distinct pair
    agreeing in exactly zero or two coordinates;
@@ -14,15 +14,13 @@ Submit `/app/submission.json` and `/app/evidence/answer.txt`. Your JSON must:
 
 The verifier accepts any valid construction and recomputes all finite
 arithmetic. A published value of 18 without the construction and dual
-certificate is insufficient. Do not claim `VERIFIED`; no independent formal
-proof checker is used.
+certificate is insufficient.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

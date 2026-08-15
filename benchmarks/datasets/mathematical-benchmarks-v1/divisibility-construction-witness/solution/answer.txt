@@ -1,2 +1,0 @@
-Take a=18 and b=1. Then the product a*b*(a+b)=342, whose residue modulo 7 is 6. The power difference 19^7-18^7-1=281651706 has quotient 342 after division by 7^7, so both required conditions hold.
-RESULT_JSON: {"a":18,"b":1,"product_mod_7":6,"power_difference":281651706,"quotient_by_7_pow_7":342}

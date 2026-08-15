@@ -11,7 +11,7 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.",
   "required_witness_filenames": [
     "evidence/root-bound-certificate.json"
   ],

@@ -22,10 +22,13 @@ lets the verifier decide it:
   certificate is required for replay.
 - **Formal proof** only when a supported checker accepts the language.
 
-Do not add generic assurance claims, evidence artifacts, or limitations prose.
-If a task exposes an independently authorized claim, publish the exact record
-that authorizes it and reject a false claim. If a limitation affects score, use
-a closed structured obligation ID, not a phrase, keyword count, or negation
+Put small structured mathematical certificates in `result`. Use a witness
+artifact only for an external finite object that replay genuinely needs; it
+must not duplicate the result or carry a natural-language explanation. Do not
+add generic assurance claims, scope, completeness, limitations, or prose. If a
+task exposes an independently authorized claim, publish the exact record that
+authorizes it and reject a false claim. If a boundary affects score, use a
+closed structured obligation ID, not a phrase, keyword count, or negation
 heuristic.
 
 The visible schema and instructions must describe every field, type, bound,
@@ -54,10 +57,12 @@ indexing or hashing; compare JSON values recursively with type-strict equality;
 and accept mathematically equivalent rational, reordered, or scaled witnesses
 when the task permits them.
 
-Read and bound submissions and visible/frozen inputs before parsing. Do not add
-an undocumented evidence-byte limit. For declared artifacts, reject traversal,
-symlinks, non-regular files, wrong cardinality, wrong digest, and content that
-does not support the claimed result.
+Read and bound submissions and visible/frozen inputs before parsing. A witness
+artifact needs a published finite bound only when its encoding or task mechanics
+justify one; do not inherit a universal/default cap or create a redundant
+artifact merely to add one. For declared artifacts, reject traversal, symlinks,
+non-regular files, wrong cardinality, wrong digest, and content that does not
+support the claimed result.
 
 Compute mathematical correctness from the frozen verifier copy. Keep input
 binding, declared witness validity, scope, and independent authorization as
@@ -87,6 +92,10 @@ Assert observable reward and diagnostics, including that the reward artifact is
 written. Do not assert private helper names or mirror hidden solution text. A
 large valid declared artifact should remain valid unless the published task
 contract itself gives it a finite bound.
+
+When removing a prose or envelope gate, keep a mutation that makes the
+mathematical predicate false. Generic schema attacks alone do not demonstrate
+that replay still rejects a wrong mathematical claim.
 
 Natural-language proofs belong in a human-reviewed diagnostic setting unless a
 formalization or executable certificate makes their key claims checkable. Never

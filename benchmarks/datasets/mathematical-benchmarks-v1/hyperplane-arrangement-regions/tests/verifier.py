@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-import re
 from fractions import Fraction
 from functools import reduce
 from pathlib import Path
@@ -14,9 +13,6 @@ from verifier_support import (
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-TASK_ID = "jacobian/hyperplane-arrangement-regions"
-CONCLUSION = "REGION_COUNT_CERTIFIED"
-SCOPE = "the ten frozen cube and tetrahedron face planes"
 PLANES = {
     "cube_x0": (1, 0, 0, 0),
     "cube_x1": (1, 0, 0, 1),
@@ -30,42 +26,7 @@ PLANES = {
     "tetra_BA1C1": (1, -1, 1, 1),
 }
 PLANE_LABELS = tuple(PLANES)
-_NEGATED_PROOF_ASSISTANT = re.compile(
-    r"\b(?:not|no|without|doesn['']?t|does\s+not|cannot|never)\b"
-    r"[^.;\n]{0,80}\b(?:verif(?:y|ied|ies)|formaliz(?:e|ed|es)|"
-    r"prove(?:s|d)|certif(?:y|ied|ies))\b[^.;\n]{0,80}"
-    r"\b(?:proof assistant|lean)\b|"
-    r"\b(?:not|no|without|doesn['']?t|does\s+not|cannot|never)\b"
-    r"[^.;\n]{0,30}\b(?:proof assistant|lean)\b",
-    re.I,
-)
-_AFFIRMATIVE_PROOF_ASSISTANT = re.compile(
-    r"\b(?:verif(?:y|ied|ies)|formaliz(?:e|ed|es)|prove(?:s|d)|certif(?:y|ied|ies))\b"
-    r"[^.;\n]{0,80}\b(?:proof assistant|lean)\b|"
-    r"\b(?:proof assistant|lean)\b[^.;\n]{0,80}"
-    r"\b(?:verif(?:y|ied|ies)|formaliz(?:e|ed|es)|prove(?:s|d)|certif(?:y|ied|ies))\b",
-    re.I,
-)
 _EVIDENCE_STEMS = ("duplic", "restrict", "line", "region")
-
-
-def _limitation_is_valid(value: str) -> bool:
-    """Accept limitations that genuinely negate proof-assistant verification.
-
-    The negation must appear within 30 chars before the proof-assistant phrase
-    in the same clause, so an unrelated negation elsewhere does not rescue an
-    affirmative proof-assistant claim.
-    """
-
-    normalized = re.sub(r"[-_\s]+", " ", value.casefold()).strip()
-    if "proof assistant" not in normalized and "lean" not in normalized:
-        return False
-    for clause in re.split(r"[.;\n]", normalized):
-        if _AFFIRMATIVE_PROOF_ASSISTANT.search(clause) and not (
-            _NEGATED_PROOF_ASSISTANT.search(clause)
-        ):
-            return False
-    return _NEGATED_PROOF_ASSISTANT.search(normalized) is not None
 
 
 def _canonical(values: tuple[int, ...]) -> tuple[int, ...] | None:

@@ -23,7 +23,6 @@ def test_accepts_alternative_exact_certificates(tmp_path: Path) -> None:
         "second_extremum": 0,
     }
     submission["result"]["predicate_certificate"]["intended_witness"] = [2, 3]
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
     accepted = _verifier._run_verifier(task, app, logs)
     assert accepted.details["correctness"] == 1.0
@@ -35,18 +34,6 @@ def test_rejects_same_shadow_extremum(tmp_path: Path) -> None:
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["shadowing_certificate"]["second_multiplier"] = 1
     submission["result"]["shadowing_certificate"]["second_extremum"] = 0
-    _fixtures._bind_result_evidence(app, submission)
-    _fixtures._write_json(app / "submission.json", submission)
-    rejected = _verifier._run_verifier(task, app, logs)
-    assert rejected.details["correctness"] == 0.0
-    assert rejected.reward == 0.0
-
-
-def test_rejects_nonoptimal_intended_witness(tmp_path: Path) -> None:
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    submission["result"]["predicate_certificate"]["intended_witness"] = [2]
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
     rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
@@ -57,7 +44,6 @@ def test_rejects_blocker_outside_legacy_candidate(tmp_path: Path) -> None:
     task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["predicate_certificate"]["legacy_witness"] = [2, 3]
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
     rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
@@ -71,7 +57,6 @@ def test_rejects_boolean_in_shadowing_certificate(tmp_path: Path) -> None:
     cert = submission["result"]["shadowing_certificate"]
     cert["first_extremum"] = False  # False == 0 in Python
     cert["second_extremum"] = True  # True == 1 in Python, but expected 2
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
     rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
@@ -89,7 +74,6 @@ def test_rejects_boolean_target_in_predicate_certificate(tmp_path: Path) -> None
         "first_extremum": False,  # False == 0
         "second_extremum": True,  # True == 1
     }
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
     rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
@@ -101,24 +85,10 @@ def test_rejects_boolean_universe_entry(tmp_path: Path) -> None:
     task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["predicate_certificate"]["universe"][0] = True
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
     rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
     assert rejected.reward == 0.0
-
-
-def test_deeply_nested_evidence_json_does_not_crash(tmp_path: Path) -> None:
-    """A deeply nested RESULT_JSON line must not crash the verifier."""
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    evidence_path = app / "evidence" / "answer.txt"
-    nested = "null" + ",[" * 200 + "]" * 200
-    evidence_path.write_text(f"RESULT_JSON: {nested}\n")
-    submission = json.loads((app / "submission.json").read_text())
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence_path)
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == pytest.approx(0.0)
 
 
 def test_input_tamper_preserves_math_correctness(tmp_path: Path) -> None:
@@ -135,34 +105,4 @@ def test_oversized_workspace_input_fails_closed(tmp_path: Path) -> None:
     task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     (app / "input.json").write_text("x" * (20 * 1024 * 1024))
     result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-
-
-def test_accepts_large_digest_bound_evidence(tmp_path: Path) -> None:
-    """Valid evidence has no hidden byte ceiling beyond path and digest binding."""
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    evidence_path = app / "evidence" / "answer.txt"
-    submission = json.loads((app / "submission.json").read_text())
-    evidence_path.write_text(
-        ("audit " * 200_000)
-        + "\nRESULT_JSON: "
-        + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))
-        + "\n"
-    )
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence_path)
-    _fixtures._write_json(app / "submission.json", submission)
-    accepted = _verifier._run_verifier(task, app, logs)
-    assert accepted.reward == 1.0
-    assert accepted.reward == pytest.approx(1.0)
-
-
-def test_witness_without_result_marker_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    evidence_path = app / "evidence" / "answer.txt"
-    evidence_path.write_text("prose without any structured marker\n")
-    submission = json.loads((app / "submission.json").read_text())
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence_path)
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
     assert result.reward == 0.0

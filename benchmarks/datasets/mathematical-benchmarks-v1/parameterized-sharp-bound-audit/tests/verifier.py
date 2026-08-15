@@ -5,11 +5,8 @@ from pathlib import Path
 from typing import Any, cast
 
 from verifier_support import (
-    aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
@@ -285,38 +282,6 @@ def _result_is_valid(result: object, source: dict[str, Any]) -> bool:
     )
 
 
-def _evidence_matches_result(evidence: object, result: dict[str, Any]) -> bool:
-    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-        return False
-    if not isinstance(evidence, list) or not evidence:
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        if target.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        text = target.read_text()
-        markers = [
-            line.removeprefix("RESULT_JSON:").strip()
-            for line in text.splitlines()
-            if line.startswith("RESULT_JSON:")
-        ]
-        boundary_markers = [
-            line.removeprefix("BOUNDARY_FAMILY_JSON:").strip()
-            for line in text.splitlines()
-            if line.startswith("BOUNDARY_FAMILY_JSON:")
-        ]
-        return bool(
-            len(markers) == 1
-            and json.loads(markers[0]) == result
-            and len(boundary_markers) == 1
-            and json.loads(boundary_markers[0]) == result["boundary_family"]
-        )
-    except (OSError, UnicodeError, ValueError):
-        return False
-
-
 def main() -> None:
     submission = load_submission()
     submission_data = submission if isinstance(submission, dict) else {}
@@ -324,16 +289,7 @@ def main() -> None:
     input_binding = bool(source)
     result = submission_data.get("result")
     math_ok = bool(submission is not None and _result_is_valid(result, source))
-    ev_ok = bool(
-        math_ok
-        and isinstance(result, dict)
-        and _evidence_matches_result(submission_data.get("witness"), result)
-    )
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=ev_ok,
-        protocol_ok=bool(input_binding and submission is not None),
-    )
+    reward = float(math_ok and input_binding)
 
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
@@ -341,7 +297,6 @@ def main() -> None:
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(ev_ok),
                 "input_binding": float(input_binding),
                 "reward": reward,
             }

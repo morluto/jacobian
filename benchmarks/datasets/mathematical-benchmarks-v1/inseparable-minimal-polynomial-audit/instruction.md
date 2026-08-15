@@ -16,16 +16,13 @@ degree, zero derivative, and repeated-root conclusion.  Include any prime
 alternatives.
 
 A factorization alone, a numeric instance alone, or the source conclusion
-alone is insufficient.  Write `/app/submission.json` and bind
-`/app/evidence/answer.txt`.  Do not claim `VERIFIED`; the checker validates the
-symbolic certificate contract but is not a field-theory proof assistant.
+alone is insufficient. Write `/app/submission.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

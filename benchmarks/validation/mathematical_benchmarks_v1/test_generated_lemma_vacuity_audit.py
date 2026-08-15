@@ -23,7 +23,6 @@ def test_enforces_visible_divisor_witness_bounds(tmp_path: Path) -> None:
         2 * audit["a"] + 1,
     ]
     audit["original_premise_holds"] = False
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
     rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0

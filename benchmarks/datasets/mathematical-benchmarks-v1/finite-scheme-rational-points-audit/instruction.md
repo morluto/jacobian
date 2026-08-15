@@ -16,7 +16,7 @@ The public submission contract is generated below from `tests/public_contract.js
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Submit complete finite-algebra structure constants, exhaustive rational-point lists, the induced point bijection, and a reducedness-separating nilpotent certificate. The verifier reconstructs every operation over F_5.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

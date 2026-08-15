@@ -8,7 +8,7 @@ Choose any certificate dimension from 5 through 12. Submit the full sparse-affin
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Submit the result and the required replay artifact. The verifier recomputes the task-specific mathematical claim from the frozen input.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

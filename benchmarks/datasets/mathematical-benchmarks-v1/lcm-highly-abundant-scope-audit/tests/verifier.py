@@ -5,13 +5,10 @@ from typing import Any
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-MAX_EVIDENCE_BYTES = 1_048_576
 MAX_DELTA_ITEMS = 32
 MAX_DELTA_ABS = 16
 MAX_DELTA_PRIME = 10_000
@@ -203,37 +200,17 @@ def _result_is_valid(result: object, source: dict[str, Any]) -> bool:
     return False
 
 
-def _evidence_is_valid(evidence: object) -> bool:
-    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-        return False
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        if target.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        text = target.read_text().strip()
-    except (OSError, UnicodeError):
-        return False
-    return len(text) >= 20
-
-
 def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
     math_correct = bool(_result_is_valid(data.get("result"), _load_frozen_input()))
-    witness_valid = bool(math_correct and _evidence_is_valid(data.get("witness")))
-    correct = math_correct and witness_valid
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(witness_valid),
-                "reward": float(correct),
+                "reward": float(math_correct),
             }
         )
     )

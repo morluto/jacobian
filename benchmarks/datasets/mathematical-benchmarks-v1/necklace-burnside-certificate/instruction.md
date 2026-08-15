@@ -2,7 +2,7 @@
 
 For cyclic binary words of length 16, forbid every cyclic run of three equal bits. Count equivalence classes under all rotations and reflections.
 
-Submit a complete certificate by writing `/app/submission.json` conforming to `submission_schema.json` and a digest-bound evidence file at `/app/evidence/answer.txt`. The submission `result` object must contain:
+Submit a complete certificate by writing `/app/submission.json` conforming to `submission_schema.json` and a digest-bound task-specific witness file at `/app/evidence/answer.txt`. The submission `result` object must contain:
 
 1. `valid_labelled_words`: the total number of valid labelled words;
 2. `rotation_fixed_counts`: a 16-element array where index `k` is the number of valid words fixed by rotation by `k` positions (`word[i] == word[(i+k) mod 16]`);
@@ -17,7 +17,7 @@ The verifier independently enumerates all 65,536 binary words, applies the cycli
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

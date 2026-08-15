@@ -15,11 +15,5 @@
     ],
     "j": 6,
     "prime": 2
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:15f2b4421e2053a8024a7d9f42b82c7db15d41bd426a22138a3fe5192b3b881c"
-    }
-  ]
+  }
 }

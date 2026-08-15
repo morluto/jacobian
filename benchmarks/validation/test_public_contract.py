@@ -73,6 +73,11 @@ def _make_task_dir(tmp_path: Path, name: str = "task") -> Path:
     return task
 
 
+def test_task_template_contract_is_current() -> None:
+    task = Path("benchmarks/templates/task")
+    assert check(task / "tests" / "public_contract.json", task) == []
+
+
 # ---------------------------------------------------------------------------
 # Model validation
 # ---------------------------------------------------------------------------
@@ -83,6 +88,14 @@ class TestModelValidation:
         contract = PublicContract.model_validate(_base_contract_dict())
         assert contract.schema_version == SCHEMA_VERSION
         assert contract.task_id == "jacobian/test-fixture-task"
+
+    def test_result_only_contract_uses_no_witness_default(self) -> None:
+        data = _base_contract_dict()
+        data.pop("witness")
+        data.pop("required_witness_filenames")
+        contract = PublicContract.model_validate(data)
+        assert contract.witness.min_items == 0
+        assert contract.witness.max_items == 0
 
     def test_extra_field_rejected(self) -> None:
         data = _base_contract_dict() | {"unexpected": True}
@@ -109,6 +122,22 @@ class TestModelValidation:
     def test_legacy_envelope_declarations_are_rejected(self, field: str) -> None:
         with pytest.raises(ValueError, match="extra"):
             PublicContract.model_validate(_base_contract_dict() | {field: {}})
+
+    @pytest.mark.parametrize(
+        "note",
+        (
+            "Claim COMPUTED assurance.",
+            "Include the limitations array.",
+            "Write one RESULT_JSON line in digest-bound evidence.",
+        ),
+    )
+    def test_legacy_protocol_language_is_rejected_from_public_notes(
+        self, note: str
+    ) -> None:
+        with pytest.raises(ValueError, match="public_notes"):
+            PublicContract.model_validate(
+                _base_contract_dict() | {"public_notes": note}
+            )
 
     def test_evidence_max_ge_min(self) -> None:
         data = _base_contract_dict() | {

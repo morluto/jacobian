@@ -19,7 +19,6 @@ def _mutate(tmp_path: Path, mutation):
     task, app, logs = _prepare(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     mutation(submission)
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
     return _verifier._run_verifier(task, app, logs)
 
@@ -43,7 +42,6 @@ def test_alternative_term_order_is_accepted(tmp_path: Path) -> None:
     task, app, logs = _prepare(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["norm_polynomial"].reverse()
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
     reward = _verifier._run_verifier(task, app, logs)
     assert reward.reward == 1.0
@@ -84,42 +82,6 @@ def test_noncanonical_rational_is_rejected(tmp_path: Path) -> None:
         lambda s: s["result"]["p_numerator"][0].__setitem__("coefficient", "2/2"),
     )
     assert reward.details["correctness"] == 0.0
-    assert reward.reward == 0.0
-
-
-def test_unrelated_witness_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _prepare(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    evidence.write_text("The quick brown fox jumps over the lazy dog.\n")
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-    _fixtures._write_json(app / "submission.json", submission)
-    reward = _verifier._run_verifier(task, app, logs)
-    assert reward.reward == 0.0
-    assert reward.reward == 0.0
-
-
-def test_witness_result_mismatch_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _prepare(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    evidence.write_text("RESULT_JSON: {}\n")
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-    _fixtures._write_json(app / "submission.json", submission)
-    reward = _verifier._run_verifier(task, app, logs)
-    assert reward.reward == 0.0
-    assert reward.reward == 0.0
-
-
-def test_broken_witness_path_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _prepare(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    submission["witness"] = [
-        {"path": "../answer.txt", "sha256": submission["witness"][0]["sha256"]}
-    ]
-    _fixtures._write_json(app / "submission.json", submission)
-    reward = _verifier._run_verifier(task, app, logs)
-    assert reward.reward == 0.0
     assert reward.reward == 0.0
 
 

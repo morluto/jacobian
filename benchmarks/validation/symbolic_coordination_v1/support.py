@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import pathlib
@@ -21,10 +20,6 @@ def task(task_id: str) -> Path:
     return path
 
 
-def digest(path: Path) -> str:
-    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def write_json(path: Path, value: object) -> None:
     path.write_text(
         json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n",
@@ -37,28 +32,11 @@ def prepare(tmp_path: Path, task_id: str) -> tuple[Path, Path, Path]:
     root = tmp_path / task_id
     app = root / "app"
     logs = root / "logs"
-    (app / "evidence").mkdir(parents=True)
+    app.mkdir(parents=True)
     logs.mkdir(parents=True)
     shutil.copy2(task_path / "environment/input.json", app / "input.json")
-    shutil.copy2(
-        task_path / "solution/certificate.json", app / "evidence/certificate.json"
-    )
     shutil.copy2(task_path / "solution/submission.json", app / "submission.json")
     return task_path, app, logs
-
-
-def rebind_evidence(app: Path, submission: dict) -> None:
-    evidence = {
-        "schema_version": "1",
-        "task_id": json.loads((app / "input.json").read_text())["task_id"],
-        "result": submission["result"],
-    }
-    evidence_path = app / "evidence/certificate.json"
-    write_json(evidence_path, evidence)
-    submission["witness"] = [
-        {"path": "evidence/certificate.json", "sha256": digest(evidence_path)}
-    ]
-    write_json(app / "submission.json", submission)
 
 
 def run_verifier(task_path: Path, app: Path, logs: Path) -> VerifierOutput:

@@ -24,25 +24,11 @@ denominator `1`.
 For every point listed in `input.json`, submit the exact specialized matrix
 rank and cokernel dimension. Each point must occur exactly once.
 
-The digest-bound `evidence/answer.txt` must contain exactly five lines:
-
-1. `fiber-dimension-fitting-repair-v1`
-2. `tensor-repair: <submitted tensor_repair>`
-3. `global-repair: <submitted global_repair>`
-4. `generator-count: <number of submitted ideal_generators>`
-5. `fiber-dimensions: <points sorted lexicographically as x,y:dimension and joined by semicolons>`
-
-Use conclusion `SEMICONTINUITY_PROOF_REPAIRED`, scope
-`FROZEN_AFFINE_PRESENTATION_AND_IDENTIFIED_PROOF_GAPS`, completeness `COMPLETE`,
-and claimed assurance `COMPUTED`. Include exactly this limitation:
-`The verifier checks the frozen affine presentation and the two identified proof obligations; it does not formalize the full scheme-theoretic semicontinuity theorem.`
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier reports proof repair, symbolic ideal equality, fiber ranks, evidence, input binding, scope, completeness, limitations, protocol, and assurance separately. Sparse polynomials use canonical rational coefficients and bounded two-variable exponent vectors; duplicate monomials and zero terms are rejected.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

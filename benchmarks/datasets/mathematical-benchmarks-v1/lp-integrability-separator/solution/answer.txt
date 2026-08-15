@@ -1,7 +1,0 @@
-Choose beta=1. At p=2, both x=e^-t substitutions give the exact integral
-integral_1^infinity t^-2 dt=1, using the log factor to convert the power-law
-singularity into an integrable tail. For p>2 the origin power exponent -p/2
-is below -1, so the origin diverges despite the logarithm. For 0<p<2 the
-infinity power exponent -p/2 is above -1, so the tail diverges. Hence the
-declared function lies in L^p exactly at p=2.
-RESULT_JSON:{"beta":"1","origin_power_coefficient":"-1/2","infinity_power_coefficient":"-1/2","p2_log_exponent":"-2","p2_integral_each":"1","critical_p":"2","lower_regime":{"p_interval":"0<p<2","obstruction":"INFINITY_POWER_TAIL"},"upper_regime":{"p_interval":"p>2","obstruction":"ORIGIN_POWER_SINGULARITY"}}

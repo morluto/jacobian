@@ -2,11 +2,8 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -69,50 +66,18 @@ def _complete_obstruction(result):
     )
 
 
-def _evidence_matches_result(evidence, result):
-    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text()
-        marker = next(
-            line.removeprefix("RESULT_JSON:").strip()
-            for line in text.splitlines()
-            if line.startswith("RESULT_JSON:")
-        )
-        return json.loads(marker) == result and any(
-            line.strip() and not line.startswith("RESULT_JSON:")
-            for line in text.splitlines()
-        )
-    except (OSError, StopIteration, UnicodeError, ValueError):
-        return False
-
-
 def main():
     submission = load_submission()
     input_binding = workspace_input_is_bound()
     math_ok = bool(
         submission is not None and _complete_obstruction(submission.get("result"))
     )
-    ev_ok = bool(
-        submission is not None
-        and _evidence_matches_result(
-            submission.get("witness"), submission.get("result")
-        )
-    )
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=ev_ok,
-        protocol_ok=bool(input_binding and submission is not None),
-    )
+    reward = float(math_ok and input_binding)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(ev_ok),
                 "input_binding": float(input_binding),
                 "reward": reward,
             }

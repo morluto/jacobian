@@ -1,4 +1,0 @@
-The constructive sequence is realized by the submitted simple graph. The second
-sequence has even degree sum but fails the Erdős–Gallai inequality at k=3:
-the first three degrees sum to 13 while the exact right side is 11. This finite
-audit does not enumerate all realizations or generalize beyond the two cases.

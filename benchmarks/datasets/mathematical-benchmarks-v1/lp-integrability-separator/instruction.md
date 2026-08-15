@@ -10,25 +10,19 @@ Use the frozen two-tail family
 `f(x) = x^(-1/2) (log x)^(-beta)` for `x > e`,
 
 but choose your own canonical rational `beta > 1/2`. Submit exact transformed
-`p=2` integrals and a regime certificate explaining why the origin obstructs
-every `p>2` and infinity obstructs every `0<p<2`. Do not use numeric sampling.
+`p=2` integrals and a regime certificate for the origin obstruction at every
+`p>2` and infinity obstruction at every `0<p<2`. Do not use numeric sampling.
 
-Every rational field (`beta`, `p2_log_exponent`, `p2_integral_each`) accepts any
-mathematically equivalent rational written in canonical or non-canonical form
-(for example `1`, `1/1`, `2/1`, `-2`, `-2/1` are all accepted); the verifier
-compares exact values, not lexical strings.
-
-Write `/app/submission.json` and `/app/evidence/answer.txt` using the provided
-schema. The evidence file must be at most 64 KiB and must contain exactly one
-`RESULT_JSON:` line whose JSON equals the submitted `result` object. Each
-rational field is at most 80 characters. Claim no assurance above `COMPUTED`.
+Every rational field (`beta`, `p2_log_exponent`, `p2_integral_each`) is limited
+to 80 characters and accepts any mathematically equivalent rational written in
+canonical or non-canonical form (for example `1`, `1/1`, `2/1`, `-2`, `-2/1`
+are all accepted); the verifier compares exact values, not lexical strings.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

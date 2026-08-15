@@ -1,1 +1,0 @@
-Inclusion-exclusion factors the intersection matrix as the subset-zeta matrix times signs by cardinality times its transpose. The zeta matrix is unit triangular in cardinality order. Thus the determinant is controlled by the number of nonempty even subsets, computed as 2^(n-1)-1. This is a computed certificate.

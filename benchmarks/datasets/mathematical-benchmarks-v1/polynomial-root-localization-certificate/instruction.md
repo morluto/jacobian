@@ -10,16 +10,15 @@ must expose four nonnegative weights, their telescoping sum, the coefficients
 of `(1-z)Q(z)`, the rearranged root identity, and the powers controlled when
 `|z|<1`. Do not use numerical sampling.
 
-Write `submission.json` to the supplied schema. Write
-`evidence/root-bound-certificate.json` with exactly `schema_version`, `task_id`,
-`result`, and `limitations`, copy the corresponding submission values exactly,
-and bind it by SHA-256. Claim at most `COMPUTED` and use limitation code
-`ELEMENTARY_COMPLEX_MODULUS_LEMMAS_TRUSTED`.
+Write `submission.json` to the supplied schema. Write the declared
+task-specific witness at `evidence/root-bound-certificate.json` with
+`schema_version: "1"`, the task ID, and the submitted `result`, then bind its
+SHA-256 digest in the submission.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

@@ -1,5 +1,0 @@
-fiber-dimension-fitting-repair-v1
-tensor-repair: RIGHT_EXACTNESS_SUFFICES_RESIDUE_FIELD_NOT_FLAT_IN_GENERAL
-global-repair: GLOBAL_FITTING_IDEAL_REPLACES_ARBITRARY_UNION
-generator-count: 3
-fiber-dimensions: 0,0:2;0,1:0;1,0:0;1,1:0

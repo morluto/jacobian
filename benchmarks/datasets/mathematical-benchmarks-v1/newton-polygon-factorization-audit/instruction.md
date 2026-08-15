@@ -17,19 +17,13 @@ that at least one added left-edge condition in the corrected statement fails,
 so it does not refute the repair.
 
 Coefficient arrays are in ascending degree order and use canonical decimal
-integer strings. Write a concise mathematical explanation to
-`/app/evidence/answer.txt` covering the Newton polygon analysis: the old
-right-edge hypotheses hold at the submitted indices, the factor constant-term
-valuations contradict the old conclusion, and at least one corrected left-edge
-condition fails so the witness does not refute the repair. Do not claim a
-formal verification of the general Newton-polygon theorem.
+integer strings.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Submit a prime, two canonical ascending integer coefficient arrays, and indices ell,j. Each coefficient string is limited to 30 characters. The verifier derives the product, valuations, lower hull, old-hypothesis failure, and corrected-hypothesis boundary. The evidence file must contain a mathematical explanation covering the Newton polygon analysis, the old hypothesis failure, and the corrected left-edge repair boundary; unrelated or empty text does not earn evidence credit. In the solver's own words, the limitations array must disclose that Dumas's theorem or the corrected general lemma is not formally verified here.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

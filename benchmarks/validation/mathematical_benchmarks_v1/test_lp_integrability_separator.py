@@ -3,11 +3,6 @@ import json
 import sys
 from pathlib import Path
 
-from benchmarks.validation.mathematical_benchmarks_v1 import (
-    _fixtures,
-    _verifier,
-)
-
 ROOT = Path(__file__).resolve().parents[3]
 TASK = (
     ROOT / "benchmarks/datasets/mathematical-benchmarks-v1/lp-integrability-separator"
@@ -88,63 +83,3 @@ def test_valid_result_independent_of_assurance():
 
 
 # --- T2: evidence content validation ---
-
-
-def _evidence_case(tmp_path: Path, text: str):
-    """Prepare a computed case with a custom evidence body and return the
-    verifier result, so evidence resolution goes through the /app -> tmp_path
-    mapping used by _verifier._run_verifier."""
-    task, app, logs = _fixtures._prepare_case(
-        tmp_path, "lp-integrability-separator", "computed"
-    )
-    submission = json.loads((app / "submission.json").read_text())
-    evidence_path = app / "evidence" / "answer.txt"
-    evidence_path.write_text(text)
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence_path)
-    _fixtures._write_json(app / "submission.json", submission)
-    return _verifier._run_verifier(task, app, logs)
-
-
-def test_valid_evidence_rejects_empty_text(tmp_path: Path):
-    result = _evidence_case(tmp_path, "")
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_valid_evidence_rejects_unrelated_text(tmp_path: Path):
-    result = _evidence_case(tmp_path, "hello world\n")
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_valid_evidence_rejects_missing_result_json_marker(tmp_path: Path):
-    text = (
-        "At p=2 the substitution gives the integral. "
-        "The origin diverges for p>2 and infinity diverges for 0<p<2. "
-        "The log factor controls integrability.\n"
-    )
-    result = _evidence_case(tmp_path, text)
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_valid_evidence_rejects_mismatched_result_json(tmp_path: Path):
-    wrong = result("3/4", "-3/2", "2")
-    text = (
-        "RESULT_JSON:" + json.dumps(wrong) + "\n"
-        "At p=2 the substitution gives the integral. "
-        "The origin diverges for p>2 and infinity diverges for 0<p<2. "
-        "The log factor controls integrability.\n"
-    )
-    res = _evidence_case(tmp_path, text)
-    assert res.reward == 0.0
-    assert res.reward == 0.0
-
-
-def test_valid_evidence_accepts_bound_result(tmp_path: Path):
-    task, app, logs = _fixtures._prepare_case(
-        tmp_path, "lp-integrability-separator", "computed"
-    )
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 1.0
-    assert result.reward == 1.0

@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
-from verifier_support import json_value_equal, resolve_evidence
+from verifier_support import json_value_equal
 
 VARIABLES = {"u", "v", "w"}
 
@@ -17,10 +15,9 @@ STEP_KEYS = frozenset({"position", "label", "substitution", "stack_depth", "stac
 
 @dataclass
 class VerifyResult:
-    """Task-owned replay and witness diagnostics for one submission."""
+    """Task-owned replay diagnostic for one submission."""
 
     correctness: bool
-    witness_validity: bool
     message: str
 
 
@@ -137,32 +134,6 @@ def _trace_types_valid(trace: object) -> bool:
     return True
 
 
-def _witness_binds_result(
-    witness: object, result: dict[str, Any], task_root: Path
-) -> bool:
-    """Bind the declared witness to the exact replayed result."""
-
-    target = resolve_evidence(
-        witness[0] if isinstance(witness, list) and len(witness) == 1 else None,
-        expected_path="evidence/answer.txt",
-        workspace=task_root,
-    )
-    if target is None:
-        return False
-    try:
-        lines = target.read_text().splitlines()
-    except (OSError, UnicodeError, MemoryError):
-        return False
-    marker_lines = [line for line in lines if line.startswith("RESULT_JSON:")]
-    if len(marker_lines) != 1:
-        return False
-    try:
-        marker_value = json.loads(marker_lines[0].removeprefix("RESULT_JSON:").strip())
-    except (TypeError, ValueError, RecursionError, MemoryError):
-        return False
-    return json_value_equal(marker_value, result)
-
-
 def _valid_proof_and_positions(
     result: dict[str, Any], input_data: dict[str, Any]
 ) -> tuple[list[str] | None, str | None]:
@@ -218,26 +189,21 @@ def _mathematical_failure(result: object, input_data: dict[str, Any]) -> str | N
 
 
 def verify_submission(
-    task_root: Path, submission: dict[str, Any], input_data: dict[str, Any]
+    submission: dict[str, Any], input_data: dict[str, Any]
 ) -> VerifyResult:
     result = submission.get("result") if isinstance(submission, dict) else None
     result_shape_ok = isinstance(result, dict) and set(result) == RESULT_KEYS
     math_failure = _mathematical_failure(result, input_data)
     correctness = bool(math_failure is None)
-    witness_validity = bool(
-        isinstance(result, dict)
-        and _witness_binds_result(submission.get("witness"), result, task_root)
-    )
 
-    if result_shape_ok and correctness and witness_validity:
+    if result_shape_ok and correctness:
         message = "accepted"
     elif not correctness:
         message = math_failure or "mathematical verification failed"
     else:
-        message = "witness binding failed"
+        message = "result shape mismatch"
 
     return VerifyResult(
         correctness,
-        witness_validity,
         message,
     )

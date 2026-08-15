@@ -1,5 +1,4 @@
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -11,39 +10,6 @@ from verifier_support import (
 W = Path("/app")
 E = Path("/tests")
 
-# Lemma forms that, when used affirmatively about the open problem, claim it is
-# solved or machine/formally verified. Base present-tense verbs ("solve",
-# "verify", "check") are intentionally excluded so legitimate prose such as "the
-# verifier recomputes" or "does not solve" is not flagged. Past-tense "checked"
-# is included so affirmative claims such as "Lean checked this result" are
-# caught as false certification above the COMPUTED assurance ceiling.
-_AFFIRMATIVE_LEMMAS = (
-    "solved",
-    "solves",
-    "verified",
-    "proved",
-    "proven",
-    "proves",
-    "certified",
-    "settled",
-    "checked",
-)
-_NEGATION_TOKENS = (
-    "not",
-    "no",
-    "without",
-    "doesnt",
-    "cannot",
-    "cant",
-    "never",
-    "nor",
-    "neither",
-)
-_SCOPE_LIMITING_RE = re.compile(
-    r"\b(?:not|no|without|cannot|never|nor|neither|unsolved)\b"
-    r"|\bdoesn(?:'t|t)\b"
-)
-
 
 def _fraction(text):
     if not isinstance(text, str):
@@ -53,16 +19,6 @@ def _fraction(text):
     except (ValueError, ZeroDivisionError):
         return None
     return value if str(value) == text else None
-
-
-def _words(text):
-    normalized = (
-        text.casefold()
-        .replace("isn't", "is not")
-        .replace("doesn't", "does not")
-        .replace("can't", "can not")
-    )
-    return re.findall(r"[a-z]+", normalized)
 
 
 def _model(value, *, intended, proposed, bound, lower, upper):

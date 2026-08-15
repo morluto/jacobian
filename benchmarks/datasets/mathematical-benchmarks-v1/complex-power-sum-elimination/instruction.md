@@ -9,26 +9,17 @@ certificate that:
 4. certifies that each submitted branch is achievable.
 
 The optional `recurrence` and `hypothesis_factorization` fields describe one
-accepted exact certificate format; they are not required, and any derivation
-strategy may be used.
+accepted exact certificate format; they are not required.
 
 The two algebraic branches may appear in either order. Rational numbers must be
-reduced with positive denominators. Write the result to
-`/app/submission.json`, place a concise derivation in
-`/app/evidence/answer.txt`, and bind the evidence by SHA-256. The derivation
-must state the power-sum recurrence, both eliminated polynomials, why both
-branches occur, and the denominator-norm checks.
-
-Do not claim `VERIFIED`: the clean-room checker replays exact polynomial and
-quadratic-field arithmetic, but no external proof assistant checks the general
-complex-algebra argument.
+reduced with positive denominators. Write the result to `/app/submission.json`
+in the published schema.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

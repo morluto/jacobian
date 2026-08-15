@@ -19,7 +19,6 @@ def _case(tmp_path: Path):
 
 
 def _rewrite(app: Path, submission: dict) -> None:
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
 
 
@@ -149,30 +148,6 @@ def test_rejects_noncanonical_basis_coefficient(tmp_path: Path) -> None:
 
     rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
-    assert rejected.reward == 0.0
-
-
-def test_witness_without_result_marker_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    evidence.write_text("The certificate has many exact polynomial entries.\n")
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-    _fixtures._write_json(app / "submission.json", submission)
-    rejected = _verifier._run_verifier(task, app, logs)
-    assert rejected.reward == 0.0
-    assert rejected.reward == 0.0
-
-
-def test_witness_result_mismatch_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    evidence.write_text("RESULT_JSON: {}\n")
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-    _fixtures._write_json(app / "submission.json", submission)
-    rejected = _verifier._run_verifier(task, app, logs)
-    assert rejected.reward == 0.0
     assert rejected.reward == 0.0
 
 

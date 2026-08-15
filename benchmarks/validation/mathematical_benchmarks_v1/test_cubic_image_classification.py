@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -13,29 +12,11 @@ TASK_PATH = Path(__file__).resolve().parents[3] / (
 )
 
 
-def _digest(path: Path) -> str:
-    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def _write_json(path: Path, value: object) -> None:
     path.write_text(
         json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n",
         encoding="utf-8",
     )
-
-
-def _bind_result_witness(app: Path, submission: dict) -> None:
-    """Rebind the RESULT_JSON marker in the witness file to the submission result."""
-    evidence_path = app / "evidence" / "answer.txt"
-    lines = evidence_path.read_text().splitlines()
-    marker = "RESULT_JSON:" + json.dumps(
-        submission["result"], sort_keys=True, separators=(",", ":")
-    )
-    evidence_path.write_text(
-        "\n".join(marker if line.startswith("RESULT_JSON:") else line for line in lines)
-        + "\n"
-    )
-    submission["witness"][0]["sha256"] = _digest(evidence_path)
 
 
 def _case(tmp_path: Path):
@@ -46,18 +27,11 @@ def _case(tmp_path: Path):
     logs.mkdir(parents=True)
     shutil.copy2(TASK_PATH / "environment" / "input.json", app / "input.json")
     submission = json.loads((TASK_PATH / "solution" / "submission.json").read_text())
-    for descriptor in submission["witness"]:
-        evidence_path = Path(descriptor["path"])
-        destination = app / evidence_path
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(TASK_PATH / "solution" / evidence_path.name, destination)
-        descriptor["sha256"] = _digest(destination)
     _write_json(app / "submission.json", submission)
     return TASK_PATH, app, logs
 
 
 def _rewrite(app: Path, submission: dict) -> None:
-    _bind_result_witness(app, submission)
     _write_json(app / "submission.json", submission)
 
 

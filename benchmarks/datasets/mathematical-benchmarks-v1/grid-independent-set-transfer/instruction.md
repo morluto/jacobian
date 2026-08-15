@@ -4,12 +4,11 @@ For each `n` from 2 through 5, count black/white colorings of an `n × n` grid w
 
 Use row masks. Submit, for every `n`, the sorted list of horizontally valid masks, the number of ordered vertically compatible mask pairs, the total number of partial colorings after each successive row, and the final count `x_n`. Also submit `x_2+x_3+x_4+x_5`. The four cases may appear in any order in the `cases` array; each case is matched by its `n` value.
 
-Write `submission.json` and digest-bind `evidence/answer.txt`, which must be a JSON object that copies `result` and `limitations` exactly and includes `schema_version` set to `"1"` and `task_id` set to the `task_id` value from `/app/input.json`. The verifier reconstructs every state and transition independently. A final scalar without the intermediate transfer certificate is incomplete. Claim only `COMPUTED`; the scope is the four frozen finite grids.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

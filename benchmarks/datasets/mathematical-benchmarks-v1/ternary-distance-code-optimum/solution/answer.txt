@@ -1,5 +1,0 @@
-An 18-word ternary code exists with pairwise Hamming distance four or six.
-Its distance distribution is A0=1, A4=15, A6=2. The nonnegative combination
-(7/12)D1+(1/6)D2 is a Delsarte dual certificate equal to
-18-(1+A4+A6), proving the matching upper bound.
-This is an exact COMPUTED certificate, not an independently verified theorem.

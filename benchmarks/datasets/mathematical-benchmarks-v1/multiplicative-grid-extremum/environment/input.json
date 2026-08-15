@@ -1,1 +1,22 @@
-{"task_id":"jacobian/multiplicative-grid-extremum","source":{"dataset":"AI-MO/CombiBench","revision":"882ba08befd0856f5364db1e53d58c7e2cf704f9","config":"default","split":"test_with_solution","row":60,"source_id":"izho_2014_p3","license":"MIT"},"set_size":100,"allowed_ratios":[2,3],"integer_bounds":{"minimum":1,"maximum":100000000},"claimed_maximum":180,"assurance_ceiling":"COMPUTED"}
+{
+  "task_id": "jacobian/multiplicative-grid-extremum",
+  "source": {
+    "dataset": "AI-MO/CombiBench",
+    "revision": "882ba08befd0856f5364db1e53d58c7e2cf704f9",
+    "config": "default",
+    "split": "test_with_solution",
+    "row": 60,
+    "source_id": "izho_2014_p3",
+    "license": "MIT"
+  },
+  "set_size": 100,
+  "allowed_ratios": [
+    2,
+    3
+  ],
+  "integer_bounds": {
+    "minimum": 1,
+    "maximum": 100000000
+  },
+  "claimed_maximum": 180
+}

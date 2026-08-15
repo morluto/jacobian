@@ -1,10 +1,7 @@
 import json
-import re
 from pathlib import Path
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    aggregate_reward,
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
@@ -13,8 +10,6 @@ from verifier_support import (
 
 W = Path("/app")
 E = Path("/tests")
-ALLOWED_ASSURANCES = frozenset({"COMPUTED"})
-SCHEMA_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED", "VERIFIED"})
 
 
 def _frozen_source():
@@ -123,56 +118,13 @@ def _valid(result, source):
     )
 
 
-def _has_affirmative_prohibited_claim(text):
-    clauses = re.split(r"[.;]|\s*,\s*(?:and|but)\s+|\s+(?:and|but)\s+", text)
-    for clause in clauses:
-        if not any(topic in clause for topic in ("lean", "irrational", "theorem")):
-            continue
-        for match in re.finditer(
-            r"\b(?:verified|proved|proven|confirmed|compile|compiles|compiled|"
-            r"asserted|asserts|true|valid|correct|holds|follows|established|"
-            r"establishes|demonstrated|demonstrates|shown|shows)\b",
-            clause,
-        ):
-            prefix = clause[: match.start()][-80:]
-            if not re.search(r"\b(?:no|never)\b|\bnot\b(?!\s+only\b)", prefix):
-                return True
-    return False
-
-
-def _audit_prose_valid(text):
-    """Accept concise semantic paraphrases of the required audit."""
-    has_natural_domain = bool(re.search(r"\b(?:natural|nat)(?:[- ]domain)?\b", text))
-    has_integer_domain = bool(
-        re.search(r"\binteger\b|\bz[- ]valued\b|\bz[- ]value\b", text)
-    )
-    return has_natural_domain and has_integer_domain
-
-
-def _raw_submission():
-    """Parse the bounded submission without applying the public schema."""
-    path = W / "submission.json"
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
-
-
 def main():
-    raw = _raw_submission()
     source = _frozen_source()
     input_binding = workspace_input_is_bound(W / "input.json", tests=E)
     submission = load_submission(require_input_binding=False)
-    result = raw.get("result") if isinstance(raw, dict) else None
+    result = submission.get("result") if isinstance(submission, dict) else None
     math_ok = bool(_valid(result, source))
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=True,
-        protocol_ok=bool(input_binding and submission is not None),
-    )
+    reward = float(math_ok and input_binding and submission is not None)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(

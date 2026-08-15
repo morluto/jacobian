@@ -234,11 +234,5 @@
       5
     ],
     "witness_product_value": 1
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:0b3a353637c4a73f0ab3c1583ed11d6e3e3e48119fb93384e22ea0a5b80feb38"
-    }
-  ]
+  }
 }

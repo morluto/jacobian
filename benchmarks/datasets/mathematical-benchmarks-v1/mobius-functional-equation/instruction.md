@@ -15,12 +15,11 @@ without the orbit certificate cannot pass.
 
 Write `submission.json` and digest-bind
 `evidence/functional-equation-certificate.json`, which must copy `result`
-and `limitations` exactly. Claim at most `COMPUTED`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

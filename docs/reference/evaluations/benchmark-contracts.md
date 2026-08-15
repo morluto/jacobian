@@ -39,6 +39,13 @@ input binding, witness validity, tool use, cost, and failure modes separately.
 Use non-binary scoring only for a public task deliberately decomposed into
 independent, meaningful, replayable mathematical subclaims.
 
+The public submission shape is normally `{ "result": ... }`. Add
+`"witness"` only for a finite task-specific mathematical object that replay
+cannot derive from the frozen input and result; prefer structured certificate
+data in `result`, and never require a duplicate result file or natural-language
+explanation. Generic assurance, scope, completeness, limitation, and
+verification-record fields are not part of ordinary mathematical submissions.
+
 ## Generated output
 
 Task bundles and member records are reproducibility anchors and remain tracked.

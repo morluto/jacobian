@@ -9,7 +9,6 @@ from verifier_support import (
 )
 
 W, T = Path("/app"), Path("/tests")
-LIMITATIONS = ["FINITE_N4_REPLAY", "NO_LEAN_ELABORATION"]
 
 
 def _json_equal(a: object, b: object) -> bool:

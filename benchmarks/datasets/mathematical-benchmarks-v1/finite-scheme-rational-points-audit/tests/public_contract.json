@@ -1,14 +1,5 @@
 {
-  "witness": {
-    "allowed_paths": [],
-    "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "max_items": 0,
-    "media_types": [],
-    "min_items": 0,
-    "payload_shape": null
-  },
-  "public_notes": "Submit complete finite-algebra structure constants, exhaustive rational-point lists, the induced point bijection, and a reducedness-separating nilpotent certificate. The verifier reconstructs every operation over F_5.",
-  "required_witness_filenames": [],
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
   "schema_definitions": {
     "tensor3": {
       "items": {

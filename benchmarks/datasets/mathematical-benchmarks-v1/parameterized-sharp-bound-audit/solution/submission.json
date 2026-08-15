@@ -64,11 +64,5 @@
       "denominator": 4,
       "numerator": 15
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:dc1c162e38f2100d6eade83fb65929ca738fdd9a783e65e31b34ce800437cd34"
-    }
-  ]
+  }
 }

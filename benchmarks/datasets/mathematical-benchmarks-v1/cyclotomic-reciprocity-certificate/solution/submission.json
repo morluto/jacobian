@@ -64,11 +64,5 @@
     ],
     "reciprocal_scalar": 1,
     "root_orbit_conclusion": "INVERSION_CLOSED_WITH_EQUAL_MULTIPLICITIES"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:769c0beaeb600ee0bb9446cc3f04d65f82dc6da820761f28f5cbcec4f92c238a"
-    }
-  ]
+  }
 }

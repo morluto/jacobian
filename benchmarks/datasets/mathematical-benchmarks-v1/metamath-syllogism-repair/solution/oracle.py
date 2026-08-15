@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import sys
 from pathlib import Path
@@ -83,20 +82,7 @@ def build_submission(output_root: Path) -> dict[str, object]:
         "trace": _oracle_replay(input_data, proof),
         "final_expression": input_data["target"],
     }
-    evidence_dir = output_root / "evidence"
-    evidence_dir.mkdir(parents=True, exist_ok=True)
-    compact = json.dumps(result, sort_keys=True, separators=(",", ":"))
-    evidence_path = evidence_dir / "answer.txt"
-    evidence_path.write_text(
-        "The ordered stack applies assertion labels wi, a1i, and mpd by consuming their\n"
-        "hypotheses and recording the corresponding variable substitutions during\n"
-        "unification and replay.\nRESULT_JSON: " + compact + "\n"
-    )
-    digest = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
-    return {
-        "result": result,
-        "witness": [{"path": "evidence/answer.txt", "sha256": digest}],
-    }
+    return {"result": result}
 
 
 if __name__ == "__main__":

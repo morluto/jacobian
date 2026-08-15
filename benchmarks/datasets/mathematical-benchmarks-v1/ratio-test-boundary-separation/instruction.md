@@ -11,15 +11,13 @@ chosen partial-sum checkpoints for the convergent witness.
 
 The verifier independently evaluates every rational checkpoint and replays the
 submitted symbolic identities. A conclusion label or numerical sampling alone
-is insufficient. The evidence must contain exactly one `RESULT_JSON:` line
-equal to the submitted `result` and explain why a ratio limit equal to one is
-inconclusive — both outcomes must be discussed. Do not claim proof-assistant
-verification.
+is insufficient: the result must demonstrate why a ratio limit equal to one is
+inconclusive through both outcomes.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

@@ -805,7 +805,7 @@ def collision_certificate(data: dict[str, object]):
     }
 
 
-def solution(data: dict[str, object]) -> tuple[dict[str, object], bytes]:
+def solution(data: dict[str, object]) -> dict[str, object]:
     if data["case_type"] == "inverse":
         verdict, certificate_value = inverse_certificate(data)
     elif data["case_type"] == "keller":
@@ -819,22 +819,7 @@ def solution(data: dict[str, object]) -> tuple[dict[str, object], bytes]:
         "bindings": data["bindings"],
         "certificate": certificate_value,
     }
-    evidence = {
-        "schema_version": "1",
-        "task_id": data["task_id"],
-        "result": result,
-    }
-    evidence_bytes = json_bytes(evidence)
-    submission = {
-        "result": result,
-        "witness": [
-            {
-                "path": "evidence/certificate.json",
-                "sha256": sha256_bytes(evidence_bytes),
-            }
-        ],
-    }
-    return submission, evidence_bytes
+    return {"result": result}
 
 
 def submission_schema_parts(data: dict[str, object]) -> dict[str, object]:
@@ -1040,7 +1025,7 @@ def submission_schema_parts(data: dict[str, object]) -> dict[str, object]:
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "additionalProperties": False,
-        "required": ["result", "witness"],
+        "required": ["result"],
         "properties": {
             "result": {
                 "type": "object",
@@ -1064,23 +1049,6 @@ def submission_schema_parts(data: dict[str, object]) -> dict[str, object]:
                     "certificate": {"oneOf": certificate_variants},
                 },
             },
-            "witness": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": 1,
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "required": ["path", "sha256"],
-                    "properties": {
-                        "path": {"const": "evidence/certificate.json"},
-                        "sha256": {
-                            "type": "string",
-                            "pattern": "^sha256:[0-9a-f]{64}$",
-                        },
-                    },
-                },
-            },
         },
         "$defs": {
             "rational": rational_schema,
@@ -1101,21 +1069,10 @@ def public_contract(data: dict[str, object]) -> PublicContract:
         "schema_version": "1",
         "task_id": data["task_id"],
         "submission_path": "/app/submission.json",
-        "evidence": {
-            "min_items": 1,
-            "max_items": 1,
-            "allowed_paths": ["evidence/certificate.json"],
-            "digest_pattern": "^sha256:[0-9a-f]{64}$",
-            "media_types": ["application/json"],
-        },
-        "required_artifact_filenames": ["evidence/certificate.json"],
         "public_notes": (
-            "Write evidence/certificate.json as a JSON wrapper with exactly "
-            'these fields: schema_version (the string \\"1\\"), task_id '
-            f'(the string \\"{data["task_id"]}\\"), result (an exact copy of '
-            "the submission result object). Bind that exact regular file by "
-            "SHA-256. The verifier independently replays the mathematics and "
-            "checks the input, artifact, and witness identities."
+            "Submit the terminal certificate inside result. The verifier replays "
+            "the exact polynomial-map predicate and checks the frozen claim "
+            "bindings carried by the result."
         ),
         "submission_result": properties["result"],
         "schema_definitions": schema["$defs"],
@@ -1132,7 +1089,7 @@ def render_task(
     task = DATASET / slug
     input_content = json_bytes(data)
     fixture_digest = sha256_bytes(input_content)
-    submission, evidence = solution(data)
+    submission = solution(data)
     contract = public_contract(data)
     contract_value = contract.model_dump(mode="json", exclude_none=True)
     schema_text = render_submission_schema(contract)
@@ -1141,7 +1098,7 @@ def render_task(
         f"Assess one exact polynomial-map claim in the {data['family']} pilot family."
     )
     task_toml = f'''schema_version = "1.4"
-artifacts = ["/app/submission.json", "/app/evidence"]
+artifacts = ["/app/submission.json"]
 
 [task]
 name = "jacobian/{slug}"
@@ -1202,18 +1159,17 @@ storage_mb = 4096
 The task is offline and solvable without Jacobian. The instruction names no
 operation or tool order. The task-local clean-room verifier imports neither
 Jacobian nor the generator; it replays exact rational polynomial arithmetic,
-input and artifact bindings, and the witness digest. Reward is binary: the
-replayed mathematical predicate and every required binding must hold.
+input and claim bindings. Reward is binary: the replayed mathematical
+predicate and every required binding must hold.
 """.encode()
     instruction_base = f"""# Exact polynomial-map claim assessment
 
 Assess the `{data["family"]}` claim frozen in `input.json` under exact rational
 polynomial semantics. Supplied candidates, provider statuses, partial direction
-checks, and search records are evidence to audit, not authority. Return the
-terminal certificate described by `submission_schema.json`, bind it to the
-exact claim, map, subject, semantics, and checker identities in the input, and
-write the mirrored JSON certificate to
-`evidence/certificate.json` with its SHA-256 digest.
+checks, and search records are inputs to audit, not authority. Return the
+terminal certificate in the `result` described by `submission_schema.json`.
+Its bindings must identify the exact claim, map, subject, semantics, and
+checker identities frozen in the input.
 
 For an inverse claim, the certificate must expose both ordered composition
 residual families. A Keller-condition certificate licenses only its exact
@@ -1237,10 +1193,7 @@ RUN chmod +x /tests/test.sh
 '''.encode()
     solve_sh = b"""#!/bin/sh
 set -eu
-mkdir -p /app/evidence
 cp /solution/submission.json /app/submission.json
-cp /solution/certificate.json /app/evidence/certificate.json
-cp /solution/answer.txt /app/answer.txt
 """
     member = f'''schema_version = "2"
 task_id = "{slug}"
@@ -1263,10 +1216,6 @@ evaluation_owner = "jacobian/symbolic-coordination-v1"
         task / "environment/Dockerfile": environment_docker,
         task / "environment/input.json": input_content,
         task / "environment/submission_schema.json": schema_text.encode(),
-        task / "solution/answer.txt": (
-            str(submission["result"]["verdict"]) + "\n"
-        ).encode(),
-        task / "solution/certificate.json": evidence,
         task / "solution/submission.json": json_bytes(submission),
         task / "solution/solve.sh": solve_sh,
         task / "tests/Dockerfile": tests_docker,

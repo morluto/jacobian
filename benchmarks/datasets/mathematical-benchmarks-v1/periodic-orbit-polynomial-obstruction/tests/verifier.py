@@ -12,12 +12,6 @@ MAX_SUBMISSION_BYTES = 1_048_576
 MAX_INPUT_BYTES = 1_048_576
 MAX_EVIDENCE_BYTES = 1_048_576
 
-_ASSURANCE_ORDER = {
-    "UNVERIFIED": 0,
-    "COMPUTED": 1,
-    "VERIFIED": 2,
-}
-
 # Acceptable proof-step identifiers.  The schema exposes a finite enum so the
 # agent knows the expected format without seeing the exact answer as a single
 # const; the verifier accepts only the correct one.

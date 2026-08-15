@@ -1,4 +1,3 @@
-import hashlib
 import json
 from pathlib import Path
 
@@ -29,16 +28,4 @@ result = {
         term(-1, [0, 0, 3]),
     ],
 }
-text = (
-    "The first and second coordinate changes are birational with the displayed inverse formulas. The conjugate norm is computed exactly over QQ. The modular-form independence theorem remains a trusted premise.\nRESULT_JSON:"
-    + json.dumps(result, sort_keys=True, separators=(",", ":"))
-    + "\n"
-)
-Path("/app/evidence").mkdir(parents=True, exist_ok=True)
-Path("/app/evidence/answer.txt").write_text(text)
-digest = hashlib.sha256(text.encode()).hexdigest()
-submission = {
-    "result": result,
-    "witness": [{"path": "evidence/answer.txt", "sha256": f"sha256:{digest}"}],
-}
-Path("/app/submission.json").write_text(json.dumps(submission, indent=2) + "\n")
+Path("/app/submission.json").write_text(json.dumps({"result": result}, indent=2) + "\n")

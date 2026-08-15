@@ -13,20 +13,13 @@ lower bound of `a^3+b^3+c^3+abc*d`.
    family with one variable tending to zero.
 6. Identify the concrete defect in the frozen explanation.
 
-Write `submission.json` to the exact schema. Put a concise repair in
-`evidence/answer.txt`, include one `RESULT_JSON:` line containing the exact
-submitted result as compact JSON, plus one `BOUNDARY_FAMILY_JSON:` line
-containing the exact submitted `boundary_family` object as compact JSON, and
-bind that file with its SHA-256 digest.
-Use `COMPUTED`, not `VERIFIED`: the checker replays this bounded symbolic
-certificate but is not an external proof assistant.
+Write `submission.json` to the exact schema.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

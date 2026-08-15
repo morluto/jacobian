@@ -11,7 +11,6 @@ from verifier_support import (
 )
 
 W, T = Path("/app"), Path("/tests")
-LIMITATIONS = ["TRIANGLE_INEQUALITY_TRUSTED", "NO_PROOF_ASSISTANT_REPLAY"]
 MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
 
 

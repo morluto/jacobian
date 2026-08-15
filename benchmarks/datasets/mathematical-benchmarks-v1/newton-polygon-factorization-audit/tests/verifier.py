@@ -2,88 +2,18 @@
 
 import json
 import math
-import re
 from fractions import Fraction
 from itertools import pairwise
 from pathlib import Path
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
     workspace_input_is_bound,
 )
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-LIMITATION = (
-    "Dumas's theorem and the corrected general lemma are not machine-formalized."
-)
-ALLOWED_ASSURANCES = frozenset({"UNVERIFIED", "COMPUTED"})
-
-
-def _limitations_valid(value: object) -> bool:
-    if not (isinstance(value, list) and len(value) == 1 and isinstance(value[0], str)):
-        return False
-    text = value[0].casefold()
-    return any(
-        term in text for term in ("dumas", "corrected lemma", "newton polygon")
-    ) and any(
-        term in text
-        for term in ("not formal", "not machine", "not verified", "without formal")
-    )
-
-
-_EXPLANATION_FACTS = {
-    "newton_polygon": (
-        re.compile(r"\bnewton\s+polygon\b"),
-        re.compile(r"\blower\s+hull\b"),
-    ),
-    "old_right_edge_holds": (
-        re.compile(
-            r"\bold\b.{0,64}\b(?:right[- ]edge\s+)?hypotheses?\b"
-            r".{0,48}\b(?:hold|satisf)"
-        ),
-        re.compile(
-            r"\bright[- ]edge\b.{0,64}\b(?:old\s+)?hypotheses?\b"
-            r".{0,48}\b(?:hold|satisf)"
-        ),
-    ),
-    "factor_constant_valuations": (
-        re.compile(r"\bfactor\b.{0,96}\bconstant[- ]terms?\b.{0,64}\bvaluation"),
-        re.compile(r"\bconstant[- ]term\s+valuations?\b.{0,96}\b(?:factor|both)\b"),
-        re.compile(
-            r"\bfactor\s+constants?\b.{0,128}\bvaluations?\b"
-            r".{0,128}\b(?:non[- ]?zero|neither\b.{0,32}\bzero|not\b.{0,32}\bzero)\b"
-        ),
-        re.compile(
-            r"\bfactor\b.{0,128}\bvaluations?\b.{0,128}"
-            r"\b(?:positive|greater\s+than\s+zero|>\s*0)\b"
-        ),
-    ),
-    "corrected_left_edge_fails": (
-        re.compile(
-            r"\bcorrect(?:ed|ion)?\b.{0,96}\bleft[- ]edge\b"
-            r".{0,96}\b(?:fail|does\s+not\s+hold|not\s+satisf)"
-        ),
-        re.compile(
-            r"\bleft[- ]edge\b.{0,96}\b(?:primitiv|gcd|condition)\b"
-            r".{0,64}\b(?:fail|greater\s+than\s+one|>\s*1)"
-        ),
-    ),
-}
-_EXPLANATION_CONTRADICTIONS = (
-    re.compile(r"\bold\s+hypotheses?\b.{0,32}\b(?:fail|do\s+not\s+hold)\b"),
-    re.compile(r"\bconstant[- ]term\s+valuations?\b.{0,32}\b(?:zero|nonpositive)\b"),
-    re.compile(
-        r"\bfactor\s+constants?\b.{0,64}\bvaluations?\b.{0,64}"
-        r"\b(?:one\b.{0,16}\bzero|includes?\s+zero)\b"
-    ),
-    re.compile(r"\bcorrected?\s+left[- ]edge\b.{0,32}\bconditions?\s+hold\b"),
-    re.compile(r"(?<!not )(?<!n't )\brefutes?\b.{0,32}\b(?:repair|correction)\b"),
-)
 
 
 def _load_frozen_input() -> dict:
@@ -248,66 +178,14 @@ def _certificate_valid(result: object, source: dict) -> bool:
     )
 
 
-def _newton_explanation_valid(path: Path) -> bool:
-    """Stream evidence and require every documented Newton-polygon fact."""
-
-    matched = dict.fromkeys(_EXPLANATION_FACTS, False)
-    contradicted = False
-    carry = ""
-    try:
-        with path.open("r", encoding="utf-8") as stream:
-            while chunk := stream.read(65_536):
-                window = (carry + chunk).lower()
-                contradicted = contradicted or any(
-                    pattern.search(window) for pattern in _EXPLANATION_CONTRADICTIONS
-                )
-                for name, alternatives in _EXPLANATION_FACTS.items():
-                    if not matched[name] and any(
-                        pattern.search(window) for pattern in alternatives
-                    ):
-                        matched[name] = True
-                carry = window[-384:]
-    except (OSError, UnicodeError, MemoryError):
-        return False
-    return not contradicted and all(matched.values())
-
-
-def _raw_submission() -> dict | None:
-    """Parse the bounded submission JSON without full schema validation."""
-    path = WORKSPACE / "submission.json"
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
-
-
-def _evidence_valid(evidence: object) -> bool:
-    # The polynomial witness and repair boundary are independently replayed.
-    # The public evidence contract promises one bound text artifact that
-    # must contain a meaningful Newton-polygon explanation.
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    target = resolve_evidence(
-        evidence[0], expected_path="evidence/answer.txt", max_bytes=None
-    )
-    if target is None:
-        return False
-    return _newton_explanation_valid(target)
-
-
 def main() -> None:
     input_binding = workspace_input_is_bound()
-    raw = _raw_submission()
     submission = load_submission(require_input_binding=False)
     source = _load_frozen_input()
     contract = bool(submission)
-    result = raw.get("result") if isinstance(raw, dict) else None
+    result = submission.get("result") if isinstance(submission, dict) else None
     math_correct = bool(_certificate_valid(result, source))
-    evidence_valid = bool(isinstance(raw, dict) and _evidence_valid(raw.get("witness")))
-    correct = math_correct and input_binding and contract and evidence_valid
+    correct = math_correct and input_binding and contract
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
@@ -316,7 +194,6 @@ def main() -> None:
                 "protocol_compliance": float(bool(contract)),
                 "input_binding": float(input_binding),
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": float(correct),
             }
         )

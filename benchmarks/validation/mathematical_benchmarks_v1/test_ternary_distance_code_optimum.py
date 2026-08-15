@@ -21,35 +21,20 @@ TASK = (
 )
 
 
-def _inject_marker(app: Path, submission: dict) -> None:
-    evidence = app / "evidence" / "answer.txt"
-    text = evidence.read_text()
-    lines = [line for line in text.splitlines() if not line.startswith("RESULT_JSON:")]
-    marker = "RESULT_JSON: " + json.dumps(
-        submission["result"], sort_keys=True, separators=(",", ":")
-    )
-    lines.append(marker)
-    evidence.write_text("\n".join(lines) + "\n")
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-
-
 def _case(
     tmp_path: Path, submission: dict, *, label: str = "case", tamper_input: bool = False
 ):
     root = tmp_path / label
     app = root / "app"
     logs = root / "logs"
-    (app / "evidence").mkdir(parents=True)
+    app.mkdir(parents=True)
     logs.mkdir(parents=True)
     shutil.copy2(TASK / "environment" / "input.json", app / "input.json")
     if tamper_input:
         source = json.loads((app / "input.json").read_text())
         source["claimed_optimum"] = 17
         _fixtures._write_json(app / "input.json", source)
-    evidence = (TASK / "solution" / "answer.txt").read_bytes()
-    (app / "evidence" / "answer.txt").write_bytes(evidence)
     submission = deepcopy(submission)
-    _inject_marker(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
     return TASK, app, logs
 
@@ -136,45 +121,4 @@ def test_out_of_alphabet_codewords_rejected(tmp_path: Path) -> None:
     ]
     result = _verifier._run_verifier(*_case(tmp_path, submission, label="alphabet"))
     assert result.details["correctness"] == 0.0
-    assert result.reward == 0.0
-
-
-def test_witness_without_result_marker_is_rejected(tmp_path: Path) -> None:
-    """Evidence prose without a RESULT_JSON marker is rejected."""
-    submission = _submission()
-    root = tmp_path / "no-marker"
-    app = root / "app"
-    logs = root / "logs"
-    (app / "evidence").mkdir(parents=True)
-    logs.mkdir(parents=True)
-    shutil.copy2(TASK / "environment" / "input.json", app / "input.json")
-    evidence_path = app / "evidence" / "answer.txt"
-    evidence_path.write_text(
-        "An 18-word ternary code exists with pairwise Hamming distance four or six.\n",
-        encoding="utf-8",
-    )
-    submission = deepcopy(submission)
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence_path)
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(TASK, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_witness_result_mismatch_is_rejected(tmp_path: Path) -> None:
-    """Evidence with a RESULT_JSON marker that doesn't match the result is rejected."""
-    submission = _submission()
-    root = tmp_path / "mismatch"
-    app = root / "app"
-    logs = root / "logs"
-    (app / "evidence").mkdir(parents=True)
-    logs.mkdir(parents=True)
-    shutil.copy2(TASK / "environment" / "input.json", app / "input.json")
-    evidence_path = app / "evidence" / "answer.txt"
-    evidence_path.write_text("RESULT_JSON: {}\n", encoding="utf-8")
-    submission = deepcopy(submission)
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence_path)
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(TASK, app, logs)
-    assert result.reward == 0.0
     assert result.reward == 0.0

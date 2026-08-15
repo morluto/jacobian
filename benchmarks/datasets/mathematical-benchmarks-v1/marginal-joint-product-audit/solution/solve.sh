@@ -1,3 +1,3 @@
 #!/bin/sh
 set -eu
-python /solution/solve.py
+cp /solution/submission.json /app/submission.json

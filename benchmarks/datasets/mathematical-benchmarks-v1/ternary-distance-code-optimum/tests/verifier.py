@@ -6,10 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
     workspace_input_is_bound,
 )
 
@@ -157,30 +155,6 @@ def _upper_bound(value: object, a4: Fraction, a6: Fraction) -> bool:
     return bool(value["bound"] == 18 and combined == (17, -1, -1))
 
 
-def _witness_is_valid(witness: object, result: object) -> bool:
-    if not isinstance(witness, list) or len(witness) != 1:
-        return False
-    path = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
-    if path is None:
-        return False
-    try:
-        text = path.read_text()
-    except (OSError, UnicodeError):
-        return False
-    markers = [
-        line.removeprefix("RESULT_JSON:").strip()
-        for line in text.splitlines()
-        if line.startswith("RESULT_JSON:")
-    ]
-    if len(markers) != 1:
-        return False
-    try:
-        bound_result = json.loads(markers[0])
-    except (ValueError, RecursionError):
-        return False
-    return isinstance(result, dict) and json_value_equal(bound_result, result)
-
-
 def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
@@ -196,17 +170,13 @@ def main() -> None:
     math_correct = bool(
         isinstance(submission, dict) and input_bound and construction and upper
     )
-    witness_ok = bool(
-        math_correct and _witness_is_valid(data.get("witness"), result_data)
-    )
-    correct = bool(math_correct and witness_ok)
+    correct = math_correct
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(witness_ok),
                 "reward": float(correct),
             },
             sort_keys=True,

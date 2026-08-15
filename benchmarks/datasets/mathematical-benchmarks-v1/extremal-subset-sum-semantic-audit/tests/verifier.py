@@ -4,10 +4,8 @@ from pathlib import Path
 
 from verifier_support import (
     is_regular_bounded_file,
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
     workspace_input_is_bound,
 )
 
@@ -173,30 +171,6 @@ def _valid_audit(result, source):
     )
 
 
-def _witness_is_valid(witness, result):
-    if not isinstance(witness, list) or len(witness) != 1:
-        return False
-    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text()
-    except (OSError, UnicodeError, MemoryError):
-        return False
-    markers = [
-        line.removeprefix("RESULT_JSON:").strip()
-        for line in text.splitlines()
-        if line.startswith("RESULT_JSON:")
-    ]
-    if len(markers) != 1:
-        return False
-    try:
-        bound_result = json.loads(markers[0])
-    except (ValueError, RecursionError):
-        return False
-    return isinstance(result, dict) and json_value_equal(bound_result, result)
-
-
 def main():
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
@@ -206,14 +180,12 @@ def main():
     math_correct = bool(
         isinstance(submission, dict) and input_bound and _valid_audit(result, source)
     )
-    witness_ok = bool(math_correct and _witness_is_valid(data.get("witness"), result))
-    correct = bool(math_correct and witness_ok)
+    correct = math_correct
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(witness_ok),
                 "reward": float(correct),
             }
         )

@@ -18,11 +18,5 @@
       "target_residue": 7
     },
     "ordered_pair_count": 2023
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:85a23966430faf9f45c9076550f4eb7f74e49e1d99787951cc629d67b0c9321a"
-    }
-  ]
+  }
 }

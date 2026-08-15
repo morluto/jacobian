@@ -18,7 +18,6 @@ from verifier_support import (
     json_value_equal,
     load_submission_raw,
     normalize_reward_file,
-    read_evidence_json,
     submission_matches_public_schema,
     workspace_input_is_bound,
 )
@@ -570,37 +569,16 @@ def main() -> None:
 
     shape_ok, math_ok, _expected_verdict = _assessment(data, result)
     protocol_ok = bool(schema_ok and shape_ok)
-    artifact_binding_ok = bool(
+    claim_binding_ok = bool(
         isinstance(result, dict)
         and json_value_equal(result.get("bindings"), expected_bindings)
     )
-
-    evidence = None
-    evidence_descriptor_ok = bool(
-        isinstance(submission, dict)
-        and isinstance(submission.get("witness"), list)
-        and len(submission["witness"]) == 1
-    )
-    if evidence_descriptor_ok:
-        evidence = read_evidence_json(
-            submission["witness"][0], expected_path="evidence/certificate.json"
-        )
-    evidence_ok = bool(
-        isinstance(evidence, dict)
-        and set(evidence) == {"schema_version", "task_id", "result"}
-        and evidence.get("schema_version") == "1"
-        and evidence.get("task_id") == data.get("task_id")
-        and json_value_equal(evidence.get("result"), result)
-    )
-    accepted = bool(
-        protocol_ok and math_ok and input_bound and artifact_binding_ok and evidence_ok
-    )
+    accepted = bool(protocol_ok and math_ok and input_bound and claim_binding_ok)
     output = {
         "protocol": float(protocol_ok),
         "mathematics": float(math_ok),
         "input_binding": float(input_bound),
-        "artifact_binding": float(artifact_binding_ok),
-        "witness_validity": float(evidence_ok),
+        "claim_binding": float(claim_binding_ok),
         "aggregate_reward": float(accepted),
         "reward": 1.0 if accepted else 0.0,
     }

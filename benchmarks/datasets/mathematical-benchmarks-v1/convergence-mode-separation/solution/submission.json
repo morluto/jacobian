@@ -112,11 +112,5 @@
       "lean_theorem": "NOT_ELABORATED",
       "underlying_problem": "NOT_ADJUDICATED"
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:ede01f37930a5c056708bd8afa28fad619e19aeeaa9874e458de4316d8048045"
-    }
-  ]
+  }
 }

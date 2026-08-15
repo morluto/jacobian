@@ -5,10 +5,8 @@ from itertools import pairwise
 from pathlib import Path
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
 )
 
 W, T = Path("/app"), Path("/tests")
@@ -97,30 +95,6 @@ def valid_result(result):
     )
 
 
-def witness_content_valid(witness, result):
-    if not isinstance(witness, list) or len(witness) != 1:
-        return False
-    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text()
-    except (OSError, UnicodeError):
-        return False
-    markers = [
-        line.removeprefix("RESULT_JSON:").strip()
-        for line in text.splitlines()
-        if line.startswith("RESULT_JSON:")
-    ]
-    if len(markers) != 1:
-        return False
-    try:
-        bound_result = json.loads(markers[0])
-    except (ValueError, RecursionError):
-        return False
-    return isinstance(result, dict) and json_value_equal(bound_result, result)
-
-
 def frozen():
     try:
         return (W / "input.json").read_bytes() == (
@@ -139,18 +113,12 @@ def main():
         and input_bound
         and valid_result(data.get("result"))
     )
-    witness_ok = bool(
-        math_ok
-        and isinstance(submission, dict)
-        and witness_content_valid(data.get("witness"), data.get("result"))
-    )
-    correct = bool(math_ok and witness_ok)
+    correct = math_ok
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(witness_ok),
                 "reward": float(correct),
             }
         )

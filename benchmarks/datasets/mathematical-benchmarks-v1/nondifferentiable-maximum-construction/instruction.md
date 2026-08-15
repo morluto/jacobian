@@ -8,13 +8,13 @@ requirements.
 Return exact rational parameters and the branch values at the join. The
 verifier independently checks continuity at zero, monotonicity toward and away
 from the peak, and the unequal one-sided derivatives. Write `submission.json`
-to the exact `submission_schema.json` contract, put a concise derivation in
+to the exact `submission_schema.json` contract, Write the task-specific witness to
 `evidence/answer.txt`, and bind that file with its SHA-256 digest.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

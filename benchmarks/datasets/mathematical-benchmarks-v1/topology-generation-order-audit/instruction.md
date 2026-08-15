@@ -12,12 +12,13 @@ Your model must use three or four points and contain at least two distinct, inco
 - one open-set bitmask witnessing the failed containment direction;
 - the semantic diagnosis.
 
-The evidence prose must explain why the two topology constructions satisfy different order contracts. Do not claim Lean compilation or proof-assistant verification. Claim `COMPUTED` assurance and complete scope.
+The semantic diagnosis must explain why the two topology constructions satisfy
+different order contracts.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier exhaustively adjudicates the submitted finite topology model under ordinary family inclusion.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

@@ -12,7 +12,7 @@ from benchmarks.validation.mathematical_benchmarks_v1 import (
 TASK = "autoformalization-semantic-audit"
 
 
-def test_accepts_alternative_exact_witnesses(tmp_path: Path) -> None:
+def test_accepts_alternative_exact_certificates(tmp_path: Path) -> None:
     task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["missing_premise_certificate"] = {
@@ -27,7 +27,6 @@ def test_accepts_alternative_exact_witnesses(tmp_path: Path) -> None:
         "dot_product": 0,
         "coordinate_products": [6, -6],
     }
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
 
     accepted = _verifier._run_verifier(task, app, logs)
@@ -43,22 +42,6 @@ def test_rejects_incomplete_defect_set(tmp_path: Path) -> None:
 
     rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
-    assert rejected.reward == 0.0
-
-
-def test_rejects_positive_lean_compile_claim(tmp_path: Path) -> None:
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    (app / "evidence" / "answer.txt").write_text(
-        "dimension dot product coordinate\n"
-        "Both Lean declarations compile.\n"
-        "RESULT_JSON: {}\n"
-    )
-    _fixtures._bind_result_evidence(app, submission)
-    _fixtures._write_json(app / "submission.json", submission)
-
-    rejected = _verifier._run_verifier(task, app, logs)
-    assert rejected.details["correctness"] == 1.0
     assert rejected.reward == 0.0
 
 

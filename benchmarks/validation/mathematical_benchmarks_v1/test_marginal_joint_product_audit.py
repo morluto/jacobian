@@ -18,7 +18,6 @@ def _run(tmp_path: Path, mutate=None):
     submission = json.loads((app / "submission.json").read_text())
     if mutate is not None:
         mutate(submission)
-        _fixtures._bind_result_evidence(app, submission)
         _fixtures._write_json(app / "submission.json", submission)
     return _verifier._run_verifier(task, app, logs)
 
@@ -113,30 +112,6 @@ def test_rejects_noncanonical_mass(tmp_path: Path) -> None:
         submission["result"]["prelimit_joint"][0]["mass"] = "2/200"
 
     assert _run(tmp_path, mutate).reward == 0.0
-
-
-def test_unrelated_witness_text_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    evidence.write_text("unrelated prose without any structured marker\n")
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_witness_result_mismatch_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    evidence.write_text("RESULT_JSON: {}\n")
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0.0
 
 
 def test_unattainable_zero_mass_product_value_is_rejected(tmp_path: Path) -> None:

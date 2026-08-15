@@ -15,20 +15,15 @@ For the square-bound lemma:
 
 For the common-divisor lemma, give positive unequal integers and `d = 1` that
 satisfy all three divisibility conclusions while the original theorem premise
-is false. Explain why this proves premise-independence of the generated lemma,
-not falsity of the original IMO theorem.
+is false.
 
-Write `submission.json` to the exact agent-visible schema. Put a concise audit
-in `evidence/answer.txt`, include one `RESULT_JSON:` line containing the exact
-submitted result as compact JSON, and bind that file with its SHA-256 digest.
-Do not claim Lean compilation or theorem verification; neither is performed.
+Write `submission.json` to the exact agent-visible schema.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

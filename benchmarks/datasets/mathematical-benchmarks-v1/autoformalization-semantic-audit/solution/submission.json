@@ -30,11 +30,5 @@
       ]
     },
     "semantic_status": "NOT_EQUIVALENT"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:20461dff51e80e07a65e9c37abb2d59de5a506ca211710a8cc65ba2e3269435f"
-    }
-  ]
+  }
 }

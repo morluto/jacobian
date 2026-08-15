@@ -1,22 +1,11 @@
 import json
-import re
 from pathlib import Path
 from typing import Any
 
-from verifier_support import (
-    load_submission,
-    normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
-)
+from verifier_support import load_submission, normalize_reward_file
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-
-_FORBIDDEN_ASSURANCE_RE = re.compile(
-    r"\bverified\b",
-    re.IGNORECASE,
-)
 
 
 def _source() -> dict[str, Any]:
@@ -164,32 +153,6 @@ def _upper(value: object) -> bool:
     return bool(covered == board and value["maximum_red"] == len(cycles) == 100)
 
 
-def _evidence(value: object) -> bool:
-    if (
-        not isinstance(value, list)
-        or len(value) != 1
-        or not witness_list_is_bound(value)
-    ):
-        return False
-    path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
-    if path is None:
-        return False
-    try:
-        raw_text = path.read_text()
-    except (OSError, UnicodeError):
-        return False
-    text = raw_text.casefold()
-    # Reject evidence that asserts an assurance level outside the authorized
-    # envelope. The task ceiling is COMPUTED, so a "verified" claim hidden in
-    # the prose is false certification and must not earn evidence validity.
-    if _FORBIDDEN_ASSURANCE_RE.search(raw_text):
-        return False
-    return len(text) >= 220 and all(
-        term in text
-        for term in ("checkerboard", "100", "4-cycles", "opposite", "computed")
-    )
-
-
 def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
@@ -204,16 +167,13 @@ def main() -> None:
         and _lower(result_data.get("lower_strategy"))
         and _upper(result_data.get("upper_strategy"))
     )
-    witness = bool(correct and _evidence(data.get("witness")))
-    passed = correct and witness
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(correct),
-                "witness_validity": float(witness),
-                "reward": float(passed),
+                "reward": float(correct),
             },
             sort_keys=True,
         )

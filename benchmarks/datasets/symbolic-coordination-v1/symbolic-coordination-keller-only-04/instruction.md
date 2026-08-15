@@ -2,11 +2,10 @@
 
 Assess the `constant-nonzero-jacobian` claim frozen in `input.json` under exact rational
 polynomial semantics. Supplied candidates, provider statuses, partial direction
-checks, and search records are evidence to audit, not authority. Return the
-terminal certificate described by `submission_schema.json`, bind it to the
-exact claim, map, subject, semantics, and checker identities in the input, and
-write the mirrored JSON certificate to
-`evidence/certificate.json` with its SHA-256 digest.
+checks, and search records are inputs to audit, not authority. Return the
+terminal certificate in the `result` described by `submission_schema.json`.
+Its bindings must identify the exact claim, map, subject, semantics, and
+checker identities frozen in the input.
 
 For an inverse claim, the certificate must expose both ordered composition
 residual families. A Keller-condition certificate licenses only its exact
@@ -22,9 +21,8 @@ Use any mathematical method. No external service or special tool is required.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Write evidence/certificate.json as a JSON wrapper with exactly these fields: schema_version (the string \"1\"), task_id (the string \"jacobian/symbolic-coordination-keller-only-04\"), result (an exact copy of the submission result object). Bind that exact regular file by SHA-256. The verifier independently replays the mathematics and checks the input, artifact, and witness identities.
+Submit the terminal certificate inside result. The verifier replays the exact polynomial-map predicate and checks the frozen claim bindings carried by the result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/certificate.json`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `application/json`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

@@ -18,7 +18,7 @@ establish a liminf or any case of Littlewood's conjecture.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Rigorous rational interval replay for a finite range only; no Littlewood conclusion.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

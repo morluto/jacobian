@@ -20,8 +20,8 @@ per-step substitution transcript; empirical baseline calibration is pending.
 
 The source proof is public, but copying its compressed string does not satisfy
 the alpha-renamed replay contract. The checker independently applies every
-assertion, rejects direct-target and partial-trace shortcuts, requires exactly
-two edits, and checks evidence binding. This adds kernel-style substitution
+assertion, rejects direct-target and partial-trace shortcuts, and requires
+exactly two edits. This adds kernel-style substitution
 replay rather than another abstract dependency DAG or propositional rewrite.
 
 Assurance is capped at `COMPUTED`: the verifier checks this frozen formal

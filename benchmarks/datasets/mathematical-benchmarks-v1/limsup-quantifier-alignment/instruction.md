@@ -9,12 +9,14 @@ Determine their semantic relationship. Supply two finite exact-rational model fa
 
 For each family, report the truth values of both formulas and identify a witness for the existential or a violating witness for the universal. Values must be canonical rational strings within the frozen bounds. The verifier recomputes every comparison and accepts any valid separating families.
 
-Write `/app/submission.json` and bind a concise explanation at `/app/evidence/answer.txt`. The explanation must agree with the submitted result: include exactly one `RESULT_JSON:` line whose JSON equals the submitted `result` object, and use the words `existential`, `universal`, and `incomparable` to describe the relationship and the two separating models. Do not claim that the underlying open problem is solved or machine verified; a limitation must state this restriction in unambiguous negated language rather than merely mentioning the open problem.
+Write `/app/submission.json` using the supplied schema. The structured result
+must describe the existential, universal, and incomparable relationship through
+the two separating models.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

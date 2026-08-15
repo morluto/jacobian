@@ -1,19 +1,6 @@
 {
-  "witness": {
-    "allowed_paths": [
-      "evidence/certificate.json"
-    ],
-    "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "max_items": 1,
-    "media_types": [
-      "application/json"
-    ],
-    "min_items": 1
-  },
-  "public_notes": "Write evidence/certificate.json as a JSON wrapper with exactly these fields: schema_version (the string \\\"1\\\"), task_id (the string \\\"jacobian/symbolic-coordination-collision-found-02\\\"), result (an exact copy of the submission result object). Bind that exact regular file by SHA-256. The verifier independently replays the mathematics and checks the input, artifact, and witness identities.",
-  "required_witness_filenames": [
-    "evidence/certificate.json"
-  ],
+  "public_notes": "Submit the terminal certificate inside result. The verifier replays the exact polynomial-map predicate and checks the frozen claim bindings carried by the result.",
+  "required_witness_filenames": [],
   "schema_definitions": {
     "grid": {
       "additionalProperties": false,
@@ -751,35 +738,19 @@
           "certificate"
         ],
         "type": "object"
-      },
-      "witness": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/certificate.json"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
       }
     },
     "required": [
-      "result",
-      "witness"
+      "result"
     ],
     "type": "object"
   },
-  "task_id": "jacobian/symbolic-coordination-collision-found-02"
+  "task_id": "jacobian/symbolic-coordination-collision-found-02",
+  "witness": {
+    "allowed_paths": [],
+    "digest_pattern": "^sha256:[0-9a-f]{64}$",
+    "max_items": 0,
+    "media_types": [],
+    "min_items": 0
+  }
 }

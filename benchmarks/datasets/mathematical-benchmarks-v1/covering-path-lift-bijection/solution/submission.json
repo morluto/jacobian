@@ -83,11 +83,5 @@
       "x1",
       "x0"
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:cc45a522fd284baf8c9da26937e06c3251c16af47d77ed5ecc43389ab1610284"
-    }
-  ]
+  }
 }

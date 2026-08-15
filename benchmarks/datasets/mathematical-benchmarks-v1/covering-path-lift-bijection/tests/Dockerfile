@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Finite graph-cover path-lifting verifier.
 LABEL jacobian.task="jacobian/covering-path-lift-bijection" \
-      jacobian.checksum="cefc4d112a14dc56bfe031c00d99038f9de5e9d2b6ed96864c961bab18a1dfd4"
+      jacobian.checksum="6b475891bb3928d50bf7223429849549df8b596e9c7b6351102f30ae38b804af"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

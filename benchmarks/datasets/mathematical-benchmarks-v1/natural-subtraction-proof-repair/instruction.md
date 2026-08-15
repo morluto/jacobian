@@ -8,18 +8,16 @@ Then use the declared equation basis to derive the goal: submit one rational
 multiplier per basis equation and the resulting coefficient vector in the
 declared variable order. The subtraction-recovery equation is justified only
 by the recorded `b<=a` side condition.
-Use scope exactly: `the frozen natural-subtraction branch and declared equation basis`.
 
 The verifier independently traverses the expression tree and recomputes the
-linear combination over exact rationals. It does not run Lean or accept a
-`VERIFIED` claim. Write `submission.json` to `submission_schema.json`, put a
-concise diagnosis and derivation in `evidence/answer.txt`, and bind its SHA-256
-digest.
+linear combination over exact rationals. Write `submission.json` to
+`submission_schema.json`, put a task-specific witness in `evidence/answer.txt`,
+and bind its SHA-256 digest.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

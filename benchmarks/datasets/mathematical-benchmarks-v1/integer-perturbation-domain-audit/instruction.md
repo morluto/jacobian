@@ -11,16 +11,13 @@ bounds. Every `a` value must be positive, every `b` value nonzero, `b` must take
 both signs, and at least two indices must have `a+b=0`. Report every period
 value, exact sum, extremal `b` value, and cancellation index.
 
-The verifier independently recomputes all bounds and periodic values. Do not
-claim Lean compilation or any irrationality theorem. State both limitations in
-the `limitations` field. Write the exact schema to `submission.json`; put a
-concise audit and a matching `RESULT_JSON:` line in `evidence/answer.txt`, and
-bind its SHA-256 digest.
+The verifier independently recomputes all bounds and periodic values. Write the
+exact schema to `submission.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, exact domain-semantics scope, completeness, digest-bound evidence, limitation claims, and assurance as separate protocol dimensions. State both that Lean compilation is not assessed and that no irrationality theorem is claimed.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

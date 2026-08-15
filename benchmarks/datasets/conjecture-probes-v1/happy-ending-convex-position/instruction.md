@@ -18,7 +18,7 @@ conjecture. It does not determine the general Erdős–Szekeres number. Claim
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier exhaustively checks the frozen point set; the finite optimum does not establish the general Happy Ending formula.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

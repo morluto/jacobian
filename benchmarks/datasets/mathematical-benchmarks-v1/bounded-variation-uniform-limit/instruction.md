@@ -16,16 +16,13 @@ and `UNIFORM_CONVERGENCE_DOES_NOT_FORCE_VARIATION_CONVERGENCE` to record the
 mathematical explanation.
 
 The verifier recomputes every integer and rational identity. Sampling, a graph,
-or a conclusion label alone is insufficient. Evidence must contain exactly one
-`RESULT_JSON:` line equal to `result`; optional surrounding prose is not a
-substitute for the typed `result.argument` values. Set `limitations` to the
-single structured value `NO_PROOF_ASSISTANT_VERIFICATION`.
-The digest-bound evidence file must not exceed 16 MiB.
+or a conclusion label alone is insufficient; the typed `result.argument` values
+carry the mathematical separation.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

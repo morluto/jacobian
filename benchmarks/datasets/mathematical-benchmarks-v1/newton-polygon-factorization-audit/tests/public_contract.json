@@ -1,20 +1,5 @@
 {
-  "witness": {
-    "allowed_paths": [
-      "evidence/answer.txt"
-    ],
-    "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "max_items": 1,
-    "media_types": [
-      "text/plain"
-    ],
-    "min_items": 1,
-    "payload_shape": null
-  },
-  "public_notes": "Submit a prime, two canonical ascending integer coefficient arrays, and indices ell,j. Each coefficient string is limited to 30 characters. The verifier derives the product, valuations, lower hull, old-hypothesis failure, and corrected-hypothesis boundary. The evidence file must contain a mathematical explanation covering the Newton polygon analysis, the old hypothesis failure, and the corrected left-edge repair boundary; unrelated or empty text does not earn evidence credit. In the solver's own words, the limitations array must disclose that Dumas's theorem or the corrected general lemma is not formally verified here.",
-  "required_witness_filenames": [
-    "evidence/answer.txt"
-  ],
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
   "schema_definitions": {
     "integer_string": {
       "maxLength": 30,
@@ -118,33 +103,10 @@
           "j"
         ],
         "type": "object"
-      },
-      "witness": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/answer.txt"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
       }
     },
     "required": [
-      "result",
-      "witness"
+      "result"
     ],
     "type": "object"
   },

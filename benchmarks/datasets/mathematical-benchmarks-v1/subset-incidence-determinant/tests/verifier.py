@@ -6,13 +6,10 @@ from typing import Any
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-LIMITATION = "The verifier checks a complete finite incidence factorization and the general counting formula but does not replay the universal theorem in Lean."
 
 
 def _is_int(value: object) -> bool:
@@ -140,42 +137,17 @@ def _result(value: object, source: dict[str, Any]) -> bool:
     )
 
 
-def _evidence(value: object) -> bool:
-    # Thread PRRT_kwDOThEfjc6Vu43q: enforce the agent-visible maxItems: 1
-    # contract on the evidence list before resolving any descriptor.
-    if not isinstance(value, list) or len(value) != 1:
-        return False
-    if not witness_list_is_bound(value):
-        return False
-    path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
-    if path is None:
-        return False
-    try:
-        text = path.read_text().lower()
-    except (OSError, UnicodeError):
-        return False
-    return (
-        len(text) >= 100
-        and all(term in text for term in ("inclusion-exclusion", "zeta", "computed"))
-        and re.search(r"\b(?:even|nonempty)\b.{0,80}\bsubsets?\b", text)
-        and "determinant" in text
-    )
-
-
 def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
     correct = bool(submission and _result(data.get("result"), _source()))
-    evidence = bool(correct and _evidence(data.get("witness")))
-    passed = bool(correct and evidence)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(correct),
-                "witness_validity": float(evidence),
-                "reward": float(passed),
+                "reward": float(correct),
             },
             sort_keys=True,
         )

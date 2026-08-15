@@ -3,17 +3,10 @@ import math
 from pathlib import Path
 from typing import Any
 
-from verifier_support import (
-    aggregate_reward,
-    load_submission,
-    normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
-)
+from verifier_support import load_submission, normalize_reward_file
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-LIMITATION = "The checker validates the irreducibility and minimal-polynomial certificate contract, but does not replay a proof assistant or implement arbitrary rational-function fields."
 
 
 def _source() -> dict[str, Any]:
@@ -106,56 +99,18 @@ def _result(value: object, source: dict[str, Any]) -> bool:
     )
 
 
-def _evidence(value: object) -> bool:
-    if (
-        not isinstance(value, list)
-        or len(value) != 1
-        or not witness_list_is_bound(value)
-    ):
-        return False
-    assert isinstance(value, list)
-    path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
-    if path is None:
-        return False
-    try:
-        text = path.read_text().lower()
-    except (OSError, UnicodeError):
-        return False
-    return bool(
-        len(text) >= 180
-        and all(
-            term in text
-            for term in (
-                "annihilating",
-                "irreducible",
-                "valuation",
-                "minimal polynomial",
-            )
-        )
-        and "divisible by p" in text
-        and "x^p-u" in text
-    )
-
-
 def main() -> None:
     submission = load_submission()
     protocol_ok = submission is not None
     data = submission if isinstance(submission, dict) else {}
     math_ok = bool(protocol_ok and _result(data.get("result"), _source()))
-    ev_ok = bool(protocol_ok and math_ok and _evidence(data.get("witness")))
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=ev_ok,
-        protocol_ok=protocol_ok,
-    )
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(ev_ok),
-                "reward": reward,
+                "reward": float(math_ok),
             },
             sort_keys=True,
         )

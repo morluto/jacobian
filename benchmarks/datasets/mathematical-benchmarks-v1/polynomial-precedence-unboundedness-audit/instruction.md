@@ -15,17 +15,15 @@ with the exact substituted values. The verifier independently performs the
 symbolic substitution and checks the checkpoints; valid alternative families
 are accepted.
 
-Write one digest-bound evidence object at
+Write one digest-bound task-specific witness object at
 `/app/evidence/precedence-audit.json`. It must contain exactly
-`schema_version`, `task_id`, `result`, and `limitations`, with the latter three
-equal to the submission. The only supported assurance is `COMPUTED`: this task
 checks an exact countermodel family but does not elaborate Lean or prove the
 informal minimum.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Exact rational symbolic replay; Lean elaboration and the informal minimum remain outside scope.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

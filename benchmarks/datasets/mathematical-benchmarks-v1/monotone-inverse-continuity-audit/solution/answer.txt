@@ -1,7 +1,0 @@
-Choose f(x)=x for x<0 and f(x)=2x+2 for x>=0. The branch slopes 1 and 2 are
-positive, so both branches are strictly increasing, and the positive jump
-makes every cross-branch comparison strict.
-The image is [-2,0) union [2,6], so 1 lies between the endpoint values but has
-no preimage. Thus strict monotonicity without continuity does not give the
-claimed interval image or a two-sided inverse on that full interval.
-RESULT_JSON: {"gap_witness":"1","jump":"2","left_endpoint_value":"-2","left_limit":"0","left_slope":"1","offset":"0","right_breakpoint_value":"2","right_endpoint_value":"6","right_slope":"2"}

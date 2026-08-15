@@ -7,11 +7,5 @@
       "z": "1/60"
     },
     "value": 60
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:fb23c5ad5ee340f750ecbb7c44941879278deab3a188d8c78e5d45447a4c3ee6"
-    }
-  ]
+  }
 }

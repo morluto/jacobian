@@ -21,25 +21,6 @@ def _module():
     return module
 
 
-def test_raw_submission_is_bounded_before_read(monkeypatch):
-    module = _module()
-
-    class UnreadablePath:
-        def __init__(self, _value):
-            pass
-
-        def read_text(self):
-            raise AssertionError("oversized submission must not be read")
-
-    def reject_oversized(_path, *, max_bytes):
-        assert max_bytes == module.MAX_SUBMISSION_BYTES
-        return False
-
-    monkeypatch.setattr(module, "Path", UnreadablePath)
-    monkeypatch.setattr(module, "is_regular_bounded_file", reject_oversized)
-    assert module._raw() is None
-
-
 def _result():
     return {
         "factors": [[1, -3, 1], [1, -1, 1], [1, 1, 1], [2, -5, 2]],
@@ -126,23 +107,3 @@ def test_evidence_comparison_rejects_excessive_nesting():
         left = [left]
         right = [right]
     assert not module._json_equal(left, right)
-
-
-def test_evidence_identity_fields_bind_to_raw_submission():
-    module = _module()
-    raw = {
-        "task_id": module.TASK_ID,
-        "result": _result(),
-        "limitations": module.LIMITATIONS,
-    }
-    payload = {
-        "schema_version": "1",
-        "task_id": module.TASK_ID,
-        "result": _result(),
-        "limitations": module.LIMITATIONS,
-    }
-    assert module._evidence_payload_matches_submission(payload, raw)
-
-    raw["task_id"] = "jacobian/a-different-task"
-    raw["limitations"] = ["A_DIFFERENT_LIMITATION"]
-    assert not module._evidence_payload_matches_submission(payload, raw)

@@ -60,6 +60,11 @@ JSON_SCHEMA_DRAFT = "https://json-schema.org/draft/2020-12/schema"
 
 SUBMISSION_BLOCK_START = "<!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->"
 SUBMISSION_BLOCK_END = "<!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->"
+_RETIRED_PUBLIC_NOTE_TERMS = re.compile(
+    r"\b(?:claimed_assurance|assurance|completeness|limitations|"
+    r"verification_record|RESULT_JSON|digest-bound\s+evidence)\b",
+    re.IGNORECASE,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -153,13 +158,17 @@ class WitnessRule(BaseModel):
         }
 
 
+def _no_witness_rule() -> WitnessRule:
+    return WitnessRule(min_items=0, max_items=0)
+
+
 class PublicContract(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     schema_version: str = Field(default=SCHEMA_VERSION)
     task_id: str = Field(min_length=1, pattern=TASK_ID_PATTERN)
     submission_path: str = Field(pattern=r"^/app/[a-z0-9._/-]+$")
-    witness: WitnessRule
+    witness: WitnessRule = Field(default_factory=_no_witness_rule)
     required_witness_filenames: list[str] = Field(default_factory=list)
     public_notes: str = Field(min_length=1)
     submission_result: dict[str, Any]
@@ -186,6 +195,16 @@ class PublicContract(BaseModel):
                 )
             if ".." in name:
                 raise ValueError("required_witness_filenames must not contain '..'")
+        return v
+
+    @field_validator("public_notes")
+    @classmethod
+    def _public_notes_describe_current_protocol(cls, v: str) -> str:
+        if _RETIRED_PUBLIC_NOTE_TERMS.search(v):
+            raise ValueError(
+                "public_notes must not describe retired generic submission "
+                "envelope fields or evidence prose"
+            )
         return v
 
     # -- model validators --------------------------------------------------

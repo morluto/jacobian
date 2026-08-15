@@ -4,11 +4,8 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 W, T = Path("/app"), Path("/tests")
@@ -71,58 +68,17 @@ def _json_equal(left, right):
     )
 
 
-def valid_evidence(evidence, result):
-    """Bind evidence content to the submitted result via a RESULT_JSON line."""
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    if not witness_list_is_bound(
-        evidence, expected_path="evidence/answer.txt", max_bytes=MAX_EVIDENCE_BYTES
-    ):
-        return False
-    target = resolve_evidence(
-        evidence[0], expected_path="evidence/answer.txt", max_bytes=MAX_EVIDENCE_BYTES
-    )
-    if target is None:
-        return False
-    try:
-        text = target.read_text()
-    except (OSError, UnicodeError):
-        return False
-    markers = [
-        line.removeprefix("RESULT_JSON:").strip()
-        for line in text.splitlines()
-        if line.startswith("RESULT_JSON:")
-    ]
-    if len(markers) != 1:
-        return False
-    try:
-        bound_result = json.loads(markers[0])
-    except (ValueError, RecursionError):
-        return False
-    if not isinstance(result, dict):
-        return False
-    return _json_equal(bound_result, result)
-
-
 def main():
     submission = load_submission(W / "submission.json")
     protocol_ok = submission is not None
     result = submission.get("result") if protocol_ok else None
     math_ok = bool(protocol_ok and frozen() and valid_result(result))
-    evidence_ok = bool(
-        protocol_ok and frozen() and valid_evidence(submission.get("witness"), result)
-    )
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=evidence_ok,
-        protocol_ok=protocol_ok,
-    )
+    reward = float(math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(evidence_ok),
                 "reward": reward,
             }
         )

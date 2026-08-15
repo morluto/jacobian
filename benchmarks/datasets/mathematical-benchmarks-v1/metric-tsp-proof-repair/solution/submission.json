@@ -62,11 +62,5 @@
       "optimal": 32,
       "shortcut": 38
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:394086e9b2b12fcb32d36c446cf9e4445c0aad8c920eb6f132ac460a17d556be"
-    }
-  ]
+  }
 }

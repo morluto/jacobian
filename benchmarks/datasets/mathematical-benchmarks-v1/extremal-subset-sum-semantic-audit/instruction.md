@@ -17,18 +17,11 @@ The legacy predicate checks only the sum of the whole candidate. The intended
 predicate checks every subset, including the empty subset and the candidate
 itself. Use lists as mathematical sets: entries must be strictly increasing.
 
-Do not claim that Lean parsing, elaboration, compilation, or the corrected
-asymptotic conjecture has been verified. Write `submission.json` to the exact
-agent-visible `submission_schema.json`. Put a concise audit in
-`evidence/answer.txt`, include a `RESULT_JSON:` line containing the submitted
-result as JSON, and bind that file with its SHA-256 digest.
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, semantic scope, completeness, digest-bound evidence, limitation claims, and assurance as separate protocol dimensions. State that Lean compilation is not assessed and do not claim that Lean or the corrected asymptotic conjecture was verified or proved.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

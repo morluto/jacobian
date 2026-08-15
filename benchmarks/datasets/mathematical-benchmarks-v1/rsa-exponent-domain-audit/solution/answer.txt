@@ -1,6 +1,0 @@
-The source's negative exponent step is defined only in the unit group.  The
-repair uses an exhaustive unit branch / nonunit branch split.  In the unit
-branch, write d=d_p+k(p-1) with k nonnegative and apply Fermat without
-inverses.  In the nonunit branch, coprimality of d with p-1 forces d_p>0, so
-both positive powers are zero modulo p.  The bounded sweep is sanity evidence;
-the assurance remains COMPUTED rather than proof-assistant VERIFIED.

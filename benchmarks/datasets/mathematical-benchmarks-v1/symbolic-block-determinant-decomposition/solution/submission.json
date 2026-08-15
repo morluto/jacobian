@@ -41,11 +41,5 @@
     ],
     "determinant_identity": "det(C)=det(A-B)^2*det(A+2B)",
     "invertibility_assumption": "NOT_REQUIRED_FOR_POLYNOMIAL_IDENTITY"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:0008150e13c0ae450acc4ee9b0a06edc9c3a670d7fcf9b53eac164d6af6f7276"
-    }
-  ]
+  }
 }

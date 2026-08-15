@@ -7,14 +7,13 @@ candidate tables: one row for every integer partition of `k` (respectively
 exponent shape. Submit the prime-exponent factorizations, divisor counts,
 minimizers, and their integer quotient.
 
-Write `/app/submission.json` using the public schema and bind explanatory prose
-in the typed result. Candidate-table order is free, but coverage must
-be exact. Claim `COMPUTED`; no proof-assistant verification is available.
+Write `/app/submission.json` using the public schema. Candidate-table order is
+free, but coverage must be exact.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier independently enumerates every exponent partition and recomputes its optimal prime assignment.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

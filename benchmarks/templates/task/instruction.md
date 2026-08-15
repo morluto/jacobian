@@ -1,14 +1,14 @@
 # <Task title>
 
-<Agent-visible task prompt. State the exact finite scope, required result, and
-task-specific witness obligations without revealing Oracle-only material.>
+<Agent-visible task prompt. State the exact finite mathematical claim and
+required result without revealing Oracle-only material. Add a task-specific
+witness only when the result and frozen input cannot replay the claim.>
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Replace this note with the complete public submission protocol.
+Submit the typed mathematical result. Add a task-specific witness only when replay cannot decide the claim from the frozen input and result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

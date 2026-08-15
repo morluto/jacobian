@@ -17,7 +17,6 @@ def _case(tmp_path: Path):
 
 
 def _rewrite(app: Path, submission: dict) -> None:
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
 
 
@@ -79,23 +78,4 @@ def test_rejects_corrupted_sharpness(
 
     rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
-    assert rejected.reward == 0.0
-
-
-def test_evidence_binds_boundary_family(tmp_path: Path) -> None:
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    submission["result"]["boundary_family"]["vanishing_variable"] = "a"
-    submission["result"]["boundary_family"]["other_variables"] = ["b", "c"]
-    _fixtures._bind_result_evidence(app, submission)
-    evidence_path = app / "evidence" / "answer.txt"
-    text = evidence_path.read_text().replace(
-        'BOUNDARY_FAMILY_JSON: {"attained_for_positive_parameter":false,"limit":"1/4","other_variables":["b","c"],"parameter":"t->0+","vanishing_variable":"a"}',
-        'BOUNDARY_FAMILY_JSON: {"attained_for_positive_parameter":false,"limit":"1/4","other_variables":["a","b"],"parameter":"t->0+","vanishing_variable":"c"}',
-    )
-    evidence_path.write_text(text)
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence_path)
-    _fixtures._write_json(app / "submission.json", submission)
-    rejected = _verifier._run_verifier(task, app, logs)
-    assert rejected.details["correctness"] == 1.0
     assert rejected.reward == 0.0

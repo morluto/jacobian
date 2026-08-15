@@ -15,14 +15,14 @@ recomputes every discriminant; a copied final list is insufficient.
 Write `submission.json` and digest-bind
 `evidence/classification-certificate.json`.
 
-The digest-bound evidence file must be a JSON object with exactly three keys:
+The digest-bound task-specific witness file must be a JSON object with exactly three keys:
 `schema_version` (the string `"1"`), `task_id` (the task identifier),
 `result` (the same result object placed in `submission.json`).
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

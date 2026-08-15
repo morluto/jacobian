@@ -10,14 +10,12 @@ The verifier independently composes and checks the following polynomial identiti
 
 To certify the infinite domain structurally, the verifier expands `x`, `y`, and `ratio` in `s=t-2` and requires nonnegative coefficients, a positive constant term for `x` and `y`, and a positive coefficient of positive degree for `ratio`. This proves positive pairs and a strictly increasing ratio for every integer `t>=2`, rather than relying only on selected probes. Include at least three freely chosen distinct integer probes with `2<=t<=50`; the verifier will independently evaluate the polynomials and divisibility.
 
-Write `/app/submission.json` using the supplied schema and bind `/app/evidence/answer.txt`. The evidence file must contain exactly one line beginning `RESULT_JSON:` whose JSON object equals the submitted `result`; the digest in the submission must match the file. Use scope `the submitted integer polynomial family for t>=2`, completeness `COMPLETE`, the declared limitation, and `COMPUTED` assurance. Do not claim a classification of all solutions or `VERIFIED` assurance.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

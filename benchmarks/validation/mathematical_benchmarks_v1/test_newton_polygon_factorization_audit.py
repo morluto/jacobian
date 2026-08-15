@@ -9,6 +9,10 @@ from benchmarks.validation.mathematical_benchmarks_v1 import _fixtures, _verifie
 TASK = "newton-polygon-factorization-audit"
 
 
+def test_result_protocol(tmp_path: Path) -> None:
+    _fixtures.assert_result_witness_protocol(tmp_path, TASK)
+
+
 def test_accepts_replayed_factorization_witness(tmp_path: Path) -> None:
     task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     accepted = _verifier._run_verifier(task, app, logs)

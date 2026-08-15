@@ -5,11 +5,5 @@
     "power_difference": 281651706,
     "product_mod_7": 6,
     "quotient_by_7_pow_7": 342
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:774e815e9ae26fbabc46ee91b3fbca3206513daa2a3ca3b8235a09e11146d996"
-    }
-  ]
+  }
 }

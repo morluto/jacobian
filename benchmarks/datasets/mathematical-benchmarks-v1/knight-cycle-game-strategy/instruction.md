@@ -18,9 +18,9 @@ against every Ben strategy, and Ben has a strategy holding her to at most `g`.
 
 ## Required certificate
 
-Submit `/app/submission.json` and `/app/evidence/answer.txt`. Your certificate
-must include both an independently checkable lower strategy and an
-independently checkable upper strategy that together prove the exact optimum:
+Submit `/app/submission.json`. Your certificate must include both an
+independently checkable lower strategy and an independently checkable upper
+strategy that together prove the exact optimum:
 
 1. Lower strategy (Amy can guarantee the optimum): a set of mutually
    non-conflicting red-eligible sites and an exact move-count argument showing
@@ -36,15 +36,13 @@ independently checkable upper strategy that together prove the exact optimum:
 
 The verifier recomputes every distance, partition, response, and count. It
 accepts any alternative valid lower or upper certificate that proves the same
-optimum. Do not claim `VERIFIED`; this is an exact finite strategy-invariant
-replay.
+optimum.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

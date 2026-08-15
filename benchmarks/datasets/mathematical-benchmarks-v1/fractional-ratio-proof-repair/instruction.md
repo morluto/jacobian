@@ -9,7 +9,7 @@ Write `/app/submission.json`. The verifier replays the typed residual certificat
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the exact residual certificate for the frozen binary ratio instance.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

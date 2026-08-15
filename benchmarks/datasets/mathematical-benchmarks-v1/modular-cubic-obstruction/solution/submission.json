@@ -39,11 +39,5 @@
       }
     ],
     "target_residue": 1
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:955cacb2832a379a8aced764c8e3ed8dd21ab2de3267d90ac8aec6e5a7543e48"
-    }
-  ]
+  }
 }

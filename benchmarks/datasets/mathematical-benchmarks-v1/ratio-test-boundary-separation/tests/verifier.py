@@ -12,58 +12,6 @@ from verifier_support import (
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-TASK_ID = "jacobian/ratio-test-boundary-separation"
-CONCLUSION = "RATIO_BOUNDARY_INCONCLUSIVE"
-SCOPE = "positive rational series indexed by n >= 1"
-MAX_EVIDENCE_BYTES = 1_048_576
-
-_PROOF_ASSISTANT_RE = re.compile(r"proof[ -]assistant", re.IGNORECASE)
-_NEGATION_RE = re.compile(
-    r"\b(?:not|no|never|without|cannot|neither|nor|doesn'?t|isn'?t|wasn'?t|aren'?t|"
-    r"won'?t|don'?t|does\s+not|is\s+not|was\s+not)\b",
-    re.IGNORECASE,
-)
-_AFFIRMATIVE_VERIFICATION_RE = re.compile(
-    r"\b(?:perform(?:ed)?|confirm(?:ed)?|complet(?:ed)?|proven|proved|verified|"
-    r"established|done|carried\s+out)\b",
-    re.IGNORECASE,
-)
-_CLAUSE_SPLIT_RE = re.compile(r"[.;,!?\n]+")
-_BOUNDARY_EXPLANATION_RE = re.compile(
-    r"\b(?:inconclusive|cannot\s+decide|cannot\s+determine|does\s+not\s+decide|"
-    r"not\s+decisive|boundary|insufficient)\b",
-    re.IGNORECASE,
-)
-
-
-def _split_clauses(text: str) -> list[str]:
-    return [clause.strip() for clause in _CLAUSE_SPLIT_RE.split(text) if clause.strip()]
-
-
-def _negated_proof_assistant_limitation(item: object) -> bool:
-    """A limitation whose proof-assistant clause is negated."""
-
-    if not isinstance(item, str) or not _PROOF_ASSISTANT_RE.search(item):
-        return False
-    for clause in _split_clauses(item):
-        if _PROOF_ASSISTANT_RE.search(clause) and _NEGATION_RE.search(clause):
-            return True
-    return False
-
-
-def _affirmative_proof_assistant_claim(item: object) -> bool:
-    """A limitation whose proof-assistant clause asserts verification happened."""
-
-    if not isinstance(item, str) or not _PROOF_ASSISTANT_RE.search(item):
-        return False
-    for clause in _split_clauses(item):
-        if not _PROOF_ASSISTANT_RE.search(clause):
-            continue
-        if _NEGATION_RE.search(clause):
-            continue
-        if _AFFIRMATIVE_VERIFICATION_RE.search(clause):
-            return True
-    return False
 
 
 def _fraction(value: object) -> Fraction | None:

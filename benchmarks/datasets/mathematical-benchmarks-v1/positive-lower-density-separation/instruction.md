@@ -9,7 +9,7 @@ The verifier recomputes all finite arithmetic and checks the general closed-form
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the exact endpoint-density certificate for the frozen geometric-block family.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

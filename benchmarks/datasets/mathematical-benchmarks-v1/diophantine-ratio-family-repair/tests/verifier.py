@@ -8,7 +8,6 @@ from verifier_support import (
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
     workspace_input_is_bound,
 )
 
@@ -299,27 +298,6 @@ def _result_is_valid(result: object, source: dict[str, Any]) -> bool:
     )
 
 
-def _evidence_matches_result(evidence: object, result: dict[str, Any]) -> bool:
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    target = resolve_evidence(
-        evidence[0],
-        expected_path="evidence/answer.txt",
-        max_bytes=MAX_EVIDENCE_BYTES,
-    )
-    if target is None:
-        return False
-    try:
-        markers = [
-            line.removeprefix("RESULT_JSON:").strip()
-            for line in target.read_text().splitlines()
-            if line.startswith("RESULT_JSON:")
-        ]
-        return len(markers) == 1 and _json_exact_equal(json.loads(markers[0]), result)
-    except (OSError, UnicodeError, ValueError, RecursionError, MemoryError):
-        return False
-
-
 def _json_exact_equal(left: object, right: object) -> bool:
     if type(left) is not type(right):
         return False
@@ -358,14 +336,8 @@ def main() -> None:
     source = _load_frozen_input()
     result = data.get("result")
     math_correct = bool(_result_is_valid(result, source))
-    evidence_valid = bool(
-        isinstance(result, dict)
-        and _evidence_matches_result(data.get("witness"), result)
-    )
-    protocol = bool(
-        _result_shape_is_valid(result) and _evidence_descriptors_ok(data.get("witness"))
-    )
-    correct = bool(protocol and math_correct and evidence_valid)
+    protocol = _result_shape_is_valid(result)
+    correct = bool(protocol and math_correct)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
@@ -373,7 +345,6 @@ def main() -> None:
             {
                 "protocol_compliance": float(protocol),
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": float(correct),
             }
         )

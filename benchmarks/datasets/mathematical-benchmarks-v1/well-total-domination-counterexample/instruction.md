@@ -10,7 +10,7 @@ Write `submission.json` to the exact agent-visible `submission_schema.json`.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the finite graph predicate directly from the submitted result.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

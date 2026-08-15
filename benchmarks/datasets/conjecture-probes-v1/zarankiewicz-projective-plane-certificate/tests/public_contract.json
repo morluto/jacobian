@@ -11,7 +11,7 @@
     "min_items": 1,
     "payload_shape": null
   },
-  "public_notes": "Exact PG(2,3) incidence and finite extremal replay only; no general Zarankiewicz conclusion.\n\nThe evidence file must be a JSON object with exactly four fields: `schema_version` must be `\"1\"`, `task_id` must equal the submission task ID, `result` must be an exact JSON copy of `submission.json`'s result object, and `limitations` must be an exact JSON copy of its limitations list.",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.",
   "required_witness_filenames": [
     "evidence/answer.json"
   ],

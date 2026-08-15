@@ -1,1 +1,0 @@
-The primitive tuple (95800, 217519, 414560; 422481) is an exact counterexample: the sum of the three fourth powers equals the target fourth power. Its gcd is one. This refutes the frozen universal claim, but proves neither minimality nor anything about other exponents or other numbers of summands.

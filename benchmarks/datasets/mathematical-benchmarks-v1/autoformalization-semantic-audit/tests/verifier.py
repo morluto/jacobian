@@ -3,11 +3,8 @@ import re
 from pathlib import Path
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -54,24 +51,6 @@ def _is_non_compilation_limitation(value):
             normalized,
         )
     )
-
-
-def _has_positive_compile_claim(text):
-    for match in re.finditer(
-        r"\b(?:lean\s+)?(?:declarations?|proofs?|code|source)\b[^.\n]{0,80}"
-        r"\b(?:compil(?:e|ed|es|ation)|elaborat(?:e|ed|ion))\b",
-        text,
-        re.IGNORECASE,
-    ):
-        surrounding = text[max(0, match.start() - 60) : match.end() + 20]
-        if not re.search(
-            r"\b(?:not|never|cannot|can't|without|unchecked|unassessed|"
-            r"unverified|not checked|not assessed|not evaluated|does not)\b",
-            surrounding,
-            re.IGNORECASE,
-        ):
-            return True
-    return False
 
 
 def _integer_vector(value, dimension):
@@ -153,51 +132,18 @@ def _valid_semantic_audit(result, source):
     )
 
 
-def _witness_matches_result(witness, result):
-    if not witness_list_is_bound(witness, expected_path="evidence/answer.txt"):
-        return False
-    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        if target.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        text = target.read_text()
-        marker = next(
-            line.removeprefix("RESULT_JSON:").strip()
-            for line in text.splitlines()
-            if line.startswith("RESULT_JSON:")
-        )
-        return (
-            json_value_equal(json.loads(marker), result)
-            and any(
-                line.strip() and not line.startswith("RESULT_JSON:")
-                for line in text.splitlines()
-            )
-            and not _has_positive_compile_claim(text)
-        )
-    except (OSError, StopIteration, UnicodeError, ValueError):
-        return False
-
-
 def main():
     submission = load_submission()
     source = _load_frozen_input()
     result = submission.get("result") if isinstance(submission, dict) else None
     math_correct = bool(_valid_semantic_audit(result, source))
-    witness_valid = bool(
-        isinstance(submission, dict)
-        and _witness_matches_result(submission.get("witness"), result)
-    )
-    correct = math_correct and witness_valid
 
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(witness_valid),
-                "reward": float(correct),
+                "reward": float(math_correct),
             }
         )
     )

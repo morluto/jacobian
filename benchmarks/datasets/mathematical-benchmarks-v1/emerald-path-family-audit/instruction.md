@@ -6,12 +6,11 @@ Submit a nontrivial positive rational pair with `alpha >= beta`, `alpha+beta=2`,
 
 The digest-bound `evidence/answer.txt` must contain exactly six nonempty lines: `emerald-path-family-certificate-v1`, the four fields `alpha:`, `beta:`, `even_offset:`, and `odd_offset:` using the submitted strings, then `trace_sha256:` followed by the SHA-256 of the submitted trace serialized as sorted-key compact JSON.
 
-Include this published limitation exactly: `The certificate refutes the published singleton claim and proves sufficiency for its submitted family member; it does not independently prove necessity for every possible trip.` Do not claim `VERIFIED`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier reports mathematical, evidence, input-binding, scope, completeness, limitations, protocol, and assurance dimensions separately. Rational certificate fields are bounded to at most 64 base-10 digits per numerator and denominator so parsing remains deterministic and resource-bounded.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

@@ -12,14 +12,11 @@ Submit the exact rational definitions
 
 Finally compute the frozen conjugate norm `F(P,Q,R)F(P,Q,-R)` as a polynomial in `(P,Q,S)` with `S=R^2`. This certifies only the displayed coordinate identities and this one exact norm calculation. It does **not** certify the universal nonzero-norm argument for an arbitrary polynomial relation, repair the general algebraic-independence proof, or prove the external transcendence premise.
 
-The evidence file `evidence/answer.txt` must state the following three facts in the solver's own words: (1) the first and second coordinate changes are birational (with the displayed inverse formulas); (2) the conjugate norm is computed exactly over the rationals (QQ); (3) the modular-form independence theorem remains a trusted premise. Additional derivation content is allowed and ignored.
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Submit ten exact sparse polynomials forming the two forward/inverse transfer stages and the quadratic conjugate norm. Term order is free, but coefficients and monomials are canonicalized independently. The required limitation is the exact ID `EXTERNAL_INDEPENDENCE_THEOREM_TRUSTED`.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

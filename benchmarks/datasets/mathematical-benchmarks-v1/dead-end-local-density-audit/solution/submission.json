@@ -51,11 +51,5 @@
         "valid_count": 0
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:7664822418c5e9c15fb93aeabb00204944d14d462e25ca844db5a541e9f4da59"
-    }
-  ]
+  }
 }

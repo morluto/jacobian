@@ -45,11 +45,5 @@
       "p": 11,
       "right_residue": 7
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:6bfb235d59dc3ca92feb7e7671a7cdc1d8cf0de48070928424a4c2f0a9583023"
-    }
-  ]
+  }
 }

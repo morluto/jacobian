@@ -11,12 +11,12 @@ where `2 <= h <= 20`, `1 <= s <= 20`, and `2 <= c <= 20`. Submit ten distinct sa
 
 Also submit the exact lower bound on squared horizontal separation between distinct indices. This is the certificate that each family has no finite accumulation point and is closed. State the formalized positive-distance conclusion and the corrected conclusion separately.
 
-Write `/app/submission.json` and the digest-bound evidence file required by the schema. Claim only `COMPUTED`; this benchmark does not run Lean or machine-prove general topology.
+Write `/app/submission.json` and the digest-bound task-specific witness file required by the schema.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Exact parametric metric replay; Lean elaboration and foundational topology remain outside scope.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

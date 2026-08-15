@@ -1,6 +1,0 @@
-Amy uses one checkerboard parity class. Knight moves change parity, so all 200
-eligible sites are mutually legal for red stones; before her 100th turn Ben has
-made only 99 moves. Ben partitions the board into 100 knight-move 4-cycles and
-answers at the opposite vertex. The other two vertices then conflict with
-Amy's red vertex, allowing at most one red stone per cycle. Thus the exact
-COMPUTED optimum is 100.

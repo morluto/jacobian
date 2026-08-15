@@ -1,1 +1,0 @@
-The increasing triangle boundaries lie in the cycle lattice of the one-skeleton.  In the displayed fundamental-cycle basis their coordinate matrix has determinant -2, so the boundary lattice has index 2 and the frozen complex has H1 isomorphic to Z/2Z.

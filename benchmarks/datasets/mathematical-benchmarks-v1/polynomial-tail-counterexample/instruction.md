@@ -6,19 +6,16 @@ exact rational pair `x1 < x2` at or beyond every root for which
 `(P-Q)(x1) >= (P-Q)(x2)`.
 
 Represent every rational, including every listed root, as a canonical rational
-string such as `"5/3"` or `"-1"`. This benchmark's witness format intentionally
-restricts roots to rational values; algebraic irrational roots are outside the
+string such as `"5/3"` or `"-1"`. This benchmark intentionally restricts roots
+to rational values; algebraic irrational roots are outside the
 advertised artifact contract. Write `submission.json` to the exact
-agent-visible `submission_schema.json`. Put the exact evaluations in
-`evidence/answer.txt`, include a `RESULT_JSON:` line containing the submitted
-result as JSON, and bind its SHA-256 digest.
+agent-visible `submission_schema.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

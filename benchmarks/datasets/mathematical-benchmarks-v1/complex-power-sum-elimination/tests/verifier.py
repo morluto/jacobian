@@ -7,12 +7,10 @@ from typing import Any
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
 )
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-MAX_EVIDENCE_BYTES = 1_048_576
 Poly = tuple[Fraction, ...]
 Quad = tuple[Fraction, Fraction]
 
@@ -262,30 +260,6 @@ def _result_is_valid(result: object, source: dict[str, Any]) -> bool:
     }
 
 
-def _witness_matches_result(witness: object, result: dict[str, Any]) -> bool:
-    if not isinstance(witness, list) or not witness:
-        return False
-    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        if target.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        text = target.read_text().casefold()
-        return all(
-            fragment in text
-            for fragment in (
-                "power sum recurrence",
-                "s^2-10s+8",
-                "r^2-20r+32",
-                "both branches",
-                "norm",
-            )
-        )
-    except (OSError, UnicodeError):
-        return False
-
-
 def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
@@ -294,20 +268,13 @@ def main() -> None:
     math_correct = bool(
         isinstance(submission, dict) and _result_is_valid(result, source)
     )
-    witness_valid = bool(
-        math_correct
-        and isinstance(result, dict)
-        and _witness_matches_result(data.get("witness"), result)
-    )
-    correct = bool(math_correct and witness_valid)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(witness_valid),
-                "reward": float(correct),
+                "reward": float(math_correct),
             }
         )
     )

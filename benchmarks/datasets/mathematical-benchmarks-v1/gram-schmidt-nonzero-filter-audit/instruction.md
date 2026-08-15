@@ -11,15 +11,14 @@ as reduced rational coordinates, together with the zero-residual indices and
 the two filter outcomes. The verifier independently replays exact rational
 Gram-Schmidt and rank computation; valid alternative vector systems pass.
 
-Write one digest-bound evidence object at
+Write one digest-bound task-specific witness object at
 `/app/evidence/gram-schmidt-audit.json`, containing exactly `schema_version`,
-`task_id`, `result`, and `limitations`. Only `COMPUTED` is supported. The task
 does not elaborate Lean or machine-check the surrounding Mathlib theorem.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-Exact rational finite-dimensional replay; Lean elaboration remains outside scope.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

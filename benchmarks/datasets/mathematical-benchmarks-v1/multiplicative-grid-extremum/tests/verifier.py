@@ -41,7 +41,6 @@ def _source() -> dict | None:
         "allowed_ratios",
         "integer_bounds",
         "claimed_maximum",
-        "assurance_ceiling",
     }:
         return None
     source = value.get("source")

@@ -4,17 +4,14 @@ For the frozen ground set, construct as many disjoint unordered pairs as
 possible so that all pair sums are distinct and at most `n`.
 
 Submit the pairs in canonical increasing order, their sums, and the claimed
-optimum. The verifier independently checks the witness and exhaustively solves
-the finite optimization problem; it accepts any optimal pairing, not one
-expected arrangement. Write `submission.json` to `submission_schema.json`,
-explain the five-pair construction, its distinct sums, and the exhaustive
-exclusion of a six-pair solution in `evidence/answer.txt`, and bind its SHA-256
-digest.
+optimum. The verifier independently checks the submitted pairing and
+exhaustively solves the finite optimization problem; it accepts any optimal
+pairing, not one expected arrangement.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the finite pairing optimum from the submitted result.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 

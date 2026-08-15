@@ -1,5 +1,0 @@
-The polynomial factors exactly as
-
-3 * Phi_2(x)^2 * Phi_3(x) * Phi_5(x) * Phi_8(x) * Phi_12(x).
-
-Every listed cyclotomic factor is reciprocal and has roots closed under inversion with equal multiplicities. No Phi_1(x)=x-1 factor occurs. Thus P(1) is nonzero (direct evaluation gives P(1)=360), and evaluating the reciprocal identity at one fixes the scalar to 1. Inversion permutes each root-of-unity orbit, producing coefficient symmetry. Exact multiplication recovers all 17 coefficients and their reversal. This is a COMPUTED factorization certificate, not a proof-assistant verification of the unrestricted theorem.

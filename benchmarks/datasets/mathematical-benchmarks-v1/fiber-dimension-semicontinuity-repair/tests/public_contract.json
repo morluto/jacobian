@@ -1,20 +1,5 @@
 {
-  "witness": {
-    "allowed_paths": [
-      "evidence/answer.txt"
-    ],
-    "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "max_items": 1,
-    "media_types": [
-      "text/plain"
-    ],
-    "min_items": 1,
-    "payload_shape": null
-  },
-  "public_notes": "The verifier reports proof repair, symbolic ideal equality, fiber ranks, evidence, input binding, scope, completeness, limitations, protocol, and assurance separately. Sparse polynomials use canonical rational coefficients and bounded two-variable exponent vectors; duplicate monomials and zero terms are rejected.",
-  "required_witness_filenames": [
-    "evidence/answer.txt"
-  ],
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
   "schema_definitions": {
     "polynomial": {
       "additionalProperties": false,
@@ -248,33 +233,10 @@
           "fiber_checks"
         ],
         "type": "object"
-      },
-      "witness": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/answer.txt"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
       }
     },
     "required": [
-      "result",
-      "witness"
+      "result"
     ],
     "type": "object"
   },

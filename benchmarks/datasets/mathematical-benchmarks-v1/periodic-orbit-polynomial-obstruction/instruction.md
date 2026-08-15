@@ -10,15 +10,15 @@ by `pq`, both reductions modulo `p` and modulo `q`, and the final infinite-prime
 and polynomial-identity steps. Use basis `[F(pq),F(p),F(q),F(1)]` for the orbit
 coefficient vector and `[P(q),P(1)]` or `[P(p),P(1)]` for modular residues.
 
-Write `submission.json` to the supplied schema. Write
-`evidence/periodic-orbit-certificate.json` with exactly `schema_version`,
-`task_id` and `result`, copying the corresponding submission
+Write `submission.json` to the supplied schema. The declared task-specific
+witness at `evidence/periodic-orbit-certificate.json` contains exactly
+`schema_version`, `task_id`, and `result`, copying the corresponding submission
 values exactly and binding the file by SHA-256.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

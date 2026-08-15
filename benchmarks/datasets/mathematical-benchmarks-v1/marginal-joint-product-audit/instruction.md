@@ -6,14 +6,14 @@ Use the frozen four-point support and marginal law. Model every prelimit pair by
 
 All probability masses must be canonical nonnegative rational strings. Joint-table entries must be in lexicographic `(x,y)` order and product distributions in ascending product-value order. The verifier independently checks normalization, marginals, prelimit independence, non-product dependence of the limit coupling, and both product pushforwards. Any coupling satisfying the contract is accepted.
 
-Write `/app/submission.json` and bind a concise explanation at `/app/evidence/answer.txt`. The independently replayed finite laws belong in the typed result; no duplicate private serialization is required in the prose. Explain why marginal convergence does not determine joint convergence or the product law. Product-distribution entries must be ascending and may include zero-mass attainable values, which the verifier normalizes away. Do not claim that a general probability theorem or the original prose has been machine verified.
+Write `/app/submission.json`. Product-distribution entries must be ascending and
+may include zero-mass attainable values, which the verifier normalizes away.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The evidence explanation must state why marginal convergence does not determine joint convergence or the product law; unrelated text does not earn evidence credit. Product distributions may include ascending zero-mass attainable entries, which the verifier normalizes away. In the solver's own words, the limitations array must disclose that this exact finite-law countermodel does not prove a general weak-convergence theorem or disambiguate the original prose.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

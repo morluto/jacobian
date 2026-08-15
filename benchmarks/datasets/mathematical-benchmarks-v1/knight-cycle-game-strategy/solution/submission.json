@@ -2015,11 +2015,5 @@
       ],
       "maximum_red": 100
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:970cc1679fae18e16ee4a4d9964cb2607faa4925d217c5feb5cbb5e6702666d6"
-    }
-  ]
+  }
 }

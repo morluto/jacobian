@@ -1,2 +1,0 @@
-Use generators e1=(1,0,0), e2=(0,1,0), e3=(0,0,1), and v=(1,1,1). Any three are linearly independent, so each selected line meets the sum of any two other lines only in zero. The relation e1+e2+e3-v=0 proves the four-line sum is not direct.
-RESULT_JSON: {"generators":[[1,0,0],[0,1,0],[0,0,1],[1,1,1]],"dependence_coefficients":[1,1,1,-1]}

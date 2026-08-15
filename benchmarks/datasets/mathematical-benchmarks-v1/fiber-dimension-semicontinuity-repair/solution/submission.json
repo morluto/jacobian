@@ -71,11 +71,5 @@
       }
     ],
     "tensor_repair": "RIGHT_EXACTNESS_SUFFICES_RESIDUE_FIELD_NOT_FLAT_IN_GENERAL"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:5f7735940037b755c2281f16383c9403da69fbb40c7d922559d27f6b3a8777fb"
-    }
-  ]
+  }
 }

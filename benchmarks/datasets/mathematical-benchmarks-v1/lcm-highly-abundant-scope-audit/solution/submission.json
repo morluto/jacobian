@@ -258,11 +258,5 @@
         "sigma_lcm": 41466695608612977439691243520000
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:d61f2367b99bd99ccf1414887d32bd5bd0b331c552592aa26f55b06feae50a38"
-    }
-  ]
+  }
 }

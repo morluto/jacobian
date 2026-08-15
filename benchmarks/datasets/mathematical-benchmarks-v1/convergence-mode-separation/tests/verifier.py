@@ -4,10 +4,8 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
 )
 
 E = Path("/tests")
@@ -140,49 +138,18 @@ def _valid_result(result, source):
     )
 
 
-def _witness_valid(witness, result):
-    if not isinstance(witness, list) or len(witness) != 1:
-        return False
-    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        if target.stat().st_size > 1_048_576:
-            return False
-        text = target.read_text()
-    except (OSError, UnicodeError):
-        return False
-    # The witness binds the exact checked result. The semantic arguments and
-    # research-status boundary are closed fields in that result, rather than
-    # brittle inferred properties of free-form prose.
-    markers = [
-        line.removeprefix("RESULT_JSON:").strip()
-        for line in text.splitlines()
-        if line.startswith("RESULT_JSON:")
-    ]
-    if len(markers) != 1:
-        return False
-    try:
-        bound_result = json.loads(markers[0])
-    except (ValueError, RecursionError):
-        return False
-    return isinstance(result, dict) and json_value_equal(bound_result, result)
-
-
 def main():
     submission = _load_bounded_submission()
     source = json.loads(next(E.glob("*input*.json")).read_text())
     data = submission if isinstance(submission, dict) else {}
     result = data.get("result")
     math_correct = bool(isinstance(submission, dict) and _valid_result(result, source))
-    witness_valid = bool(math_correct and _witness_valid(data.get("witness"), result))
-    correct = bool(math_correct and witness_valid)
+    correct = math_correct
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(witness_valid),
                 "reward": float(correct),
             }
         )

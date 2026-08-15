@@ -24,18 +24,6 @@ def _write_json(path: Path, value: object) -> None:
     )
 
 
-def _inject_result_json(app: Path, submission: dict) -> None:
-    evidence_path = app / "evidence" / "answer.txt"
-    text = evidence_path.read_text()
-    lines = [line for line in text.splitlines() if not line.startswith("RESULT_JSON:")]
-    lines.append(
-        "RESULT_JSON:"
-        + json.dumps(submission["result"], sort_keys=True, separators=(",", ":"))
-    )
-    evidence_path.write_text("\n".join(lines) + "\n")
-    submission["witness"][0]["sha256"] = _digest(evidence_path)
-
-
 def _case(tmp_path: Path):
     root = tmp_path / TASK / "computed"
     app = root / "app"
@@ -44,18 +32,11 @@ def _case(tmp_path: Path):
     logs.mkdir(parents=True)
     shutil.copy2(TASK_PATH / "environment" / "input.json", app / "input.json")
     submission = json.loads((TASK_PATH / "solution" / "submission.json").read_text())
-    for descriptor in submission["witness"]:
-        evidence_path = Path(descriptor["path"])
-        destination = app / evidence_path
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(TASK_PATH / "solution" / evidence_path.name, destination)
-    _inject_result_json(app, submission)
     _write_json(app / "submission.json", submission)
     return TASK_PATH, app, logs
 
 
 def _rewrite(app: Path, submission: dict) -> None:
-    _inject_result_json(app, submission)
     _write_json(app / "submission.json", submission)
 
 
@@ -118,22 +99,6 @@ def test_visible_input_tamper_fails_closed(tmp_path: Path) -> None:
     assert reward.reward == 0.0
 
 
-def test_evidence_must_bind_submitted_result(tmp_path: Path) -> None:
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence_path = app / "evidence" / "answer.txt"
-    text = evidence_path.read_text()
-    lines = [line for line in text.splitlines() if not line.startswith("RESULT_JSON:")]
-    lines.append("RESULT_JSON:{}")
-    evidence_path.write_text("\n".join(lines) + "\n")
-    submission["witness"][0]["sha256"] = _digest(evidence_path)
-    _write_json(app / "submission.json", submission)
-    reward = _run_verifier(task, app, logs)
-    assert reward.details["correctness"] == 1.0
-    assert reward.reward == 0.0
-    assert reward.reward == 0.0
-
-
 def test_oversized_fiber_list_rejected_without_crash(tmp_path: Path) -> None:
     """An oversized fiber_checks list must fail closed without excessive work."""
     task, app, logs = _case(tmp_path)
@@ -145,15 +110,3 @@ def test_oversized_fiber_list_rejected_without_crash(tmp_path: Path) -> None:
     assert reward.details["correctness"] == 0.0
     assert reward.reward == 0.0
     assert reward.reward == 0.0
-
-
-def test_rejects_witness_without_result_marker(tmp_path: Path) -> None:
-    task, app, logs = _case(tmp_path)
-    evidence_path = app / "evidence" / "answer.txt"
-    evidence_path.write_text("prose without any structured marker\n")
-    submission = json.loads((app / "submission.json").read_text())
-    submission["witness"][0]["sha256"] = _digest(evidence_path)
-    _write_json(app / "submission.json", submission)
-    result = _run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0.0

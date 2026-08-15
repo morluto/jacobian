@@ -1,2 +1,0 @@
-Let L=ln(w). Then ln(x)/L=1/24 and ln(y)/L=1/40. Since ln(xyz)/L=1/12, ln(z)/L=1/12-1/24-1/40=1/60. Therefore log_z(w)=L/ln(z)=60.
-RESULT_JSON: {"value":60,"reciprocal_log_contributions":{"x":"1/24","y":"1/40","z":"1/60","xyz":"1/12"}}

@@ -106,11 +106,5 @@
       "k": "d^2-1",
       "status_for_d_ge_2": "NONINTEGER"
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:467da316e0070f74d048022adc5796ceab47018a5e983ec0d9b846159b04be25"
-    }
-  ]
+  }
 }

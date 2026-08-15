@@ -5,7 +5,6 @@ The frozen input gives a cyclic system over the complex numbers, a pairwise-dist
 Submit `/app/submission.json` following `/app/submission_schema.json`, plus a
 digest-bound JSON envelope at
 `/app/evidence/cyclic-elimination-certificate.json`. The envelope must contain
-exactly `schema_version` (value `"1"`), `task_id`, `result`, and `limitations`,
 with the latter three matching the submission.
 
 Your result must contain:
@@ -17,12 +16,11 @@ Your result must contain:
 - the rational candidate excluded by the original system, together with the exact elementary-symmetric invariants on that branch and the nonzero residual in the product consequence
   `(a^2-6)(b^2-6)(c^2-6)=abc`.
 
-Claim `COMPUTED` assurance and complete scope exactly as specified by the schema. This benchmark checks an exact algebraic audit of the frozen system; it does not machine-check the original contest solution or provide proof-assistant verification.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier independently replays the exact elimination, proposed-value evaluations, radical roots, and excluded-branch residual.
+The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
 
 Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
 

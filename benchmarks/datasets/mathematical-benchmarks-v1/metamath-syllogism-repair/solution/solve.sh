@@ -1,3 +1,3 @@
 #!/bin/sh
 set -eu
-python /solution/oracle.py /app
+cp /solution/submission.json /app/submission.json

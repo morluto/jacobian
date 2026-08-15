@@ -20,16 +20,21 @@ CYCLES = [
 
 
 def _module():
-    sys.path.insert(0, str(TASK / "tests"))
-    spec = importlib.util.spec_from_file_location(
-        "cycle_double_cover_verifier", TASK / "tests/verifier.py"
-    )
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
+    saved_path = sys.path[:]
+    saved_modules = dict(sys.modules)
+    try:
+        sys.path.insert(0, str(TASK / "tests"))
+        spec = importlib.util.spec_from_file_location(
+            "cycle_double_cover_verifier", TASK / "tests/verifier.py"
+        )
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path[:] = saved_path
+        sys.modules.clear()
+        sys.modules.update(saved_modules)
 def _result(module):
     repair = [cycle.copy() for cycle in CYCLES]
     flawed = [cycle.copy() for cycle in repair[:-1]]

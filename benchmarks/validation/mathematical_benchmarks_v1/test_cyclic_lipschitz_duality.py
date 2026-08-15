@@ -10,14 +10,19 @@ VERIFIER = (
 
 
 def module():
-    sys.path.insert(0, str(VERIFIER.parent))
-    spec = importlib.util.spec_from_file_location("cyclic_dual", VERIFIER)
-    assert spec and spec.loader
-    loaded = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(loaded)
-    return loaded
-
-
+    saved_path = sys.path[:]
+    saved_modules = dict(sys.modules)
+    try:
+        sys.path.insert(0, str(VERIFIER.parent))
+        spec = importlib.util.spec_from_file_location("cyclic_dual", VERIFIER)
+        assert spec and spec.loader
+        loaded = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(loaded)
+        return loaded
+    finally:
+        sys.path[:] = saved_path
+        sys.modules.clear()
+        sys.modules.update(saved_modules)
 def test_independent_dual_cost():
     assert module().minimum_cost() == 15
 

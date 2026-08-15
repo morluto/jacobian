@@ -129,8 +129,6 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/component/providers/matrix/test_matrix_operations.py"),
         # Real analysis domain test uses external analysis executables.
         PurePosixPath("tests/domain/analysis/test_real_analysis.py"),
-        # Untrusted plugin entrypoints manage their own process lifecycle.
-        PurePosixPath("tests/support/process_entrypoints.py"),
         # This checker's own test file uses subprocess in synthetic probes.
         PurePosixPath("tests/unit/tooling/test_architecture_process_policies.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_harbor_contracts.py"),

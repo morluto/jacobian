@@ -134,7 +134,7 @@ def test_accepts_long_rational_coordinates(tmp_path: Path) -> None:
         _rational(value / scale)
         for value, scale in zip(original_coordinates, scales, strict=True)
     ]
-    assert abs(result["f_coordinates"][0]["numerator"]) >= 10**80
+    assert len(str(result["f_coordinates"][0]["denominator"])) > 80
     for row, entries in enumerate(result["action_matrix"]):
         for column, poly in enumerate(entries):
             for term in poly:

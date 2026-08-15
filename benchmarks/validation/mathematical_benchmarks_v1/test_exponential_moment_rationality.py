@@ -18,7 +18,10 @@ def test_uses_result_only_protocol(tmp_path: Path) -> None:
 def test_rejects_corrupted_generic_formula(tmp_path: Path) -> None:
     task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())
-    submission["result"]["generic_formula"]["numerator"][0]["coefficient"] = "2"
+    submission["result"]["generic_formula"]["numerator"][0]["coefficient"] = {
+        "numerator": 2,
+        "denominator": 1,
+    }
     _fixtures._write_json(app / "submission.json", submission)
     rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0

@@ -123,6 +123,15 @@ def _same_ideal(generators: object, frozen: dict[str, Any]) -> bool:
         return False
 
 
+def _frozen_q(value: object) -> Fraction | None:
+    if type(value) is not str or any(marker in value for marker in ".eE"):
+        return None
+    try:
+        return Fraction(value)
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
 def _expected_fiber_points(
     points: list[object],
 ) -> set[tuple[Fraction, Fraction]] | None:
@@ -130,7 +139,7 @@ def _expected_fiber_points(
     for point in points:
         if not isinstance(point, dict):
             return None
-        x_value, y_value = _q(point.get("x")), _q(point.get("y"))
+        x_value, y_value = _frozen_q(point.get("x")), _frozen_q(point.get("y"))
         if x_value is None or y_value is None:
             return None
         expected.add((x_value, y_value))

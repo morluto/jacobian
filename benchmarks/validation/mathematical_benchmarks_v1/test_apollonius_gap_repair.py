@@ -31,7 +31,13 @@ def _bind_witness(app: Path, submission: dict[str, object]) -> None:
     result = submission["result"]
 
     def render(value: object) -> str:
-        return str(Fraction(value["numerator"], value["denominator"]))
+        if isinstance(value, dict) and set(value) >= {"numerator", "denominator"}:
+            return str(Fraction(value["numerator"], value["denominator"]))
+        if isinstance(value, list):
+            return ",".join(
+                render(item) if isinstance(item, dict) else str(item) for item in value
+            )
+        return str(value)
 
     text = (
         "\n".join(

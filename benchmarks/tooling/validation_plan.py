@@ -252,14 +252,31 @@ def task_host_validation(
                 ),
             )
         return dataset_host_validation(dataset, timings=timings)
-    if dataset == "public-reproductions-v1" and task == "sat-erdos-schur-f4":
-        return (
-            _entry(
-                name=task,
-                selector="benchmarks/validation/test_sat_erdos_schur_f4.py",
-                timings=timings,
-            ),
+    if dataset == "public-reproductions-v1":
+        dedicated = (
+            root
+            / "benchmarks"
+            / "validation"
+            / "public_reproductions_v1"
+            / f"test_{task.replace('-', '_')}.py"
         )
+        if dedicated.is_file():
+            return (
+                _entry(
+                    name=f"{task}-specific",
+                    selector=dedicated.relative_to(root).as_posix(),
+                    timings=timings,
+                ),
+            )
+        if task == "sat-erdos-schur-f4":
+            return (
+                _entry(
+                    name=task,
+                    selector="benchmarks/validation/test_sat_erdos_schur_f4.py",
+                    timings=timings,
+                ),
+            )
+        return dataset_host_validation(dataset, timings=timings)
     if dataset == "conjecture-probes-v1":
         dedicated = (
             root

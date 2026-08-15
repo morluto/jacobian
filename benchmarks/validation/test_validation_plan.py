@@ -30,6 +30,34 @@ def test_task_change_selects_only_its_owned_leaf(tmp_path: Path) -> None:
     assert all(reason.startswith("focused host validation:") for reason in plan.reasons)
 
 
+def test_public_reproduction_task_selects_its_dedicated_host_leaf(
+    tmp_path: Path,
+) -> None:
+    task = "jacobian-negative-control"
+    leaf = (
+        tmp_path
+        / "benchmarks/validation/public_reproductions_v1"
+        / "test_jacobian_negative_control.py"
+    )
+    leaf.parent.mkdir(parents=True)
+    leaf.write_text("", encoding="utf-8")
+    suite = SimpleNamespace(tasks=(SimpleNamespace(path=Path(task)),))
+
+    plan = host_validation_plan(
+        tmp_path,
+        [f"benchmarks/datasets/public-reproductions-v1/{task}/tests/verifier.py"],
+        {"public-reproductions-v1": suite},
+    )
+
+    assert [(entry.selector, entry.keyword) for entry in plan.entries] == [
+        (
+            "benchmarks/validation/public_reproductions_v1/"
+            "test_jacobian_negative_control.py",
+            "",
+        ),
+    ]
+
+
 def test_task_change_without_a_leaf_uses_the_input_binding_fallback(
     tmp_path: Path,
 ) -> None:

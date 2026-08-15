@@ -26,10 +26,6 @@ def q(value):
     return parsed
 
 
-def encoded(value):
-    return {"numerator": value.numerator, "denominator": value.denominator}
-
-
 def valid_result(result):
     if not isinstance(result, dict) or set(result) != {
         "base",
@@ -51,41 +47,46 @@ def valid_result(result):
         or result.get("count_formula") != "(b^(2m+2)-1)/(b+1)"
     ):
         return False
-    expected = []
+    expected = {}
     for m in range(8):
         high, low = b ** (2 * m + 1), b ** (2 * m + 2)
         count = (low - 1) // (b + 1)
-        expected.append(
-            {
-                "level": m,
-                "included_endpoint": high,
-                "excluded_endpoint": low,
-                "cumulative_count": count,
-                "included_density": encoded(Fraction(count, high)),
-                "excluded_density": encoded(Fraction(count, low)),
-            }
+        expected[m] = (
+            high,
+            low,
+            count,
+            Fraction(count, high),
+            Fraction(count, low),
         )
     levels = result.get("levels")
-    exact_integer_levels = bool(
-        isinstance(levels, list)
-        and len(levels) == 8
-        and all(
-            isinstance(row, dict)
-            and all(
-                type(row.get(field)) is int
-                for field in (
-                    "level",
-                    "included_endpoint",
-                    "excluded_endpoint",
-                    "cumulative_count",
-                )
-            )
-            for row in levels
+    if not isinstance(levels, list) or len(levels) != 8:
+        return False
+    submitted = {}
+    for row in levels:
+        if not isinstance(row, dict):
+            return False
+        level = row.get("level")
+        included = q(row.get("included_density"))
+        excluded = q(row.get("excluded_density"))
+        if (
+            type(level) is not int
+            or level in submitted
+            or type(row.get("included_endpoint")) is not int
+            or type(row.get("excluded_endpoint")) is not int
+            or type(row.get("cumulative_count")) is not int
+            or included is None
+            or excluded is None
+        ):
+            return False
+        submitted[level] = (
+            row["included_endpoint"],
+            row["excluded_endpoint"],
+            row["cumulative_count"],
+            included,
+            excluded,
         )
-    )
     return (
-        exact_integer_levels
-        and sorted(result.get("levels"), key=lambda row: row["level"]) == expected
+        submitted == expected
         and q(result.get("lower_density")) == Fraction(1, b + 1)
         and q(result.get("upper_density")) == Fraction(b, b + 1)
         and result.get("lower_density_positive") is True

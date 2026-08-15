@@ -102,6 +102,18 @@ def test_string_coerced_density_is_rejected(tmp_path: Path) -> None:
     )
 
 
+def test_accepts_unreduced_lower_density(tmp_path: Path) -> None:
+    assert (
+        _run(
+            tmp_path,
+            lambda submission: submission["result"].update(
+                lower_density={"numerator": 2, "denominator": 8}
+            ),
+        ).reward
+        == 1.0
+    )
+
+
 def test_oracle_generator_emits_typed_rationals(tmp_path: Path, monkeypatch) -> None:
     generated: dict[str, str] = {}
     original_write_text = Path.write_text

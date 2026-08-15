@@ -42,9 +42,7 @@ def solve_independence_number(
 
     started = time.monotonic()
     incumbent = tuple(sorted(nx.approximation.maximum_independent_set(graph)))
-    remaining_ms = int(
-        (request.resource_budget.wall_seconds - (time.monotonic() - started)) * 1000
-    )
+    remaining_ms = _remaining_ms(started, request.resource_budget.wall_seconds)
     if remaining_ms <= 0:
         return IndependenceNumberResult(
             status="UNKNOWN",

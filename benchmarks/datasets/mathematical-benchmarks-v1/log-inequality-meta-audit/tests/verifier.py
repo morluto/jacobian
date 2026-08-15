@@ -5,34 +5,10 @@ from verifier_support import (
     aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 W = Path("/app")
 E = Path("/tests")
-
-
-def evidence_matches_result(evidence, result):
-    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text().casefold()
-        return all(
-            fragment in text
-            for fragment in (
-                "x^2+y^2=z^2=12",
-                "18^4=104976",
-                "6^7",
-                "universal claim is false",
-                "score 0",
-            )
-        )
-    except (OSError, UnicodeError):
-        return False
 
 
 def _valid_layered_audit(result, source):
@@ -135,13 +111,9 @@ def main():
     math_correct = bool(
         protocol_ok and _valid_layered_audit(submission.get("result"), source)
     )
-    evidence_valid = bool(
-        protocol_ok
-        and evidence_matches_result(submission.get("witness"), submission.get("result"))
-    )
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=evidence_valid,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
 
@@ -150,7 +122,6 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

@@ -19,11 +19,5 @@
       "proposed_truth": true
     },
     "relationship": "INCOMPARABLE"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:82d1787410da5e3c6f2d89b467ffe9272f150c22f3919647f5701e6b314e767b"
-    }
-  ]
+  }
 }

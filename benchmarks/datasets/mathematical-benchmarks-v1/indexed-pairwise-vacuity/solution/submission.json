@@ -56,11 +56,5 @@
       8
     ],
     "subgroup_step": 4
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:f75ad83ae0d542b8d1b9c5868c0ad19012cd3c9d1092e837da1c03f30d553955"
-    }
-  ]
+  }
 }

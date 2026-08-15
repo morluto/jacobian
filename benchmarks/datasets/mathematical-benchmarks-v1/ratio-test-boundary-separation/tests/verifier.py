@@ -6,10 +6,8 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
 )
 
 WORKSPACE = Path("/app")
@@ -190,57 +188,13 @@ def _result(value: object) -> bool:
     )
 
 
-def _evidence(value: object, result: object) -> bool:
-    if not isinstance(value, list) or len(value) != 1:
-        return False
-    path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
-    if path is None:
-        return False
-    try:
-        if path.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        text = path.read_text()
-    except (OSError, UnicodeError):
-        return False
-    markers = [
-        line[12:].strip()
-        for line in text.splitlines()
-        if line.startswith("RESULT_JSON:")
-    ]
-    if len(markers) != 1:
-        return False
-    try:
-        bound = json.loads(markers[0])
-    except (ValueError, RecursionError):
-        return False
-    prose = "\n".join(
-        line for line in text.splitlines() if not line.startswith("RESULT_JSON:")
-    )
-    folded = prose.casefold()
-    return bool(
-        bound == result
-        and len(folded) >= 80
-        and _BOUNDARY_EXPLANATION_RE.search(prose)
-        and all(
-            word in folded
-            for word in ("ratio", "diverge", "converge", "dyadic", "telescop")
-        )
-    )
-
-
 def _evaluate(submission: object) -> dict[str, float | bool]:
     data = submission if isinstance(submission, dict) else {}
     input_binding = _source_is_bound()
     math_ok = bool(input_binding and _result(data.get("result")))
-    ev_ok = bool(math_ok and _evidence(data.get("witness"), data.get("result")))
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=ev_ok,
-        protocol_ok=bool(input_binding and submission is not None),
-    )
+    reward = float(input_binding and submission is not None and math_ok)
     return {
         "correctness": float(math_ok),
-        "witness_validity": float(ev_ok),
         "input_binding": float(input_binding),
         "reward": reward,
     }

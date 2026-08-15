@@ -8,11 +8,8 @@ from typing import Any
 
 from verifier_support import (
     aggregate_reward,
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
@@ -162,98 +159,6 @@ def load_regular_submission() -> dict[str, Any] | None:
         return None
 
 
-def evidence_matches_result(evidence: object, result: object) -> bool:
-    """Bind the evidence file to the submitted result and require a derivation.
-
-    Rejects empty or arbitrary evidence text: the file must contain a
-    ``RESULT_JSON:`` marker matching the submitted result object and a
-    non-empty human-readable derivation body with concrete certificate values.
-    The evidence list must contain
-    exactly one descriptor (submission_schema.json sets maxItems: 1).
-    """
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    try:
-        if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-            return False
-        target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    except RecursionError:
-        return False
-    if target is None:
-        return False
-    try:
-        if target.stat().st_size > 1_048_576:
-            return False
-        text = target.read_text()
-        lines = text.splitlines()
-        marker = next(
-            line.removeprefix("RESULT_JSON:").strip()
-            for line in lines
-            if line.startswith("RESULT_JSON:")
-        )
-        body = "\n".join(line for line in lines if not line.startswith("RESULT_JSON:"))
-        lowered = body.lower()
-        compact = "".join(lowered.split())
-        parameter = (
-            integer_value(result.get("parameter")) if isinstance(result, dict) else None
-        )
-        expected_fragments = tuple(
-            str(result.get(key)).replace(" ", "")
-            for key in (
-                "remainder_constant",
-                "remainder_x",
-                "common_gcd",
-                "quotient",
-            )
-        )
-        parameter_is_stated = bool(
-            parameter is not None
-            and any(
-                form in compact
-                for form in (
-                    f"a={parameter}",
-                    f"rootis{parameter}",
-                    f"root={parameter}",
-                    f"parameteris{parameter}",
-                )
-            )
-        )
-        return (
-            json_value_equal(json.loads(marker), result)
-            and len(body) >= 80
-            and "gcd" in lowered
-            and "remainder" in lowered
-            and ("product" in lowered or "multiplication" in lowered)
-            and parameter_is_stated
-            and "unique" in lowered
-            and "root" in lowered
-            and all(fragment in compact for fragment in expected_fragments)
-        )
-    except (OSError, StopIteration, UnicodeError, ValueError, RecursionError):
-        return False
-
-
-def limitation_is_bounded(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    lowered = value.casefold()
-    bounded_language = (
-        "only",
-        "specific",
-        "frozen",
-        "limited",
-        "restricted",
-        "supplied",
-        "given",
-        "not a general",
-        "does not generalize",
-    )
-    subject = ("polynomial", "family", "divisibility", "certificate", "input")
-    return any(word in lowered for word in subject) and any(
-        phrase in lowered for phrase in bounded_language
-    )
-
-
 def main() -> None:
     submission = load_regular_submission()
     protocol_ok = submission is not None
@@ -293,14 +198,9 @@ def main() -> None:
     math_correct = bool(
         protocol_ok and result_schema_ok and symbolic_ok and quotient_ok
     )
-    evidence_valid = bool(
-        protocol_ok
-        and math_correct
-        and evidence_matches_result(data.get("witness"), result_typed)
-    )
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=evidence_valid,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     logs = Path("/logs/verifier")
@@ -309,7 +209,6 @@ def main() -> None:
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

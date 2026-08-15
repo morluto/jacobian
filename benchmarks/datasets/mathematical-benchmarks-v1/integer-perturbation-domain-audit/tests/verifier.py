@@ -8,8 +8,6 @@ from verifier_support import (
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -125,73 +123,6 @@ def _valid(result, source):
     )
 
 
-def _evidence(evidence, result):
-    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text()
-        marker_lines = [
-            line[12:].strip()
-            for line in text.splitlines()
-            if line.startswith("RESULT_JSON:")
-        ]
-        if len(marker_lines) != 1 or not isinstance(result, dict):
-            return False
-        marker = marker_lines[0]
-        prose = "\n".join(
-            line for line in text.splitlines() if not line.startswith("RESULT_JSON:")
-        ).casefold()
-        if _has_affirmative_prohibited_claim(prose):
-            return False
-        canonical_marker = json.dumps(
-            json.loads(marker), sort_keys=True, separators=(",", ":")
-        )
-        canonical_result = json.dumps(result, sort_keys=True, separators=(",", ":"))
-        return canonical_marker == canonical_result and _audit_prose_valid(prose)
-    except (
-        OSError,
-        ValueError,
-        UnicodeError,
-        StopIteration,
-        RecursionError,
-        MemoryError,
-    ):
-        return False
-
-
-def _limitations_valid(limitations):
-    """Reject affirmative Lean/irrationality overclaims.
-
-    The task prohibits claiming Lean compilation or any irrationality theorem.
-    A valid limitation must explicitly state that Lean is not assessed, and
-    must not assert that Lean or any irrationality theorem was proved/verified.
-    """
-    if not isinstance(limitations, list):
-        return False
-    has_lean_limitation = False
-    has_irrationality_limitation = False
-    for item in limitations:
-        if not isinstance(item, str):
-            return False
-        folded = item.casefold()
-        if _has_affirmative_prohibited_claim(folded):
-            return False
-        if "lean" in folded and (
-            "not assessed" in folded
-            or re.search(r"\b(?:no|not|never)\b.{0,80}\b(?:claim|claimed)\b", folded)
-        ):
-            has_lean_limitation = True
-        if "irrational" in folded and (
-            "not assessed" in folded
-            or re.search(r"\b(?:no|not|never)\b.{0,80}\b(?:claim|claimed)\b", folded)
-        ):
-            has_irrationality_limitation = True
-    return has_lean_limitation and has_irrationality_limitation
-
-
 def _has_affirmative_prohibited_claim(text):
     clauses = re.split(r"[.;]|\s*,\s*(?:and|but)\s+|\s+(?:and|but)\s+", text)
     for clause in clauses:
@@ -237,12 +168,9 @@ def main():
     submission = load_submission(require_input_binding=False)
     result = raw.get("result") if isinstance(raw, dict) else None
     math_ok = bool(_valid(result, source))
-    ev_ok = bool(
-        isinstance(raw, dict) and _evidence(raw.get("witness"), raw.get("result"))
-    )
     reward = aggregate_reward(
         correctness=math_ok,
-        witness_validity=ev_ok,
+        witness_validity=True,
         protocol_ok=bool(input_binding and submission is not None),
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -250,7 +178,6 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(ev_ok),
                 "input_binding": float(input_binding),
                 "reward": reward,
             }

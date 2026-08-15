@@ -108,11 +108,5 @@
       "term": "1/n"
     },
     "ratio_limit": "1"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:132e08fa6f598dec4e1b6618c1521043de6e7dd30311b502f41907933546374d"
-    }
-  ]
+  }
 }

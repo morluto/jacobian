@@ -1,9 +1,0 @@
-Let T on ell2 have diagonal weights 1/n. Its bounded graph is closed in ell2
-direct sum ell2, and projection to the second summand has image equal to the
-range of T.
-
-The truncations of y_n=1/n lie in the range and converge by the tail bound
-sum_{n>m} 1/n^2 <= 1/m. The forced preimage is the all-ones sequence, whose
-squared norm diverges, so the limit has no preimage in ell2. The exact
-coordinates, partial norms, tail parameters, and proof obligations are in the
-structured submission.

@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="0032b7076eb926f1128d331a1b6e7a4679284438622bbecce71b00c1dfa8beda"
+LABEL jacobian.checksum="2a451a28354fc62d9690e69d345ee4d5c1470a350be440223902eca1943042c4"
 # Exact verifier for multivariable path-dependent limit certificates.
 LABEL jacobian.task="jacobian/path-dependent-limit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/

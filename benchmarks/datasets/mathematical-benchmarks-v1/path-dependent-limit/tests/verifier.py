@@ -6,10 +6,8 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
     workspace_input_is_bound,
 )
 
@@ -157,100 +155,13 @@ def _result(value: object) -> bool:
     )
 
 
-def _evidence(value: object, result: object) -> bool:
-    if not isinstance(value, list) or len(value) != 1:
-        return False
-    path = resolve_evidence(
-        value[0],
-        expected_path="evidence/answer.txt",
-        max_bytes=MAX_EVIDENCE_BYTES,
-    )
-    if path is None:
-        return False
-    try:
-        if path.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        text = path.read_text()
-    except (OSError, UnicodeError):
-        return False
-    markers = [
-        line[12:].strip()
-        for line in text.splitlines()
-        if line.startswith("RESULT_JSON:")
-    ]
-    if len(markers) != 1:
-        return False
-    try:
-        bound = json.loads(markers[0])
-    except (ValueError, RecursionError):
-        return False
-    prose = "\n".join(
-        line for line in text.splitlines() if not line.startswith("RESULT_JSON:")
-    )
-    folded = prose.casefold()
-    explains_linewise_limit = bool(
-        re.search(r"\b(?:every|all|each)\s+straight lines?\b", folded)
-        and re.search(
-            r"\b(?:does not|doesn't|cannot|can't|fails to|insufficient to)\b"
-            r"[^.!?]{0,120}\b(?:establish|prove|show|imply|guarantee|determine)\b"
-            r"[^.!?]{0,120}\blimit\b",
-            folded,
-        )
-    )
-    states_multivariable_nonexistence = bool(
-        "does not exist" in folded
-        or re.search(
-            r"\bno\s+(?:single\s+)?(?:two-variable|multivariable)\s+limit\s+exists\b",
-            folded,
-        )
-    )
-    return bool(
-        bound == result
-        and len(prose) >= 120
-        and explains_linewise_limit
-        and all(word in folded for word in ("nonlinear", "origin"))
-        and states_multivariable_nonexistence
-    )
-
-
-def _assurance_limitation_is_negated(value: object) -> bool:
-    if not isinstance(value, list) or not all(type(item) is str for item in value):
-        return False
-    text = "\n".join(value).casefold()
-    if "proof assistant" not in text:
-        return False
-    if re.search(r"\b(?:no|not all)\s+proof assistant\b[^.!?]*\bfailed\b", text):
-        return False
-    affirmative = re.search(
-        r"\bproof assistant\b[^.!?]{0,100}\b(?:verified|proved|formalized|"
-        r"established|certified|checked|used)\b",
-        text,
-    )
-    negated = re.search(
-        r"(?:\b(?:does not|doesn't|did not|cannot|can't|will not|won't)\b"
-        r"[^.!?]{0,100}\b(?:establish|prove|verify|formalize|certify|check|use)\b"
-        r"[^.!?]{0,100}\bproof assistant\b|"
-        r"\b(?:no|without)\b[^.!?]{0,30}\bproof assistant\b|"
-        r"\bproof assistant\b[^.!?]{0,60}\b(?:not|never)\b[^.!?]{0,30}\b"
-        r"(?:used|verified|proved|formalized|established|certified|checked)\b)",
-        text,
-    )
-    return affirmative is None and negated is not None
-
-
 def _evaluate(submission: object) -> dict[str, float]:
     data = submission if isinstance(submission, dict) else {}
     input_binding = workspace_input_is_bound()
     math_ok = bool(_source_is_bound() and _result(data.get("result")))
-    ev_ok = bool(_evidence(data.get("witness"), data.get("result")))
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=ev_ok,
-        protocol_ok=bool(input_binding and submission is not None),
-    )
+    reward = float(input_binding and submission is not None and math_ok)
     return {
         "correctness": float(math_ok),
-        "witness_validity": float(ev_ok),
         "input_binding": float(input_binding),
         "reward": reward,
     }

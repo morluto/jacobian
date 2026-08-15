@@ -109,11 +109,5 @@
       }
     ],
     "regions": 64
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:2f95e9be90ec8ab87b8197ed08417c0ffeba834bb1cdb27898f0a6c22d6f83c4"
-    }
-  ]
+  }
 }

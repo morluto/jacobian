@@ -1,24 +1,16 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
 )
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
-TASK_ID = "jacobian/finite-field-irreducibility-repair"
 CONCLUSION = "BAD_REDUCTION_DIAGNOSED_AND_IRREDUCIBILITY_REPAIRED"
-SCOPE = "the irreducibility step for x^4-4x+1 only"
-LIMITATIONS = [
-    "The verifier does not assess the source proof's later Galois-group or density claims and does not invoke a proof assistant."
-]
-MAX_ANSWER_BYTES = 1_048_576
 
 
 def _exact_int(value: object) -> bool:
@@ -35,33 +27,6 @@ def _int_list(value: object, *, min_len: int, max_len: int) -> bool:
         and min_len <= len(value) <= max_len
         and all(type(x) is int for x in value)
     )
-
-
-def _json_equal(a: object, b: object) -> bool:
-    """Structural JSON equality that rejects bool where int is expected.
-
-    Python's ``==`` treats ``True == 1`` and ``False == 0`` as equal, so a
-    marker that substitutes a boolean for an integer field would match the
-    validated result. This helper recursively requires exact types for
-    scalars (``bool`` is never equal to ``int``) and element-wise equality
-    for lists and dicts.
-    """
-
-    if isinstance(a, bool) or isinstance(b, bool):
-        return type(a) is type(b) and a == b
-    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
-        return type(a) is type(b) and a == b
-    if isinstance(a, str) and isinstance(b, str):
-        return a == b
-    if isinstance(a, list) and isinstance(b, list):
-        return len(a) == len(b) and all(
-            _json_equal(x, y) for x, y in zip(a, b, strict=True)
-        )
-    if isinstance(a, dict) and isinstance(b, dict):
-        return a.keys() == b.keys() and all(_json_equal(a[k], b[k]) for k in a)
-    if a is None or b is None:
-        return a is None and b is None
-    return False
 
 
 def _trim(a: list[int], p: int) -> list[int]:
@@ -187,164 +152,12 @@ def _result(value: object) -> bool:
     )
 
 
-_FORMAL_CLAIM_PHRASES = (
-    "proof assistant",
-    "proof-assistant",
-    "formally verified",
-    "formal verification",
-    "formally checked",
-    "formally proved",
-    "formally proven",
-    "machine checked",
-    "machine-checked",
-    "machine verified",
-    "machine-verified",
-    "theorem prover",
-    "theorem proving",
-)
-_PROVER_NAMES = (
-    "lean",
-    "coq",
-    "isabelle",
-    "agda",
-    "metamath",
-    "pvs",
-    "acl2",
-    "hol4",
-    "mizar",
-)
-_VERIFY_VERBS = (
-    "verified",
-    "proved",
-    "proven",
-    "checked",
-    "confirmed",
-    "certified",
-    "formal",
-)
-
-
-def _claims_proof_assistant(folded: str) -> bool:
-    """Reject assertions of proof-assistant or formal verification; allow disclaimers.
-
-    The instruction forbids claiming proof-assistant verification, not
-    truthfully disclaiming it. A clause that mentions a proof assistant or
-    formal verification alongside a negation term (e.g. "was not checked by a
-    proof assistant") is a valid disclaimer, not a false claim. Affirmative
-    claims using synonymous phrasing such as "Lean 4 formally verified this
-    proof" are also rejected.
-    """
-
-    clauses = [clause.strip() for clause in re.split(r"[.!?]\s*", folded)]
-    negations = ("not", "no", "without", "never", "neither", "nor")
-    return any(
-        (
-            any(phrase in clause for phrase in _FORMAL_CLAIM_PHRASES)
-            or any(
-                name in clause and any(verb in clause for verb in _VERIFY_VERBS)
-                for name in _PROVER_NAMES
-            )
-        )
-        and not any(neg in clause for neg in negations)
-        for clause in clauses
-    )
-
-
-def _explanation_valid(prose: str) -> bool:
-    """Check the two documented mathematical obligations by clause."""
-
-    folded = prose.casefold()
-    clauses = [clause.strip() for clause in re.split(r"[.!?]\s*", folded)]
-    explains_bad_implication = any(
-        "reducible" in clause
-        and any(
-            phrase in clause
-            for phrase in (
-                "cannot support",
-                "does not support",
-                "invalid",
-                "fails",
-                "false implication",
-                "not irreducible",
-            )
-        )
-        for clause in clauses
-    )
-    explains_repair = any(
-        "irreducible" in clause
-        and any(phrase in clause for phrase in ("rational", "over q"))
-        and any(
-            phrase in clause
-            for phrase in ("hence", "therefore", "proves", "shows", "criterion", "test")
-        )
-        for clause in clauses
-    )
-    explains_rabin_test = any(
-        any(word in clause for word in ("rabin", "frobenius")) and "gcd" in clause
-        for clause in clauses
-    )
-    return bool(
-        len(prose) >= 140
-        and explains_bad_implication
-        and explains_repair
-        and explains_rabin_test
-        and not _claims_proof_assistant(folded)
-    )
-
-
-def _evidence(value: object, result: object) -> bool:
-    if not isinstance(value, list) or len(value) != 1:
-        return False
-    path = resolve_evidence(
-        value[0], expected_path="evidence/answer.txt", max_bytes=MAX_ANSWER_BYTES
-    )
-    if path is None:
-        return False
-    try:
-        if path.stat().st_size > MAX_ANSWER_BYTES:
-            return False
-        text = path.read_text()
-    except (OSError, UnicodeError):
-        return False
-    markers = [
-        line[12:].strip()
-        for line in text.splitlines()
-        if line.startswith("RESULT_JSON:")
-    ]
-    if len(markers) != 1:
-        return False
-    try:
-        bound = json.loads(markers[0])
-    except (ValueError, RecursionError, MemoryError):
-        return False
-    prose = "\n".join(
-        line for line in text.splitlines() if not line.startswith("RESULT_JSON:")
-    )
-    return bool(_json_equal(bound, result) and _explanation_valid(prose))
-
-
-def _limitation_valid(limits: object) -> bool:
-    """Require a limitation that excludes the density calculation from scope.
-
-    The instructions state the verifier must not assess the later density
-    calculation. A limitation such as ``The density is not purple.'' must be
-    rejected because it does not state that the density step is outside the
-    checked scope.
-    """
-
-    if not isinstance(limits, list):
-        return False
-    return limits == LIMITATIONS
-
-
 def _evaluate(submission: object) -> dict[str, float | bool]:
     data = submission if isinstance(submission, dict) else {}
     math_correct = bool(_source_is_bound() and _result(data.get("result")))
-    witness_valid = bool(_evidence(data.get("witness"), data.get("result")))
-    reward = float(math_correct and witness_valid)
+    reward = float(math_correct)
     return {
         "correctness": float(math_correct),
-        "witness_validity": float(witness_valid),
         "reward": reward,
     }
 

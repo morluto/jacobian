@@ -34,11 +34,5 @@
       "sum_lower_bound": 1
     },
     "semantic_status": "STRICTLY_WEAKER"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:d9a87d66009540c95e22bd2fcacb0173a24cf5f482997114bc011af1c8dc1f83"
-    }
-  ]
+  }
 }

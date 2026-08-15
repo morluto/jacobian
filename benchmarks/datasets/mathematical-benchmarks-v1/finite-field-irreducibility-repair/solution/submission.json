@@ -26,11 +26,5 @@
     "rabin_gcd_degree": 0,
     "rational_conclusion": "IRREDUCIBLE_OVER_Q",
     "repair_prime": 11
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:7aa31bfc4ef3888ada30ec4b725f09c8e5aa0ca931429b621696afad8cefcf38"
-    }
-  ]
+  }
 }

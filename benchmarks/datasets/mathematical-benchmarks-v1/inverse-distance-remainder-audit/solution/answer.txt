@@ -1,1 +1,0 @@
-The normalized expansion is (1-2*u_1*t+t^2)^(-1/2) = 1+u_1*t+(3*u_1^2-1)t^2/2+O(t^3). The parallel direction has positive quadratic coefficient 1; an orthogonal direction has negative coefficient -1/2. Both nonzero limits show the residual is not O(t^3). The frozen response reaches the right conclusion, but it misclassifies epsilon^2 and drops an explicit quadratic contribution.

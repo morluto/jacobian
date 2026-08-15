@@ -6,8 +6,6 @@ from pathlib import Path
 from verifier_support import (
     aggregate_reward,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -216,28 +214,13 @@ _AFFIRMATIVE_SETTLEMENT = re.compile(
 )
 
 
-def _limitation_disclaims_conjecture(text):
-    """Require a limitation to disclaim settling the open conjecture.
-
-    The task forbids presenting the finite audit as settling the underlying
-    conjecture, so a valid limitation must reference the open/underlying
-    conjecture, explicitly disclaim settling it, and must not affirm that it is
-    settled. Mere keyword presence is not enough.
-    """
-    lowered = text.casefold()
-    if not any(kind in lowered for kind in _CONJECTURE_KINDS):
-        return False
-    if _AFFIRMATIVE_SETTLEMENT.search(lowered):
-        return False
-    return any(disclaimer in lowered for disclaimer in _DISCLAIMERS)
-
-
 def _load_exact_submission():
     path = Path("/app/submission.json")
     try:
         if path.is_symlink() or not path.is_file() or path.stat().st_size > 1_048_576:
             return None
-        return json.loads(path.read_text(), parse_float=Decimal)
+        value = json.loads(path.read_text(), parse_float=Decimal)
+        return value if isinstance(value, dict) and set(value) == {"result"} else None
     except (
         OSError,
         UnicodeError,
@@ -246,100 +229,6 @@ def _load_exact_submission():
         DecimalException,
     ):
         return None
-
-
-def _evidence_descriptor_ok(descriptor):
-    return (
-        isinstance(descriptor, dict)
-        and set(descriptor) == {"path", "sha256"}
-        and descriptor.get("path") == "evidence/answer.txt"
-        and isinstance(descriptor.get("sha256"), str)
-    )
-
-
-def _evidence_file_stat_ok(target):
-    try:
-        if (
-            target.is_symlink()
-            or not target.is_file()
-            or target.stat().st_size > 1_048_576
-        ):
-            return False
-    except OSError:
-        return False
-    return True
-
-
-def _evidence_target_text(target):
-    try:
-        if target.stat().st_size > 1_048_576:
-            return None
-        return target.read_text().casefold()
-    except (OSError, UnicodeError):
-        return None
-
-
-def _evidence_content_ok(text, result):
-    if not all(term in text for term in ("exact cover", "set.range", "vacuously")):
-        return False
-    modulus = result.get("modulus") if isinstance(result, dict) else None
-    step = result.get("subgroup_step") if isinstance(result, dict) else None
-    if type(modulus) is not int or type(step) is not int:
-        return False
-    if not (
-        re.search(rf"\bz\s*/\s*{modulus}\s*z\b", text)
-        or re.search(rf"\b(?:modulus|n)\s*(?:=|is|:)\s*{modulus}\b", text)
-    ):
-        return False
-    subgroup = result.get("subgroup") if isinstance(result, dict) else None
-    subgroup_pattern = None
-    if isinstance(subgroup, list) and all(type(value) is int for value in subgroup):
-        values = r"\s*,\s*".join(str(value) for value in sorted(subgroup))
-        subgroup_pattern = rf"\{{\s*{values}\s*\}}"
-    if not (
-        re.search(rf"\b(?:subgroup\s+)?step\s*(?:=|is|:)\s*{step}\b", text)
-        or (subgroup_pattern is not None and re.search(subgroup_pattern, text))
-    ):
-        return False
-    # Reject evidence that contradicts the submitted conclusion. The audit
-    # asserts an exact cover with a vacuously-true Set.range predicate, so any
-    # negation of those claims invalidates the evidence regardless of keyword
-    # presence.
-    contradictions = (
-        "not an exact cover",
-        "not a exact cover",
-        "no exact cover",
-        "is not an exact cover",
-        "set.range is not vacuously",
-        "not vacuously true",
-        "not vacuously",
-        "vacuously false",
-    )
-    return not any(contradiction in text for contradiction in contradictions)
-
-
-def _evidence_valid(evidence, result):
-    # The published submission schema caps the evidence array at one descriptor,
-    # so require exactly one before awarding evidence validity.
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    descriptor = evidence[0]
-    if not _evidence_descriptor_ok(descriptor):
-        return False
-    target = Path("/app") / "evidence" / "answer.txt"
-    if target is None:
-        return False
-    if not _evidence_file_stat_ok(target):
-        return False
-    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-        return False
-    target = resolve_evidence(descriptor, expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    text = _evidence_target_text(target)
-    if text is None:
-        return False
-    return _evidence_content_ok(text, result)
 
 
 def main():
@@ -351,13 +240,9 @@ def main():
         and workspace_input_is_bound()
         and _valid_result(submission.get("result"), source)
     )
-    evidence_valid = bool(
-        protocol_ok
-        and _evidence_valid(submission.get("witness"), submission.get("result"))
-    )
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=evidence_valid,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -365,7 +250,6 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

@@ -1,2 +1,0 @@
-In Z/12Z, the subgroup {0,4,8} and its four cosets form an exact cover. Every index uses the same subgroup part H, so Set.range of the part map is the singleton {H}; pairwise unequal cardinality on that range is vacuously true. Distinct covering indices nevertheless have equal part cardinalities, so the intended indexwise predicate is false. This audits formalization semantics only.
-

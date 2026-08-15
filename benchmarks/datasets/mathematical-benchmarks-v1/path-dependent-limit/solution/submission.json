@@ -40,11 +40,5 @@
       }
     ],
     "origin_value": "0"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:155b60ed0cd1315b5208b07cbe85470612174dd51f2521284115c98c9165c47e"
-    }
-  ]
+  }
 }

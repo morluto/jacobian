@@ -1,2 +1,0 @@
-The natural-number perturbation domain makes the sum-nonzero condition redundant, while bounded integer perturbations can cancel a positive sequence at multiple indices. Lean compilation and irrationality are not assessed.
-RESULT_JSON: {"semantic_status":"STRICTLY_WEAKER","nat_redundancy":{"a_lower_bound":0,"b_lower_bound":1,"sum_lower_bound":1,"rule":"ORDERED_ADDITION_LOWER_BOUND"},"integer_witness":{"period":4,"a_values":[2,3,5,7],"b_values":[-2,1,-5,2],"sum_values":[0,4,0,9],"b_min":-5,"b_max":2,"cancellation_indices":[0,2]}}

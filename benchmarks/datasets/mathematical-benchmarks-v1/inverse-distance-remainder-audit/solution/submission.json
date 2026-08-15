@@ -59,11 +59,5 @@
       },
       "remainder": "O(|y|^3/|x|^4)"
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:c70e93ee9f42e5c3b4dc27a95592e6598b93ca76d069243578b17331577a3102"
-    }
-  ]
+  }
 }

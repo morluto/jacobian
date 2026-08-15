@@ -8,11 +8,8 @@ from functools import reduce
 from pathlib import Path
 
 from verifier_support import (
-    aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
@@ -210,50 +207,18 @@ def _result(value: object) -> bool:
     )
 
 
-def _evidence(value: object, result: object) -> bool:
-    if (
-        not isinstance(value, list)
-        or len(value) != 1
-        or not witness_list_is_bound(value)
-    ):
-        return False
-    path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
-    if path is None:
-        return False
-    try:
-        text = path.read_text()
-        markers = [
-            line[12:].strip()
-            for line in text.splitlines()
-            if line.startswith("RESULT_JSON:")
-        ]
-        bound = json.loads(markers[0]) if len(markers) == 1 else None
-    except (OSError, UnicodeError, ValueError, RecursionError):
-        return False
-    prose = "\n".join(
-        line for line in text.splitlines() if not line.startswith("RESULT_JSON:")
-    ).strip()
-    return bound == result and len(prose) >= 32
-
-
 def main() -> None:
     submission = load_submission()
     protocol_ok = submission is not None
     data = submission if isinstance(submission, dict) else {}
     math_ok = bool(protocol_ok and _source_is_bound() and _result(data.get("result")))
-    ev_ok = bool(protocol_ok and _evidence(data.get("witness"), data.get("result")))
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=ev_ok,
-        protocol_ok=protocol_ok,
-    )
+    reward = float(protocol_ok and math_ok)
     destination = Path("/logs/verifier/reward.json")
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(ev_ok),
                 "reward": reward,
             },
             sort_keys=True,

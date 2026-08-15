@@ -16,11 +16,5 @@
     "evaluator_score": 0,
     "instruction_compliance": "DOES_NOT_PROVE_REQUESTED_CLAIM",
     "meta_evaluation_status": "REASONABLE"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:98055b98ead85005f839e378c230521da338d9c820924ed74b5761f879d01c92"
-    }
-  ]
+  }
 }

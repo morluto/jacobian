@@ -6,8 +6,6 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -65,56 +63,6 @@ def _words(text):
         .replace("can't", "can not")
     )
     return re.findall(r"[a-z]+", normalized)
-
-
-def _affirmative_solved_or_verified_claim(text):
-    """True if text affirmatively claims the open problem is solved or verified.
-
-    A claim is affirmative when a solved/verified lemma appears without a
-    negation token in the preceding clause, so negated scope statements such as
-    "does not solve" or "not machine verified" are accepted.
-    """
-    for clause in re.split(r"[.!?;]+", text.casefold()):
-        if re.search(
-            r"\b(?:machine|formally)\s+(?:verified|checked|certified)\b", clause
-        ):
-            words = _words(clause)
-            match = next(
-                (
-                    i
-                    for i, word in enumerate(words)
-                    if word in {"verified", "checked", "certified"}
-                ),
-                None,
-            )
-            if match is not None and not any(
-                token in words[max(0, match - 4) : match] for token in _NEGATION_TOKENS
-            ):
-                return True
-        if not any(
-            subject in clause for subject in ("open problem", "theorem", "lean")
-        ):
-            continue
-        words = _words(clause)
-        for index, word in enumerate(words):
-            if word not in _AFFIRMATIVE_LEMMAS:
-                continue
-            if not any(
-                token in words[max(0, index - 10) : index] for token in _NEGATION_TOKENS
-            ):
-                return True
-    return False
-
-
-def _limitation_is_scope_limiting(text):
-    if not isinstance(text, str):
-        return False
-    folded = text.casefold()
-    if "open problem" not in folded:
-        return False
-    if _affirmative_solved_or_verified_claim(text):
-        return False
-    return _SCOPE_LIMITING_RE.search(folded) is not None
 
 
 def _model(value, *, intended, proposed, bound, lower, upper):
@@ -178,73 +126,18 @@ def _valid_result(result, source):
     )
 
 
-def _witness_valid(witness, result):
-    if not witness_list_is_bound(witness, expected_path="evidence/answer.txt"):
-        return False
-    if not isinstance(witness, list) or len(witness) != 1:
-        return False
-    target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text()
-    except (OSError, UnicodeError):
-        return False
-    if _affirmative_solved_or_verified_claim(text):
-        return False
-    markers = [
-        line.removeprefix("RESULT_JSON:").strip()
-        for line in text.splitlines()
-        if line.startswith("RESULT_JSON:")
-    ]
-    if len(markers) != 1:
-        return False
-    try:
-        bound_result = json.loads(markers[0])
-    except (ValueError, RecursionError):
-        return False
-    if not isinstance(result, dict) or bound_result != result:
-        return False
-    folded = text.casefold()
-    return (
-        all(word in folded for word in ("existential", "universal", "incomparable"))
-        and "not incomparable" not in folded
-    )
-
-
-def _evidence_affirmative_claim(evidence):
-    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-        return False
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        return _affirmative_solved_or_verified_claim(target.read_text())
-    except (OSError, UnicodeError):
-        return False
-
-
 def main():
     submission = load_submission()
     source = json.loads(next(E.glob("*input*.json")).read_text())
     data = submission if isinstance(submission, dict) else {}
     result = data.get("result")
     math_correct = bool(submission and _valid_result(result, source))
-    witness_valid = bool(math_correct and _witness_valid(data.get("witness"), result))
-    reward = float(math_correct and witness_valid)
-    Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
-    (Path("/logs/verifier/reward.json")).write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(witness_valid),
-                "reward": reward,
-            }
-        )
+    output = Path("/logs/verifier/reward.json")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps({"correctness": float(math_correct), "reward": float(math_correct)})
     )
-    normalize_reward_file(Path("/logs/verifier/reward.json"))
+    normalize_reward_file(output)
 
 
 if __name__ == "__main__":

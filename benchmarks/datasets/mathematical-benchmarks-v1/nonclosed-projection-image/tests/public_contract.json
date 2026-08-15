@@ -1,20 +1,14 @@
 {
   "witness": {
-    "allowed_paths": [
-      "evidence/answer.txt"
-    ],
+    "allowed_paths": [],
     "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "max_items": 1,
-    "media_types": [
-      "text/plain"
-    ],
-    "min_items": 1,
+    "max_items": 0,
+    "media_types": [],
+    "min_items": 0,
     "payload_shape": null
   },
   "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.",
-  "required_witness_filenames": [
-    "evidence/answer.txt"
-  ],
+  "required_witness_filenames": [],
   "schema_definitions": {},
   "schema_version": "1",
   "submission_path": "/app/submission.json",
@@ -27,14 +21,6 @@
         },
         "minItems": 100,
         "type": "array"
-      },
-      "limit_preimage": {
-        "minLength": 1,
-        "type": "string"
-      },
-      "operator": {
-        "minLength": 1,
-        "type": "string"
       },
       "operator_bound": {
         "type": "string"
@@ -88,56 +74,6 @@
         ],
         "type": "object"
       },
-      "projection": {
-        "minLength": 1,
-        "type": "string"
-      },
-      "proof_obligations": {
-        "additionalProperties": false,
-        "properties": {
-          "absent_preimage": {
-            "maxLength": 4096,
-            "minLength": 40,
-            "type": "string"
-          },
-          "boundedness": {
-            "maxLength": 4096,
-            "minLength": 40,
-            "type": "string"
-          },
-          "closedness": {
-            "maxLength": 4096,
-            "minLength": 40,
-            "type": "string"
-          },
-          "convergence": {
-            "maxLength": 4096,
-            "minLength": 40,
-            "type": "string"
-          },
-          "range_identification": {
-            "maxLength": 4096,
-            "minLength": 40,
-            "type": "string"
-          }
-        },
-        "required": [
-          "boundedness",
-          "closedness",
-          "range_identification",
-          "convergence",
-          "absent_preimage"
-        ],
-        "type": "object"
-      },
-      "space": {
-        "minLength": 1,
-        "type": "string"
-      },
-      "subspace": {
-        "minLength": 1,
-        "type": "string"
-      },
       "tail_bound": {
         "additionalProperties": false,
         "properties": {
@@ -159,19 +95,20 @@
           "verification_terms"
         ],
         "type": "object"
+      },
+      "operator_kind": {
+        "enum": [
+          "DIAGONAL",
+          "WEIGHTED_SHIFT"
+        ]
       }
     },
     "required": [
-      "space",
-      "operator",
-      "subspace",
-      "projection",
       "operator_bound",
       "prefixes",
       "limit_coordinates",
       "tail_bound",
-      "limit_preimage",
-      "proof_obligations"
+      "operator_kind"
     ],
     "type": "object"
   },
@@ -188,14 +125,6 @@
             },
             "minItems": 100,
             "type": "array"
-          },
-          "limit_preimage": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "operator": {
-            "minLength": 1,
-            "type": "string"
           },
           "operator_bound": {
             "type": "string"
@@ -249,56 +178,6 @@
             ],
             "type": "object"
           },
-          "projection": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "proof_obligations": {
-            "additionalProperties": false,
-            "properties": {
-              "absent_preimage": {
-                "maxLength": 4096,
-                "minLength": 40,
-                "type": "string"
-              },
-              "boundedness": {
-                "maxLength": 4096,
-                "minLength": 40,
-                "type": "string"
-              },
-              "closedness": {
-                "maxLength": 4096,
-                "minLength": 40,
-                "type": "string"
-              },
-              "convergence": {
-                "maxLength": 4096,
-                "minLength": 40,
-                "type": "string"
-              },
-              "range_identification": {
-                "maxLength": 4096,
-                "minLength": 40,
-                "type": "string"
-              }
-            },
-            "required": [
-              "boundedness",
-              "closedness",
-              "range_identification",
-              "convergence",
-              "absent_preimage"
-            ],
-            "type": "object"
-          },
-          "space": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "subspace": {
-            "minLength": 1,
-            "type": "string"
-          },
           "tail_bound": {
             "additionalProperties": false,
             "properties": {
@@ -320,48 +199,26 @@
               "verification_terms"
             ],
             "type": "object"
+          },
+          "operator_kind": {
+            "enum": [
+              "DIAGONAL",
+              "WEIGHTED_SHIFT"
+            ]
           }
         },
         "required": [
-          "space",
-          "operator",
-          "subspace",
-          "projection",
           "operator_bound",
           "prefixes",
           "limit_coordinates",
           "tail_bound",
-          "limit_preimage",
-          "proof_obligations"
+          "operator_kind"
         ],
         "type": "object"
-      },
-      "witness": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/answer.txt"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
       }
     },
     "required": [
-      "result",
-      "witness"
+      "result"
     ],
     "type": "object"
   },

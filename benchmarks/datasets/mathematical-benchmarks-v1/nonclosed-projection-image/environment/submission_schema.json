@@ -12,16 +12,14 @@
           "minItems": 100,
           "type": "array"
         },
-        "limit_preimage": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "operator": {
-          "minLength": 1,
-          "type": "string"
-        },
         "operator_bound": {
           "type": "string"
+        },
+        "operator_kind": {
+          "enum": [
+            "DIAGONAL",
+            "WEIGHTED_SHIFT"
+          ]
         },
         "prefixes": {
           "items": {
@@ -72,56 +70,6 @@
           ],
           "type": "object"
         },
-        "projection": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "proof_obligations": {
-          "additionalProperties": false,
-          "properties": {
-            "absent_preimage": {
-              "maxLength": 4096,
-              "minLength": 40,
-              "type": "string"
-            },
-            "boundedness": {
-              "maxLength": 4096,
-              "minLength": 40,
-              "type": "string"
-            },
-            "closedness": {
-              "maxLength": 4096,
-              "minLength": 40,
-              "type": "string"
-            },
-            "convergence": {
-              "maxLength": 4096,
-              "minLength": 40,
-              "type": "string"
-            },
-            "range_identification": {
-              "maxLength": 4096,
-              "minLength": 40,
-              "type": "string"
-            }
-          },
-          "required": [
-            "boundedness",
-            "closedness",
-            "range_identification",
-            "convergence",
-            "absent_preimage"
-          ],
-          "type": "object"
-        },
-        "space": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "subspace": {
-          "minLength": 1,
-          "type": "string"
-        },
         "tail_bound": {
           "additionalProperties": false,
           "properties": {
@@ -146,45 +94,17 @@
         }
       },
       "required": [
-        "space",
-        "operator",
-        "subspace",
-        "projection",
         "operator_bound",
         "prefixes",
         "limit_coordinates",
         "tail_bound",
-        "limit_preimage",
-        "proof_obligations"
+        "operator_kind"
       ],
       "type": "object"
-    },
-    "witness": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "const": "evidence/answer.txt"
-          },
-          "sha256": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "type": "object"
-      },
-      "maxItems": 1,
-      "minItems": 1,
-      "type": "array"
     }
   },
   "required": [
-    "result",
-    "witness"
+    "result"
   ],
   "type": "object"
 }

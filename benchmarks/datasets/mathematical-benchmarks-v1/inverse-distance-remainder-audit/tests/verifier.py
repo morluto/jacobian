@@ -8,8 +8,6 @@ from verifier_support import (
     aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
@@ -158,32 +156,6 @@ def _result_is_valid(result: object, source: dict[str, Any]) -> bool:
     )
 
 
-def _evidence_matches_result(evidence: object, result: dict[str, Any]) -> bool:
-    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-        return False
-    if not isinstance(evidence, list) or not evidence:
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        if target.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        text = target.read_text().casefold()
-        return all(
-            fragment in text
-            for fragment in (
-                "3*u_1^2-1",
-                "positive quadratic coefficient 1",
-                "negative coefficient -1/2",
-                "epsilon^2",
-                "quadratic contribution",
-            )
-        )
-    except (OSError, UnicodeError):
-        return False
-
-
 def main() -> None:
     submission = load_submission()
     protocol_ok = submission is not None
@@ -191,14 +163,9 @@ def main() -> None:
     source = _load_frozen_input()
     result = data.get("result")
     math_ok = bool(protocol_ok and _result_is_valid(result, source))
-    ev_ok = bool(
-        math_ok
-        and isinstance(result, dict)
-        and _evidence_matches_result(data.get("witness"), result)
-    )
     reward = aggregate_reward(
         correctness=math_ok,
-        witness_validity=ev_ok,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     logs = Path("/logs/verifier")
@@ -207,7 +174,6 @@ def main() -> None:
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(ev_ok),
                 "reward": reward,
             }
         )

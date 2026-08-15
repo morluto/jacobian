@@ -7,8 +7,6 @@ from verifier_support import (
     aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
@@ -161,31 +159,6 @@ def _certificate_is_valid(value: object) -> bool:
     )
 
 
-def _evidence_is_valid(value: object) -> bool:
-    if (
-        not isinstance(value, list)
-        or len(value) != 1
-        or not witness_list_is_bound(value)
-    ):
-        return False
-    target = resolve_evidence(value[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text()
-    except (OSError, UnicodeError):
-        return False
-    return (
-        len(text) >= 180
-        and all(term in text for term in ("u>=0", "u=0", "u=-1", "(2025,64,25)"))
-        and all(
-            term in text.casefold()
-            for term in ("principal", "excludes", "substitution")
-        )
-        and "not a solution" not in text.casefold()
-    )
-
-
 def main() -> None:
     submission = load_submission()
     source = _load_bound_input()
@@ -198,10 +171,9 @@ def main() -> None:
     math_correct = bool(
         protocol_ok and source_ok and _certificate_is_valid(submission.get("result"))
     )
-    evidence = bool(protocol_ok and _evidence_is_valid(submission.get("witness")))
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=evidence,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     output = Path("/logs/verifier/reward.json")
@@ -210,7 +182,6 @@ def main() -> None:
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence),
                 "reward": reward,
             }
         )

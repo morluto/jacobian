@@ -16,8 +16,11 @@ def _case(tmp_path: Path):
 
 
 def _rewrite(app: Path, submission: dict) -> None:
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(app / "submission.json", submission)
+
+
+def test_uses_result_only_protocol(tmp_path: Path) -> None:
+    _fixtures.assert_result_witness_protocol(tmp_path, TASK)
 
 
 def test_accepts_reversed_operator_orientation(tmp_path: Path) -> None:

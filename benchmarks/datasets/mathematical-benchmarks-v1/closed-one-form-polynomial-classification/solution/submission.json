@@ -230,11 +230,5 @@
       }
     ],
     "rank": 2
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:b706bda5f734c17a3e9906654b065f94f3d8b96a131270e5805a09359e7b0f63"
-    }
-  ]
+  }
 }

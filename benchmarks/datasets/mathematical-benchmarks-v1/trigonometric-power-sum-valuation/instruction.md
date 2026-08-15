@@ -6,14 +6,13 @@ Produce an exact symbolic certificate that `7^floor(n/3)` divides `S_n` for ever
 
 Finally give the three residue-class cases (or an equivalent exact valuation argument). For each `n mod 3`, report the valuation offsets, relative to `floor(n/3)`, obtained from the checked certificate. The verifier recomputes the full table and the symbolic divisibility obligation.
 
-Numerical trigonometric approximations, a finite table without the general induction step, or an unsupported `VERIFIED` claim are insufficient.
+Numerical trigonometric approximations or a finite table without the general induction step are insufficient.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
 The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

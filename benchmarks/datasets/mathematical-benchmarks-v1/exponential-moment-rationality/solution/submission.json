@@ -86,11 +86,5 @@
       "C",
       "D"
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:269714dafb65630e10283204bad5a98bd50a5a0ddefead827a5b803915341aff"
-    }
-  ]
+  }
 }

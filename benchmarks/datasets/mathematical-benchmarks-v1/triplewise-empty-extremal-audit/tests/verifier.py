@@ -1,14 +1,11 @@
 import itertools
 import json
-import re
 from pathlib import Path
 
 from verifier_support import (
     aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 
@@ -90,63 +87,15 @@ def _math_claim_is_correct(result):
     )
 
 
-def _evidence_is_valid(evidence):
-    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
-        return False
-    folded = text.casefold()
-    return bool(
-        text.strip()
-        and re.search(r"1\s*\+\s*n\s*\+\s*floor\s*\(\s*n\s*/\s*2\s*\)", folded)
-        and re.search(
-            r"element(?:s)?(?:'s)?\s+(?:frequency|occurrence|incidence)"
-            r".{0,100}(?:at most|no more than|<=|≤)\s*(?:2|two)",
-            folded,
-        )
-        and re.search(
-            r"(?:remaining|non[- ]?singleton).{0,140}"
-            r"(?:at least|minimum|>=|≥)\s*(?:2|two).{0,80}incidence",
-            folded,
-        )
-        and re.search(
-            r"(?:attain|attains|attained|match|matches|matching).{0,100}"
-            r"(?:bound|maximum|formula)",
-            folded,
-        )
-    )
-
-
-def _scope_is_positive(scope):
-    if not isinstance(scope, str):
-        return False
-    folded = scope.casefold()
-    return bool(
-        "distinct subsets" in folded
-        and "triplewise empty intersection" in folded
-        and not re.search(
-            r"\b(?:not|no|without|never|doesn(?:t|'t)|does not)\b", folded
-        )
-    )
-
-
 def main():
     submission = load_submission()
     protocol_ok = submission is not None
     data = submission if protocol_ok else {}
     result = data.get("result", {})
     math_correct = bool(protocol_ok and _math_claim_is_correct(result))
-    evidence_valid = bool(
-        protocol_ok and math_correct and _evidence_is_valid(data.get("witness"))
-    )
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=evidence_valid,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -154,7 +103,6 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

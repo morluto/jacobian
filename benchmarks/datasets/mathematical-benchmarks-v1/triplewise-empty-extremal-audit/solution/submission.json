@@ -152,11 +152,5 @@
       "nonsingleton_incidence_floor": 2,
       "singleton_cap": "n"
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:be239317f1937c4014257cac6e572284575099dae8474bc069300f2b23a79a53"
-    }
-  ]
+  }
 }

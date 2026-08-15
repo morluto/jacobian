@@ -56,11 +56,5 @@
       }
     ],
     "substitution": "u=b^(1/6)"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:aea010d343fadaadae9808fcf229cd86260ee55b2168cb8a761140caada2449c"
-    }
-  ]
+  }
 }

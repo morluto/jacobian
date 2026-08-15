@@ -75,11 +75,5 @@
     "spectral_conclusion": "EIGENVALUE_SETS_DIFFER",
     "zero_eigenvalue_product": "ST",
     "zero_eigenvector_basis_index": 0
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:c4a8d93c6f01013fee7a5196ed73ea80ecfed6ee26e73111f5e02fd070ff9db1"
-    }
-  ]
+  }
 }

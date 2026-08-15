@@ -1,5 +1,4 @@
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -7,13 +6,10 @@ from verifier_support import (
     aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 W = Path("/app")
 E = Path("/tests")
-MAX_EVIDENCE_BYTES = 1_048_576
 
 
 def _load_frozen_input():
@@ -99,101 +95,14 @@ def _valid_result(result, frozen):
     )
 
 
-def _evidence_matches(evidence, result):
-    if (
-        not isinstance(evidence, list)
-        or len(evidence) != 1
-        or not witness_list_is_bound(evidence, expected_path="evidence/answer.txt")
-    ):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        if target.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        text = target.read_text().casefold()
-    except (OSError, UnicodeError):
-        return False
-    q = str(result["reciprocal_denominator"])
-    coefficient = result["general_block_power_exponent"]["level_coefficient"]
-    constant = result["general_block_power_exponent"]["constant"]
-    # Accept equivalent bound notation: caret (2^(4k-1)) and double-star
-    # (2**(4*k-1)) forms both bind the affine exponent to the structured result.
-    bound_pattern = re.compile(
-        r"(?:block(?:-sum)?\s+lower[- ]bound|lower[- ]bound[^.;:\n]{0,40}block)"
-        rf"[^.;:\n]{{0,100}}2\s*(?:\^|\*\*)\s*\(\s*{coefficient}\s*(?:\*|\s)?k\s*"
-        rf"(?:\+\s*{constant}|-\s*{abs(constant)})\s*\)",
-        re.I,
-    )
-    # Reject affirmative analytic-continuation or genuine-zero claims in the
-    # evidence text, mirroring the limitation guard so contradictory evidence
-    # cannot earn full reward behind a valid negative limitation.
-    affirmative_claim = re.compile(
-        r"\b(?:verif(?:y|ies)|prove(?:s|n)?|establish(?:es|ed)?|"
-        r"certif(?:y|ies|ied)|show(?:s|n)?|demonstrat(?:e|es|ed))\b"
-        r"[^.;\n]{0,120}\b(?:analytic[- ]continuation|genuine zeta zero|zeta zero)\b|"
-        r"\b(?:analytic[- ]continuation|genuine zeta zero|zeta zero)\b"
-        r"[^.;\n]{0,80}\b(?:is|was|has been)\s+(?:verified|proved|established|certified)\b",
-        re.I,
-    )
-    if affirmative_claim.search(text):
-        return False
-    return bool(
-        len(text) >= 120
-        and all(term in text for term in ("diverge", "fallback", "analytic", q))
-        and "block" in text
-        and ("lower bound" in text or "lower-bound" in text)
-        and "not tend" in text
-        and bound_pattern.search(text)
-    )
-
-
-def _limitation_is_valid(limitations):
-    if not isinstance(limitations, list):
-        return False
-    disclaimer = re.compile(
-        r"(?:\b(?:not|no|doesn['']?t|cannot|without|only|unverified|unassessed)\b"
-        r".{0,100}(?:analytic[- ]continuation|genuine zeta zero|zeta zero)|"
-        r"(?:analytic[- ]continuation|genuine zeta zero|zeta zero).{0,100}"
-        r"\b(?:not|no|doesn['']?t|cannot|without|unverified|unassessed)\b)",
-        re.I,
-    )
-    affirmative = re.compile(
-        r"\b(?:verif(?:y|ies)|prove(?:s|n)?|establish(?:es|ed)?|"
-        r"certif(?:y|ies|ied)|show(?:s|n)?|demonstrat(?:e|es|ed))\b"
-        r"[^.;\n]{0,120}\b(?:analytic[- ]continuation|genuine zeta zero|zeta zero)\b|"
-        r"\b(?:analytic[- ]continuation|genuine zeta zero|zeta zero)\b"
-        r"[^.;\n]{0,80}\b(?:is|was|has been)\s+(?:verified|proved|established|certified)\b",
-        re.I,
-    )
-    items = [item for item in limitations if isinstance(item, str)]
-    positive_claim = any(
-        affirmative.search(clause)
-        and not re.search(
-            r"\b(?:not|no|never|without|doesn['']?t|cannot)\b", clause, re.I
-        )
-        for item in items
-        for clause in re.split(r"(?:[.;\n]|,\s*(?:but|however)\b)", item, flags=re.I)
-    )
-    return bool(
-        items and not positive_claim and any(disclaimer.search(item) for item in items)
-    )
-
-
 def main():
     submission = load_submission()
     protocol_ok = submission is not None
     frozen = _load_frozen_input()
     math_correct = bool(protocol_ok and _valid_result(submission.get("result"), frozen))
-    evidence_valid = bool(
-        protocol_ok
-        and math_correct
-        and _evidence_matches(submission.get("witness"), submission["result"])
-    )
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=evidence_valid,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -201,7 +110,6 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

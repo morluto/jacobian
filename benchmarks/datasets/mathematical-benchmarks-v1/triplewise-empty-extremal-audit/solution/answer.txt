@@ -1,1 +1,0 @@
-The source bound is too large. The corrected maximum is 1+n+floor(n/2). Each element's frequency is at most two. After the empty set and all singletons, each remaining non-singleton costs at least two incidences, so at most floor(n/2) such sets remain. The submitted families attain the corrected bound.

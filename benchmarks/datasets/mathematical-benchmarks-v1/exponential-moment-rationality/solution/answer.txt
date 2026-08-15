@@ -1,9 +1,0 @@
-Let delta=AC-B^2. Exact elimination gives
-
-E=(AD^2-2BCD+C^3)/delta
-
-when delta is nonzero. Symbolically delta=e^(x+y)(x-y)^2, so its zero branch is exactly x=y. There A is nonzero and
-
-E=B^4/A^3.
-
-The verifier substitutes the full two-atom moment model into both rational identities coefficient by coefficient, and the generic denominator is exactly the nonzero scalar multiples of delta while the singular denominator is a nonzero scalar multiple of A^3. Hence rational A,B,C,D imply rational E in either branch. This is COMPUTED symbolic evidence, not a proof-assistant verification record.

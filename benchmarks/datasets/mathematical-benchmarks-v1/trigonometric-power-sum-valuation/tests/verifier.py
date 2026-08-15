@@ -7,13 +7,10 @@ from verifier_support import (
     aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 W = Path("/app")
 E = Path("/tests")
-MAX_EVIDENCE_BYTES = 1_048_576
 
 
 def _load_frozen_input():
@@ -151,46 +148,6 @@ def _result_is_valid(result, frozen):
     )
 
 
-def _evidence_matches(evidence):
-    if (
-        not isinstance(evidence, list)
-        or len(evidence) != 1
-        or not witness_list_is_bound(evidence, expected_path="evidence/answer.txt")
-    ):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        if target.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        text = target.read_text().casefold()
-    except (OSError, UnicodeError):
-        return False
-    return bool(
-        len(text) >= 180
-        and all(term in text for term in ("cubic", "7-adic", "valuation", "divis"))
-        and ("recurrence" in text or "newton" in text or "power sum" in text)
-        and ("induction" in text or "residue" in text or "valuation argument" in text)
-        and "minimal polynomial" in text
-    )
-
-
-def _limitation_is_valid(limitations):
-    if not isinstance(limitations, list):
-        return False
-    return any(
-        isinstance(item, str)
-        and "trigonometric" in item.casefold()
-        and re.search(
-            r"\b(?:not|doesn['']?t|cannot)\b.{0,100}\b(?:independently )?(?:verify|check|prove)\b",
-            item,
-            re.I,
-        )
-        for item in limitations
-    )
-
-
 def main():
     submission = load_submission()
     frozen = _load_frozen_input()
@@ -198,12 +155,9 @@ def main():
     math_correct = bool(
         protocol_ok and _result_is_valid(submission.get("result"), frozen)
     )
-    evidence_valid = bool(
-        protocol_ok and math_correct and _evidence_matches(submission.get("witness"))
-    )
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=evidence_valid,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -211,7 +165,6 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

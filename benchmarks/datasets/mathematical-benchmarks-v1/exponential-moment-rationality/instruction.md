@@ -9,14 +9,13 @@ Submit two rational formulas for `E` using only `A,B,C,D`:
 
 Each numerator and denominator is a canonical sorted sparse polynomial over variables `[A,B,C,D]` with rational coefficients and total degree at most 4. The verifier accepts any formulas satisfying the symbolic contracts, not only the source proof’s presentation.
 
-Explain the branch split and why rational `A,B,C,D` make `E` rational. Do not claim `VERIFIED`; the checker performs exact symbolic computation without a proof assistant.
+Report the branch split and rationality conclusion in the typed result. The checker performs exact symbolic computation.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
 The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

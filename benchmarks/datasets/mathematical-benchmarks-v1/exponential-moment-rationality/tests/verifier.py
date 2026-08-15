@@ -1,5 +1,4 @@
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -7,8 +6,6 @@ from verifier_support import (
     aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -229,57 +226,15 @@ def _result_is_valid(result, frozen):
     )
 
 
-def _evidence_matches(evidence):
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    descriptor = evidence[0]
-    if (
-        not isinstance(descriptor, dict)
-        or set(descriptor) != {"path", "sha256"}
-        or descriptor.get("path") != "evidence/answer.txt"
-        or not isinstance(descriptor.get("sha256"), str)
-    ):
-        return False
-    target = W / "evidence" / "answer.txt"
-    try:
-        if (
-            target.is_symlink()
-            or not target.is_file()
-            or target.stat().st_size > 1_048_576
-        ):
-            return False
-    except OSError:
-        return False
-    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
-        return False
-    target = resolve_evidence(descriptor, expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text().casefold()
-    except (OSError, UnicodeError):
-        return False
-    return bool(
-        len(text) >= 180
-        and all(
-            word in text for word in ("delta", "nonzero", "generic", "singular", "x=y")
-        )
-        and re.search(r"\brational\b", text)
-    )
-
-
 def main():
     submission, frozen = _load_bounded_submission(), _load_frozen_input()
     protocol_ok = submission is not None
     math_correct = bool(
         protocol_ok and _result_is_valid(submission.get("result"), frozen)
     )
-    evidence_valid = bool(
-        protocol_ok and math_correct and _evidence_matches(submission.get("witness"))
-    )
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=evidence_valid,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -287,7 +242,6 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

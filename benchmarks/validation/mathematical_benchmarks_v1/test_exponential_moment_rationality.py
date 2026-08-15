@@ -11,6 +11,10 @@ from benchmarks.validation.mathematical_benchmarks_v1 import (
 TASK = "exponential-moment-rationality"
 
 
+def test_uses_result_only_protocol(tmp_path: Path) -> None:
+    _fixtures.assert_result_witness_protocol(tmp_path, TASK)
+
+
 def test_rejects_corrupted_generic_formula(tmp_path: Path) -> None:
     task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     submission = json.loads((app / "submission.json").read_text())

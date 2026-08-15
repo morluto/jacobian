@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -9,8 +8,6 @@ from verifier_support import (
     aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 ORDER = [(0, 0), (1, 0), (0, 1), (2, 0), (1, 1), (0, 2), (3, 0), (2, 1), (1, 2), (0, 3)]
@@ -67,82 +64,6 @@ def _valid_potential(potential):
             return False
         seen.add((x_power, y_power))
     return True
-
-
-def _valid_scope(scope):
-    if not isinstance(scope, str):
-        return False
-    normalized = " ".join(scope.casefold().split())
-    required = ("closed polynomial one-form", "swapped", "degree at most three", "r2")
-    if not all(term in normalized for term in required):
-        return False
-    return not re.search(
-        r"(?:\b(?:not|no|without|excluding)\b[^.]*\bclosed polynomial one-form\b|"
-        r"\bclosed polynomial one-form\b[^.]*\b(?:not|no|without|excluding)\b)",
-        normalized,
-    )
-
-
-def _valid_limitations(limitations):
-    if not isinstance(limitations, list) or not limitations:
-        return False
-    normalized = " ".join(
-        " ".join(item.casefold().split())
-        for item in limitations
-        if isinstance(item, str)
-    )
-    return bool(
-        normalized
-        and re.search(r"poincare lemma[^.]*\bnot\b[^.]*\bcheck", normalized)
-        and re.search(r"arbitrary smooth forms[^.]*\bnot\b[^.]*\bcheck", normalized)
-    )
-
-
-def _valid_derivation_evidence(evidence):
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        lines = target.read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeError):
-        return False
-    if len(lines) != 6:
-        return False
-    fields = {}
-    for line in lines:
-        key, separator, value = line.partition(":")
-        if not separator or key in fields or not value.strip():
-            return False
-        fields[key] = " ".join(value.casefold().split())
-    if set(fields) != {
-        "CHAIN_RULE",
-        "CONSTRAINTS",
-        "RANK",
-        "DIMENSION",
-        "POTENTIALS",
-        "LIMITATION",
-    }:
-        return False
-    compact = {key: value.replace(" ", "") for key, value in fields.items()}
-    return (
-        "d/dxf(y,x)" in compact["CHAIN_RULE"]
-        and "f_y(y,x)" in compact["CHAIN_RULE"]
-        and all(
-            term in compact["CONSTRAINTS"]
-            for term in ("a_11-2*a_02=0", "a_21-3*a_03=0")
-        )
-        and fields["RANK"] == "2"
-        and fields["DIMENSION"] == "8"
-        and "every" in fields["POTENTIALS"]
-        and "f_x=f(x,y)" in compact["POTENTIALS"]
-        and "f_y=f(y,x)" in compact["POTENTIALS"]
-        and all(
-            term in fields["LIMITATION"]
-            for term in ("poincare lemma", "arbitrary smooth forms", "not")
-        )
-    )
 
 
 def rank(matrix):
@@ -234,16 +155,9 @@ def main():
     protocol_ok = submission is not None
     data = submission if isinstance(submission, dict) else {}
     math_correct = bool(protocol_ok and valid_result(data.get("result")))
-    evidence_valid = bool(
-        protocol_ok
-        and witness_list_is_bound(
-            data.get("witness"), expected_path="evidence/answer.txt"
-        )
-        and _valid_derivation_evidence(data.get("witness"))
-    )
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=evidence_valid,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -251,7 +165,6 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

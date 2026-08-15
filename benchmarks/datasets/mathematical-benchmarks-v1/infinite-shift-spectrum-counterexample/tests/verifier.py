@@ -1,18 +1,14 @@
 import json
-import re
 from pathlib import Path
 
 from verifier_support import (
     aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 W = Path("/app")
 E = Path("/tests")
-MAX_EVIDENCE_BYTES = 1_048_576
 
 
 def _load_frozen_input():
@@ -120,125 +116,14 @@ def _valid_result(result, frozen):
     )
 
 
-def _evidence_matches(evidence, result):
-    if (
-        not isinstance(evidence, list)
-        or len(evidence) != 1
-        or not witness_list_is_bound(evidence, expected_path="evidence/answer.txt")
-    ):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        if target.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        text = target.read_text().casefold()
-    except (OSError, UnicodeError):
-        return False
-    zero = result["zero_eigenvalue_product"].casefold()
-    identity = result["identity_product"].casefold()
-    if not all(
-        term in text
-        for term in ("finitely supported", "eigenvalue", "finite-dimensional")
-    ):
-        return False
-    sentences = re.split(r"(?:\n+|(?<=[.!?])\s+)", text)
-
-    def positive_relation(patterns):
-        for sentence in sentences:
-            for pattern in patterns:
-                match = re.search(pattern, sentence, re.I)
-                if match and not re.search(
-                    r"\b(?:not|never|without|isn['']?t)\b", match.group(), re.I
-                ):
-                    return True
-        return False
-
-    # Keep the operator name inside the same short relation as the property.
-    # A sentence-level wildcard can accidentally transfer the claim from ST to
-    # TS (or vice versa) when both products occur in one sentence.
-    relation_gap = rf"(?:(?!\b(?:{zero}|{identity})\b)[^.;:\n]){{0,100}}"
-    zero_role = positive_relation(
-        (
-            rf"\bzero\b{relation_gap}\b(?:eigenvalue|eigenvector|"
-            rf"nontrivial kernel|nonzero kernel vector)\b{relation_gap}\b{zero}\b",
-            rf"\b{zero}\b{relation_gap}\b(?:zero eigenvalue|zero vector|"
-            rf"eigenvector|nontrivial kernel|nonzero kernel vector|kills|"
-            rf"annihilates)\b",
-        )
-    )
-    identity_role = positive_relation(
-        (
-            rf"\bidentity\b{relation_gap}\b{identity}\b",
-            rf"\b{identity}\b{relation_gap}\b(?:identity|one-to-one|injective)\b",
-        )
-    )
-    missing_assumption = positive_relation(
-        (
-            r"\b(?:missing|omitted|absent|requires?|assumption|hypothesis)\b"
-            r"[^.;:\n]{0,80}\bfinite[- ]dimensional\b",
-            r"\bfinite[- ]dimensional\b[^.;:\n]{0,80}\b(?:missing|omitted|absent|assumption|hypothesis)\b",
-        )
-    )
-    all_basis = re.search(
-        r"(?:every|each|all)\s+(?:basis|basis vector|e[_ ]?i)|"
-        r"for\s+every\s+(?:basis|i\b)|"
-        r"shift(?:s|ed|ing)?[^.\n]{0,80}(?:basis|e[_ ]?i)",
-        text,
-    )
-    no_shift = re.search(r"\b(?:no|not|without)\b[^.\n]{0,60}\b(?:shift|basis)\b", text)
-    return bool(
-        zero_role
-        and identity_role
-        and missing_assumption
-        and all_basis
-        and not no_shift
-    )
-
-
-def _limitation_is_valid(limitations):
-    if not isinstance(limitations, list):
-        return False
-    for item in limitations:
-        if not isinstance(item, str) or "lean" not in item.casefold():
-            continue
-        compilation_claim = re.search(
-            r"\blean\b[^.\n]*(?:compiled|compilation|checked|verified)", item, re.I
-        )
-        if compilation_claim and not (
-            re.search(
-                r"\b(?:not|never|without|cannot)\s+(?:be\s+)?"
-                r"(?:compiled|checked|verified)\b",
-                item,
-                re.I,
-            )
-            or re.search(
-                r"\b(?:compiled|compilation|checked|verified)\b[^.\n]{0,30}"
-                r"\bnot\s+(?:assessed|replayed|performed|run)\b",
-                item,
-                re.I,
-            )
-        ):
-            continue
-        if re.search(r"\b(?:not|doesn['']?t|cannot|without|only)\b", item, re.I):
-            return True
-    return False
-
-
 def main():
     submission = load_submission()
     protocol_ok = submission is not None
     frozen = _load_frozen_input()
     math_correct = bool(protocol_ok and _valid_result(submission.get("result"), frozen))
-    evidence_valid = bool(
-        protocol_ok
-        and math_correct
-        and _evidence_matches(submission.get("witness"), submission["result"])
-    )
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=evidence_valid,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -246,7 +131,6 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

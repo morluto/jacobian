@@ -80,13 +80,7 @@ def test_nested_extra_fields_are_rejected(tmp_path):
     assert reward.reward == 0.0
 
 
-def test_unrelated_digest_bound_evidence_is_rejected(tmp_path):
-    def mutate(submission, app):
-        evidence = app / "evidence" / "answer.txt"
-        evidence.write_text("This unrelated text is nonempty but proves nothing.\n")
-        submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-
-    reward = _prepared_submission(tmp_path, mutate)
-    assert reward.details["correctness"] == 1.0
-    assert reward.reward == 0.0
-    assert reward.reward == 0.0
+def test_uses_result_only_protocol(tmp_path):
+    _fixtures.assert_result_witness_protocol(
+        tmp_path, "triplewise-empty-extremal-audit"
+    )

@@ -66,11 +66,5 @@
     "returned_value": 0,
     "summability_status": "DIVERGENT",
     "zero_classification": "FALLBACK_ARTIFACT"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:9718dde63712f33741809deb5cf014121bea6f7e875aeece8d9ec0bba76ebec3"
-    }
-  ]
+  }
 }

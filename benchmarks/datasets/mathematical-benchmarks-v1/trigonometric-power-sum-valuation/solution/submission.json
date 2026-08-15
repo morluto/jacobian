@@ -195,11 +195,5 @@
         "value": 83201447389466
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:3e42d56bf366a899acb4a01185c62b6ba621c495755562235872705da02c1802"
-    }
-  ]
+  }
 }

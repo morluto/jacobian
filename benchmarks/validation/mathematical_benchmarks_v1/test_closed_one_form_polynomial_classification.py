@@ -22,6 +22,14 @@ def _module():
     return module
 
 
+def test_uses_result_only_protocol(tmp_path: Path) -> None:
+    from benchmarks.validation.mathematical_benchmarks_v1 import _fixtures
+
+    _fixtures.assert_result_witness_protocol(
+        tmp_path, "closed-one-form-polynomial-classification"
+    )
+
+
 def test_correct_constraint_rank_and_wrong_published_rank() -> None:
     v = _module()
     assert v.rank(v.TARGET) == 2

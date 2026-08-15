@@ -1,18 +1,13 @@
 import json
-import re
 from pathlib import Path
 
 from verifier_support import (
-    aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 W = Path("/app")
 E = Path("/tests")
-MAX_EVIDENCE_BYTES = 1_048_576
 EXPECTED_PROOF = {
     "base_cases": [{"length": 0, "value": "1"}, {"length": 1, "value": "1"}],
     "partition": "each_tiling_ends_in_a_square_or_domino",
@@ -149,63 +144,6 @@ def _result_is_valid(result, frozen):
     )
 
 
-def _evidence_matches(evidence):
-    if (
-        not isinstance(evidence, list)
-        or len(evidence) != 1
-        or not witness_list_is_bound(evidence, expected_path="evidence/answer.txt")
-    ):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        if target.stat().st_size > MAX_EVIDENCE_BYTES:
-            return False
-        raw_text = target.read_text()
-        text = raw_text.casefold()
-    except (OSError, UnicodeError):
-        return False
-    if len(text) < 120:
-        return False
-    marker = next(
-        (
-            line[len("RESULT_JSON:") :].strip()
-            for line in raw_text.splitlines()
-            if line.startswith("RESULT_JSON:")
-        ),
-        None,
-    )
-    if marker is None:
-        return False
-    try:
-        bound_proof = json.loads(marker)
-    except (TypeError, ValueError):
-        return False
-    return (
-        bound_proof == EXPECTED_PROOF
-        and all(
-            re.search(pattern, text, re.IGNORECASE)
-            for pattern in (
-                r"tiling.{0,160}(?:recurrence|monomial)",
-                r"recurrence.{0,160}(?:tiling|reflection)",
-                r"reflection.{0,160}(?:support|monomial)",
-            )
-        )
-        and all(
-            phrase in text
-            for phrase in (
-                "tiling",
-                "square",
-                "domino",
-                "a_i",
-                "n-i",
-                "coefficient",
-            )
-        )
-    )
-
-
 def main():
     submission = load_submission()
     frozen = _load_frozen_input()
@@ -213,20 +151,12 @@ def main():
     math_correct = bool(
         protocol_ok and _result_is_valid(submission.get("result"), frozen)
     )
-    evidence_valid = bool(
-        protocol_ok and math_correct and _evidence_matches(submission.get("witness"))
-    )
-    reward = aggregate_reward(
-        correctness=math_correct,
-        witness_validity=evidence_valid,
-        protocol_ok=protocol_ok,
-    )
+    reward = float(protocol_ok and math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

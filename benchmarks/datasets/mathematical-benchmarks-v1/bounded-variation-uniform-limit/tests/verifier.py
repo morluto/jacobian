@@ -7,10 +7,8 @@ from pathlib import Path
 
 from verifier_support import (
     is_regular_bounded_file,
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
 )
 
 WORKSPACE = Path("/app")
@@ -179,48 +177,12 @@ def _result(value: object) -> bool:
     return all(_checkpoint_ok(item, q, seen) for item in checkpoints)
 
 
-def _witness(value: object, result: object) -> bool:
-    if not isinstance(value, list) or len(value) != 1:
-        return False
-    expected = WORKSPACE / "evidence/answer.txt"
-    if not is_regular_bounded_file(expected, max_bytes=16 * 1024 * 1024):
-        return False
-    path = resolve_evidence(
-        value[0], expected_path="evidence/answer.txt", max_bytes=16 * 1024 * 1024
-    )
-    if path is None:
-        return False
-    try:
-        text = path.read_text()
-    except (OSError, UnicodeError):
-        return False
-    markers = [
-        line[12:].strip()
-        for line in text.splitlines()
-        if line.startswith("RESULT_JSON:")
-    ]
-    if len(markers) != 1:
-        return False
-    try:
-        bound = json.loads(markers[0])
-    except (ValueError, RecursionError):
-        return False
-    # The required explanation is the typed ``result.argument`` object.  Any
-    # surrounding prose is optional and is deliberately not interpreted as a
-    # hidden keyword protocol.
-    return json_value_equal(bound, result)
-
-
 def _evaluate(submission: object) -> dict[str, float | bool]:
     data = submission if isinstance(submission, dict) else {}
     math_correct = bool(_source_is_bound() and _result(data.get("result")))
-    witness_valid = bool(
-        math_correct and _witness(data.get("witness"), data.get("result"))
-    )
-    reward = float(math_correct and witness_valid)
+    reward = float(math_correct)
     return {
         "correctness": float(math_correct),
-        "witness_validity": float(witness_valid),
         "reward": reward,
     }
 

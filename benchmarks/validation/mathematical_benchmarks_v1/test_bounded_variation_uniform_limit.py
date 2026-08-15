@@ -40,7 +40,6 @@ def test_alternative_scale_and_indices_pass(tmp_path: Path) -> None:
                 "total_variation": "4",
             }
         )
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(path, submission)
     assert _verifier._run_verifier(task, app, logs).reward == 1.0
 
@@ -50,7 +49,6 @@ def _mutate(tmp_path: Path, mutation) -> float:
     path = app / "submission.json"
     submission = json.loads(path.read_text())
     mutation(submission)
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(path, submission)
     return _verifier._run_verifier(task, app, logs).reward
 
@@ -99,22 +97,12 @@ def test_unstructured_argument_claim_is_rejected(tmp_path: Path) -> None:
     path = app / "submission.json"
     submission = json.loads(path.read_text())
     submission["result"]["argument"]["implication"] = "does not force"
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(path, submission)
     assert _verifier._run_verifier(task, app, logs).reward == 0.0
 
 
-def test_oversized_evidence_is_rejected_before_digest_binding(tmp_path: Path) -> None:
-    """The task-specific evidence bound is checked before hashing."""
-
-    task, app, logs = _case(tmp_path)
-    path = app / "submission.json"
-    submission = json.loads(path.read_text())
-    evidence = app / "evidence" / "answer.txt"
-    evidence.write_text("x" * (1_048_576 + 1))
-    submission["witness"][0]["sha256"] = "sha256:" + "0" * 64
-    _fixtures._write_json(path, submission)
-    assert _verifier._run_verifier(task, app, logs).reward == 0.0
+def test_uses_result_only_protocol(tmp_path: Path) -> None:
+    _fixtures.assert_result_witness_protocol(tmp_path, TASK)
 
 
 def test_bool_in_integer_certificate_is_rejected(tmp_path: Path) -> None:
@@ -140,6 +128,5 @@ def test_equivalent_sequence_serialization_passes(tmp_path: Path) -> None:
     path = app / "submission.json"
     submission = json.loads(path.read_text())
     submission["result"]["sequence"] = "sin(n*q*x)/(n*q)"
-    _fixtures._bind_result_evidence(app, submission)
     _fixtures._write_json(path, submission)
     assert _verifier._run_verifier(task, app, logs).reward == 1.0

@@ -1,15 +1,11 @@
 import itertools
 import json
-import re
 from pathlib import Path
 from typing import Any
 
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    valid_sha256_uri,
-    witness_list_is_bound,
 )
 
 
@@ -148,95 +144,26 @@ def _mathematical_result_is_valid(result: object, source: dict[str, Any]) -> boo
         return False
 
 
-def _evidence_descriptor_shape_is_valid(evidence: object) -> bool:
-    return bool(
-        isinstance(evidence, list)
-        and len(evidence) == 1
-        and isinstance(evidence[0], dict)
-        and set(evidence[0]) == {"path", "sha256"}
-        and evidence[0]["path"] == "evidence/answer.txt"
-        and valid_sha256_uri(evidence[0]["sha256"])
-    )
-
-
 def _protocol_is_valid(submission: object, contract: bool, result: object) -> bool:
     if not isinstance(submission, dict):
         return False
-    return bool(
-        _result_shape_is_valid(result)
-        and _evidence_descriptor_shape_is_valid(submission.get("witness"))
-    )
-
-
-def _evidence_is_valid(
-    evidence: object, result: object, evidence_max_bytes: int
-) -> bool:
-    if not witness_list_is_bound(
-        evidence,
-        expected_path="evidence/answer.txt",
-        max_bytes=evidence_max_bytes,
-    ):
-        return False
-    target = resolve_evidence(
-        evidence[0], expected_path="evidence/answer.txt", max_bytes=evidence_max_bytes
-    )
-    if target is None:
-        return False
-    try:
-        text = target.read_text()
-    except (OSError, UnicodeError, RecursionError, MemoryError):
-        return False
-    marker_lines = [
-        line for line in text.splitlines() if line.startswith("RESULT_JSON:")
-    ]
-    if len(marker_lines) != 1:
-        return False
-    try:
-        marker = json.loads(marker_lines[0].removeprefix("RESULT_JSON:").strip())
-    except (ValueError, RecursionError, MemoryError):
-        return False
-    try:
-        marker_match = _exact_json_equal(marker, result)
-    except RecursionError:
-        return False
-    if not marker_match:
-        return False
-    prose = " ".join(
-        line for line in text.splitlines() if not line.startswith("RESULT_JSON:")
-    ).casefold()
-    prose = re.sub(r"\s+", " ", prose)
-    return all(
-        term in prose
-        for term in (
-            "ordered",
-            "unordered",
-            "factor",
-            "free",
-            "edge",
-            "finite",
-        )
-    ) and any(phrase in prose for phrase in ("two", "half", "double"))
+    return _result_shape_is_valid(result)
 
 
 def main():
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
-    expected = _load_json(Path("/tests/expected.json"))
     source = _load_json(Path("/tests/input.json"))
     result = data.get("result")
     protocol = _protocol_is_valid(submission, True, result)
     math_correct = _mathematical_result_is_valid(result, source)
-    evidence_valid = _evidence_is_valid(
-        data.get("witness"), result, expected.get("evidence_max_bytes", 0)
-    )
-    reward = 1.0 if protocol and math_correct and evidence_valid else 0.0
+    reward = 1.0 if protocol and math_correct else 0.0
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "protocol_compliance": float(protocol),
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

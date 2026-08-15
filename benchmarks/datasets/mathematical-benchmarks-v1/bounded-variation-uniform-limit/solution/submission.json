@@ -58,11 +58,5 @@
       "interior_segment_count": "2*q*n-1",
       "total_variation": "4"
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:da06657cddec7c0e9698ee4828219f0bedc23226438e3208b38d3b71f8fc11a1"
-    }
-  ]
+  }
 }

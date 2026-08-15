@@ -22,11 +22,5 @@
         "n": 6
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:5e5bae7789552e54f34e250680c4aceee5a5dab789575c7b32e0eba2f48649f7"
-    }
-  ]
+  }
 }

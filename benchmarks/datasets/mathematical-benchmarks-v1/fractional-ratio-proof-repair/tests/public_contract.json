@@ -1,20 +1,14 @@
 {
   "witness": {
-    "allowed_paths": [
-      "evidence/answer.txt"
-    ],
+    "allowed_paths": [],
     "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "max_items": 1,
-    "media_types": [
-      "text/plain"
-    ],
-    "min_items": 1,
+    "max_items": 0,
+    "media_types": [],
+    "min_items": 0,
     "payload_shape": null
   },
-  "public_notes": "The verifier checks the declared result, scope, completeness, evidence binding, and assurance as separate protocol dimensions. The required limitation is the exact ID `FROZEN_BINARY_RATIO_INSTANCE_ONLY`.",
-  "required_witness_filenames": [
-    "evidence/answer.txt"
-  ],
+  "public_notes": "The verifier replays the exact residual certificate for the frozen binary ratio instance.",
+  "required_witness_filenames": [],
   "schema_definitions": {
     "residual": {
       "additionalProperties": false,
@@ -202,33 +196,10 @@
           "repair_method"
         ],
         "type": "object"
-      },
-      "witness": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/answer.txt"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
       }
     },
     "required": [
-      "result",
-      "witness"
+      "result"
     ],
     "type": "object"
   },

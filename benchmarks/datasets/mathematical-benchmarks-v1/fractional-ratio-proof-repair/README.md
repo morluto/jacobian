@@ -10,4 +10,4 @@ The verifier requires all three contract mismatches, then independently replays 
 - **Shortcut audit:** the instance has 24 items and requires the full residual certificate; copying the public fractional-knapsack route fails because no budget or fractional variables exist.
 - **Portfolio value:** adds objective/feasible-set substitution repair in discrete fractional programming.
 
-Source: `Jiahao004/DeepTheorem`, immutable revision `f5935720f176cedff4ecd8ebf83d1696e31cfac8`, train row 10007 / source id 86829, MIT. The verifier proves only the frozen exact optimization certificate at `COMPUTED`; it does not machine-prove a general greedy theorem.
+Source: `Jiahao004/DeepTheorem`, immutable revision `f5935720f176cedff4ecd8ebf83d1696e31cfac8`, train row 10007 / source id 86829, MIT. The verifier proves only the frozen exact optimization certificate; it does not machine-prove a general greedy theorem.

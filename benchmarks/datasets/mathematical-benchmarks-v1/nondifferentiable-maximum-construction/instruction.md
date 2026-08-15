@@ -6,7 +6,7 @@ declared in the input and choose any rational peak and slopes satisfying the
 requirements.
 
 Return exact rational parameters as integer `numerator`/positive integer
-`denominator` objects in lowest terms and the branch values at the join. The
+`denominator` objects and the branch values at the join. Equivalent encodings such as `2/8` and `1/4` are accepted after exact `Fraction` normalization. The
 verifier independently checks continuity at zero, monotonicity toward and away
 from the peak, and the unequal one-sided derivatives. Write `submission.json`
 to the exact `submission_schema.json` contract, Write the task-specific witness to

@@ -8,7 +8,7 @@ spike areas must form a divergent series while the integer samples form a
 convergent series.
 
 Represent each rational field as an integer `numerator` and positive integer
-`denominator` in lowest terms.
+`denominator`. Equivalent encodings such as `2/8` and `1/4` are accepted after exact `Fraction` normalization.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

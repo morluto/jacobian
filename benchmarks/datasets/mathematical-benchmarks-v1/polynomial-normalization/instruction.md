@@ -1,8 +1,10 @@
 # Polynomial normalization
 
 Combine like terms in the exact sparse polynomial from `input.json`. Return
-canonical rational coefficients as integer `numerator`/positive integer
+rational coefficients as integer `numerator`/positive integer
 `denominator` objects and exponent vectors, omitting zero terms.
+Equivalent encodings such as `6/2` and `3/1` are accepted after exact
+`Fraction` normalization.
 Record the cancellation and resulting terms in `evidence/answer.txt`, and use
 its SHA-256 digest in the evidence list. Write `submission.json` to the exact
 agent-visible `submission_schema.json`.

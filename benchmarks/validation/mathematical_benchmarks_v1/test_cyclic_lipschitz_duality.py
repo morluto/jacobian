@@ -1,5 +1,6 @@
 import importlib.util
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -29,8 +30,8 @@ def test_independent_dual_cost():
     assert module().minimum_cost() == 15
 
 
-def test_noncanonical_fraction_rejected():
-    assert module().fraction({"numerator": 2, "denominator": 4}) is None
+def test_unreduced_fraction_accepted():
+    assert module().fraction({"numerator": 2, "denominator": 4}) == Fraction(1, 2)
 
 
 def test_fraction_rejects_nonfinite_and_unbounded_values():

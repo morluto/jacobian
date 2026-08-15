@@ -33,7 +33,7 @@ def _load_bounded_submission():
         return None
 
 
-def _fraction(value, *, canonical=True):
+def _fraction(value):
     if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
         return None
     numerator = value["numerator"]
@@ -43,10 +43,6 @@ def _fraction(value, *, canonical=True):
     try:
         parsed = Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError, OverflowError):
-        return None
-    if canonical and (
-        parsed.numerator != numerator or parsed.denominator != denominator
-    ):
         return None
     return parsed
 
@@ -80,7 +76,7 @@ def _valid_levels(levels, start, end):
             and row["level"] == expected_k
             and _is_int(row["interval_count"])
             and row["interval_count"] == count
-            and _fraction(row["event_mass"], canonical=False) == Fraction(1, count)
+            and _fraction(row["event_mass"]) == Fraction(1, count)
             and _is_int(row["index_start"])
             and row["index_start"] == count
             and _is_int(row["index_end"])
@@ -97,7 +93,7 @@ def _valid_probes(probes, start, end):
     for probe in probes:
         if not isinstance(probe, dict) or set(probe) != {"point", "hit_indices"}:
             return False
-        point = _fraction(probe["point"], canonical=True)
+        point = _fraction(probe["point"])
         # Accept the full frozen space [0,1): zero is a valid probe with the
         # unique hit index 2^k at every level.
         if point is None or not 0 <= point < 1 or point in points:

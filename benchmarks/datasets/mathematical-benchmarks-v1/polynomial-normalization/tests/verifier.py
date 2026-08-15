@@ -24,11 +24,7 @@ def canonical_fraction(value):
         parsed = Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    return (
-        parsed
-        if parsed.numerator == numerator and parsed.denominator == denominator
-        else None
-    )
+    return parsed
 
 
 def _compute_want(x):

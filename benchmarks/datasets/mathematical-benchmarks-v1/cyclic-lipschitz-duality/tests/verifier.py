@@ -61,11 +61,7 @@ def fraction(value):
     ):
         return None
     result = Fraction(numerator, denominator)
-    return (
-        result
-        if result.numerator == numerator and result.denominator == denominator
-        else None
-    )
+    return result
 
 
 def minimum_cost(instance=None):

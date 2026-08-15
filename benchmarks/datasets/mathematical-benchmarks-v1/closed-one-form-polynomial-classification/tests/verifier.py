@@ -29,11 +29,7 @@ def _canonical_fraction(value):
         fraction = Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    return (
-        fraction
-        if fraction.numerator == numerator and fraction.denominator == denominator
-        else None
-    )
+    return fraction
 
 
 def _valid_vector(vector):

@@ -3,7 +3,7 @@
 A frozen API defines `F(s)` by `Σ n^{-s}` when the series is summable and returns `0` otherwise. Choose `s=1/q` with `3≤q≤7` and certify nonsummability using all dyadic blocks `2^k≤n<2^(k+1)` for the frozen levels.
 
 Represent the exact real part as an integer `numerator` and positive integer
-`denominator` in lowest terms.
+`denominator`. Equivalent encodings such as `2/8` and `1/4` are accepted after exact `Fraction` normalization.
 
 First report the affine exponent of the general q-th-power lower bound as a coefficient of `k` and a constant term. For each frozen block, report its term count and the corresponding integer lower bound obtained from `n<2^(k+1)`. Include the divergence and returned-value classifications in the typed result.
 

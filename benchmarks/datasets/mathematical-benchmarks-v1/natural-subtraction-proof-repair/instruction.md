@@ -7,7 +7,7 @@ First report whether the failed pattern occurs as a subtree of the target AST.
 Then use the declared equation basis to derive the goal: submit one rational
 multiplier per basis equation and the resulting coefficient vector in the
 declared variable order. Represent each rational as an integer `numerator` and
-positive integer `denominator` in lowest terms. The subtraction-recovery equation is justified only
+positive integer `denominator`. Equivalent encodings such as `2/8` and `1/4` are accepted after exact `Fraction` normalization. The subtraction-recovery equation is justified only
 by the recorded `b<=a` side condition.
 
 The verifier independently traverses the expression tree and recomputes the

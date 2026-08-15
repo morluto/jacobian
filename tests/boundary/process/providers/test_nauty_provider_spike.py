@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
+from _spike_support import _result, _runner
+from benchmarks.tooling.command_runner import ToolCommandResult
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 SPIKE = runpy.run_path(
@@ -45,42 +46,6 @@ GENG_OUTPUT = ("\n".join(PIN["reproduction"]["expected_graph6"]) + "\n").encode(
 LABELG_OUTPUT = (
     "\n".join(PIN["canonicalization"]["expected_output_graph6"]) + "\n"
 ).encode()
-
-
-def _result(
-    *,
-    stdout: bytes = b"",
-    returncode: int | None = 0,
-    timed_out: bool = False,
-    cancelled: bool = False,
-    stdout_exceeded: bool = False,
-) -> ToolCommandResult:
-    if cancelled:
-        status = ToolCommandStatus.CANCELLED
-    elif timed_out:
-        status = ToolCommandStatus.TIMED_OUT
-    elif stdout_exceeded:
-        status = ToolCommandStatus.OUTPUT_LIMIT_EXCEEDED
-    else:
-        status = ToolCommandStatus.EXITED
-    return ToolCommandResult(
-        status=status,
-        exit_code=returncode,
-        stdout=stdout,
-        stderr=b"",
-        stdout_exceeded=stdout_exceeded,
-    )
-
-
-def _runner(
-    outcomes: Sequence[ToolCommandResult],
-) -> Callable[..., ToolCommandResult]:
-    remaining = iter(outcomes)
-
-    def run(*_args: object, **_kwargs: object) -> ToolCommandResult:
-        return next(remaining)
-
-    return run
 
 
 def _source_archive(tmp_path: Path, *, pin_digest: bool = True) -> Path:

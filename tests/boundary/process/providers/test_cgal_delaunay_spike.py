@@ -10,6 +10,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, cast
 
+from _spike_support import _result, _runner
 from benchmarks.tooling.command_runner import ToolCommandResult
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -28,8 +29,6 @@ BASE_PIN = json.loads(
 )
 RunSpike = Callable[..., dict[str, Any]]
 RUN_SPIKE = cast(RunSpike, SPIKE["run_spike"])
-
-from _spike_support import _result, _runner
 
 
 def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:

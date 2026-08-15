@@ -48,6 +48,9 @@ def test_canonical_cnf_can_be_passed_directly_to_assignment_and_solver() -> None
     solved = solve_sat(SatSolveRequest(cnf=canonical))
     assert solved.outcome == "SAT"
     assert solved.assignment is not None
+    assert check_sat_assignment(
+        SatAssignmentCheckRequest(cnf=canonical, assignment=solved.assignment)
+    ).satisfies
 
 
 def test_tautological_cnf_is_a_typed_invalid_request() -> None:
@@ -100,6 +103,7 @@ def test_smt_solver_uses_the_inline_smtlib_query() -> None:
 
     assert result.outcome == "SAT"
     assert result.model_smtlib is not None
+    assert "(define-fun" in result.model_smtlib or "(:obj" in result.model_smtlib
 
 
 def test_smt_request_rejects_a_logic_name_hidden_in_a_comment() -> None:

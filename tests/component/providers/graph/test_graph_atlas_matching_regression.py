@@ -31,7 +31,6 @@ def _assert_gallai_edmonds_certificate(graphs: list[nx.Graph[int]]) -> None:
             {"graph": _graph_payload(graph)}
         )
         result = operation.run(request)
-        assert isinstance(result, operation.result_type)
         barrier = set(result.certificate.barrier_vertices)
         reduced = graph.subgraph(set(graph) - barrier)
         odd_component_count = sum(

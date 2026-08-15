@@ -16,14 +16,18 @@ TASK_NAME = "pythagorean-generator-recurrence"
 
 
 def load_verifier():
-    sys.path.insert(0, str(TASK / "tests"))
-    spec = importlib.util.spec_from_file_location(
-        "pythagorean_recurrence_verifier", TASK / "tests/verifier.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
-    spec.loader.exec_module(module)
-    return module
+    saved_path = sys.path[:]
+    try:
+        sys.path.insert(0, str(TASK / "tests"))
+        spec = importlib.util.spec_from_file_location(
+            "pythagorean_recurrence_verifier", TASK / "tests/verifier.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path[:] = saved_path
 
 
 def candidate(seed=(2, 1)):

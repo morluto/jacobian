@@ -14,12 +14,16 @@ VERIFIER = (
 
 
 def _module():
-    sys.path.insert(0, str(VERIFIER.parent))
-    spec = importlib.util.spec_from_file_location("closed_form_verifier", VERIFIER)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    saved_path = sys.path[:]
+    try:
+        sys.path.insert(0, str(VERIFIER.parent))
+        spec = importlib.util.spec_from_file_location("closed_form_verifier", VERIFIER)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path[:] = saved_path
 
 
 def test_uses_result_only_protocol(tmp_path: Path) -> None:

@@ -48,6 +48,7 @@ def test_rational_linear_operations_return_mathematical_outcomes() -> None:
     assert consistency.status == "CONSISTENT"
     assert contradiction.status == "INCONSISTENT"
     assert contradiction.left_witness is not None
+    assert len(contradiction.left_witness) == 2
     assert contradiction.model_dump(mode="json")["rhs_pairing"] == q(1)
 
 

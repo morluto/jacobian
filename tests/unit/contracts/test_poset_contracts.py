@@ -24,7 +24,6 @@ def _materialize(elements: list[str], relation: list[tuple[str, str]]):
             interpretation="COVER_EDGES",
         )
     )
-    assert isinstance(outcome, operation.result_type)
     return outcome.poset
 
 

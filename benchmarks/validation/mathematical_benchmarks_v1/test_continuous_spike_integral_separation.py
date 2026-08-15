@@ -16,15 +16,19 @@ TASK_NAME = "continuous-spike-integral-separation"
 
 
 def load_verifier():
-    sys.path.insert(0, str(TASK / "tests"))
-    spec = importlib.util.spec_from_file_location(
-        "continuous_spike_verifier", TASK / "tests/verifier.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
-    spec.loader.exec_module(module)
-    sys.modules.pop("verifier_support", None)
-    return module
+    saved_path = sys.path[:]
+    try:
+        sys.path.insert(0, str(TASK / "tests"))
+        spec = importlib.util.spec_from_file_location(
+            "continuous_spike_verifier", TASK / "tests/verifier.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(module)
+        sys.modules.pop("verifier_support", None)
+        return module
+    finally:
+        sys.path[:] = saved_path
 
 
 def candidate(alpha=Fraction(1, 4)):

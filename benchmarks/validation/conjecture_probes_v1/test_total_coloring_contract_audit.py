@@ -9,14 +9,18 @@ TASK = ROOT / "benchmarks/datasets/conjecture-probes-v1/total-coloring-contract-
 
 
 def _module():
-    sys.path.insert(0, str(TASK / "tests"))
-    spec = importlib.util.spec_from_file_location(
-        "total_coloring_verifier", TASK / "tests/verifier.py"
-    )
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    saved_path = sys.path[:]
+    try:
+        sys.path.insert(0, str(TASK / "tests"))
+        spec = importlib.util.spec_from_file_location(
+            "total_coloring_verifier", TASK / "tests/verifier.py"
+        )
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path[:] = saved_path
 
 
 def test_oracle_mathematics():

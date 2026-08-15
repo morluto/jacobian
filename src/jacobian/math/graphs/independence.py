@@ -14,6 +14,7 @@ IndependenceTermination = Literal[
     "OPTIMUM_ESTABLISHED",
     "WALL_TIME",
     "SOLVER_UNKNOWN",
+    "SOLVER_UNSAT",
     "SPECIAL_CASE",
 ]
 

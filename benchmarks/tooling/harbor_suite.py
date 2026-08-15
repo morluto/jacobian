@@ -56,6 +56,9 @@ REQUIRED_METADATA = {
 REQUIRED_ENVIRONMENT = ("Dockerfile", "input.json", "submission_schema.json")
 REQUIRED_TESTS = ("Dockerfile", "test.sh", "verifier.py", "verifier_support.py")
 DATASET_SUPPORT_DIRS = frozenset({"jobs", "members"})
+DATASET_CACHE_DIRS = frozenset(
+    {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
+)
 MEMBER_SCHEMA_VERSION = "2"
 VERIFIER_CONTRACT_VERSION = "1"
 PUBLIC_CONTRACT_DATASETS = frozenset(
@@ -210,6 +213,8 @@ def _dataset_task_directories(root: Path) -> set[Path]:
         if entry.is_symlink():
             raise HarborSuiteError(f"dataset contains a symlink: {entry}")
         if not entry.is_dir():
+            continue
+        if entry.name in DATASET_CACHE_DIRS:
             continue
         resolved = _validate_task_entry(entry)
         if resolved is not None:

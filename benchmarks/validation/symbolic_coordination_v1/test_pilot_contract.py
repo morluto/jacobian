@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import sys
 from collections import Counter
 from copy import deepcopy
 from fractions import Fraction
@@ -497,7 +498,12 @@ def _load_generate():
     )
     module = importlib.util.module_from_spec(spec)
     assert spec is not None and spec.loader is not None
-    spec.loader.exec_module(module)
+    bytecode = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = bytecode
     return module
 
 

@@ -26,7 +26,6 @@ from jacobian.domains.graph_optimization.exact_search import (
 from jacobian.domains.graph_optimization.operations import build_simple_graph
 from jacobian.math_tools import MathTool
 
-
 _WitnessValidator = Callable[[Any, ContractModel], bool]
 
 

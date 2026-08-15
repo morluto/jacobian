@@ -5,12 +5,12 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from jacobian.domains.graph_optimization._budget import remaining_ms as _remaining_ms
 from jacobian.contracts.graph_coloring import (
     ChromaticGraph,
     ChromaticSearchStep,
     GraphChromaticNumberOutput,
 )
+from jacobian.domains.graph_optimization._budget import remaining_ms as _remaining_ms
 
 
 def canonical_graph(graph: ChromaticGraph) -> ChromaticGraph:

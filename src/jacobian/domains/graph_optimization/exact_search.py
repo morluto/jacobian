@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from jacobian.contracts.graph_coloring import ChromaticGraph
-from jacobian.domains.graph_optimization._budget import remaining_ms as _remaining_ms
 from jacobian.contracts.graph_optimization import (
     GraphDominationMinimumOutput,
     GraphInducedBipartiteMaximumOutput,
@@ -19,6 +18,7 @@ from jacobian.contracts.graph_optimization import (
     OptimizationSearchStep,
     OptimizationTermination,
 )
+from jacobian.domains.graph_optimization._budget import remaining_ms as _remaining_ms
 
 ThresholdRelation = Literal["AT_MOST", "AT_LEAST"]
 type VertexWitness = tuple[str, ...]

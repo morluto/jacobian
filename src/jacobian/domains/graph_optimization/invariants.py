@@ -7,7 +7,6 @@ import time
 from collections.abc import Callable
 from typing import Any, cast
 
-from jacobian.domains.graph_optimization._budget import remaining_ms as _remaining_ms
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.graph_invariant_operations import (
     GraphCliqueNumberResult,
@@ -34,6 +33,7 @@ from jacobian.contracts.graph_optimization import (
 )
 from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
+from jacobian.domains.graph_optimization._budget import remaining_ms as _remaining_ms
 from jacobian.domains.graph_optimization.operations import build_simple_graph
 from jacobian.math_tools import MathTool
 

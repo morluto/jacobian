@@ -61,10 +61,25 @@ task explicitly makes canonicalization an outcome. Declare every intentional
 normal-form or ordering rule in the public instruction and schema. Never use
 `answer.txt` as the authoritative answer channel.
 
-The agent-visible instruction and schema are the complete public protocol:
-required result fields, exact types, scope, and any task-specific witness rule.
-Do not hide a validity requirement in a README or task metadata. Keep solution,
-verifier, Oracle, host paths, and caches out of the agent environment.
+Do not copy these authoring failures into a new or generated task:
+
+- scoring equality with hidden `tests/expected.json` while ignoring frozen
+  `input.json`;
+- requiring lowest terms or one canonical spelling while the verifier
+  constructs `Fraction` or an unordered map;
+- encoding exact rationals or formulas as privileged strings;
+- scoring prose with keywords, length, or negation regexes;
+- publishing a universal certificate `oneOf` for every generated family;
+- requiring a witness that only mirrors, hashes, or paraphrases `result`;
+- leaving instruction, schema, and verifier mutually unsatisfiable.
+
+The verifier replays the advertised predicate from the frozen input. Keep
+`expected.json` as an Oracle fixture only. Generated families emit the
+smallest schema licensed by that task's claim type. The agent-visible
+instruction and schema are the complete public protocol: required result
+fields, exact types, scope, and any task-specific witness rule. Do not hide a
+validity requirement in a README or task metadata. Keep solution, verifier,
+Oracle, host paths, and caches out of the agent environment.
 
 Each task is a direct child of its dataset with one authoritative member record:
 

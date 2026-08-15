@@ -62,7 +62,8 @@ SUBMISSION_BLOCK_START = "<!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->"
 SUBMISSION_BLOCK_END = "<!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->"
 _RETIRED_PUBLIC_NOTE_TERMS = re.compile(
     r"\b(?:claimed_assurance|assurance|completeness|limitations|"
-    r"verification_record|RESULT_JSON|digest-bound\s+evidence)\b",
+    r"verification_record|RESULT_JSON|digest-bound\s+evidence|"
+    r"lowest\s+terms|expected\.json|keyword[- ]scored)\b",
     re.IGNORECASE,
 )
 

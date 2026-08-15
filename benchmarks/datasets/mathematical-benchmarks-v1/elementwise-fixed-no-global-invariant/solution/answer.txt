@@ -1,9 +1,0 @@
-Over F_5 the two displayed generators close to a 12-element subgroup of SL_3.
-Every element in the lexicographically ordered closure has the corresponding
-nonzero fixed vector recorded in the certificate.  Stacking the fixed equations
-for the two generators has rank three, so the common fixed space has dimension
-zero.  This separates `for every element there exists a vector` from `there
-exists one vector fixed by every element`.  The finite replay is COMPUTED and
-is not verified by a proof assistant or a classification of all actions.
-
-RESULT_JSON:{"field_prime":5,"generators":[[[0,0,1],[1,0,0],[0,1,0]],[[4,0,0],[0,4,0],[0,0,1]]],"group_elements":[[[0,0,1],[1,0,0],[0,1,0]],[[0,0,1],[4,0,0],[0,4,0]],[[0,0,4],[1,0,0],[0,4,0]],[[0,0,4],[4,0,0],[0,1,0]],[[0,1,0],[0,0,1],[1,0,0]],[[0,1,0],[0,0,4],[4,0,0]],[[0,4,0],[0,0,1],[4,0,0]],[[0,4,0],[0,0,4],[1,0,0]],[[1,0,0],[0,1,0],[0,0,1]],[[1,0,0],[0,4,0],[0,0,4]],[[4,0,0],[0,1,0],[0,0,4]],[[4,0,0],[0,4,0],[0,0,1]]],"fixed_vectors":[[1,1,1],[1,4,1],[1,1,4],[1,4,4],[1,1,1],[1,1,4],[1,4,4],[1,4,1],[0,0,1],[1,0,0],[0,1,0],[0,0,1]],"common_fixed_dimension":0}

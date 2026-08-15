@@ -1,20 +1,14 @@
 {
   "witness": {
-    "allowed_paths": [
-      "evidence/answer.txt"
-    ],
+    "allowed_paths": [],
     "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "max_items": 1,
-    "media_types": [
-      "text/plain"
-    ],
-    "min_items": 1,
+    "max_items": 0,
+    "media_types": [],
+    "min_items": 0,
     "payload_shape": null
   },
-  "public_notes": "The verifier independently generates the finite group, checks determinant one and every elementwise fixed vector, and computes the common fixed-space intersection. The evidence file remains qualitative prose and must explain the elementwise fixed vectors, absence of a common fixed vector, and quantifier-order separation; unrelated or empty text does not earn evidence credit. The limitations array records the exact obligation IDs `claim:finite-action-counterexample` and `limitation:no-general-classification-theorem` in that order.",
-  "required_witness_filenames": [
-    "evidence/answer.txt"
-  ],
+  "public_notes": "The verifier independently generates the finite group, checks determinant one and every elementwise fixed vector, and computes the common fixed-space intersection.",
+  "required_witness_filenames": [],
   "schema_definitions": {
     "entry": {
       "maximum": 12,
@@ -170,33 +164,10 @@
     "properties": {
       "result": {
         "$ref": "#/$defs/result"
-      },
-      "witness": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/answer.txt"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
       }
     },
     "required": [
-      "result",
-      "witness"
+      "result"
     ],
     "type": "object"
   },

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import subprocess
@@ -29,15 +28,7 @@ def case(tmp_path):
 
 
 def write(app, s):
-    payload = {
-        "schema_version": "1",
-        "task_id": "jacobian/yang-mills-gauge-invariance-certificate",
-        "result": s["result"],
-    }
-    e = app / "evidence/answer.txt"
-    e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
-    s["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
-    (app / "submission.json").write_text(json.dumps(s) + "\n")
+    (app / "submission.json").write_text(json.dumps({"result": s["result"]}) + "\n")
 
 
 def run(app, logs):
@@ -49,24 +40,43 @@ def test_oracle_passes(tmp_path):
     assert run(app, logs).details["aggregate_reward"] == 1.0
 
 
+def test_accepts_unreduced_link_components(tmp_path):
+    app, logs, s = case(tmp_path)
+    s["result"]["links"][0] = [
+        {"numerator": 6, "denominator": 10},
+        {"numerator": 8, "denominator": 10},
+        {"numerator": 0, "denominator": 1},
+        {"numerator": 0, "denominator": 1},
+    ]
+    write(app, s)
+    assert run(app, logs).details["aggregate_reward"] == 1.0
+
+
 def test_corrupt_transformed_link_and_plaquette_fail(tmp_path):
     app, logs, s = case(tmp_path)
-    s["result"]["transformed_links"][0][0] = "2"
+    s["result"]["transformed_links"][0][0] = {"numerator": 2, "denominator": 1}
     write(app, s)
     assert run(app, logs).details["mathematics"] == 0.0
     app, logs, s = case(tmp_path / "p")
-    s["result"]["plaquette"][1] = "0"
+    s["result"]["plaquette"][1] = {"numerator": 0, "denominator": 1}
     write(app, s)
     assert run(app, logs).details["aggregate_reward"] == 0.0
 
 
 def test_identity_shortcut_and_nonunit_gauge_fail(tmp_path):
     app, logs, s = case(tmp_path)
-    s["result"]["links"] = [["1", "0", "0", "0"]] * 4
+    one = {"numerator": 1, "denominator": 1}
+    zero = {"numerator": 0, "denominator": 1}
+    s["result"]["links"] = [[one, zero, zero, zero]] * 4
     write(app, s)
     assert run(app, logs).details["aggregate_reward"] == 0.0
     app, logs, s = case(tmp_path / "unit")
-    s["result"]["gauges"][0] = ["1", "1", "0", "0"]
+    s["result"]["gauges"][0] = [
+        {"numerator": 1, "denominator": 1},
+        {"numerator": 1, "denominator": 1},
+        {"numerator": 0, "denominator": 1},
+        {"numerator": 0, "denominator": 1},
+    ]
     write(app, s)
     assert run(app, logs).details["aggregate_reward"] == 0.0
 
@@ -80,3 +90,10 @@ def test_tampered_input_fails(tmp_path):
         and r.details["mathematics"] == 1.0
         and r.details["aggregate_reward"] == 0.0
     )
+
+
+def test_result_only_submission_is_accepted(tmp_path):
+    app, logs, s = case(tmp_path)
+    assert "witness" not in s
+    write(app, s)
+    assert run(app, logs).details["aggregate_reward"] == 1.0

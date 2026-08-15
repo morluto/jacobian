@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from fractions import Fraction
 from pathlib import Path
-
-TASK_ID = "jacobian/yang-mills-gauge-invariance-certificate"
 
 
 def mul(a, b):
@@ -31,8 +28,13 @@ def product(items):
     return out
 
 
+def encode(value):
+    q = value if isinstance(value, Fraction) else Fraction(value)
+    return {"numerator": q.numerator, "denominator": q.denominator}
+
+
 def row(q):
-    return [str(x) for x in q]
+    return [encode(x) for x in q]
 
 
 def main():
@@ -66,24 +68,9 @@ def main():
         "conjugated_plaquette": row(cp),
         "scalar_trace_invariant": True,
     }
-    payload = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": result,
-    }
-    e = root / "evidence/answer.txt"
-    e.parent.mkdir(parents=True, exist_ok=True)
-    e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
-    s = {
-        "result": result,
-        "witness": [
-            {
-                "path": "evidence/answer.txt",
-                "sha256": "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest(),
-            }
-        ],
-    }
-    (root / "submission.json").write_text(json.dumps(s, sort_keys=True) + "\n")
+    (root / "submission.json").write_text(
+        json.dumps({"result": result}, sort_keys=True) + "\n"
+    )
 
 
 if __name__ == "__main__":

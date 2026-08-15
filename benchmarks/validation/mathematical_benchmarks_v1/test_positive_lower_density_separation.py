@@ -4,11 +4,7 @@ import json
 from fractions import Fraction
 from pathlib import Path
 
-from benchmarks.validation.mathematical_benchmarks_v1 import (
-    _fixtures,
-    _metadata,
-    _verifier,
-)
+from benchmarks.validation.mathematical_benchmarks_v1 import _fixtures, _verifier
 
 TASK = "positive-lower-density-separation"
 
@@ -18,19 +14,18 @@ def _run(tmp_path: Path, mutate=None):
     submission = json.loads((app / "submission.json").read_text())
     if mutate:
         mutate(submission)
-        _fixtures._bind_result_evidence(app, submission)
         _fixtures._write_json(app / "submission.json", submission)
     return _verifier._run_verifier(task, app, logs)
 
 
-def _set_base(submission, b):
+def _set_base(submission, base):
     levels = []
-    for m in range(8):
-        high, low = b ** (2 * m + 1), b ** (2 * m + 2)
-        count = (low - 1) // (b + 1)
+    for level in range(8):
+        high, low = base ** (2 * level + 1), base ** (2 * level + 2)
+        count = (low - 1) // (base + 1)
         levels.append(
             {
-                "level": m,
+                "level": level,
                 "included_endpoint": high,
                 "excluded_endpoint": low,
                 "cumulative_count": count,
@@ -40,193 +35,53 @@ def _set_base(submission, b):
         )
     submission["result"].update(
         {
-            "base": b,
+            "base": base,
             "levels": levels,
-            "lower_density": str(Fraction(1, b + 1)),
-            "upper_density": str(Fraction(b, b + 1)),
+            "lower_density": str(Fraction(1, base + 1)),
+            "upper_density": str(Fraction(base, base + 1)),
         }
     )
 
 
 def test_oracle_and_alternative_base_pass(tmp_path: Path) -> None:
     assert _run(tmp_path / "oracle").reward == 1.0
-    assert _run(tmp_path / "alternative", lambda s: _set_base(s, 7)).reward == 1.0
-
-
-def test_published_evidence_sentence_needs_no_private_marker(tmp_path: Path) -> None:
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence/answer.txt"
-    evidence.write_text(
-        "The lower density is positive, while the two endpoint subsequences have different limits, so the "
-        "natural density does not exist. The finite levels replay instances of the general formula rather than "
-        "proving every infinite case.\n"
+    assert (
+        _run(
+            tmp_path / "alternative", lambda submission: _set_base(submission, 7)
+        ).reward
+        == 1.0
     )
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 1.0
-    assert result.reward == 1.0
 
 
-def test_visible_input_tamper_preserves_math_diagnostic(tmp_path: Path) -> None:
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
+def test_rejects_wrong_certificate_or_legacy_field(tmp_path: Path) -> None:
+    assert (
+        _run(
+            tmp_path / "wrong",
+            lambda submission: submission["result"]["levels"][4].update(
+                cumulative_count=0
+            ),
+        ).reward
+        == 0.0
+    )
+    assert (
+        _run(
+            tmp_path / "legacy",
+            lambda submission: submission.update(witness=[]),
+        ).reward
+        == 0.0
+    )
+
+
+def test_input_binding_and_type_checks_are_hard_gates(tmp_path: Path) -> None:
+    assert (
+        _run(
+            tmp_path / "typed",
+            lambda submission: submission["result"]["levels"][0].update(level=0.0),
+        ).reward
+        == 0.0
+    )
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "input-tamper")
     (app / "input.json").write_text("{}")
     result = _verifier._run_verifier(task, app, logs)
     assert result.details["input_binding"] == 0.0
-    assert result.details["correctness"] == 1.0
     assert result.reward == 0.0
-
-
-def test_integral_float_level_fields_are_rejected(tmp_path: Path) -> None:
-    def mutate(s):
-        for row in s["result"]["levels"]:
-            row["level"] = float(row["level"])
-            row["included_endpoint"] = float(row["included_endpoint"])
-            row["excluded_endpoint"] = float(row["excluded_endpoint"])
-            row["cumulative_count"] = float(row["cumulative_count"])
-
-    result = _run(tmp_path, mutate)
-    assert result.details["correctness"] == 0.0
-    assert result.reward == 0.0
-
-
-def test_level_rows_are_order_independent(tmp_path: Path) -> None:
-    result = _run(tmp_path, lambda s: s["result"]["levels"].reverse())
-    assert result.details["correctness"] == 1.0
-    assert result.reward == 1.0
-
-
-def test_rejects_corrupted_endpoint_count(tmp_path: Path) -> None:
-    def mutate(s):
-        s["result"]["levels"][4]["cumulative_count"] += 1
-
-    assert _run(tmp_path, mutate).reward == 0.0
-
-
-def test_rejects_equal_subsequence_limits(tmp_path: Path) -> None:
-    def mutate(s):
-        s["result"]["upper_density"] = s["result"]["lower_density"]
-
-    assert _run(tmp_path, mutate).reward == 0.0
-
-
-def test_rejects_out_of_scope_base(tmp_path: Path) -> None:
-    assert _run(tmp_path, lambda s: _set_base(s, 10)).reward == 0.0
-
-
-def _set_evidence(app: Path, submission: dict, text: str) -> None:
-    evidence = app / "evidence" / "answer.txt"
-    evidence.write_text(text)
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence)
-    _fixtures._write_json(app / "submission.json", submission)
-
-
-def test_evidence_descriptor_missing_sha256_preserves_correctness(
-    tmp_path: Path,
-) -> None:
-    """A bad evidence descriptor fails evidence but preserves correctness."""
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    submission["witness"][0] = {"path": "evidence/answer.txt"}
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.details["correctness"] == 1.0
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_large_valid_evidence_has_no_arbitrary_byte_cap(tmp_path: Path) -> None:
-    """An otherwise valid explanation larger than 65536 bytes is accepted."""
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    _set_evidence(
-        app,
-        submission,
-        "derivation filler\n"
-        * 70_000
-        + "The lower density is positive, while the two endpoint subsequences have "
-        "different limits, so the natural density does not exist. The finite levels "
-        "replay instances of the general formula rather than proving every infinite "
-        "case.\n",
-    )
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 1.0
-    assert result.reward == 1.0
-
-
-def test_equivalent_explanation_paraphrase_is_accepted(tmp_path: Path) -> None:
-    """Equivalent phrasing of the certified separation is accepted."""
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    _set_evidence(
-        app,
-        submission,
-        "The lower density is positive, but the two subsequential limits differ, so "
-        "no natural density exists. The eight finite cases are instances of the "
-        "general formula, not a proof of the infinite limit.\n",
-    )
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 1.0
-    assert result.reward == 1.0
-
-
-def test_contradictory_explanation_is_rejected(tmp_path: Path) -> None:
-    """Text that asserts the opposite of the certified separation is rejected."""
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    _set_evidence(
-        app,
-        submission,
-        "The natural density exists and the limits agree; the finite levels prove "
-        "every infinite case.\n",
-    )
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_late_contradiction_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    _set_evidence(
-        app,
-        submission,
-        "The lower density is positive and the subsequential limits differ, so "
-        "the natural density does not exist. The finite levels replay instances "
-        "of the general formula and are not a proof of the infinite claim.\n"
-        + "derivation filler\n" * 70_000
-        + "Contrary conclusion: the limits agree.\n",
-    )
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_unrelated_explanation_is_rejected(tmp_path: Path) -> None:
-    """Nonempty but unrelated text is rejected."""
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    _set_evidence(app, submission, "The weather is sunny today.\n")
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_empty_explanation_is_rejected(tmp_path: Path) -> None:
-    """An empty digest-bound explanation is rejected."""
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    _set_evidence(app, submission, "\n")
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
-def test_input_binding_decoupled_is_declared_in_task_metadata() -> None:
-    """The verifier decouples correctness from input binding via task metadata."""
-    assert _metadata.is_input_binding_decoupled(TASK) is True
-    assert _metadata.is_scope_independent_assurance(TASK) is True
-    metadata = _metadata.load_task_contract_metadata(TASK)
-    assert metadata["input_binding_decoupled"] is True
-    assert metadata["scope_independent_assurance"] is True

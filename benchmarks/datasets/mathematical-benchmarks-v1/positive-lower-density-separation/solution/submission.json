@@ -74,11 +74,5 @@
     "natural_density_exists": false,
     "semantic_relation": "FORMALIZED_PREDICATE_STRICTLY_STRONGER",
     "upper_density": "3/4"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:88938736d8533357ce3e3bd7ec8304f418a0c9f11e126106144adf81797879c4"
-    }
-  ]
+  }
 }

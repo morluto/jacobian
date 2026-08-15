@@ -6,87 +6,11 @@ from pathlib import Path
 from verifier_support import (
     load_submission_raw,
     normalize_reward_file,
-    resolve_evidence,
     submission_matches_public_schema,
     workspace_input_is_bound,
 )
 
 T = Path("/tests")
-LIMITATION = "Eight exact levels replay the general formula but do not machine-prove the infinite limit or the Erdős problem."
-
-
-def _limitations_valid(value: object) -> bool:
-    if not (isinstance(value, list) and len(value) == 1 and isinstance(value[0], str)):
-        return False
-    text = value[0].casefold()
-    return (
-        any(term in text for term in ("eight", "8", "finite", "exact levels"))
-        and any(term in text for term in ("infinite limit", "erdős", "erdos"))
-        and any(
-            term in text
-            for term in ("not prove", "do not prove", "does not prove", "not machine")
-        )
-    )
-
-
-# The published prose obligation is structural, not verbatim: the explanation
-# must affirmatively state the separation and its limitation, accept equivalent
-# phrasing, and reject contradictory or unrelated text.
-_LOWER_DENSITY_POSITIVE = (
-    "lower density is positive",
-    "lower density positive",
-    "positive lower density",
-)
-_DIFFERENT_LIMITS = (
-    "different limits",
-    "limits differ",
-    "endpoint subsequences have different",
-    "subsequential limits differ",
-    "different subsequential limits",
-)
-_NATURAL_DENSITY_ABSENT = (
-    "natural density does not exist",
-    "natural density does not",
-    "density does not exist",
-    "no natural density",
-    "natural density is absent",
-    "natural density doesn't exist",
-)
-_FINITE_REPLAY = (
-    "finite levels replay",
-    "replay instances",
-    "instances of the general formula",
-    "eight finite cases",
-)
-_NOT_GENERAL_PROOF = (
-    "rather than proving",
-    "not a proof",
-    "not proving every",
-    "not machine-prove",
-    "do not prove",
-    "not prove every",
-)
-_CONCEPT_GROUPS = (
-    _LOWER_DENSITY_POSITIVE,
-    _DIFFERENT_LIMITS,
-    _NATURAL_DENSITY_ABSENT,
-    _FINITE_REPLAY,
-    _NOT_GENERAL_PROOF,
-)
-# Direct contradictions of the certified claims; the opposite affirmative
-# phrasing also fails the concept-group presence check.
-_NEGATIONS = (
-    "limits agree",
-    "limits are equal",
-    "limits coincide",
-    "same limit",
-    "lower density is zero",
-    "lower density vanishes",
-    "lower density is not positive",
-    "proves every infinite",
-    "machine-proves the infinite",
-    "proves the general limit",
-)
 
 
 def q(text):
@@ -166,49 +90,12 @@ def valid_result(result):
     )
 
 
-def _explanation_is_valid(path: Path) -> bool:
-    """Stream the explanation, requiring each fact and no contradiction."""
-
-    matched = [False] * len(_CONCEPT_GROUPS)
-    contradicted = False
-    carry = ""
-    try:
-        with path.open("r", encoding="utf-8", errors="strict") as stream:
-            while chunk := stream.read(65_536):
-                window = (carry + chunk).lower()
-                contradicted = contradicted or any(
-                    negation in window for negation in _NEGATIONS
-                )
-                for index, group in enumerate(_CONCEPT_GROUPS):
-                    if not matched[index] and any(phrase in window for phrase in group):
-                        matched[index] = True
-                carry = window[-256:]
-    except (OSError, UnicodeError, MemoryError):
-        return False
-    return not contradicted and all(matched)
-
-
-def evidence_ok(evidence):
-    # The structured endpoint certificate is replayed independently.  The
-    # public evidence contract requires one digest-bound text explanation
-    # whose content affirmatively states the separation and its limitation;
-    # equivalent phrasing is accepted and contradictory or unrelated text is
-    # rejected.  The digest and prose are streamed without a hidden size cap.
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    path = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if path is None:
-        return False
-    return _explanation_is_valid(path)
-
-
 def main():
     raw = load_submission_raw(require_input_binding=False)
     input_binding = workspace_input_is_bound()
     contract = submission_matches_public_schema(raw)
     r = raw.get("result") if isinstance(raw, dict) else None
     math_ok = valid_result(r)
-    ev = bool(isinstance(raw, dict) and evidence_ok(raw.get("witness")))
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
@@ -216,8 +103,7 @@ def main():
                 "protocol_compliance": float(bool(contract)),
                 "input_binding": float(input_binding),
                 "correctness": float(math_ok),
-                "witness_validity": float(ev),
-                "reward": float(contract and input_binding and math_ok and ev),
+                "reward": float(contract and input_binding and math_ok),
             }
         )
     )

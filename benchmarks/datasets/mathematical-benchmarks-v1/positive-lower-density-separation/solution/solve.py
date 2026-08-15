@@ -1,4 +1,3 @@
-import hashlib
 import json
 from fractions import Fraction
 from pathlib import Path
@@ -29,16 +28,4 @@ result = {
     "natural_density_exists": False,
     "semantic_relation": "FORMALIZED_PREDICATE_STRICTLY_STRONGER",
 }
-text = (
-    "The lower density is positive, while the two endpoint subsequences have different limits, so the natural density does not exist. The finite levels replay instances of the general formula rather than proving every infinite case.\nRESULT_JSON:"
-    + json.dumps(result, sort_keys=True, separators=(",", ":"))
-    + "\n"
-)
-Path("/app/evidence").mkdir(parents=True, exist_ok=True)
-Path("/app/evidence/answer.txt").write_text(text)
-digest = hashlib.sha256(text.encode()).hexdigest()
-submission = {
-    "result": result,
-    "witness": [{"path": "evidence/answer.txt", "sha256": f"sha256:{digest}"}],
-}
-Path("/app/submission.json").write_text(json.dumps(submission, indent=2) + "\n")
+Path("/app/submission.json").write_text(json.dumps({"result": result}, indent=2) + "\n")

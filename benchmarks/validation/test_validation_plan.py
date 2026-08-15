@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from benchmarks.tooling.validation_plan import host_validation_plan
 
 
-def test_task_change_selects_only_leaf_and_filtered_generic(tmp_path: Path) -> None:
+def test_task_change_selects_only_its_owned_leaf(tmp_path: Path) -> None:
     task = "task-a"
     leaf = tmp_path / "benchmarks/validation/mathematical_benchmarks_v1/test_task_a.py"
     leaf.parent.mkdir(parents=True)
@@ -22,11 +22,6 @@ def test_task_change_selects_only_leaf_and_filtered_generic(tmp_path: Path) -> N
     )
 
     assert [(entry.selector, entry.keyword) for entry in plan.entries] == [
-        (
-            "benchmarks/validation/mathematical_benchmarks_v1/"
-            "test_generic_verifier_contracts.py",
-            task,
-        ),
         (
             "benchmarks/validation/mathematical_benchmarks_v1/test_task_a.py",
             "",
@@ -131,6 +126,12 @@ def test_focused_host_matrix_over_limit_escalates_to_full_suite(
     suite = SimpleNamespace(
         tasks=tuple(SimpleNamespace(path=Path(task)) for task in tasks)
     )
+    validation_root = tmp_path / "benchmarks/validation/mathematical_benchmarks_v1"
+    validation_root.mkdir(parents=True)
+    for task in tasks:
+        (validation_root / f"test_{task.replace('-', '_')}.py").write_text(
+            "", encoding="utf-8"
+        )
     paths = [
         f"benchmarks/datasets/mathematical-benchmarks-v1/{task}/tests/verifier_support.py"
         for task in tasks

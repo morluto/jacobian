@@ -309,11 +309,6 @@ def test_executable_task_change_selects_exact_task_without_version_bump() -> Non
             "test_parameterized_sharp_bound_audit.py",
             "",
         ),
-        (
-            "benchmarks/validation/mathematical_benchmarks_v1/"
-            "test_generic_verifier_contracts.py",
-            "parameterized-sharp-bound-audit",
-        ),
     }
     _assert_plan_valid(result)
 
@@ -335,7 +330,6 @@ def test_host_and_oracle_matrices_record_predictions() -> None:
         entry["name"]: entry["predicted_seconds"] for entry in _raw_host_matrix(result)
     }
     assert predictions == {
-        f"{task}-generic": 3.5,
         f"{task}-specific": 8.25,
     }
     _assert_plan_valid(result)

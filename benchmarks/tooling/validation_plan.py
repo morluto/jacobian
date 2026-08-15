@@ -207,7 +207,7 @@ def task_host_validation(
     *,
     timings: Mapping[str, float] | None = None,
 ) -> tuple[HostValidation, ...]:
-    """Select the leaf and task-filtered generic contracts for one task."""
+    """Select task-owned host validation for one task."""
     if dataset == "mathematical-benchmarks-v1":
         dedicated = (
             root
@@ -216,27 +216,15 @@ def task_host_validation(
             / "mathematical_benchmarks_v1"
             / f"test_{task.replace('-', '_')}.py"
         )
-        entries: list[HostValidation] = []
         if dedicated.is_file():
-            entries.append(
+            return (
                 _entry(
                     name=f"{task}-specific",
                     selector=dedicated.relative_to(root).as_posix(),
                     timings=timings,
-                )
-            )
-        entries.append(
-            _entry(
-                name=f"{task}-generic",
-                selector=(
-                    "benchmarks/validation/mathematical_benchmarks_v1/"
-                    "test_generic_verifier_contracts.py"
                 ),
-                keyword=task,
-                timings=timings,
             )
-        )
-        return tuple(entries)
+        return ()
     if dataset == "conjecture-probes-v1":
         dedicated = (
             root

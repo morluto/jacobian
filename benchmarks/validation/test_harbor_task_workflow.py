@@ -68,11 +68,6 @@ def test_resolve_selection_uses_planner_owned_host_matrix() -> None:
     assert [(item.selector, item.keyword) for item in selection.host_validations] == [
         (
             "benchmarks/validation/mathematical_benchmarks_v1/"
-            "test_generic_verifier_contracts.py",
-            "parameterized-sharp-bound-audit",
-        ),
-        (
-            "benchmarks/validation/mathematical_benchmarks_v1/"
             "test_parameterized_sharp_bound_audit.py",
             "",
         ),

@@ -6,15 +6,13 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    _public_submission_is_valid,
-    is_regular_bounded_file,
+    load_submission_raw,
     normalize_reward_file,
     resolve_evidence,
+    submission_matches_public_schema,
     workspace_input_is_bound,
 )
 
-WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 LIMITATION = "The certificate refutes the published singleton claim and proves sufficiency for its submitted family member; it does not independently prove necessity for every possible trip."
 RATIONAL = re.compile(r"^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$")
@@ -28,17 +26,6 @@ def _load() -> dict[str, Any]:
     except (OSError, ValueError):
         return {}
     return value if isinstance(value, dict) else {}
-
-
-def _submission() -> dict[str, Any] | None:
-    path = WORKSPACE / "submission.json"
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
 
 
 def _fraction(value: object) -> Fraction | None:
@@ -142,7 +129,7 @@ def _stream_matches_certificate(path: Path, expected: list[str]) -> bool:
     return line_index == len(expected_bytes)
 
 
-def _evidence(value: object, result: object) -> bool:
+def _witness(value: object, result: object) -> bool:
     if not isinstance(value, list) or len(value) != 1:
         return False
     if not isinstance(result, dict):
@@ -188,15 +175,15 @@ def _evidence(value: object, result: object) -> bool:
 
 
 def main() -> None:
-    submission = _submission()
+    submission = load_submission_raw(require_input_binding=False)
     data = submission if isinstance(submission, dict) else {}
     input_bound = workspace_input_is_bound()
     contract = bool(
-        _public_submission_is_valid(submission)
+        submission_matches_public_schema(submission)
         and _result_protocol_valid(data.get("result"))
     )
     math_correct = _result(data.get("result"), _load())
-    witness_valid = _evidence(data.get("witness"), data.get("result"))
+    witness_valid = _witness(data.get("witness"), data.get("result"))
     correct = input_bound and contract and math_correct and witness_valid
     output = Path("/logs/verifier")
     output.mkdir(parents=True, exist_ok=True)

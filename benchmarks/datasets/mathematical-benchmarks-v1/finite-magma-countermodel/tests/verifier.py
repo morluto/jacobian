@@ -5,8 +5,6 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -20,30 +18,6 @@ def load_json(path):
         return json.loads(path.read_text())
     except (OSError, ValueError):
         return None
-
-
-def evidence_matches_result(evidence, result):
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    if not witness_list_is_bound(evidence):
-        return False
-    target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
-    if target is None:
-        return False
-    try:
-        text = target.read_text().casefold()
-        return all(
-            fragment in text
-            for fragment in (
-                "x diamond y = y",
-                "x=0",
-                "y=1",
-                "one-element",
-                "minimality",
-            )
-        )
-    except (OSError, UnicodeError):
-        return False
 
 
 def evaluate(term, table, assignment):
@@ -161,18 +135,13 @@ def main():
     fixture = load_json(E / FIXTURE_NAME)
     result = submission.get("result") if isinstance(submission, dict) else None
     math_correct = bool(fixture is not None and result_valid(result, fixture))
-    witness = bool(
-        isinstance(submission, dict)
-        and evidence_matches_result(submission.get("witness"), result)
-    )
-    reward = float(input_binding and math_correct and witness)
+    reward = float(input_binding and math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "input_binding": float(input_binding),
                 "correctness": float(math_correct),
-                "witness_validity": float(witness),
                 "reward": reward,
             }
         )

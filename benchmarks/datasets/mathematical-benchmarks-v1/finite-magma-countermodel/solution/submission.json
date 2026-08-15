@@ -20,11 +20,5 @@
       ]
     ],
     "target_holds_universally": false
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:17685fc837ace09210cedcce29e48e3bfe807abe5e44bbd0efe0a64035ce3aa9"
-    }
-  ]
+  }
 }

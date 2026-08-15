@@ -98,6 +98,16 @@ def test_rejects_corrupt_geometry_and_nonvanishing_gap(tmp_path: Path) -> None:
         assert _verify(tmp_path / name, submission).reward == 0.0
 
 
+def test_public_instruction_does_not_require_lowest_terms() -> None:
+    instruction = (
+        Path("benchmarks/datasets/public-reproductions-v1") / TASK / "instruction.md"
+    ).read_text()
+    lowered = instruction.lower()
+    assert "lowest terms" not in lowered
+    assert "canonical rational" not in lowered
+    assert "equivalent encodings" in lowered
+
+
 def test_rejects_string_coercion_and_accepts_equivalent_rationals(
     tmp_path: Path,
 ) -> None:

@@ -8,7 +8,8 @@ Diagnose this semantic strengthening by constructing two disjoint locally finite
 rational plane whose distance infimum is zero. Choose a start index from 4 through 20 and submit
 eight consecutive indexed point pairs. For every row use `A_n = (n,0)` and `B_n = (n,1/n)`, with
 each exact rational coordinate and distance represented as an integer `numerator` and positive
-integer `denominator` in lowest terms. Also submit four to eight distinct positive canonical
+integer `denominator`. Equivalent encodings such as `2/8` and `1/4` are accepted after
+normalization. Also submit four to eight distinct positive
 rational epsilons in strictly decreasing order, each paired with an index `N` such that
 `N` is at least the start index and `1/N < epsilon`; indices must strictly increase.
 

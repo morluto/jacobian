@@ -1436,11 +1436,5 @@
       "universal_projection_cost": 20,
       "witness_projection_cost": 20
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:5446ac55602060329dbca53b5f97847216cae8979cc59f0e5c459fb34c753be0"
-    }
-  ]
+  }
 }

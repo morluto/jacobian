@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/gram-schmidt-audit.json"
     ],
@@ -12,7 +12,7 @@
     "payload_shape": null
   },
   "public_notes": "Exact rational finite-dimensional replay; Lean elaboration remains outside scope.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/gram-schmidt-audit.json"
   ],
   "schema_definitions": {

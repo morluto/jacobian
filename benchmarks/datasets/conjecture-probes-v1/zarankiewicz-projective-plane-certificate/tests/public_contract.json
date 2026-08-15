@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/answer.json"
     ],
@@ -12,7 +12,7 @@
     "payload_shape": null
   },
   "public_notes": "Exact PG(2,3) incidence and finite extremal replay only; no general Zarankiewicz conclusion.\n\nThe evidence file must be a JSON object with exactly four fields: `schema_version` must be `\"1\"`, `task_id` must equal the submission task ID, `result` must be an exact JSON copy of `submission.json`'s result object, and `limitations` must be an exact JSON copy of its limitations list.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/answer.json"
   ],
   "schema_definitions": {

@@ -3,10 +3,10 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
@@ -225,7 +225,7 @@ def _symbolic_certificate_valid(result: object, source: dict) -> bool:
 
 
 def _evidence_matches(evidence: object, result: dict) -> bool:
-    if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
+    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
         return False
     target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if target is None:

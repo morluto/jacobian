@@ -5,10 +5,10 @@ from itertools import combinations, pairwise, permutations
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -32,7 +32,7 @@ def _load_frozen_input():
 
 
 def witness_matches_result(witness, result):
-    if not evidence_list_is_bound(witness):
+    if not witness_list_is_bound(witness):
         return False
     target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
     if target is None:

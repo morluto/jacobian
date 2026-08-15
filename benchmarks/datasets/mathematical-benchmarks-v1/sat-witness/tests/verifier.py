@@ -2,9 +2,9 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
+    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -13,7 +13,7 @@ E = Path("/tests")
 
 
 def _answer_evidence(submission):
-    return evidence_list_is_bound(submission.get("witness"))
+    return witness_list_is_bound(submission.get("witness"))
 
 
 def main():

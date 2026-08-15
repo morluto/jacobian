@@ -8,11 +8,11 @@ from typing import Any
 
 from verifier_support import (
     aggregate_reward,
-    evidence_list_is_bound,
     json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
@@ -174,7 +174,7 @@ def evidence_matches_result(evidence: object, result: object) -> bool:
     if not isinstance(evidence, list) or len(evidence) != 1:
         return False
     try:
-        if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
+        if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
             return False
         target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     except RecursionError:
@@ -300,7 +300,7 @@ def main() -> None:
     )
     reward = aggregate_reward(
         correctness=math_correct,
-        evidence_validity=evidence_valid,
+        witness_validity=evidence_valid,
         protocol_ok=protocol_ok,
     )
     logs = Path("/logs/verifier")
@@ -309,7 +309,7 @@ def main() -> None:
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
+                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

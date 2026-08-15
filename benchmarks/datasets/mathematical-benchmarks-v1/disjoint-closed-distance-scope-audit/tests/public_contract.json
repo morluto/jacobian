@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/disjoint-closed-distance-audit.json"
     ],
@@ -12,7 +12,7 @@
     "payload_shape": null
   },
   "public_notes": "Exact parametric metric replay; Lean elaboration and foundational topology remain outside scope.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/disjoint-closed-distance-audit.json"
   ],
   "schema_definitions": {

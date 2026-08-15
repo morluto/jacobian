@@ -1,18 +1,18 @@
 import json
 from pathlib import Path
 
+from verifier_support import load_submission as load_strict_submission
 from verifier_support import (
-    evidence_list_is_bound,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
 )
-from verifier_support import load_submission as load_strict_submission
 
 E = Path("/tests")
 
 
 def evidence_matches_result(evidence, result):
-    if not evidence_list_is_bound(evidence):
+    if not witness_list_is_bound(evidence):
         return False
     target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if target is None:

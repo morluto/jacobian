@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/answer.txt"
     ],
@@ -12,7 +12,7 @@
     "payload_shape": null
   },
   "public_notes": "Exact finite coloring and minor replay only; no global Hadwiger conclusion.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/answer.txt"
   ],
   "schema_definitions": {

@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/answer.txt"
     ],
@@ -10,7 +10,7 @@
     "min_items": 1
   },
   "public_notes": "Submit the result and the required replay artifact. The verifier recomputes the task-specific mathematical claim from the frozen input.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/answer.txt"
   ],
   "schema_definitions": {},

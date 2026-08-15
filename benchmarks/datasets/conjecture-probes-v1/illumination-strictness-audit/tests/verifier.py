@@ -8,12 +8,12 @@ from typing import Any
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    evidence_list_is_bound,
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
     resolve_evidence,
+    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -59,7 +59,7 @@ def _json_equal(left: Any, right: Any) -> bool:
 
 
 def _witness_matches_result(witness: object, result: object) -> bool:
-    if not evidence_list_is_bound(witness, expected_path="evidence/answer.json"):
+    if not witness_list_is_bound(witness, expected_path="evidence/answer.json"):
         return False
     if resolve_evidence(witness[0], expected_path="evidence/answer.json") is None:
         return False

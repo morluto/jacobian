@@ -5,10 +5,10 @@ from typing import Any
 
 from verifier_support import (
     aggregate_reward,
-    evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
@@ -110,7 +110,7 @@ def _evidence(value: object) -> bool:
     if (
         not isinstance(value, list)
         or len(value) != 1
-        or not evidence_list_is_bound(value)
+        or not witness_list_is_bound(value)
     ):
         return False
     assert isinstance(value, list)
@@ -145,7 +145,7 @@ def main() -> None:
     ev_ok = bool(protocol_ok and math_ok and _evidence(data.get("witness")))
     reward = aggregate_reward(
         correctness=math_ok,
-        evidence_validity=ev_ok,
+        witness_validity=ev_ok,
         protocol_ok=protocol_ok,
     )
     logs = Path("/logs/verifier")
@@ -154,7 +154,7 @@ def main() -> None:
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(ev_ok),
+                "witness_validity": float(ev_ok),
                 "reward": reward,
             },
             sort_keys=True,

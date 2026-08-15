@@ -43,7 +43,7 @@ def _number(value: Any) -> float | None:
 def _trial_metric(trial: dict[str, Any], metric: str) -> float | None:
     if metric in {
         "correctness",
-        "evidence_validity",
+        "witness_validity",
         "scope_accuracy",
         "assurance_calibration",
         "reward",
@@ -210,7 +210,7 @@ def compare_evidence(
     pairs = sorted(set(control_trials) & set(treatment_trials))
     metric_names = (
         "correctness",
-        "evidence_validity",
+        "witness_validity",
         "scope_accuracy",
         "assurance_calibration",
         "false_certification",

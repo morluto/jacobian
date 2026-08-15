@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/certificate.json"
     ],
@@ -11,7 +11,7 @@
     "min_items": 1
   },
   "public_notes": "Write evidence/certificate.json as a JSON wrapper with exactly these fields: schema_version (the string \\\"1\\\"), task_id (the string \\\"jacobian/symbolic-coordination-semantic-equivalence-04\\\"), result (an exact copy of the submission result object). Bind that exact regular file by SHA-256. The verifier independently replays the mathematics and checks the input, artifact, and witness identities.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/certificate.json"
   ],
   "schema_definitions": {

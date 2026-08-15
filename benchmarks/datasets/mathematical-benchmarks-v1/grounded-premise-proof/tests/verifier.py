@@ -3,9 +3,9 @@ import re
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
+    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -137,7 +137,7 @@ def main():
     )
     witness_valid = bool(
         isinstance(submission, dict)
-        and evidence_list_is_bound(
+        and witness_list_is_bound(
             submission.get("witness"), expected_path="evidence/answer.txt"
         )
     )

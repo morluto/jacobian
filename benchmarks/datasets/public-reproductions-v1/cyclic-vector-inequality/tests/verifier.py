@@ -6,10 +6,10 @@ from pathlib import Path
 
 from verifier_support import (
     aggregate_reward,
-    evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
@@ -156,7 +156,7 @@ def _evidence(value: object, result: object) -> bool:
     if (
         not isinstance(value, list)
         or len(value) != 1
-        or not evidence_list_is_bound(value)
+        or not witness_list_is_bound(value)
     ):
         return False
     path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
@@ -188,12 +188,12 @@ def _evaluate(submission: object) -> dict[str, float]:
     )
     reward = aggregate_reward(
         correctness=correct,
-        evidence_validity=correct,
+        witness_validity=correct,
         protocol_ok=protocol_ok,
     )
     return {
         "correctness": float(correct),
-        "evidence_validity": float(correct),
+        "witness_validity": float(correct),
         "reward": reward,
     }
 

@@ -17,7 +17,7 @@ _VIRTUAL_ROOTS = ("/app", "/tests", "/logs/verifier")
 _FAILURE_DETAILS = {
     "assurance_calibration": 0.0,
     "correctness": 0.0,
-    "evidence_validity": 0.0,
+    "witness_validity": 0.0,
     "false_certification": False,
     "input_binding": 0.0,
     "input_integrity": 0.0,

@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/answer.txt"
     ],
@@ -12,7 +12,7 @@
     "payload_shape": null
   },
   "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/answer.txt"
   ],
   "schema_version": "1",

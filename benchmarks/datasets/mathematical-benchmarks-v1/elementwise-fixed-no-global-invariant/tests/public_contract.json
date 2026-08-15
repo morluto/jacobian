@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/answer.txt"
     ],
@@ -12,7 +12,7 @@
     "payload_shape": null
   },
   "public_notes": "The verifier independently generates the finite group, checks determinant one and every elementwise fixed vector, and computes the common fixed-space intersection. The evidence file remains qualitative prose and must explain the elementwise fixed vectors, absence of a common fixed vector, and quantifier-order separation; unrelated or empty text does not earn evidence credit. The limitations array records the exact obligation IDs `claim:finite-action-counterexample` and `limitation:no-general-classification-theorem` in that order.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/answer.txt"
   ],
   "schema_definitions": {

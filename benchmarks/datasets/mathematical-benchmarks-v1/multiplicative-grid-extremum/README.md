@@ -9,8 +9,7 @@ The verifier independently factors every submitted integer as
 `core * 2^a * 3^b`, recomputes every good pair, checks the lattice projections,
 and derives the universal bound with a finite dynamic program. Alternative
 valid witnesses, including common rescalings coprime to 6, are accepted. The
-elementary projection lemma is part of the trusted mathematical boundary, and
-no proof assistant is invoked, so assurance is capped at `COMPUTED`.
+elementary projection lemma is part of the trusted mathematical boundary.
 
 ## Selection rationale
 
@@ -24,5 +23,5 @@ lacked a compact independently checkable certificate.
 
 Knowing the published answer `180` is insufficient. A successful submission
 must supply 100 distinct integers, the complete 180-edge relation, exact
-factorizations, and projection data that the verifier recomputes. Tiny-witness,
-answer-only, sampling, and evidence-rebinding shortcuts are rejected.
+factorizations, and projection data that the verifier recomputes. Tiny
+constructions, answer-only, and sampling shortcuts are rejected.

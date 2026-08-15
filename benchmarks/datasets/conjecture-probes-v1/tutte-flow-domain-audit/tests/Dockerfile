@@ -1,5 +1,5 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
-LABEL jacobian.task="jacobian/tutte-flow-domain-audit" jacobian.checksum="4105350e7bb3bba1028db3befa1376817bfa32b6db9d63ca09db345436448f77"
+LABEL jacobian.task="jacobian/tutte-flow-domain-audit" jacobian.checksum="e374ba9b902db67ffd5dd741d41db1b362de50a175500a2db2d94fb05a58e479"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 COPY input.json public_contract.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

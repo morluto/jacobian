@@ -6,17 +6,12 @@ from collections import defaultdict
 from pathlib import Path
 
 from verifier_support import (
-    aggregate_reward,
-    evidence_list_is_bound,
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
 )
 
 TESTS = Path("/tests")
 LOGS = Path("/logs/verifier")
-MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
 
 _PROJECTION_SUMMARY_KEYS = (
     "component_count",
@@ -249,63 +244,6 @@ def _result_valid(result: object, source: dict) -> bool:
     )
 
 
-def _json_values_equal(left: object, right: object) -> bool:
-    """Compare parsed JSON values without coercing booleans or numbers."""
-
-    if type(left) is not type(right):
-        return False
-    if isinstance(left, dict):
-        if not isinstance(right, dict):
-            return False
-        return set(left) == set(right) and all(
-            _json_values_equal(left[key], right[key]) for key in left
-        )
-    if isinstance(left, list):
-        if not isinstance(right, list):
-            return False
-        return len(left) == len(right) and all(
-            _json_values_equal(left_item, right_item)
-            for left_item, right_item in zip(left, right, strict=True)
-        )
-    return left == right
-
-
-def _evidence_valid(evidence: object, result: object) -> bool:
-    if not evidence_list_is_bound(
-        evidence,
-        expected_path="evidence/answer.txt",
-        max_bytes=MAX_EVIDENCE_BYTES,
-    ):
-        return False
-    path = resolve_evidence(
-        evidence[0],
-        expected_path="evidence/answer.txt",
-        max_bytes=MAX_EVIDENCE_BYTES,
-    )
-    if path is None:
-        return False
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-        markers = [
-            line.removeprefix("RESULT_JSON:").strip()
-            for line in lines
-            if line.startswith("RESULT_JSON:")
-        ]
-        if len(markers) != 1:
-            return False
-        value = json.loads(markers[0])
-    except (
-        OSError,
-        StopIteration,
-        UnicodeError,
-        ValueError,
-        RecursionError,
-        MemoryError,
-    ):
-        return False
-    return json_value_equal(value, result)
-
-
 def main() -> None:
     source = _source()
     submission = load_submission()
@@ -315,20 +253,10 @@ def main() -> None:
         and source is not None
         and _result_valid(submission.get("result"), source)
     )
-    evidence = bool(
-        protocol_ok
-        and correctness
-        and _evidence_valid(submission.get("witness"), submission.get("result"))
-    )
-    reward = aggregate_reward(
-        correctness=correctness,
-        evidence_validity=evidence,
-        protocol_ok=protocol_ok,
-    )
+    reward = float(correctness)
     _write_reward(
         {
             "correctness": float(correctness),
-            "evidence_validity": float(evidence),
             "reward": reward,
         }
     )
@@ -341,7 +269,6 @@ if __name__ == "__main__":
         _write_reward(
             {
                 "correctness": 0.0,
-                "evidence_validity": 0.0,
                 "reward": 0.0,
             }
         )

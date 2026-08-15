@@ -87,7 +87,7 @@ def main():
                 ev_ok &= i.get("sha256") == _digest(t)
     reward = aggregate_reward(
         correctness=math_ok,
-        evidence_validity=ev_ok,
+        witness_validity=ev_ok,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -95,7 +95,7 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(ev_ok),
+                "witness_validity": float(ev_ok),
                 "reward": reward,
             }
         )

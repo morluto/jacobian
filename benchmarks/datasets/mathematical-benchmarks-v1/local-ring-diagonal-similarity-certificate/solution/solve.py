@@ -1,4 +1,3 @@
-import hashlib
 import json
 import math
 from itertools import permutations
@@ -44,16 +43,4 @@ r = {
         for i in range(6)
     ],
 }
-text = (
-    "The modular products agree. The determinant is a unit, and the displayed determinant permutation selects only unit entries, forcing each matched diagonal pair to agree.\nRESULT_JSON:"
-    + json.dumps(r, sort_keys=True, separators=(",", ":"))
-    + "\n"
-)
-Path("/app/evidence").mkdir(parents=True, exist_ok=True)
-Path("/app/evidence/answer.txt").write_text(text)
-h = hashlib.sha256(text.encode()).hexdigest()
-s = {
-    "result": r,
-    "witness": [{"path": "evidence/answer.txt", "sha256": f"sha256:{h}"}],
-}
-Path("/app/submission.json").write_text(json.dumps(s, indent=2) + "\n")
+Path("/app/submission.json").write_text(json.dumps({"result": r}, indent=2) + "\n")

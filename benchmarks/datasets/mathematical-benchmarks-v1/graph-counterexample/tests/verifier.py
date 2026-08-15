@@ -2,11 +2,11 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
-    normalize_reward_file,
+    load_submission as load_strict_submission,
 )
 from verifier_support import (
-    load_submission as load_strict_submission,
+    normalize_reward_file,
+    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -18,7 +18,7 @@ def load_submission():
 
 
 def evidence(s):
-    return bool(s and evidence_list_is_bound(s.get("witness")))
+    return bool(s and witness_list_is_bound(s.get("witness")))
 
 
 def _graph_arrays(result):

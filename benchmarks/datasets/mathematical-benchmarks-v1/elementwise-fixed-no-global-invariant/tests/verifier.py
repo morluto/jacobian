@@ -3,8 +3,6 @@ import re
 from pathlib import Path
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
@@ -221,17 +219,6 @@ def _quantifier_explanation_valid(path: Path) -> bool:
     except (OSError, UnicodeError, MemoryError):
         return False
     return all(matched.values())
-
-
-def raw_submission():
-    path = W / "submission.json"
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
 
 
 def evidence_valid(descriptors):

@@ -273,7 +273,7 @@ def main() -> None:
     correct = bool(protocol_ok and input_bound and math_correct)
     reward = aggregate_reward(
         correctness=correct,
-        evidence_validity=evidence_valid,
+        witness_validity=evidence_valid,
         protocol_ok=protocol_ok,
     )
     out = Path("/logs/verifier")
@@ -283,7 +283,7 @@ def main() -> None:
             {
                 "correctness": float(math_correct),
                 "input_binding": float(input_bound),
-                "evidence_validity": float(evidence_valid),
+                "witness_validity": float(evidence_valid),
                 "protocol_compliance": float(protocol_ok),
                 "reward": reward,
             }

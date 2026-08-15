@@ -4,10 +4,10 @@ from pathlib import Path
 
 from verifier_support import (
     aggregate_reward,
-    evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -113,7 +113,7 @@ def evidence_valid(evidence, result):
     if (
         not isinstance(evidence, list)
         or len(evidence) != 1
-        or not evidence_list_is_bound(
+        or not witness_list_is_bound(
             evidence, expected_path="evidence/audit-certificate.json"
         )
     ):
@@ -144,7 +144,7 @@ def main():
     evidence = bool(protocol_ok and evidence_valid(submission.get("witness"), result))
     reward = aggregate_reward(
         correctness=correctness,
-        evidence_validity=evidence,
+        witness_validity=evidence,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -152,7 +152,7 @@ def main():
         json.dumps(
             {
                 "correctness": float(correctness),
-                "evidence_validity": float(evidence),
+                "witness_validity": float(evidence),
                 "reward": reward,
             }
         )

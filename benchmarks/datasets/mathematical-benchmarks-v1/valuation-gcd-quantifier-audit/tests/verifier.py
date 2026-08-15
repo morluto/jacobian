@@ -128,7 +128,7 @@ def main():
     )
     reward = aggregate_reward(
         correctness=math_ok,
-        evidence_validity=evidence_ok,
+        witness_validity=evidence_ok,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -136,7 +136,7 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(evidence_ok),
+                "witness_validity": float(evidence_ok),
                 "reward": reward,
             }
         )

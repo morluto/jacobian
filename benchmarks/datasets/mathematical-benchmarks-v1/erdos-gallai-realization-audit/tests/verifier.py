@@ -3,10 +3,10 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
@@ -117,7 +117,7 @@ def _result(result: object, frozen: dict[str, Any]) -> bool:
 
 
 def _evidence(value: object) -> bool:
-    if not evidence_list_is_bound(value, expected_path="evidence/answer.txt"):
+    if not witness_list_is_bound(value, expected_path="evidence/answer.txt"):
         return False
     if not isinstance(value, list) or len(value) != 1:
         return False

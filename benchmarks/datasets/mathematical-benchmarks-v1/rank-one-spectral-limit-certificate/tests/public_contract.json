@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/spectral-certificate.json"
     ],
@@ -12,7 +12,7 @@
     "payload_shape": null
   },
   "public_notes": "The verifier independently replays exact rational sums and freely selected checkpoints; the determinant lemma and rational limit inference remain trusted.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/spectral-certificate.json"
   ],
   "schema_definitions": {

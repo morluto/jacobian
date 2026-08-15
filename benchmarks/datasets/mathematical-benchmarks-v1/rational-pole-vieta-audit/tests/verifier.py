@@ -132,7 +132,7 @@ def main() -> None:
     )
     reward = aggregate_reward(
         correctness=math_ok,
-        evidence_validity=ev_ok,
+        witness_validity=ev_ok,
         protocol_ok=bool(input_binding and submission is not None),
     )
     logs = Path("/logs/verifier")
@@ -141,7 +141,7 @@ def main() -> None:
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(ev_ok),
+                "witness_validity": float(ev_ok),
                 "input_binding": float(input_binding),
                 "reward": reward,
             }

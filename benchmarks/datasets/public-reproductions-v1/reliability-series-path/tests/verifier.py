@@ -3,9 +3,9 @@ from pathlib import Path
 
 from verifier_support import (
     aggregate_reward,
-    evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
+    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -39,16 +39,16 @@ def main():
     protocol_ok = s is not None
     math_correct = _math(s, x, e) if protocol_ok else False
     correct = bool(protocol_ok and math_correct)
-    good = bool(protocol_ok and evidence_list_is_bound(s["witness"]))
+    good = bool(protocol_ok and witness_list_is_bound(s["witness"]))
     reward = aggregate_reward(
-        correctness=correct, evidence_validity=good, protocol_ok=protocol_ok
+        correctness=correct, witness_validity=good, protocol_ok=protocol_ok
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(good),
+                "witness_validity": float(good),
                 "reward": reward,
             }
         )

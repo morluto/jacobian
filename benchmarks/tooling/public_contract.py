@@ -67,8 +67,8 @@ SUBMISSION_BLOCK_END = "<!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->"
 # ---------------------------------------------------------------------------
 
 
-# JSON Schema document keywords. ``payload_shape`` is a map of evidence-item
-# field names to schema fragments, not a schema for the evidence file body.
+# JSON Schema document keywords. ``payload_shape`` is a map of witness-item
+# field names to schema fragments, not a schema for the witness file body.
 _PAYLOAD_SHAPE_SCHEMA_DOCUMENT_KEYS = frozenset(
     {
         "$defs",
@@ -86,7 +86,7 @@ _PAYLOAD_SHAPE_SCHEMA_DOCUMENT_KEYS = frozenset(
 )
 
 
-class EvidenceRule(BaseModel):
+class WitnessRule(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     min_items: int = Field(ge=0)
@@ -97,29 +97,29 @@ class EvidenceRule(BaseModel):
     payload_shape: dict[str, Any] | None = None
 
     @model_validator(mode="after")
-    def _max_ge_min(self) -> EvidenceRule:
+    def _max_ge_min(self) -> WitnessRule:
         if self.max_items < self.min_items:
-            raise ValueError("evidence.max_items must be >= min_items")
+            raise ValueError("witness.max_items must be >= min_items")
         if self.max_items == 0 and (self.allowed_paths or self.media_types):
             raise ValueError(
-                "evidence with max_items=0 must not declare paths or media types"
+                "witness with max_items=0 must not declare paths or media types"
             )
         if self.max_items > 0 and (not self.allowed_paths or not self.media_types):
             raise ValueError(
-                "evidence with max_items>0 requires allowed_paths and media_types"
+                "witness with max_items>0 requires allowed_paths and media_types"
             )
         return self
 
     @model_validator(mode="after")
-    def _payload_shape_is_field_map(self) -> EvidenceRule:
+    def _payload_shape_is_field_map(self) -> WitnessRule:
         if not self.payload_shape:
             return self
         keys = set(self.payload_shape)
         if keys and keys <= _PAYLOAD_SHAPE_SCHEMA_DOCUMENT_KEYS:
             raise ValueError(
-                "evidence.payload_shape must map submission evidence-item "
+                "witness.payload_shape must map submission witness-item "
                 "field names to JSON Schema fragments; it is not a schema "
-                "for the evidence file body. Leave payload_shape null and "
+                "for the witness file body. Leave payload_shape null and "
                 "document file-body shape in instruction.md / public_notes, "
                 "or declare extra envelope fields such as "
                 "{'solution': {'type': 'string'}}."
@@ -127,9 +127,9 @@ class EvidenceRule(BaseModel):
         return self
 
     def item_schema(self) -> dict[str, Any]:
-        """Render the per-evidence-item JSON Schema."""
+        """Render the per-witness-item JSON Schema."""
         if not self.allowed_paths:
-            raise ValueError("evidence without allowed paths has no item schema")
+            raise ValueError("witness without allowed paths has no item schema")
         properties: dict[str, Any] = {
             "path": (
                 {"const": self.allowed_paths[0]}
@@ -142,9 +142,7 @@ class EvidenceRule(BaseModel):
         if self.payload_shape:
             for key, fragment in self.payload_shape.items():
                 if key in ("path", "sha256"):
-                    raise ValueError(
-                        f"evidence.payload_shape must not override '{key}'"
-                    )
+                    raise ValueError(f"witness.payload_shape must not override '{key}'")
                 properties[key] = fragment
                 required.append(key)
         return {
@@ -161,8 +159,8 @@ class PublicContract(BaseModel):
     schema_version: str = Field(default=SCHEMA_VERSION)
     task_id: str = Field(min_length=1, pattern=TASK_ID_PATTERN)
     submission_path: str = Field(pattern=r"^/app/[a-z0-9._/-]+$")
-    evidence: EvidenceRule
-    required_artifact_filenames: list[str] = Field(default_factory=list)
+    witness: WitnessRule
+    required_witness_filenames: list[str] = Field(default_factory=list)
     public_notes: str = Field(min_length=1)
     submission_result: dict[str, Any]
     schema_definitions: dict[str, Any] = Field(default_factory=dict)
@@ -177,28 +175,28 @@ class PublicContract(BaseModel):
             raise ValueError(f"schema_version must be '{SCHEMA_VERSION}'")
         return v
 
-    @field_validator("required_artifact_filenames")
+    @field_validator("required_witness_filenames")
     @classmethod
     def _artifacts(cls, v: list[str]) -> list[str]:
         for name in v:
             if name.startswith("/"):
                 raise ValueError(
-                    "required_artifact_filenames must be relative "
-                    "(e.g. 'evidence/answer.txt'), not absolute"
+                    "required_witness_filenames must be relative "
+                    "(e.g. 'witness/answer.txt'), not absolute"
                 )
             if ".." in name:
-                raise ValueError("required_artifact_filenames must not contain '..'")
+                raise ValueError("required_witness_filenames must not contain '..'")
         return v
 
     # -- model validators --------------------------------------------------
 
     @model_validator(mode="after")
-    def _evidence_paths_in_artifacts(self) -> PublicContract:
-        artifacts = set(self.required_artifact_filenames)
-        for ev_path in self.evidence.allowed_paths:
+    def _witness_paths_in_artifacts(self) -> PublicContract:
+        artifacts = set(self.required_witness_filenames)
+        for ev_path in self.witness.allowed_paths:
             if ev_path not in artifacts:
                 raise ValueError(
-                    f"evidence path {ev_path!r} is not in required_artifact_filenames"
+                    f"witness path {ev_path!r} is not in required_witness_filenames"
                 )
         return self
 
@@ -223,15 +221,15 @@ def _dump_json(value: Any) -> str:
 
 def _declared_schema(contract: PublicContract) -> dict[str, Any]:
     properties: dict[str, Any] = {"result": dict(contract.submission_result)}
-    if contract.evidence.max_items:
+    if contract.witness.max_items:
         properties["witness"] = {
             "type": "array",
-            "minItems": contract.evidence.min_items,
-            "maxItems": contract.evidence.max_items,
-            "items": contract.evidence.item_schema(),
+            "minItems": contract.witness.min_items,
+            "maxItems": contract.witness.max_items,
+            "items": contract.witness.item_schema(),
         }
     required = ["result"]
-    if contract.evidence.min_items:
+    if contract.witness.min_items:
         required.append("witness")
     schema: dict[str, Any] = {
         "$schema": JSON_SCHEMA_DRAFT,
@@ -261,18 +259,18 @@ def render_submission_block(contract: PublicContract) -> str:
         f"Write `{contract.submission_path}` to the exact schema in "
         f"`environment/submission_schema.json`. The submission requires a typed "
         f"`result`"
-        + (" and the declared `witness`." if contract.evidence.min_items else "."),
+        + (" and the declared `witness`." if contract.witness.min_items else "."),
         "",
     ]
-    if contract.evidence.max_items:
+    if contract.witness.max_items:
         lines.append(
             "- **Witness:** "
-            f"{contract.evidence.min_items}-{contract.evidence.max_items} item(s); "
+            f"{contract.witness.min_items}-{contract.witness.max_items} item(s); "
             "allowed path(s): "
-            + ", ".join(f"`{p}`" for p in contract.evidence.allowed_paths)
-            + f"; digest must match `{contract.evidence.digest_pattern}`; media "
+            + ", ".join(f"`{p}`" for p in contract.witness.allowed_paths)
+            + f"; digest must match `{contract.witness.digest_pattern}`; media "
             "type(s): "
-            + ", ".join(f"`{m}`" for m in contract.evidence.media_types)
+            + ", ".join(f"`{m}`" for m in contract.witness.media_types)
             + "."
         )
     block = "\n".join(lines)

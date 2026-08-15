@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/answer.txt"
     ],
@@ -12,7 +12,7 @@
     "payload_shape": null
   },
   "public_notes": "The verifier checks the declared result, semantic scope, completeness, digest-bound evidence, limitation claims, and assurance as separate protocol dimensions. State that Lean compilation is not assessed and do not claim that Lean or the corrected asymptotic conjecture was verified or proved.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/answer.txt"
   ],
   "schema_version": "1",

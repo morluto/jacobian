@@ -111,7 +111,7 @@ def test_compare_evidence_tolerates_missing_optional_metrics() -> None:
     treatment = deepcopy(_evidence("treatment", [1.0]))
     for evidence in (control, treatment):
         trial = evidence["trials"][0]
-        for key in ("evidence_validity", "scope_accuracy", "assurance_calibration"):
+        for key in ("witness_validity", "scope_accuracy", "assurance_calibration"):
             trial["rewards"].pop(key)
         trial["tokens"]["input"] = None
         trial["tokens"]["output"] = None
@@ -121,4 +121,4 @@ def test_compare_evidence_tolerates_missing_optional_metrics() -> None:
     report = compare_evidence(control, treatment)
 
     assert report["status"] == "VALID"
-    assert report["metrics"]["evidence_validity"]["pair_count"] == 0
+    assert report["metrics"]["witness_validity"]["pair_count"] == 0

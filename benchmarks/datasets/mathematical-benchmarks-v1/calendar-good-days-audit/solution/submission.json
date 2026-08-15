@@ -68,11 +68,5 @@
         "month": 5
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:d2d5322cb2e07c5a2168be282fc8b4503204ebf65905acbda394c88a85cd777b"
-    }
-  ]
+  }
 }

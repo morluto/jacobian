@@ -4,15 +4,14 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    is_regular_bounded_file,
-    load_submission,
+    load_submission_raw,
     normalize_reward_file,
     resolve_evidence,
+    submission_matches_public_schema,
     workspace_input_is_bound,
 )
 
-W, T = Path("/app"), Path("/tests")
+T = Path("/tests")
 LIMITATION = "Eight exact levels replay the general formula but do not machine-prove the infinite limit or the Erdős problem."
 
 
@@ -203,22 +202,10 @@ def evidence_ok(evidence):
     return _explanation_is_valid(path)
 
 
-def raw_submission():
-    path = W / "submission.json"
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
-
-
 def main():
-    raw = raw_submission()
+    raw = load_submission_raw(require_input_binding=False)
     input_binding = workspace_input_is_bound()
-    s = load_submission(W / "submission.json", require_input_binding=False)
-    contract = bool(s)
+    contract = submission_matches_public_schema(raw)
     r = raw.get("result") if isinstance(raw, dict) else None
     math_ok = valid_result(r)
     ev = bool(isinstance(raw, dict) and evidence_ok(raw.get("witness")))

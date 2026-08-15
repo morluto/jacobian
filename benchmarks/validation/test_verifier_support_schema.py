@@ -167,33 +167,33 @@ def test_load_submission_enforces_the_complete_public_schema(
 
 
 def test_aggregate_reward_full_credit_when_hard_gates_pass() -> None:
-    assert _VS.aggregate_reward(correctness=1.0, evidence_validity=True) == 1.0
+    assert _VS.aggregate_reward(correctness=1.0, witness_validity=True) == 1.0
 
 
 def test_aggregate_reward_zeros_on_invalid_evidence_even_when_math_passes() -> None:
-    assert _VS.aggregate_reward(correctness=1.0, evidence_validity=0.0) == 0.0
+    assert _VS.aggregate_reward(correctness=1.0, witness_validity=0.0) == 0.0
 
 
 def test_aggregate_reward_zeros_on_protocol_failure() -> None:
     assert (
-        _VS.aggregate_reward(correctness=1.0, evidence_validity=1.0, protocol_ok=False)
+        _VS.aggregate_reward(correctness=1.0, witness_validity=1.0, protocol_ok=False)
         == 0.0
     )
 
 
 def test_aggregate_reward_is_binary_with_no_partial_credit() -> None:
     # A partial correctness diagnostic is not a full mathematical outcome.
-    assert _VS.aggregate_reward(correctness=0.5, evidence_validity=1.0) == 0.0
+    assert _VS.aggregate_reward(correctness=0.5, witness_validity=1.0) == 0.0
     # Booleans are accepted and treated as full/empty unit scores.
-    assert _VS.aggregate_reward(correctness=True, evidence_validity=True) == 1.0
-    assert _VS.aggregate_reward(correctness=True, evidence_validity=False) == 0.0
+    assert _VS.aggregate_reward(correctness=True, witness_validity=True) == 1.0
+    assert _VS.aggregate_reward(correctness=True, witness_validity=False) == 0.0
 
 
 def test_aggregate_reward_has_no_soft_assurance_parameter() -> None:
     signature = inspect.signature(_VS.aggregate_reward)
     assert set(signature.parameters) == {
         "correctness",
-        "evidence_validity",
+        "witness_validity",
         "protocol_ok",
     }
 

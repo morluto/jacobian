@@ -337,7 +337,7 @@ def _json_exact_equal(left: object, right: object) -> bool:
 def _evidence_descriptors_ok(evidence: object) -> bool:
     """Check the evidence descriptor shape, path, and digest syntax.
 
-    File-content binding is left to ``evidence_validity``; this predicate only
+    File-content binding is left to ``witness_validity``; this predicate only
     ensures the envelope descriptor matches the public schema so a malformed
     descriptor such as ``[null]`` is reported as a protocol failure.
     """

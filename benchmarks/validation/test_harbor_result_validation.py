@@ -71,7 +71,7 @@ def _trial(*, reward: object = 1.0, **trial_overrides: object) -> dict:
         "verifier_result": {
             "rewards": {
                 "correctness": reward,
-                "evidence_validity": 1.0,
+                "witness_validity": 1.0,
                 "scope_accuracy": 1.0,
                 "assurance_calibration": 1.0,
                 "reward": 0.9999999999999999,

@@ -4,17 +4,16 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
     aggregate_reward,
-    evidence_list_is_bound,
-    is_regular_bounded_file,
-    load_submission,
+    load_submission_raw,
     normalize_reward_file,
     resolve_evidence,
+    submission_matches_public_schema,
+    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
-W, T = Path("/app"), Path("/tests")
+T = Path("/tests")
 MISMATCHES = {"OBJECTIVE_REPLACED", "BINARY_DOMAIN_RELAXED", "UNDECLARED_BUDGET_ADDED"}
 LIMITATION_ID = "FROZEN_BINARY_RATIO_INSTANCE_ONLY"
 
@@ -177,7 +176,7 @@ def _evidence_explains_clauses(path: Path) -> bool:
 def evidence_ok(evidence):
     # The typed residual certificate is replayed independently.  The public
     # evidence contract requires one digest-bound text artifact only.
-    if not evidence_list_is_bound(evidence):
+    if not witness_list_is_bound(evidence):
         return False
     path = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if path is None:
@@ -291,17 +290,6 @@ def valid_result(result, data):
     return _positives_ok(result, positives, selected, constant, residuals)
 
 
-def raw_submission():
-    path = W / "submission.json"
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
-
-
 def _array_preflight(raw):
     """Reject oversized index arrays before expensive schema validation."""
 
@@ -318,28 +306,24 @@ def _array_preflight(raw):
 
 
 def main():
-    raw = raw_submission()
+    raw = load_submission_raw(require_input_binding=False)
     data = json.loads((T / "input.json").read_text())
     input_binding = workspace_input_is_bound()
-    submission = (
-        load_submission(W / "submission.json", require_input_binding=False)
-        if _array_preflight(raw)
-        else None
-    )
+    protocol_ok = _array_preflight(raw) and submission_matches_public_schema(raw)
     result = raw.get("result") if isinstance(raw, dict) else None
     math_ok = valid_result(result, data)
     ev_ok = bool(isinstance(raw, dict) and evidence_ok(raw.get("witness")))
     reward = aggregate_reward(
         correctness=math_ok,
-        evidence_validity=ev_ok,
-        protocol_ok=bool(input_binding and submission is not None),
+        witness_validity=ev_ok,
+        protocol_ok=bool(input_binding and protocol_ok),
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(ev_ok),
+                "witness_validity": float(ev_ok),
                 "input_binding": float(input_binding),
                 "reward": reward,
             }

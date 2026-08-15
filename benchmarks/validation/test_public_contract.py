@@ -40,13 +40,13 @@ def _base_contract_dict() -> dict:
         "schema_version": "1",
         "task_id": "jacobian/test-fixture-task",
         "submission_path": "/app/submission.json",
-        "evidence": {
+        "witness": {
             "min_items": 1,
             "max_items": 1,
             "allowed_paths": ["evidence/answer.txt"],
             "media_types": ["text/plain"],
         },
-        "required_artifact_filenames": ["evidence/answer.txt"],
+        "required_witness_filenames": ["evidence/answer.txt"],
         "public_notes": "Find a counterexample and document it.",
         "submission_result": {
             "type": "object",
@@ -112,7 +112,7 @@ class TestModelValidation:
 
     def test_evidence_max_ge_min(self) -> None:
         data = _base_contract_dict() | {
-            "evidence": {
+            "witness": {
                 "min_items": 3,
                 "max_items": 1,
                 "allowed_paths": ["evidence/answer.txt"],
@@ -124,26 +124,26 @@ class TestModelValidation:
 
     def test_evidence_path_must_be_in_artifacts(self) -> None:
         data = _base_contract_dict() | {
-            "evidence": {
+            "witness": {
                 "min_items": 1,
                 "max_items": 1,
                 "allowed_paths": ["evidence/other.txt"],
                 "media_types": ["text/plain"],
             },
         }
-        with pytest.raises(ValueError, match="not in required_artifact_filenames"):
+        with pytest.raises(ValueError, match="not in required_witness_filenames"):
             PublicContract.model_validate(data)
 
     def test_artifact_filename_rejects_absolute(self) -> None:
         data = _base_contract_dict() | {
-            "required_artifact_filenames": ["/app/evidence/answer.txt"],
+            "required_witness_filenames": ["/app/evidence/answer.txt"],
         }
         with pytest.raises(ValueError, match="relative"):
             PublicContract.model_validate(data)
 
     def test_artifact_filename_rejects_traversal(self) -> None:
         data = _base_contract_dict() | {
-            "required_artifact_filenames": ["../evidence/answer.txt"],
+            "required_witness_filenames": ["../evidence/answer.txt"],
         }
         with pytest.raises(ValueError, match=r"\.\."):
             PublicContract.model_validate(data)
@@ -184,7 +184,7 @@ class TestModelValidation:
 
     def test_domain_owned_evidence_payload_field_is_allowed(self) -> None:
         data = _base_contract_dict() | {
-            "evidence": {
+            "witness": {
                 "min_items": 1,
                 "max_items": 1,
                 "allowed_paths": ["evidence/answer.txt"],
@@ -196,9 +196,9 @@ class TestModelValidation:
         }
         PublicContract.model_validate(data)
 
-    def test_evidence_file_body_schema_is_rejected_as_payload_shape(self) -> None:
+    def test_witness_file_body_schema_is_rejected_as_payload_shape(self) -> None:
         data = _base_contract_dict() | {
-            "evidence": {
+            "witness": {
                 "min_items": 1,
                 "max_items": 1,
                 "allowed_paths": ["evidence/answer.txt"],
@@ -210,7 +210,7 @@ class TestModelValidation:
                 },
             },
         }
-        with pytest.raises(ValueError, match="evidence-item field names"):
+        with pytest.raises(ValueError, match="witness-item field names"):
             PublicContract.model_validate(data)
 
 
@@ -253,13 +253,13 @@ class TestRendering:
 
     def test_submission_schema_witness_multi_path_renders_enum(self) -> None:
         data = _base_contract_dict() | {
-            "evidence": {
+            "witness": {
                 "min_items": 1,
                 "max_items": 2,
                 "allowed_paths": ["evidence/answer.txt", "evidence/extra.txt"],
                 "media_types": ["text/plain"],
             },
-            "required_artifact_filenames": [
+            "required_witness_filenames": [
                 "evidence/answer.txt",
                 "evidence/extra.txt",
             ],
@@ -274,13 +274,13 @@ class TestRendering:
 
     def test_submission_schema_result_only_when_no_witness(self) -> None:
         data = _base_contract_dict() | {
-            "evidence": {
+            "witness": {
                 "min_items": 0,
                 "max_items": 0,
                 "allowed_paths": [],
                 "media_types": [],
             },
-            "required_artifact_filenames": [],
+            "required_witness_filenames": [],
         }
         contract = PublicContract.model_validate(data)
         schema = json.loads(render_submission_schema(contract))

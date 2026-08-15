@@ -9,12 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    evidence_list_is_bound,
     json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
     resolve_evidence,
+    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -135,7 +135,7 @@ def _reward(value: dict[str, Any]) -> None:
 
 
 def _witness_matches_result(witness: object, result: object) -> bool:
-    if not evidence_list_is_bound(witness, expected_path="evidence/answer.txt"):
+    if not witness_list_is_bound(witness, expected_path="evidence/answer.txt"):
         return False
     if resolve_evidence(witness[0], expected_path="evidence/answer.txt") is None:
         return False

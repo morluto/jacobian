@@ -5,11 +5,11 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
     valid_sha256_uri,
+    witness_list_is_bound,
 )
 
 
@@ -171,7 +171,7 @@ def _protocol_is_valid(submission: object, contract: bool, result: object) -> bo
 def _evidence_is_valid(
     evidence: object, result: object, evidence_max_bytes: int
 ) -> bool:
-    if not evidence_list_is_bound(
+    if not witness_list_is_bound(
         evidence,
         expected_path="evidence/answer.txt",
         max_bytes=evidence_max_bytes,

@@ -2,10 +2,10 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
     load_submission_raw,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -160,7 +160,7 @@ def evidence_valid(evidence, result):
     except OSError:
         return False
     try:
-        if not evidence_list_is_bound(evidence):
+        if not witness_list_is_bound(evidence):
             return False
         target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     except RecursionError:

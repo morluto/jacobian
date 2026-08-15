@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/precedence-audit.json"
     ],
@@ -12,7 +12,7 @@
     "payload_shape": null
   },
   "public_notes": "Exact rational symbolic replay; Lean elaboration and the informal minimum remain outside scope.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/precedence-audit.json"
   ],
   "schema_definitions": {

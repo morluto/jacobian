@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="4676d39d6f0d026762904fd7d07fbe362772a0e78638ff00b198d8431d0974ba"
+LABEL jacobian.checksum="8feb6e43c2ac277d9fe3a13a7698923cd88916b8a4c71793c843ef54cdef9175"
 LABEL jacobian.task="jacobian/inseparable-minimal-polynomial-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

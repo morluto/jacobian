@@ -9,12 +9,12 @@ from typing import Any
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    evidence_list_is_bound,
     is_regular_bounded_file,
     json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
+    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -164,7 +164,7 @@ def main():
     )
     e = bool(
         isinstance(raw, dict)
-        and evidence_list_is_bound(raw.get("witness"), max_bytes=None)
+        and witness_list_is_bound(raw.get("witness"), max_bytes=None)
     )
     payload = (
         read_evidence_json(

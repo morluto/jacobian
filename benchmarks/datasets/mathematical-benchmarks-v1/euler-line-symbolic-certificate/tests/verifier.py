@@ -4,10 +4,10 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -30,7 +30,7 @@ def q(value):
 
 
 def evidence_matches_result(evidence, result):
-    if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
+    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
         return False
     target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if target is None:
@@ -255,7 +255,7 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(good),
+                "witness_validity": float(good),
                 "reward": float(correct),
             }
         )

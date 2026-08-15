@@ -13,14 +13,14 @@
   },
   "discrimination_estimate": {
     "weaker_models": "Likely to submit only the published maximum, omit edges, or confuse a witness count with a universal bound.",
-    "stronger_models": "Should recognize the 2-adic/3-adic grid, construct a 10 by 10 witness, and preserve all certificate bindings.",
+    "stronger_models": "Should recognize the 2-adic/3-adic grid and construct a 10 by 10 extremal example with its projection data.",
     "tool_less_agents": "Can solve the mathematics but face substantial bookkeeping risk in the 100-element certificate."
   },
   "shortcut_audit": {
-    "published_answer_only": "rejected by the required witness and exact edge set",
-    "tiny_witness": "rejected by the exact cardinality contract",
+    "published_answer_only": "rejected by the exact edge set and projection replay",
+    "tiny_construction": "rejected by the exact cardinality contract",
     "brute_force": "does not establish the universal projection bound",
-    "schema_or_evidence_exploit": "rejected by exact types, byte-bound input, structured evidence equality, and digest checks"
+    "schema_exploit": "rejected by exact types, bounded submission parsing, and task-specific replay"
   },
   "nearby_rejections": [
     {"source_row": 55, "reason": "The all-n domino strategy lacks a compact independent verifier and overlaps an existing game-proof workflow."},
@@ -28,5 +28,5 @@
     {"source_row": 87, "reason": "The table construction substantially overlaps the existing balanced-row permutation workflow."},
     {"source_row": 91, "reason": "The negative universal claim lacks a stable compact certificate suitable for clean-room verification."}
   ],
-  "assurance_boundary": "COMPUTED: exact finite witness and projection arithmetic are replayed; the elementary row/column projection lemma is trusted and no proof assistant certifies the universal argument."
+  "mathematical_boundary": "The verifier replays the exact finite construction and projection arithmetic; the elementary row/column projection lemma is the stated mathematical premise for the universal bound."
 }

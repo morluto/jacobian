@@ -9,11 +9,11 @@ from typing import Any
 
 from verifier_support import (
     aggregate_reward,
-    evidence_list_is_bound,
     json_value_equal,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
+    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -118,7 +118,7 @@ def main() -> None:
     )
     evidence = bool(
         protocol_ok
-        and evidence_list_is_bound(
+        and witness_list_is_bound(
             submission.get("witness"), max_bytes=MAX_EVIDENCE_BYTES
         )
     )
@@ -138,7 +138,7 @@ def main() -> None:
     )
     reward = aggregate_reward(
         correctness=mathematics,
-        evidence_validity=evidence,
+        witness_validity=evidence,
         protocol_ok=protocol_ok and input_bound,
     )
     _reward(
@@ -146,7 +146,7 @@ def main() -> None:
             "protocol_compliance": float(protocol_ok),
             "input_binding": float(input_bound),
             "correctness": float(mathematics),
-            "evidence_validity": float(evidence),
+            "witness_validity": float(evidence),
             "reward": reward,
         }
     )
@@ -161,7 +161,7 @@ if __name__ == "__main__":
                 "protocol_compliance": 0.0,
                 "input_binding": 0.0,
                 "correctness": 0.0,
-                "evidence_validity": 0.0,
+                "witness_validity": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,
             }

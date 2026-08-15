@@ -3,10 +3,10 @@ from pathlib import Path
 
 from verifier_support import (
     aggregate_reward,
-    evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -14,7 +14,7 @@ E = Path("/tests")
 
 
 def evidence_matches_result(evidence, result):
-    if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
+    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
         return False
     target = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if target is None:
@@ -141,7 +141,7 @@ def main():
     )
     reward = aggregate_reward(
         correctness=math_correct,
-        evidence_validity=evidence_valid,
+        witness_validity=evidence_valid,
         protocol_ok=protocol_ok,
     )
 
@@ -150,7 +150,7 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "evidence_validity": float(evidence_valid),
+                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

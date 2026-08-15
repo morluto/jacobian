@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/product-hausdorff-audit.json"
     ],
@@ -12,7 +12,7 @@
     "payload_shape": null
   },
   "public_notes": "Complete finite-topology replay; Lean elaboration and infinite spaces remain outside scope.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/product-hausdorff-audit.json"
   ],
   "schema_definitions": {

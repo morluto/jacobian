@@ -7,11 +7,11 @@ from pathlib import Path
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    evidence_list_is_bound,
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -528,7 +528,7 @@ def main():
         isinstance(raw, dict)
         and isinstance(raw.get("witness"), list)
         and len(raw["witness"]) == 1
-        and evidence_list_is_bound(raw["witness"], expected_path="evidence/answer.txt")
+        and witness_list_is_bound(raw["witness"], expected_path="evidence/answer.txt")
         and _witness_matches_result(raw)
     )
     aggregate_eligible = bool(

@@ -1,12 +1,12 @@
 {
-  "evidence": {
+  "witness": {
     "min_items": 0,
     "max_items": 0,
     "allowed_paths": [],
     "media_types": []
   },
   "public_notes": "The verifier replays the finite graph predicate directly from the submitted result.",
-  "required_artifact_filenames": [],
+  "required_witness_filenames": [],
   "schema_definitions": {},
   "schema_version": "1",
   "submission_path": "/app/submission.json",

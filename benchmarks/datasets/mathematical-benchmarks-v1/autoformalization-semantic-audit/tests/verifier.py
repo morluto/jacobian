@@ -3,11 +3,11 @@ import re
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
     json_value_equal,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -154,7 +154,7 @@ def _valid_semantic_audit(result, source):
 
 
 def _witness_matches_result(witness, result):
-    if not evidence_list_is_bound(witness, expected_path="evidence/answer.txt"):
+    if not witness_list_is_bound(witness, expected_path="evidence/answer.txt"):
         return False
     target = resolve_evidence(witness[0], expected_path="evidence/answer.txt")
     if target is None:

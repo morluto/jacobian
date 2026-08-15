@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/divisibility-audit.json"
     ],
@@ -12,7 +12,7 @@
     "payload_shape": null
   },
   "public_notes": "The JSON evidence object must contain exactly schema_version (the string \"1\"), task_id, and result; result must exactly repeat the submission with JSON types preserved. JSON numbers with integral values are valid wherever the submission schema declares type integer; booleans and non-integral numbers are not.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/divisibility-audit.json"
   ],
   "schema_definitions": {

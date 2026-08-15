@@ -1,20 +1,13 @@
 {
-  "evidence": {
-    "allowed_paths": [
-      "evidence/answer.txt"
-    ],
+  "witness": {
+    "allowed_paths": [],
     "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "max_items": 1,
-    "media_types": [
-      "text/plain"
-    ],
-    "min_items": 1,
+    "max_items": 0,
+    "media_types": [],
+    "min_items": 0,
     "payload_shape": null
   },
-  "public_notes": "Submit the exact modular matrix products, determinant residue, one unit determinant term, and its induced diagonal matching. The verifier recomputes the determinant expansion and every claimed ring operation. The required limitation is the exact ID `FROZEN_LOCAL_RING_CERTIFICATE_ONLY`.",
-  "required_artifact_filenames": [
-    "evidence/answer.txt"
-  ],
+  "public_notes": "Submit the exact modular matrix products, determinant residue, one unit determinant term, and its induced diagonal matching. The verifier recomputes the determinant expansion and every claimed ring operation.",
   "schema_definitions": {},
   "schema_version": "1",
   "submission_path": "/app/submission.json",
@@ -239,33 +232,10 @@
           "matched_pairs"
         ],
         "type": "object"
-      },
-      "witness": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/answer.txt"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
       }
     },
     "required": [
-      "result",
-      "witness"
+      "result"
     ],
     "type": "object"
   },

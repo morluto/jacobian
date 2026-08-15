@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/profile-transfer-certificate.json"
     ],
@@ -12,7 +12,7 @@
     "payload_shape": null
   },
   "public_notes": "The verifier independently reconstructs and replays the exact profile-transfer certificate. The evidence artifact is a structured JSON envelope that binds the submitted result and limitations.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/profile-transfer-certificate.json"
   ],
   "schema_definitions": {},

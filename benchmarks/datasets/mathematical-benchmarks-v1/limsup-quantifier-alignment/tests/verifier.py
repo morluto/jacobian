@@ -4,10 +4,10 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -179,7 +179,7 @@ def _valid_result(result, source):
 
 
 def _witness_valid(witness, result):
-    if not evidence_list_is_bound(witness, expected_path="evidence/answer.txt"):
+    if not witness_list_is_bound(witness, expected_path="evidence/answer.txt"):
         return False
     if not isinstance(witness, list) or len(witness) != 1:
         return False
@@ -213,7 +213,7 @@ def _witness_valid(witness, result):
 
 
 def _evidence_affirmative_claim(evidence):
-    if not evidence_list_is_bound(evidence, expected_path="evidence/answer.txt"):
+    if not witness_list_is_bound(evidence, expected_path="evidence/answer.txt"):
         return False
     if not isinstance(evidence, list) or len(evidence) != 1:
         return False

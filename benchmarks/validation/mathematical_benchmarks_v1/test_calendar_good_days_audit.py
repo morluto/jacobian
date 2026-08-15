@@ -31,5 +31,4 @@ def test_tampered_input_is_a_hard_gate_without_erasing_math_diagnostic(
 
     rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 1.0
-    assert rejected.reward == 1.0
     assert rejected.reward == 0.0

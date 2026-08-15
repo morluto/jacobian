@@ -5,10 +5,10 @@ from pathlib import Path
 
 from verifier_support import (
     aggregate_reward,
-    evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
 )
 
 W, T = Path("/app"), Path("/tests")
@@ -75,7 +75,7 @@ def valid_evidence(evidence, result):
     """Bind evidence content to the submitted result via a RESULT_JSON line."""
     if not isinstance(evidence, list) or len(evidence) != 1:
         return False
-    if not evidence_list_is_bound(
+    if not witness_list_is_bound(
         evidence, expected_path="evidence/answer.txt", max_bytes=MAX_EVIDENCE_BYTES
     ):
         return False
@@ -114,7 +114,7 @@ def main():
     )
     reward = aggregate_reward(
         correctness=math_ok,
-        evidence_validity=evidence_ok,
+        witness_validity=evidence_ok,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -122,7 +122,7 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "evidence_validity": float(evidence_ok),
+                "witness_validity": float(evidence_ok),
                 "reward": reward,
             }
         )

@@ -382,7 +382,7 @@ def json_value_equal(left: object, right: object) -> bool:
     return left == right
 
 
-def evidence_list_is_bound(
+def witness_list_is_bound(
     evidence: object,
     *,
     expected_path: str = "evidence/answer.json",
@@ -425,7 +425,7 @@ def _as_unit_score(value: float | bool | int) -> float:
 def aggregate_reward(
     *,
     correctness: float | bool,
-    evidence_validity: float | bool,
+    witness_validity: float | bool,
     protocol_ok: bool = True,
 ) -> float:
     """Binary fail-closed reward from the mathematical predicate and witness.
@@ -440,7 +440,7 @@ def aggregate_reward(
         return 0.0
     try:
         correctness_score = _as_unit_score(correctness)
-        evidence_score = _as_unit_score(evidence_validity)
+        evidence_score = _as_unit_score(witness_validity)
     except ValueError:
         return 0.0
     if correctness_score < 1.0 or evidence_score < 1.0:
@@ -496,7 +496,6 @@ __all__ = [
     "TESTS",
     "WORKSPACE",
     "aggregate_reward",
-    "evidence_list_is_bound",
     "is_regular_bounded_file",
     "json_value_equal",
     "load_submission",
@@ -507,5 +506,6 @@ __all__ = [
     "sha256_uri",
     "submission_matches_public_schema",
     "valid_sha256_uri",
+    "witness_list_is_bound",
     "workspace_input_is_bound",
 ]

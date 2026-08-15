@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact verifier for an infinite-shift eigenvalue-set scope audit.
 LABEL jacobian.task="jacobian/infinite-shift-spectrum-counterexample" \
-      jacobian.checksum="f3fd1f3fe5d9e13505b2e7f6a0b1b935bb4df5509f98bd6d23e1e1826382fff7"
+      jacobian.checksum="67b2dd31c0a9c0a610d12703cc5095093e8544871284e095a8c344bc5f95245d"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

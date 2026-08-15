@@ -33,7 +33,7 @@ def _trial(repetition: int, reward: float) -> dict:
         "agent": {"name": "codex", "version": "1"},
         "rewards": {
             "correctness": reward,
-            "evidence_validity": reward,
+            "witness_validity": reward,
             "scope_accuracy": 1.0,
             "assurance_calibration": 1.0,
             "reward": reward,

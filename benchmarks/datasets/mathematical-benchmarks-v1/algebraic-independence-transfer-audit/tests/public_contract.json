@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/answer.txt"
     ],
@@ -12,7 +12,7 @@
     "payload_shape": null
   },
   "public_notes": "Submit ten exact sparse polynomials forming the two forward/inverse transfer stages and the quadratic conjugate norm. Term order is free, but coefficients and monomials are canonicalized independently. The required limitation is the exact ID `EXTERNAL_INDEPENDENCE_THEOREM_TRUSTED`.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/answer.txt"
   ],
   "schema_definitions": {

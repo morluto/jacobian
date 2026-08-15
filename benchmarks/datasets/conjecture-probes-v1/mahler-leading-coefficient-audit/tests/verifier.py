@@ -8,9 +8,9 @@ from pathlib import Path
 
 from verifier_support import (
     aggregate_reward,
-    evidence_list_is_bound,
     load_submission,
     read_evidence_json,
+    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -174,8 +174,7 @@ def main():
     protocol_ok = submission is not None
     math_ok = bool(protocol_ok and mathematics(submission.get("result")))
     evidence_ok = bool(
-        protocol_ok
-        and evidence_list_is_bound(submission.get("witness"), max_bytes=None)
+        protocol_ok and witness_list_is_bound(submission.get("witness"), max_bytes=None)
     )
     payload = (
         read_evidence_json(
@@ -189,7 +188,7 @@ def main():
     evidence_ok = _evidence_payload_matches_submission(payload, submission)
     reward = aggregate_reward(
         correctness=math_ok,
-        evidence_validity=evidence_ok,
+        witness_validity=evidence_ok,
         protocol_ok=protocol_ok and input_bound,
     )
     _write(
@@ -197,7 +196,7 @@ def main():
             "protocol_compliance": float(protocol_ok),
             "input_binding": float(input_bound),
             "correctness": float(math_ok),
-            "evidence_validity": float(evidence_ok),
+            "witness_validity": float(evidence_ok),
             "reward": reward,
         }
     )
@@ -212,7 +211,7 @@ if __name__ == "__main__":
                 "protocol_compliance": 0.0,
                 "input_binding": 0.0,
                 "correctness": 0.0,
-                "evidence_validity": 0.0,
+                "witness_validity": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,
             }

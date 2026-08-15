@@ -4,77 +4,13 @@ from itertools import permutations
 from pathlib import Path
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    is_regular_bounded_file,
-    load_submission,
+    load_submission_raw,
     normalize_reward_file,
-    resolve_evidence,
+    submission_matches_public_schema,
     workspace_input_is_bound,
 )
 
-W, T = Path("/app"), Path("/tests")
-LIMITATION_ID = "FROZEN_LOCAL_RING_CERTIFICATE_ONLY"
-
-
-def _limitations_valid(value: object) -> bool:
-    return value == [LIMITATION_ID]
-
-
-# The published prose obligation is structural, not verbatim: the explanation
-# must affirmatively relate the three certified facts, accept equivalent
-# phrasing, and reject contradictory or unrelated text.  Each concept group
-# lists affirmative phrases; ``_NEGATIONS`` flags direct contradictions.
-_PRODUCTS_AGREE = (
-    "products agree",
-    "modular products agree",
-    "pa and bp coincide",
-    "pa and bp agree",
-    "pa=bp",
-    "pa = bp",
-    "pa equals bp",
-    "pa and bp match",
-    "pa and bp are equal",
-    "modular products coincide",
-    "modular products are equal",
-    "matrix products coincide",
-)
-_DETERMINANT_UNIT = (
-    "determinant is a unit",
-    "is a unit",
-    "determinant is invertible",
-    "is invertible",
-    "det is a unit",
-    "det is invertible",
-    "det(p) is a unit",
-    "det(p) is invertible",
-    "determinant belongs to the units",
-)
-_DIAGONAL_MATCH = (
-    "unit entries",
-    "unit entry",
-    "diagonal entries match",
-    "matched diagonal pair",
-    "diagonal pair",
-    "matched pairs agree",
-    "diagonal pairs agree",
-    "matched diagonal pairs agree",
-    "diagonal matching",
-    "matches the diagonal",
-    "match the diagonal",
-)
-_CONCEPT_GROUPS = (_PRODUCTS_AGREE, _DETERMINANT_UNIT, _DIAGONAL_MATCH)
-_NEGATIONS = (
-    "not a unit",
-    "not invertible",
-    "non-unit",
-    "nonunit",
-    "do not agree",
-    "does not agree",
-    "do not match",
-    "does not match",
-    "do not coincide",
-    "does not coincide",
-)
+T = Path("/tests")
 
 
 def sign(p):
@@ -151,80 +87,21 @@ def valid(r, d):
     )
 
 
-def _explanation_is_valid(path: Path) -> bool:
-    """Stream the explanation, requiring each fact and no contradiction."""
-
-    matched = [False] * len(_CONCEPT_GROUPS)
-    contradicted = False
-    carry = ""
-    try:
-        with path.open("r", encoding="utf-8", errors="strict") as stream:
-            while chunk := stream.read(65_536):
-                window = (carry + chunk).lower()
-                contradicted = contradicted or any(
-                    negation in window for negation in _NEGATIONS
-                )
-                for index, group in enumerate(_CONCEPT_GROUPS):
-                    if not matched[index] and any(phrase in window for phrase in group):
-                        matched[index] = True
-                carry = window[-256:]
-    except (OSError, UnicodeError, MemoryError):
-        return False
-    return not contradicted and all(matched)
-
-
-def evidence_ok(e):
-    # The typed matrix certificate is replayed independently.  The public
-    # evidence contract requires one digest-bound text explanation whose
-    # content affirmatively states the certified relationships; equivalent
-    # phrasing is accepted and contradictory or unrelated text is rejected.
-    if not isinstance(e, list) or len(e) != 1:
-        return False
-    path = resolve_evidence(e[0], expected_path="evidence/answer.txt")
-    if path is None:
-        return False
-    return _explanation_is_valid(path)
-
-
-def _reject_nonfinite(token):
-    raise ValueError(f"non-finite JSON number: {token}")
-
-
-def raw_submission():
-    """Parse the bounded submission JSON before envelope validation.
-
-    Used to preserve independently evaluable diagnostics (mathematical
-    correctness, evidence, assurance, and unauthorized ``VERIFIED`` claims)
-    when a non-result envelope field violates the schema.
-    """
-    path = W / "submission.json"
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(path.read_text(), parse_constant=_reject_nonfinite)
-    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError, TypeError):
-        return None
-    return value if isinstance(value, dict) else None
-
-
 def main():
-    raw = raw_submission()
+    raw = load_submission_raw(require_input_binding=False)
     d = json.loads((T / "input.json").read_text())
     input_binding = workspace_input_is_bound()
-    s = load_submission(W / "submission.json", require_input_binding=False)
-    protocol_ok = isinstance(s, dict)
-    # Mathematical correctness and evidence are evaluated from the bounded raw
-    # payload so a malformed non-result field cannot erase them.
+    protocol_ok = submission_matches_public_schema(raw)
     r = raw.get("result") if isinstance(raw, dict) else None
     m = valid(r, d)
-    ev = bool(isinstance(raw, dict) and evidence_ok(raw.get("witness")))
-    correct = bool(input_binding and protocol_ok and m and ev)
+    correct = bool(input_binding and protocol_ok and m)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(m),
-                "evidence_validity": float(ev),
+                "input_binding": float(input_binding),
+                "protocol_compliance": float(protocol_ok),
                 "reward": float(correct),
             }
         )

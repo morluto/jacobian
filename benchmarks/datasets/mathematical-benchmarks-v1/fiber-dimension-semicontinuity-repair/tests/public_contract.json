@@ -1,5 +1,5 @@
 {
-  "evidence": {
+  "witness": {
     "allowed_paths": [
       "evidence/answer.txt"
     ],
@@ -12,7 +12,7 @@
     "payload_shape": null
   },
   "public_notes": "The verifier reports proof repair, symbolic ideal equality, fiber ranks, evidence, input binding, scope, completeness, limitations, protocol, and assurance separately. Sparse polynomials use canonical rational coefficients and bounded two-variable exponent vectors; duplicate monomials and zero terms are rejected.",
-  "required_artifact_filenames": [
+  "required_witness_filenames": [
     "evidence/answer.txt"
   ],
   "schema_definitions": {

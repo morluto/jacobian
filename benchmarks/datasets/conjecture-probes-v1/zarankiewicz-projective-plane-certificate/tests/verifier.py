@@ -8,11 +8,11 @@ from typing import Any
 
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
-    evidence_list_is_bound,
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
     read_evidence_json,
+    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -231,7 +231,7 @@ def main() -> None:
     math_ok = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
     evidence_ok = bool(
         isinstance(raw, dict)
-        and evidence_list_is_bound(raw.get("witness"), max_bytes=None)
+        and witness_list_is_bound(raw.get("witness"), max_bytes=None)
     )
     payload = (
         read_evidence_json(

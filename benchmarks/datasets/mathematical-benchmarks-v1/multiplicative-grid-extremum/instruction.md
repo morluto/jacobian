@@ -4,9 +4,7 @@ The frozen source asks for the maximum possible number of good pairs among 100
 distinct positive integers. A pair is good when its larger member is exactly
 2 or 3 times its smaller member.
 
-Produce `/app/submission.json` matching `/app/submission_schema.json` and one
-evidence file at `/app/evidence/answer.txt`.
-The evidence file must be no larger than 16 MiB (16,777,216 bytes).
+Produce `/app/submission.json` matching `/app/submission_schema.json`.
 
 Your result must contain:
 
@@ -26,27 +24,11 @@ A component occupying `m` exponent pairs needs row and column counts `r,c`
 with `m <= r*c`. Minimize the total `r+c` over every partition of 100 vertices.
 The verifier independently performs this finite minimization.
 
-The evidence file must contain exactly one line beginning with `RESULT_JSON:`
-followed by the exact compact JSON encoding of the submitted `result`. The
-verifier binds that marker to the submitted result; additional text is not
-scored. For example:
-
-```json
-RESULT_JSON: {}
-```
-
-Replace the empty object with the exact `result` object in the submission and
-bind the evidence file by its `sha256:` digest. The verifier parses the marker
-as JSON and requires semantic equality with the submitted result.
-
-The submitted result is checked by the task-specific replay; no generic assurance, completeness, scope, or limitation declaration is required.
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates a witness only where the task needs one.
+The verifier replays the exact finite construction and projection bound from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

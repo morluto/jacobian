@@ -4,12 +4,10 @@ import re
 from pathlib import Path
 
 from verifier_support import (
-    MAX_SUBMISSION_BYTES,
-    evidence_list_is_bound,
-    is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -254,23 +252,12 @@ def evidence_ok(evidence):
     # The finite-algebra certificate is independently replayed from the typed
     # result.  The public evidence contract requires one bound text file that
     # states the three published mathematical obligations.
-    if not evidence_list_is_bound(evidence):
+    if not witness_list_is_bound(evidence):
         return False
     resolved = resolve_evidence(evidence[0], expected_path="evidence/answer.txt")
     if resolved is None:
         return False
     return evidence_text_is_valid(resolved)
-
-
-def raw_submission():
-    path = WORKSPACE / "submission.json"
-    if not is_regular_bounded_file(path, max_bytes=MAX_SUBMISSION_BYTES):
-        return None
-    try:
-        value = json.loads(path.read_text())
-    except (OSError, ValueError, UnicodeError, RecursionError, MemoryError):
-        return None
-    return value if isinstance(value, dict) else None
 
 
 def main():

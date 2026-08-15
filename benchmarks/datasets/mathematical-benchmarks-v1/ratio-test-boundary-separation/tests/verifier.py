@@ -235,12 +235,12 @@ def _evaluate(submission: object) -> dict[str, float | bool]:
     ev_ok = bool(math_ok and _evidence(data.get("witness"), data.get("result")))
     reward = aggregate_reward(
         correctness=math_ok,
-        evidence_validity=ev_ok,
+        witness_validity=ev_ok,
         protocol_ok=bool(input_binding and submission is not None),
     )
     return {
         "correctness": float(math_ok),
-        "evidence_validity": float(ev_ok),
+        "witness_validity": float(ev_ok),
         "input_binding": float(input_binding),
         "reward": reward,
     }

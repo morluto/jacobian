@@ -4,10 +4,10 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    evidence_list_is_bound,
     load_submission,
     normalize_reward_file,
     resolve_evidence,
+    witness_list_is_bound,
 )
 
 WORKSPACE = Path("/app")
@@ -145,7 +145,7 @@ def _evidence(value: object) -> bool:
     # contract on the evidence list before resolving any descriptor.
     if not isinstance(value, list) or len(value) != 1:
         return False
-    if not evidence_list_is_bound(value):
+    if not witness_list_is_bound(value):
         return False
     path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
     if path is None:

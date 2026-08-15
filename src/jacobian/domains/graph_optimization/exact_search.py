@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from jacobian.contracts.graph_coloring import ChromaticGraph
+from jacobian.domains.graph_optimization._budget import remaining_ms as _remaining_ms
 from jacobian.contracts.graph_optimization import (
     GraphDominationMinimumOutput,
     GraphInducedBipartiteMaximumOutput,
@@ -42,10 +43,6 @@ def _canonical_edges(graph: Any) -> tuple[tuple[str, str], ...]:
             for left, right in graph.edges
         )
     )
-
-
-def _remaining_ms(started: float, wall_seconds: int) -> int:
-    return int((wall_seconds - (time.monotonic() - started)) * 1000)
 
 
 def _search_thresholds[WitnessT: (VertexWitness, EdgeWitness)](

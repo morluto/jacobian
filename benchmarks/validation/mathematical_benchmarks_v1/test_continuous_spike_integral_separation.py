@@ -32,6 +32,8 @@ def load_verifier():
         sys.path[:] = saved_path
         sys.modules.clear()
         sys.modules.update(saved_modules)
+
+
 def candidate(alpha=Fraction(1, 4)):
     verifier = load_verifier()
     return {

@@ -25,6 +25,8 @@ def load_verifier():
         sys.path[:] = saved_path
         sys.modules.clear()
         sys.modules.update(saved_modules)
+
+
 def result(beta="1", log_exponent="-2", integral="1"):
     return {
         "beta": beta,

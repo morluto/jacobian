@@ -29,6 +29,8 @@ def _module():
         sys.path[:] = saved_path
         sys.modules.clear()
         sys.modules.update(saved_modules)
+
+
 def _result(module):
     pairs = [
         {"left": list(e), "right": list(f), "relation": module._relation(e, f)}

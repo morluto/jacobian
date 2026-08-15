@@ -33,6 +33,8 @@ def load_verifier():
         sys.path[:] = saved_path
         sys.modules.clear()
         sys.modules.update(saved_modules)
+
+
 def _digest(path: Path) -> str:
     import hashlib
 

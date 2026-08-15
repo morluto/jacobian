@@ -35,6 +35,8 @@ def _module():
         sys.path[:] = saved_path
         sys.modules.clear()
         sys.modules.update(saved_modules)
+
+
 def _result(module):
     repair = [cycle.copy() for cycle in CYCLES]
     flawed = [cycle.copy() for cycle in repair[:-1]]

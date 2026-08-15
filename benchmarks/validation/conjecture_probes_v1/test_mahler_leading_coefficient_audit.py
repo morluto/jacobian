@@ -26,6 +26,8 @@ def _module():
         sys.path[:] = saved_path
         sys.modules.clear()
         sys.modules.update(saved_modules)
+
+
 def _result():
     return {
         "factors": [[1, -3, 1], [1, -1, 1], [1, 1, 1], [2, -5, 2]],

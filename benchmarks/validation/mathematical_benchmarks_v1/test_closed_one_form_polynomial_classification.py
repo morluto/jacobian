@@ -27,6 +27,8 @@ def _module():
         sys.path[:] = saved_path
         sys.modules.clear()
         sys.modules.update(saved_modules)
+
+
 def test_uses_result_only_protocol(tmp_path: Path) -> None:
     from benchmarks.validation.mathematical_benchmarks_v1 import _fixtures
 

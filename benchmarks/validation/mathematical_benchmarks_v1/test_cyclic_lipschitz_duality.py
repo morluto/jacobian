@@ -23,6 +23,8 @@ def module():
         sys.path[:] = saved_path
         sys.modules.clear()
         sys.modules.update(saved_modules)
+
+
 def test_independent_dual_cost():
     assert module().minimum_cost() == 15
 

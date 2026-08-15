@@ -24,6 +24,8 @@ def _module():
         sys.path[:] = saved_path
         sys.modules.clear()
         sys.modules.update(saved_modules)
+
+
 def _result():
     return {
         "finite_parameters": ["-1", "0", "1"],

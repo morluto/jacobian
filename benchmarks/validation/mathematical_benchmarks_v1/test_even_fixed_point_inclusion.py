@@ -24,6 +24,8 @@ def load_verifier():
         sys.path[:] = saved_path
         sys.modules.clear()
         sys.modules.update(saved_modules)
+
+
 def test_two_derivations_agree():
     result = load_verifier().derive()
     assert result["signed_inclusion_terms"] == [40320, -20160, 4320, -480, 24]

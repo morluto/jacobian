@@ -24,6 +24,8 @@ def _module():
         sys.path[:] = saved_path
         sys.modules.clear()
         sys.modules.update(saved_modules)
+
+
 def test_oracle_mathematics():
     module = _module()
     vertices = [0, 1, 0, 1, 2, 1, 2, 3, 3, 1]

@@ -75,9 +75,10 @@ def run_operation(
         raise ValueError("pass exactly one of --json or --file")
     if json_payload is not None:
         source = json_payload.encode("utf-8")
-    else:
-        assert file is not None
+    elif file is not None:
         source = file.read_bytes()
+    else:
+        raise ValueError("pass exactly one of --json or --file")
     payload = loads_strict_json(source)
     if not isinstance(payload, dict):
         raise ValueError("operation payload must be a JSON object")

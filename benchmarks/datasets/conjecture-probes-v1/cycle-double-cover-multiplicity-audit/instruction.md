@@ -10,7 +10,7 @@ For the supplied Petersen graph, submit a complete certificate containing:
 
 Each cycle is a vertex list without a repeated closing vertex. The verifier canonicalizes rotations and reversals, checks simplicity and every consecutive graph edge, rejects duplicate cycles, and recomputes both multiplicity profiles. Alternative valid collections are accepted.
 
-This is one finite Assurance audit. It does not establish the Cycle Double Cover Conjecture for any graph family. Claim at most `COMPUTED`.
+This is one finite Assurance audit. It does not establish the Cycle Double Cover Conjecture for any graph family.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

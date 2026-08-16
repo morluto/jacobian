@@ -200,7 +200,6 @@ def main() -> None:
     )
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     logs = Path("/logs/verifier")

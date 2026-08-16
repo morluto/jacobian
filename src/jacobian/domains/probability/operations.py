@@ -59,16 +59,6 @@ def _complex_wire(value: tuple[Any, Any]) -> ExactComplexRational:
     return ExactComplexRational(real=_wire(value[0]), imaginary=_wire(value[1]))
 
 
-def _complex_multiply(
-    left: tuple[Any, Any],
-    right: tuple[Any, Any],
-) -> tuple[Any, Any]:
-    return (
-        left[0] * right[0] - left[1] * right[1],
-        left[0] * right[1] + left[1] * right[0],
-    )
-
-
 def _gaussian_univariate_moment(exponent: int) -> int:
     if exponent % 2:
         return 0

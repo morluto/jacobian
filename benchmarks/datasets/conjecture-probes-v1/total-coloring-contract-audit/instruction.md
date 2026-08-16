@@ -10,7 +10,7 @@ Submit `/app/submission.json`. Your certificate must contain:
 
 Both assignments must list ten vertex colors in vertex order and fifteen edge colors in the frozen edge order. The verifier independently reconstructs every vertex adjacency, edge adjacency, and incidence constraint. It accepts alternative assignments and does not trust submitted collision labels.
 
-The conclusion is limited to this one finite validator defect and its Petersen-graph repair. It neither proves nor disproves the Total Coloring Conjecture. Claim at most `COMPUTED`; truth beyond the frozen finite instance is `NOT_ASSESSED`.
+The conclusion is limited to this one finite validator defect and its Petersen-graph repair. It neither proves nor disproves the Total Coloring Conjecture.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

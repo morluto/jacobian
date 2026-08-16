@@ -38,7 +38,7 @@ complexity-check: ## Reject new, increased, or stale C901 baseline entries.
 
 lint-full: lint ## Add dependency and dead-code checks.
 	$(UV_RUN) deptry .
-	$(UV_RUN) vulture src tests --min-confidence=80
+	$(UV_RUN) vulture src tests --min-confidence=80 --ignore-names patched_root
 
 security-audit: ## Audit dependencies for known vulnerabilities.
 	$(UV_RUN) pip-audit

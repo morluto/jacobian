@@ -19,7 +19,7 @@ radicand/root pairs as an unordered set.
 
 This is a finite semantic-scope audit. An Euler brick is not a perfect cuboid,
 and finding no perfect cuboid in these twelve cases is not evidence of global
-nonexistence. Claim `COMPUTED` only for the frozen case set.
+nonexistence.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

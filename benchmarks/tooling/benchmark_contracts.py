@@ -275,6 +275,45 @@ def _validate_task(suite: Suite, task_dir: Path) -> list[str]:
         location = ".".join(str(part) for part in exc.absolute_path)
         suffix = f" at {location}" if location else ""
         failures.append(f"{solution_path.relative_to(ROOT)}{suffix}: {exc.message}")
+    failures.extend(_validate_gold_witness(solution, solution_path, task_dir))
+    return failures
+
+
+def _validate_gold_witness(
+    solution: object, solution_path: Path, task_dir: Path
+) -> list[str]:
+    """Check that gold witness descriptors point to real, matching artifacts."""
+
+    if not isinstance(solution, dict):
+        return []
+    witness = solution.get("witness")
+    if not isinstance(witness, list):
+        return []
+    rel = solution_path.relative_to(ROOT)
+    failures: list[str] = []
+    for i, descriptor in enumerate(witness):
+        if not isinstance(descriptor, dict):
+            failures.append(f"{rel}.witness[{i}]: not an object")
+            continue
+        path_str = descriptor.get("path")
+        sha256 = descriptor.get("sha256")
+        if not isinstance(path_str, str) or not isinstance(sha256, str):
+            failures.append(f"{rel}.witness[{i}]: missing path or sha256")
+            continue
+        if ".." in Path(path_str).parts or Path(path_str).is_absolute():
+            failures.append(f"{rel}.witness[{i}]: path escapes task directory")
+            continue
+        artifact = task_dir / "solution" / path_str
+        if not artifact.is_file():
+            failures.append(
+                f"{rel}.witness[{i}]: artifact {path_str} not found in solution/"
+            )
+            continue
+        import hashlib
+
+        digest = "sha256:" + hashlib.sha256(artifact.read_bytes()).hexdigest()
+        if digest != sha256:
+            failures.append(f"{rel}.witness[{i}]: sha256 mismatch for {path_str}")
     return failures
 
 

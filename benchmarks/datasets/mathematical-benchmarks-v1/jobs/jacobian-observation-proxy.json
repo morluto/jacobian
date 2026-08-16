@@ -29,7 +29,6 @@
       "raw.githubusercontent.com"
     ],
     "extra_docker_compose": [
-      "benchmarks/config/agent-eval-codex.compose.yaml",
       "benchmarks/config/agent-eval-egress-proxy.compose.yaml",
       "benchmarks/datasets/mathematical-benchmarks-v1/jacobian-observation.compose.yaml"
     ]

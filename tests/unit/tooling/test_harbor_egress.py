@@ -28,7 +28,6 @@ OBSERVATION_PROXY_JOB = (
     / "jobs"
     / "jacobian-observation-proxy.json"
 )
-CODEX_COMPOSE = ROOT / "benchmarks" / "config" / "agent-eval-codex.compose.yaml"
 EGRESS_PROXY_COMPOSE = (
     ROOT / "benchmarks" / "config" / "agent-eval-egress-proxy.compose.yaml"
 )
@@ -78,9 +77,13 @@ def test_agent_eval_forwards_web_search_setting_to_harbor() -> None:
         "JACOBIAN_EVAL_ALL_PROXY ?= $(call _jacobian_eval_container_proxy,$(ALL_PROXY))"
         in evaluations
     )
-    assert "JACOBIAN_EVAL_CODEX_BINARY" in evaluations
-    assert "benchmarks.tooling.codex_binary" in evaluations
+    assert "JACOBIAN_EVAL_CODEX_BINARY" not in evaluations
+    assert "benchmarks.tooling.codex_binary" not in evaluations
     assert "JACOBIAN_EVAL_UPSTREAM_PROXY" in evaluations
+    assert "JACOBIAN_EVAL_PROXY_BUILDER" in evaluations
+    assert "JACOBIAN_EVAL_BUILDX_BUILDER" in evaluations
+    assert "agent-eval-proxy-builder-create" in evaluations
+    assert 'BUILDX_BUILDER="$(JACOBIAN_EVAL_BUILDX_BUILDER)"' in evaluations
     assert "export CODEX_FORCE_AUTH_JSON=1" in evaluations
     assert "benchmarks.tooling.harbor_proxy" in evaluations
     assert 'if [ "$(JACOBIAN_EVAL_PROXY)" = "1" ]; then' in evaluations
@@ -107,15 +110,16 @@ def test_agent_eval_docs_exclude_host_codex_from_the_control_protocol() -> None:
     assert "control must have no Jacobian MCP server" in guide
     assert "treatment must" in guide
     assert "no Jacobian Skill" in guide
+    assert "Build images through an opt-in proxy builder" in guide
+    assert "JACOBIAN_EVAL_BUILDX_BUILDER=jacobian-eval-proxy" in guide
+    assert "Docker daemon proxy" in guide
 
 
 def test_proxy_observation_job_is_opt_in_and_preserves_local_mcp_access() -> None:
     proxy_job = _read_json(OBSERVATION_PROXY_JOB)
     proxy_control = _read_json(CONTROL_PROXY_JOB)
     proxy_overlay = EGRESS_PROXY_COMPOSE.read_text(encoding="utf-8")
-    codex_overlay = CODEX_COMPOSE.read_text(encoding="utf-8")
     assert proxy_job["environment"]["extra_docker_compose"] == [
-        "benchmarks/config/agent-eval-codex.compose.yaml",
         "benchmarks/config/agent-eval-egress-proxy.compose.yaml",
         "benchmarks/datasets/mathematical-benchmarks-v1/jacobian-observation.compose.yaml",
     ]
@@ -126,14 +130,6 @@ def test_proxy_observation_job_is_opt_in_and_preserves_local_mcp_access() -> Non
     assert "harbor-docker-egress-control-sidecar:" in proxy_overlay
     assert "JACOBIAN_EVAL_GOST_CONFIG" in proxy_overlay
     assert "http://127.0.0.1:12346" in proxy_overlay
-    assert "JACOBIAN_EVAL_CODEX_BINARY" in codex_overlay
-    assert "JACOBIAN_EVAL_CODEX_CODE_MODE_HOST" in codex_overlay
-    assert "target: /usr/local/bin/codex" in codex_overlay
-    assert "target: /usr/local/bin/codex-code-mode-host" in codex_overlay
-    assert (
-        "target: /usr/local/lib/node_modules/@openai/codex/bin/codex-code-mode-host"
-        in codex_overlay
-    )
     assert proxy_job["artifacts"] == [
         "/logs/agent/trajectory.json",
         {"source": "/logs/jacobian/mcp.log", "service": "jacobian"},
@@ -169,7 +165,6 @@ def test_proxy_control_job_is_valid_harbor_job_json() -> None:
         }
     ]
     assert job["environment"]["extra_docker_compose"] == [
-        "benchmarks/config/agent-eval-codex.compose.yaml",
         "benchmarks/config/agent-eval-egress-proxy.compose.yaml",
     ]
 
@@ -180,39 +175,13 @@ def test_compose_overlays_parse_as_valid_yaml() -> None:
     The gate claims to cover Compose overlays, so the owning tests must parse
     them as YAML rather than only asserting on substring presence.
     """
-    for compose_path in (CODEX_COMPOSE, EGRESS_PROXY_COMPOSE, OBSERVATION_COMPOSE):
+    for compose_path in (EGRESS_PROXY_COMPOSE, OBSERVATION_COMPOSE):
         parsed = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
         assert isinstance(parsed, dict), f"{compose_path.name}: root must be a mapping"
         assert "services" in parsed, f"{compose_path.name}: missing services table"
         assert isinstance(parsed["services"], dict), (
             f"{compose_path.name}: services must be a mapping"
         )
-
-
-def test_codex_overlay_mounts_the_complete_standalone_runtime() -> None:
-    parsed = yaml.safe_load(CODEX_COMPOSE.read_text(encoding="utf-8"))
-    volumes = parsed["services"]["main"]["volumes"]
-
-    assert volumes == [
-        {
-            "type": "bind",
-            "source": "${JACOBIAN_EVAL_CODEX_BINARY:?set JACOBIAN_EVAL_CODEX_BINARY to the standalone Codex executable}",
-            "target": "/usr/local/bin/codex",
-            "read_only": True,
-        },
-        {
-            "type": "bind",
-            "source": "${JACOBIAN_EVAL_CODEX_CODE_MODE_HOST:?set JACOBIAN_EVAL_CODEX_CODE_MODE_HOST to the Codex Code Mode host}",
-            "target": "/usr/local/bin/codex-code-mode-host",
-            "read_only": True,
-        },
-        {
-            "type": "bind",
-            "source": "${JACOBIAN_EVAL_CODEX_CODE_MODE_HOST:?set JACOBIAN_EVAL_CODEX_CODE_MODE_HOST to the Codex Code Mode host}",
-            "target": "/usr/local/lib/node_modules/@openai/codex/bin/codex-code-mode-host",
-            "read_only": True,
-        },
-    ]
 
 
 def test_proxy_compose_overlay_declares_proxy_environment() -> None:

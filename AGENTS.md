@@ -65,6 +65,12 @@ runtime, worker, or second operation surface.
 
 ## Implement mathematics directly
 
+A `MathTool` is an exact mathematical instrument, not a lesson, proof recipe,
+or workflow. Add an operation only when it exposes a stable bounded computation
+or check that remains useful as models improve at mathematical reasoning and
+notation. The model chooses what to investigate and how to compose results;
+the operation returns a concrete mathematical value or certificate.
+
 - Prefer a thin typed adapter to maintained backends such as SymPy, FLINT,
   NetworkX or Z3. They are private implementation details, not
   operation-specific providers. Do not reimplement their kernels.

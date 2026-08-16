@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evaluate MCP Tool Adoption"
+  short_description: "Diagnose MCP discovery and tool selection"
+  default_prompt: "Use $evaluate-mcp-tool-adoption to investigate why agents do or do not use an MCP tool."

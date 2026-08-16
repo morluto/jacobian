@@ -7,10 +7,14 @@ SERVER_DESCRIPTION = (
 )
 
 SERVER_INSTRUCTIONS = (
-    "Use math.find to discover a typed mathematical function when its ID or input "
-    "shape is unknown, then use math.run to calculate one bounded result. The model "
-    "owns representation, decomposition, composition, and stopping. Jacobian retains "
-    "no workspace, artifact, replay record, or proof session. A timeout, incomplete "
+    "RECOMMENDED for bounded mathematical computation:\n"
+    "- math.run instead of an ad-hoc CAS or solver script, or lengthy exact manual "
+    "calculation: returns a typed result from an installed operation.\n"
+    "- math.find before math.run when no matching operation is known: searches the "
+    "local operation catalog and provides exact input schemas and examples.\n\n"
+    "Use the typed math.run output for the requested claim. The model owns "
+    "representation, decomposition, composition, and stopping. Jacobian retains no "
+    "workspace, artifact, replay record, or proof session. A timeout, incomplete "
     "search, or missing witness is not a mathematical conclusion."
 )
 

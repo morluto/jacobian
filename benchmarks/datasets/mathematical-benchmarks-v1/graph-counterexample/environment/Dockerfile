@@ -6,11 +6,9 @@ ARG NO_PROXY
 ARG http_proxy
 ARG https_proxy
 ARG no_proxy
-ARG CODEX_VERSION=0.146.0
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends nodejs npm curl ripgrep \
- && npm install --global "@openai/codex@${CODEX_VERSION}" \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

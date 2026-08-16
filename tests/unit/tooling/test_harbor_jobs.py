@@ -237,6 +237,68 @@ def test_agent_eval_keeps_the_local_mcp_endpoint_independent_of_egress_proxy(
     assert "reasoning_effort=high" in arguments
 
 
+def test_agent_eval_forwards_an_explicit_buildx_builder(tmp_path: Path) -> None:
+    trace = tmp_path / "buildx-builder.txt"
+    fake_harbor = tmp_path / "harbor"
+    fake_harbor.write_text(
+        '#!/bin/sh\nprintf \'%s\\n\' "${BUILDX_BUILDER-unset}" > "$TRACE"\n',
+        encoding="utf-8",
+    )
+    fake_harbor.chmod(0o755)
+
+    completed = run_operator_command(
+        "make",
+        (
+            "agent-eval",
+            "EVAL_EXECUTE=1",
+            "JACOBIAN_MODEL=test-model",
+            "JACOBIAN_IMAGE=jacobian:test",
+            "JACOBIAN_EVAL_BUILDX_BUILDER=jacobian-eval-proxy",
+            f"HARBOR_RUNNER={fake_harbor}",
+        ),
+        cwd=ROOT,
+        environment=os.environ | {"TRACE": str(trace)},
+        timeout_seconds=120.0,
+    )
+
+    assert completed.status is ToolCommandStatus.EXITED
+    assert completed.exit_code == 0, completed.stderr.decode("utf-8", errors="replace")
+    assert trace.read_text(encoding="utf-8") == "jacobian-eval-proxy\n"
+
+
+def test_agent_eval_creates_an_explicit_proxy_builder(tmp_path: Path) -> None:
+    trace = tmp_path / "docker-args.txt"
+    fake_docker = tmp_path / "docker"
+    fake_docker.write_text(
+        "#!/bin/sh\n"
+        'printf "%s\\n" "$*" >> "$TRACE"\n'
+        '[ "$1 $2" = "buildx inspect" ] && exit 1\n'
+        '[ "$1 $2" = "buildx create" ] && exit 0\n'
+        "exit 2\n",
+        encoding="utf-8",
+    )
+    fake_docker.chmod(0o755)
+
+    completed = run_operator_command(
+        "make",
+        (
+            "agent-eval-proxy-builder-create",
+            f"DOCKER={fake_docker}",
+            "JACOBIAN_EVAL_BUILDX_PROXY=http://proxy.invalid:7890",
+        ),
+        cwd=ROOT,
+        environment=os.environ | {"TRACE": str(trace)},
+        timeout_seconds=120.0,
+    )
+
+    assert completed.status is ToolCommandStatus.EXITED
+    assert completed.exit_code == 0, completed.stderr.decode("utf-8", errors="replace")
+    assert trace.read_text(encoding="utf-8").splitlines() == [
+        "buildx inspect jacobian-eval-proxy",
+        "buildx create --name jacobian-eval-proxy --driver docker-container --driver-opt network=host --driver-opt env.HTTP_PROXY=http://proxy.invalid:7890 --driver-opt env.HTTPS_PROXY=http://proxy.invalid:7890 --driver-opt env.http_proxy=http://proxy.invalid:7890 --driver-opt env.https_proxy=http://proxy.invalid:7890 --bootstrap",
+    ]
+
+
 @pytest.mark.parametrize(
     ("configured_proxy", "expects_warning"),
     [

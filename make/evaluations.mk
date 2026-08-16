@@ -1,4 +1,4 @@
-.PHONY: agent-eval agent-eval-validate agent-eval-compare codex-visibility codex-tool-context
+.PHONY: agent-eval agent-eval-proxy-builder-create agent-eval-validate agent-eval-compare codex-visibility codex-tool-context
 
 JACOBIAN_ENABLED ?= 1
 ifneq ($(filter 0 1,$(JACOBIAN_ENABLED)),$(JACOBIAN_ENABLED))
@@ -9,7 +9,7 @@ CODEX_WEB_SEARCH ?= disabled
 EVAL_ATTEMPTS ?=
 EVAL_REASONING_EFFORT ?=
 JACOBIAN_EVAL_PROXY ?= 0
-JACOBIAN_EVAL_CODEX_BINARY ?= $(shell command -v codex 2>/dev/null)
+DOCKER ?= docker
 define _jacobian_eval_container_proxy
 $(subst localhost,host.docker.internal,$(subst 127.0.0.1,host.docker.internal,$1))
 endef
@@ -19,6 +19,10 @@ JACOBIAN_EVAL_ALL_PROXY ?= $(call _jacobian_eval_container_proxy,$(ALL_PROXY))
 JACOBIAN_EVAL_NO_PROXY ?= localhost,127.0.0.1,jacobian
 JACOBIAN_EVAL_UPSTREAM_PROXY ?= $(or $(JACOBIAN_EVAL_HTTPS_PROXY),$(JACOBIAN_EVAL_ALL_PROXY),$(JACOBIAN_EVAL_HTTP_PROXY))
 JACOBIAN_EVAL_GOST_CONFIG ?= $(abspath benchmarks/results/.runtime/agent-eval-gost.yaml)
+JACOBIAN_EVAL_PROXY_BUILDER ?= jacobian-eval-proxy
+JACOBIAN_EVAL_BUILDX_BUILDER ?=
+JACOBIAN_EVAL_BUILDX_PROXY ?= $(or $(HTTPS_PROXY),$(HTTP_PROXY))
+JACOBIAN_EVAL_BUILDX_NETWORK ?= host
 ifneq ($(filter 0 1,$(JACOBIAN_EVAL_PROXY)),$(JACOBIAN_EVAL_PROXY))
 $(error JACOBIAN_EVAL_PROXY must be exactly 0 or 1 (got '$(JACOBIAN_EVAL_PROXY)'))
 endif
@@ -46,10 +50,22 @@ EVAL_CONFIG ?= benchmarks/datasets/$(or $(DATASET),mathematical-benchmarks-v1)/j
 endif
 endif
 
+agent-eval-proxy-builder-create: ## Create an opt-in Buildx proxy builder (JACOBIAN_EVAL_BUILDX_PROXY=...).
+	@test -n "$(JACOBIAN_EVAL_BUILDX_PROXY)" || { echo "JACOBIAN_EVAL_BUILDX_PROXY or HTTPS_PROXY / HTTP_PROXY is required" >&2; exit 2; }
+	@if $(DOCKER) buildx inspect "$(JACOBIAN_EVAL_PROXY_BUILDER)" >/dev/null 2>&1; then \
+		echo "Buildx builder already exists: $(JACOBIAN_EVAL_PROXY_BUILDER)"; \
+	else \
+		$(DOCKER) buildx create --name "$(JACOBIAN_EVAL_PROXY_BUILDER)" --driver docker-container \
+			--driver-opt "network=$(JACOBIAN_EVAL_BUILDX_NETWORK)" \
+			--driver-opt "env.HTTP_PROXY=$(JACOBIAN_EVAL_BUILDX_PROXY)" \
+			--driver-opt "env.HTTPS_PROXY=$(JACOBIAN_EVAL_BUILDX_PROXY)" \
+			--driver-opt "env.http_proxy=$(JACOBIAN_EVAL_BUILDX_PROXY)" \
+			--driver-opt "env.https_proxy=$(JACOBIAN_EVAL_BUILDX_PROXY)" \
+			--bootstrap; \
+	fi
+
 agent-eval: ## Run a Harbor observation (JACOBIAN_ENABLED=0|1, DATASET=..., TASKS=..., JACOBIAN_MODEL=..., EVAL_EXECUTE=1).
 	@set -e; \
-	CODEX_BINARY="$(JACOBIAN_EVAL_CODEX_BINARY)"; \
-	CODEX_CODE_MODE_HOST=""; \
 	if [ "$(EVAL_EXECUTE)" != "1" ]; then \
 		echo "Model execution is opt-in. Review the job, then run: make agent-eval DATASET=mathematical-benchmarks-v1 EVAL_EXECUTE=1"; \
 		exit 0; \
@@ -60,6 +76,13 @@ agent-eval: ## Run a Harbor observation (JACOBIAN_ENABLED=0|1, DATASET=..., TASK
 	fi; \
 	if [ "$(JACOBIAN_EVAL_PROXY)" = "1" ]; then \
 		echo "Provider egress: proxy"; \
+		if [ -n "$(JACOBIAN_EVAL_BUILDX_BUILDER)" ]; then \
+			echo "Image builder: Buildx $(JACOBIAN_EVAL_BUILDX_BUILDER)"; \
+		elif [ "$$( $(DOCKER) info --format '{{if .HTTPProxy}}configured{{else}}absent{{end}}' 2>/dev/null || true )" != "configured" ]; then \
+			echo "Image builder: no Docker daemon proxy is configured."; \
+			echo "Fresh image pulls may fail before Harbor starts the trial proxy."; \
+			echo "Create an opt-in builder with: make agent-eval-proxy-builder-create"; \
+		fi; \
 	else \
 		echo "Provider egress: direct"; \
 		if [ -n "$(JACOBIAN_EVAL_HTTP_PROXY)$(JACOBIAN_EVAL_HTTPS_PROXY)$(JACOBIAN_EVAL_ALL_PROXY)" ]; then \
@@ -68,8 +91,6 @@ agent-eval: ## Run a Harbor observation (JACOBIAN_ENABLED=0|1, DATASET=..., TASK
 		fi; \
 	fi; \
 	if [ "$(JACOBIAN_EVAL_PROXY)" = "1" ]; then \
-		CODEX_BINARY="$$( $(UV_RUN) python -m benchmarks.tooling.codex_binary --candidate "$$CODEX_BINARY" )"; \
-		CODEX_CODE_MODE_HOST="$$( $(UV_RUN) python -m benchmarks.tooling.codex_binary --candidate "$$CODEX_BINARY" --code-mode-host )"; \
 		JACOBIAN_EVAL_UPSTREAM_PROXY="$(JACOBIAN_EVAL_UPSTREAM_PROXY)" \
 			$(UV_RUN) python -m benchmarks.tooling.harbor_proxy \
 			--output "$(JACOBIAN_EVAL_GOST_CONFIG)"; \
@@ -89,9 +110,8 @@ agent-eval: ## Run a Harbor observation (JACOBIAN_ENABLED=0|1, DATASET=..., TASK
 	JACOBIAN_EVAL_HTTPS_PROXY="$(JACOBIAN_EVAL_HTTPS_PROXY)" \
 	JACOBIAN_EVAL_ALL_PROXY="$(JACOBIAN_EVAL_ALL_PROXY)" \
 	JACOBIAN_EVAL_NO_PROXY="$(JACOBIAN_EVAL_NO_PROXY)" \
-	JACOBIAN_EVAL_CODEX_BINARY="$$CODEX_BINARY" \
-	JACOBIAN_EVAL_CODEX_CODE_MODE_HOST="$$CODEX_CODE_MODE_HOST" \
 	JACOBIAN_EVAL_GOST_CONFIG="$(JACOBIAN_EVAL_GOST_CONFIG)" \
+	env $(if $(strip $(JACOBIAN_EVAL_BUILDX_BUILDER)),BUILDX_BUILDER="$(JACOBIAN_EVAL_BUILDX_BUILDER)") \
 	$(HARBOR_RUNNER) run \
 		-c "$(EVAL_CONFIG)" \
 		-a codex \

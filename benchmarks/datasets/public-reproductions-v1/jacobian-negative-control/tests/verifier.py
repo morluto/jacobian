@@ -8,32 +8,6 @@ W = Path("/app")
 E = Path("/tests")
 
 
-def _math(s, x):
-    r = s.get("result", {})
-    if not isinstance(r, dict) or set(r) != {
-        "both_points_map_to_claimed_image",
-        "noninvertibility_verified",
-    }:
-        return False
-    try:
-        polynomial_map = x["map"]
-        first = tuple(_fraction(value) for value in x["first_point"])
-        second = tuple(_fraction(value) for value in x["second_point"])
-        claimed = tuple(_fraction(value) for value in x["claimed_image"])
-        if len(first) != len(second) or len(first) != len(polynomial_map["variables"]):
-            return False
-        first_image = _evaluate_map(polynomial_map, first)
-        second_image = _evaluate_map(polynomial_map, second)
-    except (KeyError, TypeError, ValueError, IndexError, ZeroDivisionError):
-        return False
-    both_map_to_claimed = first_image == claimed and second_image == claimed
-    noninvertibility_verified = first != second and first_image == second_image
-    return (
-        r["both_points_map_to_claimed_image"] is both_map_to_claimed
-        and r["noninvertibility_verified"] is noninvertibility_verified
-    )
-
-
 def _fraction(value):
     return Fraction(int(value["num"]), int(value["den"]))
 
@@ -59,6 +33,33 @@ def _evaluate_map(polynomial_map, point):
             total += monomial
         values.append(total)
     return tuple(values)
+
+
+def _math(s, x):
+    r = s.get("result", {})
+    if not isinstance(r, dict) or set(r) != {"collision"}:
+        return False
+    c = r.get("collision")
+    if not isinstance(c, dict):
+        return False
+    try:
+        polynomial_map = x["map"]
+        first = tuple(_fraction(value) for value in c["first_point"])
+        second = tuple(_fraction(value) for value in c["second_point"])
+        first_image = tuple(_fraction(value) for value in c["first_image"])
+        second_image = tuple(_fraction(value) for value in c["second_image"])
+        if len(first) != len(second) or len(first) != len(polynomial_map["variables"]):
+            return False
+    except (KeyError, TypeError, ValueError, IndexError, ZeroDivisionError):
+        return False
+    expected_first_image = _evaluate_map(polynomial_map, first)
+    expected_second_image = _evaluate_map(polynomial_map, second)
+    return (
+        first != second
+        and first_image == expected_first_image
+        and second_image == expected_second_image
+        and first_image == second_image
+    )
 
 
 def main():

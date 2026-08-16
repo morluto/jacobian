@@ -1,190 +1,144 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "integer_witness": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "a_values": {
-            "items": {
-              "type": "integer"
+            "integer_witness": {
+                "additionalProperties": false,
+                "properties": {
+                    "a_values": {
+                        "items": {
+                            "type": "integer"
+                        },
+                        "type": "array"
+                    },
+                    "b_values": {
+                        "items": {
+                            "type": "integer"
+                        },
+                        "type": "array"
+                    },
+                    "period": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "period",
+                    "a_values",
+                    "b_values"
+                ],
+                "type": "object"
             },
-            "type": "array"
-          },
-          "b_max": {
-            "type": "integer"
-          },
-          "b_min": {
-            "type": "integer"
-          },
-          "b_values": {
-            "items": {
-              "type": "integer"
+            "nat_redundancy": {
+                "additionalProperties": false,
+                "properties": {
+                    "a_lower_bound": {
+                        "const": 0
+                    },
+                    "b_lower_bound": {
+                        "const": 1
+                    },
+                    "rule": {
+                        "const": "ORDERED_ADDITION_LOWER_BOUND"
+                    },
+                    "sum_lower_bound": {
+                        "const": 1
+                    }
+                },
+                "required": [
+                    "a_lower_bound",
+                    "b_lower_bound",
+                    "sum_lower_bound",
+                    "rule"
+                ],
+                "type": "object"
             },
-            "type": "array"
-          },
-          "cancellation_indices": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "period": {
-            "type": "integer"
-          },
-          "sum_values": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array"
-          }
+            "semantic_status": {
+                "const": "STRICTLY_WEAKER"
+            }
         },
         "required": [
-          "period",
-          "a_values",
-          "b_values",
-          "sum_values",
-          "b_min",
-          "b_max",
-          "cancellation_indices"
+            "semantic_status",
+            "nat_redundancy",
+            "integer_witness"
         ],
         "type": "object"
-      },
-      "nat_redundancy": {
-        "additionalProperties": false,
-        "properties": {
-          "a_lower_bound": {
-            "const": 0
-          },
-          "b_lower_bound": {
-            "const": 1
-          },
-          "rule": {
-            "const": "ORDERED_ADDITION_LOWER_BOUND"
-          },
-          "sum_lower_bound": {
-            "const": 1
-          }
-        },
-        "required": [
-          "a_lower_bound",
-          "b_lower_bound",
-          "sum_lower_bound",
-          "rule"
-        ],
-        "type": "object"
-      },
-      "semantic_status": {
-        "const": "STRICTLY_WEAKER"
-      }
     },
-    "required": [
-      "semantic_status",
-      "nat_redundancy",
-      "integer_witness"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "submission_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
-          "integer_witness": {
-            "additionalProperties": false,
-            "properties": {
-              "a_values": {
-                "items": {
-                  "type": "integer"
+            "result": {
+                "additionalProperties": false,
+                "properties": {
+                    "integer_witness": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "a_values": {
+                                "items": {
+                                    "type": "integer"
+                                },
+                                "type": "array"
+                            },
+                            "b_values": {
+                                "items": {
+                                    "type": "integer"
+                                },
+                                "type": "array"
+                            },
+                            "period": {
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "period",
+                            "a_values",
+                            "b_values"
+                        ],
+                        "type": "object"
+                    },
+                    "nat_redundancy": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "a_lower_bound": {
+                                "const": 0
+                            },
+                            "b_lower_bound": {
+                                "const": 1
+                            },
+                            "rule": {
+                                "const": "ORDERED_ADDITION_LOWER_BOUND"
+                            },
+                            "sum_lower_bound": {
+                                "const": 1
+                            }
+                        },
+                        "required": [
+                            "a_lower_bound",
+                            "b_lower_bound",
+                            "sum_lower_bound",
+                            "rule"
+                        ],
+                        "type": "object"
+                    },
+                    "semantic_status": {
+                        "const": "STRICTLY_WEAKER"
+                    }
                 },
-                "type": "array"
-              },
-              "b_max": {
-                "type": "integer"
-              },
-              "b_min": {
-                "type": "integer"
-              },
-              "b_values": {
-                "items": {
-                  "type": "integer"
-                },
-                "type": "array"
-              },
-              "cancellation_indices": {
-                "items": {
-                  "type": "integer"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              "period": {
-                "type": "integer"
-              },
-              "sum_values": {
-                "items": {
-                  "type": "integer"
-                },
-                "type": "array"
-              }
-            },
-            "required": [
-              "period",
-              "a_values",
-              "b_values",
-              "sum_values",
-              "b_min",
-              "b_max",
-              "cancellation_indices"
-            ],
-            "type": "object"
-          },
-          "nat_redundancy": {
-            "additionalProperties": false,
-            "properties": {
-              "a_lower_bound": {
-                "const": 0
-              },
-              "b_lower_bound": {
-                "const": 1
-              },
-              "rule": {
-                "const": "ORDERED_ADDITION_LOWER_BOUND"
-              },
-              "sum_lower_bound": {
-                "const": 1
-              }
-            },
-            "required": [
-              "a_lower_bound",
-              "b_lower_bound",
-              "sum_lower_bound",
-              "rule"
-            ],
-            "type": "object"
-          },
-          "semantic_status": {
-            "const": "STRICTLY_WEAKER"
-          }
+                "required": [
+                    "semantic_status",
+                    "nat_redundancy",
+                    "integer_witness"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "semantic_status",
-          "nat_redundancy",
-          "integer_witness"
+            "result"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/integer-perturbation-domain-audit"
+    "task_id": "jacobian/integer-perturbation-domain-audit"
 }

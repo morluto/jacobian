@@ -32,18 +32,11 @@ def _maximum_size(n):
 
 
 def _valid(result, source):
-    if not isinstance(result, dict) or set(result) != {"pair_count", "pairs", "sums"}:
+    if not isinstance(result, dict) or set(result) != {"pairs"}:
         return False
     n = source.get("n")
     pairs = result.get("pairs")
-    sums = result.get("sums")
-    if (
-        not isinstance(n, int)
-        or not isinstance(pairs, list)
-        or not isinstance(sums, list)
-    ):
-        return False
-    if result.get("pair_count") != len(pairs) or len(sums) != len(pairs):
+    if not isinstance(n, int) or not isinstance(pairs, list):
         return False
     used = set()
     actual_sums = []
@@ -69,9 +62,8 @@ def _valid(result, source):
         actual_sums.append(a + b)
         previous = pair
     return bool(
-        sums == actual_sums
-        and len(set(sums)) == len(sums)
-        and all(total <= n for total in sums)
+        len(set(actual_sums)) == len(actual_sums)
+        and all(total <= n for total in actual_sums)
         and len(pairs) == _maximum_size(n)
     )
 

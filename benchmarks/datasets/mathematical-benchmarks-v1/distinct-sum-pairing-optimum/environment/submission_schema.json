@@ -1,47 +1,35 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": false,
-  "properties": {
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "pair_count": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "pairs": {
-          "items": {
-            "items": false,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "integer"
-              }
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+        "result": {
+            "additionalProperties": false,
+            "properties": {
+                "pairs": {
+                    "items": {
+                        "items": false,
+                        "minItems": 2,
+                        "prefixItems": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "integer"
+                            }
+                        ],
+                        "type": "array"
+                    },
+                    "type": "array"
+                }
+            },
+            "required": [
+                "pairs"
             ],
-            "type": "array"
-          },
-          "type": "array"
-        },
-        "sums": {
-          "items": {
-            "type": "integer"
-          },
-          "type": "array"
+            "type": "object"
         }
-      },
-      "required": [
-        "pair_count",
-        "pairs",
-        "sums"
-      ],
-      "type": "object"
-    }
-  },
-  "required": [
-    "result"
-  ],
-  "type": "object"
+    },
+    "required": [
+        "result"
+    ],
+    "type": "object"
 }

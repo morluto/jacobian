@@ -53,6 +53,7 @@ BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
         "rational_linear_operations",
     ),
     ("jacobian.domains.lattices", "lattice_operations"),
+    ("jacobian.domains.formal_power_series", "formal_power_series_operations"),
     ("jacobian.domains.polynomial", "polynomial_operations"),
     ("jacobian.domains.analysis", "real_analysis_operations"),
     (

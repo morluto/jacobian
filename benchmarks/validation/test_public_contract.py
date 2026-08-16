@@ -61,8 +61,6 @@ def _base_contract_dict() -> dict:
 
 
 def _write_contract(tmp_path: Path, data: dict) -> Path:
-    declared = PublicContract.model_validate(data)
-    data = data | {"submission_schema": json.loads(render_submission_schema(declared))}
     path = tmp_path / "public_contract.json"
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return path

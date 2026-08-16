@@ -18,7 +18,7 @@ from benchmarks.tooling.harbor_suite import (
     load_environment_profiles,
     validate_task_topology,
 )
-from benchmarks.tooling.heldout_runner import _json_digest, _validated_plan
+from benchmarks.tooling.heldout_runner import _validated_plan
 from benchmarks.tooling.strict_boundaries import (
     HarborJobDatasetEntry,
     HarborJobSelection,
@@ -37,6 +37,16 @@ from tests.unit.tooling.harbor_suite_support import (
 # ---------------------------------------------------------------------------
 # Strict boundary models
 # ---------------------------------------------------------------------------
+
+
+import hashlib
+
+
+def _json_digest(value: object) -> str:
+    """Compute the canonical plan digest used by the held-out run plan loader."""
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
 
 
 def test_task_environment_section_rejects_extra_fields() -> None:

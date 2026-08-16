@@ -1,4 +1,11 @@
-"""Regression tests for observation-evidence normalization and comparison."""
+"""Regression tests for observation-evidence normalization and comparison.
+
+These tests call private (``_``-prefixed) helpers from
+``benchmarks.tooling.observation_results`` directly because the fail-closed
+status normalization and observation-failure logic they guard has no public
+API surface — the helpers are internal implementation details of the
+benchmark observation pipeline.
+"""
 
 
 def test_trial_status_missing_status_fails_closed() -> None:

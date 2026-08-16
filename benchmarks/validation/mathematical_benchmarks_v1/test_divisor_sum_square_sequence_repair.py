@@ -23,7 +23,7 @@ def _verify(tmp_path, submission):
     app.mkdir(parents=True)
     logs.mkdir(parents=True)
     shutil.copy2(task / "environment/input.json", app / "input.json")
-    (app / "submission.json").write_text(json.dumps({"result": submission["result"]}))
+    (app / "submission.json").write_text(json.dumps(submission))
     return _run_verifier(task, app, logs)
 
 

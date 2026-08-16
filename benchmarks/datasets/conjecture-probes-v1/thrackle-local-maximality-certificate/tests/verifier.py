@@ -5,6 +5,7 @@ from itertools import combinations
 from pathlib import Path
 
 from verifier_support import (
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     workspace_input_is_bound,
@@ -62,7 +63,9 @@ def mathematics(result):
         {"left": list(e), "right": list(f), "relation": _relation(e, f)}
         for e, f in combinations(selected, 2)
     ]
-    if any(row["relation"] == "DISJOINT" for row in expected_pairs):
+    if any(
+        row["relation"] == "DISJOINT" for row in expected_pairs
+    ) or not json_value_equal(result["pair_classifications"], expected_pairs):
         return False
     excluded = [e for e in ALL if e not in selected]
     expected = []
@@ -77,7 +80,7 @@ def mathematics(result):
         expected.append(
             {"excluded": list(edge), "disjoint_selected": list(disjoint[0])}
         )
-    return result["excluded_edge_witnesses"] == expected
+    return json_value_equal(result["excluded_edge_witnesses"], expected)
 
 
 def _write(values):

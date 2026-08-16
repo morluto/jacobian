@@ -9,10 +9,13 @@ from typing import Any
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
     is_regular_bounded_file,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     workspace_input_is_bound,
 )
+
+_json_equal = json_value_equal
 
 TASK_ID = "jacobian/illumination-strictness-audit"
 VERTICES = list(product((-1, 1), repeat=3))
@@ -63,6 +66,7 @@ def mathematics(result):
     return (
         weak_cover
         and bool(expected)
+        and _json_equal(result["weak_false_positive_pairs"], expected)
         and isinstance(mapping, list)
         and (len(mapping) == 8)
         and all(

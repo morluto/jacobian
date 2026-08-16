@@ -4,10 +4,13 @@ import json
 from pathlib import Path
 
 from verifier_support import (
+    json_value_equal,
     load_submission,
     normalize_reward_file,
     workspace_input_is_bound,
 )
+
+_json_equal = json_value_equal
 
 TASK_ID = "jacobian/total-coloring-contract-audit"
 VERTICES = list(range(10))

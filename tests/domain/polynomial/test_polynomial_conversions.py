@@ -6,7 +6,10 @@ from jacobian.domains.polynomial.conversions import (
     rational_polynomial_to_sympy,
 )
 from jacobian.domains.polynomial.operations import polynomial_gcd
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    SparseRationalPolynomial,
+)
 
 
 def _polynomial() -> RationalPolynomial:
@@ -75,3 +78,24 @@ def test_gcd_result_composes_without_reshaping_or_json_round_trip() -> None:
         }
     )
     assert polynomial_gcd(serialized_consumer).gcd == result.gcd
+
+
+def test_sparse_polynomial_schema_explains_canonical_term_order() -> None:
+    terms = SparseRationalPolynomial.model_json_schema()["properties"]["terms"]
+
+    assert terms["description"] == (
+        "Nonzero monomials in descending lexicographic order of their exponent "
+        "tuples (highest first). For one variable, list [2] before [0]."
+    )
+    assert terms["examples"] == [
+        [
+            {
+                "coefficient": {"num": "1", "den": "1"},
+                "exponents": [2],
+            },
+            {
+                "coefficient": {"num": "-1", "den": "1"},
+                "exponents": [0],
+            },
+        ]
+    ]

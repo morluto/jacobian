@@ -16,6 +16,14 @@ operation reports mathematical completeness or uncertainty in its own result;
 it does not add a generic assurance, artifact, publication, replay, or
 verification wrapper.
 
+Public request contracts must make their valid representation visible before a
+backend call. Express constraints that JSON Schema can represent in typed field
+metadata. When a domain invariant needs a Pydantic model validator—such as a
+cross-field relation or canonical term ordering—also provide an explicit field
+or model description and a minimal valid example in the exported schema. The
+validator remains authoritative; the metadata lets a caller form a valid first
+request rather than discover the rule only through a rejected call.
+
 Use maintained backends through thin private adapters. Direct bounded results
 compose by being supplied as the next operation's typed
 payload.

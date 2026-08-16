@@ -40,7 +40,25 @@ class RationalPolynomialTerm(ContractModel):
 
 class SparseRationalPolynomial(ContractModel):
     terms: tuple[RationalPolynomialTerm, ...] = Field(
-        default=(), max_length=MAX_POLYNOMIAL_TERMS
+        default=(),
+        max_length=MAX_POLYNOMIAL_TERMS,
+        description=(
+            "Nonzero monomials in descending lexicographic order of their "
+            "exponent tuples (highest first). For one variable, list [2] "
+            "before [0]."
+        ),
+        examples=[
+            [
+                {
+                    "coefficient": {"num": "1", "den": "1"},
+                    "exponents": [2],
+                },
+                {
+                    "coefficient": {"num": "-1", "den": "1"},
+                    "exponents": [0],
+                },
+            ]
+        ],
     )
 
     @model_validator(mode="after")

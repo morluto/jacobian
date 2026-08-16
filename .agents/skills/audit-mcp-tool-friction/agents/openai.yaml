@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audit MCP Tool Friction"
+  short_description: "Audit existing MCP tool usability"
+  default_prompt: "Use $audit-mcp-tool-friction to audit an existing MCP tool contract and trace for agent friction."

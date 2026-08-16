@@ -84,7 +84,10 @@ Before declaring the operation, provide tests for:
 - a boundary or degenerate input, including valid empty, zero, singleton, or
   identity values where the domain admits them;
 - an adversarial input that distinguishes the stated semantics from a tempting
-  weaker algorithm; and
+  weaker algorithm;
+- a public-operation assertion that the returned value satisfies its defining
+  mathematical invariant or witness, rather than merely parsing or reaching a
+  backend; and
 - request validation proving schema-valid inputs reach the backend without a
   representation or shape failure.
 

@@ -46,6 +46,24 @@ def test_root_isolation_returns_intervals_aligned_with_multiplicities() -> None:
     )
 
 
+def test_root_isolation_accepts_sympy_singleton_interval_for_a_rational_root() -> None:
+    result = compute_root_isolation(
+        UnivariatePolynomialRequest.model_validate(
+            {
+                "coefficients_descending": [
+                    {"num": "1", "den": "1"},
+                    {"num": "-1", "den": "1"},
+                ]
+            }
+        )
+    )
+
+    assert tuple(
+        (lower.num, lower.den, upper.num, upper.den) for lower, upper in result.roots
+    ) == (("1", "1", "1", "1"),)
+    assert result.multiplicities == (1,)
+
+
 def test_algebraic_comparison_parses_canonical_interval_endpoints() -> None:
     result = compute_algebraic_compare(
         AlgebraicCompareRequest.model_validate(
@@ -111,6 +129,14 @@ def test_recurrence_finder_solves_for_coefficients() -> None:
     assert result.coefficients == ("2",)
 
 
+def test_recurrence_finder_reports_a_missing_nonvacuous_fit() -> None:
+    result = compute_find_recurrence(RecurrenceFindRequest(sequence=("0", "1")))
+
+    assert result.status == "NO_FITTING_RECURRENCE"
+    assert result.order == 0
+    assert result.coefficients == ()
+
+
 def test_repeated_root_closed_form_preserves_polynomial_factor() -> None:
     result = compute_closed_form(
         ClosedFormRequest(
@@ -120,6 +146,27 @@ def test_repeated_root_closed_form_preserves_polynomial_factor() -> None:
     )
 
     assert result.expression == "3*n + 2"
+
+
+def test_closed_form_handles_repeated_zero_characteristic_roots() -> None:
+    result = compute_closed_form(
+        ClosedFormRequest(
+            characteristic_coefficients=("1", "0", "0"),
+            initial_values=("2", "5"),
+        )
+    )
+
+    assert result.expression == "2*KroneckerDelta(0, n) + 5*KroneckerDelta(1, n)"
+
+
+def test_closed_form_contract_rejects_characteristic_polynomials_above_degree_four() -> (
+    None
+):
+    with pytest.raises(ValidationError):
+        ClosedFormRequest(
+            characteristic_coefficients=("1", "0", "0", "0", "-1", "-1"),
+            initial_values=("0", "0", "0", "0", "0"),
+        )
 
 
 def test_closed_form_contract_requires_every_initial_value() -> None:

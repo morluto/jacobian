@@ -47,7 +47,7 @@ RECURRENCE_SOLVING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     rs_operation(
         "sequence.recurrence.find",
         "Find the minimal linear recurrence of a sequence",
-        "Find the lowest-order homogeneous recurrence that exactly fits the supplied finite rational sequence.",
+        "Find the lowest-order non-vacuous homogeneous recurrence that exactly fits the supplied finite rational sequence, or report NO_FITTING_RECURRENCE.",
         RecurrenceFindRequest,
         RecurrenceFindResult,
         compute_find_recurrence,
@@ -65,7 +65,7 @@ RECURRENCE_SOLVING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     rs_operation(
         "sequence.recurrence.closed_form.compute",
         "Compute the closed-form of a linear recurrence",
-        "Compute the closed form from a characteristic polynomial and exactly one initial value per degree, including repeated roots.",
+        "Compute a SymPy-expression closed form for a characteristic polynomial of degree at most four and exactly one initial value per degree, including repeated roots.",
         ClosedFormRequest,
         ClosedFormResult,
         compute_closed_form,

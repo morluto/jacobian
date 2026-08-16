@@ -64,7 +64,7 @@ CODE_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ct_operation(
         "code.weight_distribution.compute",
         "Compute the weight distribution of a linear code",
-        "Compute the weight distribution by exact enumeration over a bounded prime field.",
+        "Compute the distribution of distinct codeword weights by exact enumeration over a bounded prime field.",
         LinearCodeRequest,
         WeightDistributionResult,
         compute_weight_dist,

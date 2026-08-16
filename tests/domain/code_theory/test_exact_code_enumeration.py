@@ -17,6 +17,12 @@ def test_prime_field_code_enumeration_uses_the_declared_matrix() -> None:
     assert compute_weight_dist(request).weights == ((0, 1), (2, 1))
 
 
+def test_code_weight_distribution_counts_distinct_words_for_dependent_rows() -> None:
+    request = LinearCodeRequest(field_order=2, generator_matrix=((1,), (1,)))
+
+    assert compute_weight_dist(request).weights == ((0, 1), (1, 1))
+
+
 def test_code_contract_rejects_nonprime_fields_and_unbounded_enumeration() -> None:
     with pytest.raises(ValidationError, match="prime"):
         LinearCodeRequest(field_order=4, generator_matrix=((1,),))

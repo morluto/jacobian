@@ -26,18 +26,36 @@ class RecurrenceFindRequest(ContractModel):
 
 
 class RecurrenceFindResult(ContractModel):
-    """The minimal linear recurrence coefficients."""
+    """A fitted recurrence or an explicit finite-prefix missing outcome."""
 
     coefficients: tuple[str, ...] = Field(max_length=255)
     order: int = Field(ge=0, le=255)
+    status: Literal["FOUND", "NO_FITTING_RECURRENCE"]
     method: Literal["RATIONAL_INTERPOLATION"] = "RATIONAL_INTERPOLATION"
+
+    @model_validator(mode="after")
+    def require_status_consistent_coefficients(self) -> Self:
+        if self.status == "FOUND":
+            if self.order == 0 or len(self.coefficients) != self.order:
+                raise ValueError(
+                    "a found recurrence must have one coefficient per order"
+                )
+        elif self.order != 0 or self.coefficients:
+            raise ValueError(
+                "a missing recurrence must have zero order and no coefficients"
+            )
+        return self
 
 
 class ClosedFormRequest(ContractModel):
-    """Compute the closed-form solution of a linear recurrence."""
+    """Compute a SymPy-expression closed form for a recurrence of degree at most four."""
 
-    characteristic_coefficients: tuple[str, ...] = Field(min_length=1, max_length=64)
-    initial_values: tuple[str, ...] = Field(min_length=1, max_length=64)
+    characteristic_coefficients: tuple[str, ...] = Field(
+        min_length=1,
+        max_length=5,
+        description="Characteristic polynomial coefficients in descending order, with degree at most four.",
+    )
+    initial_values: tuple[str, ...] = Field(min_length=1, max_length=4)
 
     @model_validator(mode="after")
     def require_initial_values_for_order(self) -> Self:

@@ -12,9 +12,13 @@ def _codewords(generator_matrix, field_order):  # type: ignore[no-untyped-def]
 
     n_rows = len(generator_matrix)
     generator = nmod_mat(generator_matrix, field_order)
+    seen = set()
     for coeffs in product(range(field_order), repeat=n_rows):
         coefficient_row = nmod_mat([list(coeffs)], field_order)
-        yield tuple((coefficient_row * generator).tolist()[0])
+        codeword = tuple((coefficient_row * generator).tolist()[0])
+        if codeword not in seen:
+            seen.add(codeword)
+            yield codeword
 
 
 def minimum_distance(generator_matrix, field_order):  # type: ignore[no-untyped-def]

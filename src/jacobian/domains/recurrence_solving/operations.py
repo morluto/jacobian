@@ -16,6 +16,7 @@ def compute_find_recurrence(request: RecurrenceFindRequest) -> RecurrenceFindRes
     return RecurrenceFindResult(
         coefficients=result["coefficients"],
         order=result["order"],
+        status=result["status"],
     )
 
 

@@ -23,7 +23,7 @@ class UnivariatePolynomialRequest(ContractModel):
 
 
 class RootIsolationResult(ContractModel):
-    """Real roots with rational isolating intervals."""
+    """Real roots with rational intervals; rational roots use a singleton."""
 
     roots: tuple[tuple[CanonicalRational, CanonicalRational], ...]
     multiplicities: tuple[int, ...]
@@ -34,9 +34,9 @@ class RootIsolationResult(ContractModel):
         if len(self.roots) != len(self.multiplicities):
             raise ValueError("roots and multiplicities must have the same length")
         if any(
-            lower.as_fraction() >= upper.as_fraction() for lower, upper in self.roots
+            lower.as_fraction() > upper.as_fraction() for lower, upper in self.roots
         ):
-            raise ValueError("isolating intervals must have lower < upper")
+            raise ValueError("isolating intervals must have lower <= upper")
         if any(multiplicity < 1 for multiplicity in self.multiplicities):
             raise ValueError("root multiplicities must be positive")
         return self

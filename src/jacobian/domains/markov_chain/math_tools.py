@@ -70,7 +70,7 @@ MARKOV_CHAIN_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     mc_operation(
         "probability.markov_chain.ergodic.decide",
         "Decide whether a Markov chain is ergodic",
-        "Decide whether a finite Markov chain is ergodic (irreducible and aperiodic) using SymPy.",
+        "Decide whether a finite Markov chain is ergodic (irreducible and aperiodic); aperiodicity is checked in every communicating class.",
         TransitionMatrixRequest,
         ErgodicDecisionResult,
         compute_ergodic_decision,

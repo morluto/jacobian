@@ -37,6 +37,29 @@ def test_ergodicity_uses_irreducibility_and_period_not_square_positivity() -> No
     assert result.is_ergodic is True
 
 
+def test_aperiodicity_is_checked_for_each_communicating_class() -> None:
+    result = compute_ergodic_decision(
+        TransitionMatrixRequest.model_validate(
+            {
+                "matrix": [
+                    [
+                        {"num": "1", "den": "1"},
+                        {"num": "0", "den": "1"},
+                    ],
+                    [
+                        {"num": "0", "den": "1"},
+                        {"num": "1", "den": "1"},
+                    ],
+                ]
+            }
+        )
+    )
+
+    assert result.is_irreducible is False
+    assert result.is_aperiodic is True
+    assert result.is_ergodic is False
+
+
 @pytest.mark.parametrize(
     "matrix",
     [

@@ -38,5 +38,8 @@ def ergodic_properties(matrix):  # type: ignore[no-untyped-def]
         if value["num"] != "0"
     )
     irreducible = nx.is_strongly_connected(graph)
-    aperiodic = irreducible and nx.is_aperiodic(graph)
+    aperiodic = all(
+        nx.is_aperiodic(graph.subgraph(component))
+        for component in nx.strongly_connected_components(graph)
+    )
     return irreducible, aperiodic

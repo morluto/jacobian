@@ -26,27 +26,33 @@ def find_recurrence(sequence):  # type: ignore[no-untyped-def]
         return {
             "coefficients": tuple(str(value) for value in solution),
             "order": order,
+            "status": "FOUND",
         }
-    return {"coefficients": (), "order": 0}
+    return {
+        "coefficients": (),
+        "order": 0,
+        "status": "NO_FITTING_RECURRENCE",
+    }
 
 
 def closed_form(char_coeffs, initial_values):  # type: ignore[no-untyped-def]
     import sympy
 
     x = sympy.Symbol("x")
-    n = sympy.Symbol("n")
+    n = sympy.Symbol("n", integer=True, nonnegative=True)
     char_poly_coeffs = [sympy.Rational(c) for c in char_coeffs]
     char_poly = sum(
         c * x ** (len(char_poly_coeffs) - 1 - i) for i, c in enumerate(char_poly_coeffs)
     )
-    roots = sympy.roots(char_poly, x)
-    if sum(roots.values()) != len(initial_values):
-        raise ValueError("characteristic polynomial degree must match initial values")
-    basis = [
+    roots = sympy.Poly(char_poly, x).all_roots()
+    zero_root_multiplicity = sum(root == 0 for root in roots)
+    nonzero_roots = list(dict.fromkeys(root for root in roots if root != 0))
+    basis = [sympy.KroneckerDelta(index, n) for index in range(zero_root_multiplicity)]
+    basis.extend(
         n**power * root**n
-        for root, multiplicity in roots.items()
-        for power in range(multiplicity)
-    ]
+        for root in nonzero_roots
+        for power in range(roots.count(root))
+    )
     init = [sympy.Rational(v) for v in initial_values]
     a = sympy.Matrix([[term.subs(n, i) for term in basis] for i in range(len(basis))])
     b = sympy.Matrix(init)

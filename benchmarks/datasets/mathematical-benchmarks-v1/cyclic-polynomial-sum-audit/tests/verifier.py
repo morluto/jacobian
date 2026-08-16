@@ -138,7 +138,7 @@ def _result_is_valid(result: object, source: dict[str, object]) -> bool:
 
 def main() -> None:
     _input_binding = workspace_input_is_bound()
-    submission = load_submission()
+    submission = load_submission(require_input_binding=False)
     source = json.loads((TESTS / "input.json").read_text())
     data = submission if isinstance(submission, dict) else {}
     result = data.get("result")

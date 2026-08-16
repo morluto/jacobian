@@ -28,7 +28,7 @@ repos:
     rev: v2.16
     hooks:
       - id: vulture
-        args: ["src", "tests", "--min-confidence=80"]
+        args: ["src", "tests", "--min-confidence=80", "--ignore-names", "patched_root"]
 
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12

@@ -1,132 +1,132 @@
 {
-    "$defs": {
-        "rational": {
+  "$defs": {
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "levels": {
+          "items": {
             "additionalProperties": false,
             "properties": {
-                "denominator": {
-                    "minimum": 1,
-                    "type": "integer"
-                },
-                "numerator": {
-                    "type": "integer"
-                }
+              "event_mass": {
+                "$ref": "#/$defs/rational"
+              },
+              "index_end": {
+                "type": "integer"
+              },
+              "index_start": {
+                "type": "integer"
+              },
+              "interval_count": {
+                "type": "integer"
+              },
+              "level": {
+                "type": "integer"
+              }
             },
             "required": [
-                "numerator",
-                "denominator"
+              "level",
+              "interval_count",
+              "event_mass",
+              "index_start",
+              "index_end"
             ],
             "type": "object"
-        }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-        "result": {
+          },
+          "maxItems": 8,
+          "minItems": 8,
+          "type": "array"
+        },
+        "probability_argument": {
+          "additionalProperties": false,
+          "properties": {
+            "event_mass_formula": {
+              "additionalProperties": false,
+              "properties": {
+                "base": {
+                  "$ref": "#/$defs/rational"
+                },
+                "coefficient": {
+                  "$ref": "#/$defs/rational"
+                },
+                "exponent_coefficient": {
+                  "type": "integer"
+                },
+                "variable": {
+                  "const": "k"
+                }
+              },
+              "required": [
+                "coefficient",
+                "base",
+                "exponent_coefficient",
+                "variable"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "event_mass_formula"
+          ],
+          "type": "object"
+        },
+        "probes": {
+          "items": {
             "additionalProperties": false,
             "properties": {
-                "levels": {
-                    "items": {
-                        "additionalProperties": false,
-                        "properties": {
-                            "event_mass": {
-                                "$ref": "#/$defs/rational"
-                            },
-                            "index_end": {
-                                "type": "integer"
-                            },
-                            "index_start": {
-                                "type": "integer"
-                            },
-                            "interval_count": {
-                                "type": "integer"
-                            },
-                            "level": {
-                                "type": "integer"
-                            }
-                        },
-                        "required": [
-                            "level",
-                            "interval_count",
-                            "event_mass",
-                            "index_start",
-                            "index_end"
-                        ],
-                        "type": "object"
-                    },
-                    "maxItems": 8,
-                    "minItems": 8,
-                    "type": "array"
+              "hit_indices": {
+                "items": {
+                  "type": "integer"
                 },
-                "probability_argument": {
-                    "additionalProperties": false,
-                    "properties": {
-                        "event_mass_formula": {
-                            "additionalProperties": false,
-                            "properties": {
-                                "base": {
-                                    "$ref": "#/$defs/rational"
-                                },
-                                "coefficient": {
-                                    "$ref": "#/$defs/rational"
-                                },
-                                "exponent_coefficient": {
-                                    "type": "integer"
-                                },
-                                "variable": {
-                                    "const": "k"
-                                }
-                            },
-                            "required": [
-                                "coefficient",
-                                "base",
-                                "exponent_coefficient",
-                                "variable"
-                            ],
-                            "type": "object"
-                        }
-                    },
-                    "required": [
-                        "event_mass_formula"
-                    ],
-                    "type": "object"
-                },
-                "probes": {
-                    "items": {
-                        "additionalProperties": false,
-                        "properties": {
-                            "hit_indices": {
-                                "items": {
-                                    "type": "integer"
-                                },
-                                "maxItems": 8,
-                                "minItems": 8,
-                                "type": "array"
-                            },
-                            "point": {
-                                "$ref": "#/$defs/rational"
-                            }
-                        },
-                        "required": [
-                            "point",
-                            "hit_indices"
-                        ],
-                        "type": "object"
-                    },
-                    "maxItems": 8,
-                    "minItems": 3,
-                    "type": "array"
-                }
+                "maxItems": 8,
+                "minItems": 8,
+                "type": "array"
+              },
+              "point": {
+                "$ref": "#/$defs/rational"
+              }
             },
             "required": [
-                "levels",
-                "probes",
-                "probability_argument"
+              "point",
+              "hit_indices"
             ],
             "type": "object"
+          },
+          "maxItems": 8,
+          "minItems": 3,
+          "type": "array"
         }
-    },
-    "required": [
-        "result"
-    ],
-    "type": "object"
+      },
+      "required": [
+        "levels",
+        "probes",
+        "probability_argument"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "result"
+  ],
+  "type": "object"
 }

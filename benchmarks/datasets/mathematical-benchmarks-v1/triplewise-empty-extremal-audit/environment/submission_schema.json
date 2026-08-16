@@ -1,96 +1,96 @@
 {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-        "result": {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "constructions": {
+          "items": {
             "additionalProperties": false,
             "properties": {
-                "constructions": {
-                    "items": {
-                        "additionalProperties": false,
-                        "properties": {
-                            "family": {
-                                "items": {
-                                    "items": {
-                                        "maximum": 10,
-                                        "minimum": 0,
-                                        "type": "integer"
-                                    },
-                                    "type": "array",
-                                    "uniqueItems": true
-                                },
-                                "type": "array"
-                            },
-                            "n": {
-                                "enum": [
-                                    7,
-                                    8,
-                                    11
-                                ]
-                            }
-                        },
-                        "required": [
-                            "n",
-                            "family"
-                        ],
-                        "type": "object"
-                    },
-                    "maxItems": 3,
-                    "minItems": 3,
-                    "type": "array"
+              "family": {
+                "items": {
+                  "items": {
+                    "maximum": 10,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "type": "array",
+                  "uniqueItems": true
                 },
-                "maximum_formula": {
-                    "additionalProperties": false,
-                    "properties": {
-                        "constant": {
-                            "type": "integer"
-                        },
-                        "floor_half": {
-                            "type": "integer"
-                        },
-                        "linear": {
-                            "type": "integer"
-                        }
-                    },
-                    "required": [
-                        "constant",
-                        "linear",
-                        "floor_half"
-                    ],
-                    "type": "object"
-                },
-                "upper_bound_certificate": {
-                    "additionalProperties": false,
-                    "properties": {
-                        "singleton_cap": {
-                            "additionalProperties": false,
-                            "properties": {
-                                "variable": {
-                                    "const": "n"
-                                }
-                            },
-                            "required": [
-                                "variable"
-                            ],
-                            "type": "object"
-                        }
-                    },
-                    "required": [
-                        "singleton_cap"
-                    ],
-                    "type": "object"
-                }
+                "type": "array"
+              },
+              "n": {
+                "enum": [
+                  7,
+                  8,
+                  11
+                ]
+              }
             },
             "required": [
-                "maximum_formula",
-                "upper_bound_certificate",
-                "constructions"
+              "n",
+              "family"
             ],
             "type": "object"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "maximum_formula": {
+          "additionalProperties": false,
+          "properties": {
+            "constant": {
+              "type": "integer"
+            },
+            "floor_half": {
+              "type": "integer"
+            },
+            "linear": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "constant",
+            "linear",
+            "floor_half"
+          ],
+          "type": "object"
+        },
+        "upper_bound_certificate": {
+          "additionalProperties": false,
+          "properties": {
+            "singleton_cap": {
+              "additionalProperties": false,
+              "properties": {
+                "variable": {
+                  "const": "n"
+                }
+              },
+              "required": [
+                "variable"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "singleton_cap"
+          ],
+          "type": "object"
         }
-    },
-    "required": [
-        "result"
-    ],
-    "type": "object"
+      },
+      "required": [
+        "maximum_formula",
+        "upper_bound_certificate",
+        "constructions"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "result"
+  ],
+  "type": "object"
 }

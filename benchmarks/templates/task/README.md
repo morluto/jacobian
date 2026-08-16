@@ -27,9 +27,9 @@ as non-authoritative source material, if it is needed at all.
 The verifier must replay the claim from frozen `input.json`. Do not score a
 hidden `tests/expected.json` field, a lowest-terms rendering, a formula
 string, keyword-bearing prose, or a leaked derived conclusion. Do not default
-a witness path to `evidence/answer.txt`. Do not copy a universal certificate
-union into a generated family; each task's schema admits only the certificate
-that family can reward. Instruction, schema, solver, and verifier must accept
+a witness path to `evidence/answer.txt`. Do not copy a universal certificate union
+into a generated family; each task's schema admits only the certificate that
+family can reward. Instruction, schema, solver, and verifier must accept
 the same objects. Closed success variants omit inapplicable fields. See
 [authoring a Harbor benchmark task](../../../docs/how-to/author-harbor-benchmark-task.md)
 and [benchmark contracts](../../../docs/reference/evaluations/benchmark-contracts.md).

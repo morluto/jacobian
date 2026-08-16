@@ -8,9 +8,7 @@ must include `n`, the two floor values, the two nearest integers, and structured
 `{numerator, denominator}` rational lower/upper bounds for the product. Identify the final finite argmin.
 
 The verifier independently reconstructs all 2000 enclosures and the complete
-record sequence. Evidence is a matching JSON object (`application/json`) with
-`limitations`.
-
+record sequence. 
 This certifies only the frozen finite range for `(sqrt(2),sqrt(3))`; it does not
 establish a liminf or any case of Littlewood's conjecture.
 

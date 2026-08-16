@@ -165,7 +165,6 @@ def main() -> None:
     math_ok = bool(protocol_ok and _result_is_valid(result, source))
     reward = aggregate_reward(
         correctness=math_ok,
-        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     logs = Path("/logs/verifier")

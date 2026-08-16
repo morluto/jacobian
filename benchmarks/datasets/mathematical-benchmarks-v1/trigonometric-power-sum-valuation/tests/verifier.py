@@ -147,7 +147,6 @@ def main():
     )
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)

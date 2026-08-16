@@ -54,7 +54,7 @@ DISCRETE_LOGARITHM_OPERATION = number_theory_operation(
         ),
         example(
             "three_to_two_mod_five",
-            "Base and target must each be less than the modulus.",
+            "Solve 3^x = 2 modulo 5; base and target must each be less than the modulus.",
             {"base": 3, "target": 2, "modulus": 5},
         ),
     ),

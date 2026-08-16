@@ -62,7 +62,7 @@ BOOLEAN_OPERATIONS = (
             ),
             example(
                 "walsh_two_bit_function",
-                "The truth table length must be a power of two; here a 4-entry (2-bit) table.",
+                "Compute the Walsh spectrum of a 2-bit function; the truth-table length must be a power of two.",
                 {"truth_table": [1, 0, 0, 1]},
             ),
         ),

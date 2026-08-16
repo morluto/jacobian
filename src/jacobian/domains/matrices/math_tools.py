@@ -108,7 +108,7 @@ MATRIX_DETERMINANT_COMPUTE = matrix_operation(
         ),
         example(
             "determinant_3x3_identity",
-            "The matrix must be square (rows == columns); a 3x3 identity has determinant 1.",
+            "Compute the determinant of a 3x3 identity (1); the matrix must be square (rows == columns).",
             {
                 "matrix": {
                     "entries": [
@@ -205,7 +205,7 @@ MATRIX_OPERATIONS = (
             ),
             example(
                 "solve_3x3_diagonal",
-                "The matrix must be square and rhs length must match the order.",
+                "Solve a 3x3 diagonal system; the matrix must be square and rhs length must match its order.",
                 {
                     "matrix": {
                         "entries": [
@@ -253,7 +253,7 @@ MATRIX_OPERATIONS = (
             ),
             example(
                 "adjugate_3x3_diagonal",
-                "The matrix must be square; here a 3x3 diagonal matrix.",
+                "Compute the adjugate of a 3x3 diagonal matrix; the matrix must be square.",
                 {
                     "matrix": {
                         "entries": [["2", "0", "0"], ["0", "3", "0"], ["0", "0", "4"]]
@@ -280,7 +280,7 @@ MATRIX_OPERATIONS = (
             ),
             example(
                 "inverse_diagonal_3x3",
-                "The matrix must be square and nonsingular; here a 3x3 diagonal matrix.",
+                "Compute the inverse of a 3x3 diagonal matrix; the matrix must be square and nonsingular.",
                 {
                     "matrix": {
                         "entries": [["2", "0", "0"], ["0", "3", "0"], ["0", "0", "4"]]
@@ -307,7 +307,7 @@ MATRIX_OPERATIONS = (
             ),
             example(
                 "trace_diagonal_3x3",
-                "The matrix must be square; here the trace of a 3x3 diagonal is 6.",
+                "Compute the trace (6) of a 3x3 diagonal matrix; the matrix must be square.",
                 {
                     "matrix": {
                         "entries": [["1", "0", "0"], ["0", "2", "0"], ["0", "0", "3"]]
@@ -374,7 +374,7 @@ MATRIX_OPERATIONS = (
             ),
             example(
                 "multiply_square_matrices",
-                "The left column count must equal the right row count; a 2x2 by 2x2 product.",
+                "Multiply two 2x2 matrices; the left column count must equal the right row count.",
                 {
                     "left": {
                         "entries": [
@@ -483,7 +483,7 @@ MATRIX_OPERATIONS = (
             ),
             example(
                 "characteristic_diagonal_3x3",
-                "The matrix must be square; here the characteristic polynomial of a diagonal 3x3.",
+                "Compute the characteristic polynomial of a diagonal 3x3; the matrix must be square.",
                 {
                     "matrix": {
                         "entries": [
@@ -561,7 +561,7 @@ MATRIX_OPERATIONS = (
             ),
             example(
                 "permanent_identity_3x3",
-                "The matrix must be square; here the permanent of the 3x3 identity is 1.",
+                "Compute the permanent (1) of a 3x3 identity; the matrix must be square.",
                 {
                     "matrix": {
                         "entries": [

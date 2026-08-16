@@ -48,7 +48,7 @@ MODULAR_OPERATIONS = (
             ),
             example(
                 "jacobi_7_15",
-                "The denominator n must be odd; here (7/15).",
+                "Compute the Jacobi symbol (7/15); the denominator n must be odd.",
                 {"a": "7", "n": 15},
             ),
         ),
@@ -125,7 +125,7 @@ MODULAR_OPERATIONS = (
         examples=(
             example(
                 "cubic_residue_image_mod_7",
-                "Enumerate the complete image of four times x cubed modulo 7.",
+                "Enumerate four times x cubed modulo 7; variable names and exponent vectors must be unique and ordered, with canonical residues.",
                 {
                     "modulus": 7,
                     "variables": [
@@ -157,7 +157,7 @@ MODULAR_OPERATIONS = (
         examples=(
             example(
                 "cubic_assignment_ledger_mod_7",
-                "Compute the assignment ledger for four times x cubed modulo 7.",
+                "Compute the assignment ledger for four times x cubed modulo 7; names and exponent vectors must be unique and ordered.",
                 {
                     "modulus": 7,
                     "variables": [
@@ -188,7 +188,7 @@ MODULAR_OPERATIONS = (
             ),
             example(
                 "crt_three_congruences",
-                "Residues and moduli must be equal-length arrays; each residue must be canonical for its modulus.",
+                "Solve three congruences; residues and moduli must have equal lengths and each residue must be canonical.",
                 {"residues": [1, 4, 0], "moduli": [2, 5, 7]},
             ),
         ),

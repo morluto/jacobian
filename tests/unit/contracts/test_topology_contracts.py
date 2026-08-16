@@ -93,6 +93,18 @@ def test_canonical_complex_composes_as_the_authoritative_object() -> None:
     assert tuple(group.betti_number for group in homology.groups) == (1, 1)
 
 
+def test_integral_homology_runs_through_the_public_operation() -> None:
+    complex_ = _canonical_complex(("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c")))
+    operation = _CANALOG.operation("topology.simplicial_homology.integral.compute")
+    assert operation is not None
+
+    result = operation.run(IntegralSimplicialHomologyRequest(complex=complex_))
+
+    assert result.complex_digest == complex_.complex_digest
+    assert result.coefficient_ring == "ZZ"
+    assert tuple(group.betti_number for group in result.groups) == (1, 1)
+
+
 def test_chain_bounds_are_checked_after_materialization_but_before_computation() -> (
     None
 ):

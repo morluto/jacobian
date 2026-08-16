@@ -181,7 +181,7 @@ PROJECTIVE_LINE_ARRANGEMENT_OPERATION: MathTool[
         ),
         example(
             "three_coordinate_lines",
-            "Labels must be unique and lines must not be projectively duplicate.",
+            "Compute the flat lattice of three coordinate lines; labels must be unique and lines projectively distinct.",
             {
                 "lines": [
                     {

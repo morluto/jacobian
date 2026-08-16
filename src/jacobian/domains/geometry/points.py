@@ -133,7 +133,7 @@ POINT_OPERATIONS = (
             ),
             example(
                 "triangle_convex_hull",
-                "Points must be unique; here three distinct points forming a triangle.",
+                "Construct the convex hull of a triangle; the input points must be unique.",
                 {
                     "points": [
                         {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},

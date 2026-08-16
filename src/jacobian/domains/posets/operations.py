@@ -359,7 +359,7 @@ FINITE_POSET_OPERATIONS: MathTools = (
             ),
             example(
                 "three_element_chain",
-                "The relation must be antisymmetric and acyclic; a three-element chain 0<1<2.",
+                "Materialize the chain 0<1<2; the relation must be antisymmetric and acyclic.",
                 {
                     "elements": ["0", "1", "2"],
                     "relation": [
@@ -425,7 +425,7 @@ FINITE_POSET_OPERATIONS: MathTools = (
             ),
             example(
                 "diamond_complete_mobius_scope",
-                "The poset must have at most 14 elements for the linear extension count.",
+                "Count the diamond's linear extensions; the poset must have at most 14 elements.",
                 {"poset": _MATERIALIZED_DIAMOND},
             ),
         ),
@@ -456,7 +456,7 @@ FINITE_POSET_OPERATIONS: MathTools = (
             ),
             example(
                 "diamond_selected_interval",
-                "For SELECTED_INTERVALS scope, intervals must have lower <= upper in the poset.",
+                "Compute the selected Möbius interval [0,1]; selected endpoints must satisfy lower <= upper in the poset.",
                 {
                     "poset": _MATERIALIZED_DIAMOND,
                     "scope": "SELECTED_INTERVALS",

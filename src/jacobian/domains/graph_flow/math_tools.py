@@ -81,7 +81,7 @@ GRAPH_FLOW_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             ),
             example(
                 "four_vertex_max_flow",
-                "Source and sink must be distinct and in 0..vertex_count-1.",
+                "Compute a maximum flow; edge endpoints, source, and sink must be in 0..vertex_count-1 and source must differ from sink.",
                 {
                     "graph": {
                         "vertex_count": 4,
@@ -146,7 +146,7 @@ GRAPH_FLOW_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             ),
             example(
                 "four_vertex_min_cut",
-                "Source and sink must be distinct and in 0..vertex_count-1.",
+                "Compute a minimum s-t cut; edge endpoints, source, and sink must be in 0..vertex_count-1 and source must differ from sink.",
                 {
                     "graph": {
                         "vertex_count": 4,

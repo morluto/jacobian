@@ -518,7 +518,7 @@ FINITE_PROBABILITY_OPERATIONS = (
             ),
             example(
                 "fair_die_event_subset",
-                "event_values must be strictly increasing, bounded, and a subset of the distribution support.",
+                "Compute a fair-die event probability; event values must be increasing, bounded, and supported by the distribution.",
                 {
                     "distribution": _FAIR_DIE_3,
                     "event_values": [
@@ -584,7 +584,7 @@ FINITE_PROBABILITY_OPERATIONS = (
             ),
             example(
                 "fair_die_pair_merge",
-                "mapping sources must exactly cover the distribution atoms in canonical order.",
+                "Push forward a fair die by merging atoms; mapping sources must cover distribution atoms in canonical order.",
                 {
                     "distribution": _FAIR_DIE_3,
                     "mapping": [
@@ -632,7 +632,7 @@ FINITE_PROBABILITY_OPERATIONS = (
             ),
             example(
                 "die_plus_bit",
-                "pair product must not exceed 4096 and aggregated atom count must not exceed 256.",
+                "Convolve a fair die with a fair bit; pair product and aggregated atoms have bounded limits.",
                 {"left": _FAIR_DIE_3, "right": _FAIR_BIT},
             ),
         ),
@@ -741,7 +741,7 @@ FINITE_PROBABILITY_OPERATIONS = (
             ),
             example(
                 "square_terminal_reliability",
-                "edge_probabilities must cover graph edges in canonical order; terminals must be two distinct declared vertices.",
+                "Compute square-graph terminal reliability; edge probabilities cover edges canonically and terminals are distinct declared vertices.",
                 _SQUARE_GRAPH,
             ),
         ),

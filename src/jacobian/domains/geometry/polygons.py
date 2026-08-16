@@ -44,7 +44,7 @@ POLYGON_OPERATIONS = (
         examples=(
             example(
                 "unit_square_complete_diagonals",
-                "Triangulate a unit square with one weight for each non-hull diagonal.",
+                "Triangulate a unit square; use a strict CCW convex polygon and ordered weights for every non-hull diagonal.",
                 {
                     "polygon": {"points": _UNIT_SQUARE},
                     "diagonal_weights": [
@@ -88,7 +88,7 @@ POLYGON_OPERATIONS = (
         examples=(
             example(
                 "unit_square_is_simple",
-                "Check every edge pair of a unit-square ring.",
+                "Check every edge pair of a unit-square ring; a simple polygon's adjacent edges meet only at endpoints.",
                 {"points": _UNIT_SQUARE},
             ),
         ),
@@ -109,7 +109,7 @@ POLYGON_OPERATIONS = (
         examples=(
             example(
                 "unit_square_center",
-                "Classify the center of a unit square.",
+                "Classify the center of a unit square; the polygon must be simple.",
                 {
                     "polygon": {"points": _UNIT_SQUARE},
                     "point": {

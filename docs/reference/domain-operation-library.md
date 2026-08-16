@@ -32,6 +32,14 @@ the operation and adapt it when a request contract changes. The catalog test
 checks every published example at the request boundary; the operation's owning
 tests should exercise any nontrivial example behavior.
 
+Write an invocation example's description in two parts: first state the
+computation the operation performs on the supplied values, then state the
+important precondition that makes the example valid. For example, use
+`Compute the exact eigenvalues of [[1, 2], [3, 4]]; the matrix must be square
+and rectangular.` The first part tells an agent what the operation does; the
+second part teaches the input rule it must preserve. A precondition by itself,
+such as `The matrix must be square`, is not an adequate example description.
+
 Examples help an agent form its first request without guessing. JSON Schema can
 name fields and simple bounds, but it cannot fully communicate validator-owned
 rules such as nested value shape, canonical ordering, coupled fields, or the

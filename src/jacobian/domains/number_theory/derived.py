@@ -45,7 +45,7 @@ DERIVED_NUMBER_THEORY_OPERATIONS = (
             ),
             example(
                 "legendre_3_mod_11",
-                "The prime must be odd; here (3/11).",
+                "Compute the Legendre symbol (3/11); the prime denominator must be odd.",
                 {"a": 3, "prime": 11},
             ),
         ),

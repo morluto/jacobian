@@ -64,7 +64,7 @@ GROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "cyclic_group_order_4",
-                "Compute the order of the cyclic group C4.",
+                "Compute C4's order; each generator must be a bijection of 0..degree-1.",
                 {
                     "degree": 4,
                     "generators": [[1, 2, 3, 0]],
@@ -86,7 +86,7 @@ GROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "four_cycle_order",
-                "Compute the order of the 4-cycle (0 1 2 3).",
+                "Compute the 4-cycle's order; its generator must be a bijection of 0..degree-1.",
                 {
                     "degree": 4,
                     "generator": [1, 2, 3, 0],
@@ -108,7 +108,7 @@ GROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "cyclic_orbit",
-                "Compute the orbit of point 0 under the cyclic group C4.",
+                "Compute point 0's orbit; generators must be bijections and points lie in 0..degree-1.",
                 {
                     "degree": 4,
                     "generators": [[1, 2, 3, 0]],

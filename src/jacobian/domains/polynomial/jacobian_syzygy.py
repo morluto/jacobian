@@ -372,7 +372,8 @@ GRADED_JACOBIAN_SYZYGY_OPERATION = polynomial_operation(
         OperationExample(
             name="labelled-linear-factor-product",
             description=(
-                "Bind h=x*y*z directly to three labelled rational linear factors."
+                "Bind h=x*y*z to labelled factors; supply exactly one source form, "
+                "with a matching three-variable order and unique labels."
             ),
             input={
                 "linear_factors": [

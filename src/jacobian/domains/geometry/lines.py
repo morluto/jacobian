@@ -54,7 +54,7 @@ LINE_OPERATIONS = (
             ),
             example(
                 "parallel_diagonal_lines",
-                "Each line is defined by two distinct points; here two parallel diagonals.",
+                "Decide whether two diagonal lines are parallel; each line needs two distinct points.",
                 {
                     "first_line": {
                         "first": {

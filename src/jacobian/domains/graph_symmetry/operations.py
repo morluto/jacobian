@@ -129,28 +129,30 @@ GRAPH_SYMMETRY_OPERATIONS: MathTools = (
         ),
         examples=(
             example(
-                "cycle_rotation_orbits",
-                "Compute vertex and edge orbits of one declared quarter-turn of C4.",
+                "path_reflection_orbits",
+                "Compute path vertex and edge orbits; the generator must be a total vertex permutation preserving colors and edges.",
                 {
                     "graph": {
-                        "vertices": ["a", "b", "c", "d"],
+                        "vertices": ["a", "b", "c"],
                         "edges": [
                             ["a", "b"],
-                            ["a", "d"],
                             ["b", "c"],
-                            ["c", "d"],
                         ],
                     },
                     "generators": [
                         {
-                            "generator_id": "quarter_turn",
+                            "generator_id": "reflection",
                             "mapping": {
-                                "a": "b",
-                                "b": "c",
-                                "c": "d",
-                                "d": "a",
+                                "a": "c",
+                                "b": "b",
+                                "c": "a",
                             },
                         }
+                    ],
+                    "vertex_colors": [
+                        {"vertex": "a", "color": "endpoint"},
+                        {"vertex": "b", "color": "middle"},
+                        {"vertex": "c", "color": "endpoint"},
                     ],
                 },
             ),

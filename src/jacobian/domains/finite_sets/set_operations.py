@@ -31,7 +31,7 @@ SET_OPERATION_OPERATIONS = (
             ),
             example(
                 "union_disjoint_sets",
-                "Each set's elements must be unique; here two disjoint sets of two elements.",
+                "Compute the union of two disjoint sets; each set's elements must be unique.",
                 {"left": {"elements": ["1", "5"]}, "right": {"elements": ["2", "3"]}},
             ),
         ),

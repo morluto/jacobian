@@ -64,7 +64,7 @@ SYMBOLIC_MATRIX_OPERATIONS = (
         examples=(
             example(
                 "symbolic_determinant_two_by_two",
-                "Compute the determinant of [[a, c], [b, d]].",
+                "Compute the determinant of [[a, c], [b, d]]; the matrix must be square and rectangular over declared variables.",
                 {
                     "matrix": {
                         "variables": ["a", "b", "c", "d"],
@@ -89,7 +89,7 @@ SYMBOLIC_MATRIX_OPERATIONS = (
         examples=(
             example(
                 "symbolic_rank_full",
-                "Compute the rank of a 2x2 symbolic matrix.",
+                "Compute the rank of a 2x2 symbolic matrix; rows must be nonempty and equal length over declared variables.",
                 {
                     "matrix": {
                         "variables": ["a", "b", "c", "d"],
@@ -114,7 +114,7 @@ SYMBOLIC_MATRIX_OPERATIONS = (
         examples=(
             example(
                 "symbolic_charpoly_two_by_two",
-                "Compute the characteristic polynomial of [[a, c], [b, d]].",
+                "Compute the characteristic polynomial of [[a, c], [b, d]]; the matrix must be square and rectangular.",
                 {
                     "matrix": {
                         "variables": ["a", "b", "c", "d"],
@@ -139,7 +139,7 @@ SYMBOLIC_MATRIX_OPERATIONS = (
         examples=(
             example(
                 "symbolic_eigenvalues_two_by_two",
-                "Compute the eigenvalues of [[1, 2], [3, 4]].",
+                "Compute the exact eigenvalues of [[1, 2], [3, 4]]; the matrix must be square and rectangular.",
                 {
                     "matrix": {
                         "variables": [],

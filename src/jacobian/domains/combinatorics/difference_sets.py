@@ -205,7 +205,7 @@ DIFFERENCE_SET_OPERATIONS = (
         examples=(
             example(
                 "mian_chowla_prefix",
-                "Decide whether 1, 2, 4, 8, 13 is Sidon over the integers.",
+                "Decide whether 1, 2, 4, 8, 13 is Sidon; the integer-set elements must be unique.",
                 {"elements": ["1", "2", "4", "8", "13"]},
             ),
         ),

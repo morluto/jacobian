@@ -53,7 +53,7 @@ CHROMATIC_NUMBER_OPERATION = MathTool(
     examples=(
         example(
             "triangle_chromatic_number",
-            "Vertices must be unique and edges must not self-loop; a triangle has chromatic number 3.",
+            "Compute a triangle's chromatic number (3); vertices must be unique and edges must not self-loop.",
             {
                 "graph": {
                     "vertices": ["a", "b", "c"],

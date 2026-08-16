@@ -41,6 +41,14 @@ contract through a failed call, a lengthy ad-hoc script, or trial and error.
 Examples illustrate a valid representation; they do not prescribe a proof
 strategy or restrict how operations may be composed.
 
+Avoid **validator-only public contracts**. Do not introduce a required input
+representation solely through a Pydantic validator and expect callers to infer
+it from an error. When a rule cannot be expressed as an ordinary JSON Schema
+constraint, pair the validator with schema-visible field or model guidance and
+a valid invocation example. Diagnostics remain the recovery path for malformed
+requests; they are not the primary documentation for an operation's wire
+contract.
+
 Use maintained backends through thin private adapters. Direct bounded results
 compose by being supplied as the next operation's typed
 payload.

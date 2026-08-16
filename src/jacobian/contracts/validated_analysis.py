@@ -230,3 +230,107 @@ class RationalLinearProgramResult(ContractModel):
         if not optimal and any(value is not None for value in dual_fields):
             raise ValueError("only an optimal result can carry dual data")
         return self
+
+
+type IntervalExpressionNodeOp = Literal[
+    "const",
+    "var",
+    "add",
+    "sub",
+    "mul",
+    "div",
+    "pow",
+    "neg",
+    "exp",
+    "log",
+    "sqrt",
+    "sin",
+    "cos",
+]
+
+
+class IntervalExpressionNode(ContractModel):
+    """One node of a bounded univariate expression tree."""
+
+    op: IntervalExpressionNodeOp
+    value: CanonicalRational | None = None
+    exponent: StrictInt | None = None
+    children: tuple[IntervalExpressionNode, ...] = Field(default=(), max_length=2)
+
+    @model_validator(mode="after")
+    def validate_node(self) -> Self:
+        if self.op == "const":
+            if self.value is None:
+                raise ValueError("const node requires a value")
+            require_bounded_rational(
+                self.value,
+                max_digits=MAX_RATIONAL_DIGITS,
+                label="interval-expression rational",
+            )
+            if self.children:
+                raise ValueError("const node must not have children")
+        elif self.op == "var":
+            if self.children:
+                raise ValueError("var node must not have children")
+        elif self.op == "neg":
+            if len(self.children) != 1:
+                raise ValueError("neg node requires exactly one child")
+        elif self.op in ("add", "sub", "mul", "div"):
+            if len(self.children) != 2:
+                raise ValueError(f"{self.op} node requires exactly two children")
+        elif self.op == "pow":
+            if len(self.children) != 1:
+                raise ValueError("pow node requires exactly one child")
+            if self.exponent is None or self.exponent == 0:
+                raise ValueError("pow node requires a nonzero exponent")
+        else:
+            if len(self.children) != 1:
+                raise ValueError(f"{self.op} node requires exactly one child")
+        return self
+
+
+class IntervalExpressionEnclosureRequest(ContractModel):
+    expression: IntervalExpressionNode
+    argument: CanonicalRational
+    precision_bits: StrictInt = Field(default=128, ge=32, le=4096)
+
+    @model_validator(mode="after")
+    def bound_argument_size(self) -> Self:
+        require_bounded_rational(
+            self.argument,
+            max_digits=MAX_RATIONAL_DIGITS,
+            label="interval-enclosure rational",
+        )
+        return self
+
+
+class IntervalExpressionEnclosureResult(ContractModel):
+    status: Literal[
+        "ENCLOSED", "NONFINITE", "TIMEOUT", "BACKEND_ERROR", "INVALID"
+    ]
+    precision_bits: StrictInt = Field(ge=32, le=4096)
+    lower: ExactDyadic | None = None
+    upper: ExactDyadic | None = None
+    relative_accuracy_bits: StrictInt | None = None
+    exact: bool = False
+    detail: str = Field(min_length=1, max_length=1024)
+
+    @model_validator(mode="after")
+    def bind_enclosure_to_status(self) -> Self:
+        enclosed = self.status == "ENCLOSED"
+        if enclosed != (self.lower is not None and self.upper is not None):
+            raise ValueError("only an enclosed result may carry dyadic endpoints")
+        if not enclosed and (self.relative_accuracy_bits is not None or self.exact):
+            raise ValueError("a non-enclosure cannot claim accuracy or exactness")
+        if enclosed:
+            lower = self.lower
+            upper = self.upper
+            if lower is None or upper is None:
+                raise ValueError("only an enclosed result may carry dyadic endpoints")
+            if lower.as_fraction() > upper.as_fraction():
+                raise ValueError("enclosure lower endpoint exceeds upper endpoint")
+            if self.exact != (self.relative_accuracy_bits is None):
+                raise ValueError(
+                    "exact enclosures omit relative accuracy; inexact ones report it"
+                )
+        return self

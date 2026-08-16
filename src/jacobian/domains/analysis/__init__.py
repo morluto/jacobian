@@ -11,6 +11,6 @@ __all__ = ["real_analysis_operations"]
 
 
 def real_analysis_operations() -> MathTools:
-    from jacobian.domains.analysis.operations import POINT_ENCLOSURE_OPERATIONS
+    from jacobian.domains.analysis.operations import ANALYSIS_OPERATIONS
 
-    return POINT_ENCLOSURE_OPERATIONS
+    return ANALYSIS_OPERATIONS

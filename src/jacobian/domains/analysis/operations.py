@@ -7,8 +7,11 @@ from jacobian.contracts.validated_analysis import (
     ArbPointEnclosureRequest,
     ArbPointEnclosureResult,
     ExactDyadic,
+    IntervalExpressionEnclosureRequest,
+    IntervalExpressionEnclosureResult,
 )
 from jacobian.domains._examples import example
+from jacobian.domains.analysis.expression_enclosure import compute_expression_enclosure
 from jacobian.math_tools import MathTool
 
 
@@ -51,7 +54,7 @@ def _point_enclosure(
     )
 
 
-POINT_ENCLOSURE_OPERATIONS = (
+ANALYSIS_OPERATIONS: tuple[MathTool, ...] = (
     MathTool(
         operation_id="analysis.real_function.point_enclosure.compute",
         version="1",
@@ -93,6 +96,48 @@ POINT_ENCLOSURE_OPERATIONS = (
             ),
         ),
     ),
+    MathTool(
+        operation_id="interval.compute.enclosure",
+        version="1",
+        title="Enclose a user-defined expression at a rational point",
+        description=(
+            "Use Arb ball arithmetic to enclose a user-supplied univariate "
+            "expression tree at one exact rational point with declared "
+            "precision.  Supports +, -, *, /, ^n, exp, log, sqrt, sin, cos."
+        ),
+        request_type=IntervalExpressionEnclosureRequest,
+        result_type=IntervalExpressionEnclosureResult,
+        run=compute_expression_enclosure,
+        tags=(
+            "analysis",
+            "validated",
+            "arb",
+            "enclosure",
+            "bounded",
+            "interval",
+            "expression",
+            "transcendental",
+        ),
+        examples=(
+            example(
+                "log_137_80",
+                "Enclose log(137/80) at 128-bit precision.",
+                {
+                    "expression": {
+                        "op": "log",
+                        "children": [
+                            {"op": "const", "value": {"num": "137", "den": "80"}}
+                        ],
+                    },
+                    "argument": {"num": "1", "den": "1"},
+                    "precision_bits": 128,
+                },
+            ),
+        ),
+    ),
 )
 
-__all__ = ["POINT_ENCLOSURE_OPERATIONS"]
+# Backward-compatible alias
+POINT_ENCLOSURE_OPERATIONS = ANALYSIS_OPERATIONS
+
+__all__ = ["POINT_ENCLOSURE_OPERATIONS", "ANALYSIS_OPERATIONS"]

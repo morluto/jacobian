@@ -82,10 +82,8 @@ testpaths = [
 timeout_method = "thread"
 markers = [
     "requires_provider(name): test requires a production provider readiness probe",
-    "performance: benchmark or timing evidence excluded from correctness lanes",
     "property: property-based invariant tests",
     "exhaustive: broad finite reference sweeps run by scheduled validation",
-    "destructive_process: test requires child-process isolation and group termination",
 ]
 
 [tool.ruff]

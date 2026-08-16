@@ -242,10 +242,10 @@ success criteria are concrete.
 ## Test ownership and selection
 
 Test directories define semantic ownership: `tests/unit`, `tests/component`,
-`tests/domain`, `tests/composition`, `tests/boundary`, and `tests/e2e`. Use the
+`tests/domain`, `tests/composition`, and `tests/boundary`. Use the
 matching `make test-*` target as the canonical entry point. Markers are retained
-only when they alter execution: `requires_provider(name)`, `performance`,
-`property`, `exhaustive`, and `destructive_process`. They do not replace
+only when they alter execution: `requires_provider(name)`,
+`property`, and `exhaustive`. They do not replace
 directory ownership. Scheduled validation owns `make test-exhaustive`; keep a
 representative behavioral case in the ordinary owning lane.
 

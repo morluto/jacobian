@@ -11,6 +11,9 @@ __all__ = ["number_theory_operations"]
 
 
 def number_theory_operations() -> MathTools:
+    from jacobian.domains.number_theory.arithmetic_function_math_tools import (
+        ARITHMETIC_FUNCTION_OPERATIONS,
+    )
     from jacobian.domains.number_theory.derived import DERIVED_NUMBER_THEORY_OPERATIONS
     from jacobian.domains.number_theory.divisibility import DIVISIBILITY_OPERATIONS
     from jacobian.domains.number_theory.finite_abelian_groups import (
@@ -29,4 +32,5 @@ def number_theory_operations() -> MathTools:
         *MODULAR_IDENTITY_OPERATIONS,
         *DERIVED_NUMBER_THEORY_OPERATIONS,
         FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION,
+        *ARITHMETIC_FUNCTION_OPERATIONS,
     )

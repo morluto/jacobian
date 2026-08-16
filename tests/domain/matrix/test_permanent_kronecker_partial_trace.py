@@ -23,7 +23,7 @@ from jacobian.domains.matrices.operations import (
 
 
 def _cr(num: int, den: int = 1) -> CanonicalRational:
-    return CanonicalRational(num=str(num), den=str(den))
+    return CanonicalRational.from_integer_ratio(num, den)
 
 
 def _matrix(entries: list[list[dict[str, str]]]) -> RationalMatrix:

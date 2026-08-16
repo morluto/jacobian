@@ -118,6 +118,22 @@ def test_smt_request_rejects_state_changes_after_check_sat() -> None:
         )
 
 
+def test_smt_request_rejects_multiple_check_sat_commands() -> None:
+    with pytest.raises(ValueError, match="exactly one check-sat"):
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib="(set-logic QF_LIA)\n(check-sat)\n(check-sat)\n",
+        )
+
+
+def test_smt_request_rejects_non_ascii_input() -> None:
+    with pytest.raises(ValueError, match="must be ASCII"):
+        SmtSolveRequest(
+            logic=SmtLogic.QF_LIA,
+            smtlib="(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n\xe9\n(check-sat\n",
+        )
+
+
 def test_lean_check_returns_typed_rejection_without_retaining_source(
     monkeypatch,
 ) -> None:

@@ -96,7 +96,7 @@ def test_chain_bounds_are_checked_after_materialization_but_before_computation()
     )
     complex_ = _canonical_complex(vertices, facets)
 
-    assert complex_.closure_size == 8 * 255
+    assert complex_.closure_size == 8 * (2**8 - 1)  # 8 simplices, each closing to 2^8-1 faces
     with pytest.raises(ValidationError, match="chain group"):
         SimplicialHomologyRequest(complex=complex_, prime=2)
 
@@ -141,7 +141,7 @@ def test_integral_homology_has_tighter_certificate_size_bounds() -> None:
         projective_plane_facets,
     )
     assert max(total_rank_too_large.f_vector) <= 16
-    assert sum(total_rank_too_large.f_vector) == 33
+    assert sum(total_rank_too_large.f_vector) == 33  # exceeds the 32-bound
     with pytest.raises(ValidationError, match="total chain rank at most 32"):
         IntegralSimplicialHomologyRequest(complex=total_rank_too_large)
 

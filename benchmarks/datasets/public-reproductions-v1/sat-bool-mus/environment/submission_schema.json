@@ -1,59 +1,59 @@
 {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-        "result": {
-            "oneOf": [
-                {
-                    "additionalProperties": false,
-                    "properties": {
-                        "status": {
-                            "const": "SATISFIABLE"
-                        },
-                        "assignment": {
-                            "additionalProperties": false,
-                            "properties": {
-                                "x": {
-                                    "type": "boolean"
-                                },
-                                "y": {
-                                    "type": "boolean"
-                                },
-                                "z": {
-                                    "type": "boolean"
-                                }
-                            },
-                            "required": [
-                                "x",
-                                "y",
-                                "z"
-                            ],
-                            "type": "object"
-                        }
-                    },
-                    "required": [
-                        "status",
-                        "assignment"
-                    ],
-                    "type": "object"
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "result": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "assignment": {
+              "additionalProperties": false,
+              "properties": {
+                "x": {
+                  "type": "boolean"
                 },
-                {
-                    "additionalProperties": false,
-                    "properties": {
-                        "status": {
-                            "const": "UNSATISFIABLE"
-                        }
-                    },
-                    "required": [
-                        "status"
-                    ],
-                    "type": "object"
+                "y": {
+                  "type": "boolean"
+                },
+                "z": {
+                  "type": "boolean"
                 }
-            ]
+              },
+              "required": [
+                "x",
+                "y",
+                "z"
+              ],
+              "type": "object"
+            },
+            "status": {
+              "const": "SATISFIABLE"
+            }
+          },
+          "required": [
+            "status",
+            "assignment"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "const": "UNSATISFIABLE"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
         }
-    },
-    "required": [
-        "result"
-    ],
-    "type": "object"
+      ]
+    }
+  },
+  "required": [
+    "result"
+  ],
+  "type": "object"
 }

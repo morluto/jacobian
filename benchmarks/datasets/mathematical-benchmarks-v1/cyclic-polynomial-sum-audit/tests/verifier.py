@@ -145,15 +145,15 @@ def main() -> None:
     math_correct = bool(
         isinstance(submission, dict) and _result_is_valid(result, source)
     )
-    correct = bool(_input_binding and math_correct)
+    reward = float(_input_binding and math_correct)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": 1.0 if correct else 0.0,
-                "reward": float(correct),
+                "witness_validity": 1.0 if math_correct else 0.0,
+                "reward": reward,
             }
         )
     )

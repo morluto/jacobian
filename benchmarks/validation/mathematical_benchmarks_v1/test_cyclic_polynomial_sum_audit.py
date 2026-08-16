@@ -63,3 +63,12 @@ def test_rejects_corrupted_algebraic_certificates(
     rejected = _run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
     assert rejected.reward == 0.0
+
+
+def test_input_binding_failure_keeps_witness_validity(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    _write_json(app / "input.json", {"task_id": "unrelated"})
+    result = _run_verifier(task, app, logs)
+    assert result.details["correctness"] == 1.0
+    assert result.details["witness_validity"] == 1.0
+    assert result.reward == 0.0

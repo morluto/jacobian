@@ -106,6 +106,7 @@ BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
     ("jacobian.domains.submodular_opt", "submodular_opt_operations"),
     ("jacobian.domains.polynomial_maps", "polynomial_map_operations"),
     ("jacobian.domains.euclidean_geometry", "euclidean_geometry_operations"),
+    ("jacobian.domains.finite_game_theory", "finite_game_theory_operations"),
 )
 
 

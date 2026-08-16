@@ -5,7 +5,7 @@ runtime.  It enforces nineteen focused invariants:
 
 1. **subprocess-confined**: direct ``subprocess`` usage and ``os.execvpe``/
    ``os.execvp`` are allowed only in ``bounded_process.py``,
-   ``command_runner.py``, and explicit e2e/process-boundary test fixture
+   ``command_runner.py``, and explicit process-boundary test fixture
    files listed by exact path.  Product code and mathematical checkers must
    route through the bounded process gateway.
 
@@ -116,18 +116,14 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/boundary/process/public_api/test_import_isolation.py"),
         # Tooling boundary tests invoke CI scripts and installers as subprocesses.
         PurePosixPath("tests/boundary/process/tooling/ci.py"),
-        PurePosixPath("tests/boundary/process/tooling/test_deploy_installer.py"),
         PurePosixPath("tests/boundary/process/tooling/test_supervised_make_lanes.py"),
         PurePosixPath("tests/boundary/process/tooling/test_cli_import_surface.py"),
-        PurePosixPath("tests/boundary/process/tooling/test_source_agent_bootstrap.py"),
         PurePosixPath("tests/boundary/process/tooling/test_make_help.py"),
         # MCP transport boundary tests spawn server processes.
         PurePosixPath("tests/boundary/mcp/test_mcp_entrypoint.py"),
         PurePosixPath("tests/boundary/mcp/test_remote_mcp_auth.py"),
         # Matrix provider component tests spawn matrix executables.
-        PurePosixPath("tests/component/providers/matrix/test_matrix_operations.py"),
         # Real analysis domain test uses external analysis executables.
-        PurePosixPath("tests/domain/analysis/test_real_analysis.py"),
         # This checker's own test file uses subprocess in synthetic probes.
         PurePosixPath("tests/unit/tooling/test_architecture_process_policies.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_harbor_contracts.py"),

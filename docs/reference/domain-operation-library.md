@@ -63,9 +63,14 @@ reference.
 ## Operation preflight
 
 Do not add a public operation until its stated mathematical claim has a bounded,
-appropriate backend method. A heuristic or approximation may be useful only when
-its result contract states that limited scope. It must not return a negative
-decision, exact invariant, or optimum that the method cannot establish.
+appropriate implementation. A public operation is the `MathTool` contract—its
+identifier, typed request and result, scope, and mathematical claim—not merely
+a native Jacobian function or maintained backend routine. It may adapt either,
+but its claim must be no broader than the implementation can establish.
+
+A heuristic or approximation may be useful only when its result contract states
+that limited scope. It must not return a negative decision, exact invariant, or
+optimum that the implementation cannot establish.
 
 Before declaring the operation, provide tests for:
 
@@ -77,6 +82,6 @@ Before declaring the operation, provide tests for:
 - request validation proving schema-valid inputs reach the backend without a
   representation or shape failure.
 
-If no maintained bounded method can support the public claim, do not expose the
-operation yet. A backend import is not evidence that its result has the desired
-mathematical semantics.
+If no bounded implementation can support the public claim, do not expose the
+operation yet. A backend import or native function is not evidence that its
+result has the desired mathematical semantics.

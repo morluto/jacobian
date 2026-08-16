@@ -54,9 +54,7 @@ class SymbolicMatrixRequest(ContractModel):
     matrix: SymbolicMatrix
 
     @model_validator(mode="after")
-    def require_variables_nonempty(self) -> Self:
-        if not self.matrix.variables:
-            raise ValueError("symbolic matrix operations require at least one variable")
+    def require_request_consistency(self) -> Self:
         return self
 
 
@@ -73,3 +71,35 @@ class SymbolicRankResult(ContractModel):
     rank: int = Field(ge=0, le=MAX_SYMBOLIC_MATRIX_DIMENSION)
     pivot_columns: tuple[int, ...] = Field(max_length=MAX_SYMBOLIC_MATRIX_DIMENSION)
     method: Literal["EXACT_SYMBOLIC_ROW_REDUCTION"] = "EXACT_SYMBOLIC_ROW_REDUCTION"
+
+
+class SymbolicCharacteristicPolynomialResult(ContractModel):
+    """The dense monic characteristic polynomial coefficients (descending)."""
+
+    variable: Literal["lambda"] = "lambda"
+    degree: int = Field(ge=1, le=MAX_SYMBOLIC_MATRIX_DIMENSION)
+    coefficients_descending: tuple[str, ...] = Field(
+        min_length=2,
+        max_length=MAX_SYMBOLIC_MATRIX_DIMENSION + 1,
+    )
+    convention: Literal["DET_LAMBDA_I_MINUS_A"] = "DET_LAMBDA_I_MINUS_A"
+
+
+class SymbolicEigenvaluesResult(ContractModel):
+    """The exact eigenvalues with algebraic multiplicities."""
+
+    eigenvalues: tuple[str, ...] = Field(
+        min_length=1,
+        max_length=MAX_SYMBOLIC_MATRIX_DIMENSION,
+    )
+    multiplicities: tuple[int, ...] = Field(
+        min_length=1,
+        max_length=MAX_SYMBOLIC_MATRIX_DIMENSION,
+    )
+    convention: Literal["SYMPY_EIGENVALS"] = "SYMPY_EIGENVALS"
+
+    @model_validator(mode="after")
+    def require_matching_lengths(self) -> Self:
+        if len(self.eigenvalues) != len(self.multiplicities):
+            raise ValueError("eigenvalues and multiplicities must have the same length")
+        return self

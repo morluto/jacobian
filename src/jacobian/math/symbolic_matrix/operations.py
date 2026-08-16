@@ -55,3 +55,32 @@ def symbolic_rank(
     matrix, _ = _parse_matrix(entries, variables)
     _, pivots = matrix.rref()
     return len(pivots), tuple(int(c) for c in pivots)
+
+
+def symbolic_characteristic_polynomial(
+    entries: list[list[str]],
+    variables: list[str],
+) -> tuple[int, list[str]]:
+    """Return (degree, descending coefficients) of det(lambda I - A)."""
+    import sympy
+
+    matrix, _ = _parse_matrix(entries, variables)
+    if matrix.rows != matrix.cols:
+        raise ValueError("characteristic polynomial requires a square matrix")
+    lam = sympy.Symbol("lambda")
+    poly = (sympy.eye(matrix.rows) * lam - matrix).det(method="bareiss")
+    expanded = sympy.Poly(poly, lam)
+    coeffs = expanded.all_coeffs()
+    return int(expanded.degree()), [str(c) for c in coeffs]
+
+
+def symbolic_eigenvalues(
+    entries: list[list[str]],
+    variables: list[str],
+) -> list[tuple[str, int]]:
+    """Return a list of (eigenvalue_string, multiplicity) pairs."""
+    matrix, _ = _parse_matrix(entries, variables)
+    if matrix.rows != matrix.cols:
+        raise ValueError("eigenvalues require a square matrix")
+    eigenvalues = matrix.eigenvals()
+    return [(str(value), int(mult)) for value, mult in eigenvalues.items()]

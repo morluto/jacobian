@@ -101,6 +101,9 @@ BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
         "jacobian.domains.additive_combinatorics",
         "additive_combinatorics_operations",
     ),
+    ("jacobian.domains.matrix_analysis", "matrix_analysis_operations"),
+    ("jacobian.domains.convex_analysis", "convex_analysis_operations"),
+    ("jacobian.domains.submodular_opt", "submodular_opt_operations"),
 )
 
 

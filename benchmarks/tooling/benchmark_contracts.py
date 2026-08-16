@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tomllib
 from collections.abc import Callable, Iterable
@@ -279,6 +280,30 @@ def _validate_task(suite: Suite, task_dir: Path) -> list[str]:
     return failures
 
 
+def _regular_file_inside(root: Path, relative: str) -> Path | None:
+    """Return a regular non-symlink file contained in ``root``, else None."""
+
+    if not relative or Path(relative).is_absolute():
+        return None
+    current = root
+    for part in Path(relative).parts:
+        if part in {"", ".", ".."}:
+            return None
+        current = current / part
+        try:
+            if current.is_symlink():
+                return None
+        except OSError:
+            return None
+    try:
+        if current.is_symlink() or not current.is_file():
+            return None
+        current.resolve().relative_to(root.resolve())
+    except (OSError, ValueError):
+        return None
+    return current
+
+
 def _validate_gold_witness(
     solution: object, solution_path: Path, task_dir: Path
 ) -> list[str]:
@@ -303,13 +328,13 @@ def _validate_gold_witness(
         if ".." in Path(path_str).parts or Path(path_str).is_absolute():
             failures.append(f"{rel}.witness[{i}]: path escapes task directory")
             continue
-        artifact = task_dir / "solution" / path_str
-        if not artifact.is_file():
+        artifact = _regular_file_inside(task_dir / "solution", path_str)
+        if artifact is None:
             failures.append(
-                f"{rel}.witness[{i}]: artifact {path_str} not found in solution/"
+                f"{rel}.witness[{i}]: artifact {path_str} is not a regular "
+                "non-symlink file inside solution/"
             )
             continue
-        import hashlib
 
         digest = "sha256:" + hashlib.sha256(artifact.read_bytes()).hexdigest()
         if digest != sha256:

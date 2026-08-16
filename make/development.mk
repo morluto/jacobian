@@ -1,4 +1,4 @@
-.PHONY: uv-version-check setup doctor setup-lean doctor-lean doctor-external container-image eval-image eval-image-pull hooks fix lint complexity-check lint-full security-audit typecheck architecture docs-command-check docs-linkcheck
+.PHONY: uv-version-check setup setup-lean container-image eval-image eval-image-pull hooks fix lint complexity-check lint-full security-audit typecheck architecture docs-command-check docs-linkcheck
 
 uv-version-check: ## Require the repository-pinned uv release.
 	@test "$$(uv --version | awk '{print $$2}')" = "$$(tr -d '[:space:]' < .uv-version)" || { echo "install uv $$(tr -d '[:space:]' < .uv-version) before using this checkout" >&2; exit 2; }
@@ -6,17 +6,8 @@ uv-version-check: ## Require the repository-pinned uv release.
 setup: uv-version-check ## Install the locked Python environment.
 	uv sync --locked --dev
 
-doctor: ## Diagnose operator-installed Lean and SAT tools that uv does not own.
-	uv run --locked --no-sync python tools/doctor_external_tools.py --repo .
-
 setup-lean: setup ## Install the locked environment and the pinned Lean toolchain.
 	python3 tools/setup_lean.py --repo .
-
-doctor-lean: ## Diagnose Lean/elan/lake without changing the checkout.
-	uv run --locked --no-sync python tools/doctor_external_tools.py --repo . --require lean
-
-doctor-external: ## Diagnose optional SAT proof binaries (no downloads).
-	uv run --locked --no-sync python tools/doctor_external_tools.py --repo . --require external-proof
 
 JACOBIAN_REGISTRY_IMAGE ?= ghcr.io/morluto/jacobian
 

@@ -104,7 +104,6 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         # The tooling command runner.
         PurePosixPath("benchmarks/tooling/command_runner.py"),
         PurePosixPath("tools/setup_lean.py"),
-        PurePosixPath("tools/doctor_external_tools.py"),
         PurePosixPath("tools/process_supervisor.py"),
         PurePosixPath("tools/with_validation_lock.py"),
         # Developer helpers that shell out to git, gh, or Make. They are not
@@ -211,7 +210,6 @@ _SHUTIL_WHICH_ALLOWED: frozenset[PurePosixPath] = frozenset(
     {
         PurePosixPath("src/jacobian/domains/logic/operations.py"),
         PurePosixPath("benchmarks/tooling/command_runner.py"),
-        PurePosixPath("tools/doctor_external_tools.py"),
         PurePosixPath("tools/setup_lean.py"),
         # Test skip-condition checks for optional operator tools.
         PurePosixPath("tests/boundary/process/test_bounded_process.py"),

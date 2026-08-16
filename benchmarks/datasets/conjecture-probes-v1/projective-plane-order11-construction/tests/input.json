@@ -1,0 +1,8 @@
+{
+  "task_id": "jacobian/projective-plane-order11-construction",
+  "order": 11,
+  "point_count": 133,
+  "line_count": 133,
+  "points_per_line": 12,
+  "frontier_cutoff": "2026-08-14"
+}

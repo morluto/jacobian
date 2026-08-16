@@ -1,0 +1,8 @@
+{
+  "task_id": "jacobian/ramsey-r3-13-lower-bound-61",
+  "vertex_count": 60,
+  "forbidden_clique_size": 3,
+  "forbidden_independent_set_size": 13,
+  "certified_lower_bound": 61,
+  "frontier_cutoff": "2026-08-14"
+}

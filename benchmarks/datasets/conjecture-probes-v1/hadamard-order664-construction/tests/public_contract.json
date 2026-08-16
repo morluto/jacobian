@@ -1,0 +1,42 @@
+{
+  "schema_version": "1",
+  "task_id": "jacobian/hadamard-order664-construction",
+  "submission_path": "/app/submission.json",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "rows": {
+        "items": {"pattern": "^[01]{664}$", "type": "string"},
+        "maxItems": 664,
+        "minItems": 664,
+        "type": "array",
+        "uniqueItems": true
+      }
+    },
+    "required": ["rows"],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "rows": {
+            "items": {"pattern": "^[01]{664}$", "type": "string"},
+            "maxItems": 664,
+            "minItems": 664,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": ["rows"],
+        "type": "object"
+      }
+    },
+    "required": ["result"],
+    "type": "object"
+  }
+}

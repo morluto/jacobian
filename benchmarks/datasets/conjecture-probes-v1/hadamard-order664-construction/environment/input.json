@@ -1,0 +1,6 @@
+{
+  "task_id": "jacobian/hadamard-order664-construction",
+  "order": 664,
+  "entry_encoding": {"0": -1, "1": 1},
+  "frontier_cutoff": "2026-08-14"
+}

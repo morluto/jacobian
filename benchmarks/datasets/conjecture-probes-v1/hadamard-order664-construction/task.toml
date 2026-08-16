@@ -1,0 +1,44 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json"]
+
+[task]
+name = "jacobian/hadamard-order664-construction"
+version = "1.0.0"
+description = "Construct and exactly check a Hadamard matrix of order 664."
+keywords = ["combinatorics", "hadamard-matrix", "exact-linear-algebra", "construction"]
+
+[metadata]
+evaluation_kind = "conjecture-probe"
+domain = "mathematical-sciences"
+primary_domain = "combinatorics"
+field = "design-theory"
+answer_visibility = "public"
+provenance_class = "authored-conjecture-probe"
+fixture_digest = "sha256:2eac5ef9f2f4b3b0984b9cefe900380ab554e7641769bcd99dd9dc078f1861f9"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "matrix-construction", "exact-arithmetic", "offline"]
+case_version = "conjecture-probes-v1"
+contamination_class = "public-formula-derived-construction"
+derivation = "Paley order-332 tensor construction calibration adjacent to the unscored open order-668 frontier at cutoff 2026-08-14."
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

@@ -75,6 +75,19 @@ BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
     ),
     ("jacobian.domains.topology", "topology_operations"),
     ("jacobian.domains.posets", "finite_poset_operations"),
+    ("jacobian.domains.directed_graph", "directed_graph_operations"),
+    (
+        "jacobian.domains.graph_realization",
+        "graph_realization_operations",
+    ),
+    (
+        "jacobian.domains.boolean_analysis",
+        "boolean_analysis_operations",
+    ),
+    (
+        "jacobian.domains.arithmetic_functions",
+        "arithmetic_functions_operations",
+    ),
 )
 
 

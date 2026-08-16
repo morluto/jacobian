@@ -8,6 +8,7 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
+    workspace_input_is_bound,
 )
 
 TESTS = Path("/tests")
@@ -244,11 +245,13 @@ def _result_valid(result: object, source: dict) -> bool:
 
 
 def main() -> None:
+    _input_binding = workspace_input_is_bound()
     source = _source()
     submission = load_submission()
     protocol_ok = submission is not None
     correctness = bool(
-        protocol_ok
+        _input_binding
+        and protocol_ok
         and source is not None
         and _result_valid(submission.get("result"), source)
     )

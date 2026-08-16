@@ -7,6 +7,7 @@ from typing import Any
 from verifier_support import (
     load_submission,
     normalize_reward_file,
+    workspace_input_is_bound,
 )
 
 
@@ -174,13 +175,14 @@ def _protocol_is_valid(submission: object, contract: bool, result: object) -> bo
 
 
 def main():
+    _input_binding = workspace_input_is_bound()
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
     source = _load_json(Path("/tests/input.json"))
     result = data.get("result")
     protocol = _protocol_is_valid(submission, True, result)
     math_correct = _mathematical_result_is_valid(result, source)
-    reward = 1.0 if protocol and math_correct else 0.0
+    reward = 1.0 if _input_binding and protocol and math_correct else 0.0
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(

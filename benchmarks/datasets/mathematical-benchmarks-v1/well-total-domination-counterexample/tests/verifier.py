@@ -5,6 +5,7 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
+    workspace_input_is_bound,
 )
 
 W = Path("/app")
@@ -133,11 +134,12 @@ def result_valid(result, fixture):
 
 
 def main():
+    _input_binding = workspace_input_is_bound()
     submission = load_submission()
     fixture = load_json(E / FIXTURE_NAME)
     result = submission.get("result") if isinstance(submission, dict) else None
     math_correct = bool(fixture is not None and result_valid(result, fixture))
-    reward = float(math_correct)
+    reward = float(_input_binding and math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(

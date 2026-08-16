@@ -5,6 +5,7 @@ from verifier_support import (
     aggregate_reward,
     load_submission,
     normalize_reward_file,
+    workspace_input_is_bound,
 )
 
 W, T = Path("/app"), Path("/tests")
@@ -123,11 +124,13 @@ def valid(result):
 
 
 def main():
+    _input_binding = workspace_input_is_bound()
     submission = load_submission(W / "submission.json")
     protocol_ok = submission is not None
     data = submission if isinstance(submission, dict) else {}
     result = data.get("result")
     math_ok = bool(protocol_ok and valid(result))
+    math_ok = math_ok and _input_binding
     reward = aggregate_reward(
         correctness=math_ok,
         witness_validity=True,

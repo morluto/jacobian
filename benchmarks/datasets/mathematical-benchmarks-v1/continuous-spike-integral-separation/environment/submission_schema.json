@@ -1,107 +1,85 @@
 {
-  "$defs": {
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    }
-  },
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": false,
-  "properties": {
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "alpha": {
-          "$ref": "#/$defs/rational"
-        },
-        "baseline_power": {
-          "const": 2
-        },
-        "integral_classification": {
-          "const": {
-            "spike_area_series": "alpha*sum(1/n)",
-            "status": "DIVERGENT"
-          }
-        },
-        "sample_series_classification": {
-          "const": {
-            "sample_series": "sum(1/n^2)",
-            "status": "CONVERGENT"
-          }
-        },
-        "spike_height": {
-          "const": "1"
-        },
-        "spikes": {
-          "items": {
+    "$defs": {
+        "rational": {
             "additionalProperties": false,
             "properties": {
-              "area": {
-                "$ref": "#/$defs/rational"
-              },
-              "center": {
-                "$ref": "#/$defs/rational"
-              },
-              "half_width": {
-                "$ref": "#/$defs/rational"
-              },
-              "integer_sample": {
-                "$ref": "#/$defs/rational"
-              },
-              "left": {
-                "$ref": "#/$defs/rational"
-              },
-              "n": {
-                "maximum": 12,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "right": {
-                "$ref": "#/$defs/rational"
-              }
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
             },
             "required": [
-              "n",
-              "center",
-              "half_width",
-              "left",
-              "right",
-              "area",
-              "integer_sample"
+                "numerator",
+                "denominator"
             ],
             "type": "object"
-          },
-          "maxItems": 12,
-          "minItems": 12,
-          "type": "array"
         }
-      },
-      "required": [
-        "alpha",
-        "baseline_power",
-        "spike_height",
-        "spikes",
-        "integral_classification",
-        "sample_series_classification"
-      ],
-      "type": "object"
-    }
-  },
-  "required": [
-    "result"
-  ],
-  "type": "object"
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+        "result": {
+            "additionalProperties": false,
+            "properties": {
+                "alpha": {
+                    "$ref": "#/$defs/rational"
+                },
+                "spikes": {
+                    "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "area": {
+                                "$ref": "#/$defs/rational"
+                            },
+                            "center": {
+                                "$ref": "#/$defs/rational"
+                            },
+                            "half_width": {
+                                "$ref": "#/$defs/rational"
+                            },
+                            "integer_sample": {
+                                "$ref": "#/$defs/rational"
+                            },
+                            "left": {
+                                "$ref": "#/$defs/rational"
+                            },
+                            "n": {
+                                "maximum": 12,
+                                "minimum": 1,
+                                "type": "integer"
+                            },
+                            "right": {
+                                "$ref": "#/$defs/rational"
+                            }
+                        },
+                        "required": [
+                            "n",
+                            "center",
+                            "half_width",
+                            "left",
+                            "right",
+                            "area",
+                            "integer_sample"
+                        ],
+                        "type": "object"
+                    },
+                    "maxItems": 12,
+                    "minItems": 12,
+                    "type": "array"
+                }
+            },
+            "required": [
+                "alpha",
+                "spikes"
+            ],
+            "type": "object"
+        }
+    },
+    "required": [
+        "result"
+    ],
+    "type": "object"
 }

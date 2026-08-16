@@ -54,6 +54,10 @@ BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
     ),
     ("jacobian.domains.lattices", "lattice_operations"),
     ("jacobian.domains.polynomial", "polynomial_operations"),
+    (
+        "jacobian.domains.multivariate_polynomial",
+        "multivariate_polynomial_operations",
+    ),
     ("jacobian.domains.analysis", "real_analysis_operations"),
     (
         "jacobian.domains.probability",
@@ -72,18 +76,37 @@ def load_builtin_operation_modules() -> tuple[LoadedOperationModule, ...]:
     """Load the fixed built-in inventory for catalog compilation or binding."""
 
     return tuple(
-        load_builtin_operation_module(module_name)
-        for module_name, _factory_name in BUILTIN_OPERATION_MODULES
+        load_builtin_operation_module(module_name, factory_name)
+        for module_name, factory_name in BUILTIN_OPERATION_MODULES
     )
 
 
-def load_builtin_operation_module(module_name: str) -> LoadedOperationModule:
+def load_builtin_operation_module(
+    module_name: str,
+    factory_name: str | None = None,
+) -> LoadedOperationModule:
     """Load one selected module from the fixed built-in inventory."""
 
-    try:
-        factory_name = dict(BUILTIN_OPERATION_MODULES)[module_name]
-    except KeyError as exc:
-        raise ValueError(f"unknown built-in operation module: {module_name}") from exc
+    matching_factories = tuple(
+        factory
+        for configured_module_name, factory in BUILTIN_OPERATION_MODULES
+        if configured_module_name == module_name
+    )
+
+    if factory_name is None:
+        if not matching_factories:
+            raise ValueError(f"unknown built-in operation module: {module_name}")
+        if len(matching_factories) > 1:
+            duplicate_factories = ", ".join(matching_factories)
+            raise ValueError(
+                "ambiguous built-in operation module; specify factory with one of: "
+                f"{duplicate_factories}",
+            )
+        factory_name = matching_factories[0]
+    elif factory_name not in matching_factories:
+        raise ValueError(
+            f"unknown built-in operation module/factory: {module_name}.{factory_name}",
+        )
     module = import_module(module_name)
     factory = getattr(module, factory_name)
     operations = cast(MathTools, factory())

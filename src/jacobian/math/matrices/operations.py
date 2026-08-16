@@ -18,7 +18,10 @@ __all__ = [
     "characteristic_polynomial",
     "determinant",
     "inverse",
+    "kronecker_product",
     "multiply",
+    "partial_trace",
+    "permanent",
     "rank",
     "rref",
     "smith_normal_form",
@@ -113,3 +116,60 @@ def adjugate(matrix: MatrixBase) -> MatrixBase:
     if source.rows != source.cols:
         raise ValueError("adjugate requires a square matrix")
     return source.adjugate()
+
+
+def kronecker_product(left: MatrixBase, right: MatrixBase) -> MatrixBase:
+    import sympy
+
+    return sympy.kronecker_product(_exact_matrix(left), _exact_matrix(right))
+
+
+def partial_trace(
+    matrix: MatrixBase,
+    traced_dimension: int,
+    kept_dimension: int,
+) -> MatrixBase:
+    """Trace out the first traced_dimension factor of a Kronecker product.
+
+    The composite matrix is the Kronecker product A (x) B of a
+    traced_dimension x traced_dimension matrix A (the traced subsystem)
+    by a kept_dimension x kept_dimension matrix B (the kept subsystem),
+    stored as a block matrix in row-major block order.  The returned matrix is
+    the trace over the traced factor, i.e. trace(A) * B.
+    """
+
+    import sympy
+
+    source = _exact_matrix(matrix)
+    total = traced_dimension * kept_dimension
+    if source.rows != source.cols:
+        raise ValueError("partial trace requires a square composite matrix")
+    if source.rows != total:
+        raise ValueError(
+            "partial trace dimensions are inconsistent with the composite matrix"
+        )
+    if traced_dimension <= 0 or kept_dimension <= 0:
+        raise ValueError("partial trace subsystem dimensions must be positive")
+    accumulator = sympy.zeros(kept_dimension)
+    for block in range(traced_dimension):
+        block_row = block * kept_dimension
+        block_col = block * kept_dimension
+        accumulator = sympy.Matrix(
+            [
+                [
+                    accumulator[i, j] + source[block_row + i, block_col + j]
+                    for j in range(kept_dimension)
+                ]
+                for i in range(kept_dimension)
+            ]
+        )
+    return accumulator
+
+
+def permanent(matrix: MatrixBase) -> Any:
+    from sympy import Permanent
+
+    source = _exact_matrix(matrix, maximum_dimension=64)
+    if source.rows != source.cols:
+        raise ValueError("permanent requires a square matrix")
+    return Permanent(source).doit()

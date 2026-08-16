@@ -11,6 +11,11 @@ from jacobian.contracts.matrix_operations import (
     MatrixDeterminantRequest,
     MatrixDeterminantResult,
     MatrixInverseResult,
+    MatrixKroneckerProductRequest,
+    MatrixKroneckerProductResult,
+    MatrixPartialTraceRequest,
+    MatrixPartialTraceResult,
+    MatrixPermanentResult,
     MatrixProductResult,
     MatrixRankRequest,
     MatrixRankResult,
@@ -160,3 +165,40 @@ def compute_adjugate(request: SquareIntegerMatrixRequest) -> MatrixAdjugateResul
     return MatrixAdjugateResult(
         adjugate=conversions.integer_matrix_from_sympy(adjugate)
     )
+
+
+def compute_permanent(request: SquareRationalMatrixRequest) -> MatrixPermanentResult:
+    value = matrices.permanent(conversions.rational_matrix_to_sympy(request.matrix))
+    return MatrixPermanentResult(
+        permanent=conversions.rational_from_sympy(value),
+    )
+
+
+def compute_kronecker_product(
+    request: MatrixKroneckerProductRequest,
+) -> MatrixKroneckerProductResult:
+    left = conversions.rational_matrix_to_sympy(request.left)
+    right = conversions.rational_matrix_to_sympy(request.right)
+    product = matrices.kronecker_product(left, right)
+    return MatrixKroneckerProductResult(
+        product=conversions.rational_matrix_from_sympy(product),
+        left_rows=left.rows,
+        left_columns=left.cols,
+        right_rows=right.rows,
+        right_columns=right.cols,
+    )
+
+
+def compute_partial_trace(request: MatrixPartialTraceRequest) -> MatrixPartialTraceResult:
+    matrix = conversions.rational_matrix_to_sympy(request.matrix)
+    reduced = matrices.partial_trace(
+        matrix,
+        request.traced_dimension,
+        request.kept_dimension,
+    )
+    return MatrixPartialTraceResult(
+        reduced_matrix=conversions.rational_matrix_from_sympy(reduced),
+        traced_dimension=request.traced_dimension,
+        kept_dimension=request.kept_dimension,
+    )
+

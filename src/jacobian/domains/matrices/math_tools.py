@@ -10,6 +10,11 @@ from jacobian.contracts.matrix_operations import (
     MatrixDeterminantRequest,
     MatrixDeterminantResult,
     MatrixInverseResult,
+    MatrixKroneckerProductRequest,
+    MatrixKroneckerProductResult,
+    MatrixPartialTraceRequest,
+    MatrixPartialTraceResult,
+    MatrixPermanentResult,
     MatrixProductResult,
     MatrixRankRequest,
     MatrixRankResult,
@@ -30,7 +35,10 @@ from jacobian.domains.matrices.operations import (
     compute_characteristic_polynomial,
     compute_determinant,
     compute_inverse,
+    compute_kronecker_product,
     compute_nullspace,
+    compute_partial_trace,
+    compute_permanent,
     compute_product,
     compute_rank,
     compute_rational_linear_solve,
@@ -396,5 +404,130 @@ MATRIX_OPERATIONS = (
             ),
         ),
         version="2",
+    ),
+    matrix_operation(
+        "matrix.permanent.compute",
+        "Compute an exact matrix permanent",
+        "Compute the permanent (sign-free determinant analogue) of a square rational matrix over QQ through order 64 with SymPy's exact Permanent backend.",
+        SquareRationalMatrixRequest,
+        MatrixPermanentResult,
+        compute_permanent,
+        "matrix",
+        "permanent",
+        "exact-rational",
+        examples=(
+            example(
+                "permanent_two_by_two",
+                "Compute the permanent of [[1, 2], [3, 4]].",
+                {
+                    "matrix": {
+                        "entries": [
+                            [
+                                {"num": "1", "den": "1"},
+                                {"num": "2", "den": "1"},
+                            ],
+                            [
+                                {"num": "3", "den": "1"},
+                                {"num": "4", "den": "1"},
+                            ],
+                        ]
+                    }
+                },
+            ),
+        ),
+    ),
+    matrix_operation(
+        "matrix.kronecker_product.compute",
+        "Compute an exact Kronecker product",
+        "Compute the Kronecker (tensor) product of two bounded rational matrices over QQ.",
+        MatrixKroneckerProductRequest,
+        MatrixKroneckerProductResult,
+        compute_kronecker_product,
+        "matrix",
+        "kronecker-product",
+        "tensor-product",
+        "exact-rational",
+        examples=(
+            example(
+                "kronecker_two_by_two",
+                "Compute the Kronecker product of two 2x2 matrices.",
+                {
+                    "left": {
+                        "entries": [
+                            [
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                        ]
+                    },
+                    "right": {
+                        "entries": [
+                            [
+                                {"num": "2", "den": "1"},
+                                {"num": "3", "den": "1"},
+                            ],
+                            [
+                                {"num": "4", "den": "1"},
+                                {"num": "5", "den": "1"},
+                            ],
+                        ]
+                    },
+                },
+            ),
+        ),
+    ),
+    matrix_operation(
+        "matrix.partial_trace.compute",
+        "Compute an exact partial trace over a Kronecker factor",
+        "Compute the partial trace over the first (traced) subsystem of a composite matrix A (x) B stored in row-major block order over QQ.",
+        MatrixPartialTraceRequest,
+        MatrixPartialTraceResult,
+        compute_partial_trace,
+        "matrix",
+        "partial-trace",
+        "tensor",
+        "exact-rational",
+        examples=(
+            example(
+                "partial_trace_diagonal",
+                "Trace out a 2x2 diagonal factor from a 4x4 Kronecker product.",
+                {
+                    "matrix": {
+                        "entries": [
+                            [
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "2", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "2", "den": "1"},
+                            ],
+                        ]
+                    },
+                    "traced_dimension": 2,
+                    "kept_dimension": 2,
+                },
+            ),
+        ),
     ),
 )

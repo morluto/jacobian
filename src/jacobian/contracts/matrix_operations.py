@@ -286,3 +286,94 @@ class RationalLinearSolveResult(ContractModel):
 class MatrixAdjugateResult(ContractModel):
     adjugate: IntegerMatrix
     convention: Literal["CLASSICAL_ADJUGATE"] = "CLASSICAL_ADJUGATE"
+
+
+class MatrixPermanentResult(ContractModel):
+    """One exact matrix permanent."""
+
+    permanent: CanonicalRational
+    method: Literal["SYMPY_PERMANENT"] = "SYMPY_PERMANENT"
+
+
+class MatrixKroneckerProductRequest(ContractModel):
+    """Two bounded matrices for an exact Kronecker product over QQ."""
+
+    left: RationalMatrix
+    right: RationalMatrix
+
+    @model_validator(mode="after")
+    def require_input_budget(self) -> Self:
+        require_matrix_scalar_digits(
+            self.left.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+        )
+        require_matrix_scalar_digits(
+            self.right.entries,
+            maximum=MAX_INPUT_SCALAR_DIGITS,
+            label="matrix input",
+        )
+        return self
+
+
+class MatrixKroneckerProductResult(ContractModel):
+    """The Kronecker product of two bounded matrices over QQ."""
+
+    product: RationalMatrix
+    left_rows: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    left_columns: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    right_rows: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    right_columns: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    convention: Literal["SYMPY_KRONECKER_PRODUCT_OVER_QQ"] = (
+        "SYMPY_KRONECKER_PRODUCT_OVER_QQ"
+    )
+
+    @model_validator(mode="after")
+    def require_product_shape(self) -> Self:
+        if len(self.product.entries) != self.left_rows * self.right_rows:
+            raise ValueError("Kronecker product row count must equal left_rows * right_rows")
+        if len(self.product.entries[0]) != self.left_columns * self.right_columns:
+            raise ValueError(
+                "Kronecker product column count must equal left_columns * right_columns"
+            )
+        return self
+
+
+class MatrixPartialTraceRequest(ContractModel):
+    """A composite matrix (Kronecker product A (x) B) and the subsystem dimensions."""
+
+    matrix: RationalMatrix
+    traced_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    kept_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+
+    @model_validator(mode="after")
+    def require_composite_shape(self) -> Self:
+        total = self.traced_dimension * self.kept_dimension
+        if len(self.matrix.entries) != total:
+            raise ValueError(
+                "composite matrix row count must equal traced_dimension * kept_dimension"
+            )
+        if len(self.matrix.entries[0]) != total:
+            raise ValueError(
+                "composite matrix must be square: traced_dimension * kept_dimension"
+            )
+        require_matrix_scalar_digits(
+            self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+        )
+        return self
+
+
+class MatrixPartialTraceResult(ContractModel):
+    """The partial trace over the traced subsystem of a composite matrix."""
+
+    reduced_matrix: RationalMatrix
+    traced_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    kept_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    convention: Literal["BLOCK_TRACE_OVER_QQ"] = "BLOCK_TRACE_OVER_QQ"
+
+    @model_validator(mode="after")
+    def require_reduced_shape(self) -> Self:
+        if len(self.reduced_matrix.entries) != self.kept_dimension:
+            raise ValueError("reduced matrix row count must equal kept_dimension")
+        if len(self.reduced_matrix.entries[0]) != self.kept_dimension:
+            raise ValueError("reduced matrix must be square of order kept_dimension")
+        return self
+

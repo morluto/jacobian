@@ -60,6 +60,11 @@ BOOLEAN_OPERATIONS = (
                 "Compute the Walsh spectrum of the 1-bit Boolean function f(0)=1, f(1)=0.",
                 {"truth_table": [1, 0]},
             ),
+            example(
+                "walsh_two_bit_function",
+                "The truth table length must be a power of two; here a 4-entry (2-bit) table.",
+                {"truth_table": [1, 0, 0, 1]},
+            ),
         ),
     ),
 )

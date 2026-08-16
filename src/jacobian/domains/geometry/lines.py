@@ -52,6 +52,20 @@ LINE_OPERATIONS = (
                     },
                 },
             ),
+            example(
+                "parallel_diagonal_lines",
+                "Each line is defined by two distinct points; here two parallel diagonals.",
+                {
+                    "first_line": {
+                        "first": {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
+                        "second": {"x": {"num": "1", "den": "1"}, "y": {"num": "1", "den": "1"}},
+                    },
+                    "second_line": {
+                        "first": {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}},
+                        "second": {"x": {"num": "1", "den": "1"}, "y": {"num": "2", "den": "1"}},
+                    },
+                },
+            ),
         ),
     ),
     geometry_operation(

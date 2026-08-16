@@ -6,6 +6,7 @@ from jacobian.contracts.graph_coloring import (
     GraphChromaticNumberOutput,
     GraphChromaticNumberRequest,
 )
+from jacobian.domains._examples import example
 from jacobian.domains.graph_optimization.operations import (
     build_simple_graph,
     solve_chromatic_number,
@@ -48,5 +49,17 @@ CHROMATIC_NUMBER_OPERATION = MathTool(
         "exact",
         "bounded",
         "z3",
+    ),
+    examples=(
+        example(
+            "triangle_chromatic_number",
+            "Vertices must be unique and edges must not self-loop; a triangle has chromatic number 3.",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"], ["a", "c"]],
+                }
+            },
+        ),
     ),
 )

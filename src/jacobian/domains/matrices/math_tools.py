@@ -106,6 +106,19 @@ MATRIX_DETERMINANT_COMPUTE = matrix_operation(
                 }
             },
         ),
+        example(
+            "determinant_3x3_identity",
+            "The matrix must be square (rows == columns); a 3x3 identity has determinant 1.",
+            {
+                "matrix": {
+                    "entries": [
+                        [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
+                        [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+                        [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+                    ]
+                }
+            },
+        ),
     ),
     version="3",
 )
@@ -176,6 +189,20 @@ MATRIX_OPERATIONS = (
                         ]
                     },
                     "rhs": [{"num": "3", "den": "1"}, {"num": "4", "den": "1"}],
+                },
+            ),
+            example(
+                "solve_3x3_diagonal",
+                "The matrix must be square and rhs length must match the order.",
+                {
+                    "matrix": {
+                        "entries": [
+                            [{"num": "2", "den": "1"}, {"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "3", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}, {"num": "4", "den": "1"}],
+                        ]
+                    },
+                    "rhs": [{"num": "4", "den": "1"}, {"num": "6", "den": "1"}, {"num": "8", "den": "1"}],
                 },
             ),
         ),
@@ -286,6 +313,24 @@ MATRIX_OPERATIONS = (
                                 {"num": "1", "den": "1"},
                                 {"num": "1", "den": "1"},
                             ],
+                        ]
+                    },
+                },
+            ),
+            example(
+                "multiply_square_matrices",
+                "The left column count must equal the right row count; a 2x2 by 2x2 product.",
+                {
+                    "left": {
+                        "entries": [
+                            [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+                        ]
+                    },
+                    "right": {
+                        "entries": [
+                            [{"num": "2", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "2", "den": "1"}],
                         ]
                     },
                 },

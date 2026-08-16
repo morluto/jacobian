@@ -46,6 +46,11 @@ MODULAR_OPERATIONS = (
                 "Compute the Jacobi symbol (10/21).",
                 {"a": "10", "n": 21},
             ),
+            example(
+                "jacobi_7_15",
+                "The denominator n must be odd; here (7/15).",
+                {"a": "7", "n": 15},
+            ),
         ),
     ),
     number_theory_operation(
@@ -180,6 +185,11 @@ MODULAR_OPERATIONS = (
                 "crt_2_mod_3_3_mod_5",
                 "Solve x=2 mod 3 and x=3 mod 5.",
                 {"residues": [2, 3], "moduli": [3, 5]},
+            ),
+            example(
+                "crt_three_congruences",
+                "Residues and moduli must be equal-length arrays; each residue must be canonical for its modulus.",
+                {"residues": [1, 4, 0], "moduli": [2, 5, 7]},
             ),
         ),
     ),

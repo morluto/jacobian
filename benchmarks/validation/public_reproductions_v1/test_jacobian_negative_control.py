@@ -77,3 +77,22 @@ def test_expected_fixture_does_not_rewrite_the_collision(tmp_path: Path) -> None
     expected["expected_noninvertibility_verified"] = False
     _write_json(expected_path, expected)
     assert _run_verifier(copied_task, app, logs).reward == pytest.approx(1.0)
+
+
+def test_unrelated_collision_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _prepare_case(tmp_path, "jacobian-negative-control", "claimed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["collision"]["first_point"] = [
+        {"num": -2, "den": 1},
+        {"num": 1, "den": 1},
+        {"num": 2, "den": 1},
+    ]
+    submission["result"]["collision"]["second_point"] = [
+        {"num": 0, "den": 1},
+        {"num": 1, "den": 1},
+        {"num": -4, "den": 1},
+    ]
+    _write_json(app / "submission.json", submission)
+    rejected = _run_verifier(task, app, logs)
+    assert rejected.details["correctness"] == pytest.approx(0.0)
+    assert rejected.reward == pytest.approx(0.0)

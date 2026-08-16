@@ -423,6 +423,11 @@ FINITE_POSET_OPERATIONS: MathTools = (
                 "Count the linear extensions of the canonical diamond.",
                 {"poset": _MATERIALIZED_DIAMOND},
             ),
+            example(
+                "diamond_complete_mobius_scope",
+                "The poset must have at most 14 elements for the linear extension count.",
+                {"poset": _MATERIALIZED_DIAMOND},
+            ),
         ),
     ),
     MathTool(
@@ -448,6 +453,17 @@ FINITE_POSET_OPERATIONS: MathTools = (
                 "materialized_diamond",
                 "Compute every Möbius value of the canonical diamond.",
                 {"poset": _MATERIALIZED_DIAMOND},
+            ),
+            example(
+                "diamond_selected_interval",
+                "For SELECTED_INTERVALS scope, intervals must have lower <= upper in the poset.",
+                {
+                    "poset": _MATERIALIZED_DIAMOND,
+                    "scope": "SELECTED_INTERVALS",
+                    "intervals": [
+                        {"lower": "0", "upper": "1"},
+                    ],
+                },
             ),
         ),
     ),

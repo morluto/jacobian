@@ -179,6 +179,38 @@ PROJECTIVE_LINE_ARRANGEMENT_OPERATION: MathTool[
                 ]
             },
         ),
+        example(
+            "three_coordinate_lines",
+            "Labels must be unique and lines must not be projectively duplicate.",
+            {
+                "lines": [
+                    {
+                        "label": "x",
+                        "coefficients": [
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                    },
+                    {
+                        "label": "y",
+                        "coefficients": [
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                    },
+                    {
+                        "label": "z",
+                        "coefficients": [
+                            {"num": "0", "den": "1"},
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                    },
+                ]
+            },
+        ),
     ),
 )
 

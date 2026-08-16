@@ -223,6 +223,11 @@ MATRIX_OPERATIONS = (
                 "Compute the adjugate of a 2x2 integer matrix.",
                 {"matrix": {"entries": [["1", "2"], ["3", "4"]]}},
             ),
+            example(
+                "adjugate_3x3_diagonal",
+                "The matrix must be square; here a 3x3 diagonal matrix.",
+                {"matrix": {"entries": [["2", "0", "0"], ["0", "3", "0"], ["0", "0", "4"]]}},
+            ),
         ),
     ),
     matrix_operation(
@@ -241,6 +246,11 @@ MATRIX_OPERATIONS = (
                 "Compute the inverse of a nonsingular 2x2 integer matrix.",
                 {"matrix": {"entries": [["1", "2"], ["3", "4"]]}},
             ),
+            example(
+                "inverse_diagonal_3x3",
+                "The matrix must be square and nonsingular; here a 3x3 diagonal matrix.",
+                {"matrix": {"entries": [["2", "0", "0"], ["0", "3", "0"], ["0", "0", "4"]]}},
+            ),
         ),
     ),
     matrix_operation(
@@ -258,6 +268,11 @@ MATRIX_OPERATIONS = (
                 "trace_two_by_two",
                 "Compute the trace of a 2x2 integer matrix.",
                 {"matrix": {"entries": [["1", "2"], ["3", "4"]]}},
+            ),
+            example(
+                "trace_diagonal_3x3",
+                "The matrix must be square; here the trace of a 3x3 diagonal is 6.",
+                {"matrix": {"entries": [["1", "0", "0"], ["0", "2", "0"], ["0", "0", "3"]]}},
             ),
         ),
     ),
@@ -426,6 +441,19 @@ MATRIX_OPERATIONS = (
                     }
                 },
             ),
+            example(
+                "characteristic_diagonal_3x3",
+                "The matrix must be square; here the characteristic polynomial of a diagonal 3x3.",
+                {
+                    "matrix": {
+                        "entries": [
+                            [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "2", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}, {"num": "3", "den": "1"}],
+                        ]
+                    }
+                },
+            ),
         ),
     ),
     matrix_operation(
@@ -475,6 +503,19 @@ MATRIX_OPERATIONS = (
                                 {"num": "3", "den": "1"},
                                 {"num": "4", "den": "1"},
                             ],
+                        ]
+                    }
+                },
+            ),
+            example(
+                "permanent_identity_3x3",
+                "The matrix must be square; here the permanent of the 3x3 identity is 1.",
+                {
+                    "matrix": {
+                        "entries": [
+                            [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
                         ]
                     }
                 },

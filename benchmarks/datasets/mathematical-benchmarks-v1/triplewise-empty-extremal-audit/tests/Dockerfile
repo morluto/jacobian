@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="e083253b868fe134239bb6ff81a234206559a3ca2f0b714c63733c9f5facd10b"
+LABEL jacobian.checksum="88bdc8e7266eac5e05f39e9143b85827af8bf9caba3d202aabb42cfb99ab1a3c"
 # Exact extremal set-family verifier.
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

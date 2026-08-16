@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="edee495403ba8c5d65e2e2fbad4962eaa9d02cefaa0edf3a337fccdcf15c8cf1"
+LABEL jacobian.checksum="16cafa79897f45c779773036acbce91e4c8b00187ef002c9a9d9053320ef90f7"
 LABEL jacobian.task="jacobian/trigonometric-power-sum-valuation"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

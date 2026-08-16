@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="633265c30df9c78aea864769c05353bed6892823d51993e13024f6209bcf3a9c"
+LABEL jacobian.checksum="14861b51f835010ce81261a0f492bdfa008a76f7cdc82ae95687f82fdebe35ea"
 LABEL jacobian.task="jacobian/inverse-distance-remainder-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

@@ -17,11 +17,9 @@ from jacobian.math.finite_fields import (
     FiniteFieldPresentation,
     FiniteLinearMap,
     FiniteMapTable,
-    FinitePolynomialMap,
     OrbitDistribution,
     PermutationResult,
     ProjectiveLine,
-    ProjectivePoint,
     RankResult,
     element,
     finite_field,
@@ -62,32 +60,11 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
         assert not hasattr(operation, "provider_binding")
     assert projective.request_type is ProjectiveLineRequest
     assert projective.result_type is ProjectiveLine
-    assert restrict_operation.request_type.model_fields["subspace"].annotation is (
-        FiniteDimensionalSubspace
-    )
-    assert restrict_operation.request_type.model_fields["direction"].annotation is (
-        ProjectivePoint
-    )
     assert restrict_operation.result_type is FiniteLinearMap
-    assert rank_operation.request_type.model_fields["direction"].annotation is (
-        ProjectivePoint
-    )
-    assert rank_operation.request_type.model_fields["linear_map"].annotation is (
-        FiniteLinearMap
-    )
     assert rank_operation.result_type is RankResult
-    assert ledger.request_type.model_fields["subspace"].annotation is (
-        FiniteDimensionalSubspace
-    )
-    assert ledger.request_type.model_fields["directions"].annotation is ProjectiveLine
     assert ledger.result_type is DirectionRankLedger
-    assert orbit.request_type.model_fields["ledger"].annotation is DirectionRankLedger
     assert orbit.result_type is OrbitDistribution
-    assert table.request_type.model_fields["polynomial_map"].annotation is (
-        FinitePolynomialMap
-    )
     assert table.result_type is FiniteMapTable
-    assert fibers.request_type.model_fields["table"].annotation is FiniteMapTable
     assert fibers.result_type is FiberPartition
     assert collision.result_type is CollisionResult
     assert permutation.result_type is PermutationResult

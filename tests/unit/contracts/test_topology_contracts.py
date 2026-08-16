@@ -11,12 +11,16 @@ from jacobian.contracts.topology import (
     SimplicialComplexRequest,
     SimplicialHomologyRequest,
 )
-from jacobian.domains.topology.operations import (
-    _canonical_complex,
-    _canonicalize,
-    _chain_result,
-    _homology,
-)
+from jacobian.serving_catalog import ServingCatalog
+
+_CANALOG = ServingCatalog.open()
+
+
+def _canonical_complex(vertices, facets):
+    """Build a canonical FiniteSimplicialComplex via the public operation."""
+    request = SimplicialComplexRequest(vertices=vertices, facets=facets)
+    operation = _CANALOG.operation("topology.simplicial_complex.canonicalize")
+    return operation.run(request).complex
 
 
 def test_facet_request_rejects_duplicates_nonmaximal_faces_and_hidden_isolates() -> (
@@ -59,22 +63,24 @@ def test_chain_and_homology_requests_validate_prime_semantics() -> None:
 
 
 def test_canonical_complex_composes_as_the_authoritative_object() -> None:
-    canonical = _canonicalize(
-        SimplicialComplexRequest(
-            vertices=("c", "a", "b"),
-            facets=(("b", "a"), ("c", "b"), ("c", "a")),
-        )
+    request = SimplicialComplexRequest(
+        vertices=("c", "a", "b"),
+        facets=(("b", "a"), ("c", "b"), ("c", "a")),
     )
-
+    canonical = _CANALOG.operation("topology.simplicial_complex.canonicalize").run(request)
     complex_ = canonical.complex
-    chain = _chain_result(
+
+    chain_operation = _CANALOG.operation("topology.simplicial_complex.chain_complex.compute")
+    chain = chain_operation.run(
         ChainComplexRequest(
             complex=complex_,
             coefficient_ring=ChainCoefficientRing.PRIME_FIELD,
             prime=2,
         )
     )
-    homology = _homology(SimplicialHomologyRequest(complex=complex_, prime=2))
+
+    homology_operation = _CANALOG.operation("topology.simplicial_homology.compute")
+    homology = homology_operation.run(SimplicialHomologyRequest(complex=complex_, prime=2))
 
     assert chain.complex_digest == complex_.complex_digest
     assert homology.complex_digest == complex_.complex_digest

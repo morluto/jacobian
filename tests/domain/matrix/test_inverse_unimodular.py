@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+"""Internal kernel tests for unimodular matrix inversion.
+
+inverse_unimodular is an internal helper of the certified Smith normal
+form kernel; it has no public MathTool operation surface of its own.
+These tests guard the kernel directly because the public
+matrix.normal_form.smith.certified.compute operation only exercises the
+smith_reduce / certificate_from_reduction path, not the inverse.
+"""
 from random import Random
 
 import pytest

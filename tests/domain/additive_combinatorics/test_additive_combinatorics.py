@@ -1,6 +1,7 @@
 """Tests for additive combinatorics operations."""
 
 import pytest
+from jacobian.canonical import parse_canonical_integer
 
 from jacobian.contracts.additive_combinatorics import (
     AdditiveEnergyRequest,
@@ -44,6 +45,37 @@ class TestRepresentationProfile:
         entries = {e.sum: e.multiplicity for e in result.entries}
         assert entries == {"0": 1, "1": 2, "2": 3, "3": 2, "4": 1}
 
+    def test_negative_integers(self):
+        req = RepresentationProfileRequest(
+            left=FiniteIntegerSet(elements=("-2", "-1")),
+            right=FiniteIntegerSet(elements=("3", "4")),
+        )
+        result = compute_representation_profile(req)
+        entries = tuple((entry.sum, entry.multiplicity) for entry in result.entries)
+        assert entries == (("1", 1), ("2", 2), ("3", 1))
+
+    def test_sums_sorted_and_unique(self):
+        req = RepresentationProfileRequest(
+            left=FiniteIntegerSet(elements=("7", "-2", "0")),
+            right=FiniteIntegerSet(elements=("5", "0", "-5")),
+        )
+        result = compute_representation_profile(req)
+        assert tuple(entry.sum for entry in result.entries) == (
+            "-7",
+            "-5",
+            "-2",
+            "0",
+            "2",
+            "3",
+            "5",
+            "7",
+            "12",
+        )
+
+        assert tuple(entry.sum for entry in result.entries) == tuple(
+            sorted(set(e.sum for e in result.entries), key=parse_canonical_integer)
+        )
+
 
 class TestAdditiveEnergy:
     def test_two_by_two(self):
@@ -81,6 +113,24 @@ class TestSumsetCardinality:
         )
         result = compute_sumset_cardinality(req)
         assert result.cardinality == 1
+
+    def test_sumset_support_matches_profile(self):
+        req = SumsetCardinalityRequest(
+            left=FiniteIntegerSet(elements=("7", "-2", "0")),
+            right=FiniteIntegerSet(elements=("5", "0", "-5")),
+        )
+        result = compute_sumset_cardinality(req)
+        assert result.support == (
+            "-7",
+            "-5",
+            "-2",
+            "0",
+            "2",
+            "3",
+            "5",
+            "7",
+            "12",
+        )
 
 
 class TestDirectSumPredicate:

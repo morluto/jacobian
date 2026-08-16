@@ -333,7 +333,7 @@ def _as_unit_score(value: float | bool | int) -> float:
 def aggregate_reward(
     *,
     correctness: float | bool,
-    witness_validity: float | bool,
+    witness_validity: float | bool = True,
     protocol_ok: bool = True,
 ) -> float:
     """Binary fail-closed reward from the mathematical predicate and witness.

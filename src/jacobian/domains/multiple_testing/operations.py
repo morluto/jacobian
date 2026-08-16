@@ -4,12 +4,22 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.multiple_testing import (
     BHStepUpRequest,
     BHStepUpResult,
     FDPRequest,
     FDPResult,
 )
+
+
+def _format_rational(value: Fraction) -> str:
+    if value.denominator == 1:
+        return format_canonical_integer(value.numerator)
+    return (
+        f"{format_canonical_integer(value.numerator)}/"
+        f"{format_canonical_integer(value.denominator)}"
+    )
 
 
 def compute_bh_step_up(request: BHStepUpRequest) -> BHStepUpResult:
@@ -37,7 +47,7 @@ def compute_bh_step_up(request: BHStepUpRequest) -> BHStepUpResult:
 
     return BHStepUpResult(
         critical_index=critical_k,
-        cutoff_threshold=str(cutoff),
+        cutoff_threshold=_format_rational(cutoff),
         rejected=tuple(sorted(rejected_ids)),
         total_hypotheses=n,
     )
@@ -53,7 +63,7 @@ def compute_fdp(request: FDPRequest) -> FDPResult:
     return FDPResult(
         false_discoveries=false_d,
         total_rejections=total,
-        fdp=str(fdp),
+        fdp=_format_rational(fdp),
     )
 
 

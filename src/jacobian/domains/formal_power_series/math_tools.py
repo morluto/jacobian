@@ -20,6 +20,7 @@ from jacobian.contracts.formal_power_series import (
     SeriesMultiplyResult,
     SeriesPowerRequest,
     SeriesPowerResult,
+    SeriesReversionRequest,
     SeriesReversionResult,
     SeriesScalarMultiplyRequest,
     SeriesScalarMultiplyResult,
@@ -418,9 +419,9 @@ FORMAL_POWER_SERIES_OPERATIONS = (
             "F(0)=0 and f_1 != 0.  Validates both left and right identities "
             "exactly."
         ),
-        request_type=InputTruncatedSeries,
+        request_type=SeriesReversionRequest,
         result_type=SeriesReversionResult,
-        run=lambda request: compute_reversion(request),
+        run=lambda request: compute_reversion(request.as_series()),
         tags=(
             "formal-series",
             "power-series",

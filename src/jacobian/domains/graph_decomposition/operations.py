@@ -172,12 +172,12 @@ def _find_next_ear(  # noqa: C901
 ) -> tuple[int, ...] | None:
     """Find one ear for the open ear decomposition.
 
-    An ear is a path whose endpoints are both in ``used_vertices``, all
-    internal vertices are unused, and all edges are unused (not in
-    ``used_edges``).  We search by doing a BFS from each used vertex ``s``,
-    traversing only through unused internal vertices, looking for another
-    used vertex different from ``s`` (or, if we find ``s`` again after going
-    through unused vertices, a cycle ear through ``s``).
+    An ear is a simple path (Whitney) whose endpoints are both in
+    ``used_vertices``, all internal vertices are unused, and all edges are
+    unused.  The BFS parent edge is skipped because reversing the discovery
+    edge would be the walk ``s-v-s`` on one edge, which is not a simple path
+    and not an ear.  A genuine return to ``s`` must use a different unused
+    edge.
     """
     for s in sorted(used_vertices):
         parent: dict[int, int] = {s: s}

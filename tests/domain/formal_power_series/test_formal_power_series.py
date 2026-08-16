@@ -44,6 +44,37 @@ def test_power_rejects_result_digit_overflow() -> None:
         )
 
 
+def test_reversion_rejects_nonzero_constant() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    from jacobian.contracts.formal_power_series import SeriesReversionRequest
+
+    with pytest.raises(ValidationError, match="zero constant"):
+        SeriesReversionRequest(
+            variable="x",
+            truncation_order=2,
+            coefficients=(_coeff("1"), _coeff("1")),
+        )
+
+
+def test_integral_rejects_oversized_output_order() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    from jacobian.contracts.formal_power_series import SeriesIntegralRequest
+
+    with pytest.raises(ValidationError, match="source_order"):
+        SeriesIntegralRequest(
+            series=InputTruncatedSeries(
+                variable="x",
+                truncation_order=2,
+                coefficients=(_coeff("1"), _coeff("0")),
+            ),
+            output_order=4,
+        )
+
+
 def test_inverse_rejects_zero_constant() -> None:
     import pytest
     from pydantic import ValidationError

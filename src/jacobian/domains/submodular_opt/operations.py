@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.submodular_opt import (
     MonotonicityCheckRequest,
     MonotonicityCheckResult,
@@ -13,6 +14,15 @@ from jacobian.contracts.submodular_opt import (
     SubmodularityCheckRequest,
     SubmodularityCheckResult,
 )
+
+
+def _format_rational(value: Fraction) -> str:
+    if value.denominator == 1:
+        return format_canonical_integer(value.numerator)
+    return (
+        f"{format_canonical_integer(value.numerator)}/"
+        f"{format_canonical_integer(value.denominator)}"
+    )
 
 
 def _lookup(
@@ -33,7 +43,7 @@ def evaluate_set_function(
     """Evaluate f(S) by table lookup."""
     val = _lookup(request.function, request.subset)
     if val is not None:
-        return SetFunctionEvalResult(value=str(val), found=True)
+        return SetFunctionEvalResult(value=_format_rational(val), found=True)
     return SetFunctionEvalResult(value="0", found=False)
 
 

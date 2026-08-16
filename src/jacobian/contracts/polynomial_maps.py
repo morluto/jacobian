@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Any, Self
 
 import sympy
 from pydantic import Field, model_validator
@@ -19,6 +19,25 @@ class RationalPolynomialExpr(ContractModel):
     """
 
     expression: str = Field(min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def require_polynomial(self) -> Self:
+        _require_polynomial_expression(self.expression)
+        return self
+
+
+def _require_polynomial_expression(raw: str) -> Any:
+    try:
+        expression = sympy.sympify(raw)
+    except (sympy.SympifyError, TypeError, SyntaxError) as exc:
+        raise ValueError("polynomial expression must be a polynomial") from exc
+    symbols = tuple(expression.free_symbols)
+    if symbols:
+        if not expression.is_polynomial(*symbols):
+            raise ValueError("polynomial expression must be a polynomial")
+    elif not expression.is_rational:
+        raise ValueError("polynomial expression must be a polynomial")
+    return expression
 
 
 class VariablePoint(ContractModel):
@@ -44,18 +63,7 @@ class EvalRequest(ContractModel):
 
     @model_validator(mode="after")
     def require_complete_rational_evaluation(self) -> Self:
-        try:
-            expression = sympy.sympify(self.polynomial.expression)
-        except (sympy.SympifyError, TypeError, SyntaxError) as exc:
-            raise ValueError(
-                "polynomial expression must be a rational polynomial"
-            ) from exc
-        symbols = tuple(expression.free_symbols)
-        if symbols:
-            if not expression.is_polynomial(*symbols):
-                raise ValueError("polynomial expression must be a polynomial")
-        elif not expression.is_rational:
-            raise ValueError("polynomial expression must be a polynomial")
+        expression = _require_polynomial_expression(self.polynomial.expression)
         free = {str(symbol) for symbol in expression.free_symbols}
         given = set(self.point.variables)
         if not free <= given:

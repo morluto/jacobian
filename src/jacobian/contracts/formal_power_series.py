@@ -263,6 +263,34 @@ class SeriesComposeResult(ContractModel):
 # ---------------------------------------------------------------------------
 
 
+class SeriesReversionRequest(ContractModel):
+    """Compositional inverse of a series with F(0)=0 and F'(0) != 0."""
+
+    variable: Variable
+    truncation_order: StrictInt = Field(ge=2, le=MAX_TRUNCATION_ORDER)
+    coefficients: tuple[CanonicalRational, ...]
+
+    @model_validator(mode="after")
+    def require_reversion_hypotheses(self) -> Self:
+        series = InputTruncatedSeries(
+            variable=self.variable,
+            truncation_order=self.truncation_order,
+            coefficients=self.coefficients,
+        )
+        if series.coefficients[0].as_fraction() != 0:
+            raise ValueError("reversion requires zero constant term")
+        if series.coefficients[1].as_fraction() == 0:
+            raise ValueError("reversion requires nonzero linear coefficient")
+        return self
+
+    def as_series(self) -> InputTruncatedSeries:
+        return InputTruncatedSeries(
+            variable=self.variable,
+            truncation_order=self.truncation_order,
+            coefficients=self.coefficients,
+        )
+
+
 class SeriesReversionResult(ContractModel):
     result: TruncatedSeries
     left_identity: Literal["F_OF_G_IS_X_MOD_X_TO_N"] = "F_OF_G_IS_X_MOD_X_TO_N"
@@ -288,6 +316,12 @@ class SeriesDerivativeResult(ContractModel):
 class SeriesIntegralRequest(ContractModel):
     series: InputTruncatedSeries
     output_order: StrictInt = Field(ge=1, le=MAX_TRUNCATION_ORDER)
+
+    @model_validator(mode="after")
+    def require_output_order_in_range(self) -> Self:
+        if self.output_order > self.series.truncation_order + 1:
+            raise ValueError("output_order must not exceed source_order + 1")
+        return self
 
 
 class SeriesIntegralResult(ContractModel):

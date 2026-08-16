@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.convex_analysis import (
     AffinePiece,
     MaxAffineEvalRequest,
@@ -40,11 +41,21 @@ def compute_max_affine_evaluation(
         elif v == max_value:
             active_pieces.append(piece.piece_id)
 
-    all_values = tuple((pid, str(v)) for pid, v in values)
+    all_values = tuple((pid, _format_rational(v)) for pid, v in values)
+    assert max_value is not None
     return MaxAffineEvalResult(
-        value=str(max_value),
+        value=_format_rational(max_value),
         active_pieces=tuple(active_pieces),
         all_values=all_values,
+    )
+
+
+def _format_rational(value: Fraction) -> str:
+    if value.denominator == 1:
+        return format_canonical_integer(value.numerator)
+    return (
+        f"{format_canonical_integer(value.numerator)}/"
+        f"{format_canonical_integer(value.denominator)}"
     )
 
 

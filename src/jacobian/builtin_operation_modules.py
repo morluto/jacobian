@@ -13,6 +13,7 @@ type LoadedOperationModule = tuple[str, MathTools]
 BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
     ("jacobian.domains.boolean", "boolean_operations"),
     ("jacobian.domains.group", "group_operations"),
+    ("jacobian.domains.permutation_group", "permutation_group_operations"),
     ("jacobian.domains.graph_coloring_ops", "graph_coloring_operations"),
     ("jacobian.domains.graph_spectral", "graph_spectral_operations"),
     ("jacobian.domains.graph_flow", "graph_flow_operations"),
@@ -45,6 +46,7 @@ BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
         "jacobian.domains.graph_symmetry",
         "graph_symmetry_operations",
     ),
+    ("jacobian.domains.certified_factoring", "certified_factoring_operations"),
     ("jacobian.domains.certified_snf", "certified_snf_operations"),
     ("jacobian.domains.matrices", "matrix_operations"),
     ("jacobian.domains.symbolic_matrix", "symbolic_matrix_operations"),

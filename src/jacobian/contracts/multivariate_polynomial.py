@@ -1,7 +1,11 @@
 """Typed wire contracts for multivariate polynomial operations."""
+
 from __future__ import annotations
+
 from typing import Literal
+
 from pydantic import Field
+
 from jacobian.contracts.base import ContractModel
 
 MAX_VARS = 16

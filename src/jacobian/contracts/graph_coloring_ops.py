@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, model_validator
 
 from jacobian.contracts.base import ContractModel
-from jacobian.contracts.exact import CanonicalInteger
 
 
 class GraphEdgeList(ContractModel):

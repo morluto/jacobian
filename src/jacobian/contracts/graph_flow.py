@@ -27,7 +27,10 @@ class FlowGraph(ContractModel):
     @model_validator(mode="after")
     def require_valid_vertices(self) -> Self:
         for edge in self.edges:
-            if not (0 <= edge.source < self.vertex_count and 0 <= edge.target < self.vertex_count):
+            if not (
+                0 <= edge.source < self.vertex_count
+                and 0 <= edge.target < self.vertex_count
+            ):
                 raise ValueError("edge vertices must be in 0..vertex_count-1")
         return self
 

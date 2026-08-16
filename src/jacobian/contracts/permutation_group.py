@@ -14,7 +14,9 @@ MAX_PERM_DEGREE = 64
 
 class PermutationGroupRequest(ContractModel):
     degree: int = Field(ge=1, le=MAX_PERM_DEGREE)
-    generators: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=MAX_PERM_DEGREE)
+    generators: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_PERM_DEGREE
+    )
 
     @model_validator(mode="after")
     def require_valid_generators(self) -> Self:
@@ -33,7 +35,9 @@ class PermutationGroupOrderResult(ContractModel):
 
 class PermutationGroupOrbitRequest(ContractModel):
     degree: int = Field(ge=1, le=MAX_PERM_DEGREE)
-    generators: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=MAX_PERM_DEGREE)
+    generators: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_PERM_DEGREE
+    )
     point: int = Field(ge=0, le=MAX_PERM_DEGREE - 1)
 
     @model_validator(mode="after")

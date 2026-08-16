@@ -17,7 +17,9 @@ def compute_stationary_distribution(
     matrix = [[{"num": c.num, "den": c.den} for c in row] for row in request.matrix]
     dist = stationary_distribution(matrix)
     return StationaryDistributionResult(
-        distribution=tuple(CanonicalRational(num=str(v.p), den=str(v.q)) for v in dist)
+        distribution=tuple(
+            CanonicalRational.from_integer_ratio(int(v.p), int(v.q)) for v in dist
+        )
     )
 
 

@@ -80,6 +80,7 @@ def main():
             matrix[i][i] == 0
             and all(
                 isinstance(matrix[i][j], int)
+                and not isinstance(matrix[i][j], bool)
                 and (i == j or matrix[i][j] > 0)
                 and matrix[i][j] == matrix[j][i]
                 for j in range(len(vertices))

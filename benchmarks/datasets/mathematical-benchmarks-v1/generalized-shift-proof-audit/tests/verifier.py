@@ -119,7 +119,6 @@ def main():
     correctness = bool(protocol_ok and frozen_valid() and certificate_valid(result))
     reward = aggregate_reward(
         correctness=correctness,
-        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)

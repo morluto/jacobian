@@ -39,6 +39,7 @@ def _valid(result, source):
     sums = result.get("sums")
     if (
         not isinstance(n, int)
+        or isinstance(n, bool)
         or not isinstance(pairs, list)
         or not isinstance(sums, list)
     ):

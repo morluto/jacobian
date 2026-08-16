@@ -129,7 +129,6 @@ def main():
     math_ok = bool(isinstance(s, dict) and valid(s.get("result")))
     reward = aggregate_reward(
         correctness=math_ok,
-        witness_validity=True,
         protocol_ok=bool(input_binding and s is not None),
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -137,7 +136,6 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": 1.0 if math_ok else 0.0,
                 "input_binding": float(input_binding),
                 "reward": reward,
             }

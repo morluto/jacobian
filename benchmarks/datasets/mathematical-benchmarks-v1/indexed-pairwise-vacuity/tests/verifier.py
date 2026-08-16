@@ -21,7 +21,7 @@ def _is_integer(value):
     """
     if isinstance(value, bool):
         return False
-    if isinstance(value, int):
+    if isinstance(value, int) and not isinstance(value, bool):
         return True
     if isinstance(value, float):
         return value.is_integer()
@@ -210,7 +210,6 @@ def main():
     )
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)

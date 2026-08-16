@@ -71,7 +71,10 @@ def parse_poly(terms):
             or not isinstance(exponents, list)
             or len(exponents) != 3
             or any(
-                not isinstance(value, int) or value < 0 or value > 4
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or value < 0
+                or value > 4
                 for value in exponents
             )
         ):

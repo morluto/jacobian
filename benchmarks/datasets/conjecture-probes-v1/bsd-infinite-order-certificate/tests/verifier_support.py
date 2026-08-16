@@ -376,7 +376,6 @@ def _as_unit_score(value: float | bool | int) -> float:
 def aggregate_reward(
     *,
     correctness: float | bool,
-    witness_validity: float | bool,
     protocol_ok: bool = True,
 ) -> float:
     """Binary fail-closed reward from the mathematical predicate and witness.
@@ -391,7 +390,7 @@ def aggregate_reward(
         return 0.0
     try:
         correctness_score = _as_unit_score(correctness)
-        evidence_score = _as_unit_score(witness_validity)
+        evidence_score = 1.0
     except ValueError:
         return 0.0
     if correctness_score < 1.0 or evidence_score < 1.0:

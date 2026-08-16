@@ -150,7 +150,6 @@ def main() -> None:
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": 1.0 if correct else 0.0,
                 "reward": float(correct),
             }
         )

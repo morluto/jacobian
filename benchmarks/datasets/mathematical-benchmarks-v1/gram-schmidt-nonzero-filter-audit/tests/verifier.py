@@ -135,7 +135,6 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": 1.0 if math_ok else 0.0,
                 "reward": reward,
             }
         )

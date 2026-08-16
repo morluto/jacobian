@@ -218,7 +218,11 @@ def _witness(value: object, source: dict[str, Any]) -> bool:
     The hidden Oracle's exact construction is not required.
     """
     length = source.get("prefix_length")
-    if not isinstance(length, int) or length != PREFIX_LENGTH:
+    if (
+        not isinstance(length, int)
+        or isinstance(length, bool)
+        or length != PREFIX_LENGTH
+    ):
         return False
     if not isinstance(value, dict) or set(value) != _RESULT_FIELDS:
         return False
@@ -260,7 +264,6 @@ def main() -> None:
     math_correct = bool(_witness(result, source))
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     logs = Path("/logs/verifier")

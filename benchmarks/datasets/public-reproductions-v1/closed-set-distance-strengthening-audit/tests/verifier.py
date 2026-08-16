@@ -215,7 +215,6 @@ def main() -> None:
     correct = bool(protocol_ok and input_bound and math_correct)
     reward = aggregate_reward(
         correctness=correct,
-        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     out = Path("/logs/verifier")

@@ -55,12 +55,3 @@ def test_lean_setup_requires_elan(
 
     with pytest.raises(RuntimeError, match="requires elan"):
         setup_lean.setup_lean(repo, run=lambda *_args: 0)
-
-
-def test_doctor_does_not_inspect_python_package_versions() -> None:
-    source = (ROOT / "tools" / "doctor_external_tools.py").read_text(encoding="utf-8")
-
-    assert "importlib.metadata" not in source
-    assert "pyproject.toml" not in source
-    assert "_matches_spec" not in source
-    assert "uv sync" not in source

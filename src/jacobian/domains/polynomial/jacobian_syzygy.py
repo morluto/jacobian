@@ -423,6 +423,34 @@ JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION = polynomial_operation(
     "syzygy",
     "coefficient-ledger",
     "evidence",
+    examples=(
+        OperationExample(
+            name="sparse-homogeneous-polynomial",
+            description="Compute sparse coefficient maps for h=x²+y²+z².",
+            input={
+                "polynomial": {
+                    "variables": ["x", "y", "z"],
+                    "polynomial": {
+                        "terms": [
+                            {
+                                "coefficient": {"num": "1", "den": "1"},
+                                "exponents": [2, 0, 0],
+                            },
+                            {
+                                "coefficient": {"num": "1", "den": "1"},
+                                "exponents": [0, 2, 0],
+                            },
+                            {
+                                "coefficient": {"num": "1", "den": "1"},
+                                "exponents": [0, 0, 2],
+                            },
+                        ]
+                    },
+                },
+                "max_degree": 0,
+            },
+        ),
+    ),
 )
 
 

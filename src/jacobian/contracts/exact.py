@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Annotated, Self
 
-from pydantic import StringConstraints, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.contracts.base import ContractModel
@@ -37,8 +37,23 @@ def require_bounded_rational(
 
 
 class CanonicalRational(ContractModel):
-    num: CanonicalInteger
-    den: CanonicalInteger
+    """A reduced rational whose denominator is positive and whose zero is 0/1."""
+
+    model_config = ConfigDict(
+        json_schema_extra={"examples": [{"num": "1", "den": "2"}]}
+    )
+
+    num: CanonicalInteger = Field(
+        description="Canonical decimal numerator of the reduced rational.",
+        examples=["1"],
+    )
+    den: CanonicalInteger = Field(
+        description=(
+            "Positive canonical decimal denominator; together with num it must be "
+            "reduced, and integers use den='1'."
+        ),
+        examples=["2"],
+    )
 
     @model_validator(mode="after")
     def require_reduced_positive_denominator(self) -> Self:

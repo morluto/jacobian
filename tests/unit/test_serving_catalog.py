@@ -17,6 +17,19 @@ def test_serving_catalog_inspects_determinant_without_sqlite() -> None:
     assert descriptor.operation_id == "matrix.determinant.compute"
 
 
+def test_every_served_operation_publishes_request_valid_examples() -> None:
+    catalog = ServingCatalog.open()
+
+    for descriptor in catalog.snapshot().operations:
+        operation = catalog.operation(descriptor.operation_id)
+        assert operation is not None
+        assert operation.examples, (
+            f"{descriptor.operation_id} must publish an invocation example"
+        )
+        for invocation_example in operation.examples:
+            operation.request_type.model_validate(invocation_example.input)
+
+
 def test_invoke_operation_runs_determinant_without_state() -> None:
     catalog = ServingCatalog.open()
     result = invoke_operation(

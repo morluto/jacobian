@@ -41,6 +41,19 @@ POLYGON_OPERATIONS = (
         "polygon",
         "triangulation",
         "optimization",
+        examples=(
+            example(
+                "unit_square_complete_diagonals",
+                "Triangulate a unit square with one weight for each non-hull diagonal.",
+                {
+                    "polygon": {"points": _UNIT_SQUARE},
+                    "diagonal_weights": [
+                        {"first": 0, "second": 2, "weight": {"num": "1", "den": "1"}},
+                        {"first": 1, "second": 3, "weight": {"num": "2", "den": "1"}},
+                    ],
+                },
+            ),
+        ),
     ),
     geometry_operation(
         "geometry.polygon.compute.signed_area",

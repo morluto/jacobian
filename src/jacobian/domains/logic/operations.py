@@ -9,7 +9,14 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import Field, StrictBool, StrictInt, field_validator, model_validator
+from pydantic import (
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictInt,
+    field_validator,
+    model_validator,
+)
 
 from jacobian.bounded_process import run_bounded_process
 from jacobian.contracts.base import ContractModel
@@ -28,8 +35,25 @@ _LEAN_TOOLCHAIN = "leanprover/lean4:v4.31.0"
 class CanonicalCnf(ContractModel):
     """A bounded canonical propositional formula value."""
 
-    variables: tuple[str, ...] = Field(max_length=_MAX_VARIABLES)
-    clauses: tuple[tuple[StrictInt, ...], ...] = Field(max_length=_MAX_CLAUSES)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [{"variables": ["a", "b"], "clauses": [[-1, 2], [1]]}]
+        }
+    )
+
+    variables: tuple[str, ...] = Field(
+        max_length=_MAX_VARIABLES,
+        description="Distinct variable names in ascending lexicographic order.",
+        examples=[["a", "b"]],
+    )
+    clauses: tuple[tuple[StrictInt, ...], ...] = Field(
+        max_length=_MAX_CLAUSES,
+        description=(
+            "Unique non-tautological clauses in canonical order. Literals are signed "
+            "one-based indexes into variables and each clause is ordered by variable."
+        ),
+        examples=[[[-1, 2], [1]]],
+    )
 
     @field_validator("variables")
     @classmethod
@@ -216,7 +240,17 @@ def _top_level_smtlib_commands(source: str) -> tuple[tuple[str, ...], ...]:
 
 class SmtSolveRequest(ContractModel):
     logic: SmtLogic
-    smtlib: str = Field(min_length=1, max_length=_MAX_SMTLIB_BYTES)
+    smtlib: str = Field(
+        min_length=1,
+        max_length=_MAX_SMTLIB_BYTES,
+        description=(
+            "ASCII SMT-LIB that declares logic, contains exactly one check-sat command, "
+            "and ends with that command."
+        ),
+        examples=[
+            "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)"
+        ],
+    )
     timeout_ms: StrictInt = Field(default=1_000, ge=1, le=10_000)
 
     @model_validator(mode="after")
@@ -260,7 +294,12 @@ class LeanDiagnostic(ContractModel):
 class LeanCheckRequest(ContractModel):
     """A source snippet checked in the service image's fixed Lean environment."""
 
-    source: str = Field(min_length=1, max_length=32_000)
+    source: str = Field(
+        min_length=1,
+        max_length=32_000,
+        description="A self-contained Lean source snippet for the fixed service toolchain.",
+        examples=["example : True := by trivial"],
+    )
     timeout_seconds: StrictInt = Field(default=10, ge=1, le=30)
 
 
@@ -504,6 +543,16 @@ LOGIC_OPERATIONS = (
         result_type=SatAssignmentCheckResult,
         run=check_sat_assignment,
         tags=("sat", "cnf", "assignment", "predicate"),
+        examples=(
+            example(
+                "satisfying_assignment",
+                "Check a total assignment against a canonical CNF.",
+                {
+                    "cnf": {"variables": ["a", "b"], "clauses": [[-1, 2], [1]]},
+                    "assignment": [True, True],
+                },
+            ),
+        ),
     ),
     MathTool(
         operation_id="sat.solve",
@@ -514,6 +563,13 @@ LOGIC_OPERATIONS = (
         result_type=SatSolveResult,
         run=solve_sat,
         tags=("sat", "cnf", "solve", "z3"),
+        examples=(
+            example(
+                "two_variable_cnf",
+                "Solve a small canonical CNF.",
+                {"cnf": {"variables": ["a", "b"], "clauses": [[-1, 2], [1]]}},
+            ),
+        ),
     ),
     MathTool(
         operation_id="smt.solve",
@@ -524,6 +580,16 @@ LOGIC_OPERATIONS = (
         result_type=SmtSolveResult,
         run=solve_smt,
         tags=("smt", "solve", "smtlib", "z3"),
+        examples=(
+            example(
+                "positive_integer",
+                "Solve a bounded quantifier-free linear-integer query.",
+                {
+                    "logic": "QF_LIA",
+                    "smtlib": "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
+                },
+            ),
+        ),
     ),
     MathTool(
         operation_id="lean.check",
@@ -534,6 +600,13 @@ LOGIC_OPERATIONS = (
         result_type=LeanCheckResult,
         run=check_lean_source,
         tags=("lean", "elaboration", "source", "bounded"),
+        examples=(
+            example(
+                "trivial_proposition",
+                "Elaborate a self-contained proof of True.",
+                {"source": "example : True := by trivial"},
+            ),
+        ),
     ),
 )
 

@@ -135,6 +135,27 @@ def rational_linear_operations() -> MathTools:
             result_type=LinearRationalInconsistencyResult,
             run=compute_rational_inconsistency,
             tags=("linear-algebra", "rational", "inconsistency", "exact"),
+            examples=(
+                example(
+                    "contradictory_one_variable_system",
+                    "Find a witness for x=0 together with x=1.",
+                    {
+                        "system": {
+                            "variables": ["x"],
+                            "coefficients": {
+                                "entries": [
+                                    [{"num": "1", "den": "1"}],
+                                    [{"num": "1", "den": "1"}],
+                                ]
+                            },
+                            "rhs": [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                        }
+                    },
+                ),
+            ),
         ),
     )
 

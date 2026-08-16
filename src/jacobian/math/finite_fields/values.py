@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal, Self
 
 import rfc8785
-from pydantic import model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from jacobian.canonical import sha256_digest
 from jacobian.contracts.base import ContractModel
@@ -60,10 +60,39 @@ def _validate_presentation_shape(
 class FiniteFieldPresentation(ContractModel):
     """An exact polynomial presentation with a fixed power-basis encoding."""
 
-    characteristic: int
-    modulus_coefficients: tuple[int, ...]
-    generator: str = "a"
-    element_encoding_version: str = "power-basis-v1"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "characteristic": 2,
+                    "modulus_coefficients": [1, 1, 1],
+                    "generator": "a",
+                    "element_encoding_version": "power-basis-v1",
+                }
+            ]
+        }
+    )
+
+    characteristic: int = Field(
+        description="Prime p defining the base field GF(p).", examples=[2]
+    )
+    modulus_coefficients: tuple[int, ...] = Field(
+        description=(
+            "Constant-to-leading coefficients of a monic irreducible modulus over "
+            "GF(characteristic); each coefficient is a canonical residue."
+        ),
+        examples=[[1, 1, 1]],
+    )
+    generator: str = Field(
+        default="a",
+        description="Name of the power-basis generator represented by the modulus.",
+        examples=["a"],
+    )
+    element_encoding_version: str = Field(
+        default="power-basis-v1",
+        description="Fixed coordinate encoding for finite-field elements.",
+        examples=["power-basis-v1"],
+    )
 
     @model_validator(mode="after")
     def validate_presentation(self) -> Self:

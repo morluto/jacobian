@@ -14,8 +14,6 @@ must be nonzero, so the zero field and pure-gradient shortcuts are rejected.
 This finite symbolic certificate concerns one exact steady polynomial flow.
 It neither proves nor disproves global existence or smoothness for the
 three-dimensional Navier–Stokes equations.
-for the frozen
-symbolic contract.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

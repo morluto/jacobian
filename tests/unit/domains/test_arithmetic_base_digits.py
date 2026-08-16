@@ -49,7 +49,7 @@ def test_base_digits_separates_sign_base_and_digits(
 def test_base_digits_result_rejects_noncanonical_separated_fields(
     invalid: dict[str, object],
 ) -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match=r"leading zero|smaller than the base|zero sign|zero digit"):
         IntegerBaseDigitsResult.model_validate(invalid)
 
 

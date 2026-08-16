@@ -70,7 +70,7 @@ def test_polynomial_recurrence_result_rejects_malformed_prefix_projection(
     result = _result()
     result["values"] = values
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match=r"index|indices"):
         PolynomialCoefficientRecurrenceEvaluationResult.model_validate(result)
 
 
@@ -99,7 +99,7 @@ def test_polynomial_recurrence_result_requires_exact_residual_range(
     result = deepcopy(_result())
     result["residuals"] = residuals
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match=r"residuals must cover"):
         PolynomialCoefficientRecurrenceEvaluationResult.model_validate(result)
 
 

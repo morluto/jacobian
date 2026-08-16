@@ -51,7 +51,7 @@ def test_strict_json_encoding_preserves_unreduced_rationals_and_unicode() -> Non
     ],
 )
 def test_ambiguous_or_inexact_json_is_rejected(value: object) -> None:
-    with pytest.raises(CanonicalizationError):
+    with pytest.raises(CanonicalizationError, match=r"not allowed|duplicate|zero"):
         canonicalize_json(value)
 
 
@@ -79,7 +79,7 @@ def test_canonical_errors_preserve_only_repair_relevant_context(
 
 
 def test_canonical_rational_wire_model_rejects_unreduced_input() -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match=r"rational must be reduced"):
         CanonicalRational.model_validate({"num": "2", "den": "4"})
 
 
@@ -102,9 +102,9 @@ def test_bounded_rational_rejects_oversized_canonical_components(
 
 
 def test_negative_zero_is_not_a_canonical_integer_encoding() -> None:
-    with pytest.raises(CanonicalizationError):
+    with pytest.raises(CanonicalizationError, match=r"canonical decimal"):
         canonicalize_json({"num": "-0", "den": "1"})
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match=r"num"):
         CanonicalRational.model_validate({"num": "-0", "den": "1"})
 
 
@@ -126,9 +126,9 @@ def test_num_den_schema_property_map_is_regular_json() -> None:
 
 
 def test_unicode_bom_and_non_json_tuples_are_rejected() -> None:
-    with pytest.raises(CanonicalizationError):
+    with pytest.raises(CanonicalizationError, match=r"BOM"):
         canonicalize_json(b'\xef\xbb\xbf{"value":1}')
-    with pytest.raises(CanonicalizationError):
+    with pytest.raises(CanonicalizationError, match=r"unsupported JSON value type"):
         canonicalize_json({"value": (1, 2)})
 
 

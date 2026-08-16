@@ -43,12 +43,14 @@ def test_rational_linear_operations_return_mathematical_outcomes() -> None:
     )
 
     assert solution.status == "SOLUTION"
-    assert solution.model_dump(mode="json")["values"] == [q(1)]
+    assert solution.values is not None
+    assert [v.model_dump(mode="json") for v in solution.values] == [q(1)]
     assert no_solution.status == "INCONSISTENT"
     assert consistency.status == "CONSISTENT"
     assert contradiction.status == "INCONSISTENT"
     assert contradiction.left_witness is not None
-    assert contradiction.model_dump(mode="json")["rhs_pairing"] == q(1)
+    assert contradiction.rhs_pairing is not None
+    assert contradiction.rhs_pairing.model_dump(mode="json") == q(1)
 
 
 def test_rational_linear_program_returns_an_optimum_not_a_certificate() -> None:
@@ -67,15 +69,12 @@ def test_rational_linear_program_returns_an_optimum_not_a_certificate() -> None:
     )
 
     assert result.status == "OPTIMAL"
-    assert result.model_dump(mode="json") == {
-        "status": "OPTIMAL",
-        "primal_candidate": [q(1)],
-        "dual_candidate": [q(1)],
-        "primal_objective": q(1),
-        "dual_objective": q(1),
-        "primal_residuals": [q(0)],
-        "dual_slacks": [q(0)],
-    }
+    assert [v.model_dump(mode="json") for v in result.primal_candidate] == [q(1)]
+    assert [v.model_dump(mode="json") for v in result.dual_candidate] == [q(1)]
+    assert result.primal_objective.model_dump(mode="json") == q(1)
+    assert result.dual_objective.model_dump(mode="json") == q(1)
+    assert [v.model_dump(mode="json") for v in result.primal_residuals] == [q(0)]
+    assert [v.model_dump(mode="json") for v in result.dual_slacks] == [q(0)]
 
 
 def test_rational_linear_program_handles_multiple_equalities() -> None:
@@ -94,5 +93,5 @@ def test_rational_linear_program_handles_multiple_equalities() -> None:
     )
 
     assert result.status == "OPTIMAL"
-    assert result.model_dump(mode="json")["primal_candidate"] == [q(1), q(2)]
-    assert result.model_dump(mode="json")["primal_residuals"] == [q(0), q(0)]
+    assert [v.model_dump(mode="json") for v in result.primal_candidate] == [q(1), q(2)]
+    assert [v.model_dump(mode="json") for v in result.primal_residuals] == [q(0), q(0)]

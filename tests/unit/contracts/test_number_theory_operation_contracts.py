@@ -65,7 +65,7 @@ def test_chinese_remainder_rejects_invalid_system_bounds(
 def test_powerful_number_result_rejects_inconsistent_or_noncanonical_witnesses(
     payload: dict[str, object],
 ) -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match=r"powerful|factor"):
         PowerfulNumberResult.model_validate(payload)
 
 
@@ -77,5 +77,5 @@ def test_in_process_factorization_dependencies_have_small_input_bounds() -> None
         (FactorialValuationRequest, {"n": 1, "base": 1_000_001}),
         (FactorizationRequest, {"value": "1000000000000"}),
     ):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match=r"less than or equal|at most"):
             model.model_validate(payload)

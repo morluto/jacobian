@@ -104,12 +104,12 @@ def test_round_trip_above_digit_limit() -> None:
 def test_from_integer_ratio_rejects_above_contract_digit_limit() -> None:
     too_large = 10 ** (MAX_CANONICAL_RATIONAL_DIGITS + 1)
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match=r"exceed the canonical"):
         CanonicalRational.from_integer_ratio(too_large, 1)
 
 
 def test_from_fraction_rejects_above_contract_digit_limit() -> None:
     too_large = Fraction(10 ** (MAX_CANONICAL_RATIONAL_DIGITS + 1), 1)
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match=r"exceed the canonical"):
         CanonicalRational.from_fraction(too_large)

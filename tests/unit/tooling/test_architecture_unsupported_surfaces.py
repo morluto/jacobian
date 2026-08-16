@@ -31,6 +31,7 @@ def test_research_memory_import_in_src_is_flagged(tmp_path: Path) -> None:
     report = check_architecture(tmp_path)
     surf = [v for v in report.violations if v.code == "unsupported-surface"]
     assert len(surf) >= 1
+    assert surf[0].path == "src/jacobian/operation_dispatcher.py"
 
 
 def test_research_memory_import_in_tests_is_flagged(tmp_path: Path) -> None:
@@ -103,6 +104,7 @@ def test_research_memory_prose_in_docs_is_flagged(tmp_path: Path) -> None:
     report = check_architecture(tmp_path)
     surf = [v for v in report.violations if v.code == "unsupported-surface"]
     assert len(surf) >= 1
+    assert surf[0].path == "docs/explanation/memory.md"
 
 
 def test_generic_memory_word_is_not_flagged(tmp_path: Path) -> None:

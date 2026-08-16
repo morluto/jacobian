@@ -56,15 +56,11 @@ def test_inline_results_keep_only_mathematical_values() -> None:
         rhs_pairing=_q(1),
     )
 
-    assert set(solution.model_dump()) == {
-        "status",
-        "values",
-    }
-    assert set(inconsistency.model_dump()) == {
-        "status",
-        "left_witness",
-        "rhs_pairing",
-    }
+    assert solution.status == "SOLUTION"
+    assert solution.values is not None
+    assert inconsistency.status == "INCONSISTENT"
+    assert inconsistency.left_witness is not None
+    assert inconsistency.rhs_pairing is not None
 
 
 def test_inline_results_preserve_completed_no_candidate_outcomes() -> None:

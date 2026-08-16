@@ -241,6 +241,7 @@ def test_run_bounded_process_in_unowned_domain_is_flagged(tmp_path: Path) -> Non
     report = check_architecture(tmp_path)
     gateway = [v for v in report.violations if v.code == "bounded-process-gateway"]
     assert len(gateway) >= 1
+    assert gateway[0].path == "src/jacobian/domains/other.py"
 
 
 def test_run_bounded_process_in_bounded_process_is_allowed(tmp_path: Path) -> None:

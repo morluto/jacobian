@@ -46,5 +46,5 @@ def test_ergodicity_uses_irreducibility_and_period_not_square_positivity() -> No
     ],
 )
 def test_transition_contract_rejects_non_stochastic_matrices(matrix: object) -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match=r"square|sum to one|nonnegative"):
         TransitionMatrixRequest.model_validate({"matrix": matrix})

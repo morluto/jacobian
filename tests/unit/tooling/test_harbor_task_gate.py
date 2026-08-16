@@ -37,7 +37,7 @@ def test_selected_task_gate_rejects_missing_or_empty_selection(
     dataset: str,
     tasks: tuple[str, ...],
 ) -> None:
-    with pytest.raises(HarborSuiteError):
+    with pytest.raises(HarborSuiteError, match=r"unknown dataset|unknown task|at least one task"):
         suite = get_suite(dataset)
         select_task_refs(suite, tasks)
 

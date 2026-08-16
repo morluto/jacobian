@@ -1,3 +1,5 @@
 """Recurrence solving operations."""
-from jacobian.math.recurrence_solving.operations import find_recurrence, closed_form
-__all__ = ["find_recurrence", "closed_form"]
+
+from jacobian.math.recurrence_solving.operations import closed_form, find_recurrence
+
+__all__ = ["closed_form", "find_recurrence"]

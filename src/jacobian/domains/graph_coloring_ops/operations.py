@@ -23,9 +23,7 @@ def _build_graph(graph: GraphEdgeList) -> nx.Graph:
 def compute_k_colorability(request: KColorabilityRequest) -> KColorabilityResult:
     g = _build_graph(request.graph)
     try:
-        coloring_dict = nx.coloring.greedy_color(
-            g, strategy="largest_first"
-        )
+        coloring_dict = nx.coloring.greedy_color(g, strategy="largest_first")
         num_colors = len(set(coloring_dict.values()))
         if num_colors <= request.colors:
             coloring = [

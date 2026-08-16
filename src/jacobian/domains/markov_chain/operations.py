@@ -1,19 +1,25 @@
 """Domain adapter for Markov chain operations."""
-from __future__ import annotations
-from jacobian.contracts.markov_chain import (
-    ErgodicDecisionResult, StationaryDistributionResult, TransitionMatrixRequest,
-)
-from jacobian.contracts.exact import CanonicalRational
-from jacobian.math.markov_chain import stationary_distribution, is_ergodic
 
-def compute_stationary_distribution(request: TransitionMatrixRequest) -> StationaryDistributionResult:
+from __future__ import annotations
+
+from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.markov_chain import (
+    ErgodicDecisionResult,
+    StationaryDistributionResult,
+    TransitionMatrixRequest,
+)
+from jacobian.math.markov_chain import is_ergodic, stationary_distribution
+
+
+def compute_stationary_distribution(
+    request: TransitionMatrixRequest,
+) -> StationaryDistributionResult:
     matrix = [[{"num": c.num, "den": c.den} for c in row] for row in request.matrix]
     dist = stationary_distribution(matrix)
     return StationaryDistributionResult(
-        distribution=tuple(
-            CanonicalRational(num=str(v.p), den=str(v.q)) for v in dist
-        )
+        distribution=tuple(CanonicalRational(num=str(v.p), den=str(v.q)) for v in dist)
     )
+
 
 def compute_ergodic_decision(request: TransitionMatrixRequest) -> ErgodicDecisionResult:
     matrix = [[{"num": c.num, "den": c.den} for c in row] for row in request.matrix]

@@ -15,8 +15,8 @@ from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
 from jacobian.domains.group.operations import (
     compute_element_order,
-    compute_group_order,
     compute_group_orbit,
+    compute_group_order,
 )
 from jacobian.math_tools import MathTool
 

@@ -5,12 +5,6 @@ from __future__ import annotations
 __all__ = ["element_order", "group_orbit", "group_order"]
 
 
-def _to_permutation(perm: list[int]) -> "Any":
-    from sympy.combinatorics import Permutation
-
-    return Permutation(list(perm))
-
-
 def group_order(degree: int, generators: list[list[int]]) -> int:
     """Return the exact order of a permutation group via Schreier-Sims."""
     from sympy.combinatorics import Permutation, PermutationGroup

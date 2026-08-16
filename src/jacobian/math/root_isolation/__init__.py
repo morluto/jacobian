@@ -1,3 +1,8 @@
 """Root isolation operations."""
-from jacobian.math.root_isolation.operations import isolate_real_roots, compare_algebraic
-__all__ = ["isolate_real_roots", "compare_algebraic"]
+
+from jacobian.math.root_isolation.operations import (
+    compare_algebraic,
+    isolate_real_roots,
+)
+
+__all__ = ["compare_algebraic", "isolate_real_roots"]

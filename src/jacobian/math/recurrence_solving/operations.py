@@ -1,7 +1,11 @@
 """Recurrence solving backed by SymPy."""
+
 from __future__ import annotations
+
 from fractions import Fraction
-__all__ = ["find_recurrence", "closed_form"]
+
+__all__ = ["closed_form", "find_recurrence"]
+
 
 def find_recurrence(sequence):
     n = len(sequence)
@@ -18,20 +22,24 @@ def find_recurrence(sequence):
         if found and order > 0:
             coeffs = [str(v) for v in vals[:order]]
             return {"coefficients": tuple(coeffs), "order": order}
-    return {"coefficients": tuple(), "order": 0}
+    return {"coefficients": (), "order": 0}
+
 
 def closed_form(char_coeffs, initial_values):
     import sympy
+
     x = sympy.Symbol("x")
     n = sympy.Symbol("n")
     char_poly_coeffs = [sympy.Rational(c) for c in char_coeffs]
-    char_poly = sum(c * x**(len(char_poly_coeffs) - 1 - i) for i, c in enumerate(char_poly_coeffs))
+    char_poly = sum(
+        c * x ** (len(char_poly_coeffs) - 1 - i) for i, c in enumerate(char_poly_coeffs)
+    )
     roots = sympy.solve(char_poly, x)
-    if len(set(str(r) for r in roots)) != len(roots):
+    if len({str(r) for r in roots}) != len(roots):
         return {"expression": "closed form with repeated roots not supported"}
     init = [sympy.Rational(v) for v in initial_values]
-    A = sympy.Matrix([[r**i for r in roots] for i in range(len(roots))])
-    b = sympy.Matrix(init[:len(roots)])
-    consts = A.solve(b)
-    expr = sum(c * r**n for c, r in zip(consts, roots))
+    a = sympy.Matrix([[r**i for r in roots] for i in range(len(roots))])
+    b = sympy.Matrix(init[: len(roots)])
+    consts = a.solve(b)
+    expr = sum(c * r**n for c, r in zip(consts, roots, strict=True))
     return {"expression": str(sympy.simplify(expr))}

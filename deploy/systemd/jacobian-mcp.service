@@ -9,8 +9,6 @@ User=jacobian
 Group=jacobian
 WorkingDirectory=/opt/jacobian/current
 Environment=PYTHONUNBUFFERED=1
-Environment=JACOBIAN_LEAN_WARMUP=1
-Environment=JACOBIAN_DEPLOYMENT_REVISION_FILE=/opt/jacobian/current/.git-revision
 Environment=ELAN_HOME=/opt/jacobian/lean/elan
 Environment=PATH=/opt/jacobian/lean/elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 LoadCredential=tokens.json:/etc/jacobian-mcp/tokens.json

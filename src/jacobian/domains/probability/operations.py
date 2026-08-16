@@ -414,7 +414,50 @@ _FAIR_BIT = {
             "value": {"num": "1", "den": "1"},
             "probability": {"num": "1", "den": "2"},
         },
-    ]
+    ],
+}
+
+_FAIR_DIE_3 = {
+    "atoms": [
+        {
+            "value": {"num": "0", "den": "1"},
+            "probability": {"num": "1", "den": "3"},
+        },
+        {
+            "value": {"num": "1", "den": "1"},
+            "probability": {"num": "1", "den": "3"},
+        },
+        {
+            "value": {"num": "2", "den": "1"},
+            "probability": {"num": "1", "den": "3"},
+        },
+    ],
+}
+
+_SQUARE_GRAPH = {
+    "graph": {
+        "vertices": ["a", "b", "c", "d"],
+        "edges": [["a", "b"], ["a", "c"], ["b", "d"], ["c", "d"]],
+    },
+    "edge_probabilities": [
+        {
+            "edge": ["a", "b"],
+            "open_probability": {"num": "1", "den": "2"},
+        },
+        {
+            "edge": ["a", "c"],
+            "open_probability": {"num": "1", "den": "2"},
+        },
+        {
+            "edge": ["b", "d"],
+            "open_probability": {"num": "1", "den": "2"},
+        },
+        {
+            "edge": ["c", "d"],
+            "open_probability": {"num": "1", "den": "2"},
+        },
+    ],
+    "terminals": ["a", "d"],
 }
 
 
@@ -473,6 +516,17 @@ FINITE_PROBABILITY_OPERATIONS = (
                     "event_values": [{"num": "1", "den": "1"}],
                 },
             ),
+            example(
+                "fair_die_event_subset",
+                "event_values must be strictly increasing, bounded, and a subset of the distribution support.",
+                {
+                    "distribution": _FAIR_DIE_3,
+                    "event_values": [
+                        {"num": "0", "den": "1"},
+                        {"num": "2", "den": "1"},
+                    ],
+                },
+            ),
         ),
     ),
     MathTool(
@@ -528,6 +582,27 @@ FINITE_PROBABILITY_OPERATIONS = (
                     ],
                 },
             ),
+            example(
+                "fair_die_pair_merge",
+                "mapping sources must exactly cover the distribution atoms in canonical order.",
+                {
+                    "distribution": _FAIR_DIE_3,
+                    "mapping": [
+                        {
+                            "source": {"num": "0", "den": "1"},
+                            "target": {"num": "0", "den": "1"},
+                        },
+                        {
+                            "source": {"num": "1", "den": "1"},
+                            "target": {"num": "1", "den": "2"},
+                        },
+                        {
+                            "source": {"num": "2", "den": "1"},
+                            "target": {"num": "1", "den": "2"},
+                        },
+                    ],
+                },
+            ),
         ),
     ),
     MathTool(
@@ -554,6 +629,11 @@ FINITE_PROBABILITY_OPERATIONS = (
                 "two_fair_bits",
                 "Compute the exact distribution of the sum of two fair bits.",
                 {"left": _FAIR_BIT, "right": _FAIR_BIT},
+            ),
+            example(
+                "die_plus_bit",
+                "pair product must not exceed 4096 and aggregated atom count must not exceed 256.",
+                {"left": _FAIR_DIE_3, "right": _FAIR_BIT},
             ),
         ),
     ),
@@ -658,6 +738,11 @@ FINITE_PROBABILITY_OPERATIONS = (
                     ],
                     "terminals": ["a", "c"],
                 },
+            ),
+            example(
+                "square_terminal_reliability",
+                "edge_probabilities must cover graph edges in canonical order; terminals must be two distinct declared vertices.",
+                _SQUARE_GRAPH,
             ),
         ),
     ),

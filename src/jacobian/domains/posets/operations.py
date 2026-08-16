@@ -357,6 +357,20 @@ FINITE_POSET_OPERATIONS: MathTools = (
                 "Materialize the four-element diamond from its cover relation.",
                 _DIAMOND,
             ),
+            example(
+                "three_element_chain",
+                "The relation must be antisymmetric and acyclic; a three-element chain 0<1<2.",
+                {
+                    "elements": ["0", "1", "2"],
+                    "relation": [
+                        {"lower": "0", "upper": "1"},
+                        {"lower": "0", "upper": "2"},
+                        {"lower": "1", "upper": "2"},
+                    ],
+                    "interpretation": "COMPARABLE_PAIRS",
+                    "reflexive_pairs": "FORBIDDEN",
+                },
+            ),
         ),
     ),
     MathTool(

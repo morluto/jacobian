@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="90460837398c82abd295028b75cef6ed99a17472f652cbde7b3198cc618d0a60"
+LABEL jacobian.checksum="fd6939deb4c3a1a37ba815748a69e0344f3be47f5b6ed5d47bae40e0d80436dc"
 LABEL jacobian.task="jacobian/noncompact-lefschetz-proof-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

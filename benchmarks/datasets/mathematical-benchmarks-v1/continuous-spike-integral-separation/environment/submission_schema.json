@@ -1,85 +1,85 @@
 {
-    "$defs": {
-        "rational": {
+  "$defs": {
+    "rational": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "alpha": {
+          "$ref": "#/$defs/rational"
+        },
+        "spikes": {
+          "items": {
             "additionalProperties": false,
             "properties": {
-                "denominator": {
-                    "minimum": 1,
-                    "type": "integer"
-                },
-                "numerator": {
-                    "type": "integer"
-                }
+              "area": {
+                "$ref": "#/$defs/rational"
+              },
+              "center": {
+                "$ref": "#/$defs/rational"
+              },
+              "half_width": {
+                "$ref": "#/$defs/rational"
+              },
+              "integer_sample": {
+                "$ref": "#/$defs/rational"
+              },
+              "left": {
+                "$ref": "#/$defs/rational"
+              },
+              "n": {
+                "maximum": 12,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "right": {
+                "$ref": "#/$defs/rational"
+              }
             },
             "required": [
-                "numerator",
-                "denominator"
+              "n",
+              "center",
+              "half_width",
+              "left",
+              "right",
+              "area",
+              "integer_sample"
             ],
             "type": "object"
+          },
+          "maxItems": 12,
+          "minItems": 12,
+          "type": "array"
         }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-        "result": {
-            "additionalProperties": false,
-            "properties": {
-                "alpha": {
-                    "$ref": "#/$defs/rational"
-                },
-                "spikes": {
-                    "items": {
-                        "additionalProperties": false,
-                        "properties": {
-                            "area": {
-                                "$ref": "#/$defs/rational"
-                            },
-                            "center": {
-                                "$ref": "#/$defs/rational"
-                            },
-                            "half_width": {
-                                "$ref": "#/$defs/rational"
-                            },
-                            "integer_sample": {
-                                "$ref": "#/$defs/rational"
-                            },
-                            "left": {
-                                "$ref": "#/$defs/rational"
-                            },
-                            "n": {
-                                "maximum": 12,
-                                "minimum": 1,
-                                "type": "integer"
-                            },
-                            "right": {
-                                "$ref": "#/$defs/rational"
-                            }
-                        },
-                        "required": [
-                            "n",
-                            "center",
-                            "half_width",
-                            "left",
-                            "right",
-                            "area",
-                            "integer_sample"
-                        ],
-                        "type": "object"
-                    },
-                    "maxItems": 12,
-                    "minItems": 12,
-                    "type": "array"
-                }
-            },
-            "required": [
-                "alpha",
-                "spikes"
-            ],
-            "type": "object"
-        }
-    },
-    "required": [
-        "result"
-    ],
-    "type": "object"
+      },
+      "required": [
+        "alpha",
+        "spikes"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "result"
+  ],
+  "type": "object"
 }

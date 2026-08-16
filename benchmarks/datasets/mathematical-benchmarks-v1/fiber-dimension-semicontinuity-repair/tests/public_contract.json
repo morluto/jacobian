@@ -1,270 +1,133 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "polynomial": {
-      "additionalProperties": false,
-      "properties": {
-        "terms": {
-          "items": {
-            "$ref": "#/$defs/term"
-          },
-          "maxItems": 12,
-          "minItems": 1,
-          "type": "array"
-        }
-      },
-      "required": [
-        "terms"
-      ],
-      "type": "object"
-    },
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    },
-    "term": {
-      "additionalProperties": false,
-      "properties": {
-        "coefficient": {
-          "$ref": "#/$defs/rational"
-        },
-        "exponents": {
-          "items": {
-            "maximum": 4,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 2,
-          "minItems": 2,
-          "type": "array"
-        }
-      },
-      "required": [
-        "coefficient",
-        "exponents"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "fiber_checks": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "cokernel_dimension": {
-              "maximum": 2,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "matrix_rank": {
-              "maximum": 2,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "point": {
-              "additionalProperties": false,
-              "properties": {
-                "x": {
-                  "$ref": "#/$defs/rational"
-                },
-                "y": {
-                  "$ref": "#/$defs/rational"
-                }
-              },
-              "required": [
-                "x",
-                "y"
-              ],
-              "type": "object"
-            }
-          },
-          "required": [
-            "point",
-            "matrix_rank",
-            "cokernel_dimension"
-          ],
-          "type": "object"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      },
-      "global_repair": {
-        "const": "GLOBAL_FITTING_IDEAL_REPLACES_ARBITRARY_UNION"
-      },
-      "ideal_generators": {
-        "items": {
-          "$ref": "#/$defs/polynomial"
-        },
-        "maxItems": 6,
-        "minItems": 2,
-        "type": "array"
-      },
-      "tensor_repair": {
-        "const": "RIGHT_EXACTNESS_SUFFICES_RESIDUE_FIELD_NOT_FLAT_IN_GENERAL"
-      }
-    },
-    "required": [
-      "tensor_repair",
-      "global_repair",
-      "ideal_generators",
-      "fiber_checks"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "polynomial": {
-        "additionalProperties": false,
-        "properties": {
-          "terms": {
-            "items": {
-              "$ref": "#/$defs/term"
-            },
-            "maxItems": 12,
-            "minItems": 1,
-            "type": "array"
-          }
-        },
-        "required": [
-          "terms"
-        ],
-        "type": "object"
-      },
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "term": {
-        "additionalProperties": false,
-        "properties": {
-          "coefficient": {
-            "$ref": "#/$defs/rational"
-          },
-          "exponents": {
-            "items": {
-              "maximum": 4,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          }
-        },
-        "required": [
-          "coefficient",
-          "exponents"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "fiber_checks": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "cokernel_dimension": {
-                  "maximum": 2,
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "matrix_rank": {
-                  "maximum": 2,
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "point": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "x": {
-                      "$ref": "#/$defs/rational"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "polynomial": {
+            "additionalProperties": false,
+            "properties": {
+                "terms": {
+                    "items": {
+                        "$ref": "#/$defs/term"
                     },
-                    "y": {
-                      "$ref": "#/$defs/rational"
-                    }
-                  },
-                  "required": [
-                    "x",
-                    "y"
-                  ],
-                  "type": "object"
+                    "maxItems": 12,
+                    "minItems": 1,
+                    "type": "array"
                 }
-              },
-              "required": [
-                "point",
-                "matrix_rank",
-                "cokernel_dimension"
-              ],
-              "type": "object"
             },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          },
-          "global_repair": {
-            "const": "GLOBAL_FITTING_IDEAL_REPLACES_ARBITRARY_UNION"
-          },
-          "ideal_generators": {
-            "items": {
-              "$ref": "#/$defs/polynomial"
+            "required": [
+                "terms"
+            ],
+            "type": "object"
+        },
+        "rational": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
             },
-            "maxItems": 6,
-            "minItems": 2,
-            "type": "array"
-          },
-          "tensor_repair": {
-            "const": "RIGHT_EXACTNESS_SUFFICES_RESIDUE_FIELD_NOT_FLAT_IN_GENERAL"
-          }
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        },
+        "term": {
+            "additionalProperties": false,
+            "properties": {
+                "coefficient": {
+                    "$ref": "#/$defs/rational"
+                },
+                "exponents": {
+                    "items": {
+                        "maximum": 4,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                }
+            },
+            "required": [
+                "coefficient",
+                "exponents"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "fiber_checks": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "cokernel_dimension": {
+                            "maximum": 2,
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "matrix_rank": {
+                            "maximum": 2,
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "point": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "x": {
+                                    "$ref": "#/$defs/rational"
+                                },
+                                "y": {
+                                    "$ref": "#/$defs/rational"
+                                }
+                            },
+                            "required": [
+                                "x",
+                                "y"
+                            ],
+                            "type": "object"
+                        }
+                    },
+                    "required": [
+                        "point",
+                        "matrix_rank",
+                        "cokernel_dimension"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
+            },
+            "global_repair": {
+                "const": "GLOBAL_FITTING_IDEAL_REPLACES_ARBITRARY_UNION"
+            },
+            "ideal_generators": {
+                "items": {
+                    "$ref": "#/$defs/polynomial"
+                },
+                "maxItems": 6,
+                "minItems": 2,
+                "type": "array"
+            },
+            "tensor_repair": {
+                "const": "RIGHT_EXACTNESS_SUFFICES_RESIDUE_FIELD_NOT_FLAT_IN_GENERAL"
+            }
         },
         "required": [
-          "tensor_repair",
-          "global_repair",
-          "ideal_generators",
-          "fiber_checks"
+            "tensor_repair",
+            "global_repair",
+            "ideal_generators",
+            "fiber_checks"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/fiber-dimension-semicontinuity-repair"
+    "task_id": "jacobian/fiber-dimension-semicontinuity-repair"
 }

@@ -1,178 +1,87 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rat": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rat": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
         }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "divergence": {
-        "items": {
-          "$ref": "#/$defs/rat"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
-      },
-      "momentum_x": {
-        "items": {
-          "$ref": "#/$defs/rat"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "momentum_y": {
-        "items": {
-          "$ref": "#/$defs/rat"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "pressure": {
-        "items": {
-          "$ref": "#/$defs/rat"
-        },
-        "maxItems": 6,
-        "minItems": 6,
-        "type": "array"
-      },
-      "velocity": {
-        "items": {
-          "items": {
-            "$ref": "#/$defs/rat"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "vorticity": {
-        "$ref": "#/$defs/rat"
-      }
     },
-    "required": [
-      "velocity",
-      "pressure",
-      "divergence",
-      "momentum_x",
-      "momentum_y",
-      "vorticity"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "rat": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "divergence": {
-            "items": {
-              "$ref": "#/$defs/rat"
+            "divergence": {
+                "items": {
+                    "$ref": "#/$defs/rat"
+                },
+                "maxItems": 1,
+                "minItems": 1,
+                "type": "array"
             },
-            "maxItems": 1,
-            "minItems": 1,
-            "type": "array"
-          },
-          "momentum_x": {
-            "items": {
-              "$ref": "#/$defs/rat"
+            "momentum_x": {
+                "items": {
+                    "$ref": "#/$defs/rat"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
             },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "momentum_y": {
-            "items": {
-              "$ref": "#/$defs/rat"
+            "momentum_y": {
+                "items": {
+                    "$ref": "#/$defs/rat"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
             },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "pressure": {
-            "items": {
-              "$ref": "#/$defs/rat"
+            "pressure": {
+                "items": {
+                    "$ref": "#/$defs/rat"
+                },
+                "maxItems": 6,
+                "minItems": 6,
+                "type": "array"
             },
-            "maxItems": 6,
-            "minItems": 6,
-            "type": "array"
-          },
-          "velocity": {
-            "items": {
-              "items": {
+            "velocity": {
+                "items": {
+                    "items": {
+                        "$ref": "#/$defs/rat"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            },
+            "vorticity": {
                 "$ref": "#/$defs/rat"
-              },
-              "maxItems": 3,
-              "minItems": 3,
-              "type": "array"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "vorticity": {
-            "$ref": "#/$defs/rat"
-          }
+            }
         },
         "required": [
-          "velocity",
-          "pressure",
-          "divergence",
-          "momentum_x",
-          "momentum_y",
-          "vorticity"
+            "velocity",
+            "pressure",
+            "divergence",
+            "momentum_x",
+            "momentum_y",
+            "vorticity"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/navier-stokes-polynomial-certificate"
+    "task_id": "jacobian/navier-stokes-polynomial-certificate"
 }

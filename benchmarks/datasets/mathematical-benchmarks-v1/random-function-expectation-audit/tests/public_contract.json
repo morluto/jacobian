@@ -1,94 +1,53 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {"minimum": 1, "type": "integer"},
-        "numerator": {"type": "integer"}
-      },
-      "required": ["numerator", "denominator"],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "expected_value": {
-        "description": "The expectation of (f(f(x))-x)^2 over ordered x and f",
-        "$ref": "#/$defs/rational"
-      },
-      "ordered_squared_difference_sum": {
-        "minimum": 0,
-        "type": "integer"
-      },
-      "other_hit_probability": {
-        "description": "P(f(f(x))=y) for one fixed y != x",
-        "$ref": "#/$defs/rational"
-      },
-      "self_hit_probability": {
-        "description": "P(f(f(x))=x) for a fixed x",
-        "$ref": "#/$defs/rational"
-      }
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rational": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        }
     },
-    "required": [
-      "self_hit_probability",
-      "other_hit_probability",
-      "ordered_squared_difference_sum",
-      "expected_value"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$defs": {
-      "rational": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {"minimum": 1, "type": "integer"},
-          "numerator": {"type": "integer"}
-        },
-        "required": ["numerator", "denominator"],
-        "type": "object"
-      }
-    },
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "expected_value": {
-            "description": "The expectation of (f(f(x))-x)^2 over ordered x and f",
-            "$ref": "#/$defs/rational"
-          },
-          "ordered_squared_difference_sum": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "other_hit_probability": {
-            "description": "P(f(f(x))=y) for one fixed y != x",
-            "$ref": "#/$defs/rational"
-          },
-          "self_hit_probability": {
-            "description": "P(f(f(x))=x) for a fixed x",
-            "$ref": "#/$defs/rational"
-          }
+            "expected_value": {
+                "description": "The expectation of (f(f(x))-x)^2 over ordered x and f",
+                "$ref": "#/$defs/rational"
+            },
+            "ordered_squared_difference_sum": {
+                "minimum": 0,
+                "type": "integer"
+            },
+            "other_hit_probability": {
+                "description": "P(f(f(x))=y) for one fixed y != x",
+                "$ref": "#/$defs/rational"
+            },
+            "self_hit_probability": {
+                "description": "P(f(f(x))=x) for a fixed x",
+                "$ref": "#/$defs/rational"
+            }
         },
         "required": [
-          "self_hit_probability",
-          "other_hit_probability",
-          "ordered_squared_difference_sum",
-          "expected_value"
+            "self_hit_probability",
+            "other_hit_probability",
+            "ordered_squared_difference_sum",
+            "expected_value"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/random-function-expectation-audit"
+    "task_id": "jacobian/random-function-expectation-audit"
 }

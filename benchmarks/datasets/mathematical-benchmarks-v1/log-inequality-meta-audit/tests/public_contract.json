@@ -1,175 +1,86 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "certificate": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "comparison": {
-            "const": "LESS_THAN"
-          },
-          "comparison_left": {
-            "type": "integer"
-          },
-          "comparison_right": {
-            "type": "integer"
-          },
-          "first_log_term": {
-            "type": "integer"
-          },
-          "lhs_reduction": {
-            "const": "2+4*log_6(18)"
-          },
-          "x_squared": {
-            "type": "integer"
-          },
-          "y_squared": {
-            "type": "integer"
-          },
-          "z_squared": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "x_squared",
-          "y_squared",
-          "z_squared",
-          "first_log_term",
-          "lhs_reduction",
-          "comparison_left",
-          "comparison_right",
-          "comparison"
-        ],
-        "type": "object"
-      },
-      "claim_status": {
-        "minLength": 1,
-        "type": "string"
-      },
-      "counterexample_status": {
-        "minLength": 1,
-        "type": "string"
-      },
-      "evaluator_rubric_status": {
-        "minLength": 1,
-        "type": "string"
-      },
-      "evaluator_score": {
-        "minimum": 0,
-        "type": "integer"
-      },
-      "instruction_compliance": {
-        "minLength": 1,
-        "type": "string"
-      },
-      "meta_evaluation_status": {
-        "minLength": 1,
-        "type": "string"
-      }
-    },
-    "required": [
-      "claim_status",
-      "counterexample_status",
-      "instruction_compliance",
-      "evaluator_score",
-      "evaluator_rubric_status",
-      "meta_evaluation_status",
-      "certificate"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "certificate": {
-            "additionalProperties": false,
-            "properties": {
-              "comparison": {
-                "const": "LESS_THAN"
-              },
-              "comparison_left": {
-                "type": "integer"
-              },
-              "comparison_right": {
-                "type": "integer"
-              },
-              "first_log_term": {
-                "type": "integer"
-              },
-              "lhs_reduction": {
-                "const": "2+4*log_6(18)"
-              },
-              "x_squared": {
-                "type": "integer"
-              },
-              "y_squared": {
-                "type": "integer"
-              },
-              "z_squared": {
-                "type": "integer"
-              }
+            "certificate": {
+                "additionalProperties": false,
+                "properties": {
+                    "comparison": {
+                        "const": "LESS_THAN"
+                    },
+                    "comparison_left": {
+                        "type": "integer"
+                    },
+                    "comparison_right": {
+                        "type": "integer"
+                    },
+                    "first_log_term": {
+                        "type": "integer"
+                    },
+                    "lhs_reduction": {
+                        "const": "2+4*log_6(18)"
+                    },
+                    "x_squared": {
+                        "type": "integer"
+                    },
+                    "y_squared": {
+                        "type": "integer"
+                    },
+                    "z_squared": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "x_squared",
+                    "y_squared",
+                    "z_squared",
+                    "first_log_term",
+                    "lhs_reduction",
+                    "comparison_left",
+                    "comparison_right",
+                    "comparison"
+                ],
+                "type": "object"
             },
-            "required": [
-              "x_squared",
-              "y_squared",
-              "z_squared",
-              "first_log_term",
-              "lhs_reduction",
-              "comparison_left",
-              "comparison_right",
-              "comparison"
-            ],
-            "type": "object"
-          },
-          "claim_status": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "counterexample_status": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "evaluator_rubric_status": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "evaluator_score": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "instruction_compliance": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "meta_evaluation_status": {
-            "minLength": 1,
-            "type": "string"
-          }
+            "claim_status": {
+                "minLength": 1,
+                "type": "string"
+            },
+            "counterexample_status": {
+                "minLength": 1,
+                "type": "string"
+            },
+            "evaluator_rubric_status": {
+                "minLength": 1,
+                "type": "string"
+            },
+            "evaluator_score": {
+                "minimum": 0,
+                "type": "integer"
+            },
+            "instruction_compliance": {
+                "minLength": 1,
+                "type": "string"
+            },
+            "meta_evaluation_status": {
+                "minLength": 1,
+                "type": "string"
+            }
         },
         "required": [
-          "claim_status",
-          "counterexample_status",
-          "instruction_compliance",
-          "evaluator_score",
-          "evaluator_rubric_status",
-          "meta_evaluation_status",
-          "certificate"
+            "claim_status",
+            "counterexample_status",
+            "instruction_compliance",
+            "evaluator_score",
+            "evaluator_rubric_status",
+            "meta_evaluation_status",
+            "certificate"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/log-inequality-meta-audit"
+    "task_id": "jacobian/log-inequality-meta-audit"
 }

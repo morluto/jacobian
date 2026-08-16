@@ -1,149 +1,73 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "bad_factor": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "bad_factor_power": {
-        "const": 4
-      },
-      "bad_prime": {
-        "const": 2
-      },
-      "bad_reduction": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 5,
-        "minItems": 5,
-        "type": "array"
-      },
-      "p2_remainder": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 4,
-        "minItems": 1,
-        "type": "array"
-      },
-      "p4_remainder": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 4,
-        "minItems": 1,
-        "type": "array"
-      },
-      "rabin_gcd_degree": {
-        "const": 0
-      },
-      "rational_conclusion": {
-        "const": "IRREDUCIBLE_OVER_Q"
-      },
-      "repair_prime": {
-        "maximum": 97,
-        "minimum": 3,
-        "type": "integer"
-      }
-    },
-    "required": [
-      "bad_prime",
-      "bad_reduction",
-      "bad_factor",
-      "bad_factor_power",
-      "repair_prime",
-      "p2_remainder",
-      "p4_remainder",
-      "rabin_gcd_degree",
-      "rational_conclusion"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "bad_factor": {
-            "items": {
-              "type": "integer"
+            "bad_factor": {
+                "items": {
+                    "type": "integer"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
             },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "bad_factor_power": {
-            "const": 4
-          },
-          "bad_prime": {
-            "const": 2
-          },
-          "bad_reduction": {
-            "items": {
-              "type": "integer"
+            "bad_factor_power": {
+                "const": 4
             },
-            "maxItems": 5,
-            "minItems": 5,
-            "type": "array"
-          },
-          "p2_remainder": {
-            "items": {
-              "type": "integer"
+            "bad_prime": {
+                "const": 2
             },
-            "maxItems": 4,
-            "minItems": 1,
-            "type": "array"
-          },
-          "p4_remainder": {
-            "items": {
-              "type": "integer"
+            "bad_reduction": {
+                "items": {
+                    "type": "integer"
+                },
+                "maxItems": 5,
+                "minItems": 5,
+                "type": "array"
             },
-            "maxItems": 4,
-            "minItems": 1,
-            "type": "array"
-          },
-          "rabin_gcd_degree": {
-            "const": 0
-          },
-          "rational_conclusion": {
-            "const": "IRREDUCIBLE_OVER_Q"
-          },
-          "repair_prime": {
-            "maximum": 97,
-            "minimum": 3,
-            "type": "integer"
-          }
+            "p2_remainder": {
+                "items": {
+                    "type": "integer"
+                },
+                "maxItems": 4,
+                "minItems": 1,
+                "type": "array"
+            },
+            "p4_remainder": {
+                "items": {
+                    "type": "integer"
+                },
+                "maxItems": 4,
+                "minItems": 1,
+                "type": "array"
+            },
+            "rabin_gcd_degree": {
+                "const": 0
+            },
+            "rational_conclusion": {
+                "const": "IRREDUCIBLE_OVER_Q"
+            },
+            "repair_prime": {
+                "maximum": 97,
+                "minimum": 3,
+                "type": "integer"
+            }
         },
         "required": [
-          "bad_prime",
-          "bad_reduction",
-          "bad_factor",
-          "bad_factor_power",
-          "repair_prime",
-          "p2_remainder",
-          "p4_remainder",
-          "rabin_gcd_degree",
-          "rational_conclusion"
+            "bad_prime",
+            "bad_reduction",
+            "bad_factor",
+            "bad_factor_power",
+            "repair_prime",
+            "p2_remainder",
+            "p4_remainder",
+            "rabin_gcd_degree",
+            "rational_conclusion"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/finite-field-irreducibility-repair"
+    "task_id": "jacobian/finite-field-irreducibility-repair"
 }

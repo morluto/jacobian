@@ -1,206 +1,101 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "poly": {
-      "items": {
-        "$ref": "#/$defs/term"
-      },
-      "maxItems": 16,
-      "minItems": 1,
-      "type": "array"
-    },
-    "term": {
-      "additionalProperties": false,
-      "properties": {
-        "coefficient": {
-          "additionalProperties": false,
-          "properties": {
-            "denominator": {
-              "minimum": 1,
-              "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "poly": {
+            "items": {
+                "$ref": "#/$defs/term"
             },
-            "numerator": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "numerator",
-            "denominator"
-          ],
-          "type": "object"
+            "maxItems": 16,
+            "minItems": 1,
+            "type": "array"
         },
-        "exponents": {
-          "items": {
-            "maximum": 8,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        }
-      },
-      "required": [
-        "coefficient",
-        "exponents"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "d2_delta_denominator": {
-        "$ref": "#/$defs/poly"
-      },
-      "d2_delta_numerator": {
-        "$ref": "#/$defs/poly"
-      },
-      "d_delta_inverse": {
-        "$ref": "#/$defs/poly"
-      },
-      "delta_inverse": {
-        "$ref": "#/$defs/poly"
-      },
-      "norm_polynomial": {
-        "$ref": "#/$defs/poly"
-      },
-      "p_denominator": {
-        "$ref": "#/$defs/poly"
-      },
-      "p_numerator": {
-        "$ref": "#/$defs/poly"
-      },
-      "q_denominator": {
-        "$ref": "#/$defs/poly"
-      },
-      "q_numerator": {
-        "$ref": "#/$defs/poly"
-      },
-      "s_forward": {
-        "$ref": "#/$defs/poly"
-      }
-    },
-    "required": [
-      "p_numerator",
-      "p_denominator",
-      "q_numerator",
-      "q_denominator",
-      "d_delta_inverse",
-      "d2_delta_numerator",
-      "d2_delta_denominator",
-      "s_forward",
-      "delta_inverse",
-      "norm_polynomial"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "poly": {
-        "items": {
-          "$ref": "#/$defs/term"
-        },
-        "maxItems": 16,
-        "minItems": 1,
-        "type": "array"
-      },
-      "term": {
-        "additionalProperties": false,
-        "properties": {
-          "coefficient": {
+        "term": {
             "additionalProperties": false,
             "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
+                "coefficient": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "denominator": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "numerator": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "numerator",
+                        "denominator"
+                    ],
+                    "type": "object"
+                },
+                "exponents": {
+                    "items": {
+                        "maximum": 8,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                }
             },
             "required": [
-              "numerator",
-              "denominator"
+                "coefficient",
+                "exponents"
             ],
             "type": "object"
-          },
-          "exponents": {
-            "items": {
-              "maximum": 8,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          }
-        },
-        "required": [
-          "coefficient",
-          "exponents"
-        ],
-        "type": "object"
-      }
+        }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "d2_delta_denominator": {
-            "$ref": "#/$defs/poly"
-          },
-          "d2_delta_numerator": {
-            "$ref": "#/$defs/poly"
-          },
-          "d_delta_inverse": {
-            "$ref": "#/$defs/poly"
-          },
-          "delta_inverse": {
-            "$ref": "#/$defs/poly"
-          },
-          "norm_polynomial": {
-            "$ref": "#/$defs/poly"
-          },
-          "p_denominator": {
-            "$ref": "#/$defs/poly"
-          },
-          "p_numerator": {
-            "$ref": "#/$defs/poly"
-          },
-          "q_denominator": {
-            "$ref": "#/$defs/poly"
-          },
-          "q_numerator": {
-            "$ref": "#/$defs/poly"
-          },
-          "s_forward": {
-            "$ref": "#/$defs/poly"
-          }
+            "d2_delta_denominator": {
+                "$ref": "#/$defs/poly"
+            },
+            "d2_delta_numerator": {
+                "$ref": "#/$defs/poly"
+            },
+            "d_delta_inverse": {
+                "$ref": "#/$defs/poly"
+            },
+            "delta_inverse": {
+                "$ref": "#/$defs/poly"
+            },
+            "norm_polynomial": {
+                "$ref": "#/$defs/poly"
+            },
+            "p_denominator": {
+                "$ref": "#/$defs/poly"
+            },
+            "p_numerator": {
+                "$ref": "#/$defs/poly"
+            },
+            "q_denominator": {
+                "$ref": "#/$defs/poly"
+            },
+            "q_numerator": {
+                "$ref": "#/$defs/poly"
+            },
+            "s_forward": {
+                "$ref": "#/$defs/poly"
+            }
         },
         "required": [
-          "p_numerator",
-          "p_denominator",
-          "q_numerator",
-          "q_denominator",
-          "d_delta_inverse",
-          "d2_delta_numerator",
-          "d2_delta_denominator",
-          "s_forward",
-          "delta_inverse",
-          "norm_polynomial"
+            "p_numerator",
+            "p_denominator",
+            "q_numerator",
+            "q_denominator",
+            "d_delta_inverse",
+            "d2_delta_numerator",
+            "d2_delta_denominator",
+            "s_forward",
+            "delta_inverse",
+            "norm_polynomial"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/algebraic-independence-transfer-audit"
+    "task_id": "jacobian/algebraic-independence-transfer-audit"
 }

@@ -1,235 +1,116 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "BP": {
-        "items": {
-          "items": {
-            "maximum": 124,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 6,
-          "minItems": 6,
-          "type": "array"
-        },
-        "maxItems": 6,
-        "minItems": 6,
-        "type": "array"
-      },
-      "PA": {
-        "items": {
-          "items": {
-            "maximum": 124,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 6,
-          "minItems": 6,
-          "type": "array"
-        },
-        "maxItems": 6,
-        "minItems": 6,
-        "type": "array"
-      },
-      "determinant_modulus": {
-        "maximum": 124,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "matched_pairs": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "a_value": {
-              "type": "integer"
-            },
-            "b_value": {
-              "type": "integer"
-            },
-            "column": {
-              "type": "integer"
-            },
-            "row": {
-              "type": "integer"
-            },
-            "unit_entry": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "row",
-            "column",
-            "b_value",
-            "a_value",
-            "unit_entry"
-          ],
-          "type": "object"
-        },
-        "maxItems": 6,
-        "minItems": 6,
-        "type": "array"
-      },
-      "modulus": {
-        "const": 125
-      },
-      "permutation_sign": {
-        "enum": [
-          -1,
-          1
-        ]
-      },
-      "signed_term_modulus": {
-        "maximum": 124,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "unit_permutation": {
-        "items": {
-          "maximum": 5,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 6,
-        "minItems": 6,
-        "type": "array",
-        "uniqueItems": true
-      }
-    },
-    "required": [
-      "modulus",
-      "PA",
-      "BP",
-      "determinant_modulus",
-      "unit_permutation",
-      "permutation_sign",
-      "signed_term_modulus",
-      "matched_pairs"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "BP": {
-            "items": {
-              "items": {
+            "BP": {
+                "items": {
+                    "items": {
+                        "maximum": 124,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "maxItems": 6,
+                    "minItems": 6,
+                    "type": "array"
+                },
+                "maxItems": 6,
+                "minItems": 6,
+                "type": "array"
+            },
+            "PA": {
+                "items": {
+                    "items": {
+                        "maximum": 124,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "maxItems": 6,
+                    "minItems": 6,
+                    "type": "array"
+                },
+                "maxItems": 6,
+                "minItems": 6,
+                "type": "array"
+            },
+            "determinant_modulus": {
                 "maximum": 124,
                 "minimum": 0,
                 "type": "integer"
-              },
-              "maxItems": 6,
-              "minItems": 6,
-              "type": "array"
             },
-            "maxItems": 6,
-            "minItems": 6,
-            "type": "array"
-          },
-          "PA": {
-            "items": {
-              "items": {
+            "matched_pairs": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "a_value": {
+                            "type": "integer"
+                        },
+                        "b_value": {
+                            "type": "integer"
+                        },
+                        "column": {
+                            "type": "integer"
+                        },
+                        "row": {
+                            "type": "integer"
+                        },
+                        "unit_entry": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "row",
+                        "column",
+                        "b_value",
+                        "a_value",
+                        "unit_entry"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 6,
+                "minItems": 6,
+                "type": "array"
+            },
+            "modulus": {
+                "const": 125
+            },
+            "permutation_sign": {
+                "enum": [
+                    -1,
+                    1
+                ]
+            },
+            "signed_term_modulus": {
                 "maximum": 124,
                 "minimum": 0,
                 "type": "integer"
-              },
-              "maxItems": 6,
-              "minItems": 6,
-              "type": "array"
             },
-            "maxItems": 6,
-            "minItems": 6,
-            "type": "array"
-          },
-          "determinant_modulus": {
-            "maximum": 124,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "matched_pairs": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "a_value": {
-                  "type": "integer"
+            "unit_permutation": {
+                "items": {
+                    "maximum": 5,
+                    "minimum": 0,
+                    "type": "integer"
                 },
-                "b_value": {
-                  "type": "integer"
-                },
-                "column": {
-                  "type": "integer"
-                },
-                "row": {
-                  "type": "integer"
-                },
-                "unit_entry": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "row",
-                "column",
-                "b_value",
-                "a_value",
-                "unit_entry"
-              ],
-              "type": "object"
-            },
-            "maxItems": 6,
-            "minItems": 6,
-            "type": "array"
-          },
-          "modulus": {
-            "const": 125
-          },
-          "permutation_sign": {
-            "enum": [
-              -1,
-              1
-            ]
-          },
-          "signed_term_modulus": {
-            "maximum": 124,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "unit_permutation": {
-            "items": {
-              "maximum": 5,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "maxItems": 6,
-            "minItems": 6,
-            "type": "array",
-            "uniqueItems": true
-          }
+                "maxItems": 6,
+                "minItems": 6,
+                "type": "array",
+                "uniqueItems": true
+            }
         },
         "required": [
-          "modulus",
-          "PA",
-          "BP",
-          "determinant_modulus",
-          "unit_permutation",
-          "permutation_sign",
-          "signed_term_modulus",
-          "matched_pairs"
+            "modulus",
+            "PA",
+            "BP",
+            "determinant_modulus",
+            "unit_permutation",
+            "permutation_sign",
+            "signed_term_modulus",
+            "matched_pairs"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/local-ring-diagonal-similarity-certificate"
+    "task_id": "jacobian/local-ring-diagonal-similarity-certificate"
 }

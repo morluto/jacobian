@@ -1,202 +1,99 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "matrix": {
-      "items": {
-        "items": {
-          "maximum": 1,
-          "minimum": 0,
-          "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "matrix": {
+            "items": {
+                "items": {
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
         },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "maxItems": 3,
-      "minItems": 3,
-      "type": "array"
-    },
-    "poly": {
-      "items": {
-        "maximum": 100,
-        "minimum": -100,
-        "type": "integer"
-      },
-      "maxItems": 8,
-      "minItems": 1,
-      "type": "array"
-    },
-    "ratfun": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "$ref": "#/$defs/poly"
+        "poly": {
+            "items": {
+                "maximum": 100,
+                "minimum": -100,
+                "type": "integer"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "type": "array"
         },
-        "numerator": {
-          "$ref": "#/$defs/poly"
+        "ratfun": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "$ref": "#/$defs/poly"
+                },
+                "numerator": {
+                    "$ref": "#/$defs/poly"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        },
+        "result": {
+            "additionalProperties": false,
+            "properties": {
+                "coefficient_matrix": {
+                    "$ref": "#/$defs/matrix"
+                },
+                "matrix_determinant": {
+                    "const": 2
+                },
+                "orbit": {
+                    "items": {
+                        "$ref": "#/$defs/ratfun"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "right_hand_sides": {
+                    "items": {
+                        "$ref": "#/$defs/ratfun"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "solution_at_x": {
+                    "$ref": "#/$defs/ratfun"
+                },
+                "solution_values": {
+                    "items": {
+                        "$ref": "#/$defs/ratfun"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                }
+            },
+            "required": [
+                "orbit",
+                "right_hand_sides",
+                "solution_values",
+                "coefficient_matrix",
+                "matrix_determinant",
+                "solution_at_x"
+            ],
+            "type": "object"
         }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
     },
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "coefficient_matrix": {
-          "$ref": "#/$defs/matrix"
-        },
-        "matrix_determinant": {
-          "const": 2
-        },
-        "orbit": {
-          "items": {
-            "$ref": "#/$defs/ratfun"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "right_hand_sides": {
-          "items": {
-            "$ref": "#/$defs/ratfun"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "solution_at_x": {
-          "$ref": "#/$defs/ratfun"
-        },
-        "solution_values": {
-          "items": {
-            "$ref": "#/$defs/ratfun"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        }
-      },
-      "required": [
-        "orbit",
-        "right_hand_sides",
-        "solution_values",
-        "coefficient_matrix",
-        "matrix_determinant",
-        "solution_at_x"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "$ref": "#/$defs/result"
-  },
-  "submission_schema": {
-    "$defs": {
-      "matrix": {
-        "items": {
-          "items": {
-            "maximum": 1,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "poly": {
-        "items": {
-          "maximum": 100,
-          "minimum": -100,
-          "type": "integer"
-        },
-        "maxItems": 8,
-        "minItems": 1,
-        "type": "array"
-      },
-      "ratfun": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "$ref": "#/$defs/poly"
-          },
-          "numerator": {
-            "$ref": "#/$defs/poly"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "coefficient_matrix": {
-            "$ref": "#/$defs/matrix"
-          },
-          "matrix_determinant": {
-            "const": 2
-          },
-          "orbit": {
-            "items": {
-              "$ref": "#/$defs/ratfun"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "right_hand_sides": {
-            "items": {
-              "$ref": "#/$defs/ratfun"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "solution_at_x": {
-            "$ref": "#/$defs/ratfun"
-          },
-          "solution_values": {
-            "items": {
-              "$ref": "#/$defs/ratfun"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          }
-        },
-        "required": [
-          "orbit",
-          "right_hand_sides",
-          "solution_values",
-          "coefficient_matrix",
-          "matrix_determinant",
-          "solution_at_x"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "$ref": "#/$defs/result"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/mobius-functional-equation"
+    "task_id": "jacobian/mobius-functional-equation"
 }

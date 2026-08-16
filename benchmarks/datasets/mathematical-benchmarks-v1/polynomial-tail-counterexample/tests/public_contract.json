@@ -1,277 +1,137 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "p_coefficients": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "denominator": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "numerator": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "numerator",
-            "denominator"
-          ],
-          "type": "object"
-        },
-        "minItems": 3,
-        "type": "array"
-      },
-      "p_roots": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "denominator": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "numerator": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "numerator",
-            "denominator"
-          ],
-          "type": "object"
-        },
-        "type": "array"
-      },
-      "q_coefficients": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "denominator": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "numerator": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "numerator",
-            "denominator"
-          ],
-          "type": "object"
-        },
-        "minItems": 2,
-        "type": "array"
-      },
-      "q_roots": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "denominator": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "numerator": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "numerator",
-            "denominator"
-          ],
-          "type": "object"
-        },
-        "type": "array"
-      },
-      "x1": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
+            "p_coefficients": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "denominator": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "numerator": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "numerator",
+                        "denominator"
+                    ],
+                    "type": "object"
+                },
+                "minItems": 3,
+                "type": "array"
+            },
+            "p_roots": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "denominator": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "numerator": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "numerator",
+                        "denominator"
+                    ],
+                    "type": "object"
+                },
+                "type": "array"
+            },
+            "q_coefficients": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "denominator": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "numerator": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "numerator",
+                        "denominator"
+                    ],
+                    "type": "object"
+                },
+                "minItems": 2,
+                "type": "array"
+            },
+            "q_roots": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "denominator": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "numerator": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "numerator",
+                        "denominator"
+                    ],
+                    "type": "object"
+                },
+                "type": "array"
+            },
+            "x1": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
+            },
+            "x2": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "numerator",
-          "denominator"
+            "p_coefficients",
+            "q_coefficients",
+            "p_roots",
+            "q_roots",
+            "x1",
+            "x2"
         ],
         "type": "object"
-      },
-      "x2": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      }
     },
-    "required": [
-      "p_coefficients",
-      "q_coefficients",
-      "p_roots",
-      "q_roots",
-      "x1",
-      "x2"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "p_coefficients": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "denominator": {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "numerator": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "numerator",
-                "denominator"
-              ],
-              "type": "object"
-            },
-            "minItems": 3,
-            "type": "array"
-          },
-          "p_roots": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "denominator": {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "numerator": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "numerator",
-                "denominator"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "q_coefficients": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "denominator": {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "numerator": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "numerator",
-                "denominator"
-              ],
-              "type": "object"
-            },
-            "minItems": 2,
-            "type": "array"
-          },
-          "q_roots": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "denominator": {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "numerator": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "numerator",
-                "denominator"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "x1": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          },
-          "x2": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "p_coefficients",
-          "q_coefficients",
-          "p_roots",
-          "q_roots",
-          "x1",
-          "x2"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/polynomial-tail-counterexample"
+    "task_id": "jacobian/polynomial-tail-counterexample"
 }

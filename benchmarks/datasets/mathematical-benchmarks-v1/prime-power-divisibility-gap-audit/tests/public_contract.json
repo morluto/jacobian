@@ -1,198 +1,97 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "result": {
-      "$ref": "#/properties/result"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "coprime_factor": {
-        "const": 1
-      },
-      "cycle_count": {
-        "minimum": 4,
-        "type": "integer"
-      },
-      "cycle_groups": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "cycle_sum": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "multiplicity": {
-              "minimum": 1,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "multiplicity",
-            "cycle_sum"
-          ],
-          "type": "object"
-        },
-        "maxItems": 6,
-        "minItems": 2,
-        "type": "array"
-      },
-      "exponent": {
-        "maximum": 6,
-        "minimum": 2,
-        "type": "integer"
-      },
-      "global_statement": {
-        "const": "TOTAL_NOT_DIVISIBLE_BY_M"
-      },
-      "local_statement": {
-        "const": "ALL_CYCLE_SUMS_DIVISIBLE_BY_P"
-      },
-      "missing_condition": {
-        "const": "PRIME_POWER_MULTIPLICITIES"
-      },
-      "modulus": {
-        "maximum": 10000,
-        "minimum": 4,
-        "type": "integer"
-      },
-      "p_valuation_modulus": {
-        "minimum": 2,
-        "type": "integer"
-      },
-      "p_valuation_total": {
-        "minimum": 1,
-        "type": "integer"
-      },
-      "prime": {
-        "maximum": 29,
-        "minimum": 2,
-        "type": "integer"
-      },
-      "total_sum": {
-        "minimum": 1,
-        "type": "integer"
-      }
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "result": {
+            "$ref": "#/properties/result"
+        }
     },
-    "required": [
-      "prime",
-      "exponent",
-      "coprime_factor",
-      "modulus",
-      "cycle_count",
-      "cycle_groups",
-      "total_sum",
-      "p_valuation_modulus",
-      "p_valuation_total",
-      "local_statement",
-      "global_statement",
-      "missing_condition"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "result": {
-        "$ref": "#/properties/result"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "coprime_factor": {
-            "const": 1
-          },
-          "cycle_count": {
-            "minimum": 4,
-            "type": "integer"
-          },
-          "cycle_groups": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "cycle_sum": {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "multiplicity": {
-                  "minimum": 1,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "multiplicity",
-                "cycle_sum"
-              ],
-              "type": "object"
+            "coprime_factor": {
+                "const": 1
             },
-            "maxItems": 6,
-            "minItems": 2,
-            "type": "array"
-          },
-          "exponent": {
-            "maximum": 6,
-            "minimum": 2,
-            "type": "integer"
-          },
-          "global_statement": {
-            "const": "TOTAL_NOT_DIVISIBLE_BY_M"
-          },
-          "local_statement": {
-            "const": "ALL_CYCLE_SUMS_DIVISIBLE_BY_P"
-          },
-          "missing_condition": {
-            "const": "PRIME_POWER_MULTIPLICITIES"
-          },
-          "modulus": {
-            "maximum": 10000,
-            "minimum": 4,
-            "type": "integer"
-          },
-          "p_valuation_modulus": {
-            "minimum": 2,
-            "type": "integer"
-          },
-          "p_valuation_total": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "prime": {
-            "maximum": 29,
-            "minimum": 2,
-            "type": "integer"
-          },
-          "total_sum": {
-            "minimum": 1,
-            "type": "integer"
-          }
+            "cycle_count": {
+                "minimum": 4,
+                "type": "integer"
+            },
+            "cycle_groups": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "cycle_sum": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "multiplicity": {
+                            "minimum": 1,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "multiplicity",
+                        "cycle_sum"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 6,
+                "minItems": 2,
+                "type": "array"
+            },
+            "exponent": {
+                "maximum": 6,
+                "minimum": 2,
+                "type": "integer"
+            },
+            "global_statement": {
+                "const": "TOTAL_NOT_DIVISIBLE_BY_M"
+            },
+            "local_statement": {
+                "const": "ALL_CYCLE_SUMS_DIVISIBLE_BY_P"
+            },
+            "missing_condition": {
+                "const": "PRIME_POWER_MULTIPLICITIES"
+            },
+            "modulus": {
+                "maximum": 10000,
+                "minimum": 4,
+                "type": "integer"
+            },
+            "p_valuation_modulus": {
+                "minimum": 2,
+                "type": "integer"
+            },
+            "p_valuation_total": {
+                "minimum": 1,
+                "type": "integer"
+            },
+            "prime": {
+                "maximum": 29,
+                "minimum": 2,
+                "type": "integer"
+            },
+            "total_sum": {
+                "minimum": 1,
+                "type": "integer"
+            }
         },
         "required": [
-          "prime",
-          "exponent",
-          "coprime_factor",
-          "modulus",
-          "cycle_count",
-          "cycle_groups",
-          "total_sum",
-          "p_valuation_modulus",
-          "p_valuation_total",
-          "local_statement",
-          "global_statement",
-          "missing_condition"
+            "prime",
+            "exponent",
+            "coprime_factor",
+            "modulus",
+            "cycle_count",
+            "cycle_groups",
+            "total_sum",
+            "p_valuation_modulus",
+            "p_valuation_total",
+            "local_statement",
+            "global_statement",
+            "missing_condition"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/prime-power-divisibility-gap-audit"
+    "task_id": "jacobian/prime-power-divisibility-gap-audit"
 }

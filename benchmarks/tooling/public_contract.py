@@ -174,7 +174,6 @@ class PublicContract(BaseModel):
     public_notes: str = Field(min_length=1)
     submission_result: dict[str, Any]
     schema_definitions: dict[str, Any] = Field(default_factory=dict)
-    submission_schema: dict[str, Any] = Field(default_factory=dict)
 
     # -- field validators --------------------------------------------------
 
@@ -220,13 +219,7 @@ class PublicContract(BaseModel):
                 )
         return self
 
-    @model_validator(mode="after")
-    def _complete_schema_matches_declarations(self) -> PublicContract:
-        if self.submission_schema and self.submission_schema != _declared_schema(self):
-            raise ValueError(
-                "submission_schema disagrees with declared protocol fields"
-            )
-        return self
+    # submission_schema is now derived, not stored
 
 
 # ---------------------------------------------------------------------------
@@ -331,11 +324,15 @@ def load_contract(path: Path) -> PublicContract:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ContractError(f"cannot read contract {path}: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise ContractError(
+            f"contract {path} is invalid: top-level JSON must be an object"
+        )
+    # submission_schema is a derived projection, not a stored field.
+    # Strip it if present so older contract files still validate.
+    raw.pop("submission_schema", None)
     try:
-        contract = PublicContract.model_validate(raw)
-        if not contract.submission_schema:
-            raise ValueError("submission_schema is required")
-        return contract
+        return PublicContract.model_validate(raw)
     except ValueError as exc:
         raise ContractError(f"contract {path} is invalid: {exc}") from exc
 

@@ -1,242 +1,119 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "extended_bound": {
-      "oneOf": [
-        {
-          "const": "NEGATIVE_INFINITY"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "extended_bound": {
+            "oneOf": [
+                {
+                    "const": "NEGATIVE_INFINITY"
+                },
+                {
+                    "const": "POSITIVE_INFINITY"
+                },
+                {
+                    "$ref": "#/$defs/rational"
+                }
+            ]
         },
-        {
-          "const": "POSITIVE_INFINITY"
-        },
-        {
-          "$ref": "#/$defs/rational"
-        }
-      ]
-    },
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    },
-    "terminal_bound": {
-      "additionalProperties": false,
-      "properties": {
-        "input_lower": {
-          "$ref": "#/$defs/extended_bound"
-        },
-        "input_upper": {
-          "$ref": "#/$defs/extended_bound"
-        },
-        "output_lower": {
-          "$ref": "#/$defs/extended_bound"
-        },
-        "output_upper": {
-          "$ref": "#/$defs/extended_bound"
-        }
-      },
-      "required": [
-        "input_lower",
-        "input_upper",
-        "output_lower",
-        "output_upper"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "decrement_lower_bound": {
-        "$ref": "#/$defs/rational"
-      },
-      "initial_potential": {
-        "minimum": 1,
-        "type": "integer"
-      },
-      "negative_index_upper": {
-        "maximum": 2001,
-        "minimum": 2,
-        "type": "integer"
-      },
-      "phase_transitions": {
-        "maximum": 2001,
-        "minimum": 1,
-        "type": "integer"
-      },
-      "potential_identity_coefficients": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "terminal_bounds": {
-        "items": {
-          "$ref": "#/$defs/terminal_bound"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "threshold": {
-        "$ref": "#/$defs/rational"
-      },
-      "threshold_index_upper": {
-        "maximum": 2001,
-        "minimum": 2,
-        "type": "integer"
-      }
-    },
-    "required": [
-      "potential_identity_coefficients",
-      "initial_potential",
-      "threshold",
-      "decrement_lower_bound",
-      "phase_transitions",
-      "threshold_index_upper",
-      "terminal_bounds",
-      "negative_index_upper"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "extended_bound": {
-        "oneOf": [
-          {
-            "const": "NEGATIVE_INFINITY"
-          },
-          {
-            "const": "POSITIVE_INFINITY"
-          },
-          {
-            "$ref": "#/$defs/rational"
-          }
-        ]
-      },
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "terminal_bound": {
-        "additionalProperties": false,
-        "properties": {
-          "input_lower": {
-            "$ref": "#/$defs/extended_bound"
-          },
-          "input_upper": {
-            "$ref": "#/$defs/extended_bound"
-          },
-          "output_lower": {
-            "$ref": "#/$defs/extended_bound"
-          },
-          "output_upper": {
-            "$ref": "#/$defs/extended_bound"
-          }
-        },
-        "required": [
-          "input_lower",
-          "input_upper",
-          "output_lower",
-          "output_upper"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "decrement_lower_bound": {
-            "$ref": "#/$defs/rational"
-          },
-          "initial_potential": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "negative_index_upper": {
-            "maximum": 2001,
-            "minimum": 2,
-            "type": "integer"
-          },
-          "phase_transitions": {
-            "maximum": 2001,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "potential_identity_coefficients": {
-            "items": {
-              "type": "integer"
+        "rational": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
             },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "terminal_bounds": {
-            "items": {
-              "$ref": "#/$defs/terminal_bound"
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        },
+        "terminal_bound": {
+            "additionalProperties": false,
+            "properties": {
+                "input_lower": {
+                    "$ref": "#/$defs/extended_bound"
+                },
+                "input_upper": {
+                    "$ref": "#/$defs/extended_bound"
+                },
+                "output_lower": {
+                    "$ref": "#/$defs/extended_bound"
+                },
+                "output_upper": {
+                    "$ref": "#/$defs/extended_bound"
+                }
             },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "threshold": {
-            "$ref": "#/$defs/rational"
-          },
-          "threshold_index_upper": {
-            "maximum": 2001,
-            "minimum": 2,
-            "type": "integer"
-          }
+            "required": [
+                "input_lower",
+                "input_upper",
+                "output_lower",
+                "output_upper"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "decrement_lower_bound": {
+                "$ref": "#/$defs/rational"
+            },
+            "initial_potential": {
+                "minimum": 1,
+                "type": "integer"
+            },
+            "negative_index_upper": {
+                "maximum": 2001,
+                "minimum": 2,
+                "type": "integer"
+            },
+            "phase_transitions": {
+                "maximum": 2001,
+                "minimum": 1,
+                "type": "integer"
+            },
+            "potential_identity_coefficients": {
+                "items": {
+                    "type": "integer"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+            },
+            "terminal_bounds": {
+                "items": {
+                    "$ref": "#/$defs/terminal_bound"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+            },
+            "threshold": {
+                "$ref": "#/$defs/rational"
+            },
+            "threshold_index_upper": {
+                "maximum": 2001,
+                "minimum": 2,
+                "type": "integer"
+            }
         },
         "required": [
-          "potential_identity_coefficients",
-          "initial_potential",
-          "threshold",
-          "decrement_lower_bound",
-          "phase_transitions",
-          "threshold_index_upper",
-          "terminal_bounds",
-          "negative_index_upper"
+            "potential_identity_coefficients",
+            "initial_potential",
+            "threshold",
+            "decrement_lower_bound",
+            "phase_transitions",
+            "threshold_index_upper",
+            "terminal_bounds",
+            "negative_index_upper"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/nonlinear-recurrence-crossing-certificate"
+    "task_id": "jacobian/nonlinear-recurrence-crossing-certificate"
 }

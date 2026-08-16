@@ -1,126 +1,61 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rational": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
         }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "left_derivative": {
-        "$ref": "#/$defs/rational"
-      },
-      "left_slope": {
-        "$ref": "#/$defs/rational"
-      },
-      "left_value_at_join": {
-        "$ref": "#/$defs/rational"
-      },
-      "peak": {
-        "$ref": "#/$defs/rational"
-      },
-      "right_derivative": {
-        "$ref": "#/$defs/rational"
-      },
-      "right_slope": {
-        "$ref": "#/$defs/rational"
-      },
-      "right_value_at_join": {
-        "$ref": "#/$defs/rational"
-      }
     },
-    "required": [
-      "peak",
-      "left_slope",
-      "right_slope",
-      "left_value_at_join",
-      "right_value_at_join",
-      "left_derivative",
-      "right_derivative"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "rational": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
+            "left_derivative": {
+                "$ref": "#/$defs/rational"
+            },
+            "left_slope": {
+                "$ref": "#/$defs/rational"
+            },
+            "left_value_at_join": {
+                "$ref": "#/$defs/rational"
+            },
+            "peak": {
+                "$ref": "#/$defs/rational"
+            },
+            "right_derivative": {
+                "$ref": "#/$defs/rational"
+            },
+            "right_slope": {
+                "$ref": "#/$defs/rational"
+            },
+            "right_value_at_join": {
+                "$ref": "#/$defs/rational"
+            }
         },
         "required": [
-          "numerator",
-          "denominator"
+            "peak",
+            "left_slope",
+            "right_slope",
+            "left_value_at_join",
+            "right_value_at_join",
+            "left_derivative",
+            "right_derivative"
         ],
         "type": "object"
-      }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "left_derivative": {
-            "$ref": "#/$defs/rational"
-          },
-          "left_slope": {
-            "$ref": "#/$defs/rational"
-          },
-          "left_value_at_join": {
-            "$ref": "#/$defs/rational"
-          },
-          "peak": {
-            "$ref": "#/$defs/rational"
-          },
-          "right_derivative": {
-            "$ref": "#/$defs/rational"
-          },
-          "right_slope": {
-            "$ref": "#/$defs/rational"
-          },
-          "right_value_at_join": {
-            "$ref": "#/$defs/rational"
-          }
-        },
-        "required": [
-          "peak",
-          "left_slope",
-          "right_slope",
-          "left_value_at_join",
-          "right_value_at_join",
-          "left_derivative",
-          "right_derivative"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/nondifferentiable-maximum-construction"
+    "task_id": "jacobian/nondifferentiable-maximum-construction"
 }

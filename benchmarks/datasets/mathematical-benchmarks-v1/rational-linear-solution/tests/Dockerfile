@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 LABEL jacobian.task="jacobian/rational-linear-solution" \
-      jacobian.checksum="e0813e6f8874d97db2fde9f99a07a6420e9e0ab8a29e9c2c8390ef5f1a687173"
+      jacobian.checksum="e07df7f1bf90e50426e7e4a75fff06242f0f3cb96ed90ef30a97ab2264901541"
 COPY expected.json mathematical-benchmarks-v1-rational-linear-solution-input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY mathematical-benchmarks-v1-rational-linear-solution-input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

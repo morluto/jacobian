@@ -59,8 +59,7 @@ def contract_path(tmp_path: Path) -> Path:
         json.dumps(
             {
                 "schema_version": "1",
-                "submission_schema": {
-                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "submission_result": {
                     "type": "object",
                     "properties": {
                         "count": {"type": "integer", "minimum": 0},
@@ -88,10 +87,10 @@ def test_load_public_contract_accepts_valid_draft_2020_12_schema(
 @pytest.mark.parametrize(
     "submission",
     [
-        {"count": -1, "labels": []},
-        {"count": True, "labels": []},
-        {"count": 1, "labels": ["duplicate", "duplicate"]},
-        {"count": 1, "labels": [], "unknown": None},
+        {"result": {"count": -1, "labels": []}},
+        {"result": {"count": True, "labels": []}},
+        {"result": {"count": 1, "labels": ["duplicate", "duplicate"]}},
+        {"result": {"count": 1, "labels": [], "unknown": None}},
     ],
 )
 def test_public_submission_validation_rejects_schema_violations(
@@ -112,7 +111,10 @@ def test_public_submission_validation_accepts_complete_object(
     monkeypatch.setattr(
         _VS, "_load_public_contract", lambda: json.loads(contract_path.read_text())
     )
-    assert _VS._public_submission_is_valid({"count": 1, "labels": ["one"]}) is True
+    assert (
+        _VS._public_submission_is_valid({"result": {"count": 1, "labels": ["one"]}})
+        is True
+    )
 
 
 def test_load_public_contract_rejects_invalid_schema(tmp_path: Path) -> None:
@@ -121,7 +123,7 @@ def test_load_public_contract_rejects_invalid_schema(tmp_path: Path) -> None:
         json.dumps(
             {
                 "schema_version": "1",
-                "submission_schema": {"type": "not-a-json-schema-type"},
+                "submission_result": {"type": "not-a-json-schema-type"},
             }
         )
     )
@@ -136,7 +138,7 @@ def test_load_submission_rejects_nonfinite_json(
     number: str,
 ) -> None:
     submission = tmp_path / "submission.json"
-    submission.write_text(f'{{"count": {number}, "labels": []}}')
+    submission.write_text(f'{{"result": {{"count": {number}, "labels": []}}}}')
     monkeypatch.setattr(
         _VS, "_load_public_contract", lambda: json.loads(contract_path.read_text())
     )
@@ -149,7 +151,7 @@ def test_load_submission_enforces_the_complete_public_schema(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     submission = tmp_path / "submission.json"
-    submission.write_text('{"count": -1, "labels": [], "unknown": true}')
+    submission.write_text('{"result": {"count": -1, "labels": [], "unknown": true}}')
     contract = json.loads(contract_path.read_text())
     monkeypatch.setattr(_VS, "_load_public_contract", lambda: contract)
 
@@ -217,8 +219,49 @@ def test_submission_matches_public_schema_validates_against_contract(
     monkeypatch.setattr(
         _VS, "_load_public_contract", lambda: json.loads(contract_path.read_text())
     )
-    assert _VS.submission_matches_public_schema({"count": 1, "labels": ["one"]}) is True
-    assert _VS.submission_matches_public_schema({"count": -1, "labels": []}) is False
+    assert (
+        _VS.submission_matches_public_schema(
+            {"result": {"count": 1, "labels": ["one"]}}
+        )
+        is True
+    )
+    assert (
+        _VS.submission_matches_public_schema({"result": {"count": -1, "labels": []}})
+        is False
+    )
+
+
+def test_derive_submission_schema_prefers_declarations_over_stored_copy() -> None:
+    schema = _VS._derive_submission_schema(
+        {
+            "schema_version": "1",
+            "submission_result": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {"n": {"type": "integer"}},
+                "required": ["n"],
+            },
+            "submission_schema": {
+                "type": "object",
+                "properties": {"stale": {"type": "string"}},
+            },
+        }
+    )
+    assert schema is not None
+    assert "result" in schema["properties"]
+    assert "stale" not in schema["properties"]
+
+
+def test_derive_submission_schema_uses_stored_copy_without_declarations() -> None:
+    stored = {
+        "type": "object",
+        "properties": {"count": {"type": "integer"}},
+        "required": ["count"],
+    }
+    schema = _VS._derive_submission_schema(
+        {"schema_version": "1", "submission_schema": stored}
+    )
+    assert schema == stored
 
 
 def test_reject_duplicate_keys_raises_on_duplicate_object_name() -> None:

@@ -1,326 +1,161 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "witness": {
-      "additionalProperties": false,
-      "properties": {
-        "C": {
-          "type": "integer"
-        },
-        "d": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "d_p": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "left_residue": {
-          "type": "integer"
-        },
-        "p": {
-          "minimum": 3,
-          "type": "integer"
-        },
-        "right_residue": {
-          "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "witness": {
+            "additionalProperties": false,
+            "properties": {
+                "C": {
+                    "type": "integer"
+                },
+                "d": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "d_p": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "left_residue": {
+                    "type": "integer"
+                },
+                "p": {
+                    "minimum": 3,
+                    "type": "integer"
+                },
+                "right_residue": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "p",
+                "d",
+                "d_p",
+                "C",
+                "left_residue",
+                "right_residue"
+            ],
+            "type": "object"
         }
-      },
-      "required": [
-        "p",
-        "d",
-        "d_p",
-        "C",
-        "left_residue",
-        "right_residue"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "diagnosis": {
-        "additionalProperties": false,
-        "properties": {
-          "missing_domain": {
-            "const": "C_CONGRUENT_ZERO_MOD_P"
-          },
-          "unsafe_step": {
-            "const": "NEGATIVE_POWER_REQUIRES_UNIT"
-          }
-        },
-        "required": [
-          "unsafe_step",
-          "missing_domain"
-        ],
-        "type": "object"
-      },
-      "domain_split": {
-        "const": [
-          "gcd(C,p)=1",
-          "p|C"
-        ]
-      },
-      "finite_testing_role": {
-        "const": "SANITY_ONLY_NOT_UNIVERSAL_PROOF"
-      },
-      "nonunit_branch": {
-        "additionalProperties": false,
-        "properties": {
-          "condition": {
-            "const": "p|C"
-          },
-          "d_p_positive": {
-            "const": true
-          },
-          "d_positive": {
-            "const": true
-          },
-          "residues": {
-            "const": [
-              0,
-              0
-            ]
-          }
-        },
-        "required": [
-          "condition",
-          "d_positive",
-          "d_p_positive",
-          "residues"
-        ],
-        "type": "object"
-      },
-      "nonunit_witness": {
-        "$ref": "#/$defs/witness"
-      },
-      "remainder_bounds": {
-        "additionalProperties": false,
-        "properties": {
-          "lower": {
-            "const": 1
-          },
-          "reason": {
-            "const": "COPRIMALITY_EXCLUDES_ZERO_REMAINDER"
-          },
-          "upper": {
-            "const": "p-2"
-          }
-        },
-        "required": [
-          "lower",
-          "upper",
-          "reason"
-        ],
-        "type": "object"
-      },
-      "unit_branch": {
-        "additionalProperties": false,
-        "properties": {
-          "condition": {
-            "const": "gcd(C,p)=1"
-          },
-          "identity": {
-            "const": "C^d=C^d_p*(C^(p-1))^k"
-          },
-          "quotient_bound": {
-            "const": "k>=0"
-          },
-          "quotient_relation": {
-            "const": "d=d_p+k*(p-1)"
-          }
-        },
-        "required": [
-          "condition",
-          "quotient_relation",
-          "quotient_bound",
-          "identity"
-        ],
-        "type": "object"
-      },
-      "unit_witness": {
-        "$ref": "#/$defs/witness"
-      }
     },
-    "required": [
-      "diagnosis",
-      "remainder_bounds",
-      "unit_branch",
-      "nonunit_branch",
-      "domain_split",
-      "unit_witness",
-      "nonunit_witness",
-      "finite_testing_role"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "witness": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "C": {
-            "type": "integer"
-          },
-          "d": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "d_p": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "left_residue": {
-            "type": "integer"
-          },
-          "p": {
-            "minimum": 3,
-            "type": "integer"
-          },
-          "right_residue": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "p",
-          "d",
-          "d_p",
-          "C",
-          "left_residue",
-          "right_residue"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "diagnosis": {
-            "additionalProperties": false,
-            "properties": {
-              "missing_domain": {
-                "const": "C_CONGRUENT_ZERO_MOD_P"
-              },
-              "unsafe_step": {
-                "const": "NEGATIVE_POWER_REQUIRES_UNIT"
-              }
+            "diagnosis": {
+                "additionalProperties": false,
+                "properties": {
+                    "missing_domain": {
+                        "const": "C_CONGRUENT_ZERO_MOD_P"
+                    },
+                    "unsafe_step": {
+                        "const": "NEGATIVE_POWER_REQUIRES_UNIT"
+                    }
+                },
+                "required": [
+                    "unsafe_step",
+                    "missing_domain"
+                ],
+                "type": "object"
             },
-            "required": [
-              "unsafe_step",
-              "missing_domain"
-            ],
-            "type": "object"
-          },
-          "domain_split": {
-            "const": [
-              "gcd(C,p)=1",
-              "p|C"
-            ]
-          },
-          "finite_testing_role": {
-            "const": "SANITY_ONLY_NOT_UNIVERSAL_PROOF"
-          },
-          "nonunit_branch": {
-            "additionalProperties": false,
-            "properties": {
-              "condition": {
-                "const": "p|C"
-              },
-              "d_p_positive": {
-                "const": true
-              },
-              "d_positive": {
-                "const": true
-              },
-              "residues": {
+            "domain_split": {
                 "const": [
-                  0,
-                  0
+                    "gcd(C,p)=1",
+                    "p|C"
                 ]
-              }
             },
-            "required": [
-              "condition",
-              "d_positive",
-              "d_p_positive",
-              "residues"
-            ],
-            "type": "object"
-          },
-          "nonunit_witness": {
-            "$ref": "#/$defs/witness"
-          },
-          "remainder_bounds": {
-            "additionalProperties": false,
-            "properties": {
-              "lower": {
-                "const": 1
-              },
-              "reason": {
-                "const": "COPRIMALITY_EXCLUDES_ZERO_REMAINDER"
-              },
-              "upper": {
-                "const": "p-2"
-              }
+            "finite_testing_role": {
+                "const": "SANITY_ONLY_NOT_UNIVERSAL_PROOF"
             },
-            "required": [
-              "lower",
-              "upper",
-              "reason"
-            ],
-            "type": "object"
-          },
-          "unit_branch": {
-            "additionalProperties": false,
-            "properties": {
-              "condition": {
-                "const": "gcd(C,p)=1"
-              },
-              "identity": {
-                "const": "C^d=C^d_p*(C^(p-1))^k"
-              },
-              "quotient_bound": {
-                "const": "k>=0"
-              },
-              "quotient_relation": {
-                "const": "d=d_p+k*(p-1)"
-              }
+            "nonunit_branch": {
+                "additionalProperties": false,
+                "properties": {
+                    "condition": {
+                        "const": "p|C"
+                    },
+                    "d_p_positive": {
+                        "const": true
+                    },
+                    "d_positive": {
+                        "const": true
+                    },
+                    "residues": {
+                        "const": [
+                            0,
+                            0
+                        ]
+                    }
+                },
+                "required": [
+                    "condition",
+                    "d_positive",
+                    "d_p_positive",
+                    "residues"
+                ],
+                "type": "object"
             },
-            "required": [
-              "condition",
-              "quotient_relation",
-              "quotient_bound",
-              "identity"
-            ],
-            "type": "object"
-          },
-          "unit_witness": {
-            "$ref": "#/$defs/witness"
-          }
+            "nonunit_witness": {
+                "$ref": "#/$defs/witness"
+            },
+            "remainder_bounds": {
+                "additionalProperties": false,
+                "properties": {
+                    "lower": {
+                        "const": 1
+                    },
+                    "reason": {
+                        "const": "COPRIMALITY_EXCLUDES_ZERO_REMAINDER"
+                    },
+                    "upper": {
+                        "const": "p-2"
+                    }
+                },
+                "required": [
+                    "lower",
+                    "upper",
+                    "reason"
+                ],
+                "type": "object"
+            },
+            "unit_branch": {
+                "additionalProperties": false,
+                "properties": {
+                    "condition": {
+                        "const": "gcd(C,p)=1"
+                    },
+                    "identity": {
+                        "const": "C^d=C^d_p*(C^(p-1))^k"
+                    },
+                    "quotient_bound": {
+                        "const": "k>=0"
+                    },
+                    "quotient_relation": {
+                        "const": "d=d_p+k*(p-1)"
+                    }
+                },
+                "required": [
+                    "condition",
+                    "quotient_relation",
+                    "quotient_bound",
+                    "identity"
+                ],
+                "type": "object"
+            },
+            "unit_witness": {
+                "$ref": "#/$defs/witness"
+            }
         },
         "required": [
-          "diagnosis",
-          "remainder_bounds",
-          "unit_branch",
-          "nonunit_branch",
-          "domain_split",
-          "unit_witness",
-          "nonunit_witness",
-          "finite_testing_role"
+            "diagnosis",
+            "remainder_bounds",
+            "unit_branch",
+            "nonunit_branch",
+            "domain_split",
+            "unit_witness",
+            "nonunit_witness",
+            "finite_testing_role"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/rsa-exponent-domain-audit"
+    "task_id": "jacobian/rsa-exponent-domain-audit"
 }

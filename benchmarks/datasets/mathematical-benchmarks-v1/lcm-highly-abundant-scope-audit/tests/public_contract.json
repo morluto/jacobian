@@ -1,244 +1,120 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "delta": {
-      "additionalProperties": false,
-      "properties": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
         "delta": {
-          "type": "integer"
-        },
-        "prime": {
-          "minimum": 2,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "prime",
-        "delta"
-      ],
-      "type": "object"
-    },
-    "prime_exponent": {
-      "additionalProperties": false,
-      "properties": {
-        "exponent": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "prime": {
-          "minimum": 2,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "prime",
-        "exponent"
-      ],
-      "type": "object"
-    },
-    "witness": {
-      "additionalProperties": false,
-      "properties": {
-        "competitor": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "exponent_deltas": {
-          "items": {
-            "$ref": "#/$defs/delta"
-          },
-          "minItems": 1,
-          "type": "array"
-        },
-        "lcm_factorization": {
-          "items": {
-            "$ref": "#/$defs/prime_exponent"
-          },
-          "minItems": 1,
-          "type": "array"
-        },
-        "lcm_value": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "n": {
-          "maximum": 97,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "sigma_competitor": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "sigma_lcm": {
-          "minimum": 1,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "n",
-        "lcm_factorization",
-        "exponent_deltas",
-        "lcm_value",
-        "competitor",
-        "sigma_lcm",
-        "sigma_competitor"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "counterexample_at_97": {
-        "minLength": 1,
-        "type": "string"
-      },
-      "minimality_claim": {
-        "minLength": 1,
-        "type": "string"
-      },
-      "witnesses": {
-        "items": {
-          "$ref": "#/$defs/witness"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      }
-    },
-    "required": [
-      "counterexample_at_97",
-      "minimality_claim",
-      "witnesses"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "delta": {
-        "additionalProperties": false,
-        "properties": {
-          "delta": {
-            "type": "integer"
-          },
-          "prime": {
-            "minimum": 2,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "prime",
-          "delta"
-        ],
-        "type": "object"
-      },
-      "prime_exponent": {
-        "additionalProperties": false,
-        "properties": {
-          "exponent": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "prime": {
-            "minimum": 2,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "prime",
-          "exponent"
-        ],
-        "type": "object"
-      },
-      "witness": {
-        "additionalProperties": false,
-        "properties": {
-          "competitor": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "exponent_deltas": {
-            "items": {
-              "$ref": "#/$defs/delta"
+            "additionalProperties": false,
+            "properties": {
+                "delta": {
+                    "type": "integer"
+                },
+                "prime": {
+                    "minimum": 2,
+                    "type": "integer"
+                }
             },
-            "minItems": 1,
-            "type": "array"
-          },
-          "lcm_factorization": {
-            "items": {
-              "$ref": "#/$defs/prime_exponent"
-            },
-            "minItems": 1,
-            "type": "array"
-          },
-          "lcm_value": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "n": {
-            "maximum": 97,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "sigma_competitor": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "sigma_lcm": {
-            "minimum": 1,
-            "type": "integer"
-          }
+            "required": [
+                "prime",
+                "delta"
+            ],
+            "type": "object"
         },
-        "required": [
-          "n",
-          "lcm_factorization",
-          "exponent_deltas",
-          "lcm_value",
-          "competitor",
-          "sigma_lcm",
-          "sigma_competitor"
-        ],
-        "type": "object"
-      }
+        "prime_exponent": {
+            "additionalProperties": false,
+            "properties": {
+                "exponent": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "prime": {
+                    "minimum": 2,
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "prime",
+                "exponent"
+            ],
+            "type": "object"
+        },
+        "witness": {
+            "additionalProperties": false,
+            "properties": {
+                "competitor": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "exponent_deltas": {
+                    "items": {
+                        "$ref": "#/$defs/delta"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                },
+                "lcm_factorization": {
+                    "items": {
+                        "$ref": "#/$defs/prime_exponent"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                },
+                "lcm_value": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "n": {
+                    "maximum": 97,
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "sigma_competitor": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "sigma_lcm": {
+                    "minimum": 1,
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "n",
+                "lcm_factorization",
+                "exponent_deltas",
+                "lcm_value",
+                "competitor",
+                "sigma_lcm",
+                "sigma_competitor"
+            ],
+            "type": "object"
+        }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "counterexample_at_97": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "minimality_claim": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "witnesses": {
-            "items": {
-              "$ref": "#/$defs/witness"
+            "counterexample_at_97": {
+                "minLength": 1,
+                "type": "string"
             },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          }
+            "minimality_claim": {
+                "minLength": 1,
+                "type": "string"
+            },
+            "witnesses": {
+                "items": {
+                    "$ref": "#/$defs/witness"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            }
         },
         "required": [
-          "counterexample_at_97",
-          "minimality_claim",
-          "witnesses"
+            "counterexample_at_97",
+            "minimality_claim",
+            "witnesses"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/lcm-highly-abundant-scope-audit"
+    "task_id": "jacobian/lcm-highly-abundant-scope-audit"
 }

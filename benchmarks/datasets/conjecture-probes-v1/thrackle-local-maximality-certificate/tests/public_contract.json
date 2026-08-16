@@ -1,176 +1,86 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "edge": {
-      "items": {
-        "maximum": 4,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "maxItems": 2,
-      "minItems": 2,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "excluded_edge_witnesses": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "disjoint_selected": {
-              "$ref": "#/$defs/edge"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "edge": {
+            "items": {
+                "maximum": 4,
+                "minimum": 0,
+                "type": "integer"
             },
-            "excluded": {
-              "$ref": "#/$defs/edge"
-            }
-          },
-          "required": [
-            "excluded",
-            "disjoint_selected"
-          ],
-          "type": "object"
-        },
-        "maxItems": 5,
-        "minItems": 5,
-        "type": "array"
-      },
-      "pair_classifications": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "left": {
-              "$ref": "#/$defs/edge"
-            },
-            "relation": {
-              "enum": [
-                "SHARED_ENDPOINT",
-                "PROPER_CROSSING"
-              ]
-            },
-            "right": {
-              "$ref": "#/$defs/edge"
-            }
-          },
-          "required": [
-            "left",
-            "right",
-            "relation"
-          ],
-          "type": "object"
-        },
-        "maxItems": 10,
-        "minItems": 10,
-        "type": "array"
-      },
-      "selected_edges": {
-        "items": {
-          "$ref": "#/$defs/edge"
-        },
-        "maxItems": 5,
-        "minItems": 5,
-        "type": "array"
-      }
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+        }
     },
-    "required": [
-      "selected_edges",
-      "pair_classifications",
-      "excluded_edge_witnesses"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "edge": {
-        "items": {
-          "maximum": 4,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "excluded_edge_witnesses": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "disjoint_selected": {
-                  "$ref": "#/$defs/edge"
+            "excluded_edge_witnesses": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "disjoint_selected": {
+                            "$ref": "#/$defs/edge"
+                        },
+                        "excluded": {
+                            "$ref": "#/$defs/edge"
+                        }
+                    },
+                    "required": [
+                        "excluded",
+                        "disjoint_selected"
+                    ],
+                    "type": "object"
                 },
-                "excluded": {
-                  "$ref": "#/$defs/edge"
-                }
-              },
-              "required": [
-                "excluded",
-                "disjoint_selected"
-              ],
-              "type": "object"
+                "maxItems": 5,
+                "minItems": 5,
+                "type": "array"
             },
-            "maxItems": 5,
-            "minItems": 5,
-            "type": "array"
-          },
-          "pair_classifications": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "left": {
-                  "$ref": "#/$defs/edge"
+            "pair_classifications": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "left": {
+                            "$ref": "#/$defs/edge"
+                        },
+                        "relation": {
+                            "enum": [
+                                "SHARED_ENDPOINT",
+                                "PROPER_CROSSING"
+                            ]
+                        },
+                        "right": {
+                            "$ref": "#/$defs/edge"
+                        }
+                    },
+                    "required": [
+                        "left",
+                        "right",
+                        "relation"
+                    ],
+                    "type": "object"
                 },
-                "relation": {
-                  "enum": [
-                    "SHARED_ENDPOINT",
-                    "PROPER_CROSSING"
-                  ]
+                "maxItems": 10,
+                "minItems": 10,
+                "type": "array"
+            },
+            "selected_edges": {
+                "items": {
+                    "$ref": "#/$defs/edge"
                 },
-                "right": {
-                  "$ref": "#/$defs/edge"
-                }
-              },
-              "required": [
-                "left",
-                "right",
-                "relation"
-              ],
-              "type": "object"
-            },
-            "maxItems": 10,
-            "minItems": 10,
-            "type": "array"
-          },
-          "selected_edges": {
-            "items": {
-              "$ref": "#/$defs/edge"
-            },
-            "maxItems": 5,
-            "minItems": 5,
-            "type": "array"
-          }
+                "maxItems": 5,
+                "minItems": 5,
+                "type": "array"
+            }
         },
         "required": [
-          "selected_edges",
-          "pair_classifications",
-          "excluded_edge_witnesses"
+            "selected_edges",
+            "pair_classifications",
+            "excluded_edge_witnesses"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/thrackle-local-maximality-certificate"
+    "task_id": "jacobian/thrackle-local-maximality-certificate"
 }

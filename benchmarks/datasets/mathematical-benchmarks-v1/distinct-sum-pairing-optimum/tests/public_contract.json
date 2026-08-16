@@ -28,40 +28,5 @@
         ],
         "type": "object"
     },
-    "submission_schema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "additionalProperties": false,
-        "properties": {
-            "result": {
-                "additionalProperties": false,
-                "properties": {
-                    "pairs": {
-                        "items": {
-                            "items": false,
-                            "minItems": 2,
-                            "prefixItems": [
-                                {
-                                    "type": "integer"
-                                },
-                                {
-                                    "type": "integer"
-                                }
-                            ],
-                            "type": "array"
-                        },
-                        "type": "array"
-                    }
-                },
-                "required": [
-                    "pairs"
-                ],
-                "type": "object"
-            }
-        },
-        "required": [
-            "result"
-        ],
-        "type": "object"
-    },
     "task_id": "jacobian/distinct-sum-pairing-optimum"
 }

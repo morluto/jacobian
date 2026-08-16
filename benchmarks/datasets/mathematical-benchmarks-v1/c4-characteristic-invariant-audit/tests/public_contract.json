@@ -1,154 +1,75 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "semantic_status": {
-        "enum": [
-          "EQUIVALENT",
-          "NOT_EQUIVALENT",
-          "NOT_ASSESSED"
-        ]
-      },
-      "witnesses": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "c4_free_characteristic": {
-              "maximum": 1,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "edges": {
-              "items": {
-                "items": {
-                  "type": "integer"
-                },
-                "maxItems": 2,
-                "minItems": 2,
-                "type": "array"
-              },
-              "maxItems": 36,
-              "type": "array"
-            },
-            "induced_c4_count": {
-              "maximum": 126,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "role": {
-              "enum": [
-                "C4_FREE_ZERO_COUNT",
-                "MULTIPLE_INDUCED_C4",
-                "CHORDED_C4_ZERO_INDUCED"
-              ]
-            },
-            "vertex_count": {
-              "maximum": 9,
-              "minimum": 5,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "role",
-            "vertex_count",
-            "edges",
-            "induced_c4_count",
-            "c4_free_characteristic"
-          ],
-          "type": "object"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      }
-    },
-    "required": [
-      "semantic_status",
-      "witnesses"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "semantic_status": {
-            "enum": [
-              "EQUIVALENT",
-              "NOT_EQUIVALENT",
-              "NOT_ASSESSED"
-            ]
-          },
-          "witnesses": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "c4_free_characteristic": {
-                  "maximum": 1,
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "edges": {
-                  "items": {
-                    "items": {
-                      "type": "integer"
-                    },
-                    "maxItems": 2,
-                    "minItems": 2,
-                    "type": "array"
-                  },
-                  "maxItems": 36,
-                  "type": "array"
-                },
-                "induced_c4_count": {
-                  "maximum": 126,
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "role": {
-                  "enum": [
-                    "C4_FREE_ZERO_COUNT",
-                    "MULTIPLE_INDUCED_C4",
-                    "CHORDED_C4_ZERO_INDUCED"
-                  ]
-                },
-                "vertex_count": {
-                  "maximum": 9,
-                  "minimum": 5,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "role",
-                "vertex_count",
-                "edges",
-                "induced_c4_count",
-                "c4_free_characteristic"
-              ],
-              "type": "object"
+            "semantic_status": {
+                "enum": [
+                    "EQUIVALENT",
+                    "NOT_EQUIVALENT",
+                    "NOT_ASSESSED"
+                ]
             },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          }
+            "witnesses": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "c4_free_characteristic": {
+                            "maximum": 1,
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "edges": {
+                            "items": {
+                                "items": {
+                                    "type": "integer"
+                                },
+                                "maxItems": 2,
+                                "minItems": 2,
+                                "type": "array"
+                            },
+                            "maxItems": 36,
+                            "type": "array"
+                        },
+                        "induced_c4_count": {
+                            "maximum": 126,
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "role": {
+                            "enum": [
+                                "C4_FREE_ZERO_COUNT",
+                                "MULTIPLE_INDUCED_C4",
+                                "CHORDED_C4_ZERO_INDUCED"
+                            ]
+                        },
+                        "vertex_count": {
+                            "maximum": 9,
+                            "minimum": 5,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "role",
+                        "vertex_count",
+                        "edges",
+                        "induced_c4_count",
+                        "c4_free_characteristic"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+            }
         },
         "required": [
-          "semantic_status",
-          "witnesses"
+            "semantic_status",
+            "witnesses"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/c4-characteristic-invariant-audit"
+    "task_id": "jacobian/c4-characteristic-invariant-audit"
 }

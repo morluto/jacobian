@@ -1,216 +1,106 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "distance": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "maxItems": 2,
-      "minItems": 2,
-      "type": "array"
-    },
-    "edge": {
-      "items": {
-        "maximum": 6,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "maxItems": 2,
-      "minItems": 2,
-      "type": "array"
-    },
-    "row": {
-      "additionalProperties": false,
-      "properties": {
-        "distance_squared": {
-          "$ref": "#/$defs/distance"
-        },
-        "pair": {
-          "$ref": "#/$defs/edge"
-        },
-        "unit": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "pair",
-        "distance_squared",
-        "unit"
-      ],
-      "type": "object"
-    },
-    "table": {
-      "items": {
-        "$ref": "#/$defs/row"
-      },
-      "maxItems": 21,
-      "minItems": 21,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "corrected_edges": {
-        "items": {
-          "$ref": "#/$defs/edge"
-        },
-        "maxItems": 11,
-        "minItems": 11,
-        "type": "array"
-      },
-      "corrected_pair_table": {
-        "$ref": "#/$defs/table"
-      },
-      "corrupted_pair_table": {
-        "$ref": "#/$defs/table"
-      },
-      "false_claimed_edges": {
-        "items": {
-          "$ref": "#/$defs/edge"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "repair": {
-        "const": "FLIP_VERTEX_5_B_BRANCH_TO_POSITIVE"
-      }
-    },
-    "required": [
-      "corrupted_pair_table",
-      "false_claimed_edges",
-      "repair",
-      "corrected_pair_table",
-      "corrected_edges"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "distance": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "denominator": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "numerator": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "numerator",
-            "denominator"
-          ],
-          "type": "object"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "edge": {
-        "items": {
-          "maximum": 6,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "row": {
-        "additionalProperties": false,
-        "properties": {
-          "distance_squared": {
-            "$ref": "#/$defs/distance"
-          },
-          "pair": {
-            "$ref": "#/$defs/edge"
-          },
-          "unit": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "pair",
-          "distance_squared",
-          "unit"
-        ],
-        "type": "object"
-      },
-      "table": {
-        "items": {
-          "$ref": "#/$defs/row"
-        },
-        "maxItems": 21,
-        "minItems": 21,
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "corrected_edges": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "distance": {
             "items": {
-              "$ref": "#/$defs/edge"
-            },
-            "maxItems": 11,
-            "minItems": 11,
-            "type": "array"
-          },
-          "corrected_pair_table": {
-            "$ref": "#/$defs/table"
-          },
-          "corrupted_pair_table": {
-            "$ref": "#/$defs/table"
-          },
-          "false_claimed_edges": {
-            "items": {
-              "$ref": "#/$defs/edge"
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
             },
             "maxItems": 2,
             "minItems": 2,
             "type": "array"
-          },
-          "repair": {
-            "const": "FLIP_VERTEX_5_B_BRANCH_TO_POSITIVE"
-          }
+        },
+        "edge": {
+            "items": {
+                "maximum": 6,
+                "minimum": 0,
+                "type": "integer"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+        },
+        "row": {
+            "additionalProperties": false,
+            "properties": {
+                "distance_squared": {
+                    "$ref": "#/$defs/distance"
+                },
+                "pair": {
+                    "$ref": "#/$defs/edge"
+                },
+                "unit": {
+                    "type": "boolean"
+                }
+            },
+            "required": [
+                "pair",
+                "distance_squared",
+                "unit"
+            ],
+            "type": "object"
+        },
+        "table": {
+            "items": {
+                "$ref": "#/$defs/row"
+            },
+            "maxItems": 21,
+            "minItems": 21,
+            "type": "array"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "corrected_edges": {
+                "items": {
+                    "$ref": "#/$defs/edge"
+                },
+                "maxItems": 11,
+                "minItems": 11,
+                "type": "array"
+            },
+            "corrected_pair_table": {
+                "$ref": "#/$defs/table"
+            },
+            "corrupted_pair_table": {
+                "$ref": "#/$defs/table"
+            },
+            "false_claimed_edges": {
+                "items": {
+                    "$ref": "#/$defs/edge"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            },
+            "repair": {
+                "const": "FLIP_VERTEX_5_B_BRANCH_TO_POSITIVE"
+            }
         },
         "required": [
-          "corrupted_pair_table",
-          "false_claimed_edges",
-          "repair",
-          "corrected_pair_table",
-          "corrected_edges"
+            "corrupted_pair_table",
+            "false_claimed_edges",
+            "repair",
+            "corrected_pair_table",
+            "corrected_edges"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/moser-radical-branch-audit"
+    "task_id": "jacobian/moser-radical-branch-audit"
 }

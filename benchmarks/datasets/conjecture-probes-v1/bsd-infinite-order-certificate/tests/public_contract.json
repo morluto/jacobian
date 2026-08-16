@@ -1,182 +1,89 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "point": {
-      "items": {
-        "$ref": "#/$defs/rat"
-      },
-      "maxItems": 2,
-      "minItems": 2,
-      "type": "array"
-    },
-    "rat": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "A": {
-        "maximum": 20,
-        "minimum": -20,
-        "type": "integer"
-      },
-      "B": {
-        "maximum": 20,
-        "minimum": -20,
-        "type": "integer"
-      },
-      "discriminant": {
-        "type": "integer"
-      },
-      "double": {
-        "$ref": "#/$defs/point"
-      },
-      "order_conclusion": {
-        "const": "INFINITE_BY_LUTZ_NAGELL"
-      },
-      "point": {
-        "items": {
-          "maximum": 100,
-          "minimum": -100,
-          "type": "integer"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "triple": {
-        "$ref": "#/$defs/point"
-      },
-      "y_square": {
-        "minimum": 1,
-        "type": "integer"
-      },
-      "y_square_divides_discriminant": {
-        "const": false
-      }
-    },
-    "required": [
-      "A",
-      "B",
-      "point",
-      "discriminant",
-      "y_square",
-      "y_square_divides_discriminant",
-      "double",
-      "triple",
-      "order_conclusion"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "point": {
-        "items": {
-          "$ref": "#/$defs/rat"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "rat": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "A": {
-            "maximum": 20,
-            "minimum": -20,
-            "type": "integer"
-          },
-          "B": {
-            "maximum": 20,
-            "minimum": -20,
-            "type": "integer"
-          },
-          "discriminant": {
-            "type": "integer"
-          },
-          "double": {
-            "$ref": "#/$defs/point"
-          },
-          "order_conclusion": {
-            "const": "INFINITE_BY_LUTZ_NAGELL"
-          },
-          "point": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "point": {
             "items": {
-              "maximum": 100,
-              "minimum": -100,
-              "type": "integer"
+                "$ref": "#/$defs/rat"
             },
             "maxItems": 2,
             "minItems": 2,
             "type": "array"
-          },
-          "triple": {
-            "$ref": "#/$defs/point"
-          },
-          "y_square": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "y_square_divides_discriminant": {
-            "const": false
-          }
+        },
+        "rat": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "A": {
+                "maximum": 20,
+                "minimum": -20,
+                "type": "integer"
+            },
+            "B": {
+                "maximum": 20,
+                "minimum": -20,
+                "type": "integer"
+            },
+            "discriminant": {
+                "type": "integer"
+            },
+            "double": {
+                "$ref": "#/$defs/point"
+            },
+            "order_conclusion": {
+                "const": "INFINITE_BY_LUTZ_NAGELL"
+            },
+            "point": {
+                "items": {
+                    "maximum": 100,
+                    "minimum": -100,
+                    "type": "integer"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            },
+            "triple": {
+                "$ref": "#/$defs/point"
+            },
+            "y_square": {
+                "minimum": 1,
+                "type": "integer"
+            },
+            "y_square_divides_discriminant": {
+                "const": false
+            }
         },
         "required": [
-          "A",
-          "B",
-          "point",
-          "discriminant",
-          "y_square",
-          "y_square_divides_discriminant",
-          "double",
-          "triple",
-          "order_conclusion"
+            "A",
+            "B",
+            "point",
+            "discriminant",
+            "y_square",
+            "y_square_divides_discriminant",
+            "double",
+            "triple",
+            "order_conclusion"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/bsd-infinite-order-certificate"
+    "task_id": "jacobian/bsd-infinite-order-certificate"
 }

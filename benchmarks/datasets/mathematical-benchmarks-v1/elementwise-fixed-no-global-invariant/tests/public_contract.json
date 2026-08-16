@@ -1,166 +1,81 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "entry": {
-      "maximum": 12,
-      "minimum": 0,
-      "type": "integer"
-    },
-    "matrix": {
-      "items": {
-        "$ref": "#/$defs/vector"
-      },
-      "maxItems": 3,
-      "minItems": 3,
-      "type": "array"
-    },
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "common_fixed_dimension": {
-          "const": 0
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "entry": {
+            "maximum": 12,
+            "minimum": 0,
+            "type": "integer"
         },
-        "field_prime": {
-          "enum": [
-            3,
-            5,
-            7,
-            11,
-            13
-          ]
+        "matrix": {
+            "items": {
+                "$ref": "#/$defs/vector"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
         },
-        "fixed_vectors": {
-          "items": {
-            "$ref": "#/$defs/vector"
-          },
-          "maxItems": 48,
-          "minItems": 6,
-          "type": "array"
+        "result": {
+            "additionalProperties": false,
+            "properties": {
+                "common_fixed_dimension": {
+                    "const": 0
+                },
+                "field_prime": {
+                    "enum": [
+                        3,
+                        5,
+                        7,
+                        11,
+                        13
+                    ]
+                },
+                "fixed_vectors": {
+                    "items": {
+                        "$ref": "#/$defs/vector"
+                    },
+                    "maxItems": 48,
+                    "minItems": 6,
+                    "type": "array"
+                },
+                "generators": {
+                    "items": {
+                        "$ref": "#/$defs/matrix"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                },
+                "group_elements": {
+                    "items": {
+                        "$ref": "#/$defs/matrix"
+                    },
+                    "maxItems": 48,
+                    "minItems": 6,
+                    "type": "array"
+                }
+            },
+            "required": [
+                "field_prime",
+                "generators",
+                "group_elements",
+                "fixed_vectors",
+                "common_fixed_dimension"
+            ],
+            "type": "object"
         },
-        "generators": {
-          "items": {
-            "$ref": "#/$defs/matrix"
-          },
-          "maxItems": 2,
-          "minItems": 2,
-          "type": "array"
-        },
-        "group_elements": {
-          "items": {
-            "$ref": "#/$defs/matrix"
-          },
-          "maxItems": 48,
-          "minItems": 6,
-          "type": "array"
+        "vector": {
+            "items": {
+                "$ref": "#/$defs/entry"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
         }
-      },
-      "required": [
-        "field_prime",
-        "generators",
-        "group_elements",
-        "fixed_vectors",
-        "common_fixed_dimension"
-      ],
-      "type": "object"
     },
-    "vector": {
-      "items": {
-        "$ref": "#/$defs/entry"
-      },
-      "maxItems": 3,
-      "minItems": 3,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "$ref": "#/$defs/result"
-  },
-  "submission_schema": {
-    "$defs": {
-      "entry": {
-        "maximum": 12,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "matrix": {
-        "items": {
-          "$ref": "#/$defs/vector"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "common_fixed_dimension": {
-            "const": 0
-          },
-          "field_prime": {
-            "enum": [
-              3,
-              5,
-              7,
-              11,
-              13
-            ]
-          },
-          "fixed_vectors": {
-            "items": {
-              "$ref": "#/$defs/vector"
-            },
-            "maxItems": 48,
-            "minItems": 6,
-            "type": "array"
-          },
-          "generators": {
-            "items": {
-              "$ref": "#/$defs/matrix"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "group_elements": {
-            "items": {
-              "$ref": "#/$defs/matrix"
-            },
-            "maxItems": 48,
-            "minItems": 6,
-            "type": "array"
-          }
-        },
-        "required": [
-          "field_prime",
-          "generators",
-          "group_elements",
-          "fixed_vectors",
-          "common_fixed_dimension"
-        ],
-        "type": "object"
-      },
-      "vector": {
-        "items": {
-          "$ref": "#/$defs/entry"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "$ref": "#/$defs/result"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/elementwise-fixed-no-global-invariant"
+    "task_id": "jacobian/elementwise-fixed-no-global-invariant"
 }

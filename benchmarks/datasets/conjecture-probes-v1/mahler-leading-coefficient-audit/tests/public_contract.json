@@ -1,156 +1,76 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "radical": {
-      "items": {
-        "$ref": "#/$defs/rational"
-      },
-      "maxItems": 2,
-      "minItems": 2,
-      "type": "array"
-    },
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "radical": {
+            "items": {
+                "$ref": "#/$defs/rational"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
         },
-        "numerator": {
-          "type": "integer"
+        "rational": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
         }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "corrected_mahler_measure": {
-        "$ref": "#/$defs/radical"
-      },
-      "factors": {
-        "items": {
-          "items": {
-            "type": "integer"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      },
-      "flawed_monic_result": {
-        "$ref": "#/$defs/radical"
-      },
-      "leading_coefficient": {
-        "$ref": "#/$defs/rational"
-      },
-      "outside_contributions": {
-        "items": {
-          "$ref": "#/$defs/radical"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      }
     },
-    "required": [
-      "factors",
-      "outside_contributions",
-      "flawed_monic_result",
-      "leading_coefficient",
-      "corrected_mahler_measure"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "radical": {
-        "items": {
-          "$ref": "#/$defs/rational"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "rational": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
+            "corrected_mahler_measure": {
+                "$ref": "#/$defs/radical"
+            },
+            "factors": {
+                "items": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
+            },
+            "flawed_monic_result": {
+                "$ref": "#/$defs/radical"
+            },
+            "leading_coefficient": {
+                "$ref": "#/$defs/rational"
+            },
+            "outside_contributions": {
+                "items": {
+                    "$ref": "#/$defs/radical"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
+            }
         },
         "required": [
-          "numerator",
-          "denominator"
+            "factors",
+            "outside_contributions",
+            "flawed_monic_result",
+            "leading_coefficient",
+            "corrected_mahler_measure"
         ],
         "type": "object"
-      }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "corrected_mahler_measure": {
-            "$ref": "#/$defs/radical"
-          },
-          "factors": {
-            "items": {
-              "items": {
-                "type": "integer"
-              },
-              "maxItems": 3,
-              "minItems": 3,
-              "type": "array"
-            },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          },
-          "flawed_monic_result": {
-            "$ref": "#/$defs/radical"
-          },
-          "leading_coefficient": {
-            "$ref": "#/$defs/rational"
-          },
-          "outside_contributions": {
-            "items": {
-              "$ref": "#/$defs/radical"
-            },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          }
-        },
-        "required": [
-          "factors",
-          "outside_contributions",
-          "flawed_monic_result",
-          "leading_coefficient",
-          "corrected_mahler_measure"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/mahler-leading-coefficient-audit"
+    "task_id": "jacobian/mahler-leading-coefficient-audit"
 }

@@ -1,97 +1,47 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "assignment": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "a": {
-            "type": "boolean"
-          },
-          "b": {
-            "type": "boolean"
-          },
-          "c": {
-            "type": "boolean"
-          },
-          "d": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "a",
-          "b",
-          "c",
-          "d"
-        ],
-        "type": "object"
-      },
-      "status": {
-        "enum": [
-          "SATISFIABLE",
-          "UNSATISFIABLE"
-        ]
-      }
-    },
-    "required": [
-      "status",
-      "assignment"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "assignment": {
-            "additionalProperties": false,
-            "properties": {
-              "a": {
-                "type": "boolean"
-              },
-              "b": {
-                "type": "boolean"
-              },
-              "c": {
-                "type": "boolean"
-              },
-              "d": {
-                "type": "boolean"
-              }
+            "assignment": {
+                "additionalProperties": false,
+                "properties": {
+                    "a": {
+                        "type": "boolean"
+                    },
+                    "b": {
+                        "type": "boolean"
+                    },
+                    "c": {
+                        "type": "boolean"
+                    },
+                    "d": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "a",
+                    "b",
+                    "c",
+                    "d"
+                ],
+                "type": "object"
             },
-            "required": [
-              "a",
-              "b",
-              "c",
-              "d"
-            ],
-            "type": "object"
-          },
-          "status": {
-            "enum": [
-              "SATISFIABLE",
-              "UNSATISFIABLE"
-            ]
-          }
+            "status": {
+                "enum": [
+                    "SATISFIABLE",
+                    "UNSATISFIABLE"
+                ]
+            }
         },
         "required": [
-          "status",
-          "assignment"
+            "status",
+            "assignment"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/sat-witness"
+    "task_id": "jacobian/sat-witness"
 }

@@ -1,120 +1,58 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "balances": {
-      "items": {
-        "maximum": 4,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "maxItems": 10,
-      "minItems": 10,
-      "type": "array"
-    },
-    "flow": {
-      "items": {
-        "maximum": 4,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "maxItems": 15,
-      "minItems": 15,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "flawed_balances": {
-        "$ref": "#/$defs/balances"
-      },
-      "flawed_flow": {
-        "$ref": "#/$defs/flow"
-      },
-      "repair_balances": {
-        "$ref": "#/$defs/balances"
-      },
-      "repair_flow": {
-        "$ref": "#/$defs/flow"
-      },
-      "zero_edge_index": {
-        "maximum": 14,
-        "minimum": 0,
-        "type": "integer"
-      }
-    },
-    "required": [
-      "flawed_flow",
-      "flawed_balances",
-      "zero_edge_index",
-      "repair_flow",
-      "repair_balances"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "balances": {
-        "items": {
-          "maximum": 4,
-          "minimum": 0,
-          "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "balances": {
+            "items": {
+                "maximum": 4,
+                "minimum": 0,
+                "type": "integer"
+            },
+            "maxItems": 10,
+            "minItems": 10,
+            "type": "array"
         },
-        "maxItems": 10,
-        "minItems": 10,
-        "type": "array"
-      },
-      "flow": {
-        "items": {
-          "maximum": 4,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 15,
-        "minItems": 15,
-        "type": "array"
-      }
+        "flow": {
+            "items": {
+                "maximum": 4,
+                "minimum": 0,
+                "type": "integer"
+            },
+            "maxItems": 15,
+            "minItems": 15,
+            "type": "array"
+        }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "flawed_balances": {
-            "$ref": "#/$defs/balances"
-          },
-          "flawed_flow": {
-            "$ref": "#/$defs/flow"
-          },
-          "repair_balances": {
-            "$ref": "#/$defs/balances"
-          },
-          "repair_flow": {
-            "$ref": "#/$defs/flow"
-          },
-          "zero_edge_index": {
-            "maximum": 14,
-            "minimum": 0,
-            "type": "integer"
-          }
+            "flawed_balances": {
+                "$ref": "#/$defs/balances"
+            },
+            "flawed_flow": {
+                "$ref": "#/$defs/flow"
+            },
+            "repair_balances": {
+                "$ref": "#/$defs/balances"
+            },
+            "repair_flow": {
+                "$ref": "#/$defs/flow"
+            },
+            "zero_edge_index": {
+                "maximum": 14,
+                "minimum": 0,
+                "type": "integer"
+            }
         },
         "required": [
-          "flawed_flow",
-          "flawed_balances",
-          "zero_edge_index",
-          "repair_flow",
-          "repair_balances"
+            "flawed_flow",
+            "flawed_balances",
+            "zero_edge_index",
+            "repair_flow",
+            "repair_balances"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/tutte-flow-domain-audit"
+    "task_id": "jacobian/tutte-flow-domain-audit"
 }

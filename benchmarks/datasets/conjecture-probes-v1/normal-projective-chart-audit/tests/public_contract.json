@@ -1,190 +1,93 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "point": {
-      "items": {
-        "$ref": "#/$defs/q"
-      },
-      "maxItems": 2,
-      "minItems": 2,
-      "type": "array"
-    },
-    "q": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "finite_parameters": {
-        "items": {
-          "$ref": "#/$defs/q"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "finite_points": {
-        "items": {
-          "$ref": "#/$defs/point"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "footpoint_records": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "ellipse_residual": {
-              "$ref": "#/$defs/q"
-            },
-            "normal_residual": {
-              "$ref": "#/$defs/q"
-            },
-            "point": {
-              "$ref": "#/$defs/point"
-            }
-          },
-          "required": [
-            "point",
-            "ellipse_residual",
-            "normal_residual"
-          ],
-          "type": "object"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      },
-      "missing_point": {
-        "$ref": "#/$defs/point"
-      },
-      "missing_projective_parameter": {
-        "$ref": "#/$defs/point"
-      }
-    },
-    "required": [
-      "finite_parameters",
-      "finite_points",
-      "missing_projective_parameter",
-      "missing_point",
-      "footpoint_records"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "point": {
-        "items": {
-          "$ref": "#/$defs/q"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "q": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "finite_parameters": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "point": {
             "items": {
-              "$ref": "#/$defs/q"
+                "$ref": "#/$defs/q"
             },
-            "maxItems": 3,
-            "minItems": 3,
+            "maxItems": 2,
+            "minItems": 2,
             "type": "array"
-          },
-          "finite_points": {
-            "items": {
-              "$ref": "#/$defs/point"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "footpoint_records": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "ellipse_residual": {
-                  "$ref": "#/$defs/q"
+        },
+        "q": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
                 },
-                "normal_residual": {
-                  "$ref": "#/$defs/q"
-                },
-                "point": {
-                  "$ref": "#/$defs/point"
+                "numerator": {
+                    "type": "integer"
                 }
-              },
-              "required": [
-                "point",
-                "ellipse_residual",
-                "normal_residual"
-              ],
-              "type": "object"
             },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          },
-          "missing_point": {
-            "$ref": "#/$defs/point"
-          },
-          "missing_projective_parameter": {
-            "$ref": "#/$defs/point"
-          }
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "finite_parameters": {
+                "items": {
+                    "$ref": "#/$defs/q"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+            },
+            "finite_points": {
+                "items": {
+                    "$ref": "#/$defs/point"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+            },
+            "footpoint_records": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "ellipse_residual": {
+                            "$ref": "#/$defs/q"
+                        },
+                        "normal_residual": {
+                            "$ref": "#/$defs/q"
+                        },
+                        "point": {
+                            "$ref": "#/$defs/point"
+                        }
+                    },
+                    "required": [
+                        "point",
+                        "ellipse_residual",
+                        "normal_residual"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
+            },
+            "missing_point": {
+                "$ref": "#/$defs/point"
+            },
+            "missing_projective_parameter": {
+                "$ref": "#/$defs/point"
+            }
         },
         "required": [
-          "finite_parameters",
-          "finite_points",
-          "missing_projective_parameter",
-          "missing_point",
-          "footpoint_records"
+            "finite_parameters",
+            "finite_points",
+            "missing_projective_parameter",
+            "missing_point",
+            "footpoint_records"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/normal-projective-chart-audit"
+    "task_id": "jacobian/normal-projective-chart-audit"
 }

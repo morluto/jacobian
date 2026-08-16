@@ -1,222 +1,109 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "residual": {
-      "additionalProperties": false,
-      "properties": {
-        "index": {
-          "maximum": 23,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "value": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "index",
-        "value"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "attained_ratio": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "constant_residual": {
-        "type": "integer"
-      },
-      "contract_mismatches": {
-        "items": {
-          "enum": [
-            "OBJECTIVE_REPLACED",
-            "BINARY_DOMAIN_RELAXED",
-            "UNDECLARED_BUDGET_ADDED"
-          ]
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "item_residuals": {
-        "items": {
-          "$ref": "#/$defs/residual"
-        },
-        "maxItems": 24,
-        "minItems": 24,
-        "type": "array"
-      },
-      "maximum_residual_sum": {
-        "const": 0
-      },
-      "positive_residual_indices": {
-        "items": {
-          "maximum": 23,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 24,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "repair_method": {
-        "const": "EXACT_FRACTIONAL_RESIDUAL_CERTIFICATE"
-      },
-      "selected_indices": {
-        "items": {
-          "maximum": 23,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 24,
-        "type": "array",
-        "uniqueItems": true
-      }
-    },
-    "required": [
-      "contract_mismatches",
-      "selected_indices",
-      "attained_ratio",
-      "constant_residual",
-      "item_residuals",
-      "positive_residual_indices",
-      "maximum_residual_sum",
-      "repair_method"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "residual": {
-        "additionalProperties": false,
-        "properties": {
-          "index": {
-            "maximum": 23,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "value": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "index",
-          "value"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "attained_ratio": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "residual": {
             "additionalProperties": false,
             "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
+                "index": {
+                    "maximum": 23,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "value": {
+                    "type": "integer"
+                }
             },
             "required": [
-              "numerator",
-              "denominator"
+                "index",
+                "value"
             ],
             "type": "object"
-          },
-          "constant_residual": {
-            "type": "integer"
-          },
-          "contract_mismatches": {
-            "items": {
-              "enum": [
-                "OBJECTIVE_REPLACED",
-                "BINARY_DOMAIN_RELAXED",
-                "UNDECLARED_BUDGET_ADDED"
-              ]
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "attained_ratio": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
             },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "item_residuals": {
-            "items": {
-              "$ref": "#/$defs/residual"
+            "constant_residual": {
+                "type": "integer"
             },
-            "maxItems": 24,
-            "minItems": 24,
-            "type": "array"
-          },
-          "maximum_residual_sum": {
-            "const": 0
-          },
-          "positive_residual_indices": {
-            "items": {
-              "maximum": 23,
-              "minimum": 0,
-              "type": "integer"
+            "contract_mismatches": {
+                "items": {
+                    "enum": [
+                        "OBJECTIVE_REPLACED",
+                        "BINARY_DOMAIN_RELAXED",
+                        "UNDECLARED_BUDGET_ADDED"
+                    ]
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array",
+                "uniqueItems": true
             },
-            "maxItems": 24,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "repair_method": {
-            "const": "EXACT_FRACTIONAL_RESIDUAL_CERTIFICATE"
-          },
-          "selected_indices": {
-            "items": {
-              "maximum": 23,
-              "minimum": 0,
-              "type": "integer"
+            "item_residuals": {
+                "items": {
+                    "$ref": "#/$defs/residual"
+                },
+                "maxItems": 24,
+                "minItems": 24,
+                "type": "array"
             },
-            "maxItems": 24,
-            "type": "array",
-            "uniqueItems": true
-          }
+            "maximum_residual_sum": {
+                "const": 0
+            },
+            "positive_residual_indices": {
+                "items": {
+                    "maximum": 23,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "maxItems": 24,
+                "type": "array",
+                "uniqueItems": true
+            },
+            "repair_method": {
+                "const": "EXACT_FRACTIONAL_RESIDUAL_CERTIFICATE"
+            },
+            "selected_indices": {
+                "items": {
+                    "maximum": 23,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "maxItems": 24,
+                "type": "array",
+                "uniqueItems": true
+            }
         },
         "required": [
-          "contract_mismatches",
-          "selected_indices",
-          "attained_ratio",
-          "constant_residual",
-          "item_residuals",
-          "positive_residual_indices",
-          "maximum_residual_sum",
-          "repair_method"
+            "contract_mismatches",
+            "selected_indices",
+            "attained_ratio",
+            "constant_residual",
+            "item_residuals",
+            "positive_residual_indices",
+            "maximum_residual_sum",
+            "repair_method"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/fractional-ratio-proof-repair"
+    "task_id": "jacobian/fractional-ratio-proof-repair"
 }

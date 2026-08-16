@@ -66,6 +66,76 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return dict(pairs)
 
 
+_JSON_SCHEMA_DRAFT = "https://json-schema.org/draft/2020-12/schema"
+
+
+def _derive_submission_schema(contract: dict[str, Any]) -> dict[str, Any] | None:
+    """Derive the submission JSON Schema from contract declaration fields.
+
+    The public contract no longer stores ``submission_schema`` as a copy.
+    Instead, the schema is derived from ``submission_result`` (the result
+    schema) and ``witness`` (the witness rule) exactly as the repository-time
+    tooling does in ``benchmarks.tooling.public_contract._declared_schema``.
+    A leftover stored ``submission_schema`` is used only when those
+    declaration fields are absent.
+    """
+    submission_result = contract.get("submission_result")
+    if isinstance(submission_result, dict):
+        properties: dict[str, Any] = {"result": dict(submission_result)}
+        required: list[str] = ["result"]
+        witness = contract.get("witness") or {}
+        if isinstance(witness, dict) and witness.get("max_items", 0):
+            allowed_paths = witness.get("allowed_paths", [])
+            digest_pattern = witness.get("digest_pattern", r"^sha256:[0-9a-f]{64}$")
+            min_items = witness.get("min_items", 0)
+            max_items = witness.get("max_items", 0)
+            payload_shape = witness.get("payload_shape")
+            item_properties: dict[str, Any] = {
+                "path": (
+                    {"const": allowed_paths[0]}
+                    if len(allowed_paths) == 1
+                    else {"enum": list(allowed_paths)}
+                ),
+                "sha256": {"type": "string", "pattern": digest_pattern},
+            }
+            item_required = ["path", "sha256"]
+            if isinstance(payload_shape, dict):
+                for key, fragment in payload_shape.items():
+                    if key in ("path", "sha256"):
+                        continue
+                    item_properties[key] = fragment
+                    item_required.append(key)
+            item_schema = {
+                "type": "object",
+                "additionalProperties": False,
+                "required": item_required,
+                "properties": item_properties,
+            }
+            properties["witness"] = {
+                "type": "array",
+                "minItems": min_items,
+                "maxItems": max_items,
+                "items": item_schema,
+            }
+            if min_items:
+                required.append("witness")
+        schema: dict[str, Any] = {
+            "$schema": _JSON_SCHEMA_DRAFT,
+            "type": "object",
+            "additionalProperties": False,
+            "required": required,
+            "properties": properties,
+        }
+        schema_definitions = contract.get("schema_definitions") or {}
+        if schema_definitions:
+            schema["$defs"] = dict(schema_definitions)
+        return schema
+    stored = contract.get("submission_schema")
+    if isinstance(stored, dict):
+        return dict(stored)
+    return None
+
+
 def _load_public_contract(
     path: Path = TESTS / "public_contract.json",
 ) -> dict[str, Any] | None:
@@ -82,7 +152,7 @@ def _load_public_contract(
         return None
     if not isinstance(contract, dict) or contract.get("schema_version") != "1":
         return None
-    schema = contract.get("submission_schema")
+    schema = _derive_submission_schema(contract)
     if not isinstance(schema, dict):
         return None
     try:
@@ -161,7 +231,7 @@ def _public_submission_is_valid(submission: object) -> bool:
     contract = _load_public_contract()
     if contract is None:
         return False
-    schema = contract["submission_schema"]
+    schema = _derive_submission_schema(contract)
     try:
         return Draft202012Validator(schema).is_valid(submission)
     except (

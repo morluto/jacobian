@@ -1,179 +1,88 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "cleared_polynomial_coefficients": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 10,
-        "minItems": 10,
-        "type": "array"
-      },
-      "combined_numerator_coefficients": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 7,
-        "minItems": 7,
-        "type": "array"
-      },
-      "denominator_coefficients": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 9,
-        "minItems": 9,
-        "type": "array"
-      },
-      "diagnosis": {
-        "const": "POLES_ARE_PLUS_MINUS_SQUARE_ROOTS_NOT_DENOMINATOR_PARAMETERS"
-      },
-      "pole_square_residuals": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "k": {
-              "maximum": 4,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "residual": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "k",
-            "residual"
-          ],
-          "type": "object"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      },
-      "root_sum": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "denominator_coefficients",
-      "combined_numerator_coefficients",
-      "cleared_polynomial_coefficients",
-      "pole_square_residuals",
-      "root_sum",
-      "diagnosis"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "cleared_polynomial_coefficients": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 10,
-            "minItems": 10,
-            "type": "array"
-          },
-          "combined_numerator_coefficients": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 7,
-            "minItems": 7,
-            "type": "array"
-          },
-          "denominator_coefficients": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 9,
-            "minItems": 9,
-            "type": "array"
-          },
-          "diagnosis": {
-            "const": "POLES_ARE_PLUS_MINUS_SQUARE_ROOTS_NOT_DENOMINATOR_PARAMETERS"
-          },
-          "pole_square_residuals": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "k": {
-                  "maximum": 4,
-                  "minimum": 1,
-                  "type": "integer"
+            "cleared_polynomial_coefficients": {
+                "items": {
+                    "type": "integer"
                 },
-                "residual": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "k",
-                "residual"
-              ],
-              "type": "object"
+                "maxItems": 10,
+                "minItems": 10,
+                "type": "array"
             },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          },
-          "root_sum": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
+            "combined_numerator_coefficients": {
+                "items": {
+                    "type": "integer"
+                },
+                "maxItems": 7,
+                "minItems": 7,
+                "type": "array"
             },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          }
+            "denominator_coefficients": {
+                "items": {
+                    "type": "integer"
+                },
+                "maxItems": 9,
+                "minItems": 9,
+                "type": "array"
+            },
+            "diagnosis": {
+                "const": "POLES_ARE_PLUS_MINUS_SQUARE_ROOTS_NOT_DENOMINATOR_PARAMETERS"
+            },
+            "pole_square_residuals": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "k": {
+                            "maximum": 4,
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "residual": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "k",
+                        "residual"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
+            },
+            "root_sum": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "denominator_coefficients",
-          "combined_numerator_coefficients",
-          "cleared_polynomial_coefficients",
-          "pole_square_residuals",
-          "root_sum",
-          "diagnosis"
+            "denominator_coefficients",
+            "combined_numerator_coefficients",
+            "cleared_polynomial_coefficients",
+            "pole_square_residuals",
+            "root_sum",
+            "diagnosis"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/rational-pole-vieta-audit"
+    "task_id": "jacobian/rational-pole-vieta-audit"
 }

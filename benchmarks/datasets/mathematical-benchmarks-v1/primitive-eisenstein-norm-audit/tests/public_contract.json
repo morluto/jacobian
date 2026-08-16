@@ -1,276 +1,136 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "pair": {
-      "additionalProperties": false,
-      "properties": {
-        "x": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "y": {
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "x",
-        "y"
-      ],
-      "type": "object"
-    },
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "inert_obstruction": {
-          "additionalProperties": false,
-          "properties": {
-            "prime": {
-              "enum": [
-                2,
-                5,
-                11,
-                17,
-                23
-              ]
-            },
-            "square_primitive_status": {
-              "const": "IMPOSSIBLE"
-            },
-            "zero_pairs": {
-              "items": {
-                "$ref": "#/$defs/pair"
-              },
-              "minItems": 1,
-              "type": "array",
-              "uniqueItems": true
-            }
-          },
-          "required": [
-            "prime",
-            "zero_pairs",
-            "square_primitive_status"
-          ],
-          "type": "object"
-        },
-        "ramified_witness": {
-          "additionalProperties": false,
-          "properties": {
-            "gcd": {
-              "const": 1
-            },
-            "norm": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "v3": {
-              "const": 1
-            },
-            "x": {
-              "maximum": 30,
-              "minimum": -30,
-              "type": "integer"
-            },
-            "y": {
-              "maximum": 30,
-              "minimum": -30,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "x",
-            "y",
-            "norm",
-            "gcd",
-            "v3"
-          ],
-          "type": "object"
-        },
-        "repaired_criterion": {
-          "additionalProperties": false,
-          "properties": {
-            "forbidden_prime_residue": {
-              "additionalProperties": false,
-              "properties": {
-                "modulus": {
-                  "minimum": 2,
-                  "type": "integer"
-                },
-                "residue": {
-                  "minimum": 0,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "modulus",
-                "residue"
-              ],
-              "type": "object"
-            },
-            "three_exponent_maximum": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "three_exponent_maximum",
-            "forbidden_prime_residue"
-          ],
-          "type": "object"
-        }
-      },
-      "required": [
-        "ramified_witness",
-        "inert_obstruction",
-        "repaired_criterion"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "$ref": "#/$defs/result"
-  },
-  "submission_schema": {
-    "$defs": {
-      "pair": {
-        "additionalProperties": false,
-        "properties": {
-          "x": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "y": {
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "x",
-          "y"
-        ],
-        "type": "object"
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "inert_obstruction": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "pair": {
             "additionalProperties": false,
             "properties": {
-              "prime": {
-                "enum": [
-                  2,
-                  5,
-                  11,
-                  17,
-                  23
-                ]
-              },
-              "square_primitive_status": {
-                "const": "IMPOSSIBLE"
-              },
-              "zero_pairs": {
-                "items": {
-                  "$ref": "#/$defs/pair"
-                },
-                "minItems": 1,
-                "type": "array",
-                "uniqueItems": true
-              }
-            },
-            "required": [
-              "prime",
-              "zero_pairs",
-              "square_primitive_status"
-            ],
-            "type": "object"
-          },
-          "ramified_witness": {
-            "additionalProperties": false,
-            "properties": {
-              "gcd": {
-                "const": 1
-              },
-              "norm": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "v3": {
-                "const": 1
-              },
-              "x": {
-                "maximum": 30,
-                "minimum": -30,
-                "type": "integer"
-              },
-              "y": {
-                "maximum": 30,
-                "minimum": -30,
-                "type": "integer"
-              }
-            },
-            "required": [
-              "x",
-              "y",
-              "norm",
-              "gcd",
-              "v3"
-            ],
-            "type": "object"
-          },
-          "repaired_criterion": {
-            "additionalProperties": false,
-            "properties": {
-              "forbidden_prime_residue": {
-                "additionalProperties": false,
-                "properties": {
-                  "modulus": {
-                    "minimum": 2,
-                    "type": "integer"
-                  },
-                  "residue": {
+                "x": {
                     "minimum": 0,
                     "type": "integer"
-                  }
                 },
-                "required": [
-                  "modulus",
-                  "residue"
-                ],
-                "type": "object"
-              },
-              "three_exponent_maximum": {
-                "minimum": 0,
-                "type": "integer"
-              }
+                "y": {
+                    "minimum": 0,
+                    "type": "integer"
+                }
             },
             "required": [
-              "three_exponent_maximum",
-              "forbidden_prime_residue"
+                "x",
+                "y"
             ],
             "type": "object"
-          }
         },
-        "required": [
-          "ramified_witness",
-          "inert_obstruction",
-          "repaired_criterion"
-        ],
-        "type": "object"
-      }
+        "result": {
+            "additionalProperties": false,
+            "properties": {
+                "inert_obstruction": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "prime": {
+                            "enum": [
+                                2,
+                                5,
+                                11,
+                                17,
+                                23
+                            ]
+                        },
+                        "square_primitive_status": {
+                            "const": "IMPOSSIBLE"
+                        },
+                        "zero_pairs": {
+                            "items": {
+                                "$ref": "#/$defs/pair"
+                            },
+                            "minItems": 1,
+                            "type": "array",
+                            "uniqueItems": true
+                        }
+                    },
+                    "required": [
+                        "prime",
+                        "zero_pairs",
+                        "square_primitive_status"
+                    ],
+                    "type": "object"
+                },
+                "ramified_witness": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "gcd": {
+                            "const": 1
+                        },
+                        "norm": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "v3": {
+                            "const": 1
+                        },
+                        "x": {
+                            "maximum": 30,
+                            "minimum": -30,
+                            "type": "integer"
+                        },
+                        "y": {
+                            "maximum": 30,
+                            "minimum": -30,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "x",
+                        "y",
+                        "norm",
+                        "gcd",
+                        "v3"
+                    ],
+                    "type": "object"
+                },
+                "repaired_criterion": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "forbidden_prime_residue": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "modulus": {
+                                    "minimum": 2,
+                                    "type": "integer"
+                                },
+                                "residue": {
+                                    "minimum": 0,
+                                    "type": "integer"
+                                }
+                            },
+                            "required": [
+                                "modulus",
+                                "residue"
+                            ],
+                            "type": "object"
+                        },
+                        "three_exponent_maximum": {
+                            "minimum": 0,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "three_exponent_maximum",
+                        "forbidden_prime_residue"
+                    ],
+                    "type": "object"
+                }
+            },
+            "required": [
+                "ramified_witness",
+                "inert_obstruction",
+                "repaired_criterion"
+            ],
+            "type": "object"
+        }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "$ref": "#/$defs/result"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/primitive-eisenstein-norm-audit"
+    "task_id": "jacobian/primitive-eisenstein-norm-audit"
 }

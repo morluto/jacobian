@@ -1,193 +1,95 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "beta": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "critical_p": {
-        "const": "2"
-      },
-      "infinity_power_coefficient": {
-        "const": "-1/2"
-      },
-      "lower_regime": {
-        "const": {
-          "obstruction": "INFINITY_POWER_TAIL",
-          "p_interval": "0<p<2"
-        }
-      },
-      "origin_power_coefficient": {
-        "const": "-1/2"
-      },
-      "p2_integral_each": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "p2_log_exponent": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "upper_regime": {
-        "const": {
-          "obstruction": "ORIGIN_POWER_SINGULARITY",
-          "p_interval": "p>2"
-        }
-      }
-    },
-    "required": [
-      "beta",
-      "origin_power_coefficient",
-      "infinity_power_coefficient",
-      "p2_log_exponent",
-      "p2_integral_each",
-      "critical_p",
-      "lower_regime",
-      "upper_regime"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "beta": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
+            "beta": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
             },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          },
-          "critical_p": {
-            "const": "2"
-          },
-          "infinity_power_coefficient": {
-            "const": "-1/2"
-          },
-          "lower_regime": {
-            "const": {
-              "obstruction": "INFINITY_POWER_TAIL",
-              "p_interval": "0<p<2"
+            "critical_p": {
+                "const": "2"
+            },
+            "infinity_power_coefficient": {
+                "const": "-1/2"
+            },
+            "lower_regime": {
+                "const": {
+                    "obstruction": "INFINITY_POWER_TAIL",
+                    "p_interval": "0<p<2"
+                }
+            },
+            "origin_power_coefficient": {
+                "const": "-1/2"
+            },
+            "p2_integral_each": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
+            },
+            "p2_log_exponent": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
+            },
+            "upper_regime": {
+                "const": {
+                    "obstruction": "ORIGIN_POWER_SINGULARITY",
+                    "p_interval": "p>2"
+                }
             }
-          },
-          "origin_power_coefficient": {
-            "const": "-1/2"
-          },
-          "p2_integral_each": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          },
-          "p2_log_exponent": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          },
-          "upper_regime": {
-            "const": {
-              "obstruction": "ORIGIN_POWER_SINGULARITY",
-              "p_interval": "p>2"
-            }
-          }
         },
         "required": [
-          "beta",
-          "origin_power_coefficient",
-          "infinity_power_coefficient",
-          "p2_log_exponent",
-          "p2_integral_each",
-          "critical_p",
-          "lower_regime",
-          "upper_regime"
+            "beta",
+            "origin_power_coefficient",
+            "infinity_power_coefficient",
+            "p2_log_exponent",
+            "p2_integral_each",
+            "critical_p",
+            "lower_regime",
+            "upper_regime"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/lp-integrability-separator"
+    "task_id": "jacobian/lp-integrability-separator"
 }

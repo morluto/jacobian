@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact verifier for a pointwise inversion-definition audit.
 LABEL jacobian.task="jacobian/inversion-aggregate-mask-audit" \
-      jacobian.checksum="ab1ff8f81e5648426eee7fc8aef3e4f964961ca05e66f5917b54a519a597d889"
+      jacobian.checksum="f237e7f2f51ff8153ebeb8debd1598103e59b0e514ed2ad8c1bb520cede221a9"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

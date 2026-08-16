@@ -1,91 +1,44 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "count": {
-        "minimum": 0,
-        "type": "integer"
-      },
-      "good_dates": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "concatenated": {
-              "type": "integer"
-            },
-            "day": {
-              "type": "integer"
-            },
-            "month": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "month",
-            "day",
-            "concatenated"
-          ],
-          "type": "object"
-        },
-        "type": "array"
-      }
-    },
-    "required": [
-      "count",
-      "good_dates"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "count": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "good_dates": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "concatenated": {
-                  "type": "integer"
-                },
-                "day": {
-                  "type": "integer"
-                },
-                "month": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "month",
-                "day",
-                "concatenated"
-              ],
-              "type": "object"
+            "count": {
+                "minimum": 0,
+                "type": "integer"
             },
-            "type": "array"
-          }
+            "good_dates": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "concatenated": {
+                            "type": "integer"
+                        },
+                        "day": {
+                            "type": "integer"
+                        },
+                        "month": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "month",
+                        "day",
+                        "concatenated"
+                    ],
+                    "type": "object"
+                },
+                "type": "array"
+            }
         },
         "required": [
-          "count",
-          "good_dates"
+            "count",
+            "good_dates"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/calendar-good-days-audit"
+    "task_id": "jacobian/calendar-good-days-audit"
 }

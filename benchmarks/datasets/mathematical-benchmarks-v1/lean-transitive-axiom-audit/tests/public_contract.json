@@ -1,43 +1,20 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "properties": {
-      "cases": {
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      }
-    },
-    "required": [
-      "cases"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "properties": {
-          "cases": {
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          }
+            "cases": {
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            }
         },
         "required": [
-          "cases"
+            "cases"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/lean-transitive-axiom-audit"
+    "task_id": "jacobian/lean-transitive-axiom-audit"
 }

@@ -1,7 +1,7 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 LABEL jacobian.task="jacobian/vizing-bounded-cartesian-products" \
-      jacobian.checksum="2fd8c7bead968dce4839f9223d5d110bac4b7fd7e55e58c3cf4d9ce252846f7d"
+      jacobian.checksum="0a073f1943f2c8e320e1b5d4feaa4c78d3b9f8f2724ff02ef7168f8542e69e92"
 COPY expected.json input.json public_contract.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && python -c 'import json; assert json.load(open("/tests/input.json"))["task_id"] == "jacobian/vizing-bounded-cartesian-products"'

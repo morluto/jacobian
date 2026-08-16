@@ -1,222 +1,109 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "matrix3": {
-      "items": {
-        "$ref": "#/$defs/row3"
-      },
-      "maxItems": 3,
-      "minItems": 3,
-      "type": "array"
-    },
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    },
-    "row3": {
-      "items": {
-        "$ref": "#/$defs/rational"
-      },
-      "maxItems": 3,
-      "minItems": 3,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "basis_change": {
-        "$ref": "#/$defs/matrix3"
-      },
-      "basis_change_inverse": {
-        "$ref": "#/$defs/matrix3"
-      },
-      "channels": {
-        "items": {
-          "enum": [
-            "A+2B",
-            "A-B"
-          ]
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "determinant_identity": {
-        "additionalProperties": false,
-        "properties": {
-          "factors": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "matrix3": {
             "items": {
-              "additionalProperties": false,
-              "properties": {
-                "exponent": {
-                  "maximum": 8,
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "matrix": {
-                  "enum": [
-                    "A-B",
-                    "A+2B"
-                  ]
-                }
-              },
-              "required": [
-                "matrix",
-                "exponent"
-              ],
-              "type": "object"
-            },
-            "maxItems": 8,
-            "minItems": 1,
-            "type": "array"
-          }
-        },
-        "required": [
-          "factors"
-        ],
-        "type": "object"
-      },
-      "invertibility_assumption": {
-        "const": "NOT_REQUIRED_FOR_POLYNOMIAL_IDENTITY"
-      }
-    },
-    "required": [
-      "basis_change",
-      "basis_change_inverse",
-      "channels",
-      "determinant_identity",
-      "invertibility_assumption"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "matrix3": {
-        "items": {
-          "$ref": "#/$defs/row3"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "row3": {
-        "items": {
-          "$ref": "#/$defs/rational"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "basis_change": {
-            "$ref": "#/$defs/matrix3"
-          },
-          "basis_change_inverse": {
-            "$ref": "#/$defs/matrix3"
-          },
-          "channels": {
-            "items": {
-              "enum": [
-                "A+2B",
-                "A-B"
-              ]
+                "$ref": "#/$defs/row3"
             },
             "maxItems": 3,
             "minItems": 3,
             "type": "array"
-          },
-          "determinant_identity": {
+        },
+        "rational": {
             "additionalProperties": false,
             "properties": {
-              "factors": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "exponent": {
-                      "maximum": 8,
-                      "minimum": 1,
-                      "type": "integer"
-                    },
-                    "matrix": {
-                      "enum": [
-                        "A-B",
-                        "A+2B"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "matrix",
-                    "exponent"
-                  ],
-                  "type": "object"
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
                 },
-                "maxItems": 8,
-                "minItems": 1,
-                "type": "array"
-              }
+                "numerator": {
+                    "type": "integer"
+                }
             },
             "required": [
-              "factors"
+                "numerator",
+                "denominator"
             ],
             "type": "object"
-          },
-          "invertibility_assumption": {
-            "const": "NOT_REQUIRED_FOR_POLYNOMIAL_IDENTITY"
-          }
+        },
+        "row3": {
+            "items": {
+                "$ref": "#/$defs/rational"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "basis_change": {
+                "$ref": "#/$defs/matrix3"
+            },
+            "basis_change_inverse": {
+                "$ref": "#/$defs/matrix3"
+            },
+            "channels": {
+                "items": {
+                    "enum": [
+                        "A+2B",
+                        "A-B"
+                    ]
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+            },
+            "determinant_identity": {
+                "additionalProperties": false,
+                "properties": {
+                    "factors": {
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "exponent": {
+                                    "maximum": 8,
+                                    "minimum": 1,
+                                    "type": "integer"
+                                },
+                                "matrix": {
+                                    "enum": [
+                                        "A-B",
+                                        "A+2B"
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "matrix",
+                                "exponent"
+                            ],
+                            "type": "object"
+                        },
+                        "maxItems": 8,
+                        "minItems": 1,
+                        "type": "array"
+                    }
+                },
+                "required": [
+                    "factors"
+                ],
+                "type": "object"
+            },
+            "invertibility_assumption": {
+                "const": "NOT_REQUIRED_FOR_POLYNOMIAL_IDENTITY"
+            }
         },
         "required": [
-          "basis_change",
-          "basis_change_inverse",
-          "channels",
-          "determinant_identity",
-          "invertibility_assumption"
+            "basis_change",
+            "basis_change_inverse",
+            "channels",
+            "determinant_identity",
+            "invertibility_assumption"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/symbolic-block-determinant-decomposition"
+    "task_id": "jacobian/symbolic-block-determinant-decomposition"
 }

@@ -1,150 +1,73 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "polynomial": {
-      "items": {
-        "$ref": "#/$defs/term"
-      },
-      "maxItems": 70,
-      "type": "array"
-    },
-    "term": {
-      "additionalProperties": false,
-      "properties": {
-        "coefficient": {
-          "pattern": "^-?(0|[1-9][0-9]*)$",
-          "type": "string"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "polynomial": {
+            "items": {
+                "$ref": "#/$defs/term"
+            },
+            "maxItems": 70,
+            "type": "array"
         },
-        "exponents": {
-          "items": {
-            "maximum": 4,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 4,
-          "minItems": 4,
-          "type": "array"
+        "term": {
+            "additionalProperties": false,
+            "properties": {
+                "coefficient": {
+                    "pattern": "^-?(0|[1-9][0-9]*)$",
+                    "type": "string"
+                },
+                "exponents": {
+                    "items": {
+                        "maximum": 4,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                }
+            },
+            "required": [
+                "exponents",
+                "coefficient"
+            ],
+            "type": "object"
         }
-      },
-      "required": [
-        "exponents",
-        "coefficient"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "divisibility_conclusion": {
-        "const": "TARGET_DIVISIBLE_BY_N"
-      },
-      "generator_multipliers": {
-        "items": {
-          "$ref": "#/$defs/polynomial"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "identity_conclusion": {
-        "const": "TARGET_IN_HYPOTHESIS_IDEAL"
-      },
-      "variables": {
-        "const": [
-          "a",
-          "b",
-          "c",
-          "d"
-        ]
-      }
     },
-    "required": [
-      "variables",
-      "generator_multipliers",
-      "identity_conclusion",
-      "divisibility_conclusion"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "polynomial": {
-        "items": {
-          "$ref": "#/$defs/term"
-        },
-        "maxItems": 70,
-        "type": "array"
-      },
-      "term": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "coefficient": {
-            "pattern": "^-?(0|[1-9][0-9]*)$",
-            "type": "string"
-          },
-          "exponents": {
-            "items": {
-              "maximum": 4,
-              "minimum": 0,
-              "type": "integer"
+            "divisibility_conclusion": {
+                "const": "TARGET_DIVISIBLE_BY_N"
             },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          }
+            "generator_multipliers": {
+                "items": {
+                    "$ref": "#/$defs/polynomial"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            },
+            "identity_conclusion": {
+                "const": "TARGET_IN_HYPOTHESIS_IDEAL"
+            },
+            "variables": {
+                "const": [
+                    "a",
+                    "b",
+                    "c",
+                    "d"
+                ]
+            }
         },
         "required": [
-          "exponents",
-          "coefficient"
+            "variables",
+            "generator_multipliers",
+            "identity_conclusion",
+            "divisibility_conclusion"
         ],
         "type": "object"
-      }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "divisibility_conclusion": {
-            "const": "TARGET_DIVISIBLE_BY_N"
-          },
-          "generator_multipliers": {
-            "items": {
-              "$ref": "#/$defs/polynomial"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "identity_conclusion": {
-            "const": "TARGET_IN_HYPOTHESIS_IDEAL"
-          },
-          "variables": {
-            "const": [
-              "a",
-              "b",
-              "c",
-              "d"
-            ]
-          }
-        },
-        "required": [
-          "variables",
-          "generator_multipliers",
-          "identity_conclusion",
-          "divisibility_conclusion"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/symmetric-polynomial-divisibility"
+    "task_id": "jacobian/symmetric-polynomial-divisibility"
 }

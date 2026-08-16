@@ -61,8 +61,6 @@ def _base_contract_dict() -> dict:
 
 
 def _write_contract(tmp_path: Path, data: dict) -> Path:
-    declared = PublicContract.model_validate(data)
-    data = data | {"submission_schema": json.loads(render_submission_schema(declared))}
     path = tmp_path / "public_contract.json"
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return path
@@ -95,9 +93,6 @@ def test_checked_in_schema_accepts_current_result_and_witness_contracts() -> Non
         Path("benchmarks/templates/task/tests/public_contract.json").read_text()
     )
     witness_contract = _base_contract_dict()
-    witness_contract["submission_schema"] = json.loads(
-        render_submission_schema(PublicContract.model_validate(witness_contract))
-    )
     validator = Draft202012Validator(schema)
     assert list(validator.iter_errors(result_only)) == []
     assert list(validator.iter_errors(witness_contract)) == []
@@ -461,6 +456,15 @@ class TestSyncCheck:
         bad = tmp_path / "bad.json"
         bad.write_text("{not json", encoding="utf-8")
         with pytest.raises(ContractError, match="cannot read"):
+            load_contract(bad)
+
+    @pytest.mark.parametrize("payload", ("[]", "null", "1"))
+    def test_load_contract_rejects_non_object_json(
+        self, tmp_path: Path, payload: str
+    ) -> None:
+        bad = tmp_path / "bad.json"
+        bad.write_text(payload, encoding="utf-8")
+        with pytest.raises(ContractError, match="top-level JSON must be an object"):
             load_contract(bad)
 
 

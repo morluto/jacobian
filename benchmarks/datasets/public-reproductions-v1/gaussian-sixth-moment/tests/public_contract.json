@@ -1,119 +1,58 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "moment": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "imaginary": {
-            "additionalProperties": false,
-            "properties": {
-              "den": {
-                "type": "string"
-              },
-              "num": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "num",
-              "den"
-            ],
-            "type": "object"
-          },
-          "real": {
-            "additionalProperties": false,
-            "properties": {
-              "den": {
-                "type": "string"
-              },
-              "num": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "num",
-              "den"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "real",
-          "imaginary"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "moment"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "moment": {
-            "additionalProperties": false,
-            "properties": {
-              "imaginary": {
+            "moment": {
                 "additionalProperties": false,
                 "properties": {
-                  "den": {
-                    "type": "string"
-                  },
-                  "num": {
-                    "type": "string"
-                  }
+                    "imaginary": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "den": {
+                                "type": "string"
+                            },
+                            "num": {
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "num",
+                            "den"
+                        ],
+                        "type": "object"
+                    },
+                    "real": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "den": {
+                                "type": "string"
+                            },
+                            "num": {
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "num",
+                            "den"
+                        ],
+                        "type": "object"
+                    }
                 },
                 "required": [
-                  "num",
-                  "den"
+                    "real",
+                    "imaginary"
                 ],
                 "type": "object"
-              },
-              "real": {
-                "additionalProperties": false,
-                "properties": {
-                  "den": {
-                    "type": "string"
-                  },
-                  "num": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "num",
-                  "den"
-                ],
-                "type": "object"
-              }
-            },
-            "required": [
-              "real",
-              "imaginary"
-            ],
-            "type": "object"
-          }
+            }
         },
         "required": [
-          "moment"
+            "moment"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/gaussian-sixth-moment"
+    "task_id": "jacobian/gaussian-sixth-moment"
 }

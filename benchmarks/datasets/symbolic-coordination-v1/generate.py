@@ -1230,8 +1230,8 @@ def public_contract(data: dict[str, object]) -> PublicContract:
         "schema_definitions": schema["$defs"],
     }
     draft = PublicContract.model_validate(declaration)
-    declaration["submission_schema"] = json.loads(render_submission_schema(draft))
-    return PublicContract.model_validate(declaration)
+    # submission_schema is now derived, not stored
+    return draft
 
 
 def render_task(

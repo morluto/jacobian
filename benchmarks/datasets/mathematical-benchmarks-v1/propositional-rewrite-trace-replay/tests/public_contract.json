@@ -1,326 +1,161 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "node": {
-      "oneOf": [
-        {
-          "additionalProperties": false,
-          "properties": {
-            "name": {
-              "maxLength": 80,
-              "minLength": 1,
-              "type": "string"
-            },
-            "op": {
-              "const": "atom"
-            }
-          },
-          "required": [
-            "op",
-            "name"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "properties": {
-            "op": {
-              "const": "false"
-            }
-          },
-          "required": [
-            "op"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "properties": {
-            "args": {
-              "items": {
-                "$ref": "#/$defs/node"
-              },
-              "maxItems": 1,
-              "minItems": 1,
-              "type": "array"
-            },
-            "op": {
-              "const": "not"
-            }
-          },
-          "required": [
-            "op",
-            "args"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "properties": {
-            "args": {
-              "items": {
-                "$ref": "#/$defs/node"
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
-            },
-            "op": {
-              "const": "imp"
-            }
-          },
-          "required": [
-            "op",
-            "args"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "properties": {
-            "args": {
-              "items": {
-                "$ref": "#/$defs/node"
-              },
-              "maxItems": 16,
-              "minItems": 2,
-              "type": "array"
-            },
-            "op": {
-              "enum": [
-                "and",
-                "or"
-              ]
-            }
-          },
-          "required": [
-            "op",
-            "args"
-          ],
-          "type": "object"
-        }
-      ]
-    },
-    "step": {
-      "additionalProperties": false,
-      "properties": {
-        "after_ast": {
-          "$ref": "#/$defs/node"
-        },
-        "path": {
-          "items": {
-            "maximum": 15,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 12,
-          "type": "array"
-        },
-        "rule": {
-          "enum": [
-            "DE_MORGAN_OR",
-            "NOT_IMPLICATION",
-            "DOUBLE_NEGATION",
-            "FLATTEN_ASSOCIATIVE",
-            "CONTRADICTION"
-          ]
-        }
-      },
-      "required": [
-        "rule",
-        "path",
-        "after_ast"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "final_ast": {
-        "$ref": "#/$defs/node"
-      },
-      "steps": {
-        "items": {
-          "$ref": "#/$defs/step"
-        },
-        "maxItems": 16,
-        "minItems": 6,
-        "type": "array"
-      }
-    },
-    "required": [
-      "steps",
-      "final_ast"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "node": {
-        "oneOf": [
-          {
-            "additionalProperties": false,
-            "properties": {
-              "name": {
-                "maxLength": 80,
-                "minLength": 1,
-                "type": "string"
-              },
-              "op": {
-                "const": "atom"
-              }
-            },
-            "required": [
-              "op",
-              "name"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "op": {
-                "const": "false"
-              }
-            },
-            "required": [
-              "op"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "args": {
-                "items": {
-                  "$ref": "#/$defs/node"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "node": {
+            "oneOf": [
+                {
+                    "additionalProperties": false,
+                    "properties": {
+                        "name": {
+                            "maxLength": 80,
+                            "minLength": 1,
+                            "type": "string"
+                        },
+                        "op": {
+                            "const": "atom"
+                        }
+                    },
+                    "required": [
+                        "op",
+                        "name"
+                    ],
+                    "type": "object"
                 },
-                "maxItems": 1,
-                "minItems": 1,
-                "type": "array"
-              },
-              "op": {
-                "const": "not"
-              }
-            },
-            "required": [
-              "op",
-              "args"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "args": {
-                "items": {
-                  "$ref": "#/$defs/node"
+                {
+                    "additionalProperties": false,
+                    "properties": {
+                        "op": {
+                            "const": "false"
+                        }
+                    },
+                    "required": [
+                        "op"
+                    ],
+                    "type": "object"
                 },
-                "maxItems": 2,
-                "minItems": 2,
-                "type": "array"
-              },
-              "op": {
-                "const": "imp"
-              }
-            },
-            "required": [
-              "op",
-              "args"
-            ],
-            "type": "object"
-          },
-          {
+                {
+                    "additionalProperties": false,
+                    "properties": {
+                        "args": {
+                            "items": {
+                                "$ref": "#/$defs/node"
+                            },
+                            "maxItems": 1,
+                            "minItems": 1,
+                            "type": "array"
+                        },
+                        "op": {
+                            "const": "not"
+                        }
+                    },
+                    "required": [
+                        "op",
+                        "args"
+                    ],
+                    "type": "object"
+                },
+                {
+                    "additionalProperties": false,
+                    "properties": {
+                        "args": {
+                            "items": {
+                                "$ref": "#/$defs/node"
+                            },
+                            "maxItems": 2,
+                            "minItems": 2,
+                            "type": "array"
+                        },
+                        "op": {
+                            "const": "imp"
+                        }
+                    },
+                    "required": [
+                        "op",
+                        "args"
+                    ],
+                    "type": "object"
+                },
+                {
+                    "additionalProperties": false,
+                    "properties": {
+                        "args": {
+                            "items": {
+                                "$ref": "#/$defs/node"
+                            },
+                            "maxItems": 16,
+                            "minItems": 2,
+                            "type": "array"
+                        },
+                        "op": {
+                            "enum": [
+                                "and",
+                                "or"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "op",
+                        "args"
+                    ],
+                    "type": "object"
+                }
+            ]
+        },
+        "step": {
             "additionalProperties": false,
             "properties": {
-              "args": {
+                "after_ast": {
+                    "$ref": "#/$defs/node"
+                },
+                "path": {
+                    "items": {
+                        "maximum": 15,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "maxItems": 12,
+                    "type": "array"
+                },
+                "rule": {
+                    "enum": [
+                        "DE_MORGAN_OR",
+                        "NOT_IMPLICATION",
+                        "DOUBLE_NEGATION",
+                        "FLATTEN_ASSOCIATIVE",
+                        "CONTRADICTION"
+                    ]
+                }
+            },
+            "required": [
+                "rule",
+                "path",
+                "after_ast"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "final_ast": {
+                "$ref": "#/$defs/node"
+            },
+            "steps": {
                 "items": {
-                  "$ref": "#/$defs/node"
+                    "$ref": "#/$defs/step"
                 },
                 "maxItems": 16,
-                "minItems": 2,
+                "minItems": 6,
                 "type": "array"
-              },
-              "op": {
-                "enum": [
-                  "and",
-                  "or"
-                ]
-              }
-            },
-            "required": [
-              "op",
-              "args"
-            ],
-            "type": "object"
-          }
-        ]
-      },
-      "step": {
-        "additionalProperties": false,
-        "properties": {
-          "after_ast": {
-            "$ref": "#/$defs/node"
-          },
-          "path": {
-            "items": {
-              "maximum": 15,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "maxItems": 12,
-            "type": "array"
-          },
-          "rule": {
-            "enum": [
-              "DE_MORGAN_OR",
-              "NOT_IMPLICATION",
-              "DOUBLE_NEGATION",
-              "FLATTEN_ASSOCIATIVE",
-              "CONTRADICTION"
-            ]
-          }
+            }
         },
         "required": [
-          "rule",
-          "path",
-          "after_ast"
+            "steps",
+            "final_ast"
         ],
         "type": "object"
-      }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "final_ast": {
-            "$ref": "#/$defs/node"
-          },
-          "steps": {
-            "items": {
-              "$ref": "#/$defs/step"
-            },
-            "maxItems": 16,
-            "minItems": 6,
-            "type": "array"
-          }
-        },
-        "required": [
-          "steps",
-          "final_ast"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/propositional-rewrite-trace-replay"
+    "task_id": "jacobian/propositional-rewrite-trace-replay"
 }

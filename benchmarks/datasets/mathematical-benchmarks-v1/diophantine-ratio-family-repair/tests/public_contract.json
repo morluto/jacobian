@@ -1,352 +1,174 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "poly": {
-      "items": {
-        "maximum": 1000000,
-        "minimum": -1000000,
-        "type": "integer"
-      },
-      "maxItems": 12,
-      "minItems": 1,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "conclusion": {
-        "const": "INFINITELY_MANY_DISTINCT_RATIOS_CERTIFIED"
-      },
-      "family": {
-        "additionalProperties": false,
-        "properties": {
-          "a": {
-            "$ref": "#/$defs/poly"
-          },
-          "b": {
-            "$ref": "#/$defs/poly"
-          },
-          "d": {
-            "$ref": "#/$defs/poly"
-          },
-          "divisibility_quotient": {
-            "$ref": "#/$defs/poly"
-          },
-          "norm": {
-            "$ref": "#/$defs/poly"
-          },
-          "quotient": {
-            "$ref": "#/$defs/poly"
-          },
-          "ratio": {
-            "$ref": "#/$defs/poly"
-          },
-          "square_congruence_factor": {
-            "$ref": "#/$defs/poly"
-          },
-          "x": {
-            "$ref": "#/$defs/poly"
-          },
-          "y": {
-            "$ref": "#/$defs/poly"
-          }
-        },
-        "required": [
-          "a",
-          "b",
-          "d",
-          "x",
-          "y",
-          "norm",
-          "square_congruence_factor",
-          "quotient",
-          "divisibility_quotient",
-          "ratio"
-        ],
-        "type": "object"
-      },
-      "probes": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "divisor": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "multiple": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "ratio": {
-              "items": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
-            },
-            "t": {
-              "maximum": 50,
-              "minimum": 2,
-              "type": "integer"
-            },
-            "x": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "y": {
-              "minimum": 1,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "t",
-            "x",
-            "y",
-            "divisor",
-            "multiple",
-            "ratio"
-          ],
-          "type": "object"
-        },
-        "maxItems": 6,
-        "minItems": 3,
-        "type": "array"
-      },
-      "source_audit": {
-        "additionalProperties": false,
-        "properties": {
-          "claimed_partner": {
-            "additionalProperties": false,
-            "properties": {
-              "numerator": {
-                "$ref": "#/$defs/poly"
-              },
-              "denominator": {
-                "$ref": "#/$defs/poly"
-              }
-            },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          },
-          "downstream_recurrence_status": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "invalid_step": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "k": {
-            "$ref": "#/$defs/poly"
-          },
-          "status_for_d_ge_2": {
-            "minLength": 1,
-            "type": "string"
-          }
-        },
-        "required": [
-          "invalid_step",
-          "k",
-          "claimed_partner",
-          "status_for_d_ge_2",
-          "downstream_recurrence_status"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "source_audit",
-      "family",
-      "probes",
-      "conclusion"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "poly": {
-        "items": {
-          "maximum": 1000000,
-          "minimum": -1000000,
-          "type": "integer"
-        },
-        "maxItems": 12,
-        "minItems": 1,
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "conclusion": {
-            "const": "INFINITELY_MANY_DISTINCT_RATIOS_CERTIFIED"
-          },
-          "family": {
-            "additionalProperties": false,
-            "properties": {
-              "a": {
-                "$ref": "#/$defs/poly"
-              },
-              "b": {
-                "$ref": "#/$defs/poly"
-              },
-              "d": {
-                "$ref": "#/$defs/poly"
-              },
-              "divisibility_quotient": {
-                "$ref": "#/$defs/poly"
-              },
-              "norm": {
-                "$ref": "#/$defs/poly"
-              },
-              "quotient": {
-                "$ref": "#/$defs/poly"
-              },
-              "ratio": {
-                "$ref": "#/$defs/poly"
-              },
-              "square_congruence_factor": {
-                "$ref": "#/$defs/poly"
-              },
-              "x": {
-                "$ref": "#/$defs/poly"
-              },
-              "y": {
-                "$ref": "#/$defs/poly"
-              }
-            },
-            "required": [
-              "a",
-              "b",
-              "d",
-              "x",
-              "y",
-              "norm",
-              "square_congruence_factor",
-              "quotient",
-              "divisibility_quotient",
-              "ratio"
-            ],
-            "type": "object"
-          },
-          "probes": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "poly": {
             "items": {
-              "additionalProperties": false,
-              "properties": {
-                "divisor": {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "multiple": {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "ratio": {
-                  "items": {
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "t": {
-                  "maximum": 50,
-                  "minimum": 2,
-                  "type": "integer"
-                },
-                "x": {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "y": {
-                  "minimum": 1,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "t",
-                "x",
-                "y",
-                "divisor",
-                "multiple",
-                "ratio"
-              ],
-              "type": "object"
+                "maximum": 1000000,
+                "minimum": -1000000,
+                "type": "integer"
             },
-            "maxItems": 6,
-            "minItems": 3,
+            "maxItems": 12,
+            "minItems": 1,
             "type": "array"
-          },
-          "source_audit": {
-            "additionalProperties": false,
-            "properties": {
-              "claimed_partner": {
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "conclusion": {
+                "const": "INFINITELY_MANY_DISTINCT_RATIOS_CERTIFIED"
+            },
+            "family": {
                 "additionalProperties": false,
                 "properties": {
-                  "numerator": {
-                    "$ref": "#/$defs/poly"
-                  },
-                  "denominator": {
-                    "$ref": "#/$defs/poly"
-                  }
+                    "a": {
+                        "$ref": "#/$defs/poly"
+                    },
+                    "b": {
+                        "$ref": "#/$defs/poly"
+                    },
+                    "d": {
+                        "$ref": "#/$defs/poly"
+                    },
+                    "divisibility_quotient": {
+                        "$ref": "#/$defs/poly"
+                    },
+                    "norm": {
+                        "$ref": "#/$defs/poly"
+                    },
+                    "quotient": {
+                        "$ref": "#/$defs/poly"
+                    },
+                    "ratio": {
+                        "$ref": "#/$defs/poly"
+                    },
+                    "square_congruence_factor": {
+                        "$ref": "#/$defs/poly"
+                    },
+                    "x": {
+                        "$ref": "#/$defs/poly"
+                    },
+                    "y": {
+                        "$ref": "#/$defs/poly"
+                    }
                 },
                 "required": [
-                  "numerator",
-                  "denominator"
+                    "a",
+                    "b",
+                    "d",
+                    "x",
+                    "y",
+                    "norm",
+                    "square_congruence_factor",
+                    "quotient",
+                    "divisibility_quotient",
+                    "ratio"
                 ],
                 "type": "object"
-              },
-              "downstream_recurrence_status": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "invalid_step": {
-                "minLength": 1,
-                "type": "string"
-              },
-              "k": {
-                "$ref": "#/$defs/poly"
-              },
-              "status_for_d_ge_2": {
-                "minLength": 1,
-                "type": "string"
-              }
             },
-            "required": [
-              "invalid_step",
-              "k",
-              "claimed_partner",
-              "status_for_d_ge_2",
-              "downstream_recurrence_status"
-            ],
-            "type": "object"
-          }
+            "probes": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "divisor": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "multiple": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "ratio": {
+                            "items": {
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "maxItems": 2,
+                            "minItems": 2,
+                            "type": "array"
+                        },
+                        "t": {
+                            "maximum": 50,
+                            "minimum": 2,
+                            "type": "integer"
+                        },
+                        "x": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "y": {
+                            "minimum": 1,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "t",
+                        "x",
+                        "y",
+                        "divisor",
+                        "multiple",
+                        "ratio"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 6,
+                "minItems": 3,
+                "type": "array"
+            },
+            "source_audit": {
+                "additionalProperties": false,
+                "properties": {
+                    "claimed_partner": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "numerator": {
+                                "$ref": "#/$defs/poly"
+                            },
+                            "denominator": {
+                                "$ref": "#/$defs/poly"
+                            }
+                        },
+                        "required": [
+                            "numerator",
+                            "denominator"
+                        ],
+                        "type": "object"
+                    },
+                    "downstream_recurrence_status": {
+                        "minLength": 1,
+                        "type": "string"
+                    },
+                    "invalid_step": {
+                        "minLength": 1,
+                        "type": "string"
+                    },
+                    "k": {
+                        "$ref": "#/$defs/poly"
+                    },
+                    "status_for_d_ge_2": {
+                        "minLength": 1,
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "invalid_step",
+                    "k",
+                    "claimed_partner",
+                    "status_for_d_ge_2",
+                    "downstream_recurrence_status"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "source_audit",
-          "family",
-          "probes",
-          "conclusion"
+            "source_audit",
+            "family",
+            "probes",
+            "conclusion"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/diophantine-ratio-family-repair"
+    "task_id": "jacobian/diophantine-ratio-family-repair"
 }

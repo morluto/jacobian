@@ -1,238 +1,125 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {"minimum": 1, "type": "integer"},
-        "numerator": {"type": "integer"}
-      },
-      "required": ["numerator", "denominator"],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "limit_coordinates": {
-        "items": {
-          "$ref": "#/$defs/rational"
-        },
-        "minItems": 100,
-        "type": "array"
-      },
-      "operator_bound": {
-        "$ref": "#/$defs/rational"
-      },
-      "prefixes": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "limit_norm_sq_partial": {
-              "$ref": "#/$defs/rational"
-            },
-            "n": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "preimage_coordinate": {
-              "$ref": "#/$defs/rational"
-            },
-            "preimage_norm_sq_partial": {
-              "$ref": "#/$defs/rational"
-            },
-            "weight": {
-              "$ref": "#/$defs/rational"
-            }
-          },
-          "required": [
-            "n",
-            "weight",
-            "preimage_coordinate",
-            "limit_norm_sq_partial",
-            "preimage_norm_sq_partial"
-          ],
-          "type": "object"
-        },
-        "type": "array"
-      },
-      "preimage_growth": {
-        "additionalProperties": false,
-        "properties": {
-          "bound_coefficient": {
-            "$ref": "#/$defs/rational"
-          },
-          "bound_exponent": {
-            "minimum": 1,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "bound_coefficient",
-          "bound_exponent"
-        ],
-        "type": "object"
-      },
-      "tail_bound": {
-        "additionalProperties": false,
-        "properties": {
-          "bound_coefficient": {
-            "$ref": "#/$defs/rational"
-          },
-          "bound_exponent": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "verification_terms": {
-            "minimum": 100,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "bound_coefficient",
-          "bound_exponent",
-          "verification_terms"
-        ],
-        "type": "object"
-      },
-      "operator_kind": {
-        "enum": [
-          "DIAGONAL",
-          "WEIGHTED_SHIFT"
-        ]
-      }
-    },
-    "required": [
-      "operator_bound",
-      "prefixes",
-      "limit_coordinates",
-      "tail_bound",
-      "operator_kind"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$defs": {
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {"minimum": 1, "type": "integer"},
-          "numerator": {"type": "integer"}
-        },
-        "required": ["numerator", "denominator"],
-        "type": "object"
-      }
-    },
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "limit_coordinates": {
-            "items": {
-              "$ref": "#/$defs/rational"
-            },
-            "minItems": 100,
-            "type": "array"
-          },
-          "operator_bound": {
-            "$ref": "#/$defs/rational"
-          },
-          "prefixes": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "limit_norm_sq_partial": {
-                  "$ref": "#/$defs/rational"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rational": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
                 },
-                "n": {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "preimage_coordinate": {
-                  "$ref": "#/$defs/rational"
-                },
-                "preimage_norm_sq_partial": {
-                  "$ref": "#/$defs/rational"
-                },
-                "weight": {
-                  "$ref": "#/$defs/rational"
+                "numerator": {
+                    "type": "integer"
                 }
-              },
-              "required": [
-                "n",
-                "weight",
-                "preimage_coordinate",
-                "limit_norm_sq_partial",
-                "preimage_norm_sq_partial"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "preimage_growth": {
-            "additionalProperties": false,
-            "properties": {
-              "bound_coefficient": {
-                "$ref": "#/$defs/rational"
-              },
-              "bound_exponent": {
-                "minimum": 1,
-                "type": "integer"
-              }
             },
             "required": [
-              "bound_coefficient",
-              "bound_exponent"
+                "numerator",
+                "denominator"
             ],
             "type": "object"
-          },
-          "tail_bound": {
-            "additionalProperties": false,
-            "properties": {
-              "bound_coefficient": {
-                "$ref": "#/$defs/rational"
-              },
-              "bound_exponent": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "verification_terms": {
-                "minimum": 100,
-                "type": "integer"
-              }
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "limit_coordinates": {
+                "items": {
+                    "$ref": "#/$defs/rational"
+                },
+                "minItems": 100,
+                "type": "array"
             },
-            "required": [
-              "bound_coefficient",
-              "bound_exponent",
-              "verification_terms"
-            ],
-            "type": "object"
-          },
-          "operator_kind": {
-            "enum": [
-              "DIAGONAL",
-              "WEIGHTED_SHIFT"
-            ]
-          }
+            "operator_bound": {
+                "$ref": "#/$defs/rational"
+            },
+            "prefixes": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "limit_norm_sq_partial": {
+                            "$ref": "#/$defs/rational"
+                        },
+                        "n": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "preimage_coordinate": {
+                            "$ref": "#/$defs/rational"
+                        },
+                        "preimage_norm_sq_partial": {
+                            "$ref": "#/$defs/rational"
+                        },
+                        "weight": {
+                            "$ref": "#/$defs/rational"
+                        }
+                    },
+                    "required": [
+                        "n",
+                        "weight",
+                        "preimage_coordinate",
+                        "limit_norm_sq_partial",
+                        "preimage_norm_sq_partial"
+                    ],
+                    "type": "object"
+                },
+                "type": "array"
+            },
+            "preimage_growth": {
+                "additionalProperties": false,
+                "properties": {
+                    "bound_coefficient": {
+                        "$ref": "#/$defs/rational"
+                    },
+                    "bound_exponent": {
+                        "minimum": 1,
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "bound_coefficient",
+                    "bound_exponent"
+                ],
+                "type": "object"
+            },
+            "tail_bound": {
+                "additionalProperties": false,
+                "properties": {
+                    "bound_coefficient": {
+                        "$ref": "#/$defs/rational"
+                    },
+                    "bound_exponent": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "verification_terms": {
+                        "minimum": 100,
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "bound_coefficient",
+                    "bound_exponent",
+                    "verification_terms"
+                ],
+                "type": "object"
+            },
+            "operator_kind": {
+                "enum": [
+                    "DIAGONAL",
+                    "WEIGHTED_SHIFT"
+                ]
+            }
         },
         "required": [
-          "operator_bound",
-          "prefixes",
-          "limit_coordinates",
-          "tail_bound",
-          "operator_kind"
+            "operator_bound",
+            "prefixes",
+            "limit_coordinates",
+            "tail_bound",
+            "operator_kind"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/nonclosed-projection-image"
+    "task_id": "jacobian/nonclosed-projection-image"
 }

@@ -1,222 +1,109 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "affine": {
-      "items": false,
-      "prefixItems": [
-        {
-          "type": "integer"
-        },
-        {
-          "type": "integer"
-        }
-      ],
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "excluded_residues_mod_9": {
-        "items": {
-          "maximum": 8,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "type": "array",
-        "uniqueItems": true
-      },
-      "factorization": {
-        "additionalProperties": false,
-        "properties": {
-          "linear": {
-            "const": "A+B+C"
-          },
-          "quadratic": {
-            "const": "A^2+B^2+C^2-AB-AC-BC"
-          }
-        },
-        "required": [
-          "linear",
-          "quadratic"
-        ],
-        "type": "object"
-      },
-      "families": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "A": {
-              "$ref": "#/$defs/affine"
-            },
-            "B": {
-              "$ref": "#/$defs/affine"
-            },
-            "C": {
-              "$ref": "#/$defs/affine"
-            },
-            "covered_residues": {
-              "items": {
-                "maximum": 8,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "type": "array",
-              "uniqueItems": true
-            },
-            "parameter_min": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "value": {
-              "$ref": "#/$defs/affine"
-            }
-          },
-          "required": [
-            "parameter_min",
-            "A",
-            "B",
-            "C",
-            "value",
-            "covered_residues"
-          ],
-          "type": "object"
-        },
-        "minItems": 3,
-        "type": "array"
-      },
-      "image_residues_mod_9": {
-        "items": {
-          "maximum": 8,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "type": "array",
-        "uniqueItems": true
-      }
-    },
-    "required": [
-      "factorization",
-      "image_residues_mod_9",
-      "excluded_residues_mod_9",
-      "families"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "affine": {
-        "items": false,
-        "prefixItems": [
-          {
-            "type": "integer"
-          },
-          {
-            "type": "integer"
-          }
-        ],
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "excluded_residues_mod_9": {
-            "items": {
-              "maximum": 8,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "factorization": {
-            "additionalProperties": false,
-            "properties": {
-              "linear": {
-                "const": "A+B+C"
-              },
-              "quadratic": {
-                "const": "A^2+B^2+C^2-AB-AC-BC"
-              }
-            },
-            "required": [
-              "linear",
-              "quadratic"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "affine": {
+            "items": false,
+            "prefixItems": [
+                {
+                    "type": "integer"
+                },
+                {
+                    "type": "integer"
+                }
             ],
-            "type": "object"
-          },
-          "families": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "A": {
-                  "$ref": "#/$defs/affine"
-                },
-                "B": {
-                  "$ref": "#/$defs/affine"
-                },
-                "C": {
-                  "$ref": "#/$defs/affine"
-                },
-                "covered_residues": {
-                  "items": {
+            "type": "array"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "excluded_residues_mod_9": {
+                "items": {
                     "maximum": 8,
                     "minimum": 0,
                     "type": "integer"
-                  },
-                  "type": "array",
-                  "uniqueItems": true
                 },
-                "parameter_min": {
-                  "minimum": 0,
-                  "type": "integer"
+                "type": "array",
+                "uniqueItems": true
+            },
+            "factorization": {
+                "additionalProperties": false,
+                "properties": {
+                    "linear": {
+                        "const": "A+B+C"
+                    },
+                    "quadratic": {
+                        "const": "A^2+B^2+C^2-AB-AC-BC"
+                    }
                 },
-                "value": {
-                  "$ref": "#/$defs/affine"
-                }
-              },
-              "required": [
-                "parameter_min",
-                "A",
-                "B",
-                "C",
-                "value",
-                "covered_residues"
-              ],
-              "type": "object"
+                "required": [
+                    "linear",
+                    "quadratic"
+                ],
+                "type": "object"
             },
-            "minItems": 3,
-            "type": "array"
-          },
-          "image_residues_mod_9": {
-            "items": {
-              "maximum": 8,
-              "minimum": 0,
-              "type": "integer"
+            "families": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "A": {
+                            "$ref": "#/$defs/affine"
+                        },
+                        "B": {
+                            "$ref": "#/$defs/affine"
+                        },
+                        "C": {
+                            "$ref": "#/$defs/affine"
+                        },
+                        "covered_residues": {
+                            "items": {
+                                "maximum": 8,
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "type": "array",
+                            "uniqueItems": true
+                        },
+                        "parameter_min": {
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "value": {
+                            "$ref": "#/$defs/affine"
+                        }
+                    },
+                    "required": [
+                        "parameter_min",
+                        "A",
+                        "B",
+                        "C",
+                        "value",
+                        "covered_residues"
+                    ],
+                    "type": "object"
+                },
+                "minItems": 3,
+                "type": "array"
             },
-            "type": "array",
-            "uniqueItems": true
-          }
+            "image_residues_mod_9": {
+                "items": {
+                    "maximum": 8,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "type": "array",
+                "uniqueItems": true
+            }
         },
         "required": [
-          "factorization",
-          "image_residues_mod_9",
-          "excluded_residues_mod_9",
-          "families"
+            "factorization",
+            "image_residues_mod_9",
+            "excluded_residues_mod_9",
+            "families"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/cubic-image-classification"
+    "task_id": "jacobian/cubic-image-classification"
 }

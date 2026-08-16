@@ -1,250 +1,123 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rational": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
         },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    },
-    "t_polynomial": {
-      "items": {
-        "$ref": "#/$defs/t_term"
-      },
-      "maxItems": 5,
-      "minItems": 0,
-      "type": "array"
-    },
-    "t_term": {
-      "additionalProperties": false,
-      "properties": {
-        "coefficient": {
-          "$ref": "#/$defs/rational"
-        },
-        "degree": {
-          "maximum": 4,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "coefficient",
-        "degree"
-      ],
-      "type": "object"
-    },
-    "xy_polynomial": {
-      "items": {
-        "$ref": "#/$defs/xy_term"
-      },
-      "maxItems": 5,
-      "minItems": 1,
-      "type": "array"
-    },
-    "xy_term": {
-      "additionalProperties": false,
-      "properties": {
-        "coefficient": {
-          "$ref": "#/$defs/rational"
-        },
-        "x_degree": {
-          "maximum": 4,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "y_degree": {
-          "maximum": 4,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "coefficient",
-        "x_degree",
-        "y_degree"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "action_matrix": {
-        "items": {
-          "items": {
-            "$ref": "#/$defs/t_polynomial"
-          },
-          "maxItems": 5,
-          "minItems": 5,
-          "type": "array"
-        },
-        "maxItems": 5,
-        "minItems": 5,
-        "type": "array"
-      },
-      "basis": {
-        "items": {
-          "$ref": "#/$defs/xy_polynomial"
-        },
-        "maxItems": 5,
-        "minItems": 5,
-        "type": "array"
-      },
-      "f_coordinates": {
-        "items": {
-          "$ref": "#/$defs/rational"
-        },
-        "maxItems": 5,
-        "minItems": 5,
-        "type": "array"
-      }
-    },
-    "required": [
-      "basis",
-      "f_coordinates",
-      "action_matrix"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "t_polynomial": {
-        "items": {
-          "$ref": "#/$defs/t_term"
-        },
-        "maxItems": 5,
-        "minItems": 0,
-        "type": "array"
-      },
-      "t_term": {
-        "additionalProperties": false,
-        "properties": {
-          "coefficient": {
-            "$ref": "#/$defs/rational"
-          },
-          "degree": {
-            "maximum": 4,
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "coefficient",
-          "degree"
-        ],
-        "type": "object"
-      },
-      "xy_polynomial": {
-        "items": {
-          "$ref": "#/$defs/xy_term"
-        },
-        "maxItems": 5,
-        "minItems": 1,
-        "type": "array"
-      },
-      "xy_term": {
-        "additionalProperties": false,
-        "properties": {
-          "coefficient": {
-            "$ref": "#/$defs/rational"
-          },
-          "x_degree": {
-            "maximum": 4,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "y_degree": {
-            "maximum": 4,
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "coefficient",
-          "x_degree",
-          "y_degree"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "action_matrix": {
+        "t_polynomial": {
             "items": {
-              "items": {
-                "$ref": "#/$defs/t_polynomial"
-              },
-              "maxItems": 5,
-              "minItems": 5,
-              "type": "array"
+                "$ref": "#/$defs/t_term"
             },
             "maxItems": 5,
-            "minItems": 5,
+            "minItems": 0,
             "type": "array"
-          },
-          "basis": {
+        },
+        "t_term": {
+            "additionalProperties": false,
+            "properties": {
+                "coefficient": {
+                    "$ref": "#/$defs/rational"
+                },
+                "degree": {
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "coefficient",
+                "degree"
+            ],
+            "type": "object"
+        },
+        "xy_polynomial": {
             "items": {
-              "$ref": "#/$defs/xy_polynomial"
+                "$ref": "#/$defs/xy_term"
             },
             "maxItems": 5,
-            "minItems": 5,
+            "minItems": 1,
             "type": "array"
-          },
-          "f_coordinates": {
-            "items": {
-              "$ref": "#/$defs/rational"
+        },
+        "xy_term": {
+            "additionalProperties": false,
+            "properties": {
+                "coefficient": {
+                    "$ref": "#/$defs/rational"
+                },
+                "x_degree": {
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "y_degree": {
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "integer"
+                }
             },
-            "maxItems": 5,
-            "minItems": 5,
-            "type": "array"
-          }
+            "required": [
+                "coefficient",
+                "x_degree",
+                "y_degree"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "action_matrix": {
+                "items": {
+                    "items": {
+                        "$ref": "#/$defs/t_polynomial"
+                    },
+                    "maxItems": 5,
+                    "minItems": 5,
+                    "type": "array"
+                },
+                "maxItems": 5,
+                "minItems": 5,
+                "type": "array"
+            },
+            "basis": {
+                "items": {
+                    "$ref": "#/$defs/xy_polynomial"
+                },
+                "maxItems": 5,
+                "minItems": 5,
+                "type": "array"
+            },
+            "f_coordinates": {
+                "items": {
+                    "$ref": "#/$defs/rational"
+                },
+                "maxItems": 5,
+                "minItems": 5,
+                "type": "array"
+            }
         },
         "required": [
-          "basis",
-          "f_coordinates",
-          "action_matrix"
+            "basis",
+            "f_coordinates",
+            "action_matrix"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/ga-action-local-finiteness-certificate"
+    "task_id": "jacobian/ga-action-local-finiteness-certificate"
 }

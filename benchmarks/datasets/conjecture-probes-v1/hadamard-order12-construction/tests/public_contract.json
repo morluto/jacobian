@@ -1,134 +1,65 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "entry_row": {
-      "items": {
-        "enum": [
-          -1,
-          1
-        ]
-      },
-      "maxItems": 12,
-      "minItems": 12,
-      "type": "array"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "entry_row": {
+            "items": {
+                "enum": [
+                    -1,
+                    1
+                ]
+            },
+            "maxItems": 12,
+            "minItems": 12,
+            "type": "array"
+        },
+        "integer_row": {
+            "items": {
+                "type": "integer"
+            },
+            "maxItems": 12,
+            "minItems": 12,
+            "type": "array"
+        }
     },
-    "integer_row": {
-      "items": {
-        "type": "integer"
-      },
-      "maxItems": 12,
-      "minItems": 12,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "determinant": {
-        "type": "integer"
-      },
-      "determinant_abs": {
-        "const": 2985984
-      },
-      "gram": {
-        "items": {
-          "$ref": "#/$defs/integer_row"
-        },
-        "maxItems": 12,
-        "minItems": 12,
-        "type": "array"
-      },
-      "matrix": {
-        "items": {
-          "$ref": "#/$defs/entry_row"
-        },
-        "maxItems": 12,
-        "minItems": 12,
-        "type": "array"
-      },
-      "scope_identity": {
-        "const": "hadamard-order12-construction:normalized-v1"
-      }
-    },
-    "required": [
-      "matrix",
-      "gram",
-      "determinant",
-      "determinant_abs",
-      "scope_identity"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "entry_row": {
-        "items": {
-          "enum": [
-            -1,
-            1
-          ]
-        },
-        "maxItems": 12,
-        "minItems": 12,
-        "type": "array"
-      },
-      "integer_row": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 12,
-        "minItems": 12,
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "determinant": {
-            "type": "integer"
-          },
-          "determinant_abs": {
-            "const": 2985984
-          },
-          "gram": {
-            "items": {
-              "$ref": "#/$defs/integer_row"
+            "determinant": {
+                "type": "integer"
             },
-            "maxItems": 12,
-            "minItems": 12,
-            "type": "array"
-          },
-          "matrix": {
-            "items": {
-              "$ref": "#/$defs/entry_row"
+            "determinant_abs": {
+                "const": 2985984
             },
-            "maxItems": 12,
-            "minItems": 12,
-            "type": "array"
-          },
-          "scope_identity": {
-            "const": "hadamard-order12-construction:normalized-v1"
-          }
+            "gram": {
+                "items": {
+                    "$ref": "#/$defs/integer_row"
+                },
+                "maxItems": 12,
+                "minItems": 12,
+                "type": "array"
+            },
+            "matrix": {
+                "items": {
+                    "$ref": "#/$defs/entry_row"
+                },
+                "maxItems": 12,
+                "minItems": 12,
+                "type": "array"
+            },
+            "scope_identity": {
+                "const": "hadamard-order12-construction:normalized-v1"
+            }
         },
         "required": [
-          "matrix",
-          "gram",
-          "determinant",
-          "determinant_abs",
-          "scope_identity"
+            "matrix",
+            "gram",
+            "determinant",
+            "determinant_abs",
+            "scope_identity"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/hadamard-order12-construction"
+    "task_id": "jacobian/hadamard-order12-construction"
 }

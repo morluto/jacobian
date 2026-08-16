@@ -1,158 +1,77 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "quat": {
-      "items": {
-        "$ref": "#/$defs/rat"
-      },
-      "maxItems": 4,
-      "minItems": 4,
-      "type": "array"
-    },
-    "quats4": {
-      "items": {
-        "$ref": "#/$defs/quat"
-      },
-      "maxItems": 4,
-      "minItems": 4,
-      "type": "array"
-    },
-    "rat": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "quat": {
+            "items": {
+                "$ref": "#/$defs/rat"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
         },
-        "numerator": {
-          "type": "integer"
+        "quats4": {
+            "items": {
+                "$ref": "#/$defs/quat"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+        },
+        "rat": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
         }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "conjugated_plaquette": {
-        "$ref": "#/$defs/quat"
-      },
-      "gauges": {
-        "$ref": "#/$defs/quats4"
-      },
-      "links": {
-        "$ref": "#/$defs/quats4"
-      },
-      "plaquette": {
-        "$ref": "#/$defs/quat"
-      },
-      "scalar_trace_invariant": {
-        "const": true
-      },
-      "transformed_links": {
-        "$ref": "#/$defs/quats4"
-      },
-      "transformed_plaquette": {
-        "$ref": "#/$defs/quat"
-      }
     },
-    "required": [
-      "links",
-      "gauges",
-      "transformed_links",
-      "plaquette",
-      "transformed_plaquette",
-      "conjugated_plaquette",
-      "scalar_trace_invariant"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "quat": {
-        "items": {
-          "$ref": "#/$defs/rat"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      },
-      "quats4": {
-        "items": {
-          "$ref": "#/$defs/quat"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      },
-      "rat": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
+            "conjugated_plaquette": {
+                "$ref": "#/$defs/quat"
+            },
+            "gauges": {
+                "$ref": "#/$defs/quats4"
+            },
+            "links": {
+                "$ref": "#/$defs/quats4"
+            },
+            "plaquette": {
+                "$ref": "#/$defs/quat"
+            },
+            "scalar_trace_invariant": {
+                "const": true
+            },
+            "transformed_links": {
+                "$ref": "#/$defs/quats4"
+            },
+            "transformed_plaquette": {
+                "$ref": "#/$defs/quat"
+            }
         },
         "required": [
-          "numerator",
-          "denominator"
+            "links",
+            "gauges",
+            "transformed_links",
+            "plaquette",
+            "transformed_plaquette",
+            "conjugated_plaquette",
+            "scalar_trace_invariant"
         ],
         "type": "object"
-      }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "conjugated_plaquette": {
-            "$ref": "#/$defs/quat"
-          },
-          "gauges": {
-            "$ref": "#/$defs/quats4"
-          },
-          "links": {
-            "$ref": "#/$defs/quats4"
-          },
-          "plaquette": {
-            "$ref": "#/$defs/quat"
-          },
-          "scalar_trace_invariant": {
-            "const": true
-          },
-          "transformed_links": {
-            "$ref": "#/$defs/quats4"
-          },
-          "transformed_plaquette": {
-            "$ref": "#/$defs/quat"
-          }
-        },
-        "required": [
-          "links",
-          "gauges",
-          "transformed_links",
-          "plaquette",
-          "transformed_plaquette",
-          "conjugated_plaquette",
-          "scalar_trace_invariant"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/yang-mills-gauge-invariance-certificate"
+    "task_id": "jacobian/yang-mills-gauge-invariance-certificate"
 }

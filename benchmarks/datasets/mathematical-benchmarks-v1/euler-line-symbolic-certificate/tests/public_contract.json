@@ -1,244 +1,128 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "point": {
-      "additionalProperties": false,
-      "properties": {
-        "x": {
-          "$ref": "#/$defs/rational_function"
-        },
-        "y": {
-          "$ref": "#/$defs/rational_function"
-        }
-      },
-      "required": [
-        "x",
-        "y"
-      ],
-      "type": "object"
-    },
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {"minimum": 1, "type": "integer"},
-        "numerator": {"type": "integer"}
-      },
-      "required": ["numerator", "denominator"],
-      "type": "object"
-    },
-    "rational_function": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "items": {
-            "$ref": "#/$defs/term"
-          },
-          "maxItems": 4,
-          "minItems": 1,
-          "type": "array"
-        },
-        "numerator": {
-          "items": {
-            "$ref": "#/$defs/term"
-          },
-          "maxItems": 8,
-          "minItems": 1,
-          "type": "array"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    },
-    "term": {
-      "additionalProperties": false,
-      "properties": {
-        "coefficient": {
-          "$ref": "#/$defs/rational"
-        },
-        "exponents": {
-          "items": {
-            "maximum": 4,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        }
-      },
-      "required": [
-        "coefficient",
-        "exponents"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "coordinates": {
-        "additionalProperties": false,
-        "properties": {
-          "G": {
-            "$ref": "#/$defs/point"
-          },
-          "H": {
-            "$ref": "#/$defs/point"
-          },
-          "O": {
-            "$ref": "#/$defs/point"
-          }
-        },
-        "required": [
-          "O",
-          "G",
-          "H"
-        ],
-        "type": "object"
-      },
-      "relation_coefficients": {
-        "items": {
-          "$ref": "#/$defs/rational"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      }
-    },
-    "required": [
-      "coordinates",
-      "relation_coefficients"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "point": {
-        "additionalProperties": false,
-        "properties": {
-          "x": {
-            "$ref": "#/$defs/rational_function"
-          },
-          "y": {
-            "$ref": "#/$defs/rational_function"
-          }
-        },
-        "required": [
-          "x",
-          "y"
-        ],
-        "type": "object"
-      },
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {"minimum": 1, "type": "integer"},
-          "numerator": {"type": "integer"}
-        },
-        "required": ["numerator", "denominator"],
-        "type": "object"
-      },
-      "rational_function": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "items": {
-              "$ref": "#/$defs/term"
-            },
-            "maxItems": 4,
-            "minItems": 1,
-            "type": "array"
-          },
-          "numerator": {
-            "items": {
-              "$ref": "#/$defs/term"
-            },
-            "maxItems": 8,
-            "minItems": 1,
-            "type": "array"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "term": {
-        "additionalProperties": false,
-        "properties": {
-            "coefficient": {
-              "$ref": "#/$defs/rational"
-          },
-          "exponents": {
-            "items": {
-              "maximum": 4,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          }
-        },
-        "required": [
-          "coefficient",
-          "exponents"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "coordinates": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "point": {
             "additionalProperties": false,
             "properties": {
-              "G": {
-                "$ref": "#/$defs/point"
-              },
-              "H": {
-                "$ref": "#/$defs/point"
-              },
-              "O": {
-                "$ref": "#/$defs/point"
-              }
+                "x": {
+                    "$ref": "#/$defs/rational_function"
+                },
+                "y": {
+                    "$ref": "#/$defs/rational_function"
+                }
             },
             "required": [
-              "O",
-              "G",
-              "H"
+                "x",
+                "y"
             ],
             "type": "object"
-          },
-          "relation_coefficients": {
-            "items": {
-              "$ref": "#/$defs/rational"
+        },
+        "rational": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
             },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          }
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        },
+        "rational_function": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "items": {
+                        "$ref": "#/$defs/term"
+                    },
+                    "maxItems": 4,
+                    "minItems": 1,
+                    "type": "array"
+                },
+                "numerator": {
+                    "items": {
+                        "$ref": "#/$defs/term"
+                    },
+                    "maxItems": 8,
+                    "minItems": 1,
+                    "type": "array"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        },
+        "term": {
+            "additionalProperties": false,
+            "properties": {
+                "coefficient": {
+                    "$ref": "#/$defs/rational"
+                },
+                "exponents": {
+                    "items": {
+                        "maximum": 4,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                }
+            },
+            "required": [
+                "coefficient",
+                "exponents"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "coordinates": {
+                "additionalProperties": false,
+                "properties": {
+                    "G": {
+                        "$ref": "#/$defs/point"
+                    },
+                    "H": {
+                        "$ref": "#/$defs/point"
+                    },
+                    "O": {
+                        "$ref": "#/$defs/point"
+                    }
+                },
+                "required": [
+                    "O",
+                    "G",
+                    "H"
+                ],
+                "type": "object"
+            },
+            "relation_coefficients": {
+                "items": {
+                    "$ref": "#/$defs/rational"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+            }
         },
         "required": [
-          "coordinates",
-          "relation_coefficients"
+            "coordinates",
+            "relation_coefficients"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/euler-line-symbolic-certificate"
+    "task_id": "jacobian/euler-line-symbolic-certificate"
 }

@@ -1,164 +1,80 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "direction": {
-      "items": {
-        "maximum": 1,
-        "minimum": -1,
-        "type": "integer"
-      },
-      "maxItems": 3,
-      "minItems": 3,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "flawed_directions": {
-        "items": {
-          "$ref": "#/$defs/direction"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      },
-      "repair_directions": {
-        "items": {
-          "$ref": "#/$defs/direction"
-        },
-        "maxItems": 8,
-        "minItems": 8,
-        "type": "array"
-      },
-      "vertex_to_direction": {
-        "items": {
-          "maximum": 7,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 8,
-        "minItems": 8,
-        "type": "array"
-      },
-      "weak_false_positive_pairs": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "direction_index": {
-              "maximum": 3,
-              "minimum": 0,
-              "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "direction": {
+            "items": {
+                "maximum": 1,
+                "minimum": -1,
+                "type": "integer"
             },
-            "vertex_index": {
-              "maximum": 7,
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "vertex_index",
-            "direction_index"
-          ],
-          "type": "object"
-        },
-        "minItems": 1,
-        "type": "array"
-      }
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+        }
     },
-    "required": [
-      "flawed_directions",
-      "weak_false_positive_pairs",
-      "repair_directions",
-      "vertex_to_direction"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "direction": {
-        "items": {
-          "maximum": 1,
-          "minimum": -1,
-          "type": "integer"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "flawed_directions": {
-            "items": {
-              "$ref": "#/$defs/direction"
-            },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          },
-          "repair_directions": {
-            "items": {
-              "$ref": "#/$defs/direction"
-            },
-            "maxItems": 8,
-            "minItems": 8,
-            "type": "array"
-          },
-          "vertex_to_direction": {
-            "items": {
-              "maximum": 7,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "maxItems": 8,
-            "minItems": 8,
-            "type": "array"
-          },
-          "weak_false_positive_pairs": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "direction_index": {
-                  "maximum": 3,
-                  "minimum": 0,
-                  "type": "integer"
+            "flawed_directions": {
+                "items": {
+                    "$ref": "#/$defs/direction"
                 },
-                "vertex_index": {
-                  "maximum": 7,
-                  "minimum": 0,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "vertex_index",
-                "direction_index"
-              ],
-              "type": "object"
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
             },
-            "minItems": 1,
-            "type": "array"
-          }
+            "repair_directions": {
+                "items": {
+                    "$ref": "#/$defs/direction"
+                },
+                "maxItems": 8,
+                "minItems": 8,
+                "type": "array"
+            },
+            "vertex_to_direction": {
+                "items": {
+                    "maximum": 7,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "maxItems": 8,
+                "minItems": 8,
+                "type": "array"
+            },
+            "weak_false_positive_pairs": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "direction_index": {
+                            "maximum": 3,
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "vertex_index": {
+                            "maximum": 7,
+                            "minimum": 0,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "vertex_index",
+                        "direction_index"
+                    ],
+                    "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+            }
         },
         "required": [
-          "flawed_directions",
-          "weak_false_positive_pairs",
-          "repair_directions",
-          "vertex_to_direction"
+            "flawed_directions",
+            "weak_false_positive_pairs",
+            "repair_directions",
+            "vertex_to_direction"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/illumination-strictness-audit"
+    "task_id": "jacobian/illumination-strictness-audit"
 }

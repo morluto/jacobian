@@ -1,398 +1,197 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "polynomial": {
-      "items": {
-        "$ref": "#/$defs/rational"
-      },
-      "maxItems": 8,
-      "minItems": 1,
-      "type": "array"
-    },
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    },
-    "surd": {
-      "additionalProperties": false,
-      "properties": {
-        "rational": {
-          "$ref": "#/$defs/rational"
-        },
-        "sqrt17": {
-          "$ref": "#/$defs/rational"
-        }
-      },
-      "required": [
-        "rational",
-        "sqrt17"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "achievability": {
-        "additionalProperties": false,
-        "properties": {
-          "branch_coverage": {
-            "const": "BOTH_AND_ONLY_BOTH"
-          },
-          "construction": {
-            "const": "TAKE_BOTH_COMPLEX_ROOTS"
-          },
-          "quadratic": {
-            "const": "T^2-s*T+p"
-          }
-        },
-        "required": [
-          "construction",
-          "quadratic",
-          "branch_coverage"
-        ],
-        "type": "object"
-      },
-      "branches": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "denominator_norms": {
-              "additionalProperties": false,
-              "properties": {
-                "five_s_minus_44": {
-                  "type": "integer"
-                },
-                "s": {
-                  "type": "integer"
-                },
-                "s_minus_12": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "s",
-                "s_minus_12",
-                "five_s_minus_44"
-              ],
-              "type": "object"
-            },
-            "product": {
-              "$ref": "#/$defs/surd"
-            },
-            "sqrt17_sign": {
-              "enum": [
-                -1,
-                1
-              ]
-            },
-            "sum": {
-              "$ref": "#/$defs/surd"
-            },
-            "target": {
-              "$ref": "#/$defs/surd"
-            }
-          },
-          "required": [
-            "sqrt17_sign",
-            "sum",
-            "product",
-            "target",
-            "denominator_norms"
-          ],
-          "type": "object"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "elimination": {
-        "additionalProperties": false,
-        "properties": {
-          "sum_polynomial": {
-            "$ref": "#/$defs/polynomial"
-          },
-          "target_polynomial": {
-            "$ref": "#/$defs/polynomial"
-          }
-        },
-        "required": [
-          "sum_polynomial",
-          "target_polynomial"
-        ],
-        "type": "object"
-      },
-      "recurrence": {
-        "additionalProperties": false,
-        "properties": {
-          "power_sums": {
-            "additionalProperties": false,
-            "properties": {
-              "2": {
-                "$ref": "#/$defs/polynomial"
-              },
-              "3": {
-                "$ref": "#/$defs/polynomial"
-              },
-              "4": {
-                "$ref": "#/$defs/polynomial"
-              },
-              "5": {
-                "$ref": "#/$defs/polynomial"
-              },
-              "6": {
-                "$ref": "#/$defs/polynomial"
-              }
-            },
-            "required": [
-              "2",
-              "3",
-              "4",
-              "5",
-              "6"
-            ],
-            "type": "object"
-          },
-          "product_polynomial": {
-            "$ref": "#/$defs/polynomial"
-          },
-          "seed": {
-            "const": [
-              "2",
-              "s"
-            ]
-          }
-        },
-        "required": [
-          "seed",
-          "product_polynomial",
-          "power_sums"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "elimination",
-      "branches",
-      "achievability"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "polynomial": {
-        "items": {
-          "$ref": "#/$defs/rational"
-        },
-        "maxItems": 8,
-        "minItems": 1,
-        "type": "array"
-      },
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "surd": {
-        "additionalProperties": false,
-        "properties": {
-          "rational": {
-            "$ref": "#/$defs/rational"
-          },
-          "sqrt17": {
-            "$ref": "#/$defs/rational"
-          }
-        },
-        "required": [
-          "rational",
-          "sqrt17"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "achievability": {
-            "additionalProperties": false,
-            "properties": {
-              "branch_coverage": {
-                "const": "BOTH_AND_ONLY_BOTH"
-              },
-              "construction": {
-                "const": "TAKE_BOTH_COMPLEX_ROOTS"
-              },
-              "quadratic": {
-                "const": "T^2-s*T+p"
-              }
-            },
-            "required": [
-              "construction",
-              "quadratic",
-              "branch_coverage"
-            ],
-            "type": "object"
-          },
-          "branches": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "polynomial": {
             "items": {
-              "additionalProperties": false,
-              "properties": {
-                "denominator_norms": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "five_s_minus_44": {
-                      "type": "integer"
-                    },
-                    "s": {
-                      "type": "integer"
-                    },
-                    "s_minus_12": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "s",
-                    "s_minus_12",
-                    "five_s_minus_44"
-                  ],
-                  "type": "object"
-                },
-                "product": {
-                  "$ref": "#/$defs/surd"
-                },
-                "sqrt17_sign": {
-                  "enum": [
-                    -1,
-                    1
-                  ]
-                },
-                "sum": {
-                  "$ref": "#/$defs/surd"
-                },
-                "target": {
-                  "$ref": "#/$defs/surd"
-                }
-              },
-              "required": [
-                "sqrt17_sign",
-                "sum",
-                "product",
-                "target",
-                "denominator_norms"
-              ],
-              "type": "object"
+                "$ref": "#/$defs/rational"
             },
-            "maxItems": 2,
-            "minItems": 2,
+            "maxItems": 8,
+            "minItems": 1,
             "type": "array"
-          },
-          "elimination": {
+        },
+        "rational": {
             "additionalProperties": false,
             "properties": {
-              "sum_polynomial": {
-                "$ref": "#/$defs/polynomial"
-              },
-              "target_polynomial": {
-                "$ref": "#/$defs/polynomial"
-              }
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
             },
             "required": [
-              "sum_polynomial",
-              "target_polynomial"
+                "numerator",
+                "denominator"
             ],
             "type": "object"
-          },
-          "recurrence": {
+        },
+        "surd": {
             "additionalProperties": false,
             "properties": {
-              "power_sums": {
+                "rational": {
+                    "$ref": "#/$defs/rational"
+                },
+                "sqrt17": {
+                    "$ref": "#/$defs/rational"
+                }
+            },
+            "required": [
+                "rational",
+                "sqrt17"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "achievability": {
                 "additionalProperties": false,
                 "properties": {
-                  "2": {
-                    "$ref": "#/$defs/polynomial"
-                  },
-                  "3": {
-                    "$ref": "#/$defs/polynomial"
-                  },
-                  "4": {
-                    "$ref": "#/$defs/polynomial"
-                  },
-                  "5": {
-                    "$ref": "#/$defs/polynomial"
-                  },
-                  "6": {
-                    "$ref": "#/$defs/polynomial"
-                  }
+                    "branch_coverage": {
+                        "const": "BOTH_AND_ONLY_BOTH"
+                    },
+                    "construction": {
+                        "const": "TAKE_BOTH_COMPLEX_ROOTS"
+                    },
+                    "quadratic": {
+                        "const": "T^2-s*T+p"
+                    }
                 },
                 "required": [
-                  "2",
-                  "3",
-                  "4",
-                  "5",
-                  "6"
+                    "construction",
+                    "quadratic",
+                    "branch_coverage"
                 ],
                 "type": "object"
-              },
-              "product_polynomial": {
-                "$ref": "#/$defs/polynomial"
-              },
-              "seed": {
-                "const": [
-                  "2",
-                  "s"
-                ]
-              }
             },
-            "required": [
-              "seed",
-              "product_polynomial",
-              "power_sums"
-            ],
-            "type": "object"
-          }
+            "branches": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "denominator_norms": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "five_s_minus_44": {
+                                    "type": "integer"
+                                },
+                                "s": {
+                                    "type": "integer"
+                                },
+                                "s_minus_12": {
+                                    "type": "integer"
+                                }
+                            },
+                            "required": [
+                                "s",
+                                "s_minus_12",
+                                "five_s_minus_44"
+                            ],
+                            "type": "object"
+                        },
+                        "product": {
+                            "$ref": "#/$defs/surd"
+                        },
+                        "sqrt17_sign": {
+                            "enum": [
+                                -1,
+                                1
+                            ]
+                        },
+                        "sum": {
+                            "$ref": "#/$defs/surd"
+                        },
+                        "target": {
+                            "$ref": "#/$defs/surd"
+                        }
+                    },
+                    "required": [
+                        "sqrt17_sign",
+                        "sum",
+                        "product",
+                        "target",
+                        "denominator_norms"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            },
+            "elimination": {
+                "additionalProperties": false,
+                "properties": {
+                    "sum_polynomial": {
+                        "$ref": "#/$defs/polynomial"
+                    },
+                    "target_polynomial": {
+                        "$ref": "#/$defs/polynomial"
+                    }
+                },
+                "required": [
+                    "sum_polynomial",
+                    "target_polynomial"
+                ],
+                "type": "object"
+            },
+            "recurrence": {
+                "additionalProperties": false,
+                "properties": {
+                    "power_sums": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "2": {
+                                "$ref": "#/$defs/polynomial"
+                            },
+                            "3": {
+                                "$ref": "#/$defs/polynomial"
+                            },
+                            "4": {
+                                "$ref": "#/$defs/polynomial"
+                            },
+                            "5": {
+                                "$ref": "#/$defs/polynomial"
+                            },
+                            "6": {
+                                "$ref": "#/$defs/polynomial"
+                            }
+                        },
+                        "required": [
+                            "2",
+                            "3",
+                            "4",
+                            "5",
+                            "6"
+                        ],
+                        "type": "object"
+                    },
+                    "product_polynomial": {
+                        "$ref": "#/$defs/polynomial"
+                    },
+                    "seed": {
+                        "const": [
+                            "2",
+                            "s"
+                        ]
+                    }
+                },
+                "required": [
+                    "seed",
+                    "product_polynomial",
+                    "power_sums"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "elimination",
-          "branches",
-          "achievability"
+            "elimination",
+            "branches",
+            "achievability"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/complex-power-sum-elimination"
+    "task_id": "jacobian/complex-power-sum-elimination"
 }

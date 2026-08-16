@@ -1,262 +1,129 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "quadratic_root": {
-      "additionalProperties": false,
-      "properties": {
-        "radical_coefficient": {
-          "$ref": "#/$defs/rational_string"
-        },
-        "radicand": {
-          "maximum": 10000,
-          "minimum": 2,
-          "type": "integer"
-        },
-        "rational": {
-          "$ref": "#/$defs/rational_string"
-        }
-      },
-      "required": [
-        "rational",
-        "radical_coefficient",
-        "radicand"
-      ],
-      "type": "object"
-    },
-    "rational_string": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "excluded_branch": {
-        "additionalProperties": false,
-        "properties": {
-          "pair_sum": {
-            "$ref": "#/$defs/rational_string"
-          },
-          "product": {
-            "$ref": "#/$defs/rational_string"
-          },
-          "product_consequence_lhs": {
-            "$ref": "#/$defs/rational_string"
-          },
-          "product_consequence_rhs": {
-            "$ref": "#/$defs/rational_string"
-          },
-          "residual": {
-            "$ref": "#/$defs/rational_string"
-          },
-          "sum": {
-            "$ref": "#/$defs/rational_string"
-          }
-        },
-        "required": [
-          "sum",
-          "pair_sum",
-          "product",
-          "product_consequence_lhs",
-          "product_consequence_rhs",
-          "residual"
-        ],
-        "type": "object"
-      },
-      "necessary_polynomial": {
-        "items": {
-          "maximum": 1000000,
-          "minimum": -1000000,
-          "type": "integer"
-        },
-        "maxItems": 8,
-        "minItems": 2,
-        "type": "array"
-      },
-      "proposed_classifications": {
-        "items": {
-          "enum": [
-            "PASSES_NECESSARY_CONDITION",
-            "FAILS_NECESSARY_CONDITION"
-          ]
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "proposed_evaluations": {
-        "items": {
-          "$ref": "#/$defs/rational_string"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "remaining_real_roots": {
-        "items": {
-          "$ref": "#/$defs/quadratic_root"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      }
-    },
-    "required": [
-      "necessary_polynomial",
-      "proposed_evaluations",
-      "proposed_classifications",
-      "remaining_real_roots",
-      "excluded_branch"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "quadratic_root": {
-        "additionalProperties": false,
-        "properties": {
-          "radical_coefficient": {
-            "$ref": "#/$defs/rational_string"
-          },
-          "radicand": {
-            "maximum": 10000,
-            "minimum": 2,
-            "type": "integer"
-          },
-          "rational": {
-            "$ref": "#/$defs/rational_string"
-          }
-        },
-        "required": [
-          "rational",
-          "radical_coefficient",
-          "radicand"
-        ],
-        "type": "object"
-      },
-      "rational_string": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "excluded_branch": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "quadratic_root": {
             "additionalProperties": false,
             "properties": {
-              "pair_sum": {
-                "$ref": "#/$defs/rational_string"
-              },
-              "product": {
-                "$ref": "#/$defs/rational_string"
-              },
-              "product_consequence_lhs": {
-                "$ref": "#/$defs/rational_string"
-              },
-              "product_consequence_rhs": {
-                "$ref": "#/$defs/rational_string"
-              },
-              "residual": {
-                "$ref": "#/$defs/rational_string"
-              },
-              "sum": {
-                "$ref": "#/$defs/rational_string"
-              }
+                "radical_coefficient": {
+                    "$ref": "#/$defs/rational_string"
+                },
+                "radicand": {
+                    "maximum": 10000,
+                    "minimum": 2,
+                    "type": "integer"
+                },
+                "rational": {
+                    "$ref": "#/$defs/rational_string"
+                }
             },
             "required": [
-              "sum",
-              "pair_sum",
-              "product",
-              "product_consequence_lhs",
-              "product_consequence_rhs",
-              "residual"
+                "rational",
+                "radical_coefficient",
+                "radicand"
             ],
             "type": "object"
-          },
-          "necessary_polynomial": {
-            "items": {
-              "maximum": 1000000,
-              "minimum": -1000000,
-              "type": "integer"
+        },
+        "rational_string": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
             },
-            "maxItems": 8,
-            "minItems": 2,
-            "type": "array"
-          },
-          "proposed_classifications": {
-            "items": {
-              "enum": [
-                "PASSES_NECESSARY_CONDITION",
-                "FAILS_NECESSARY_CONDITION"
-              ]
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "excluded_branch": {
+                "additionalProperties": false,
+                "properties": {
+                    "pair_sum": {
+                        "$ref": "#/$defs/rational_string"
+                    },
+                    "product": {
+                        "$ref": "#/$defs/rational_string"
+                    },
+                    "product_consequence_lhs": {
+                        "$ref": "#/$defs/rational_string"
+                    },
+                    "product_consequence_rhs": {
+                        "$ref": "#/$defs/rational_string"
+                    },
+                    "residual": {
+                        "$ref": "#/$defs/rational_string"
+                    },
+                    "sum": {
+                        "$ref": "#/$defs/rational_string"
+                    }
+                },
+                "required": [
+                    "sum",
+                    "pair_sum",
+                    "product",
+                    "product_consequence_lhs",
+                    "product_consequence_rhs",
+                    "residual"
+                ],
+                "type": "object"
             },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "proposed_evaluations": {
-            "items": {
-              "$ref": "#/$defs/rational_string"
+            "necessary_polynomial": {
+                "items": {
+                    "maximum": 1000000,
+                    "minimum": -1000000,
+                    "type": "integer"
+                },
+                "maxItems": 8,
+                "minItems": 2,
+                "type": "array"
             },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "remaining_real_roots": {
-            "items": {
-              "$ref": "#/$defs/quadratic_root"
+            "proposed_classifications": {
+                "items": {
+                    "enum": [
+                        "PASSES_NECESSARY_CONDITION",
+                        "FAILS_NECESSARY_CONDITION"
+                    ]
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
             },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          }
+            "proposed_evaluations": {
+                "items": {
+                    "$ref": "#/$defs/rational_string"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            },
+            "remaining_real_roots": {
+                "items": {
+                    "$ref": "#/$defs/quadratic_root"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            }
         },
         "required": [
-          "necessary_polynomial",
-          "proposed_evaluations",
-          "proposed_classifications",
-          "remaining_real_roots",
-          "excluded_branch"
+            "necessary_polynomial",
+            "proposed_evaluations",
+            "proposed_classifications",
+            "remaining_real_roots",
+            "excluded_branch"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/cyclic-polynomial-sum-audit"
+    "task_id": "jacobian/cyclic-polynomial-sum-audit"
 }

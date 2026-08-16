@@ -1,128 +1,62 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "topology": {
-      "items": {
-        "maximum": 15,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "maxItems": 16,
-      "minItems": 2,
-      "type": "array",
-      "uniqueItems": true
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "common_subtopology": {
-        "$ref": "#/$defs/topology"
-      },
-      "diagnosis": {
-        "const": "COMMON_SUBTOPOLOGY_DOES_NOT_ESTABLISH_LEAST_CONTAINING_TOPOLOGY"
-      },
-      "generated_topology": {
-        "$ref": "#/$defs/topology"
-      },
-      "input_topologies": {
-        "items": {
-          "$ref": "#/$defs/topology"
-        },
-        "maxItems": 4,
-        "minItems": 2,
-        "type": "array"
-      },
-      "universe_size": {
-        "enum": [
-          3,
-          4
-        ],
-        "type": "integer"
-      },
-      "witness_open_set": {
-        "maximum": 15,
-        "minimum": 0,
-        "type": "integer"
-      }
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "topology": {
+            "items": {
+                "maximum": 15,
+                "minimum": 0,
+                "type": "integer"
+            },
+            "maxItems": 16,
+            "minItems": 2,
+            "type": "array",
+            "uniqueItems": true
+        }
     },
-    "required": [
-      "universe_size",
-      "input_topologies",
-      "generated_topology",
-      "common_subtopology",
-      "witness_open_set",
-      "diagnosis"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "topology": {
-        "items": {
-          "maximum": 15,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 16,
-        "minItems": 2,
-        "type": "array",
-        "uniqueItems": true
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "common_subtopology": {
-            "$ref": "#/$defs/topology"
-          },
-          "diagnosis": {
-            "const": "COMMON_SUBTOPOLOGY_DOES_NOT_ESTABLISH_LEAST_CONTAINING_TOPOLOGY"
-          },
-          "generated_topology": {
-            "$ref": "#/$defs/topology"
-          },
-          "input_topologies": {
-            "items": {
-              "$ref": "#/$defs/topology"
+            "common_subtopology": {
+                "$ref": "#/$defs/topology"
             },
-            "maxItems": 4,
-            "minItems": 2,
-            "type": "array"
-          },
-          "universe_size": {
-            "enum": [
-              3,
-              4
-            ],
-            "type": "integer"
-          },
-          "witness_open_set": {
-            "maximum": 15,
-            "minimum": 0,
-            "type": "integer"
-          }
+            "diagnosis": {
+                "const": "COMMON_SUBTOPOLOGY_DOES_NOT_ESTABLISH_LEAST_CONTAINING_TOPOLOGY"
+            },
+            "generated_topology": {
+                "$ref": "#/$defs/topology"
+            },
+            "input_topologies": {
+                "items": {
+                    "$ref": "#/$defs/topology"
+                },
+                "maxItems": 4,
+                "minItems": 2,
+                "type": "array"
+            },
+            "universe_size": {
+                "enum": [
+                    3,
+                    4
+                ],
+                "type": "integer"
+            },
+            "witness_open_set": {
+                "maximum": 15,
+                "minimum": 0,
+                "type": "integer"
+            }
         },
         "required": [
-          "universe_size",
-          "input_topologies",
-          "generated_topology",
-          "common_subtopology",
-          "witness_open_set",
-          "diagnosis"
+            "universe_size",
+            "input_topologies",
+            "generated_topology",
+            "common_subtopology",
+            "witness_open_set",
+            "diagnosis"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/topology-generation-order-audit"
+    "task_id": "jacobian/topology-generation-order-audit"
 }

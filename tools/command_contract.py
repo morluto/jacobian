@@ -52,7 +52,7 @@ PUBLIC_COMMANDS: tuple[CommandContract, ...] = (
         name="check-external",
         help="Pinned Lean specialist lane only.",
         mutates_checkout=False,
-        scope="tests/boundary/providers/lean",
+        scope="tests/unit/domains/test_logic_operations.py",
         ci_relationship="local equivalent of the Lean job when the toolchain exists",
         cost_class="specialist",
     ),

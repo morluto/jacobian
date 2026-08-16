@@ -98,3 +98,16 @@ def test_equivalent_event_mass_formulas_pass_and_near_misses_fail(
     }
     _write_json(app / "submission.json", submission)
     assert _run_verifier(task, app, logs).reward == pytest.approx(0.0)
+
+
+def test_rejects_unbounded_research_scope_field(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path / "research-scope")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["research_scope"] = {
+        "lean_theorem": "NOT_ELABORATED",
+        "underlying_problem": "NOT_ADJUDICATED",
+    }
+    _write_json(app / "submission.json", submission)
+    assert _run_verifier(task, app, logs).reward == pytest.approx(0.0)
+
+

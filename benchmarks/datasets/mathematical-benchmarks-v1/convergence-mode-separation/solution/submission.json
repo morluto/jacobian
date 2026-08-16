@@ -82,10 +82,6 @@
         "level": 8
       }
     ],
-    "pointwise_argument": {
-      "hit_count_per_level": 1,
-      "miss_count_per_level": "AT_LEAST_ONE"
-    },
     "probability_argument": {
       "event_mass_formula": {
         "base": {
@@ -150,11 +146,6 @@
           "numerator": 7
         }
       }
-    ],
-    "relationship": "IN_PROBABILITY_NOT_IMPLY_ALMOST_SURE",
-    "research_scope": {
-      "lean_theorem": "NOT_ELABORATED",
-      "underlying_problem": "NOT_ADJUDICATED"
-    }
+    ]
   }
 }

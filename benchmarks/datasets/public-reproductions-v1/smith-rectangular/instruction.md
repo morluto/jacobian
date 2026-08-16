@@ -1,6 +1,6 @@
 # Smith normal form of a rectangular integer matrix
 
-Compute the exact Smith normal form of the integer matrix in `input.json`. Return the rank and the list of nonzero invariant factors in canonical order. Write `submission.json` to the exact agent-visible `submission_schema.json`. Claim `COMPUTED` assurance; do not claim `VERIFIED`.
+Compute the exact Smith normal form of the integer matrix in `input.json`. Return the rank and the list of nonzero invariant factors in canonical order. Write `submission.json` to the exact agent-visible `submission_schema.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

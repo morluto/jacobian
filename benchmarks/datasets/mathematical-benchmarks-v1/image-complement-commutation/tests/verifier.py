@@ -5,6 +5,7 @@ from verifier_support import (
     aggregate_reward,
     load_submission,
     normalize_reward_file,
+    workspace_input_is_bound,
 )
 
 W, T = Path("/app"), Path("/tests")
@@ -130,7 +131,8 @@ def valid(result):
 
 
 def main():
-    submission = load_submission(W / "submission.json")
+    _input_binding = workspace_input_is_bound()
+    submission = load_submission(W / "submission.json", require_input_binding=False)
     protocol_ok = submission is not None
     data = submission if isinstance(submission, dict) else {}
     result = data.get("result")
@@ -139,11 +141,14 @@ def main():
         correctness=math_ok,
         protocol_ok=protocol_ok,
     )
+    if not _input_binding:
+        reward = 0.0
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
+                "input_binding": float(_input_binding),
                 "reward": reward,
             }
         )

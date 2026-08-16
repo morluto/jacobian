@@ -66,29 +66,22 @@ def test_unreduced_probe_is_accepted(tmp_path: Path) -> None:
 
 
 def test_rejects_unbounded_research_status_fact(tmp_path: Path) -> None:
-    task, app, logs = _case(tmp_path)
+    task, app, logs = _case(tmp_path / "research-status")
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["research_scope"] = {"underlying_problem": "ADJUDICATED"}
     _write_json(app / "submission.json", submission)
-
-    rejected = _run_verifier(task, app, logs)
-    assert rejected.reward == pytest.approx(0.0)
+    assert _run_verifier(task, app, logs).reward == pytest.approx(0.0)
 
 
-def test_result_requires_checked_structural_convergence_arguments(
-    tmp_path: Path,
-) -> None:
-    task, app, logs = _case(tmp_path)
+def test_rejects_pointwise_argument_field(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path / "pointwise")
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["pointwise_argument"] = {
         "hit_count_per_level": 1,
         "miss_count_per_level": "UNSPECIFIED",
     }
     _write_json(app / "submission.json", submission)
-
-    rejected = _run_verifier(task, app, logs)
-    assert rejected.details["correctness"] == 0.0
-    assert rejected.reward == pytest.approx(0.0)
+    assert _run_verifier(task, app, logs).reward == pytest.approx(0.0)
 
 
 def test_equivalent_event_mass_formulas_pass_and_near_misses_fail(
@@ -121,6 +114,17 @@ def test_equivalent_event_mass_formulas_pass_and_near_misses_fail(
     submission["result"]["probability_argument"]["event_mass_formula"]["base"] = {
         "numerator": 3,
         "denominator": 1,
+    }
+    _write_json(app / "submission.json", submission)
+    assert _run_verifier(task, app, logs).reward == pytest.approx(0.0)
+
+
+def test_rejects_unbounded_research_scope_field(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path / "research-scope")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["research_scope"] = {
+        "lean_theorem": "NOT_ELABORATED",
+        "underlying_problem": "NOT_ADJUDICATED",
     }
     _write_json(app / "submission.json", submission)
     assert _run_verifier(task, app, logs).reward == pytest.approx(0.0)

@@ -8,6 +8,7 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
+    workspace_input_is_bound,
 )
 
 TESTS = Path("/tests")
@@ -244,18 +245,20 @@ def _result_valid(result: object, source: dict) -> bool:
 
 
 def main() -> None:
+    _input_binding = workspace_input_is_bound()
     source = _source()
-    submission = load_submission()
+    submission = load_submission(require_input_binding=False)
     protocol_ok = submission is not None
-    correctness = bool(
+    math_ok = bool(
         protocol_ok
         and source is not None
         and _result_valid(submission.get("result"), source)
     )
-    reward = float(correctness)
+    reward = float(_input_binding and math_ok)
     _write_reward(
         {
-            "correctness": float(correctness),
+            "correctness": float(math_ok),
+            "input_binding": float(_input_binding),
             "reward": reward,
         }
     )
@@ -268,6 +271,7 @@ if __name__ == "__main__":
         _write_reward(
             {
                 "correctness": 0.0,
+                "input_binding": 0.0,
                 "reward": 0.0,
             }
         )

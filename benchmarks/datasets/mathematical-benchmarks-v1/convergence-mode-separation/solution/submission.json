@@ -1,150 +1,150 @@
 {
-    "result": {
-        "levels": [
-            {
-                "event_mass": {
-                    "denominator": 2,
-                    "numerator": 1
-                },
-                "index_end": 3,
-                "index_start": 2,
-                "interval_count": 2,
-                "level": 1
-            },
-            {
-                "event_mass": {
-                    "denominator": 4,
-                    "numerator": 1
-                },
-                "index_end": 7,
-                "index_start": 4,
-                "interval_count": 4,
-                "level": 2
-            },
-            {
-                "event_mass": {
-                    "denominator": 8,
-                    "numerator": 1
-                },
-                "index_end": 15,
-                "index_start": 8,
-                "interval_count": 8,
-                "level": 3
-            },
-            {
-                "event_mass": {
-                    "denominator": 16,
-                    "numerator": 1
-                },
-                "index_end": 31,
-                "index_start": 16,
-                "interval_count": 16,
-                "level": 4
-            },
-            {
-                "event_mass": {
-                    "denominator": 32,
-                    "numerator": 1
-                },
-                "index_end": 63,
-                "index_start": 32,
-                "interval_count": 32,
-                "level": 5
-            },
-            {
-                "event_mass": {
-                    "denominator": 64,
-                    "numerator": 1
-                },
-                "index_end": 127,
-                "index_start": 64,
-                "interval_count": 64,
-                "level": 6
-            },
-            {
-                "event_mass": {
-                    "denominator": 128,
-                    "numerator": 1
-                },
-                "index_end": 255,
-                "index_start": 128,
-                "interval_count": 128,
-                "level": 7
-            },
-            {
-                "event_mass": {
-                    "denominator": 256,
-                    "numerator": 1
-                },
-                "index_end": 511,
-                "index_start": 256,
-                "interval_count": 256,
-                "level": 8
-            }
-        ],
-        "probability_argument": {
-            "event_mass_formula": {
-                "base": {
-                    "denominator": 1,
-                    "numerator": 2
-                },
-                "coefficient": {
-                    "denominator": 1,
-                    "numerator": 1
-                },
-                "exponent_coefficient": -1,
-                "variable": "k"
-            }
+  "result": {
+    "levels": [
+      {
+        "event_mass": {
+          "denominator": 2,
+          "numerator": 1
         },
-        "probes": [
-            {
-                "hit_indices": [
-                    2,
-                    5,
-                    10,
-                    21,
-                    42,
-                    85,
-                    170,
-                    341
-                ],
-                "point": {
-                    "denominator": 3,
-                    "numerator": 1
-                }
-            },
-            {
-                "hit_indices": [
-                    2,
-                    5,
-                    11,
-                    22,
-                    44,
-                    89,
-                    179,
-                    358
-                ],
-                "point": {
-                    "denominator": 5,
-                    "numerator": 2
-                }
-            },
-            {
-                "hit_indices": [
-                    3,
-                    7,
-                    15,
-                    30,
-                    60,
-                    120,
-                    240,
-                    480
-                ],
-                "point": {
-                    "denominator": 8,
-                    "numerator": 7
-                }
-            }
-        ]
-    }
+        "index_end": 3,
+        "index_start": 2,
+        "interval_count": 2,
+        "level": 1
+      },
+      {
+        "event_mass": {
+          "denominator": 4,
+          "numerator": 1
+        },
+        "index_end": 7,
+        "index_start": 4,
+        "interval_count": 4,
+        "level": 2
+      },
+      {
+        "event_mass": {
+          "denominator": 8,
+          "numerator": 1
+        },
+        "index_end": 15,
+        "index_start": 8,
+        "interval_count": 8,
+        "level": 3
+      },
+      {
+        "event_mass": {
+          "denominator": 16,
+          "numerator": 1
+        },
+        "index_end": 31,
+        "index_start": 16,
+        "interval_count": 16,
+        "level": 4
+      },
+      {
+        "event_mass": {
+          "denominator": 32,
+          "numerator": 1
+        },
+        "index_end": 63,
+        "index_start": 32,
+        "interval_count": 32,
+        "level": 5
+      },
+      {
+        "event_mass": {
+          "denominator": 64,
+          "numerator": 1
+        },
+        "index_end": 127,
+        "index_start": 64,
+        "interval_count": 64,
+        "level": 6
+      },
+      {
+        "event_mass": {
+          "denominator": 128,
+          "numerator": 1
+        },
+        "index_end": 255,
+        "index_start": 128,
+        "interval_count": 128,
+        "level": 7
+      },
+      {
+        "event_mass": {
+          "denominator": 256,
+          "numerator": 1
+        },
+        "index_end": 511,
+        "index_start": 256,
+        "interval_count": 256,
+        "level": 8
+      }
+    ],
+    "probability_argument": {
+      "event_mass_formula": {
+        "base": {
+          "denominator": 1,
+          "numerator": 2
+        },
+        "coefficient": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "exponent_coefficient": -1,
+        "variable": "k"
+      }
+    },
+    "probes": [
+      {
+        "hit_indices": [
+          2,
+          5,
+          10,
+          21,
+          42,
+          85,
+          170,
+          341
+        ],
+        "point": {
+          "denominator": 3,
+          "numerator": 1
+        }
+      },
+      {
+        "hit_indices": [
+          2,
+          5,
+          11,
+          22,
+          44,
+          89,
+          179,
+          358
+        ],
+        "point": {
+          "denominator": 5,
+          "numerator": 2
+        }
+      },
+      {
+        "hit_indices": [
+          3,
+          7,
+          15,
+          30,
+          60,
+          120,
+          240,
+          480
+        ],
+        "point": {
+          "denominator": 8,
+          "numerator": 7
+        }
+      }
+    ]
+  }
 }

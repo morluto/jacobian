@@ -2,7 +2,11 @@ import json
 from fractions import Fraction
 from pathlib import Path
 
-from verifier_support import load_submission, normalize_reward_file
+from verifier_support import (
+    load_submission,
+    normalize_reward_file,
+    workspace_input_is_bound,
+)
 
 FROZEN_INPUT = Path(__file__).with_name("input.json")
 REQUIRED_RESULT_FIELDS = frozenset({"sequence", "flow", "primal_value", "dual_value"})
@@ -141,7 +145,8 @@ def result_contract(result, instance):
 
 
 def main():
-    submission = load_submission()
+    _input_binding = workspace_input_is_bound()
+    submission = load_submission(require_input_binding=False)
     instance = load_instance()
     data = submission if isinstance(submission, dict) else {}
     result = data.get("result", {})
@@ -151,10 +156,16 @@ def main():
         and result_contract(result, instance)
         and valid(result, instance)
     )
-    correct = bool(math_correct)
+    correct = bool(_input_binding and math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
-        json.dumps({"correctness": float(math_correct), "reward": float(correct)})
+        json.dumps(
+            {
+                "correctness": float(math_correct),
+                "input_binding": float(_input_binding),
+                "reward": float(correct),
+            }
+        )
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

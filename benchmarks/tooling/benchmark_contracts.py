@@ -285,6 +285,11 @@ def _regular_file_inside(root: Path, relative: str) -> Path | None:
 
     if not relative or Path(relative).is_absolute():
         return None
+    try:
+        if root.is_symlink() or not root.is_dir():
+            return None
+    except OSError:
+        return None
     current = root
     for part in Path(relative).parts:
         if part in {"", ".", ".."}:

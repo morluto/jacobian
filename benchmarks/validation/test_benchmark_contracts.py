@@ -102,3 +102,13 @@ def test_regular_file_inside_rejects_symlinked_witness(tmp_path: Path) -> None:
     regular = nested / "ok.bin"
     regular.write_bytes(b"ok")
     assert benchmark_contracts._regular_file_inside(root, "evidence/ok.bin") == regular
+
+
+def test_regular_file_inside_rejects_symlinked_root(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    nested = outside / "evidence"
+    nested.mkdir(parents=True)
+    (nested / "ok.bin").write_bytes(b"ok")
+    root = tmp_path / "solution"
+    root.symlink_to(outside)
+    assert benchmark_contracts._regular_file_inside(root, "evidence/ok.bin") is None

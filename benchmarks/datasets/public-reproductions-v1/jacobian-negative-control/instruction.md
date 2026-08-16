@@ -1,6 +1,6 @@
 # Negative control for a polynomial-map collision
 
-The `claimed_image` in `input.json` has been mutated away from the true common image. Determine those two conclusions independently: whether both points map to that claimed image, and whether the two distinct points have the same actual image. A collision of actual images verifies non-invertibility even when the claimed image is wrong. Return those two conclusions as booleans. Write `submission.json` to the exact agent-visible `submission_schema.json`.
+The `claimed_image` in `input.json` has been mutated away from the true common image. Submit the finite collision object: the two distinct points, their exact images under the polynomial map, and confirm that the images are equal. The verifier replays the polynomial map from the frozen input and checks the collision. The truth values — whether both points map to the claimed image and whether non-invertibility holds — are derived by the evaluator from the submitted collision object.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

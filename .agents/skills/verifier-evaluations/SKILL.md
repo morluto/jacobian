@@ -59,6 +59,15 @@ itself the mathematical object being checked. A hard task may deliberately
 expose no operation that solves it today: that is a capability finding, not a
 verifier defect.
 
+The verifier derives conclusions from submitted mathematics. Do not score a
+submitted copy of those conclusions, and do not publish them as schema
+`const` fields. If a review asks to restore leaked constants so the schema and
+verifier match, refuse and shrink the verifier and instruction instead. When
+reducing a schema, update instruction, verifier key set, gold, public
+contract, and host tests together. Closed `oneOf` success variants omit
+inapplicable failure fields; they do not send JSON `null`. If one submitted
+object implies a dimension, parse every related object at that derived size.
+
 ## Implement total predicates
 
 Follow this order:
@@ -79,8 +88,8 @@ Read and bound submissions and visible/frozen inputs before parsing. A witness
 artifact needs a published finite bound only when its encoding or task mechanics
 justify one; do not inherit a universal/default cap or create a redundant
 artifact merely to add one. For declared artifacts, reject traversal, symlinks,
-non-regular files, wrong cardinality, wrong digest, and content that does not
-support the claimed result.
+a symlinked solution root, non-regular files, wrong cardinality, wrong digest,
+and content that does not support the claimed result.
 
 Compute mathematical correctness from the frozen verifier copy. Keep input
 binding, declared witness validity, scope, and independent authorization as
@@ -89,6 +98,10 @@ only when calculating aggregate reward. Default reward is binary: return `1`
 only for a valid replayed mathematical outcome and `0` otherwise. Add partial
 credit only when the public task explicitly contains independent, meaningful,
 replayable mathematical subclaims; diagnostics alone never earn credit.
+`load_submission()` may refuse an unbound workspace input; that must not zero
+`correctness` or `witness_validity` when those diagnostics are independent.
+Parse without requiring binding, replay against frozen tests input, and AND
+binding only into `reward`.
 
 For a deliberate raw/strict split, raw parsing is bounded and diagnostic-only.
 `load_submission()` remains the strict authoritative loader; a raw object never

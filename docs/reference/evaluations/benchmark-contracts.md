@@ -36,8 +36,10 @@ returns `1` only when it can replay a valid submitted result and every declared
 task-specific witness condition; otherwise it returns `0`. Tool calls, prose,
 confidence claims, and diagnostic observations do not earn credit. Report
 input binding, witness validity, tool use, cost, and failure modes separately.
-Use non-binary scoring only for a public task deliberately decomposed into
-independent, meaningful, replayable mathematical subclaims.
+Binding is a hard gate on reward only; it must not zero `correctness` or
+`witness_validity` when those diagnostics are independent. Use non-binary
+scoring only for a public task deliberately decomposed into independent,
+meaningful, replayable mathematical subclaims.
 
 The public submission shape is normally `{ "result": ... }`. Add
 `"witness"` only for a finite task-specific mathematical object that replay
@@ -45,6 +47,8 @@ cannot derive from the frozen input and result; prefer structured certificate
 data in `result`, and never require a duplicate result file or natural-language
 explanation. Generic assurance, scope, completeness, limitation, and
 verification-record fields are not part of ordinary mathematical submissions.
+Do not ask the agent to submit a conclusion the verifier can derive, and do
+not publish that conclusion as a schema `const` or leaked status field.
 
 ### Replay authority
 
@@ -75,8 +79,8 @@ one. Parse and compare the represented value:
   parsing into the actual mathematical type, not as privileged list order;
 - formulas as the smallest task-owned type (coefficients, an AST, an enum),
   not as a scored string literal;
-- conclusions as finite reason/status enums the verifier already derives, not
-  as keyword, length, or negation-regex checks over prose.
+- conclusions the verifier already derives from submitted mathematics, not as
+  extra submitted `const` fields, keyword checks, or prose.
 
 Do not encode an exact rational as one undifferentiated `"2/8"` string. Decimal
 strings are allowed only as bounded components of a structured object when
@@ -97,7 +101,13 @@ checks are boundary validation, not rendering rules.
 The instruction, schema, hidden solver, and verifier must accept the same
 objects. A schema-valid, instruction-conforming submission must be able to
 receive full reward. Do not leave `limitations` required in prose and forbidden
-in the verifier, or declare `text/plain` for a JSON object.
+in the verifier, or declare `text/plain` for a JSON object. When a schema
+shrinks, update the instruction, verifier key set, gold submission, public
+contract, and host tests in the same change. Align a mismatch by shrinking the
+verifier and instruction, never by restoring leaked constants. Closed `oneOf`
+success variants omit inapplicable failure fields; they do not send JSON
+`null`. If one submitted object implies a dimension or bound, parse every
+related object at that derived size.
 
 Generated task families specialize the public schema to the claim family and
 frozen case type. Certificate kind is public protocol, not a hidden answer.
@@ -116,8 +126,10 @@ it must not duplicate the typed result or carry a prose explanation.
 Do not require a witness whose only accepted content is a hash of `result`, a
 JSON envelope equal to `result`, selected copied fields, boilerplate keywords,
 or arbitrary nonempty text. Do not score a digest-bound file the verifier never
-opens. The template helper `witness_list_is_bound` has no default
-`evidence/answer.txt` path; pass an explicit path only for a declared artifact.
+opens. Gold witness descriptors must resolve to regular files under a
+non-symlink `solution/` root. The template helper `witness_list_is_bound` has
+no default `evidence/answer.txt` path; pass an explicit path only for a
+declared artifact.
 
 ## Generated output
 

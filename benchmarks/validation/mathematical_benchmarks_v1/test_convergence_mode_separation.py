@@ -65,6 +65,25 @@ def test_unreduced_probe_is_accepted(tmp_path: Path) -> None:
     assert _run_verifier(task, app, logs).reward == pytest.approx(1.0)
 
 
+def test_rejects_unbounded_research_status_fact(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path / "research-status")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["research_scope"] = {"underlying_problem": "ADJUDICATED"}
+    _write_json(app / "submission.json", submission)
+    assert _run_verifier(task, app, logs).reward == pytest.approx(0.0)
+
+
+def test_rejects_pointwise_argument_field(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path / "pointwise")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["pointwise_argument"] = {
+        "hit_count_per_level": 1,
+        "miss_count_per_level": "UNSPECIFIED",
+    }
+    _write_json(app / "submission.json", submission)
+    assert _run_verifier(task, app, logs).reward == pytest.approx(0.0)
+
+
 def test_equivalent_event_mass_formulas_pass_and_near_misses_fail(
     tmp_path: Path,
 ) -> None:
@@ -109,5 +128,3 @@ def test_rejects_unbounded_research_scope_field(tmp_path: Path) -> None:
     }
     _write_json(app / "submission.json", submission)
     assert _run_verifier(task, app, logs).reward == pytest.approx(0.0)
-
-

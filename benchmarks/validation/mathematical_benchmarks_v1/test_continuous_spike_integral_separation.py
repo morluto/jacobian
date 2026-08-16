@@ -38,17 +38,7 @@ def candidate(alpha=Fraction(1, 4)):
     verifier = load_verifier()
     return {
         "alpha": verifier.encoded(alpha),
-        "baseline_power": 2,
-        "spike_height": "1",
         "spikes": [verifier.expected_spike(n, alpha) for n in range(1, 13)],
-        "integral_classification": {
-            "spike_area_series": "alpha*sum(1/n)",
-            "status": "DIVERGENT",
-        },
-        "sample_series_classification": {
-            "sample_series": "sum(1/n^2)",
-            "status": "CONVERGENT",
-        },
     }
 
 
@@ -70,9 +60,6 @@ def test_rejects_finite_or_reversed_classification():
     verifier = load_verifier()
     bad = candidate()
     bad["spikes"] = bad["spikes"][:-1]
-    assert not verifier.valid_result(bad)
-    bad = candidate()
-    bad["sample_series_classification"]["status"] = "DIVERGENT"
     assert not verifier.valid_result(bad)
 
 

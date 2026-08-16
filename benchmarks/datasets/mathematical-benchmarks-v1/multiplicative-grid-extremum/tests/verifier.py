@@ -247,7 +247,7 @@ def _result_valid(result: object, source: dict) -> bool:
 def main() -> None:
     _input_binding = workspace_input_is_bound()
     source = _source()
-    submission = load_submission()
+    submission = load_submission(require_input_binding=False)
     protocol_ok = submission is not None
     math_ok = bool(
         protocol_ok

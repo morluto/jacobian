@@ -77,9 +77,6 @@
         "generic_formula": {
           "$ref": "#/$defs/rational_formula"
         },
-        "rationality_conclusion": {
-          "const": "E_RATIONAL_IN_BOTH_BRANCHES"
-        },
         "singular_formula": {
           "$ref": "#/$defs/rational_formula"
         },
@@ -96,8 +93,7 @@
         "variables",
         "generic_formula",
         "singular_formula",
-        "branch_partition",
-        "rationality_conclusion"
+        "branch_partition"
       ],
       "type": "object"
     }

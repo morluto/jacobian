@@ -1,194 +1,166 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {"minimum": 1, "type": "integer"},
-        "numerator": {"type": "integer"}
-      },
-      "required": ["numerator", "denominator"],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "alpha": {
-        "$ref": "#/$defs/rational"
-      },
-      "baseline_power": {
-        "const": 2
-      },
-      "integral_classification": {
-        "const": {
-          "spike_area_series": "alpha*sum(1/n)",
-          "status": "DIVERGENT"
-        }
-      },
-      "sample_series_classification": {
-        "const": {
-          "sample_series": "sum(1/n^2)",
-          "status": "CONVERGENT"
-        }
-      },
-      "spike_height": {
-        "const": "1"
-      },
-      "spikes": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "area": {
-              "$ref": "#/$defs/rational"
-            },
-            "center": {
-              "$ref": "#/$defs/rational"
-            },
-            "half_width": {
-              "$ref": "#/$defs/rational"
-            },
-            "integer_sample": {
-              "$ref": "#/$defs/rational"
-            },
-            "left": {
-              "$ref": "#/$defs/rational"
-            },
-            "n": {
-              "maximum": 12,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "right": {
-              "$ref": "#/$defs/rational"
-            }
-          },
-          "required": [
-            "n",
-            "center",
-            "half_width",
-            "left",
-            "right",
-            "area",
-            "integer_sample"
-          ],
-          "type": "object"
-        },
-        "maxItems": 12,
-        "minItems": 12,
-        "type": "array"
-      }
-    },
-    "required": [
-      "alpha",
-      "baseline_power",
-      "spike_height",
-      "spikes",
-      "integral_classification",
-      "sample_series_classification"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$defs": {
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {"minimum": 1, "type": "integer"},
-          "numerator": {"type": "integer"}
-        },
-        "required": ["numerator", "denominator"],
-        "type": "object"
-      }
-    },
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "alpha": {
-            "$ref": "#/$defs/rational"
-          },
-          "baseline_power": {
-            "const": 2
-          },
-          "integral_classification": {
-            "const": {
-              "spike_area_series": "alpha*sum(1/n)",
-              "status": "DIVERGENT"
-            }
-          },
-          "sample_series_classification": {
-            "const": {
-              "sample_series": "sum(1/n^2)",
-              "status": "CONVERGENT"
-            }
-          },
-          "spike_height": {
-            "const": "1"
-          },
-          "spikes": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "area": {
-                  "$ref": "#/$defs/rational"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rational": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
                 },
-                "center": {
-                  "$ref": "#/$defs/rational"
-                },
-                "half_width": {
-                  "$ref": "#/$defs/rational"
-                },
-                "integer_sample": {
-                  "$ref": "#/$defs/rational"
-                },
-                "left": {
-                  "$ref": "#/$defs/rational"
-                },
-                "n": {
-                  "maximum": 12,
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "right": {
-                  "$ref": "#/$defs/rational"
+                "numerator": {
+                    "type": "integer"
                 }
-              },
-              "required": [
-                "n",
-                "center",
-                "half_width",
-                "left",
-                "right",
-                "area",
-                "integer_sample"
-              ],
-              "type": "object"
             },
-            "maxItems": 12,
-            "minItems": 12,
-            "type": "array"
-          }
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "alpha": {
+                "$ref": "#/$defs/rational"
+            },
+            "spikes": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "area": {
+                            "$ref": "#/$defs/rational"
+                        },
+                        "center": {
+                            "$ref": "#/$defs/rational"
+                        },
+                        "half_width": {
+                            "$ref": "#/$defs/rational"
+                        },
+                        "integer_sample": {
+                            "$ref": "#/$defs/rational"
+                        },
+                        "left": {
+                            "$ref": "#/$defs/rational"
+                        },
+                        "n": {
+                            "maximum": 12,
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "right": {
+                            "$ref": "#/$defs/rational"
+                        }
+                    },
+                    "required": [
+                        "n",
+                        "center",
+                        "half_width",
+                        "left",
+                        "right",
+                        "area",
+                        "integer_sample"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 12,
+                "minItems": 12,
+                "type": "array"
+            }
         },
         "required": [
-          "alpha",
-          "baseline_power",
-          "spike_height",
-          "spikes",
-          "integral_classification",
-          "sample_series_classification"
+            "alpha",
+            "spikes"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/continuous-spike-integral-separation"
+    "submission_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+            "result"
+        ],
+        "properties": {
+            "result": {
+                "additionalProperties": false,
+                "properties": {
+                    "alpha": {
+                        "$ref": "#/$defs/rational"
+                    },
+                    "spikes": {
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "area": {
+                                    "$ref": "#/$defs/rational"
+                                },
+                                "center": {
+                                    "$ref": "#/$defs/rational"
+                                },
+                                "half_width": {
+                                    "$ref": "#/$defs/rational"
+                                },
+                                "integer_sample": {
+                                    "$ref": "#/$defs/rational"
+                                },
+                                "left": {
+                                    "$ref": "#/$defs/rational"
+                                },
+                                "n": {
+                                    "maximum": 12,
+                                    "minimum": 1,
+                                    "type": "integer"
+                                },
+                                "right": {
+                                    "$ref": "#/$defs/rational"
+                                }
+                            },
+                            "required": [
+                                "n",
+                                "center",
+                                "half_width",
+                                "left",
+                                "right",
+                                "area",
+                                "integer_sample"
+                            ],
+                            "type": "object"
+                        },
+                        "maxItems": 12,
+                        "minItems": 12,
+                        "type": "array"
+                    }
+                },
+                "required": [
+                    "alpha",
+                    "spikes"
+                ],
+                "type": "object"
+            }
+        },
+        "$defs": {
+            "rational": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
+            }
+        }
+    },
+    "task_id": "jacobian/continuous-spike-integral-separation"
 }

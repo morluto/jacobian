@@ -94,8 +94,7 @@
         },
         "exponent_coefficient": -1,
         "variable": "k"
-      },
-      "limit": "ZERO"
+      }
     },
     "probes": [
       {

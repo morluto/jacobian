@@ -1,49 +1,235 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "both_points_map_to_claimed_image": {
-        "type": "boolean"
-      },
-      "noninvertibility_verified": {
-        "type": "boolean"
-      }
-    },
-    "required": [
-      "both_points_map_to_claimed_image",
-      "noninvertibility_verified"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "both_points_map_to_claimed_image": {
-            "type": "boolean"
-          },
-          "noninvertibility_verified": {
-            "type": "boolean"
-          }
+            "collision": {
+                "additionalProperties": false,
+                "properties": {
+                    "first_point": {
+                        "type": "array",
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "num": {
+                                    "type": "integer"
+                                },
+                                "den": {
+                                    "minimum": 1,
+                                    "type": "integer"
+                                }
+                            },
+                            "required": [
+                                "num",
+                                "den"
+                            ],
+                            "type": "object"
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                    },
+                    "second_point": {
+                        "type": "array",
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "num": {
+                                    "type": "integer"
+                                },
+                                "den": {
+                                    "minimum": 1,
+                                    "type": "integer"
+                                }
+                            },
+                            "required": [
+                                "num",
+                                "den"
+                            ],
+                            "type": "object"
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                    },
+                    "first_image": {
+                        "type": "array",
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "num": {
+                                    "type": "integer"
+                                },
+                                "den": {
+                                    "minimum": 1,
+                                    "type": "integer"
+                                }
+                            },
+                            "required": [
+                                "num",
+                                "den"
+                            ],
+                            "type": "object"
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                    },
+                    "second_image": {
+                        "type": "array",
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "num": {
+                                    "type": "integer"
+                                },
+                                "den": {
+                                    "minimum": 1,
+                                    "type": "integer"
+                                }
+                            },
+                            "required": [
+                                "num",
+                                "den"
+                            ],
+                            "type": "object"
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                    }
+                },
+                "required": [
+                    "first_point",
+                    "second_point",
+                    "first_image",
+                    "second_image"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "both_points_map_to_claimed_image",
-          "noninvertibility_verified"
+            "collision"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/jacobian-negative-control"
+    "submission_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+            "result": {
+                "additionalProperties": false,
+                "properties": {
+                    "collision": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "first_point": {
+                                "type": "array",
+                                "items": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                        "num": {
+                                            "type": "integer"
+                                        },
+                                        "den": {
+                                            "minimum": 1,
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "required": [
+                                        "num",
+                                        "den"
+                                    ],
+                                    "type": "object"
+                                },
+                                "minItems": 3,
+                                "maxItems": 3
+                            },
+                            "second_point": {
+                                "type": "array",
+                                "items": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                        "num": {
+                                            "type": "integer"
+                                        },
+                                        "den": {
+                                            "minimum": 1,
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "required": [
+                                        "num",
+                                        "den"
+                                    ],
+                                    "type": "object"
+                                },
+                                "minItems": 3,
+                                "maxItems": 3
+                            },
+                            "first_image": {
+                                "type": "array",
+                                "items": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                        "num": {
+                                            "type": "integer"
+                                        },
+                                        "den": {
+                                            "minimum": 1,
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "required": [
+                                        "num",
+                                        "den"
+                                    ],
+                                    "type": "object"
+                                },
+                                "minItems": 3,
+                                "maxItems": 3
+                            },
+                            "second_image": {
+                                "type": "array",
+                                "items": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                        "num": {
+                                            "type": "integer"
+                                        },
+                                        "den": {
+                                            "minimum": 1,
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "required": [
+                                        "num",
+                                        "den"
+                                    ],
+                                    "type": "object"
+                                },
+                                "minItems": 3,
+                                "maxItems": 3
+                            }
+                        },
+                        "required": [
+                            "first_point",
+                            "second_point",
+                            "first_image",
+                            "second_image"
+                        ],
+                        "type": "object"
+                    }
+                },
+                "required": [
+                    "collision"
+                ],
+                "type": "object"
+            }
+        },
+        "required": [
+            "result"
+        ],
+        "type": "object"
+    },
+    "task_id": "jacobian/jacobian-negative-control"
 }

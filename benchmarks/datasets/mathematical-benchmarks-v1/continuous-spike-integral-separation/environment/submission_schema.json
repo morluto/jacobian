@@ -27,24 +27,6 @@
         "alpha": {
           "$ref": "#/$defs/rational"
         },
-        "baseline_power": {
-          "const": 2
-        },
-        "integral_classification": {
-          "const": {
-            "spike_area_series": "alpha*sum(1/n)",
-            "status": "DIVERGENT"
-          }
-        },
-        "sample_series_classification": {
-          "const": {
-            "sample_series": "sum(1/n^2)",
-            "status": "CONVERGENT"
-          }
-        },
-        "spike_height": {
-          "const": "1"
-        },
         "spikes": {
           "items": {
             "additionalProperties": false,
@@ -91,11 +73,7 @@
       },
       "required": [
         "alpha",
-        "baseline_power",
-        "spike_height",
-        "spikes",
-        "integral_classification",
-        "sample_series_classification"
+        "spikes"
       ],
       "type": "object"
     }

@@ -135,7 +135,7 @@ def result_valid(result, fixture):
 
 def main():
     _input_binding = workspace_input_is_bound()
-    submission = load_submission()
+    submission = load_submission(require_input_binding=False)
     fixture = load_json(E / FIXTURE_NAME)
     result = submission.get("result") if isinstance(submission, dict) else None
     math_correct = bool(fixture is not None and result_valid(result, fixture))

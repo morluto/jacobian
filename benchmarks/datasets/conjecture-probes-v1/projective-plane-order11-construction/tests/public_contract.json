@@ -1,0 +1,54 @@
+{
+  "schema_version": "1",
+  "task_id": "jacobian/projective-plane-order11-construction",
+  "submission_path": "/app/submission.json",
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "lines": {
+        "items": {
+          "items": {"maximum": 132, "minimum": 0, "type": "integer"},
+          "maxItems": 12,
+          "minItems": 12,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "maxItems": 133,
+        "minItems": 133,
+        "type": "array",
+        "uniqueItems": true
+      }
+    },
+    "required": ["lines"],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "result": {
+        "additionalProperties": false,
+        "properties": {
+          "lines": {
+            "items": {
+              "items": {"maximum": 132, "minimum": 0, "type": "integer"},
+              "maxItems": 12,
+              "minItems": 12,
+              "type": "array",
+              "uniqueItems": true
+            },
+            "maxItems": 133,
+            "minItems": 133,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": ["lines"],
+        "type": "object"
+      }
+    },
+    "required": ["result"],
+    "type": "object"
+  }
+}

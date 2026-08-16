@@ -146,7 +146,7 @@ def result_contract(result, instance):
 
 def main():
     _input_binding = workspace_input_is_bound()
-    submission = load_submission()
+    submission = load_submission(require_input_binding=False)
     instance = load_instance()
     data = submission if isinstance(submission, dict) else {}
     result = data.get("result", {})

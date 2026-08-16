@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 LABEL jacobian.task="jacobian/well-total-domination-counterexample" \
-      jacobian.checksum="77ef3429e0cdb9e6ba549377ffd0ca051d24dad8c84ecd0095cd66e110b36fc1"
+      jacobian.checksum="935708c6550d54a5f77fe804fa12f7b799cc559e69ef8e0478ef74f18a008e81"
 COPY expected.json mathematical-benchmarks-v1-well-total-domination-counterexample-input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY mathematical-benchmarks-v1-well-total-domination-counterexample-input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

@@ -9,7 +9,7 @@ Submit two rational formulas for `E` using only `A,B,C,D`:
 
 Each numerator and denominator is a sparse polynomial over variables `[A,B,C,D]` with rational coefficients and total degree at most 4; term order is not scored. The verifier accepts any formulas satisfying the symbolic contracts, not only the source proof’s presentation.
 
-Report the branch split and rationality conclusion in the typed result. The checker performs exact symbolic computation.
+Report the branch split in the typed result. The verifier derives rationality from the submitted formulas. The checker performs exact symbolic computation.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

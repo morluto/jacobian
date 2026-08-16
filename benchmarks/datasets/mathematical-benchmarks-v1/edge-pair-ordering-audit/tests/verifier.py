@@ -176,7 +176,7 @@ def _protocol_is_valid(submission: object, contract: bool, result: object) -> bo
 
 def main():
     _input_binding = workspace_input_is_bound()
-    submission = load_submission()
+    submission = load_submission(require_input_binding=False)
     data = submission if isinstance(submission, dict) else {}
     source = _load_json(Path("/tests/input.json"))
     result = data.get("result")

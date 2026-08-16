@@ -11,17 +11,12 @@ segments. Include at least four distinct freely chosen positive indices with
 their frequency, amplitude, segment counts, endpoint contribution, interior
 contribution, and total variation.
 Represent every exact rational as a numerator/positive-denominator object.
-Encode the sequence by the exponents of `q`, `n`, and `x` in the sine argument
-and of `q` and `n` in the denominator. Encode the interior segment count as an
-affine function of the frequency `q*n`.
-In `result.argument`, use the three typed values
-`SUP_NORM_1_OVER_QN_TENDS_TO_ZERO`, `TOTAL_VARIATION_IS_CONSTANTLY_FOUR`,
-and `UNIFORM_CONVERGENCE_DOES_NOT_FORCE_VARIATION_CONVERGENCE` to record the
-mathematical explanation.
-
+Encode the sequence descriptor `argument_exponents` by the exponents of `q`,
+`n`, and `x` in the sine argument and of `q` and `n` in the denominator.
+Encode the interior segment count as an affine function of the frequency
+`q*n`.
 The verifier recomputes every integer and rational identity. Sampling, a graph,
-or a conclusion label alone is insufficient; the typed `result.argument` values
-carry the mathematical separation.
+or a conclusion label alone is insufficient.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

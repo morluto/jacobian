@@ -237,7 +237,80 @@
   "additionalProperties": false,
   "properties": {
     "result": {
-      "$ref": "#/$defs/result"
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "certificate": {
+              "$ref": "#/$defs/cs"
+            },
+            "constant": {
+              "$ref": "#/$defs/rat"
+            },
+            "equality_witness": {
+              "$ref": "#/$defs/witness"
+            },
+            "proof_mode": {
+              "const": "CS_COMPOSITION"
+            }
+          },
+          "required": [
+            "constant",
+            "proof_mode",
+            "certificate",
+            "equality_witness"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "certificate": {
+              "$ref": "#/$defs/amgm"
+            },
+            "constant": {
+              "$ref": "#/$defs/rat"
+            },
+            "equality_witness": {
+              "$ref": "#/$defs/witness"
+            },
+            "proof_mode": {
+              "const": "AMGM_SQUARES"
+            }
+          },
+          "required": [
+            "constant",
+            "proof_mode",
+            "certificate",
+            "equality_witness"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "certificate": {
+              "$ref": "#/$defs/direct_sos"
+            },
+            "constant": {
+              "$ref": "#/$defs/rat"
+            },
+            "equality_witness": {
+              "$ref": "#/$defs/witness"
+            },
+            "proof_mode": {
+              "const": "DIRECT_SOS"
+            }
+          },
+          "required": [
+            "constant",
+            "proof_mode",
+            "certificate",
+            "equality_witness"
+          ],
+          "type": "object"
+        }
+      ]
     }
   },
   "required": [

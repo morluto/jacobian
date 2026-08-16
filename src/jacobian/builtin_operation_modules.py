@@ -16,6 +16,11 @@ BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
     ("jacobian.domains.graph_coloring_ops", "graph_coloring_operations"),
     ("jacobian.domains.graph_spectral", "graph_spectral_operations"),
     ("jacobian.domains.graph_flow", "graph_flow_operations"),
+    (
+        "jacobian.domains.graph_decomposition",
+        "graph_decomposition_operations",
+    ),
+    ("jacobian.domains.graph_isomorphism", "graph_isomorphism_operations"),
     ("jacobian.domains.root_isolation", "root_isolation_operations"),
     ("jacobian.domains.recurrence_solving", "recurrence_solving_operations"),
     ("jacobian.domains.code_theory", "code_theory_operations"),

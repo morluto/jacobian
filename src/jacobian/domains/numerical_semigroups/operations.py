@@ -115,4 +115,4 @@ def compute_membership(
     )
 
 
-__all__ = ["compute_summary", "compute_membership"]
+__all__ = ["compute_membership", "compute_summary"]

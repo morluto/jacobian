@@ -19,11 +19,6 @@ from jacobian.domains.multivariate_polynomial.operations import (
     compute_multivariate_gcd,
     compute_multivariate_resultant,
 )
-from jacobian.domains.multivariate_polynomial.operations import (
-    compute_multivariate_division,
-    compute_multivariate_gcd,
-    compute_multivariate_resultant,
-)
 from jacobian.math_tools import MathTool
 
 

@@ -7,8 +7,6 @@ from typing import Any, cast
 
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.graph_coloring import ChromaticGraph
-from jacobian.contracts.operations import OperationExample
-from jacobian.domains._examples import example
 from jacobian.contracts.graph_optimization import (
     GraphDominationMinimumOutput,
     GraphInducedBipartiteMaximumOutput,
@@ -18,6 +16,8 @@ from jacobian.contracts.graph_optimization import (
     GraphOptimizationBudget,
     GraphOptimizationRequest,
 )
+from jacobian.contracts.operations import OperationExample
+from jacobian.domains._examples import example
 from jacobian.domains.graph_optimization.exact_search import (
     solve_domination,
     solve_induced_bipartite,

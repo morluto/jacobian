@@ -8,10 +8,10 @@ from pydantic import ValidationError
 from jacobian.contracts.graph_realization import (
     DegreeSequenceRequest,
     DegreeSequenceResult,
-    GraphRealizationRequest,
-    GraphRealizationResult,
     GraphicalityCheckRequest,
     GraphicalityCheckResult,
+    GraphRealizationRequest,
+    GraphRealizationResult,
     RealizationCheckRequest,
     RealizationCheckResult,
 )
@@ -21,7 +21,6 @@ from jacobian.domains.graph_realization.operations import (
     compute_graphicality_check,
     compute_realization_check,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

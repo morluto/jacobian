@@ -83,11 +83,11 @@ class DistanceGraphResult(ContractModel):
 
 
 __all__ = [
-    "LabelledRationalPoint",
-    "PointConfiguration",
-    "DistanceProfileRequest",
-    "DistanceProfileResult",
-    "DistanceMultiplicityEntry",
     "DistanceGraphRequest",
     "DistanceGraphResult",
+    "DistanceMultiplicityEntry",
+    "DistanceProfileRequest",
+    "DistanceProfileResult",
+    "LabelledRationalPoint",
+    "PointConfiguration",
 ]

@@ -80,15 +80,15 @@ class FarkasCertificateResult(ContractModel):
     """Result of checking a Farkas infeasibility certificate."""
 
     valid: bool
-    yTa: tuple[str, ...]
-    yTb: str
+    y_t_a: tuple[str, ...]
+    y_t_b: str
     reason: str
 
 
 __all__ = [
-    "MatrixEntry",
-    "SymmetricMatrixRequest",
-    "InertiaResult",
     "FarkasCertificateRequest",
     "FarkasCertificateResult",
+    "InertiaResult",
+    "MatrixEntry",
+    "SymmetricMatrixRequest",
 ]

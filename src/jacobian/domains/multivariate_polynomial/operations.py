@@ -68,8 +68,8 @@ def compute_multivariate_division(
     # multivariate division respects the declared term ordering.  The
     # ``Poly`` API uses the implicit lex order and does not expose the
     # monomial-order keyword in its constructor.
-    from sympy.polys.rings import ring as sympy_ring
     from sympy import QQ
+    from sympy.polys.rings import ring as sympy_ring
 
     ring_obj = sympy_ring(symbols, QQ, request.monomial_order)[0]
 
@@ -77,10 +77,10 @@ def compute_multivariate_division(
     right_poly = rational_polynomial_to_sympy(request.right)
 
     left_ring = ring_obj.from_dict(
-        {exponents: coeff for exponents, coeff in left_poly.terms()}
+        {exponents: coeff for exponents, coeff in left_poly.terms()}  # noqa: C416
     )
     right_ring = ring_obj.from_dict(
-        {exponents: coeff for exponents, coeff in right_poly.terms()}
+        {exponents: coeff for exponents, coeff in right_poly.terms()}  # noqa: C416
     )
 
     quotient_ring, remainder_ring = left_ring.div(right_ring)
@@ -108,7 +108,8 @@ def compute_multivariate_resultant(
 ) -> MultivariateResultantResult:
     """Compute the resultant of two multivariate polynomials w.r.t. one variable."""
 
-    from sympy import resultant as sympy_resultant, Poly, QQ
+    from sympy import QQ, Poly
+    from sympy import resultant as sympy_resultant
 
     variables = request.left.variables
     elimination_index = variables.index(request.elimination_variable)
@@ -147,6 +148,6 @@ def compute_multivariate_resultant(
 def _to_poly(ring_element: Any, symbols: tuple[Any, ...]) -> Any:
     """Convert a low-level ring element to a SymPy ``Poly`` in ``QQ``."""
 
-    from sympy import Poly, QQ
+    from sympy import QQ, Poly
 
     return Poly(ring_element.as_expr(), *symbols, domain=QQ)

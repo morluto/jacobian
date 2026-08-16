@@ -87,7 +87,7 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "additive.representation_profile.compute",
         "Compute the representation profile of a sumset",
         "Given two finite integer sets A and B, return r_{A+B}(x) = "
-        "|{(a,b) in A×B : a+b=x}| for every sum x, as the sorted support "
+        "|{(a,b) in AxBy : a+b=x}| for every sum x, as the sorted support "
         "with multiplicities.",
         RepresentationProfileRequest,
         RepresentationProfileResult,

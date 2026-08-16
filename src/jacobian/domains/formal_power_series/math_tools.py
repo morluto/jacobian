@@ -38,11 +38,11 @@ from jacobian.domains.formal_power_series.operations import (
     compute_inverse,
     compute_multiply,
     compute_power,
+    compute_reversion,
     compute_scalar_multiply,
     compute_subtract,
     compute_to_polynomial,
     compute_truncate,
-    compute_reversion,
 )
 from jacobian.math_tools import MathTool
 

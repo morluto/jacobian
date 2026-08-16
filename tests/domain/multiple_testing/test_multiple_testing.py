@@ -1,6 +1,5 @@
 """Tests for multiple testing operations."""
 
-import pytest
 
 from jacobian.contracts.multiple_testing import (
     BHStepUpRequest,

@@ -38,7 +38,7 @@ def compute_max_affine_evaluation(
         elif v == max_value:
             active_pieces.append(piece.piece_id)
 
-    all_values = {pid: str(v) for pid, v in values}
+    all_values = tuple((pid, str(v)) for pid, v in values)
     return MaxAffineEvalResult(
         value=str(max_value),
         active_pieces=tuple(active_pieces),

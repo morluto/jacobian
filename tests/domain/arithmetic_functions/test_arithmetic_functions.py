@@ -9,13 +9,9 @@ from pydantic import ValidationError
 
 from jacobian.contracts.arithmetic_functions import (
     DirichletConvolutionRequest,
-    DirichletConvolutionResult,
     DirichletInverseRequest,
-    DirichletInverseResult,
     MobiusTransformRequest,
-    MobiusTransformResult,
     SummatoryFunctionRequest,
-    SummatoryFunctionResult,
 )
 from jacobian.domains.arithmetic_functions.operations import (
     compute_dirichlet_convolution,
@@ -23,7 +19,6 @@ from jacobian.domains.arithmetic_functions.operations import (
     compute_mobius_transform,
     compute_summatory_function,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

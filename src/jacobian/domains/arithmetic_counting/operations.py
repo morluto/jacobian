@@ -88,4 +88,4 @@ def compute_congruence_box_count(
     return CongruenceBoxCountResult(count=count, modulus=modulus)
 
 
-__all__ = ["compute_floor_sum", "compute_congruence_box_count"]
+__all__ = ["compute_congruence_box_count", "compute_floor_sum"]

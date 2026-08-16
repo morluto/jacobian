@@ -130,10 +130,10 @@ class DirichletInverseResult(ContractModel):
 __all__ = [
     "DirichletConvolutionRequest",
     "DirichletConvolutionResult",
+    "DirichletInverseRequest",
+    "DirichletInverseResult",
     "MobiusTransformRequest",
     "MobiusTransformResult",
     "SummatoryFunctionRequest",
     "SummatoryFunctionResult",
-    "DirichletInverseRequest",
-    "DirichletInverseResult",
 ]

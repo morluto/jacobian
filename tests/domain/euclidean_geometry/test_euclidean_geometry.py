@@ -1,6 +1,5 @@
 """Tests for Euclidean geometry operations."""
 
-import pytest
 
 from jacobian.contracts.euclidean_geometry import (
     AngleEqualityRequest,

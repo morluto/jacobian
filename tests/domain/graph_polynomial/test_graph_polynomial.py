@@ -1,6 +1,5 @@
 """Tests for graph polynomial operations."""
 
-import pytest
 
 from jacobian.contracts.graph_polynomials import (
     GraphEdge,

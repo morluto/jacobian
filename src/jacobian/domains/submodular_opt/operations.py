@@ -55,9 +55,8 @@ def check_monotonicity(
     for subset_str, val_s in table.items():
         subset = set(subset_str)
         for entry in entries:
-            other = set(sorted(entry.subset))
-            if subset < other and len(other) == len(subset) + 1:
-                if val_s > entry.value.as_fraction():
+            other = set(entry.subset)
+            if subset < other and len(other) == len(subset) + 1 and val_s > entry.value.as_fraction():
                     return MonotonicityCheckResult(
                         is_monotone=False,
                         violation=f"f({subset_str}) > f({tuple(sorted(other))})",
@@ -98,7 +97,7 @@ def check_submodularity(
 
 
 __all__ = [
-    "evaluate_set_function",
     "check_monotonicity",
     "check_submodularity",
+    "evaluate_set_function",
 ]

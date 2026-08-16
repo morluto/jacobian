@@ -8,7 +8,6 @@ from pydantic import Field, model_validator
 
 from jacobian.contracts.base import ContractModel
 
-
 # ---------------------------------------------------------------------------
 # Degree sequences
 # ---------------------------------------------------------------------------
@@ -121,12 +120,12 @@ class RealizationCheckResult(ContractModel):
 
 
 __all__ = [
-    "MAX_GRAPH_LENGTH",
     "MAX_GRAPH_DEGREE",
+    "MAX_GRAPH_LENGTH",
     "DegreeSequence",
-    "GraphEdges",
     "DegreeSequenceRequest",
     "DegreeSequenceResult",
+    "GraphEdges",
     "GraphRealizationRequest",
     "GraphRealizationResult",
     "GraphicalityCheckRequest",

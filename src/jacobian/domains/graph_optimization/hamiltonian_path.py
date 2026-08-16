@@ -8,9 +8,8 @@ from jacobian.contracts.graph_optimization import (
     GraphHamiltonianPathRequest,
     GraphHamiltonianPathResult,
 )
-from jacobian.domains.graph_optimization.operations import build_simple_graph
-from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
+from jacobian.domains.graph_optimization.operations import build_simple_graph
 from jacobian.math_tools import MathTool
 
 if TYPE_CHECKING:

@@ -1,6 +1,5 @@
 """Tests for submodular optimization operations."""
 
-import pytest
 
 from jacobian.contracts.submodular_opt import (
     MonotonicityCheckRequest,

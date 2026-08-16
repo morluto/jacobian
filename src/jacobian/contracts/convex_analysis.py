@@ -63,7 +63,7 @@ class MaxAffineEvalResult(ContractModel):
 
     value: str
     active_pieces: tuple[str, ...]
-    all_values: dict[str, str] = {}
+    all_values: tuple[tuple[str, str], ...] = ()
 
 
 class MaxAffineSubdifferentialRequest(ContractModel):
@@ -81,10 +81,10 @@ class MaxAffineSubdifferentialResult(ContractModel):
 
 __all__ = [
     "AffinePiece",
-    "MaxAffineFunction",
-    "RationalPoint",
     "MaxAffineEvalRequest",
     "MaxAffineEvalResult",
+    "MaxAffineFunction",
     "MaxAffineSubdifferentialRequest",
     "MaxAffineSubdifferentialResult",
+    "RationalPoint",
 ]

@@ -54,8 +54,8 @@ class CongruenceBoxCountResult(ContractModel):
 
 
 __all__ = [
-    "FloorSumRequest",
-    "FloorSumResult",
     "CongruenceBoxCountRequest",
     "CongruenceBoxCountResult",
+    "FloorSumRequest",
+    "FloorSumResult",
 ]

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import networkx as nx
 import pytest
 from pydantic import ValidationError
 
@@ -23,7 +22,6 @@ from jacobian.domains.graph_decomposition.operations import (
     compute_bridge_block_tree,
     compute_ear_decomposition,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -270,7 +268,7 @@ def _validate_ear_decomposition(
     assert first[0] == first[-1], "first ear must be a cycle"
     assert len(first) >= 3, "first ear cycle must have at least one vertex"
     used_vertices.update(first)
-    for u, v in zip(first, first[1:]):
+    for u, v in zip(first, first[1:]):  # noqa: B905, RUF007
         edge = (min(u, v), max(u, v))
         assert edge in graph_edges, f"edge {edge} not in input graph"
         assert edge not in used_edges, f"edge {edge} reused in first ear"
@@ -288,7 +286,7 @@ def _validate_ear_decomposition(
                 f"internal vertex {vertex} already used"
             )
         # Edges are new and in the graph.
-        for u, v in zip(ear, ear[1:]):
+        for u, v in zip(ear, ear[1:]):  # noqa: B905, RUF007
             edge = (min(u, v), max(u, v))
             assert edge in graph_edges, f"edge {edge} not in input graph"
             assert edge not in used_edges, f"edge {edge} reused"

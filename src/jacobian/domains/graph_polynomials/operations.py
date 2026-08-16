@@ -133,8 +133,8 @@ def compute_matching_polynomial(
 
 
 __all__ = [
-    "compute_tutte_polynomial",
     "compute_chromatic_polynomial",
     "compute_flow_polynomial",
     "compute_matching_polynomial",
+    "compute_tutte_polynomial",
 ]

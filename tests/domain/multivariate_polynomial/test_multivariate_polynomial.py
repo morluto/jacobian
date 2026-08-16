@@ -338,8 +338,8 @@ class TestMultivariateResultant:
 
         # Build polynomials with degree sum > 64 in the elimination variable.
         # Terms must be in descending lex order.
-        terms_left = tuple((f"1/1", (i, 0)) for i in range(39, -1, -1))
-        terms_right = tuple((f"1/1", (i, 0)) for i in range(39, -1, -1))
+        terms_left = tuple(("1/1", (i, 0)) for i in range(39, -1, -1))
+        terms_right = tuple(("1/1", (i, 0)) for i in range(39, -1, -1))
         left = _poly(("x", "y"), terms_left)
         right = _poly(("x", "y"), terms_right)
         with pytest.raises(ValueError, match="Sylvester degree"):

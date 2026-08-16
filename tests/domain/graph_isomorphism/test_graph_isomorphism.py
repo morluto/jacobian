@@ -13,7 +13,6 @@ from jacobian.domains.graph_isomorphism.operations import (
     decide_graph_isomorphism,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -39,7 +38,7 @@ def _complete_edges(n: int) -> list[tuple[int, int]]:
     return [(i, j) for i in range(n) for j in range(i + 1, n)]
 
 
-def _is_mapping_valid_isomorphism(
+def _is_mapping_valid_isomorphism(  # noqa: C901
     graph_a: dict, graph_b: dict, mapping: tuple
 ) -> bool:
     """Independently verify that ``mapping`` is a graph isomorphism."""
@@ -68,7 +67,7 @@ def _is_mapping_valid_isomorphism(
     # For each edge in A, the mapped edge must be in B.
     for u, v in edges_a:
         mu, mv = fwd[u], fwd[v]
-        if directed:
+        if directed:  # noqa: SIM108
             mapped = (mu, mv)
         else:
             mapped = (min(mu, mv), max(mu, mv))
@@ -77,7 +76,7 @@ def _is_mapping_valid_isomorphism(
     # And conversely every edge in B must have a preimage in A.
     for u, v in edges_b:
         mu, mv = inv[u], inv[v]
-        if directed:
+        if directed:  # noqa: SIM108
             pre = (mu, mv)
         else:
             pre = (min(mu, mv), max(mu, mv))
@@ -242,8 +241,8 @@ class TestNonisomorphicSameDegreeSequence:
         # the same degree sequence.
         n = 6
         c6 = _cycle_edges(n)
-        a_edges = c6 + [(0, 2)]
-        b_edges = c6 + [(0, 3)]
+        a_edges = [*c6, (0, 2)]
+        b_edges = [*c6, (0, 3)]
         # Sanity check the degree sequences are identical.
         degs_a = [0] * n
         for u, v in a_edges:

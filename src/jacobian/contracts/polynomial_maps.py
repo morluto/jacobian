@@ -77,12 +77,12 @@ class CompositionResult(ContractModel):
 
 
 __all__ = [
-    "RationalPolynomialExpr",
-    "VariablePoint",
+    "CompositionRequest",
+    "CompositionResult",
     "EvalRequest",
     "EvalResult",
     "JacobianRequest",
     "JacobianResult",
-    "CompositionRequest",
-    "CompositionResult",
+    "RationalPolynomialExpr",
+    "VariablePoint",
 ]

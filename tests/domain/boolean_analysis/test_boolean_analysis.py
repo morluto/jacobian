@@ -14,13 +14,13 @@ from jacobian.contracts.boolean_analysis import (
     TruthTableRequest,
     TruthTableResult,
 )
+from jacobian.contracts.exact import CanonicalRational
 from jacobian.domains.boolean_analysis.operations import (
     compute_erasure_noise,
     compute_fourier_spectrum,
     compute_multilinear_extension,
     compute_truth_table,
 )
-from jacobian.contracts.exact import CanonicalRational
 
 
 def _zero() -> CanonicalRational:

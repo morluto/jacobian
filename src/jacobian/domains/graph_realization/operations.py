@@ -9,10 +9,10 @@ import networkx as nx
 from jacobian.contracts.graph_realization import (
     DegreeSequenceRequest,
     DegreeSequenceResult,
-    GraphRealizationRequest,
-    GraphRealizationResult,
     GraphicalityCheckRequest,
     GraphicalityCheckResult,
+    GraphRealizationRequest,
+    GraphRealizationResult,
     RealizationCheckRequest,
     RealizationCheckResult,
 )

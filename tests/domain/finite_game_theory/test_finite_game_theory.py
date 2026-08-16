@@ -1,6 +1,5 @@
 """Tests for finite game theory operations."""
 
-import pytest
 
 from jacobian.contracts.finite_game_theory import (
     PayoffMatrix,

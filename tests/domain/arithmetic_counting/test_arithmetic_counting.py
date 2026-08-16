@@ -1,6 +1,5 @@
 """Tests for arithmetic counting operations."""
 
-import pytest
 
 from jacobian.contracts.arithmetic_counting import (
     CongruenceBoxCountRequest,

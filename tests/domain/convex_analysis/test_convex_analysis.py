@@ -1,6 +1,5 @@
 """Tests for convex analysis operations."""
 
-import pytest
 
 from jacobian.contracts.convex_analysis import (
     AffinePiece,

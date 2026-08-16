@@ -1,10 +1,8 @@
 """Tests for numerical semigroup operations."""
 
-import pytest
 
 from jacobian.contracts.numerical_semigroups import (
     NumericalSemigroupSummaryRequest,
-    NumericalSemigroupSummaryRequest as SummaryReq,
     SemigroupMembershipRequest,
 )
 from jacobian.domains.numerical_semigroups.operations import (

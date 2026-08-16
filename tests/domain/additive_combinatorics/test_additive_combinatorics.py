@@ -1,8 +1,6 @@
 """Tests for additive combinatorics operations."""
 
-import pytest
 from jacobian.canonical import parse_canonical_integer
-
 from jacobian.contracts.additive_combinatorics import (
     AdditiveEnergyRequest,
     DirectSumPredicateRequest,
@@ -73,7 +71,7 @@ class TestRepresentationProfile:
         )
 
         assert tuple(entry.sum for entry in result.entries) == tuple(
-            sorted(set(e.sum for e in result.entries), key=parse_canonical_integer)
+            sorted({e.sum for e in result.entries}, key=parse_canonical_integer)
         )
 
 

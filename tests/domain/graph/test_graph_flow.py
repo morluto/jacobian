@@ -10,7 +10,6 @@ from pydantic import ValidationError
 from jacobian.contracts.graph_flow import (
     EdgeDisjointPathsRequest,
     EdgeDisjointPathsResult,
-    FlowGraph,
     MaxFlowRequest,
     MaxFlowResult,
     MinCutRequest,
@@ -21,7 +20,6 @@ from jacobian.domains.graph_flow.operations import (
     compute_max_flow,
     compute_min_cut,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -397,7 +395,7 @@ class TestEdgeDisjointPaths:
         )
         used_edges: set[tuple[int, int]] = set()
         for path in result.paths:
-            for u, v in zip(path[:-1], path[1:]):
+            for u, v in zip(path[:-1], path[1:]):  # noqa: B905, RUF007
                 edge = (u, v)
                 assert edge not in used_edges, f"Edge {edge} used in multiple paths"
                 used_edges.add(edge)

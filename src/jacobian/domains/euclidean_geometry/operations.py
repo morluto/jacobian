@@ -107,7 +107,7 @@ def compute_triangle_similarity(
 
 
 __all__ = [
-    "compute_segment_ratio",
     "compute_angle_equality",
+    "compute_segment_ratio",
     "compute_triangle_similarity",
 ]

@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import Any
 
 from jacobian.contracts.base import ContractModel
+from jacobian.contracts.operations import OperationExample
 from jacobian.contracts.submodular_opt import (
     MonotonicityCheckRequest,
     MonotonicityCheckResult,
@@ -12,7 +13,6 @@ from jacobian.contracts.submodular_opt import (
     SubmodularityCheckRequest,
     SubmodularityCheckResult,
 )
-from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
 from jacobian.domains.submodular_opt.operations import (
     check_monotonicity,

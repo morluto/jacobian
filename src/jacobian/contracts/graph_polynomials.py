@@ -73,9 +73,9 @@ class GraphPolynomialResult(ContractModel):
 
 
 __all__ = [
-    "GraphSpec",
     "GraphEdge",
     "GraphPolynomialRequest",
     "GraphPolynomialResult",
+    "GraphSpec",
     "PolynomialTerm",
 ]

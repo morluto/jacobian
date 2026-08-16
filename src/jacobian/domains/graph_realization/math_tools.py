@@ -9,8 +9,6 @@ from jacobian.contracts.graph_realization import (
     DegreeSequenceResult,
     GraphRealizationRequest,
     GraphRealizationResult,
-    GraphicalityCheckRequest,
-    GraphicalityCheckResult,
     RealizationCheckRequest,
     RealizationCheckResult,
 )
@@ -19,7 +17,6 @@ from jacobian.domains._examples import example
 from jacobian.domains.graph_realization.operations import (
     compute_degree_sequence,
     compute_graph_realization,
-    compute_graphicality_check,
     compute_realization_check,
 )
 from jacobian.math_tools import MathTool

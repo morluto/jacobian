@@ -80,9 +80,9 @@ class DiscrepancyOptimumResult(ContractModel):
 __all__ = [
     "MAX_GROUND_SET",
     "MAX_SETS",
-    "FiniteSetSystem",
     "DiscrepancyEvalRequest",
     "DiscrepancyEvalResult",
     "DiscrepancyOptimumRequest",
     "DiscrepancyOptimumResult",
+    "FiniteSetSystem",
 ]

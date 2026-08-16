@@ -75,12 +75,12 @@ class SubmodularityCheckResult(ContractModel):
 
 
 __all__ = [
+    "MonotonicityCheckRequest",
+    "MonotonicityCheckResult",
     "SetFunction",
     "SetFunctionEntry",
     "SetFunctionEvalRequest",
     "SetFunctionEvalResult",
-    "MonotonicityCheckRequest",
-    "MonotonicityCheckResult",
     "SubmodularityCheckRequest",
     "SubmodularityCheckResult",
 ]

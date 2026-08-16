@@ -7,8 +7,8 @@ from jacobian.contracts.base import ContractModel
 from jacobian.contracts.matrix_analysis import (
     FarkasCertificateRequest,
     FarkasCertificateResult,
-    SymmetricMatrixRequest,
     InertiaResult,
+    SymmetricMatrixRequest,
 )
 from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example

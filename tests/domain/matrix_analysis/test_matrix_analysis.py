@@ -1,6 +1,5 @@
 """Tests for matrix analysis operations."""
 
-import pytest
 
 from jacobian.contracts.matrix_analysis import (
     FarkasCertificateRequest,

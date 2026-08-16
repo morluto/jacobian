@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sympy
-from sympy import Symbol, sympify, simplify, Matrix, Rational, Poly
+from sympy import Symbol, simplify, sympify
 
 from jacobian.contracts.polynomial_maps import (
     CompositionRequest,
@@ -62,4 +62,4 @@ def compose_polynomials(request: CompositionRequest) -> CompositionResult:
     return CompositionResult(expression=str(composed))
 
 
-__all__ = ["evaluate_polynomial", "compute_jacobian", "compose_polynomials"]
+__all__ = ["compose_polynomials", "compute_jacobian", "evaluate_polynomial"]

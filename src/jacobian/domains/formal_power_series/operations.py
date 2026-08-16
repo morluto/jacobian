@@ -8,8 +8,8 @@ crosses the boundary.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from fractions import Fraction
-from typing import Sequence
 
 from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.exact import CanonicalRational
@@ -31,7 +31,6 @@ from jacobian.contracts.formal_power_series import (
     SeriesTruncateResult,
     TruncatedSeries,
 )
-
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -289,7 +288,7 @@ def compute_reversion(series: TruncatedSeries) -> SeriesReversionResult:
         #   compute G^j using g_0..g_{k-1} and read off coefficient of x^k
         g_powers = [[Fraction(0)] * (k + 1) for _ in range(k + 1)]
         g_powers[0] = [Fraction(1)] + [Fraction(0)] * k  # G^0 = 1
-        g_powers[1] = list(g[:k]) + [Fraction(0)]
+        g_powers[1] = [*list(g[:k]), Fraction(0)]
         for j in range(2, k + 1):
             g_powers[j] = [
                 sum(g_powers[j - 1][m] * g_powers[1][i - m] for m in range(i + 1))

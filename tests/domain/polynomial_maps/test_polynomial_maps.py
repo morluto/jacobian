@@ -1,6 +1,5 @@
 """Tests for polynomial map operations."""
 
-import pytest
 
 from jacobian.contracts.polynomial_maps import (
     CompositionRequest,
@@ -69,6 +68,6 @@ class TestComposition:
         )
         result = compose_polynomials(req)
         # (x+1)^2 = x^2 + 2*x + 1
-        from sympy import sympify, expand
+        from sympy import expand, sympify
         result_expr = expand(sympify(result.expression))
         assert result_expr == expand(sympify("(x + 1)**2"))

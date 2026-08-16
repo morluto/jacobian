@@ -24,7 +24,7 @@ def _build_matrix(request: SymmetricMatrixRequest) -> list[list[Fraction]]:
     return mat
 
 
-def compute_inertia(request: SymmetricMatrixRequest) -> InertiaResult:
+def compute_inertia(request: SymmetricMatrixRequest) -> InertiaResult:  # noqa: C901
     """Compute the Sylvester inertia of a symmetric rational matrix.
 
     Uses LDL decomposition (Gaussian elimination with symmetric pivoting)
@@ -33,22 +33,7 @@ def compute_inertia(request: SymmetricMatrixRequest) -> InertiaResult:
     n = request.dimension
     mat = _build_matrix(request)
 
-    # Perform LDL^T decomposition: A = L * D * L^T
-    # The diagonal of D gives us the inertia.
-    # We use fraction-free Gaussian elimination.
-    d = [Fraction(0)] * n
-    for i in range(n):
-        d[i] = mat[i][i]
-        for j in range(i):
-            # Subtract contributions from previous steps
-            pass  # Simple approach below
-
-    # Simpler approach: compute eigenvalue signs via leading principal minors
-    # using the explicit formula for inertia via Sylvester's criterion.
-    # Actually, let's use a direct LDL decomposition.
-    import copy
-
-    a = [row[:] for row in mat]  # copy
+    a = [row[:] for row in mat]
     n_pos = 0
     n_neg = 0
     n_zero = 0
@@ -62,11 +47,11 @@ def compute_inertia(request: SymmetricMatrixRequest) -> InertiaResult:
         else:
             n_zero += 1
 
-        if k < n - 1:
+        if k < n - 1 and a[k][k] != 0:
             for i in range(k + 1, n):
-                factor = a[i][k] / a[k][k] if a[k][k] != 0 else Fraction(0)
-                for j in range(k, n):
-                    a[i][j] = a[i][j] - factor * a[k][j]
+                factor = a[i][k] / a[k][k]
+                for _ in range(k, n):
+                    a[i][_] = a[i][_] - factor * a[k][_]
 
     if n_zero == 0:
         if n_neg == 0:
@@ -75,15 +60,12 @@ def compute_inertia(request: SymmetricMatrixRequest) -> InertiaResult:
             definiteness = "negative_definite"
         else:
             definiteness = "indefinite"
+    elif (n_pos == 0 and n_neg == 0) or n_neg == 0:
+        definiteness = "positive_semidefinite"
+    elif n_pos == 0:
+        definiteness = "negative_semidefinite"
     else:
-        if n_pos == 0 and n_neg == 0:
-            definiteness = "positive_semidefinite"  # all zeros
-        elif n_neg == 0:
-            definiteness = "positive_semidefinite"
-        elif n_pos == 0:
-            definiteness = "negative_semidefinite"
-        else:
-            definiteness = "indefinite"
+        definiteness = "indefinite"
 
     return InertiaResult(
         n_positive=n_pos,
@@ -101,53 +83,51 @@ def check_farkas_certificate(
     Given system Ax <= b and multiplier vector y >= 0, the certificate is
     valid if y^T A = 0 and y^T b < 0.
     """
-    from fractions import Fraction
-
     y = [m.as_fraction() for m in request.multipliers]
-    A = [[r.as_fraction() for r in row] for row in request.constraint_matrix]
+    constraint_matrix = [
+        [r.as_fraction() for r in row] for row in request.constraint_matrix
+    ]
     b = [r.as_fraction() for r in request.rhs_vector]
 
-    # Check y >= 0
-    for i, yi in enumerate(y):
+    for yi in y:
         if yi < 0:
+            ytb = sum(yi * bi for yi, bi in zip(y, b, strict=True))
             return FarkasCertificateResult(
                 valid=False,
-                yTa=(),
-                yTb=str(sum(yi * bi for yi, bi in zip(y, b, strict=True))),
+                y_t_a=(),
+                y_t_b=str(ytb),
                 reason="multiplier vector has a negative entry",
             )
 
-    # Compute y^T A (should be all zeros)
-    n_vars = len(A[0]) if A else 0
-    yTa = [Fraction(0)] * n_vars
+    n_vars = len(constraint_matrix[0]) if constraint_matrix else 0
+    yta = [Fraction(0)] * n_vars
     for i, yi in enumerate(y):
         for j in range(n_vars):
-            yTa[j] += yi * A[i][j]
+            yta[j] += yi * constraint_matrix[i][j]
 
-    yTa_str = tuple(str(v) for v in yTa)
+    ytb = sum(yi * bi for yi, bi in zip(y, b, strict=True))
 
-    # Compute y^T b (should be < 0)
-    yTb = sum(yi * bi for yi, bi in zip(y, b, strict=True))
+    yta_str = tuple(str(v) for v in yta)
 
-    if all(v == 0 for v in yTa) and yTb < 0:
+    if all(v == 0 for v in yta) and ytb < 0:
         return FarkasCertificateResult(
             valid=True,
-            yTa=yTa_str,
-            yTb=str(yTb),
+            y_t_a=yta_str,
+            y_t_b=str(ytb),
             reason="y^T A = 0 and y^T b < 0",
         )
     else:
         reasons = []
-        if any(v != 0 for v in yTa):
+        if any(v != 0 for v in yta):
             reasons.append("y^T A != 0")
-        if yTb >= 0:
+        if ytb >= 0:
             reasons.append("y^T b >= 0")
         return FarkasCertificateResult(
             valid=False,
-            yTa=yTa_str,
-            yTb=str(yTb),
+            y_t_a=yta_str,
+            y_t_b=str(ytb),
             reason="; ".join(reasons) if reasons else "unknown",
         )
 
 
-__all__ = ["compute_inertia", "check_farkas_certificate"]
+__all__ = ["check_farkas_certificate", "compute_inertia"]

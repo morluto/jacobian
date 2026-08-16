@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import model_validator
 
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalRational
@@ -26,7 +26,6 @@ class Triangle(ContractModel):
 
     @model_validator(mode="after")
     def require_non_degenerate(self) -> Self:
-        from fractions import Fraction
 
         ax, ay = self.a.x.as_fraction(), self.a.y.as_fraction()
         bx, by = self.b.x.as_fraction(), self.b.y.as_fraction()
@@ -84,12 +83,12 @@ class TriangleSimilarityResult(ContractModel):
 
 
 __all__ = [
-    "RationalPoint2D",
-    "Triangle",
-    "SegmentRatioRequest",
-    "SegmentRatioResult",
     "AngleEqualityRequest",
     "AngleEqualityResult",
+    "RationalPoint2D",
+    "SegmentRatioRequest",
+    "SegmentRatioResult",
+    "Triangle",
     "TriangleSimilarityRequest",
     "TriangleSimilarityResult",
 ]

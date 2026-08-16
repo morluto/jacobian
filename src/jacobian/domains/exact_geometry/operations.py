@@ -10,7 +10,6 @@ from jacobian.contracts.exact_geometry import (
     DistanceMultiplicityEntry,
     DistanceProfileRequest,
     DistanceProfileResult,
-    PointConfiguration,
 )
 
 
@@ -77,4 +76,4 @@ def compute_distance_graph(
     )
 
 
-__all__ = ["compute_distance_profile", "compute_distance_graph"]
+__all__ = ["compute_distance_graph", "compute_distance_profile"]

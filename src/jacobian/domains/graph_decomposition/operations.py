@@ -136,7 +136,7 @@ def compute_ear_decomposition(
     cycle = _find_cycle(g, start)
     used_vertices: set[int] = set(cycle)
     used_edges: set[tuple[int, int]] = set()
-    for u, v in zip(cycle, cycle[1:]):
+    for u, v in zip(cycle, cycle[1:]):  # noqa: RUF007, B905
         used_edges.add((min(u, v), max(u, v)))
     ears: list[tuple[int, ...]] = [tuple(cycle)]
 
@@ -147,7 +147,7 @@ def compute_ear_decomposition(
             break
         ears.append(ear)
         used_vertices.update(ear)
-        for u, v in zip(ear, ear[1:]):
+        for u, v in zip(ear, ear[1:]):  # noqa: RUF007, B905
             used_edges.add((min(u, v), max(u, v)))
 
     return EarDecompositionResult(ears=tuple(ears))
@@ -170,7 +170,7 @@ def _find_cycle(g: nx.Graph, start: int) -> list[int]:
     return cycle
 
 
-def _find_next_ear(
+def _find_next_ear(  # noqa: C901
     g: nx.Graph,
     used_vertices: set[int],
     used_edges: set[tuple[int, int]],

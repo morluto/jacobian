@@ -100,7 +100,7 @@ def test_unstructured_argument_claim_is_rejected(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     path = app / "submission.json"
     submission = json.loads(path.read_text())
-    submission["result"]["argument"]["implication"] = "does not force"
+    submission["result"]["argument"] = {"implication": "does not force"}
     _fixtures._write_json(path, submission)
     assert _verifier._run_verifier(task, app, logs).reward == 0.0
 

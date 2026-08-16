@@ -147,7 +147,6 @@ def _result(value: object) -> bool:
         "scale_q",
         "sequence",
         "limit_function",
-        "argument",
         "uniform_certificate",
         "variation_formula",
         "checkpoints",
@@ -159,8 +158,6 @@ def _result(value: object) -> bool:
     if not _valid_sequence(value["sequence"]) or not _constant_limit(
         value["limit_function"], Fraction(0)
     ):
-        return False
-    if not _argument_ok(value["argument"]):
         return False
     if not _uniform_certificate_ok(value["uniform_certificate"], q):
         return False

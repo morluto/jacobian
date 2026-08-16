@@ -86,7 +86,6 @@ def _derive_submission_schema(contract: dict[str, Any]) -> dict[str, Any] | None
     witness = contract.get("witness") or {}
     if isinstance(witness, dict) and witness.get("max_items", 0):
         allowed_paths = witness.get("allowed_paths", [])
-        media_types = witness.get("media_types", [])
         digest_pattern = witness.get("digest_pattern", r"^sha256:[0-9a-f]{64}$")
         min_items = witness.get("min_items", 0)
         max_items = witness.get("max_items", 0)

@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact semantic verifier for an integer-to-natural perturbation-domain mismatch.
 LABEL jacobian.task="jacobian/integer-perturbation-domain-audit" \
-      jacobian.checksum="a052b3c99c0e81b3815950c3d932c6fa665e26915ce2985856e348e168ab9d74"
+      jacobian.checksum="b6d78e538bd1d37bce68ab282060ff02606a359d8061fc63da559c0b0d3a8e4d"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh

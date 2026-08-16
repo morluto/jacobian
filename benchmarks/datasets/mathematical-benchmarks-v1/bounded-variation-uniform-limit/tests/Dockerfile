@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="d140fbc25f03ae1f1e7acb82304b5439dab8e7f5fee086658328cdc3c38e5f4a"
+LABEL jacobian.checksum="73616faf3047f57b875764568972d72df2129b45eb777e634f394e3d81b6da3c"
 # Exact verifier for bounded-variation uniform-limit certificates.
 LABEL jacobian.task="jacobian/bounded-variation-uniform-limit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/

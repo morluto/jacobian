@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="85fe8f691f9eb76538dfb2e936edde8b900ffc662122f85a4b0bb3128cc7972e"
+LABEL jacobian.checksum="cc0214e97c0a810b3b5545e19b99b74a17737e981b2715f4391377874ca7ba6a"
 LABEL jacobian.task="jacobian/rsa-exponent-domain-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

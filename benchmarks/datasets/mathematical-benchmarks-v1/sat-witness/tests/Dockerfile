@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 LABEL jacobian.task="jacobian/sat-witness" \
-      jacobian.checksum="b430df65d1182a59ef14fd4d37d8fb2c75a726dcd3617c2acf13143aaec63133"
+      jacobian.checksum="19bfd2db2458cc2cad32421f24c892fdaebdd0c58ddd62f1197f7f23bda36d36"
 COPY authorized_records.json expected.json mathematical-benchmarks-v1-sat-witness-input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY mathematical-benchmarks-v1-sat-witness-input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

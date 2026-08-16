@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="cbe52188a3db4439b7c2907d78072478c526658e6fe6d261d7a65b7509f9aee6"
+LABEL jacobian.checksum="2186ff2f3fb14f1b0af62481bafce1941f644496024b2f0e9abcbd3833cea95a"
 # Exact affine-arrangement verifier for cube and tetrahedron planes.
 LABEL jacobian.task="jacobian/hyperplane-arrangement-regions"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/

@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 LABEL jacobian.task="jacobian/hodge-blowup-divisor-certificate" \
-      jacobian.checksum="787c85dcff98a84de45bc749fbb6c133e6c718b896a3092856c753b82151fd9d"
+      jacobian.checksum="e3ae6356416daef3aa1784dd9221c1ba2bc3cdf71971367c0406670e6818d653"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 COPY input.json public_contract.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

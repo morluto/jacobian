@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact semantic-alignment verifier for an autoformalized orthogonality claim.
 LABEL jacobian.task="jacobian/autoformalization-semantic-audit" \
-      jacobian.checksum="5ad46ba7646d85d2053cb8ace4182bd9436dc6a3b3dfed60d13e630b605bf6ae"
+      jacobian.checksum="fe295fbd12b335b43b6b9fea6ced32a1eeff4836f87a5179fcc6b71631911618"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

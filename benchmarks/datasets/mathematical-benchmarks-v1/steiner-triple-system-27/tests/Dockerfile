@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exhaustive finite-design verifier for a Steiner triple system.
 LABEL jacobian.task="jacobian/steiner-triple-system-27" \
-      jacobian.checksum="13dc7006a5ab86f2a033907652e9db768349329ec64e84db4ea6c65a0682dc90"
+      jacobian.checksum="7fcb97f36c66a1ff235ad584157bfc9a659d5daa022684c267e3f1c351182ca7"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

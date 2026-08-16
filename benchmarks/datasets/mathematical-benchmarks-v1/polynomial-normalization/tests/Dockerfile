@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Build context key: polynomial normalization.
 LABEL jacobian.task="jacobian/polynomial-normalization" \
-      jacobian.checksum="87506e31a3fd0f8924cc7890693b66a2c445a3e9546fd156970006ed433d1055"
+      jacobian.checksum="d9c591de723936e9a55f540838ce238ed68ce3d54ebbc6450a812d134af5ccab"
 COPY authorized_record.json mathematical-benchmarks-v1-polynomial-normalization-expected.json mathematical-benchmarks-v1-polynomial-normalization-input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY mathematical-benchmarks-v1-polynomial-normalization-input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

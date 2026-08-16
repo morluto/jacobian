@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact rational verifier for a piecewise-linear analysis construction.
 LABEL jacobian.task="jacobian/nondifferentiable-maximum-construction" \
-      jacobian.checksum="f28edd9e836e4c0d442ccd13b6a94dfc2e590af2fd807f694c815e62f42625c0"
+      jacobian.checksum="07d99d7d0ab6924df23b10df0a52befb80be20691fe32c5122276013a7b23e6d"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

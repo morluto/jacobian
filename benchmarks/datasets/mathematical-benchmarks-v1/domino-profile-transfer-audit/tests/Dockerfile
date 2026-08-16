@@ -1,5 +1,5 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
-LABEL jacobian.checksum="d0a681bda282a3a72e3dcf23025c96f6c9e79c0c89c0f45c00fa688e25b5b348"
+LABEL jacobian.checksum="20b4c25b86d34514d96f0130e2b2792ffc4a83febc05d2b59be9c5d6ed90d4d1"
 RUN uv pip install --system --no-cache attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 LABEL jacobian.task="jacobian/domino-profile-transfer-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/

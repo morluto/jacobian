@@ -34,7 +34,7 @@ def test_presentation_identity_binds_modulus_generator_basis_and_encoding() -> N
     presentation = _presentation()
 
     assert presentation.degree == 3
-    assert presentation.order == presentation.characteristic ** presentation.degree
+    assert presentation.order == presentation.characteristic**presentation.degree
     assert presentation.ordered_basis == ("1", "a", "a^2")
     assert presentation.digest == _presentation().digest
     assert presentation.digest != _presentation(generator="z").digest

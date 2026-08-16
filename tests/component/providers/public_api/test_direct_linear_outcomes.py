@@ -69,6 +69,17 @@ def test_rational_linear_program_returns_an_optimum_not_a_certificate() -> None:
     )
 
     assert result.status == "OPTIMAL"
+    # Guard the public wire shape: an optimum carries exactly the primal/dual
+    # fields and no certificate, assurance, or other non-mathematical metadata.
+    assert set(result.model_dump(mode="json")) == {
+        "status",
+        "primal_candidate",
+        "dual_candidate",
+        "primal_objective",
+        "dual_objective",
+        "primal_residuals",
+        "dual_slacks",
+    }
     assert [v.model_dump(mode="json") for v in result.primal_candidate] == [q(1)]
     assert [v.model_dump(mode="json") for v in result.dual_candidate] == [q(1)]
     assert result.primal_objective.model_dump(mode="json") == q(1)

@@ -67,10 +67,14 @@ def test_canonical_complex_composes_as_the_authoritative_object() -> None:
         vertices=("c", "a", "b"),
         facets=(("b", "a"), ("c", "b"), ("c", "a")),
     )
-    canonical = _CANALOG.operation("topology.simplicial_complex.canonicalize").run(request)
+    canonical = _CANALOG.operation("topology.simplicial_complex.canonicalize").run(
+        request
+    )
     complex_ = canonical.complex
 
-    chain_operation = _CANALOG.operation("topology.simplicial_complex.chain_complex.compute")
+    chain_operation = _CANALOG.operation(
+        "topology.simplicial_complex.chain_complex.compute"
+    )
     chain = chain_operation.run(
         ChainComplexRequest(
             complex=complex_,
@@ -80,7 +84,9 @@ def test_canonical_complex_composes_as_the_authoritative_object() -> None:
     )
 
     homology_operation = _CANALOG.operation("topology.simplicial_homology.compute")
-    homology = homology_operation.run(SimplicialHomologyRequest(complex=complex_, prime=2))
+    homology = homology_operation.run(
+        SimplicialHomologyRequest(complex=complex_, prime=2)
+    )
 
     assert chain.complex_digest == complex_.complex_digest
     assert homology.complex_digest == complex_.complex_digest
@@ -96,7 +102,9 @@ def test_chain_bounds_are_checked_after_materialization_but_before_computation()
     )
     complex_ = _canonical_complex(vertices, facets)
 
-    assert complex_.closure_size == 8 * (2**8 - 1)  # 8 simplices, each closing to 2^8-1 faces
+    assert complex_.closure_size == 8 * (
+        2**8 - 1
+    )  # 8 simplices, each closing to 2^8-1 faces
     with pytest.raises(ValidationError, match="chain group"):
         SimplicialHomologyRequest(complex=complex_, prime=2)
 

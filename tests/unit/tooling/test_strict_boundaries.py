@@ -8,6 +8,7 @@ existing ``HarborSuiteError`` convention, plus the atomic allow_apt fix.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -39,14 +40,10 @@ from tests.unit.tooling.harbor_suite_support import (
 # ---------------------------------------------------------------------------
 
 
-import hashlib
-
-
 def _json_digest(value: object) -> str:
     """Compute the canonical plan digest used by the held-out run plan loader."""
     encoded = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
-
 
 
 def test_task_environment_section_rejects_extra_fields() -> None:

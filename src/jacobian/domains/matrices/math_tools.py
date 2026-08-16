@@ -112,9 +112,21 @@ MATRIX_DETERMINANT_COMPUTE = matrix_operation(
             {
                 "matrix": {
                     "entries": [
-                        [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
-                        [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
-                        [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+                        [
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                        [
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                        [
+                            {"num": "0", "den": "1"},
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
                     ]
                 }
             },
@@ -197,12 +209,28 @@ MATRIX_OPERATIONS = (
                 {
                     "matrix": {
                         "entries": [
-                            [{"num": "2", "den": "1"}, {"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
-                            [{"num": "0", "den": "1"}, {"num": "3", "den": "1"}, {"num": "0", "den": "1"}],
-                            [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}, {"num": "4", "den": "1"}],
+                            [
+                                {"num": "2", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "3", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "4", "den": "1"},
+                            ],
                         ]
                     },
-                    "rhs": [{"num": "4", "den": "1"}, {"num": "6", "den": "1"}, {"num": "8", "den": "1"}],
+                    "rhs": [
+                        {"num": "4", "den": "1"},
+                        {"num": "6", "den": "1"},
+                        {"num": "8", "den": "1"},
+                    ],
                 },
             ),
         ),
@@ -226,7 +254,11 @@ MATRIX_OPERATIONS = (
             example(
                 "adjugate_3x3_diagonal",
                 "The matrix must be square; here a 3x3 diagonal matrix.",
-                {"matrix": {"entries": [["2", "0", "0"], ["0", "3", "0"], ["0", "0", "4"]]}},
+                {
+                    "matrix": {
+                        "entries": [["2", "0", "0"], ["0", "3", "0"], ["0", "0", "4"]]
+                    }
+                },
             ),
         ),
     ),
@@ -249,7 +281,11 @@ MATRIX_OPERATIONS = (
             example(
                 "inverse_diagonal_3x3",
                 "The matrix must be square and nonsingular; here a 3x3 diagonal matrix.",
-                {"matrix": {"entries": [["2", "0", "0"], ["0", "3", "0"], ["0", "0", "4"]]}},
+                {
+                    "matrix": {
+                        "entries": [["2", "0", "0"], ["0", "3", "0"], ["0", "0", "4"]]
+                    }
+                },
             ),
         ),
     ),
@@ -272,7 +308,11 @@ MATRIX_OPERATIONS = (
             example(
                 "trace_diagonal_3x3",
                 "The matrix must be square; here the trace of a 3x3 diagonal is 6.",
-                {"matrix": {"entries": [["1", "0", "0"], ["0", "2", "0"], ["0", "0", "3"]]}},
+                {
+                    "matrix": {
+                        "entries": [["1", "0", "0"], ["0", "2", "0"], ["0", "0", "3"]]
+                    }
+                },
             ),
         ),
     ),
@@ -447,9 +487,21 @@ MATRIX_OPERATIONS = (
                 {
                     "matrix": {
                         "entries": [
-                            [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
-                            [{"num": "0", "den": "1"}, {"num": "2", "den": "1"}, {"num": "0", "den": "1"}],
-                            [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}, {"num": "3", "den": "1"}],
+                            [
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "2", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "3", "den": "1"},
+                            ],
                         ]
                     }
                 },
@@ -513,9 +565,21 @@ MATRIX_OPERATIONS = (
                 {
                     "matrix": {
                         "entries": [
-                            [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
-                            [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
-                            [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+                            [
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
                         ]
                     }
                 },

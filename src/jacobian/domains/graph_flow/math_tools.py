@@ -86,9 +86,21 @@ GRAPH_FLOW_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     "graph": {
                         "vertex_count": 4,
                         "edges": [
-                            {"source": 0, "target": 1, "capacity": {"num": "5", "den": "1"}},
-                            {"source": 1, "target": 2, "capacity": {"num": "3", "den": "1"}},
-                            {"source": 2, "target": 3, "capacity": {"num": "4", "den": "1"}},
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "capacity": {"num": "5", "den": "1"},
+                            },
+                            {
+                                "source": 1,
+                                "target": 2,
+                                "capacity": {"num": "3", "den": "1"},
+                            },
+                            {
+                                "source": 2,
+                                "target": 3,
+                                "capacity": {"num": "4", "den": "1"},
+                            },
                         ],
                     },
                     "source": 0,
@@ -139,9 +151,21 @@ GRAPH_FLOW_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     "graph": {
                         "vertex_count": 4,
                         "edges": [
-                            {"source": 0, "target": 1, "capacity": {"num": "5", "den": "1"}},
-                            {"source": 1, "target": 2, "capacity": {"num": "3", "den": "1"}},
-                            {"source": 2, "target": 3, "capacity": {"num": "4", "den": "1"}},
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "capacity": {"num": "5", "den": "1"},
+                            },
+                            {
+                                "source": 1,
+                                "target": 2,
+                                "capacity": {"num": "3", "den": "1"},
+                            },
+                            {
+                                "source": 2,
+                                "target": 3,
+                                "capacity": {"num": "4", "den": "1"},
+                            },
                         ],
                     },
                     "source": 0,

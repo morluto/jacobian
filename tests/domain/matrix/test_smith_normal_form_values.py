@@ -5,14 +5,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.contracts.exact import CanonicalInteger
 from jacobian.math.matrices.values import IntegerMatrix, SmithNormalForm
 
 
 def _matrix(entries: list[list[int]]) -> IntegerMatrix:
-    return IntegerMatrix(entries=tuple(
-        tuple(str(v) for v in row) for row in entries
-    ))
+    return IntegerMatrix(entries=tuple(tuple(str(v) for v in row) for row in entries))
 
 
 def test_smith_normal_form_rejects_rank_exceeding_dimensions() -> None:

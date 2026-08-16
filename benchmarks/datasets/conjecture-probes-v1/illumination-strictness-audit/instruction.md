@@ -10,7 +10,7 @@ Submit:
 
 For a vertex `v` and direction `d`, the weak test is `v_i*d_i <= 0` for all coordinates; strict illumination is `v_i*d_i < 0` for all coordinates. The verifier reconstructs every pair. It also certifies minimality for the cube: one strict sign direction can illuminate at most one vertex.
 
-This Assurance result is exact for one cube only and does not establish the Illumination Conjecture in general. Claim at most `COMPUTED`.
+This Assurance result is exact for one cube only and does not establish the Illumination Conjecture in general.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

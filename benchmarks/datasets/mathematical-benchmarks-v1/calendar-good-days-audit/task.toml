@@ -21,7 +21,7 @@ category = "mathematics"
 tags = ["proof-audit", "bounded-verification", "divisibility", "offline"]
 case_version = "mathematical-benchmarks-v1"
 contamination_class = "public-dataset-derived-proof-audit"
-fixture_digest = "sha256:84643e15b984a6f6b9515915a85a8d22e723d35f43b236b1692c0dcc425fc774"
+fixture_digest = "sha256:a6c495e9b951f5416a87bce5858ef1714d0c867af1e0f6f4147c23dfb5665dd8"
 derivation = "Derived from BrokenMath benchmark row 84 with an independently exhaustive oracle."
 
 [agent]

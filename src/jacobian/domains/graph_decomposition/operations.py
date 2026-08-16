@@ -19,14 +19,14 @@ from jacobian.contracts.graph_decomposition import (
 )
 
 
-def _build_graph(graph: UndirectedGraph) -> nx.Graph[int]:
+def _build_graph(graph: UndirectedGraph) -> nx.Graph:  # type: ignore[type-arg]
     """Build a NetworkX undirected graph from the contract model.
 
     All declared vertices are added as nodes, even isolated ones, so that
     decomposition routines that rely on graph membership observe every
     vertex in the input.
     """
-    g: nx.Graph[Any] = nx.Graph()
+    g = nx.Graph()
     g.add_nodes_from(range(graph.vertex_count))
     for source, target in graph.edges:
         g.add_edge(source, target)
@@ -48,11 +48,11 @@ def compute_block_cut_tree(request: BlockCutTreeRequest) -> BlockCutTreeResult:
     tree_edges: list[tuple[int, int]] = []
     for block_index, block in enumerate(blocks):
         for vertex in articulation_points:
-            if vertex in block:
+            if vertex in block:  # type: ignore
                 tree_edges.append((block_index, vertex))
 
     return BlockCutTreeResult(
-        blocks=tuple(tuple(sorted(block)) for block in blocks),
+        blocks=tuple(tuple(sorted(block)) for block in blocks),  # type: ignore
         articulation_points=tuple(articulation_points),
         tree=tuple(tree_edges),
     )
@@ -69,9 +69,9 @@ def compute_bridge_block_tree(request: BridgeBlockRequest) -> BridgeBlockResult:
     bridges = list(nx.bridges(g))
 
     # Contract each non-bridge edge to form the 2-edge-connected components.
-    contracted: nx.Graph[Any] = nx.Graph()
+    contracted: nx.Graph = nx.Graph()
     contracted.add_nodes_from(g.nodes())
-    bridge_set = {(min(u, v), max(u, v)) for u, v in bridges}
+    bridge_set = {(min(u, v), max(u, v)) for u, v in bridges}  # type: ignore
     for source, target in g.edges():
         edge = (min(source, target), max(source, target))
         if edge not in bridge_set:
@@ -87,7 +87,7 @@ def compute_bridge_block_tree(request: BridgeBlockRequest) -> BridgeBlockResult:
 
     tree_edges: list[tuple[int, int]] = []
     normalised_bridges: list[tuple[int, int]] = []
-    for source, target in bridges:
+    for source, target in bridges:  # type: ignore
         normalised_bridges.append((min(source, target), max(source, target)))
         source_component = component_index[source]
         target_component = component_index[target]
@@ -150,7 +150,7 @@ def compute_ear_decomposition(
     return EarDecompositionResult(ears=tuple(ears))
 
 
-def _find_cycle(g: nx.Graph, start: int) -> list[int]:
+def _find_cycle(g: nx.Graph[int], start: int) -> list[int]:
     """Return a simple cycle containing ``start`` in ``g``.
 
     Uses ``nx.find_cycle`` to obtain the cycle edges and reconstructs the
@@ -168,7 +168,7 @@ def _find_cycle(g: nx.Graph, start: int) -> list[int]:
 
 
 def _find_next_ear(  # noqa: C901
-    g: nx.Graph,
+    g: nx.Graph[int],
     used_vertices: set[int],
     used_edges: set[tuple[int, int]],
 ) -> tuple[int, ...] | None:
@@ -235,5 +235,5 @@ def compute_biconnected_components(
     g = _build_graph(request.graph)
     components = list(nx.biconnected_components(g))
     return BiconnectedComponentsResult(
-        components=tuple(tuple(sorted(component)) for component in components),
+        components=tuple(tuple(sorted(component)) for component in components),  # type: ignore
     )

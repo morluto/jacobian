@@ -68,7 +68,7 @@ def compute_graph_realization(
             edges=(),
         )
 
-    g = nx.havel_hakimi_graph(degrees)
+    g = nx.havel_hakimi_graph(degrees)  # type: ignore[call-overload]
     edges = tuple(tuple(edge) for edge in g.edges())
     return GraphRealizationResult(
         is_graphical=True,

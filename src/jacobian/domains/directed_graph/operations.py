@@ -55,7 +55,7 @@ def compute_strongly_connected_components(
     """
     g = _build_digraph(request.graph)
     sccs = list(nx.strongly_connected_components(g))
-    components = tuple(sorted(component) for component in sccs)
+    components = tuple(tuple(sorted(component)) for component in sccs)
     return StronglyConnectedComponentsResult(
         component_count=len(components),
         components=components,
@@ -74,7 +74,7 @@ def compute_condensation(request: CondensationRequest) -> CondensationResult:
     sccs = list(nx.strongly_connected_components(g))
     condensation = nx.condensation(g, sccs)
 
-    components = tuple(sorted(component) for component in sccs)
+    components = tuple(tuple(sorted(component)) for component in sccs)
 
     edges: list[CondensationEdge] = [
         CondensationEdge(source=u, target=v) for u, v in condensation.edges()

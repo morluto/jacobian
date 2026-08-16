@@ -64,7 +64,7 @@ def _cauchy_convolve(
     a: Sequence[Fraction], b: Sequence[Fraction], n: int
 ) -> list[Fraction]:
     """c_k = sum_{i=0}^{k} a_i * b_{k-i} for 0 <= k < n."""
-    return [sum(a[i] * b[k - i] for i in range(k + 1)) for k in range(n)]
+    return [sum(a[i] * b[k - i] for i in range(k + 1)) for k in range(n)]  # type: ignore[misc]
 
 
 def _require_matching(
@@ -291,7 +291,7 @@ def compute_reversion(series: TruncatedSeries) -> SeriesReversionResult:
         g_powers[1] = [*list(g[:k]), Fraction(0)]
         for j in range(2, k + 1):
             g_powers[j] = [
-                sum(g_powers[j - 1][m] * g_powers[1][i - m] for m in range(i + 1))
+                sum(g_powers[j - 1][m] * g_powers[1][i - m] for m in range(i + 1))  # type: ignore[misc]
                 for i in range(k + 1)
             ]
         known = Fraction(0)

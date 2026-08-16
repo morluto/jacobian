@@ -1,10 +1,10 @@
 {
   "result": {
+    "status": "SATISFIABLE",
     "assignment": {
       "a": true,
       "b": false,
       "c": true
-    },
-    "status": "SATISFIABLE"
+    }
   }
 }

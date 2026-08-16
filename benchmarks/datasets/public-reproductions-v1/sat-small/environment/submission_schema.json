@@ -3,40 +3,53 @@
   "additionalProperties": false,
   "properties": {
     "result": {
-      "additionalProperties": false,
-      "properties": {
-        "assignment": {
+      "oneOf": [
+        {
           "additionalProperties": false,
           "properties": {
-            "a": {
-              "type": "boolean"
+            "assignment": {
+              "additionalProperties": false,
+              "properties": {
+                "a": {
+                  "type": "boolean"
+                },
+                "b": {
+                  "type": "boolean"
+                },
+                "c": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "a",
+                "b",
+                "c"
+              ],
+              "type": "object"
             },
-            "b": {
-              "type": "boolean"
-            },
-            "c": {
-              "type": "boolean"
+            "status": {
+              "const": "SATISFIABLE"
             }
           },
           "required": [
-            "a",
-            "b",
-            "c"
+            "status",
+            "assignment"
           ],
           "type": "object"
         },
-        "status": {
-          "enum": [
-            "SATISFIABLE",
-            "UNSATISFIABLE"
-          ]
+        {
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "const": "UNSATISFIABLE"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
         }
-      },
-      "required": [
-        "status",
-        "assignment"
-      ],
-      "type": "object"
+      ]
     }
   },
   "required": [

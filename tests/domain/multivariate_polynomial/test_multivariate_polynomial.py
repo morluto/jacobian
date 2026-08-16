@@ -140,7 +140,7 @@ class TestMultivariateGcd:
         """Operations fail closed on oversized inputs."""
 
         # Build >512 unique monomials (i, 0) for i = 599..0 (descending order).
-        terms = tuple((f"{i+1}/1", (i, 0)) for i in range(599, -1, -1))
+        terms = tuple((f"{i + 1}/1", (i, 0)) for i in range(599, -1, -1))
         left = _poly(("x", "y"), terms[:600])
         right = _poly(("x", "y"), (("1/1", (0, 0)),))
         with pytest.raises(ValueError, match="term operation budget"):
@@ -195,9 +195,7 @@ class TestMultivariateDivision:
         )
         right = _poly(("x", "y"), (("1/1", (1, 1)), ("-1/1", (0, 0))))
         result = compute_multivariate_division(
-            MultivariateDivisionRequest(
-                left=left, right=right, monomial_order="grlex"
-            )
+            MultivariateDivisionRequest(left=left, right=right, monomial_order="grlex")
         )
         assert result.monomial_order == "grlex"
 
@@ -268,7 +266,10 @@ class TestMultivariateResultant:
         value = result.resultant.value
         assert value.variables == ("y",)
         # The resultant is 1 - y^2, i.e. terms {y^2: -1, y^0: 1}.
-        terms = {t.exponents[0]: (t.coefficient.num, t.coefficient.den) for t in value.polynomial.terms}
+        terms = {
+            t.exponents[0]: (t.coefficient.num, t.coefficient.den)
+            for t in value.polynomial.terms
+        }
         assert terms.get(2) == ("-1", "1")
         assert terms.get(0) == ("1", "1")
 

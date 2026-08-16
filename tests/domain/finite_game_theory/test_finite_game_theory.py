@@ -1,6 +1,5 @@
 """Tests for finite game theory operations."""
 
-
 from jacobian.contracts.finite_game_theory import (
     PayoffMatrix,
     ZeroSumGameRequest,
@@ -18,8 +17,10 @@ class TestBestResponse:
                 n_rows=2,
                 n_cols=2,
                 entries=(
-                    {"num": "3", "den": "1"}, {"num": "0", "den": "1"},
-                    {"num": "0", "den": "1"}, {"num": "2", "den": "1"},
+                    {"num": "3", "den": "1"},
+                    {"num": "0", "den": "1"},
+                    {"num": "0", "den": "1"},
+                    {"num": "2", "den": "1"},
                 ),
             ),
         )
@@ -34,8 +35,10 @@ class TestNashEquilibrium:
                 n_rows=2,
                 n_cols=2,
                 entries=(
-                    {"num": "1", "den": "1"}, {"num": "1", "den": "1"},
-                    {"num": "0", "den": "1"}, {"num": "0", "den": "1"},
+                    {"num": "1", "den": "1"},
+                    {"num": "1", "den": "1"},
+                    {"num": "0", "den": "1"},
+                    {"num": "0", "den": "1"},
                 ),
             ),
         )

@@ -1,6 +1,5 @@
 """Tests for multiple testing operations."""
 
-
 from jacobian.contracts.multiple_testing import (
     BHStepUpRequest,
     FDPRequest,

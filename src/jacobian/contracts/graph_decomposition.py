@@ -26,8 +26,7 @@ class UndirectedGraph(ContractModel):
         seen: set[tuple[int, int]] = set()
         for source, target in self.edges:
             if not (
-                0 <= source < self.vertex_count
-                and 0 <= target < self.vertex_count
+                0 <= source < self.vertex_count and 0 <= target < self.vertex_count
             ):
                 raise ValueError("edge vertices must be in 0..vertex_count-1")
             if source == target:
@@ -90,9 +89,7 @@ class EarDecompositionResult(ContractModel):
     """
 
     ears: tuple[tuple[int, ...], ...] = Field(default=())
-    convention: Literal["JACOBIAN_EAR_DECOMPOSITION"] = (
-        "JACOBIAN_EAR_DECOMPOSITION"
-    )
+    convention: Literal["JACOBIAN_EAR_DECOMPOSITION"] = "JACOBIAN_EAR_DECOMPOSITION"
 
 
 class BiconnectedComponentsRequest(ContractModel):

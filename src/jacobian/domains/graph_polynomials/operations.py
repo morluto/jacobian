@@ -51,9 +51,7 @@ def compute_tutte_polynomial(request: GraphPolynomialRequest) -> GraphPolynomial
         if coeff == 0:
             continue
         x_deg, y_deg = monom
-        terms.append(
-            PolynomialTerm(coefficient=int(coeff), degree=x_deg * 100 + y_deg)
-        )
+        terms.append(PolynomialTerm(coefficient=int(coeff), degree=x_deg * 100 + y_deg))
     if not terms:
         terms.append(PolynomialTerm(coefficient=0, degree=0))
     return GraphPolynomialResult(terms=tuple(sorted(terms, key=lambda t: t.degree)))
@@ -101,9 +99,7 @@ def compute_matching_polynomial(
     g = _build_graph(request)
     n = g.number_of_nodes()
     if n == 0:
-        return GraphPolynomialResult(
-            terms=(PolynomialTerm(coefficient=1, degree=0),)
-        )
+        return GraphPolynomialResult(terms=(PolynomialTerm(coefficient=1, degree=0),))
 
     edges = list(g.edges())
     matching_counts = [0] * (n + 1)

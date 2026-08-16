@@ -22,7 +22,9 @@ class HypothesisSpec(ContractModel):
 class BHStepUpRequest(ContractModel):
     """Benjamini-Hochberg step-up procedure."""
 
-    hypotheses: tuple[HypothesisSpec, ...] = Field(min_length=1, max_length=MAX_HYPOTHESES)
+    hypotheses: tuple[HypothesisSpec, ...] = Field(
+        min_length=1, max_length=MAX_HYPOTHESES
+    )
     level: CanonicalRational
 
     @model_validator(mode="after")

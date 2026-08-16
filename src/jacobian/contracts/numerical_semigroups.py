@@ -17,7 +17,9 @@ MAX_FACTOR_SEARCH = 100
 class NumericalSemigroupRequest(ContractModel):
     """A numerical semigroup defined by a finite set of positive generators."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(min_length=1, max_length=MAX_GENERATORS)
+    generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
 
     @model_validator(mode="after")
     def require_positive_generators(self) -> Self:
@@ -30,7 +32,9 @@ class NumericalSemigroupRequest(ContractModel):
 class NumericalSemigroupSummaryRequest(ContractModel):
     """Compute the full summary of a numerical semigroup."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(min_length=1, max_length=MAX_GENERATORS)
+    generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
 
 
 class NumericalSemigroupSummaryResult(ContractModel):
@@ -48,7 +52,9 @@ class NumericalSemigroupSummaryResult(ContractModel):
 class SemigroupMembershipRequest(ContractModel):
     """Check membership of an integer in a numerical semigroup."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(min_length=1, max_length=MAX_GENERATORS)
+    generators: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
     value: CanonicalInteger
 
 

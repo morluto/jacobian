@@ -90,7 +90,10 @@ POLYNOMIAL_MAP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "Jacobian of [x**2, y**2] w.r.t. (x, y).",
                 {
                     "input_variables": ["x", "y"],
-                    "output_polynomials": [{"expression": "x**2"}, {"expression": "y**2"}],
+                    "output_polynomials": [
+                        {"expression": "x**2"},
+                        {"expression": "y**2"},
+                    ],
                 },
             ),
         ),

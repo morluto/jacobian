@@ -1,6 +1,5 @@
 """Tests for arithmetic counting operations."""
 
-
 from jacobian.contracts.arithmetic_counting import (
     CongruenceBoxCountRequest,
     FloorSumRequest,
@@ -35,7 +34,14 @@ class TestFloorSum:
 class TestCongruenceBoxCount:
     def test_simple(self):
         req = CongruenceBoxCountRequest(
-            x_lo=0, x_hi=5, y_lo=0, y_hi=5, u=1, v=1, c=0, modulus=3,
+            x_lo=0,
+            x_hi=5,
+            y_lo=0,
+            y_hi=5,
+            u=1,
+            v=1,
+            c=0,
+            modulus=3,
         )
         result = compute_congruence_box_count(req)
         # Count (x+y) % 3 == 0 for x,y in [0,5]
@@ -43,4 +49,3 @@ class TestCongruenceBoxCount:
         # x=0: y=0,3; x=1: y=2,5; x=2: y=1,4; x=3: y=0,3; x=4: y=2,5; x=5: y=1,4
         # => 2 per x => 12 total
         assert result.count == 12
-

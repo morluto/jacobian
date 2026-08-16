@@ -73,9 +73,7 @@ class MobiusTransformResult(ContractModel):
     values: tuple[CanonicalRational, ...]
     length: int
     inverse: bool
-    convention: Literal["JACOBIAN_MOBIUS_TRANSFORM"] = (
-        "JACOBIAN_MOBIUS_TRANSFORM"
-    )
+    convention: Literal["JACOBIAN_MOBIUS_TRANSFORM"] = "JACOBIAN_MOBIUS_TRANSFORM"
 
 
 class SummatoryFunctionRequest(ContractModel):
@@ -97,9 +95,7 @@ class SummatoryFunctionResult(ContractModel):
 
     values: tuple[CanonicalRational, ...]
     length: int
-    convention: Literal["JACOBIAN_SUMMATORY_FUNCTION"] = (
-        "JACOBIAN_SUMMATORY_FUNCTION"
-    )
+    convention: Literal["JACOBIAN_SUMMATORY_FUNCTION"] = "JACOBIAN_SUMMATORY_FUNCTION"
 
 
 class DirichletInverseRequest(ContractModel):

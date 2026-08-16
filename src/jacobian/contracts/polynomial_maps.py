@@ -50,7 +50,9 @@ class JacobianRequest(ContractModel):
     """Compute the Jacobian matrix of a polynomial map."""
 
     input_variables: tuple[str, ...] = Field(min_length=1, max_length=20)
-    output_polynomials: tuple[RationalPolynomialExpr, ...] = Field(min_length=1, max_length=20)
+    output_polynomials: tuple[RationalPolynomialExpr, ...] = Field(
+        min_length=1, max_length=20
+    )
 
 
 class JacobianResult(ContractModel):

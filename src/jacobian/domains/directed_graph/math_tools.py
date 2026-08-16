@@ -98,7 +98,7 @@ DIRECTED_GRAPH_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "simple_cycle_scc",
                 "Compute SCCs of a graph containing a simple cycle.",
                 {
- "graph": {
+                    "graph": {
                         "vertex_count": 4,
                         "edges": [[0, 1], [1, 2], [2, 0], [2, 3]],
                     },

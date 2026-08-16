@@ -1,6 +1,5 @@
 """Tests for discrepancy theory operations."""
 
-
 from jacobian.contracts.discrepancy_theory import (
     DiscrepancyEvalRequest,
     DiscrepancyOptimumRequest,

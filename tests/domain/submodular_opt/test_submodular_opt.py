@@ -1,6 +1,5 @@
 """Tests for submodular optimization operations."""
 
-
 from jacobian.contracts.submodular_opt import (
     MonotonicityCheckRequest,
     SetFunction,
@@ -20,7 +19,9 @@ def _make_uniform_function(n: int) -> SetFunction:
     entries = []
     for mask in range(1 << n):
         subset = tuple(i for i in range(n) if mask & (1 << i))
-        entries.append(SetFunctionEntry(subset=subset, value={"num": str(len(subset)), "den": "1"}))
+        entries.append(
+            SetFunctionEntry(subset=subset, value={"num": str(len(subset)), "den": "1"})
+        )
     return SetFunction(ground_set_size=n, entries=tuple(entries))
 
 

@@ -17,9 +17,7 @@ from jacobian.contracts.graph_isomorphism import (
 
 def _build_graph(graph: SimpleGraph) -> nx.Graph[int] | nx.DiGraph[int]:
     """Build a NetworkX graph from a wire ``SimpleGraph``."""
-    g: nx.Graph[int] | nx.DiGraph[int] = (
-        nx.DiGraph() if graph.directed else nx.Graph()
-    )
+    g: nx.Graph[int] | nx.DiGraph[int] = nx.DiGraph() if graph.directed else nx.Graph()
     g.add_nodes_from(range(graph.vertex_count))
     for source, target in graph.edges:
         g.add_edge(source, target)

@@ -69,8 +69,7 @@ ARITHMETIC_COUNTING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "integer.counting.congruence_box.compute",
         "Count congruence-constrained lattice points",
-        "Count lattice points in a bounded box satisfying u*x + v*y = c "
-        "(mod modulus).",
+        "Count lattice points in a bounded box satisfying u*x + v*y = c (mod modulus).",
         CongruenceBoxCountRequest,
         CongruenceBoxCountResult,
         compute_congruence_box_count,
@@ -82,7 +81,16 @@ ARITHMETIC_COUNTING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "simple_congruence",
                 "Count (x+y)=0 mod 3 in [0,5]^2.",
-                {"x_lo": 0, "x_hi": 5, "y_lo": 0, "y_hi": 5, "u": 1, "v": 1, "c": 0, "modulus": 3},
+                {
+                    "x_lo": 0,
+                    "x_hi": 5,
+                    "y_lo": 0,
+                    "y_hi": 5,
+                    "u": 1,
+                    "v": 1,
+                    "c": 0,
+                    "modulus": 3,
+                },
             ),
         ),
     ),

@@ -99,9 +99,7 @@ class MultivariateResultantRequest(ContractModel):
     def require_multivariate_ring(self) -> Self:
         _validate_multivariate_pair(self.left, self.right)
         if self.elimination_variable not in self.left.variables:
-            raise ValueError(
-                "elimination variable must belong to the declared ring"
-            )
+            raise ValueError("elimination variable must belong to the declared ring")
         for polynomial in (self.left, self.right):
             require_polynomial_budget(
                 polynomial,

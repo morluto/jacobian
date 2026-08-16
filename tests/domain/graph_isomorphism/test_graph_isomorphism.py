@@ -20,9 +20,7 @@ from jacobian.domains.graph_isomorphism.operations import (
 
 def _decide(graph_a: dict, graph_b: dict) -> GraphIsomorphismResult:
     return decide_graph_isomorphism(
-        GraphIsomorphismRequest.model_validate(
-            {"graph_a": graph_a, "graph_b": graph_b}
-        )
+        GraphIsomorphismRequest.model_validate({"graph_a": graph_a, "graph_b": graph_b})
     )
 
 
@@ -96,9 +94,7 @@ class TestPathGraphs:
         # Shift vertex labels: B is A under the permutation i -> (i + 1) % n
         perm = {i: (i + 1) % n for i in range(n)}
         a_edges = _path_edges(n)
-        b_edges = [
-            (perm[u], perm[v]) for u, v in a_edges
-        ]
+        b_edges = [(perm[u], perm[v]) for u, v in a_edges]
         result = _decide(
             {"vertex_count": n, "directed": False, "edges": a_edges},
             {"vertex_count": n, "directed": False, "edges": b_edges},
@@ -110,6 +106,7 @@ class TestPathGraphs:
             {"vertex_count": n, "directed": False, "edges": b_edges},
             result.vertex_mapping,
         )
+
 
 # ---------------------------------------------------------------------------
 # Cycle graphs

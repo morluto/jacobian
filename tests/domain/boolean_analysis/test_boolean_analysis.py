@@ -32,9 +32,7 @@ def _one() -> CanonicalRational:
 
 
 def _truth_table(values: list[int]) -> tuple[CanonicalRational, ...]:
-    return tuple(
-        _one() if v == 1 else _zero() for v in values
-    )
+    return tuple(_one() if v == 1 else _zero() for v in values)
 
 
 def _rational(num: int, den: int = 1) -> CanonicalRational:
@@ -47,9 +45,7 @@ def _rational(num: int, den: int = 1) -> CanonicalRational:
 
 
 def test_truth_table_single_variable() -> None:
-    result = compute_truth_table(
-        TruthTableRequest(truth_table=_truth_table([0, 1]))
-    )
+    result = compute_truth_table(TruthTableRequest(truth_table=_truth_table([0, 1])))
     assert isinstance(result, TruthTableResult)
     assert result.variable_count == 1
     assert [entry.as_fraction() for entry in result.truth_table] == [0, 1]
@@ -193,12 +189,8 @@ def test_multilinear_extension_agrees_on_hypercube() -> None:
     symbols = sympy.symbols("x0:3")
     poly = sympy.sympify(result.polynomial)
     for x in range(8):
-        assignment = {
-            symbols[i]: (x >> i) & 1 for i in range(3)
-        }
-        assert poly.subs(assignment) == truth[x], (
-            f"MLE disagrees at {x}"
-        )
+        assignment = {symbols[i]: (x >> i) & 1 for i in range(3)}
+        assert poly.subs(assignment) == truth[x], f"MLE disagrees at {x}"
 
 
 # ---------------------------------------------------------------------------

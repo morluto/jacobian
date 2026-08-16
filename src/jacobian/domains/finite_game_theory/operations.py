@@ -24,7 +24,7 @@ def compute_best_response(request: ZeroSumGameRequest) -> BestResponseResult:
 
     # For each row, compute the minimum payoff (worst case against column player)
     best_row = 0
-    best_value = Fraction(-10**18)
+    best_value = Fraction(-(10**18))
 
     for i in range(n_rows):
         row_min = min(entries[i * n_cols + j] for j in range(n_cols))

@@ -78,8 +78,7 @@ def compute_bridge_block_tree(request: BridgeBlockRequest) -> BridgeBlockResult:
             contracted.add_edge(source, target)
 
     components = [
-        frozenset(component)
-        for component in nx.connected_components(contracted)
+        frozenset(component) for component in nx.connected_components(contracted)
     ]
     component_index: dict[int, int] = {}
     for index, component in enumerate(components):
@@ -96,9 +95,7 @@ def compute_bridge_block_tree(request: BridgeBlockRequest) -> BridgeBlockResult:
             tree_edges.append((source_component, target_component))
 
     return BridgeBlockResult(
-        components=tuple(
-            tuple(sorted(component)) for component in components
-        ),
+        components=tuple(tuple(sorted(component)) for component in components),
         bridges=tuple(normalised_bridges),
         tree=tuple(tree_edges),
     )
@@ -238,7 +235,5 @@ def compute_biconnected_components(
     g = _build_graph(request.graph)
     components = list(nx.biconnected_components(g))
     return BiconnectedComponentsResult(
-        components=tuple(
-            tuple(sorted(component)) for component in components
-        ),
+        components=tuple(tuple(sorted(component)) for component in components),
     )

@@ -68,16 +68,10 @@ def compute_optimal_discrepancy(
             absolute = -signed_sum if signed_sum < 0 else signed_sum
             if absolute > max_imbalance:
                 max_imbalance = absolute
-                if (
-                    best_discrepancy is not None
-                    and max_imbalance >= best_discrepancy
-                ):
+                if best_discrepancy is not None and max_imbalance >= best_discrepancy:
                     break
         else:
-            if (
-                best_discrepancy is None
-                or max_imbalance < best_discrepancy
-            ):
+            if best_discrepancy is None or max_imbalance < best_discrepancy:
                 best_discrepancy = max_imbalance
                 best_coloring = coloring
                 if best_discrepancy == 0:

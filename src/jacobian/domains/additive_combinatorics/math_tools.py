@@ -143,9 +143,7 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "three_plus_two_sumset",
-                (
-                    "A={0,1,2}, B={0,2}: A+B={0,1,2,3,4} and |A+B|=5."
-                ),
+                ("A={0,1,2}, B={0,2}: A+B={0,1,2,3,4} and |A+B|=5."),
                 _SUMSET_CARDINALITY_EXAMPLE,
             ),
         ),

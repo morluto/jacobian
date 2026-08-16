@@ -40,9 +40,11 @@ def _floor_sum(n: int, m: int, a: int, b: int) -> int:
     # Use the standard identity:
     # sum_{i=0}^{n-1} floor((a*i+b)/m) = n*y_max - sum_{j=1}^{y_max} floor((m*j-1-b+a-1)/a)  (for a > 0)
     # Actually the standard formula is:
-    # S = n*y_max - floor_sum(y_max, m, a, (a - b%m)%a) ... 
+    # S = n*y_max - floor_sum(y_max, m, a, (a - b%m)%a) ...
     # The correct recurrence is:
-    result -= _floor_sum(y_max + 1, a, m, a - 1 - (b % m) if b >= 0 else a - 1 - (b % a))
+    result -= _floor_sum(
+        y_max + 1, a, m, a - 1 - (b % m) if b >= 0 else a - 1 - (b % a)
+    )
     # Simpler: use the well-known formula directly
     # Actually let me just compute it directly since our values are bounded
     # The O(n) version is fine for bounded n.

@@ -27,15 +27,23 @@ from jacobian.domains.graph_flow.operations import (
 
 
 def _max_flow(graph: dict, source: int, sink: int) -> MaxFlowResult:
-    return compute_max_flow(MaxFlowRequest.model_validate({"graph": graph, "source": source, "sink": sink}))
+    return compute_max_flow(
+        MaxFlowRequest.model_validate({"graph": graph, "source": source, "sink": sink})
+    )
 
 
 def _min_cut(graph: dict, source: int, sink: int) -> MinCutResult:
-    return compute_min_cut(MinCutRequest.model_validate({"graph": graph, "source": source, "sink": sink}))
+    return compute_min_cut(
+        MinCutRequest.model_validate({"graph": graph, "source": source, "sink": sink})
+    )
 
 
 def _edge_disjoint(graph: dict, source: int, sink: int) -> EdgeDisjointPathsResult:
-    return compute_edge_disjoint_paths(EdgeDisjointPathsRequest.model_validate({"graph": graph, "source": source, "sink": sink}))
+    return compute_edge_disjoint_paths(
+        EdgeDisjointPathsRequest.model_validate(
+            {"graph": graph, "source": source, "sink": sink}
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -161,29 +169,41 @@ class TestMaxFlow:
 
     def test_contract_rejects_source_equals_sink(self) -> None:
         with pytest.raises(ValidationError, match="source and sink must be distinct"):
-            MaxFlowRequest.model_validate({
-                "graph": {
-                    "vertex_count": 2,
-                    "edges": [
-                        {"source": 0, "target": 1, "capacity": {"num": "1", "den": "1"}},
-                    ],
-                },
-                "source": 0,
-                "sink": 0,
-            })
+            MaxFlowRequest.model_validate(
+                {
+                    "graph": {
+                        "vertex_count": 2,
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "capacity": {"num": "1", "den": "1"},
+                            },
+                        ],
+                    },
+                    "source": 0,
+                    "sink": 0,
+                }
+            )
 
     def test_contract_rejects_out_of_range_source(self) -> None:
         with pytest.raises(ValidationError, match="source must be"):
-            MaxFlowRequest.model_validate({
-                "graph": {
-                    "vertex_count": 2,
-                    "edges": [
-                        {"source": 0, "target": 1, "capacity": {"num": "1", "den": "1"}},
-                    ],
-                },
-                "source": 5,
-                "sink": 1,
-            })
+            MaxFlowRequest.model_validate(
+                {
+                    "graph": {
+                        "vertex_count": 2,
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "capacity": {"num": "1", "den": "1"},
+                            },
+                        ],
+                    },
+                    "source": 5,
+                    "sink": 1,
+                }
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -286,30 +306,46 @@ class TestMinCut:
 
     def test_contract_rejects_duplicate_edges(self) -> None:
         with pytest.raises(ValidationError, match="unique"):
-            MinCutRequest.model_validate({
-                "graph": {
-                    "vertex_count": 3,
-                    "edges": [
-                        {"source": 0, "target": 1, "capacity": {"num": "1", "den": "1"}},
-                        {"source": 0, "target": 1, "capacity": {"num": "2", "den": "1"}},
-                    ],
-                },
-                "source": 0,
-                "sink": 2,
-            })
+            MinCutRequest.model_validate(
+                {
+                    "graph": {
+                        "vertex_count": 3,
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "capacity": {"num": "1", "den": "1"},
+                            },
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "capacity": {"num": "2", "den": "1"},
+                            },
+                        ],
+                    },
+                    "source": 0,
+                    "sink": 2,
+                }
+            )
 
     def test_contract_rejects_negative_capacity(self) -> None:
         with pytest.raises(ValidationError, match="nonnegative"):
-            MinCutRequest.model_validate({
-                "graph": {
-                    "vertex_count": 2,
-                    "edges": [
-                        {"source": 0, "target": 1, "capacity": {"num": "-1", "den": "1"}},
-                    ],
-                },
-                "source": 0,
-                "sink": 1,
-            })
+            MinCutRequest.model_validate(
+                {
+                    "graph": {
+                        "vertex_count": 2,
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "capacity": {"num": "-1", "den": "1"},
+                            },
+                        ],
+                    },
+                    "source": 0,
+                    "sink": 1,
+                }
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -387,7 +423,13 @@ class TestEdgeDisjointPaths:
             {
                 "vertex_count": 6,
                 "edges": [
-                    [0, 1], [0, 2], [1, 3], [2, 3], [3, 4], [3, 5], [4, 5],
+                    [0, 1],
+                    [0, 2],
+                    [1, 3],
+                    [2, 3],
+                    [3, 4],
+                    [3, 5],
+                    [4, 5],
                 ],
             },
             0,
@@ -414,47 +456,55 @@ class TestEdgeDisjointPaths:
 
     def test_contract_rejects_self_loop(self) -> None:
         with pytest.raises(ValidationError, match="self-loops"):
-            EdgeDisjointPathsRequest.model_validate({
-                "graph": {
-                    "vertex_count": 3,
-                    "edges": [[0, 0], [0, 1]],
-                },
-                "source": 0,
-                "sink": 1,
-            })
+            EdgeDisjointPathsRequest.model_validate(
+                {
+                    "graph": {
+                        "vertex_count": 3,
+                        "edges": [[0, 0], [0, 1]],
+                    },
+                    "source": 0,
+                    "sink": 1,
+                }
+            )
 
     def test_contract_rejects_duplicate_edges(self) -> None:
         with pytest.raises(ValidationError, match="unique"):
-            EdgeDisjointPathsRequest.model_validate({
-                "graph": {
-                    "vertex_count": 3,
-                    "edges": [[0, 1], [0, 1]],
-                },
-                "source": 0,
-                "sink": 1,
-            })
+            EdgeDisjointPathsRequest.model_validate(
+                {
+                    "graph": {
+                        "vertex_count": 3,
+                        "edges": [[0, 1], [0, 1]],
+                    },
+                    "source": 0,
+                    "sink": 1,
+                }
+            )
 
     def test_contract_rejects_source_equals_sink(self) -> None:
         with pytest.raises(ValidationError, match="distinct"):
-            EdgeDisjointPathsRequest.model_validate({
-                "graph": {
-                    "vertex_count": 2,
-                    "edges": [[0, 1]],
-                },
-                "source": 0,
-                "sink": 0,
-            })
+            EdgeDisjointPathsRequest.model_validate(
+                {
+                    "graph": {
+                        "vertex_count": 2,
+                        "edges": [[0, 1]],
+                    },
+                    "source": 0,
+                    "sink": 0,
+                }
+            )
 
     def test_contract_rejects_out_of_range_vertex_in_edge(self) -> None:
         with pytest.raises(ValidationError, match="edge vertices must be"):
-            EdgeDisjointPathsRequest.model_validate({
-                "graph": {
-                    "vertex_count": 2,
-                    "edges": [[0, 3]],
-                },
-                "source": 0,
-                "sink": 1,
-            })
+            EdgeDisjointPathsRequest.model_validate(
+                {
+                    "graph": {
+                        "vertex_count": 2,
+                        "edges": [[0, 3]],
+                    },
+                    "source": 0,
+                    "sink": 1,
+                }
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -475,7 +525,10 @@ class TestCrossConsistency:
                 for s, t in edges_list
             ],
         }
-        uncap_graph = {"vertex_count": vertex_count, "edges": [tuple(e) for e in edges_list]}
+        uncap_graph = {
+            "vertex_count": vertex_count,
+            "edges": [tuple(e) for e in edges_list],
+        }
         flow = _max_flow(cap_graph, 0, 3)
         paths = _edge_disjoint(uncap_graph, 0, 3)
         assert flow.flow_value.as_fraction() == paths.path_count

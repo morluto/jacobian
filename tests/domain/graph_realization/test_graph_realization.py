@@ -26,6 +26,7 @@ from jacobian.domains.graph_realization.operations import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _is_graphical(degrees: list[int]) -> DegreeSequenceResult:
     return compute_degree_sequence(
         DegreeSequenceRequest.model_validate({"sequence": {"degrees": degrees}})
@@ -62,6 +63,7 @@ def _check(
 # ---------------------------------------------------------------------------
 # is_graphical (Erdos-Gallai)
 # ---------------------------------------------------------------------------
+
 
 class TestIsGraphical:
     def test_empty_sequence_is_graphical(self) -> None:
@@ -125,14 +127,13 @@ class TestIsGraphical:
 
     def test_contract_rejects_degree_exceeding_bound(self) -> None:
         with pytest.raises(ValidationError, match="maximum degree bound"):
-            DegreeSequenceRequest.model_validate(
-                {"sequence": {"degrees": [64, 1, 1]}}
-            )
+            DegreeSequenceRequest.model_validate({"sequence": {"degrees": [64, 1, 1]}})
 
 
 # ---------------------------------------------------------------------------
 # realization (Havel-Hakimi construction)
 # ---------------------------------------------------------------------------
+
 
 class TestGraphRealization:
     def test_realizes_simple_path(self) -> None:
@@ -195,6 +196,7 @@ class TestGraphRealization:
 # graphicality check (with certificate)
 # ---------------------------------------------------------------------------
 
+
 class TestGraphicalityCheck:
     def test_graphical_returns_erdos_gallai_certificate(self) -> None:
         result = _graphicality_check([1, 2, 2, 1])
@@ -240,6 +242,7 @@ class TestGraphicalityCheck:
 # ---------------------------------------------------------------------------
 # realization check
 # ---------------------------------------------------------------------------
+
 
 class TestRealizationCheck:
     def test_valid_realization(self) -> None:
@@ -312,6 +315,7 @@ class TestRealizationCheck:
 # ---------------------------------------------------------------------------
 # Cross-consistency: construct + check
 # ---------------------------------------------------------------------------
+
 
 class TestCrossConsistency:
     def test_constructed_graph_passes_check(self) -> None:

@@ -1,6 +1,5 @@
 """Tests for convex analysis operations."""
 
-
 from jacobian.contracts.convex_analysis import (
     AffinePiece,
     MaxAffineEvalRequest,
@@ -20,8 +19,16 @@ class TestMaxAffineEvaluation:
         req = MaxAffineEvalRequest(
             function=MaxAffineFunction(
                 pieces=(
-                    AffinePiece(piece_id="p1", coefficients=({"num": "1", "den": "1"},), intercept={"num": "0", "den": "1"}),
-                    AffinePiece(piece_id="p2", coefficients=({"num": "-1", "den": "1"},), intercept={"num": "0", "den": "1"}),
+                    AffinePiece(
+                        piece_id="p1",
+                        coefficients=({"num": "1", "den": "1"},),
+                        intercept={"num": "0", "den": "1"},
+                    ),
+                    AffinePiece(
+                        piece_id="p2",
+                        coefficients=({"num": "-1", "den": "1"},),
+                        intercept={"num": "0", "den": "1"},
+                    ),
                 ),
             ),
             point=RationalPoint(coordinates=({"num": "2", "den": "1"},)),
@@ -35,8 +42,16 @@ class TestMaxAffineEvaluation:
         req = MaxAffineEvalRequest(
             function=MaxAffineFunction(
                 pieces=(
-                    AffinePiece(piece_id="p1", coefficients=({"num": "1", "den": "1"},), intercept={"num": "0", "den": "1"}),
-                    AffinePiece(piece_id="p2", coefficients=({"num": "-1", "den": "1"},), intercept={"num": "0", "den": "1"}),
+                    AffinePiece(
+                        piece_id="p1",
+                        coefficients=({"num": "1", "den": "1"},),
+                        intercept={"num": "0", "den": "1"},
+                    ),
+                    AffinePiece(
+                        piece_id="p2",
+                        coefficients=({"num": "-1", "den": "1"},),
+                        intercept={"num": "0", "den": "1"},
+                    ),
                 ),
             ),
             point=RationalPoint(coordinates=({"num": "0", "den": "1"},)),
@@ -52,8 +67,16 @@ class TestSubdifferential:
         req = MaxAffineSubdifferentialRequest(
             function=MaxAffineFunction(
                 pieces=(
-                    AffinePiece(piece_id="p1", coefficients=({"num": "1", "den": "1"},), intercept={"num": "0", "den": "1"}),
-                    AffinePiece(piece_id="p2", coefficients=({"num": "-1", "den": "1"},), intercept={"num": "0", "den": "1"}),
+                    AffinePiece(
+                        piece_id="p1",
+                        coefficients=({"num": "1", "den": "1"},),
+                        intercept={"num": "0", "den": "1"},
+                    ),
+                    AffinePiece(
+                        piece_id="p2",
+                        coefficients=({"num": "-1", "den": "1"},),
+                        intercept={"num": "0", "den": "1"},
+                    ),
                 ),
             ),
             point=RationalPoint(coordinates=({"num": "2", "den": "1"},)),
@@ -66,8 +89,16 @@ class TestSubdifferential:
         req = MaxAffineSubdifferentialRequest(
             function=MaxAffineFunction(
                 pieces=(
-                    AffinePiece(piece_id="p1", coefficients=({"num": "1", "den": "1"},), intercept={"num": "0", "den": "1"}),
-                    AffinePiece(piece_id="p2", coefficients=({"num": "-1", "den": "1"},), intercept={"num": "0", "den": "1"}),
+                    AffinePiece(
+                        piece_id="p1",
+                        coefficients=({"num": "1", "den": "1"},),
+                        intercept={"num": "0", "den": "1"},
+                    ),
+                    AffinePiece(
+                        piece_id="p2",
+                        coefficients=({"num": "-1", "den": "1"},),
+                        intercept={"num": "0", "den": "1"},
+                    ),
                 ),
             ),
             point=RationalPoint(coordinates=({"num": "0", "den": "1"},)),

@@ -1,6 +1,5 @@
 """Tests for graph polynomial operations."""
 
-
 from jacobian.contracts.graph_polynomials import (
     GraphEdge,
     GraphPolynomialRequest,
@@ -40,7 +39,7 @@ class TestTuttePolynomial:
         assert d.get(300) == 1  # x^3
         assert d.get(200) == 1  # x^2
         assert d.get(100) == 1  # x
-        assert d.get(1) == 1    # y
+        assert d.get(1) == 1  # y
 
     def test_single_edge(self):
         req = GraphPolynomialRequest(

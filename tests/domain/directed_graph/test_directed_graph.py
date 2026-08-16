@@ -41,15 +41,11 @@ def _scc(graph: dict) -> StronglyConnectedComponentsResult:
 
 
 def _condensation(graph: dict) -> CondensationResult:
-    return compute_condensation(
-        CondensationRequest.model_validate({"graph": graph})
-    )
+    return compute_condensation(CondensationRequest.model_validate({"graph": graph}))
 
 
 def _acyclic_order(graph: dict) -> AcyclicOrderResult:
-    return compute_acyclic_order(
-        AcyclicOrderRequest.model_validate({"graph": graph})
-    )
+    return compute_acyclic_order(AcyclicOrderRequest.model_validate({"graph": graph}))
 
 
 # ---------------------------------------------------------------------------
@@ -106,8 +102,7 @@ class TestReachabilityContract:
     def test_rejects_self_loop(self) -> None:
         with pytest.raises(ValidationError, match="self-loops"):
             ReachabilityRequest.model_validate(
-                {"graph": {"vertex_count": 2, "edges": [[0, 0], [0, 1]]},
- "source": 0}
+                {"graph": {"vertex_count": 2, "edges": [[0, 0], [0, 1]]}, "source": 0}
             )
 
     def test_rejects_out_of_range_edge_vertex(self) -> None:
@@ -119,8 +114,7 @@ class TestReachabilityContract:
     def test_rejects_duplicate_edges(self) -> None:
         with pytest.raises(ValidationError, match="unique"):
             ReachabilityRequest.model_validate(
-                {"graph": {"vertex_count": 3, "edges": [[0, 1], [0, 1]]},
- "source": 0}
+                {"graph": {"vertex_count": 3, "edges": [[0, 1], [0, 1]]}, "source": 0}
             )
 
     def test_rejects_out_of_range_source(self) -> None:
@@ -223,12 +217,12 @@ class TestCondensation:
         result = _condensation(graph)
         assert result.vertex_count == 2
         # Identify which component index is the cycle and which is the sink.
-        cycle_idx = next(i for i, c in enumerate(result.components) if set(c) == {0, 1, 2})
+        cycle_idx = next(
+            i for i, c in enumerate(result.components) if set(c) == {0, 1, 2}
+        )
         sink_idx = next(i for i, c in enumerate(result.components) if set(c) == {3})
         # The edge should go from the cycle to the sink.
-        assert (cycle_idx, sink_idx) in {
-            (e.source, e.target) for e in result.edges
-        }
+        assert (cycle_idx, sink_idx) in {(e.source, e.target) for e in result.edges}
 
 
 # ---------------------------------------------------------------------------

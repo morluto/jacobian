@@ -44,7 +44,10 @@ def _cross(v1, v2) -> Fraction:
 
 
 def _vec(p, q):
-    return (q.x.as_fraction() - p.x.as_fraction(), q.y.as_fraction() - p.y.as_fraction())
+    return (
+        q.x.as_fraction() - p.x.as_fraction(),
+        q.y.as_fraction() - p.y.as_fraction(),
+    )
 
 
 def compute_angle_equality(request: AngleEqualityRequest) -> AngleEqualityResult:
@@ -86,16 +89,20 @@ def compute_triangle_similarity(
     t1 = request.triangle1
     t2 = request.triangle2
 
-    sides1 = sorted([
-        _squared_dist_sq(t1.a, t1.b),
-        _squared_dist_sq(t1.b, t1.c),
-        _squared_dist_sq(t1.a, t1.c),
-    ])
-    sides2 = sorted([
-        _squared_dist_sq(t2.a, t2.b),
-        _squared_dist_sq(t2.b, t2.c),
-        _squared_dist_sq(t2.a, t2.c),
-    ])
+    sides1 = sorted(
+        [
+            _squared_dist_sq(t1.a, t1.b),
+            _squared_dist_sq(t1.b, t1.c),
+            _squared_dist_sq(t1.a, t1.c),
+        ]
+    )
+    sides2 = sorted(
+        [
+            _squared_dist_sq(t2.a, t2.b),
+            _squared_dist_sq(t2.b, t2.c),
+            _squared_dist_sq(t2.a, t2.c),
+        ]
+    )
 
     # Check if sides1[i] / sides2[i] is constant
     if sides2[0] == 0 or sides1[0] == 0:

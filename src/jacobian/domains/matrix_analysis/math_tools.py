@@ -96,7 +96,10 @@ MATRIX_ANALYSIS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                         [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
                         [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
                     ],
-                    "rhs_vector": [{"num": "-1", "den": "1"}, {"num": "-1", "den": "1"}],
+                    "rhs_vector": [
+                        {"num": "-1", "den": "1"},
+                        {"num": "-1", "den": "1"},
+                    ],
                     "multipliers": [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}],
                 },
             ),

@@ -1,6 +1,5 @@
 """Tests for numerical semigroup operations."""
 
-
 from jacobian.contracts.numerical_semigroups import (
     NumericalSemigroupSummaryRequest,
     SemigroupMembershipRequest,

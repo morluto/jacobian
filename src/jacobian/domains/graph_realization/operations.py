@@ -101,9 +101,7 @@ def compute_graphicality_check(
     sorted_deg = sorted(degrees, reverse=True)
     if any(d >= n for d in sorted_deg):
         bad = next(d for d in sorted_deg if d >= n)
-        certificate = (
-            f"degree {bad} exceeds vertex count {n - 1}"
-        )
+        certificate = f"degree {bad} exceeds vertex count {n - 1}"
         return GraphicalityCheckResult(
             is_graphical=False,
             degree_sum=degree_sum,
@@ -119,8 +117,7 @@ def compute_graphicality_check(
             rhs += min(sorted_deg[i], k)
         if cumulative > rhs:
             certificate = (
-                f"erdos-gallai violation at k={k}: "
-                f"left={cumulative} > right={rhs}"
+                f"erdos-gallai violation at k={k}: left={cumulative} > right={rhs}"
             )
             return GraphicalityCheckResult(
                 is_graphical=False,

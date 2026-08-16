@@ -147,7 +147,17 @@ DOMINATION_MINIMUM_OPERATION = _operation(
     "domination",
     "minimum",
     examples=(
-        example("path_3", "Path graph on 3 vertices.", {"graph": {"vertices": ["a", "b", "c"], "edges": [["a", "b"], ["b", "c"]]}, "resource_budget": {"max_solver_calls": 33}}),
+        example(
+            "path_3",
+            "Path graph on 3 vertices.",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                },
+                "resource_budget": {"max_solver_calls": 33},
+            },
+        ),
     ),
 )
 
@@ -163,7 +173,17 @@ MINIMUM_MAXIMAL_MATCHING_OPERATION = _operation(
     "saturation_number",
     "minimum",
     examples=(
-        example("path_3_matching", "Minimum maximal matching of path graph P3.", {"graph": {"vertices": ["a", "b", "c"], "edges": [["a", "b"], ["b", "c"]]}, "resource_budget": {"max_solver_calls": 33}}),
+        example(
+            "path_3_matching",
+            "Minimum maximal matching of path graph P3.",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                },
+                "resource_budget": {"max_solver_calls": 33},
+            },
+        ),
     ),
 )
 
@@ -176,7 +196,17 @@ INDUCED_FOREST_MAXIMUM_OPERATION = _operation(
     "induced_forest",
     "maximum",
     examples=(
-        example("path_3", "Path graph P3.", {"graph": {"vertices": ["a", "b", "c"], "edges": [["a", "b"], ["b", "c"]]}, "resource_budget": {"max_solver_calls": 33}}),
+        example(
+            "path_3",
+            "Path graph P3.",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                },
+                "resource_budget": {"max_solver_calls": 33},
+            },
+        ),
     ),
 )
 
@@ -189,7 +219,17 @@ INDUCED_TREE_MAXIMUM_OPERATION = _operation(
     "induced_tree",
     "maximum",
     examples=(
-        example("path_3", "Path graph P3.", {"graph": {"vertices": ["a", "b", "c"], "edges": [["a", "b"], ["b", "c"]]}, "resource_budget": {"max_solver_calls": 33}}),
+        example(
+            "path_3",
+            "Path graph P3.",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                },
+                "resource_budget": {"max_solver_calls": 33},
+            },
+        ),
     ),
 )
 
@@ -202,7 +242,17 @@ INDUCED_BIPARTITE_MAXIMUM_OPERATION = _operation(
     "induced_bipartite",
     "maximum",
     examples=(
-        example("path_3", "Path graph P3.", {"graph": {"vertices": ["a", "b", "c"], "edges": [["a", "b"], ["b", "c"]]}, "resource_budget": {"max_solver_calls": 33}}),
+        example(
+            "path_3",
+            "Path graph P3.",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                },
+                "resource_budget": {"max_solver_calls": 33},
+            },
+        ),
     ),
 )
 

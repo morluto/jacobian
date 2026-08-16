@@ -20,7 +20,9 @@ def evaluate_polynomial(request: EvalRequest) -> EvalResult:
     expr = sympify(request.polynomial.expression)
     substitutions = {}
     for var_name, var_value in zip(
-        request.point.variables, request.point.values, strict=True,
+        request.point.variables,
+        request.point.values,
+        strict=True,
     ):
         sym = Symbol(var_name)
         substitutions[sym] = var_value.as_fraction()

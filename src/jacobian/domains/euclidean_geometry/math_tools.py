@@ -92,12 +92,30 @@ EUCLIDEAN_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "right_angle",
                 "Check two right angles are equal.",
                 {
-                    "vertex1": {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
-                    "ray1_a": {"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}},
-                    "ray1_b": {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}},
-                    "vertex2": {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
-                    "ray2_a": {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}},
-                    "ray2_b": {"x": {"num": "-1", "den": "1"}, "y": {"num": "0", "den": "1"}},
+                    "vertex1": {
+                        "x": {"num": "0", "den": "1"},
+                        "y": {"num": "0", "den": "1"},
+                    },
+                    "ray1_a": {
+                        "x": {"num": "1", "den": "1"},
+                        "y": {"num": "0", "den": "1"},
+                    },
+                    "ray1_b": {
+                        "x": {"num": "0", "den": "1"},
+                        "y": {"num": "1", "den": "1"},
+                    },
+                    "vertex2": {
+                        "x": {"num": "0", "den": "1"},
+                        "y": {"num": "0", "den": "1"},
+                    },
+                    "ray2_a": {
+                        "x": {"num": "0", "den": "1"},
+                        "y": {"num": "1", "den": "1"},
+                    },
+                    "ray2_b": {
+                        "x": {"num": "-1", "den": "1"},
+                        "y": {"num": "0", "den": "1"},
+                    },
                 },
             ),
         ),
@@ -118,14 +136,32 @@ EUCLIDEAN_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "Two similar triangles.",
                 {
                     "triangle1": {
-                        "a": {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
-                        "b": {"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}},
-                        "c": {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}},
+                        "a": {
+                            "x": {"num": "0", "den": "1"},
+                            "y": {"num": "0", "den": "1"},
+                        },
+                        "b": {
+                            "x": {"num": "1", "den": "1"},
+                            "y": {"num": "0", "den": "1"},
+                        },
+                        "c": {
+                            "x": {"num": "0", "den": "1"},
+                            "y": {"num": "1", "den": "1"},
+                        },
                     },
                     "triangle2": {
-                        "a": {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
-                        "b": {"x": {"num": "2", "den": "1"}, "y": {"num": "0", "den": "1"}},
-                        "c": {"x": {"num": "0", "den": "1"}, "y": {"num": "2", "den": "1"}},
+                        "a": {
+                            "x": {"num": "0", "den": "1"},
+                            "y": {"num": "0", "den": "1"},
+                        },
+                        "b": {
+                            "x": {"num": "2", "den": "1"},
+                            "y": {"num": "0", "den": "1"},
+                        },
+                        "c": {
+                            "x": {"num": "0", "den": "1"},
+                            "y": {"num": "2", "den": "1"},
+                        },
                     },
                 },
             ),

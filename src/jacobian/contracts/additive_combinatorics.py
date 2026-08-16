@@ -107,9 +107,7 @@ class AdditiveEnergyResult(ContractModel):
             raise ValueError("additive energy sums must be sorted and unique")
         if any(entry.multiplicity <= 0 for entry in self.decomposition):
             raise ValueError("additive energy multiplicities must be positive")
-        if self.energy != sum(
-            entry.multiplicity ** 2 for entry in self.decomposition
-        ):
+        if self.energy != sum(entry.multiplicity**2 for entry in self.decomposition):
             raise ValueError(
                 "additive energy must equal the sum of squared multiplicities",
             )

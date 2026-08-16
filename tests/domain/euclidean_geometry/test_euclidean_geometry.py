@@ -1,6 +1,5 @@
 """Tests for Euclidean geometry operations."""
 
-
 from jacobian.contracts.euclidean_geometry import (
     AngleEqualityRequest,
     RationalPoint2D,

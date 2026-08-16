@@ -77,8 +77,7 @@ def compute_condensation(request: CondensationRequest) -> CondensationResult:
     components = tuple(sorted(component) for component in sccs)
 
     edges: list[CondensationEdge] = [
-        CondensationEdge(source=u, target=v)
-        for u, v in condensation.edges()
+        CondensationEdge(source=u, target=v) for u, v in condensation.edges()
     ]
     edges.sort(key=lambda e: (e.source, e.target))
 

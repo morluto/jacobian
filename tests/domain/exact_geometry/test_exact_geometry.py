@@ -1,6 +1,5 @@
 """Tests for exact geometry operations."""
 
-
 from jacobian.contracts.exact_geometry import (
     DistanceGraphRequest,
     DistanceProfileRequest,

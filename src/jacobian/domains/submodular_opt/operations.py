@@ -56,11 +56,15 @@ def check_monotonicity(
         subset = set(subset_str)
         for entry in entries:
             other = set(entry.subset)
-            if subset < other and len(other) == len(subset) + 1 and val_s > entry.value.as_fraction():
-                    return MonotonicityCheckResult(
-                        is_monotone=False,
-                        violation=f"f({subset_str}) > f({tuple(sorted(other))})",
-                    )
+            if (
+                subset < other
+                and len(other) == len(subset) + 1
+                and val_s > entry.value.as_fraction()
+            ):
+                return MonotonicityCheckResult(
+                    is_monotone=False,
+                    violation=f"f({subset_str}) > f({tuple(sorted(other))})",
+                )
     return MonotonicityCheckResult(is_monotone=True, violation="")
 
 

@@ -26,8 +26,7 @@ class SimpleGraph(ContractModel):
         seen: set[tuple[int, int]] = set()
         for source, target in self.edges:
             if not (
-                0 <= source < self.vertex_count
-                and 0 <= target < self.vertex_count
+                0 <= source < self.vertex_count and 0 <= target < self.vertex_count
             ):
                 raise ValueError("edge vertices must be in 0..vertex_count-1")
             if source == target:

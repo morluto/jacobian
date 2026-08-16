@@ -120,9 +120,7 @@ def compute_multivariate_resultant(
     value = sympy_resultant(left.as_expr(), right.as_expr(), generator)
 
     remaining_variables = tuple(
-        variable
-        for variable in variables
-        if variable != request.elimination_variable
+        variable for variable in variables if variable != request.elimination_variable
     )
     if not remaining_variables:
         # The resultant is a rational scalar.
@@ -134,9 +132,7 @@ def compute_multivariate_resultant(
                 value=rational_from_sympy(value),
             ),
         )
-    resultant_poly = Poly(
-        value, *symbols_for_variables(remaining_variables), domain=QQ
-    )
+    resultant_poly = Poly(value, *symbols_for_variables(remaining_variables), domain=QQ)
     return MultivariateResultantResult(
         elimination_variable=request.elimination_variable,
         resultant=MultivariatePolynomialValue(

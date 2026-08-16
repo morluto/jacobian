@@ -30,7 +30,8 @@ class PointConfiguration(ContractModel):
     """A finite set of labelled rational points in a fixed dimension."""
 
     points: tuple[LabelledRationalPoint, ...] = Field(
-        min_length=1, max_length=MAX_POINTS,
+        min_length=1,
+        max_length=MAX_POINTS,
     )
 
     @model_validator(mode="after")

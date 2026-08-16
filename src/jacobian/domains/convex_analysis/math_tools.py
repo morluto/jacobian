@@ -65,8 +65,16 @@ CONVEX_ANALYSIS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "function": {
                         "pieces": [
-                            {"piece_id": "p1", "coefficients": [{"num": "1", "den": "1"}], "intercept": {"num": "0", "den": "1"}},
-                            {"piece_id": "p2", "coefficients": [{"num": "-1", "den": "1"}], "intercept": {"num": "0", "den": "1"}},
+                            {
+                                "piece_id": "p1",
+                                "coefficients": [{"num": "1", "den": "1"}],
+                                "intercept": {"num": "0", "den": "1"},
+                            },
+                            {
+                                "piece_id": "p2",
+                                "coefficients": [{"num": "-1", "den": "1"}],
+                                "intercept": {"num": "0", "den": "1"},
+                            },
                         ],
                     },
                     "point": {"coordinates": [{"num": "2", "den": "1"}]},
@@ -92,8 +100,16 @@ CONVEX_ANALYSIS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "function": {
                         "pieces": [
-                            {"piece_id": "p1", "coefficients": [{"num": "1", "den": "1"}], "intercept": {"num": "0", "den": "1"}},
-                            {"piece_id": "p2", "coefficients": [{"num": "-1", "den": "1"}], "intercept": {"num": "0", "den": "1"}},
+                            {
+                                "piece_id": "p1",
+                                "coefficients": [{"num": "1", "den": "1"}],
+                                "intercept": {"num": "0", "den": "1"},
+                            },
+                            {
+                                "piece_id": "p2",
+                                "coefficients": [{"num": "-1", "den": "1"}],
+                                "intercept": {"num": "0", "den": "1"},
+                            },
                         ],
                     },
                     "point": {"coordinates": [{"num": "2", "den": "1"}]},

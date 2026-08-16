@@ -17,7 +17,9 @@ class AffinePiece(ContractModel):
     """One affine piece: f(x) = <a, x> + b."""
 
     piece_id: str = Field(min_length=1, max_length=64)
-    coefficients: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=MAX_DIMENSION)
+    coefficients: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_DIMENSION
+    )
     intercept: CanonicalRational
 
 
@@ -41,7 +43,9 @@ class MaxAffineFunction(ContractModel):
 class RationalPoint(ContractModel):
     """A rational point in the affine function's domain."""
 
-    coordinates: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=MAX_DIMENSION)
+    coordinates: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_DIMENSION
+    )
 
 
 class MaxAffineEvalRequest(ContractModel):

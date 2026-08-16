@@ -20,8 +20,7 @@ class DirectedGraph(ContractModel):
         seen: set[tuple[int, int]] = set()
         for source, target in self.edges:
             if not (
-                0 <= source < self.vertex_count
-                and 0 <= target < self.vertex_count
+                0 <= source < self.vertex_count and 0 <= target < self.vertex_count
             ):
                 raise ValueError("edge vertices must be in 0..vertex_count-1")
             if source == target:
@@ -58,9 +57,9 @@ class StronglyConnectedComponentsRequest(ContractModel):
 class StronglyConnectedComponentsResult(ContractModel):
     component_count: int = Field(ge=0, strict=True)
     components: tuple[tuple[int, ...], ...]
-    convention: Literal[
+    convention: Literal["NETWORKX_STRONGLY_CONNECTED_COMPONENTS"] = (
         "NETWORKX_STRONGLY_CONNECTED_COMPONENTS"
-    ] = "NETWORKX_STRONGLY_CONNECTED_COMPONENTS"
+    )
 
 
 class CondensationRequest(ContractModel):
@@ -82,8 +81,7 @@ class CondensationResult(ContractModel):
 class AcyclicOrderRequest(ContractModel):
     graph: DirectedGraph
 
+
 class AcyclicOrderResult(ContractModel):
     order: tuple[int, ...]
-    convention: Literal["NETWORKX_TOPOLOGICAL_SORT"] = (
-        "NETWORKX_TOPOLOGICAL_SORT"
-    )
+    convention: Literal["NETWORKX_TOPOLOGICAL_SORT"] = "NETWORKX_TOPOLOGICAL_SORT"

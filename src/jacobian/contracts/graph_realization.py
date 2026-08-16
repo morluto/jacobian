@@ -35,14 +35,17 @@ class GraphEdges(ContractModel):
 
     vertex_count: int = Field(ge=1, le=MAX_GRAPH_LENGTH)
     edges: tuple[tuple[int, int], ...] = Field(
-        default=(), max_length=MAX_GRAPH_LENGTH * (MAX_GRAPH_LENGTH - 1) // 2,
+        default=(),
+        max_length=MAX_GRAPH_LENGTH * (MAX_GRAPH_LENGTH - 1) // 2,
     )
 
     @model_validator(mode="after")
     def require_valid_edges(self) -> Self:
         seen: set[tuple[int, int]] = set()
         for source, target in self.edges:
-            if not (0 <= source < self.vertex_count and 0 <= target < self.vertex_count):
+            if not (
+                0 <= source < self.vertex_count and 0 <= target < self.vertex_count
+            ):
                 raise ValueError("edge vertices must be in 0..vertex_count-1")
             if source == target:
                 raise ValueError("self-loops are not allowed")
@@ -57,6 +60,7 @@ class GraphEdges(ContractModel):
 # is_graphical operation
 # ---------------------------------------------------------------------------
 
+
 class DegreeSequenceRequest(ContractModel):
     sequence: DegreeSequence
 
@@ -70,6 +74,7 @@ class DegreeSequenceResult(ContractModel):
 # ---------------------------------------------------------------------------
 # realization (construct a graph) operation
 # ---------------------------------------------------------------------------
+
 
 class GraphRealizationRequest(ContractModel):
     sequence: DegreeSequence
@@ -86,6 +91,7 @@ class GraphRealizationResult(ContractModel):
 # graphicality check (with certificate) operation
 # ---------------------------------------------------------------------------
 
+
 class GraphicalityCheckRequest(ContractModel):
     sequence: DegreeSequence
 
@@ -100,6 +106,7 @@ class GraphicalityCheckResult(ContractModel):
 # ---------------------------------------------------------------------------
 # check operation
 # ---------------------------------------------------------------------------
+
 
 class RealizationCheckRequest(ContractModel):
     sequence: DegreeSequence

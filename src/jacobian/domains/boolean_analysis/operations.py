@@ -109,7 +109,7 @@ def compute_erasure_noise(request: ErasureNoiseRequest) -> ErasureNoiseResult:
     for subset_mask in range(total):
         subset_size = bin(subset_mask).count("1")
         fourier_coeff = Fraction(spectrum[subset_mask], total)
-        result += fourier_coeff * (p ** subset_size)
+        result += fourier_coeff * (p**subset_size)
 
     return ErasureNoiseResult(
         expected_value=_rational(result),

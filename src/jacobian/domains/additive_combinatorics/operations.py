@@ -92,9 +92,7 @@ def compute_sumset_cardinality(
     left = _parse_set(request.left)
     right = _parse_set(request.right)
     counts = _representation_function(left, right)
-    support = tuple(
-        format_canonical_integer(value) for value in _sorted_sums(counts)
-    )
+    support = tuple(format_canonical_integer(value) for value in _sorted_sums(counts))
     return SumsetCardinalityResult(
         cardinality=len(support),
         support=support,
@@ -142,12 +140,8 @@ def decide_direct_sum_predicate(
     return DirectSumPredicateResult(
         holds=not (collisions_sorted or missing),
         modulus=modulus,
-        representatives=tuple(
-            format_canonical_integer(r) for r in reps_sorted
-        ),
-        collisions=tuple(
-            format_canonical_integer(r) for r in collisions_sorted
-        ),
+        representatives=tuple(format_canonical_integer(r) for r in reps_sorted),
+        collisions=tuple(format_canonical_integer(r) for r in collisions_sorted),
         missing=tuple(format_canonical_integer(r) for r in missing),
     )
 

@@ -80,7 +80,7 @@ GRAPH_DECOMPOSITION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                             [4, 0],
                         ],
                     },
-            },
+                },
             ),
         ),
     ),
@@ -112,7 +112,7 @@ GRAPH_DECOMPOSITION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                             [2, 3],
                         ],
                     },
-            },
+                },
             ),
         ),
     ),
@@ -141,7 +141,7 @@ GRAPH_DECOMPOSITION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                             [3, 0],
                         ],
                     },
-            },
+                },
             ),
         ),
     ),
@@ -160,7 +160,8 @@ GRAPH_DECOMPOSITION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "two_triangle_blocks",
                 "List the biconnected components of two triangles sharing one vertex.",
-                {                    "graph": {
+                {
+                    "graph": {
                         "vertex_count": 5,
                         "edges": [
                             [0, 1],

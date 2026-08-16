@@ -29,9 +29,7 @@ class FiniteSetSystem(ContractModel):
             seen: set[int] = set()
             for element in subset:
                 if not (0 <= element < self.ground_set_size):
-                    raise ValueError(
-                        "subset element must be in 0..ground_set_size-1"
-                    )
+                    raise ValueError("subset element must be in 0..ground_set_size-1")
                 if element in seen:
                     raise ValueError("subset elements must be distinct")
                 seen.add(element)

@@ -108,8 +108,7 @@ class EdgeDisjointPathsGraph(ContractModel):
         seen: set[tuple[int, int]] = set()
         for source, target in self.edges:
             if not (
-                0 <= source < self.vertex_count
-                and 0 <= target < self.vertex_count
+                0 <= source < self.vertex_count and 0 <= target < self.vertex_count
             ):
                 raise ValueError("edge vertices must be in 0..vertex_count-1")
             if source == target:
@@ -142,6 +141,4 @@ class EdgeDisjointPathsResult(ContractModel):
     paths: tuple[tuple[int, ...], ...] = Field(default=())
     source: int = Field(ge=0, le=63)
     sink: int = Field(ge=0, le=63)
-    convention: Literal["NETWORKX_EDGE_DISJOINT_PATHS"] = (
-        "NETWORKX_EDGE_DISJOINT_PATHS"
-    )
+    convention: Literal["NETWORKX_EDGE_DISJOINT_PATHS"] = "NETWORKX_EDGE_DISJOINT_PATHS"

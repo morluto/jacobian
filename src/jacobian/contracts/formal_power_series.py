@@ -61,7 +61,10 @@ class TruncatedSeries(ContractModel):
         for value in self.coefficients:
             num = value.num
             den = value.den
-            if len(num.lstrip("-")) > MAX_RATIONAL_DIGITS or len(den) > MAX_RATIONAL_DIGITS:
+            if (
+                len(num.lstrip("-")) > MAX_RATIONAL_DIGITS
+                or len(den) > MAX_RATIONAL_DIGITS
+            ):
                 raise ValueError("coefficient exceeds the 256-digit rational bound")
         return self
 
@@ -140,9 +143,9 @@ class SeriesPowerResult(ContractModel):
 
 class SeriesInverseResult(ContractModel):
     result: TruncatedSeries
-    residual_congruence: Literal[
+    residual_congruence: Literal["PRODUCT_IS_ONE_MOD_X_TO_N"] = (
         "PRODUCT_IS_ONE_MOD_X_TO_N"
-    ] = "PRODUCT_IS_ONE_MOD_X_TO_N"
+    )
     residual_coefficients: tuple[CanonicalRational, ...] = Field(
         description="A(x) * B(x) - 1 coefficients (must all be zero).",
     )
@@ -179,7 +182,9 @@ class SeriesComposeRequest(ContractModel):
         if self.outer.variable != self.inner.variable:
             raise ValueError("outer and inner series must share the same variable")
         if self.outer.truncation_order != self.inner.truncation_order:
-            raise ValueError("outer and inner series must share the same truncation order")
+            raise ValueError(
+                "outer and inner series must share the same truncation order"
+            )
         if self.inner.coefficients[0].as_fraction() != 0:
             raise ValueError(
                 "inner series must have zero constant term for composition with a finite prefix"
@@ -214,9 +219,9 @@ class SeriesReversionResult(ContractModel):
 
 class SeriesDerivativeResult(ContractModel):
     result: TruncatedSeries
-    output_order_convention: Literal[
+    output_order_convention: Literal["MAX_N_MINUS_1_AT_LEAST_1"] = (
         "MAX_N_MINUS_1_AT_LEAST_1"
-    ] = "MAX_N_MINUS_1_AT_LEAST_1"
+    )
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
 
@@ -267,7 +272,10 @@ class SeriesIdentityCheckResult(ContractModel):
     @model_validator(mode="after")
     def require_consistent_diff(self) -> Self:
         if self.status == "EQUAL_MOD_X_TO_N":
-            if self.first_differing_index is not None or self.exact_difference is not None:
+            if (
+                self.first_differing_index is not None
+                or self.exact_difference is not None
+            ):
                 raise ValueError("EQUAL must not carry a difference")
         else:
             if self.first_differing_index is None or self.exact_difference is None:

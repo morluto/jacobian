@@ -67,7 +67,9 @@ def _cauchy_convolve(
     return [sum(a[i] * b[k - i] for i in range(k + 1)) for k in range(n)]
 
 
-def _require_matching(left: TruncatedSeries, right: TruncatedSeries, label: str) -> None:
+def _require_matching(
+    left: TruncatedSeries, right: TruncatedSeries, label: str
+) -> None:
     if left.variable != right.variable:
         raise ValueError(f"{label} must share the same variable")
     if left.truncation_order != right.truncation_order:
@@ -79,7 +81,9 @@ def _require_matching(left: TruncatedSeries, right: TruncatedSeries, label: str)
 # ---------------------------------------------------------------------------
 
 
-def compute_add(left: TruncatedSeries, right: TruncatedSeries) -> SeriesArithmeticResult:
+def compute_add(
+    left: TruncatedSeries, right: TruncatedSeries
+) -> SeriesArithmeticResult:
     """Add two series coefficientwise modulo x^N."""
     _require_matching(left, right, "operands")
     n = left.truncation_order
@@ -126,9 +130,7 @@ def compute_scalar_multiply(
     scalar_val = scalar.as_fraction()
     n = series.truncation_order
     result = [a[i] * scalar_val for i in range(n)]
-    return SeriesScalarMultiplyResult(
-        result=_series_result(series.variable, n, result)
-    )
+    return SeriesScalarMultiplyResult(result=_series_result(series.variable, n, result))
 
 
 # ---------------------------------------------------------------------------
@@ -248,9 +250,7 @@ def compute_compose(
         g_power = _cauchy_convolve(g_power, g, n)  # G^k
         for i in range(n):
             result[i] += f[k] * g_power[i]
-    return SeriesComposeResult(
-        result=_series_result(outer.variable, n, result)
-    )
+    return SeriesComposeResult(result=_series_result(outer.variable, n, result))
 
 
 # ---------------------------------------------------------------------------
@@ -306,14 +306,18 @@ def compute_reversion(series: TruncatedSeries) -> SeriesReversionResult:
         _series_result(series.variable, n, g),
     )
     fg_coeffs = _series_fractions(fg.result)
-    left_residual = [fg_coeffs[i] - (Fraction(1) if i == 1 else Fraction(0)) for i in range(n)]
+    left_residual = [
+        fg_coeffs[i] - (Fraction(1) if i == 1 else Fraction(0)) for i in range(n)
+    ]
 
     gf = compute_compose(
         _series_result(series.variable, n, g),
         _series_result(series.variable, n, f),
     )
     gf_coeffs = _series_fractions(gf.result)
-    right_residual = [gf_coeffs[i] - (Fraction(1) if i == 1 else Fraction(0)) for i in range(n)]
+    right_residual = [
+        gf_coeffs[i] - (Fraction(1) if i == 1 else Fraction(0)) for i in range(n)
+    ]
 
     return SeriesReversionResult(
         result=_series_result(series.variable, n, g),
@@ -436,6 +440,4 @@ def compute_from_polynomial(
 
 def compute_to_polynomial(series: TruncatedSeries) -> SeriesToPolynomialResult:
     """Return the canonical truncated polynomial representative of the series."""
-    return SeriesToPolynomialResult(
-        result=series
-    )
+    return SeriesToPolynomialResult(result=series)

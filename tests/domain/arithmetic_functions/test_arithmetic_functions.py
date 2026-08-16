@@ -226,9 +226,7 @@ class TestSummatoryFunction:
 
     def test_single_element(self) -> None:
         result = compute_summatory_function(
-            SummatoryFunctionRequest.model_validate(
-                {"values": [_rat(7, 1)]}
-            )
+            SummatoryFunctionRequest.model_validate({"values": [_rat(7, 1)]})
         )
         assert result.length == 1
         assert result.values[0].as_fraction() == Fraction(7)
@@ -259,11 +257,7 @@ class TestDirichletInverse:
         function mu."""
         result = compute_dirichlet_inverse(
             DirichletInverseRequest.model_validate(
-                {
-                    "values": _vals(
-                        (1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1)
-                    )
-                }
+                {"values": _vals((1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1))}
             )
         )
         # mu: 1, -1, -1, 0, -1, 1

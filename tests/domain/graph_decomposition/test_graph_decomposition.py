@@ -282,9 +282,7 @@ def _validate_ear_decomposition(
         assert ear[-1] in used_vertices, f"ear end {ear[-1]} not used"
         # Internal vertices are new.
         for vertex in ear[1:-1]:
-            assert vertex not in used_vertices, (
-                f"internal vertex {vertex} already used"
-            )
+            assert vertex not in used_vertices, f"internal vertex {vertex} already used"
         # Edges are new and in the graph.
         for u, v in zip(ear, ear[1:]):  # noqa: B905, RUF007
             edge = (min(u, v), max(u, v))
@@ -327,7 +325,12 @@ class TestEarDecomposition:
             },
         )
         edges = (
-            (0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3),
+            (0, 1),
+            (0, 2),
+            (0, 3),
+            (1, 2),
+            (1, 3),
+            (2, 3),
         )
         _validate_ear_decomposition(result.ears, 4, edges)
         # K4 has 6 edges, 4 vertices; the open ear decomposition has
@@ -335,9 +338,7 @@ class TestEarDecomposition:
         assert len(result.ears) == 3
 
     def test_complete_graph_k5(self) -> None:
-        edges = tuple(
-            (i, j) for i in range(5) for j in range(i)
-        )
+        edges = tuple((i, j) for i in range(5) for j in range(i))
         result = _ear_decomposition(
             {
                 "vertex_count": 5,
@@ -443,8 +444,7 @@ class TestOperationRegistration:
 
         modules = load_builtin_operation_modules()
         decomposition_modules = [
-            m for m in modules
-            if m[0] == "jacobian.domains.graph_decomposition"
+            m for m in modules if m[0] == "jacobian.domains.graph_decomposition"
         ]
         assert len(decomposition_modules) == 1
         operations = decomposition_modules[0][1]

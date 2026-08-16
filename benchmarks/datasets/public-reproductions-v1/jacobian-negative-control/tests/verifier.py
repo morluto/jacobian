@@ -25,7 +25,9 @@ def _fraction(value, *, require_json_int: bool):
 def _point(values, *, require_json_int: bool):
     if not isinstance(values, list):
         raise TypeError("expected a point array")
-    return tuple(_fraction(value, require_json_int=require_json_int) for value in values)
+    return tuple(
+        _fraction(value, require_json_int=require_json_int) for value in values
+    )
 
 
 def _evaluate_map(polynomial_map, point):

@@ -47,69 +47,96 @@ def compute_best_response(request: ZeroSumGameRequest) -> BestResponseResult:
     return BestResponseResult(value=_format_rational(best_value), best_row=best_row)
 
 
-def _try_support(  # noqa: C901
+def _solve_positive_weights(
+    equations: list[list[Fraction]],
+    rhs: list[Fraction],
+) -> list[Fraction] | None:
+    try:
+        solved = Matrix(equations).solve(Matrix(rhs))
+    except Exception:
+        return None
+    weights = [Fraction(solved[index]) for index in range(len(rhs))]
+    if any(weight <= 0 for weight in weights):
+        return None
+    return weights
+
+
+def _embed_weights(
+    support: Sequence[int],
+    weights: Sequence[Fraction],
+    size: int,
+) -> list[Fraction]:
+    embedded = [Fraction(0)] * size
+    for index, position in enumerate(support):
+        embedded[position] = weights[index]
+    return embedded
+
+
+def _column_mix_from_rows(
+    matrix: list[list[Fraction]],
+    rows: Sequence[int],
+    cols: Sequence[int],
+) -> list[Fraction] | None:
+    first_row = rows[0]
+    equations = [
+        [matrix[row][col] - matrix[first_row][col] for col in cols] for row in rows[1:]
+    ]
+    rhs = [Fraction(0)] * (len(rows) - 1)
+    equations.append([Fraction(1)] * len(cols))
+    rhs.append(Fraction(1))
+    weights = _solve_positive_weights(equations, rhs)
+    if weights is None:
+        return None
+    return _embed_weights(cols, weights, len(matrix[0]))
+
+
+def _row_mix_from_cols(
+    matrix: list[list[Fraction]],
+    rows: Sequence[int],
+    cols: Sequence[int],
+) -> list[Fraction] | None:
+    first_col = cols[0]
+    equations = [
+        [matrix[row][col] - matrix[row][first_col] for row in rows] for col in cols[1:]
+    ]
+    rhs = [Fraction(0)] * (len(cols) - 1)
+    equations.append([Fraction(1)] * len(rows))
+    rhs.append(Fraction(1))
+    weights = _solve_positive_weights(equations, rhs)
+    if weights is None:
+        return None
+    return _embed_weights(rows, weights, len(matrix))
+
+
+def _try_support(
     matrix: list[list[Fraction]],
     rows: Sequence[int],
     cols: Sequence[int],
 ) -> tuple[list[Fraction], list[Fraction], Fraction] | None:
-    row_count = len(matrix)
-    col_count = len(matrix[0])
-    support_size = len(rows)
-    indifference = []
-    rhs = []
-    first_row = rows[0]
-    for row in rows[1:]:
-        indifference.append([matrix[row][col] - matrix[first_row][col] for col in cols])
-        rhs.append(Fraction(0))
-    indifference.append([Fraction(1)] * support_size)
-    rhs.append(Fraction(1))
-    try:
-        solved = Matrix(indifference).solve(Matrix(rhs))
-    except Exception:
+    q = _column_mix_from_rows(matrix, rows, cols)
+    if q is None:
         return None
-    q_support = [Fraction(solved[index]) for index in range(support_size)]
-    if any(weight <= 0 for weight in q_support):
-        return None
-    q = [Fraction(0)] * col_count
-    for index, col in enumerate(cols):
-        q[col] = q_support[index]
     row_payoffs = [
-        sum(matrix[row][col] * q[col] for col in range(col_count))
-        for row in range(row_count)
+        sum(matrix[row][col] * q[col] for col in range(len(q)))
+        for row in range(len(matrix))
     ]
-    value = row_payoffs[first_row]
+    value = Fraction(row_payoffs[rows[0]])
     if any(row_payoffs[row] != value for row in rows):
         return None
-    if any(row_payoffs[row] > value for row in range(row_count) if row not in rows):
+    if any(row_payoffs[row] > value for row in range(len(matrix)) if row not in rows):
         return None
-
-    column_system = []
-    column_rhs = []
-    first_col = cols[0]
-    for col in cols[1:]:
-        column_system.append(
-            [matrix[row][col] - matrix[row][first_col] for row in rows]
-        )
-        column_rhs.append(Fraction(0))
-    column_system.append([Fraction(1)] * support_size)
-    column_rhs.append(Fraction(1))
-    try:
-        solved = Matrix(column_system).solve(Matrix(column_rhs))
-    except Exception:
+    p = _row_mix_from_cols(matrix, rows, cols)
+    if p is None:
         return None
-    p_support = [Fraction(solved[index]) for index in range(support_size)]
-    if any(weight <= 0 for weight in p_support):
-        return None
-    p = [Fraction(0)] * row_count
-    for index, row in enumerate(rows):
-        p[row] = p_support[index]
     col_payoffs = [
-        sum(p[row] * matrix[row][col] for row in range(row_count))
-        for col in range(col_count)
+        sum(p[row] * matrix[row][col] for row in range(len(p)))
+        for col in range(len(matrix[0]))
     ]
     if any(col_payoffs[col] != value for col in cols):
         return None
-    if any(col_payoffs[col] < value for col in range(col_count) if col not in cols):
+    if any(
+        col_payoffs[col] < value for col in range(len(matrix[0])) if col not in cols
+    ):
         return None
     return p, q, value
 

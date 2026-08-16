@@ -51,7 +51,64 @@ def _count_2x2_inertia(
     return 0, 0, 2
 
 
-def _symmetric_inertia(matrix: list[list[Fraction]]) -> tuple[int, int, int]:  # noqa: C901
+def _eliminate_1x1(matrix: list[list[Fraction]], index: int, pivot: int) -> int:
+    _swap_symmetric(matrix, index, pivot)
+    diagonal = matrix[index][index]
+    for row in range(index + 1, len(matrix)):
+        if matrix[row][index] == 0:
+            continue
+        factor = matrix[row][index] / diagonal
+        for col in range(index, len(matrix)):
+            matrix[row][col] -= factor * matrix[index][col]
+        for col in range(index, len(matrix)):
+            matrix[col][row] = matrix[row][col]
+    return 1 if diagonal > 0 else -1
+
+
+def _find_off_diagonal(
+    matrix: list[list[Fraction]], index: int
+) -> tuple[int, int] | None:
+    for row in range(index, len(matrix)):
+        for col in range(row + 1, len(matrix)):
+            if matrix[row][col] != 0:
+                return row, col
+    return None
+
+
+def _eliminate_2x2(matrix: list[list[Fraction]], index: int) -> tuple[int, int, int]:
+    first, second = _find_off_diagonal(matrix, index) or (index, index)
+    _swap_symmetric(matrix, index, first)
+    if second == index:
+        second = first
+    _swap_symmetric(matrix, index + 1, second)
+    pos, neg, zero = _count_2x2_inertia(
+        matrix[index][index],
+        matrix[index][index + 1],
+        matrix[index + 1][index + 1],
+    )
+    det = (
+        matrix[index][index] * matrix[index + 1][index + 1]
+        - matrix[index][index + 1] ** 2
+    )
+    if index + 2 < len(matrix) and det != 0:
+        inv00 = matrix[index + 1][index + 1] / det
+        inv01 = -matrix[index][index + 1] / det
+        inv11 = matrix[index][index] / det
+        for row in range(index + 2, len(matrix)):
+            left = matrix[row][index]
+            right = matrix[row][index + 1]
+            coeff0 = left * inv00 + right * inv01
+            coeff1 = left * inv01 + right * inv11
+            for col in range(index, len(matrix)):
+                matrix[row][col] -= (
+                    coeff0 * matrix[index][col] + coeff1 * matrix[index + 1][col]
+                )
+            for col in range(index, len(matrix)):
+                matrix[col][row] = matrix[row][col]
+    return pos, neg, zero
+
+
+def _symmetric_inertia(matrix: list[list[Fraction]]) -> tuple[int, int, int]:
     """Reduce a symmetric rational matrix to a congruence-diagonal form."""
     n = len(matrix)
     a = [row[:] for row in matrix]
@@ -60,61 +117,18 @@ def _symmetric_inertia(matrix: list[list[Fraction]]) -> tuple[int, int, int]:  #
     while index < n:
         pivot = next((row for row in range(index, n) if a[row][row] != 0), None)
         if pivot is not None:
-            _swap_symmetric(a, index, pivot)
-            diagonal = a[index][index]
-            if diagonal > 0:
-                n_pos += 1
-            else:
-                n_neg += 1
-            for row in range(index + 1, n):
-                if a[row][index] == 0:
-                    continue
-                factor = a[row][index] / diagonal
-                for col in range(index, n):
-                    a[row][col] -= factor * a[index][col]
-                for col in range(index, n):
-                    a[col][row] = a[row][col]
+            sign = _eliminate_1x1(a, index, pivot)
+            n_pos += sign > 0
+            n_neg += sign < 0
             index += 1
             continue
-
-        pair = None
-        for row in range(index, n):
-            for col in range(row + 1, n):
-                if a[row][col] != 0:
-                    pair = (row, col)
-                    break
-            if pair is not None:
-                break
-        if pair is None:
+        if _find_off_diagonal(a, index) is None:
             n_zero += n - index
             break
-        first, second = pair
-        _swap_symmetric(a, index, first)
-        if second == index:
-            second = first
-        _swap_symmetric(a, index + 1, second)
-        pos, neg, zero = _count_2x2_inertia(
-            a[index][index],
-            a[index][index + 1],
-            a[index + 1][index + 1],
-        )
+        pos, neg, zero = _eliminate_2x2(a, index)
         n_pos += pos
         n_neg += neg
         n_zero += zero
-        det = a[index][index] * a[index + 1][index + 1] - a[index][index + 1] ** 2
-        if index + 2 < n and det != 0:
-            inv00 = a[index + 1][index + 1] / det
-            inv01 = -a[index][index + 1] / det
-            inv11 = a[index][index] / det
-            for row in range(index + 2, n):
-                left = a[row][index]
-                right = a[row][index + 1]
-                coeff0 = left * inv00 + right * inv01
-                coeff1 = left * inv01 + right * inv11
-                for col in range(index, n):
-                    a[row][col] -= coeff0 * a[index][col] + coeff1 * a[index + 1][col]
-                for col in range(index, n):
-                    a[col][row] = a[row][col]
         index += 2
     return n_pos, n_neg, n_zero
 
@@ -167,7 +181,7 @@ def check_farkas_certificate(
     b = [entry.as_fraction() for entry in request.rhs_vector]
 
     if any(entry < 0 for entry in y):
-        ytb = sum(yi * bi for yi, bi in zip(y, b, strict=True))
+        ytb = sum((yi * bi for yi, bi in zip(y, b, strict=True)), Fraction(0))
         return FarkasCertificateResult(
             valid=False,
             y_t_a=(),
@@ -180,7 +194,7 @@ def check_farkas_certificate(
     for i, yi in enumerate(y):
         for j in range(n_vars):
             yta[j] += yi * constraint_matrix[i][j]
-    ytb = sum(yi * bi for yi, bi in zip(y, b, strict=True))
+    ytb = sum((yi * bi for yi, bi in zip(y, b, strict=True)), Fraction(0))
     yta_str = tuple(_format_rational(value) for value in yta)
 
     if all(value == 0 for value in yta) and ytb < 0:

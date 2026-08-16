@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from jacobian.adapters.mcp.constants import (
     OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT,
@@ -13,9 +13,6 @@ from jacobian.contracts.operations import OperationDiscoveryRequest
 from jacobian.operation_discovery import OperationDiscoveryCursorError
 
 _LOGGER = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    pass
 
 
 def _mcp_text_json_bytes(value: object) -> bytes:

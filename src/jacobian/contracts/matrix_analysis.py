@@ -30,7 +30,10 @@ class SymmetricMatrixRequest(ContractModel):
         for e in self.entries:
             if e.row >= self.dimension or e.col >= self.dimension:
                 raise ValueError("entry indices must be < dimension")
-            seen.add((e.row, e.col))
+            key = (min(e.row, e.col), max(e.row, e.col))
+            if key in seen:
+                raise ValueError("symmetric matrix entries must not conflict")
+            seen.add(key)
         return self
 
 

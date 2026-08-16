@@ -119,7 +119,7 @@ GRAPH_DECOMPOSITION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     graph_decomposition_operation(
         "graph.decomposition.ear.compute",
         "Compute an open ear decomposition of a biconnected graph",
-        "Compute an open ear decomposition of a biconnected undirected graph. The first ear is a cycle and each subsequent ear is a path whose internal vertices are disjoint from all earlier ears. Returns an error if the input graph is not biconnected.",
+        "Compute an open ear decomposition of a biconnected undirected graph. The first ear is a cycle and each subsequent ear is a path whose internal vertices are disjoint from all earlier ears. A graph that is not biconnected returns biconnected=false and no ears.",
         EarDecompositionRequest,
         EarDecompositionResult,
         compute_ear_decomposition,

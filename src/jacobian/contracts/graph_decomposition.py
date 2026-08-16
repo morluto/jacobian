@@ -85,11 +85,19 @@ class EarDecompositionResult(ContractModel):
     """Open ear decomposition of a biconnected graph.
 
     Each ear is a tuple of vertices describing a path whose internal vertex
-    is disjoint from all other ears.  The first ear is a cycle.
+    is disjoint from all other ears.  The first ear is a cycle.  A graph that
+    is not biconnected is a typed ``biconnected=false`` outcome.
     """
 
+    biconnected: bool = True
     ears: tuple[tuple[int, ...], ...] = Field(default=())
     convention: Literal["JACOBIAN_EAR_DECOMPOSITION"] = "JACOBIAN_EAR_DECOMPOSITION"
+
+    @model_validator(mode="after")
+    def require_ears_match_biconnectivity(self) -> Self:
+        if not self.biconnected and self.ears:
+            raise ValueError("a non-biconnected graph must not report ears")
+        return self
 
 
 class BiconnectedComponentsRequest(ContractModel):

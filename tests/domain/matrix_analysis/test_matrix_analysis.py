@@ -64,6 +64,19 @@ class TestInertia:
         assert result.n_zero == 0
         assert result.definiteness == "indefinite"
 
+    def test_rejects_conflicting_symmetric_entries(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="conflict"):
+            SymmetricMatrixRequest(
+                dimension=2,
+                entries=(
+                    MatrixEntry(row=0, col=1, value={"num": "1", "den": "1"}),
+                    MatrixEntry(row=1, col=0, value={"num": "2", "den": "1"}),
+                ),
+            )
+
 
 class TestFarkas:
     def test_valid_certificate(self):

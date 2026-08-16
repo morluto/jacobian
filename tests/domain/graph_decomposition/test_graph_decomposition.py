@@ -347,15 +347,15 @@ class TestEarDecomposition:
         )
         _validate_ear_decomposition(result.ears, 5, edges)
 
-    def test_non_biconnected_raises(self) -> None:
-        # A path of length 2 is not biconnected.
-        with pytest.raises(ValueError, match="biconnected"):
-            _ear_decomposition(
-                {
-                    "vertex_count": 3,
-                    "edges": [(0, 1), (1, 2)],
-                },
-            )
+    def test_non_biconnected_is_typed_outcome(self) -> None:
+        result = _ear_decomposition(
+            {
+                "vertex_count": 3,
+                "edges": [(0, 1), (1, 2)],
+            },
+        )
+        assert result.biconnected is False
+        assert result.ears == ()
 
     def test_single_vertex(self) -> None:
         # A single vertex has no ears.

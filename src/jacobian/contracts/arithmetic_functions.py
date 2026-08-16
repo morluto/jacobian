@@ -51,8 +51,8 @@ class MobiusTransformRequest(ContractModel):
 
     Given ``F`` at indices 1..n the forward Möbius transform returns
     ``f(K) = sum_{d | K} mu(d) * F(K // d)``.  When ``inverse`` is true the
-    inverse transform is applied instead:
-    ``F(K) = sum_{d | K} mu(d) * f(K // d)``.
+    inverse transform is Dirichlet convolution with the constant-one function:
+    ``F(K) = sum_{d | K} f(K // d)``.
     """
 
     values: tuple[CanonicalRational, ...]

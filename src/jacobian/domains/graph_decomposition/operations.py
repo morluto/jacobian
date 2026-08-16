@@ -121,10 +121,10 @@ def compute_ear_decomposition(
     g = _build_graph(request.graph)
 
     if g.number_of_nodes() < 2:
-        return EarDecompositionResult(ears=())
+        return EarDecompositionResult(biconnected=True, ears=())
 
     if not nx.is_biconnected(g):
-        raise ValueError("ear decomposition requires a biconnected graph")
+        return EarDecompositionResult(biconnected=False, ears=())
 
     # --- First ear: a cycle through the smallest vertex --------------------
     start = min(g.nodes())
@@ -145,7 +145,7 @@ def compute_ear_decomposition(
         for u, v in zip(ear, ear[1:]):  # noqa: RUF007, B905
             used_edges.add((min(u, v), max(u, v)))
 
-    return EarDecompositionResult(ears=tuple(ears))
+    return EarDecompositionResult(biconnected=True, ears=tuple(ears))
 
 
 def _find_cycle(g: nx.Graph[int], start: int) -> list[int]:

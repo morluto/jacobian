@@ -5,20 +5,12 @@ from __future__ import annotations
 from jacobian.contracts.number_field import (
     NumberFieldDiscriminantResult,
     NumberFieldRequest,
-    NumberFieldRingOfIntegersResult,
 )
-from jacobian.math.number_field import discriminant, ring_of_integers
+from jacobian.math.number_field import discriminant
 
 
 def compute_nf_discriminant(
     request: NumberFieldRequest,
 ) -> NumberFieldDiscriminantResult:
-    disc = discriminant(list(request.coefficients_descending), request.variable)  # type: ignore[no-untyped-call]
+    disc = discriminant(list(request.coefficients_descending), request.variable)
     return NumberFieldDiscriminantResult(discriminant=disc)
-
-
-def compute_nf_ring_of_integers(
-    request: NumberFieldRequest,
-) -> NumberFieldRingOfIntegersResult:
-    basis = ring_of_integers(list(request.coefficients_descending), request.variable)  # type: ignore[no-untyped-call]
-    return NumberFieldRingOfIntegersResult(integral_basis=tuple(basis))

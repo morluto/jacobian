@@ -79,6 +79,31 @@ ROOT_ISOLATION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "algebraic",
         "comparison",
         "exact",
-        examples=(),
+        examples=(
+            example(
+                "compare_sqrt_two_and_three",
+                "Compare sqrt(2) with sqrt(3) from their isolating intervals.",
+                {
+                    "left": {
+                        "polynomial": [
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                            {"num": "-2", "den": "1"},
+                        ],
+                        "isolating_interval_lower": {"num": "1", "den": "1"},
+                        "isolating_interval_upper": {"num": "2", "den": "1"},
+                    },
+                    "right": {
+                        "polynomial": [
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                            {"num": "-3", "den": "1"},
+                        ],
+                        "isolating_interval_lower": {"num": "1", "den": "1"},
+                        "isolating_interval_upper": {"num": "2", "den": "1"},
+                    },
+                },
+            ),
+        ),
     ),
 )

@@ -10,6 +10,7 @@ from jacobian.contracts.code_theory import (
     WeightDistributionResult,
 )
 from jacobian.contracts.operations import OperationExample
+from jacobian.domains._examples import example
 from jacobian.domains.code_theory.operations import (
     compute_min_distance,
     compute_weight_dist,
@@ -45,25 +46,37 @@ CODE_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ct_operation(
         "code.minimum_distance.compute",
         "Compute the minimum distance of a linear code",
-        "Compute the minimum Hamming distance of a linear code given by a generator matrix over a finite field.",
+        "Compute the minimum Hamming distance by exact enumeration over a bounded prime field.",
         LinearCodeRequest,
         MinimumDistanceResult,
         compute_min_distance,
         "code",
         "minimum-distance",
         "exact",
-        examples=(),
+        examples=(
+            example(
+                "binary_repetition_code",
+                "Minimum distance of the binary repetition code of length two.",
+                {"field_order": 2, "generator_matrix": [[1, 1]]},
+            ),
+        ),
     ),
     ct_operation(
         "code.weight_distribution.compute",
         "Compute the weight distribution of a linear code",
-        "Compute the weight distribution of a linear code given by a generator matrix over a finite field.",
+        "Compute the weight distribution by exact enumeration over a bounded prime field.",
         LinearCodeRequest,
         WeightDistributionResult,
         compute_weight_dist,
         "code",
         "weight-distribution",
         "exact",
-        examples=(),
+        examples=(
+            example(
+                "binary_repetition_code",
+                "Weight distribution of the binary repetition code of length two.",
+                {"field_order": 2, "generator_matrix": [[1, 1]]},
+            ),
+        ),
     ),
 )

@@ -47,7 +47,7 @@ RECURRENCE_SOLVING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     rs_operation(
         "sequence.recurrence.find",
         "Find the minimal linear recurrence of a sequence",
-        "Find the minimal linear recurrence of a finite sequence over QQ using exact rational interpolation.",
+        "Find the lowest-order homogeneous recurrence that exactly fits the supplied finite rational sequence.",
         RecurrenceFindRequest,
         RecurrenceFindResult,
         compute_find_recurrence,
@@ -65,7 +65,7 @@ RECURRENCE_SOLVING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     rs_operation(
         "sequence.recurrence.closed_form.compute",
         "Compute the closed-form of a linear recurrence",
-        "Compute the closed-form Binet-type solution of a linear recurrence from its characteristic polynomial using SymPy rsolve.",
+        "Compute the closed form from a characteristic polynomial and exactly one initial value per degree, including repeated roots.",
         ClosedFormRequest,
         ClosedFormResult,
         compute_closed_form,
@@ -73,6 +73,15 @@ RECURRENCE_SOLVING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "recurrence",
         "closed-form",
         "exact",
-        examples=(),
+        examples=(
+            example(
+                "repeated_root",
+                "Solve the recurrence with characteristic polynomial (x-1)^2.",
+                {
+                    "characteristic_coefficients": ["1", "-2", "1"],
+                    "initial_values": ["2", "5"],
+                },
+            ),
+        ),
     ),
 )

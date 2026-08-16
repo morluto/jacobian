@@ -2,54 +2,55 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import Any, Literal
+
 __all__ = ["compare_algebraic", "isolate_real_roots"]
 
 
-def isolate_real_roots(coeffs_desc):  # type: ignore[no-untyped-def]
-    import sympy
-
-    poly = sum(
-        sympy.Rational(c["num"], c["den"]) * sympy.Symbol("x") ** i
-        for i, c in enumerate(reversed(coeffs_desc))
-    )
-    roots = sympy.Poly(poly, sympy.Symbol("x")).all_roots()
-    real_roots = [(r, 1) for r in roots if r.is_real]
-    return real_roots
-
-
-def compare_algebraic(  # type: ignore[no-untyped-def]
-    left_poly, left_lower, left_upper, right_poly, right_lower, right_upper
-):
+def _polynomial(coeffs_desc: Sequence[dict[str, str]]) -> Any:
     import sympy
 
     x = sympy.Symbol("x")
-    lp = sum(
-        sympy.Rational(c["num"], c["den"]) * x**i
-        for i, c in enumerate(reversed(left_poly))
+    expression = sum(
+        sympy.Rational(c["num"], c["den"]) * sympy.Symbol("x") ** i
+        for i, c in enumerate(reversed(coeffs_desc))
     )
-    rp = sum(
-        sympy.Rational(c["num"], c["den"]) * x**i
-        for i, c in enumerate(reversed(right_poly))
-    )
-    lr = sympy.CRootOf(sympy.Poly(lp, x), 0)
-    for _i in range(len(sympy.Poly(lp, x).all_roots())):
-        for r in sympy.Poly(lp, x).all_roots():
-            if r.is_real and sympy.nsimplify(left_lower) <= r <= sympy.nsimplify(
-                left_upper
-            ):
-                lr = r
-                break
-    rr = sympy.CRootOf(sympy.Poly(rp, x), 0)
-    for _i in range(len(sympy.Poly(rp, x).all_roots())):
-        for r in sympy.Poly(rp, x).all_roots():
-            if r.is_real and sympy.nsimplify(right_lower) <= r <= sympy.nsimplify(
-                right_upper
-            ):
-                rr = r
-                break
+    return sympy.Poly(expression, x, domain=sympy.QQ)
+
+
+def isolate_real_roots(coeffs_desc: Sequence[dict[str, str]]) -> Any:
+    """Return SymPy's exact rational isolating intervals and multiplicities."""
+    return _polynomial(coeffs_desc).intervals()
+
+
+def compare_algebraic(
+    left_poly: Sequence[dict[str, str]],
+    left_lower: Any,
+    left_upper: Any,
+    right_poly: Sequence[dict[str, str]],
+    right_lower: Any,
+    right_upper: Any,
+) -> Literal["LT", "EQ", "GT"]:
+    import sympy
+
+    def selected_real_root(poly: Any, lower: Any, upper: Any) -> Any:
+        roots = {
+            root for root in poly.all_roots() if root.is_real and lower <= root <= upper
+        }
+        if len(roots) != 1:
+            raise ValueError("isolating interval must contain exactly one real root")
+        return roots.pop()
+
+    left_lower = sympy.Rational(left_lower.num, left_lower.den)
+    left_upper = sympy.Rational(left_upper.num, left_upper.den)
+    right_lower = sympy.Rational(right_lower.num, right_lower.den)
+    right_upper = sympy.Rational(right_upper.num, right_upper.den)
+    lr = selected_real_root(_polynomial(left_poly), left_lower, left_upper)
+    rr = selected_real_root(_polynomial(right_poly), right_lower, right_upper)
     cmp = sympy.sign(lr - rr)
     if cmp < 0:
         return "LT"
-    elif cmp > 0:
+    if cmp > 0:
         return "GT"
     return "EQ"

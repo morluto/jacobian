@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__all__ = ["is_ergodic", "stationary_distribution"]
+__all__ = ["ergodic_properties", "stationary_distribution"]
 
 
 def stationary_distribution(matrix):  # type: ignore[no-untyped-def]
@@ -26,22 +26,17 @@ def stationary_distribution(matrix):  # type: ignore[no-untyped-def]
     return []
 
 
-def is_ergodic(matrix):  # type: ignore[no-untyped-def]
-    import sympy
+def ergodic_properties(matrix):  # type: ignore[no-untyped-def]
+    import networkx as nx
 
-    n = len(matrix)
-    p = sympy.Matrix(
-        [
-            [sympy.Rational(matrix[i][j]["num"], matrix[i][j]["den"]) for j in range(n)]
-            for i in range(n)
-        ]
+    graph: nx.DiGraph[int] = nx.DiGraph()
+    graph.add_nodes_from(range(len(matrix)))
+    graph.add_edges_from(
+        (source, target)
+        for source, row in enumerate(matrix)
+        for target, value in enumerate(row)
+        if value["num"] != "0"
     )
-    # Check irreducible: all entries of P^n are positive for some n
-    # Check aperiodic: gcd of return times is 1
-    # Simplified: check if all entries of P^2 are positive
-    p2 = p * p
-    for i in range(n):
-        for j in range(n):
-            if p2[i, j] <= 0:
-                return False
-    return True
+    irreducible = nx.is_strongly_connected(graph)
+    aperiodic = irreducible and nx.is_aperiodic(graph)
+    return irreducible, aperiodic

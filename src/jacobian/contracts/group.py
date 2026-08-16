@@ -69,6 +69,8 @@ class GroupOrbitRequest(ContractModel):
 
     @model_validator(mode="after")
     def require_valid_generators(self) -> Self:
+        if not 0 <= self.point < self.degree:
+            raise ValueError("point must be in 0..degree-1")
         for perm in self.generators:
             if len(perm) != self.degree:
                 raise ValueError("each generator must have length equal to degree")

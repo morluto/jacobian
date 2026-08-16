@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-import networkx as nx
-
 from jacobian.contracts.graph_coloring_ops import (
-    GraphEdgeList,
     KColorabilityRequest,
     KColorabilityResult,
     MaximumIndependentSetRequest,
@@ -15,30 +10,22 @@ from jacobian.contracts.graph_coloring_ops import (
 )
 
 
-def _build_graph(graph: GraphEdgeList) -> nx.Graph[int]:
-    g: nx.Graph[Any] = nx.Graph[Any]()
-    g.add_nodes_from(range(graph.vertex_count))
-    g.add_edges_from(graph.edges)
-    return g
-
-
 def compute_k_colorability(request: KColorabilityRequest) -> KColorabilityResult:
-    g = _build_graph(request.graph)
-    try:
-        coloring_dict = nx.coloring.greedy_color(g, strategy="largest_first")
-        num_colors = len(set(coloring_dict.values()))
-        if num_colors <= request.colors:
-            coloring = [
-                coloring_dict.get(i, 0) for i in range(request.graph.vertex_count)
-            ]
-            return KColorabilityResult(
-                colorable=True,
-                coloring=tuple(coloring),
-                vertex_count=request.graph.vertex_count,
-                colors=request.colors,
-            )
-    except Exception:
-        pass
+    import z3  # type: ignore[import-untyped]
+
+    solver = z3.Solver()
+    colors = [z3.Int(f"color_{vertex}") for vertex in range(request.graph.vertex_count)]
+    solver.add(*(z3.And(color >= 0, color < request.colors) for color in colors))
+    solver.add(*(colors[u] != colors[v] for u, v in request.graph.edges))
+    if solver.check() == z3.sat:
+        model = solver.model()
+        coloring = tuple(model.eval(color).as_long() for color in colors)
+        return KColorabilityResult(
+            colorable=True,
+            coloring=coloring,
+            vertex_count=request.graph.vertex_count,
+            colors=request.colors,
+        )
     return KColorabilityResult(
         colorable=False,
         vertex_count=request.graph.vertex_count,
@@ -49,11 +36,23 @@ def compute_k_colorability(request: KColorabilityRequest) -> KColorabilityResult
 def compute_maximum_independent_set(
     request: MaximumIndependentSetRequest,
 ) -> MaximumIndependentSetResult:
-    g = _build_graph(request.graph)
-    from networkx.algorithms.approximation import maximum_independent_set
+    import z3
 
-    iset = maximum_independent_set(g)
+    vertices = [
+        z3.Bool(f"selected_{vertex}") for vertex in range(request.graph.vertex_count)
+    ]
+    solver = z3.Optimize()
+    solver.add(
+        *(z3.Not(z3.And(vertices[u], vertices[v])) for u, v in request.graph.edges)
+    )
+    solver.maximize(z3.Sum(*(z3.If(vertex, 1, 0) for vertex in vertices)))
+    if solver.check() != z3.sat:
+        raise RuntimeError("Z3 failed to optimize the bounded independent-set instance")
+    model = solver.model()
+    iset = tuple(
+        index for index, vertex in enumerate(vertices) if z3.is_true(model.eval(vertex))
+    )
     return MaximumIndependentSetResult(
-        independent_set=tuple(sorted(iset)),
+        independent_set=iset,
         cardinality=len(iset),
     )

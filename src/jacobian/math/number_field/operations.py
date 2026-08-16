@@ -2,29 +2,36 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import Any, cast
+
 __all__ = ["discriminant", "ring_of_integers"]
 
 
-def discriminant(coefficients_descending, variable):  # type: ignore[no-untyped-def]
+def _integral_basis(
+    coefficients_descending: Sequence[str], variable: str
+) -> tuple[Any, Any]:
     import sympy
+    from sympy.polys.numberfields import round_two
 
     x = sympy.Symbol(variable)
-    poly = sum(
-        sympy.Rational(c) * x ** (len(coefficients_descending) - 1 - i)
-        for i, c in enumerate(coefficients_descending)
+    polynomial = sum(
+        sympy.Rational(coefficient) * x ** (len(coefficients_descending) - 1 - index)
+        for index, coefficient in enumerate(coefficients_descending)
     )
-    p = sympy.Poly(poly, x)
-    return str(p.discriminant())
+    return cast(tuple[Any, Any], round_two(sympy.Poly(polynomial, x)))
 
 
-def ring_of_integers(coefficients_descending, variable):  # type: ignore[no-untyped-def]
-    import sympy
-
-    x = sympy.Symbol(variable)
-    poly = sum(
-        sympy.Rational(c) * x ** (len(coefficients_descending) - 1 - i)
-        for i, c in enumerate(coefficients_descending)
+def discriminant(coefficients_descending: Sequence[str], variable: str) -> str:
+    _ring_of_integers, field_discriminant = _integral_basis(
+        coefficients_descending, variable
     )
-    p = sympy.Poly(poly, x)
-    # Simplified: return the discriminant-based integral basis info
-    return [str(p.discriminant())]
+    return str(field_discriminant)
+
+
+def ring_of_integers(
+    coefficients_descending: Sequence[str], variable: str
+) -> list[str]:
+    """Return the exact integral basis expressed in the defining power basis."""
+    ring, _field_discriminant = _integral_basis(coefficients_descending, variable)
+    return [str(element.as_expr()) for element in ring.basis_element_pullbacks()]

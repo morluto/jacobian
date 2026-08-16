@@ -19,24 +19,22 @@ from jacobian.contracts.graph_flow import (
 
 
 def _build_digraph(graph: FlowGraph) -> nx.DiGraph[int]:
-    g: nx.DiGraph[Any] = nx.DiGraph[int]()
+    g: nx.DiGraph[Any] = nx.DiGraph()
     g.add_nodes_from(range(graph.vertex_count))
     for edge in graph.edges:
-        cap = edge.capacity.as_fraction()
-        g.add_edge(edge.source, edge.target, capacity=float(cap))
+        g.add_edge(edge.source, edge.target, capacity=edge.capacity.as_fraction())
     return g
 
 
 def compute_max_flow(request: MaxFlowRequest) -> MaxFlowResult:
-    if request.source == request.sink:
-        raise ValueError("source and sink must be distinct")
     g = _build_digraph(request.graph)
     flow_value = nx.maximum_flow_value(g, request.source, request.sink)
-    frac = Fraction(flow_value).limit_denominator(10**18)
+    if not isinstance(flow_value, (int, Fraction)):
+        raise RuntimeError("NetworkX did not preserve the exact flow value")
     return MaxFlowResult(
         flow_value=CanonicalRational(
-            num=format_canonical_integer(frac.numerator),
-            den=format_canonical_integer(frac.denominator),
+            num=format_canonical_integer(flow_value.numerator),
+            den=format_canonical_integer(flow_value.denominator),
         ),
         source=request.source,
         sink=request.sink,
@@ -44,16 +42,15 @@ def compute_max_flow(request: MaxFlowRequest) -> MaxFlowResult:
 
 
 def compute_min_cut(request: MinCutRequest) -> MinCutResult:
-    if request.source == request.sink:
-        raise ValueError("source and sink must be distinct")
     g = _build_digraph(request.graph)
     cut_value, partition = nx.minimum_cut(g, request.source, request.sink)
+    if not isinstance(cut_value, (int, Fraction)):
+        raise RuntimeError("NetworkX did not preserve the exact cut value")
     reachable, unreachable = partition
-    frac = Fraction(cut_value).limit_denominator(10**18)
     return MinCutResult(
         cut_value=CanonicalRational(
-            num=format_canonical_integer(frac.numerator),
-            den=format_canonical_integer(frac.denominator),
+            num=format_canonical_integer(cut_value.numerator),
+            den=format_canonical_integer(cut_value.denominator),
         ),
         reachable=tuple(sorted(reachable)),
         unreachable=tuple(sorted(unreachable)),

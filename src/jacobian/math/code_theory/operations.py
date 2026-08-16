@@ -8,16 +8,13 @@ __all__ = ["minimum_distance", "weight_distribution"]
 
 
 def _codewords(generator_matrix, field_order):  # type: ignore[no-untyped-def]
+    from flint import nmod_mat
+
     n_rows = len(generator_matrix)
-    n_cols = len(generator_matrix[0]) if n_rows > 0 else 0
+    generator = nmod_mat(generator_matrix, field_order)
     for coeffs in product(range(field_order), repeat=n_rows):
-        codeword = []
-        for j in range(n_cols):
-            val = 0
-            for i in range(n_rows):
-                val += coeffs[i] * generator_matrix[i][j]
-            codeword.append(val % field_order)
-        yield tuple(codeword)
+        coefficient_row = nmod_mat([list(coeffs)], field_order)
+        yield tuple((coefficient_row * generator).tolist()[0])
 
 
 def minimum_distance(generator_matrix, field_order):  # type: ignore[no-untyped-def]

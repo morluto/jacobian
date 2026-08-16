@@ -8,7 +8,7 @@ from jacobian.contracts.markov_chain import (
     StationaryDistributionResult,
     TransitionMatrixRequest,
 )
-from jacobian.math.markov_chain import is_ergodic, stationary_distribution
+from jacobian.math.markov_chain import ergodic_properties, stationary_distribution
 
 
 def compute_stationary_distribution(
@@ -25,9 +25,9 @@ def compute_stationary_distribution(
 
 def compute_ergodic_decision(request: TransitionMatrixRequest) -> ErgodicDecisionResult:
     matrix = [[{"num": c.num, "den": c.den} for c in row] for row in request.matrix]
-    ergodic = is_ergodic(matrix)  # type: ignore[no-untyped-call]
+    irreducible, aperiodic = ergodic_properties(matrix)  # type: ignore[no-untyped-call]
     return ErgodicDecisionResult(
-        is_ergodic=ergodic,
-        is_irreducible=ergodic,
-        is_aperdiodic=ergodic,
+        is_ergodic=irreducible and aperiodic,
+        is_irreducible=irreducible,
+        is_aperiodic=aperiodic,
     )

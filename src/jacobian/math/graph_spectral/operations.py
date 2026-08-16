@@ -29,10 +29,7 @@ def laplacian_spectrum(vertex_count, edges):  # type: ignore[no-untyped-def]
     if not 1 <= vertex_count <= 32:
         raise ValueError("graph vertex count must be between 1 and 32")
     adj = _adjacency_matrix(vertex_count, edges)  # type: ignore[no-untyped-call]
-    degree = sympy.zeros(vertex_count)
-    for u, v in edges:
-        degree[u, u] += 1
-        degree[v, v] += 1
+    degree = sympy.diag(*(sum(adj[vertex, :]) for vertex in range(vertex_count)))
     lap = degree - adj
     eigenvals = lap.eigenvals()
     return [(str(val), int(mult)) for val, mult in eigenvals.items()]

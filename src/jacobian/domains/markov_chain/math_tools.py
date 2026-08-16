@@ -10,6 +10,7 @@ from jacobian.contracts.markov_chain import (
     TransitionMatrixRequest,
 )
 from jacobian.contracts.operations import OperationExample
+from jacobian.domains._examples import example
 from jacobian.domains.markov_chain.operations import (
     compute_ergodic_decision,
     compute_stationary_distribution,
@@ -53,7 +54,18 @@ MARKOV_CHAIN_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "markov-chain",
         "stationary-distribution",
         "exact",
-        examples=(),
+        examples=(
+            example(
+                "two_state_chain",
+                "Stationary distribution of a two-state rational Markov chain.",
+                {
+                    "matrix": [
+                        [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
+                        [{"num": "1", "den": "4"}, {"num": "3", "den": "4"}],
+                    ]
+                },
+            ),
+        ),
     ),
     mc_operation(
         "probability.markov_chain.ergodic.decide",
@@ -66,6 +78,30 @@ MARKOV_CHAIN_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "markov-chain",
         "ergodic",
         "exact",
-        examples=(),
+        examples=(
+            example(
+                "aperiodic_three_state_chain",
+                "An irreducible aperiodic chain with zeros in its square.",
+                {
+                    "matrix": [
+                        [
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                        [
+                            {"num": "0", "den": "1"},
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                        [
+                            {"num": "1", "den": "2"},
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "2"},
+                        ],
+                    ]
+                },
+            ),
+        ),
     ),
 )

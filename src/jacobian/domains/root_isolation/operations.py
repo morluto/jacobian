@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import sympy
+
+from jacobian.canonical import format_canonical_integer
+from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.root_isolation import (
     AlgebraicCompareRequest,
     AlgebraicCompareResult,
@@ -12,19 +16,31 @@ from jacobian.math.root_isolation import compare_algebraic, isolate_real_roots
 
 
 def compute_root_isolation(request: UnivariatePolynomialRequest) -> RootIsolationResult:
-    roots = isolate_real_roots(  # type: ignore[no-untyped-call]
+    isolated = isolate_real_roots(
         [{"num": c.num, "den": c.den} for c in request.coefficients_descending]
     )
     return RootIsolationResult(
-        roots=(),
-        multiplicities=tuple(m for _, m in roots),
+        roots=tuple(
+            (
+                CanonicalRational(
+                    num=format_canonical_integer(sympy.Rational(lower).p),
+                    den=format_canonical_integer(sympy.Rational(lower).q),
+                ),
+                CanonicalRational(
+                    num=format_canonical_integer(sympy.Rational(upper).p),
+                    den=format_canonical_integer(sympy.Rational(upper).q),
+                ),
+            )
+            for (lower, upper), _multiplicity in isolated
+        ),
+        multiplicities=tuple(multiplicity for _interval, multiplicity in isolated),
     )
 
 
 def compute_algebraic_compare(
     request: AlgebraicCompareRequest,
 ) -> AlgebraicCompareResult:
-    order = compare_algebraic(  # type: ignore[no-untyped-call]
+    order = compare_algebraic(
         [{"num": c.num, "den": c.den} for c in request.left.polynomial],
         request.left.isolating_interval_lower,
         request.left.isolating_interval_upper,

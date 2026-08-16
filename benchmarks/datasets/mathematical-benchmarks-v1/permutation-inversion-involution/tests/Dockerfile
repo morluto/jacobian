@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact verifier for an inversion-complementing permutation involution.
 LABEL jacobian.task="jacobian/permutation-inversion-involution" \
-      jacobian.checksum="e5f38346aec7f278d9ddd1671401f65defd2dde8e9c3f0307c392b6cfb77203d"
+      jacobian.checksum="c432d3726ffafd3149d1a7b8907d83c209050b8e7825543bfd7d8836806d2162"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="f217e784040151690ee456cfce8ef57aeb98796d2e06c8f7ec4dad39de1ffc6b"
+LABEL jacobian.checksum="d3f427e9c4386b7c07cceef2d9d983635bb69814087e1a52a9faa16464f6ddf8"
 # Exact cyclic primal-dual optimization verifier.
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

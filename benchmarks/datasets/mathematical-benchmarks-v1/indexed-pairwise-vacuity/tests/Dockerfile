@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact verifier for indexed versus value-level pairwise semantics.
 LABEL jacobian.task="jacobian/indexed-pairwise-vacuity" \
-      jacobian.checksum="81bc5d54b647415a1d386e257733e3d5a22b12b950c4edc9928a057d3b65f0b3"
+      jacobian.checksum="53694efe4d39759b884e3ccff1fbb3848f266834f84821dbc50977ca1f6226a4"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

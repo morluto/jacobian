@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="912847b11f348f3d117f114803d0dbdde7caa5b7cd7c816d26b55630b3040aac"
+LABEL jacobian.checksum="34a9865deeb4329b29b9b3439d1ee195a2f9b1295407da544474dc04ceaf2e88"
 LABEL jacobian.task="jacobian/gf2-matrix-completion-quantifier-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

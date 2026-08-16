@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="8e2c3f29af5aca05d5e85a3a1fb0b82f679b1b28a0745e54b008d01ab5b1fb85"
+LABEL jacobian.checksum="937b9b0dcd25af3f718fd518263bb53b234965249f6e8d15f4ec028dcd6d1728"
 LABEL jacobian.task="jacobian/cyclic-polynomial-sum-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

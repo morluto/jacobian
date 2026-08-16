@@ -1,133 +1,126 @@
 {
-  "result": {
-    "argument": {
-      "implication": "UNIFORM_CONVERGENCE_DOES_NOT_FORCE_VARIATION_CONVERGENCE",
-      "uniform_convergence": "SUP_NORM_1_OVER_QN_TENDS_TO_ZERO",
-      "variation_behavior": "TOTAL_VARIATION_IS_CONSTANTLY_FOUR"
-    },
-    "checkpoints": [
-      {
-        "amplitude": {
-          "denominator": 3,
-          "numerator": 1
+    "result": {
+        "checkpoints": [
+            {
+                "amplitude": {
+                    "denominator": 3,
+                    "numerator": 1
+                },
+                "endpoint_contribution": {
+                    "denominator": 3,
+                    "numerator": 2
+                },
+                "frequency": 3,
+                "interior_contribution": {
+                    "denominator": 3,
+                    "numerator": 10
+                },
+                "interior_segments": 5,
+                "n": 1,
+                "total_variation": {
+                    "denominator": 1,
+                    "numerator": 4
+                }
+            },
+            {
+                "amplitude": {
+                    "denominator": 6,
+                    "numerator": 1
+                },
+                "endpoint_contribution": {
+                    "denominator": 3,
+                    "numerator": 1
+                },
+                "frequency": 6,
+                "interior_contribution": {
+                    "denominator": 3,
+                    "numerator": 11
+                },
+                "interior_segments": 11,
+                "n": 2,
+                "total_variation": {
+                    "denominator": 1,
+                    "numerator": 4
+                }
+            },
+            {
+                "amplitude": {
+                    "denominator": 15,
+                    "numerator": 1
+                },
+                "endpoint_contribution": {
+                    "denominator": 15,
+                    "numerator": 2
+                },
+                "frequency": 15,
+                "interior_contribution": {
+                    "denominator": 15,
+                    "numerator": 58
+                },
+                "interior_segments": 29,
+                "n": 5,
+                "total_variation": {
+                    "denominator": 1,
+                    "numerator": 4
+                }
+            },
+            {
+                "amplitude": {
+                    "denominator": 33,
+                    "numerator": 1
+                },
+                "endpoint_contribution": {
+                    "denominator": 33,
+                    "numerator": 2
+                },
+                "frequency": 33,
+                "interior_contribution": {
+                    "denominator": 33,
+                    "numerator": 130
+                },
+                "interior_segments": 65,
+                "n": 11,
+                "total_variation": {
+                    "denominator": 1,
+                    "numerator": 4
+                }
+            }
+        ],
+        "limit_function": {
+            "value": {
+                "denominator": 1,
+                "numerator": 0
+            }
         },
-        "endpoint_contribution": {
-          "denominator": 3,
-          "numerator": 2
+        "scale_q": 3,
+        "sequence": {
+            "argument_exponents": {
+                "n": 1,
+                "q": 1,
+                "x": 1
+            },
+            "denominator_exponents": {
+                "n": 1,
+                "q": 1
+            },
+            "function": "SIN"
         },
-        "frequency": 3,
-        "interior_contribution": {
-          "denominator": 3,
-          "numerator": 10
+        "uniform_certificate": {
+            "sup_norm_denominator_coefficient": 3,
+            "sup_norm_numerator": 1
         },
-        "interior_segments": 5,
-        "n": 1,
-        "total_variation": {
-          "denominator": 1,
-          "numerator": 4
+        "variation_formula": {
+            "endpoint_jump_multiplier": 1,
+            "endpoint_segment_count": 2,
+            "interior_jump_multiplier": 2,
+            "interior_segment_count": {
+                "constant": -1,
+                "frequency_multiplier": 2
+            },
+            "total_variation": {
+                "denominator": 1,
+                "numerator": 4
+            }
         }
-      },
-      {
-        "amplitude": {
-          "denominator": 6,
-          "numerator": 1
-        },
-        "endpoint_contribution": {
-          "denominator": 3,
-          "numerator": 1
-        },
-        "frequency": 6,
-        "interior_contribution": {
-          "denominator": 3,
-          "numerator": 11
-        },
-        "interior_segments": 11,
-        "n": 2,
-        "total_variation": {
-          "denominator": 1,
-          "numerator": 4
-        }
-      },
-      {
-        "amplitude": {
-          "denominator": 15,
-          "numerator": 1
-        },
-        "endpoint_contribution": {
-          "denominator": 15,
-          "numerator": 2
-        },
-        "frequency": 15,
-        "interior_contribution": {
-          "denominator": 15,
-          "numerator": 58
-        },
-        "interior_segments": 29,
-        "n": 5,
-        "total_variation": {
-          "denominator": 1,
-          "numerator": 4
-        }
-      },
-      {
-        "amplitude": {
-          "denominator": 33,
-          "numerator": 1
-        },
-        "endpoint_contribution": {
-          "denominator": 33,
-          "numerator": 2
-        },
-        "frequency": 33,
-        "interior_contribution": {
-          "denominator": 33,
-          "numerator": 130
-        },
-        "interior_segments": 65,
-        "n": 11,
-        "total_variation": {
-          "denominator": 1,
-          "numerator": 4
-        }
-      }
-    ],
-    "limit_function": {
-      "kind": "CONSTANT",
-      "value": {
-        "denominator": 1,
-        "numerator": 0
-      }
-    },
-    "scale_q": 3,
-    "sequence": {
-      "argument_exponents": {
-        "n": 1,
-        "q": 1,
-        "x": 1
-      },
-      "denominator_exponents": {
-        "n": 1,
-        "q": 1
-      },
-      "function": "SIN"
-    },
-    "uniform_certificate": {
-      "sup_norm_denominator_coefficient": 3,
-      "sup_norm_numerator": 1,
-      "tends_to_zero": true
-    },
-    "variation_formula": {
-      "endpoint_jump_multiplier": 1,
-      "endpoint_segment_count": 2,
-      "interior_jump_multiplier": 2,
-      "interior_segment_count": {
-        "constant": -1,
-        "frequency_multiplier": 2
-      },
-      "total_variation": {
-        "denominator": 1,
-        "numerator": 4
-      }
     }
-  }
 }

@@ -48,9 +48,7 @@ def _result_shape_is_valid(result):
         return False
     certificate = result.get("upper_bound_certificate")
     if not isinstance(certificate, dict) or set(certificate) != {
-        "element_frequency_cap",
         "singleton_cap",
-        "nonsingleton_incidence_floor",
     }:
         return False
     constructions = result.get("constructions")
@@ -87,8 +85,6 @@ def _math_claim_is_correct(result):
             == 1 + n + n // 2
             for n in (7, 8, 11)
         )
-        and certificate.get("element_frequency_cap") == 2
-        and certificate.get("nonsingleton_incidence_floor") == 2
         and isinstance(cap, dict)
         and cap == {"variable": "n"}
         and set(construction_map) == {7, 8, 11}

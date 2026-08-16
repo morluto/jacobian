@@ -1,50 +1,71 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": false,
-  "properties": {
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "assignment": {
-          "additionalProperties": true,
-          "properties": {
-            "p1h1": {
-              "type": "boolean"
-            },
-            "p1h2": {
-              "type": "boolean"
-            },
-            "p2h1": {
-              "type": "boolean"
-            },
-            "p2h2": {
-              "type": "boolean"
-            },
-            "p3h1": {
-              "type": "boolean"
-            },
-            "p3h2": {
-              "type": "boolean"
-            }
-          },
-          "type": "object"
-        },
-        "status": {
-          "enum": [
-            "SATISFIABLE",
-            "UNSATISFIABLE"
-          ]
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+        "result": {
+            "oneOf": [
+                {
+                    "additionalProperties": false,
+                    "properties": {
+                        "status": {
+                            "const": "SATISFIABLE"
+                        },
+                        "assignment": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "p1h1": {
+                                    "type": "boolean"
+                                },
+                                "p1h2": {
+                                    "type": "boolean"
+                                },
+                                "p2h1": {
+                                    "type": "boolean"
+                                },
+                                "p2h2": {
+                                    "type": "boolean"
+                                },
+                                "p3h1": {
+                                    "type": "boolean"
+                                },
+                                "p3h2": {
+                                    "type": "boolean"
+                                }
+                            },
+                            "required": [
+                                "p1h1",
+                                "p1h2",
+                                "p2h1",
+                                "p2h2",
+                                "p3h1",
+                                "p3h2"
+                            ],
+                            "type": "object"
+                        }
+                    },
+                    "required": [
+                        "status",
+                        "assignment"
+                    ],
+                    "type": "object"
+                },
+                {
+                    "additionalProperties": false,
+                    "properties": {
+                        "status": {
+                            "const": "UNSATISFIABLE"
+                        }
+                    },
+                    "required": [
+                        "status"
+                    ],
+                    "type": "object"
+                }
+            ]
         }
-      },
-      "required": [
-        "status",
-        "assignment"
-      ],
-      "type": "object"
-    }
-  },
-  "required": [
-    "result"
-  ],
-  "type": "object"
+    },
+    "required": [
+        "result"
+    ],
+    "type": "object"
 }

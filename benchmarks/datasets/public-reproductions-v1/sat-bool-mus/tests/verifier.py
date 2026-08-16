@@ -8,14 +8,14 @@ E = Path("/tests")
 
 
 def _satisfied(clause, assign, variables):
-    for lit in clause:
-        idx = abs(lit) - 1
+    for literal in clause:
+        idx = abs(literal) - 1
         if idx < 0 or idx >= len(variables):
             return False
         val = assign[variables[idx]]
         if not isinstance(val, bool):
             return False
-        if (lit > 0) == val:
+        if (literal > 0) == val:
             return True
     return False
 
@@ -40,10 +40,12 @@ def _math(s, x):
             return False
         if not all(isinstance(v, bool) for v in a.values()):
             return False
-        return status == "SATISFIABLE" and all(
-            _satisfied(c, a, variables) for c in clauses
-        )
-    return status == "UNSATISFIABLE" and _brute_unsat(clauses, variables)
+        return all(_satisfied(c, a, variables) for c in clauses)
+    if status == "UNSATISFIABLE":
+        if "assignment" in r:
+            return False
+        return _brute_unsat(clauses, variables)
+    return False
 
 
 def main():

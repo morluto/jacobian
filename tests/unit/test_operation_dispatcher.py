@@ -23,6 +23,7 @@ def test_invoke_operation_runs_determinant_directly() -> None:
         catalog,
     )
     assert result.runtime_ms >= 0
+    assert result.output is not None
     assert result.output["determinant"] == {"num": "-2", "den": "1"}
 
 

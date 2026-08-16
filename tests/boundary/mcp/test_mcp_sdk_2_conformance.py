@@ -77,6 +77,12 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources(
                 "math.find", {"unknown_key": "rejected"}
             )
             assert invalid_request.is_error is True
+            assert invalid_request.content, "error responses must carry diagnostic text"
+            assert any(
+                "request" in item.text
+                for item in invalid_request.content
+                if getattr(item, "text", None) is not None
+            ), "error text must identify the missing request field"
 
             contract_result = await client.call_tool(
                 "math.find",
@@ -100,6 +106,8 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources(
             assert result.structured_content == OperationResult.model_validate(
                 result.structured_content
             ).model_dump(mode="json")
+            assert "output" in result.structured_content
+            assert "determinant" in result.structured_content["output"]
 
             catalog = await client.read_resource("operation://catalog")
             snapshot = OperationCatalogSnapshot.model_validate_json(

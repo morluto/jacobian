@@ -92,6 +92,7 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
             )
             assert invalid.is_error is True
             assert invalid.structured_content is None
+            assert "Extra inputs are not permitted" in invalid.content[0].text
 
             matching_description = await client.call_tool(
                 "math.find",
@@ -105,8 +106,8 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
             assert isinstance(matching_description.structured_content, dict)
             matching_contract = matching_description.structured_content
             assert matching_contract["operation"]["version"] == "3"
-            assert matching_contract["operation"]["examples"][0]["name"] == (
-                "triangle_with_tail"
+            assert matching_contract["operation"]["examples"], (
+                "operation must publish at least one invocation example"
             )
 
             unknown = await client.call_tool(

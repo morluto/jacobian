@@ -35,3 +35,6 @@ def test_advertised_invocation_example_executes_successfully(operation) -> None:
     request = operation.request_type.model_validate(examples[0].input)
     outcome = operation.run(request)
     assert isinstance(outcome, operation.result_type), (operation_id, outcome)
+    assert outcome.model_dump(mode="json"), (
+        f"{operation_id} example produced an empty result"
+    )

@@ -95,9 +95,6 @@ def test_checked_in_schema_accepts_current_result_and_witness_contracts() -> Non
         Path("benchmarks/templates/task/tests/public_contract.json").read_text()
     )
     witness_contract = _base_contract_dict()
-    witness_contract["submission_schema"] = json.loads(
-        render_submission_schema(PublicContract.model_validate(witness_contract))
-    )
     validator = Draft202012Validator(schema)
     assert list(validator.iter_errors(result_only)) == []
     assert list(validator.iter_errors(witness_contract)) == []

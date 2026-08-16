@@ -1,1 +1,0 @@
-The 2x3 integer matrix [[2,4,4],[6,6,12]] has rank 2 and Smith invariant factors 2 and 6.

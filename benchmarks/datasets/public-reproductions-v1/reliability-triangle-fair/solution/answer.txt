@@ -1,1 +1,0 @@
-The fair triangle a-b-c with terminals a,c has reliability 5/8 over 8 states.

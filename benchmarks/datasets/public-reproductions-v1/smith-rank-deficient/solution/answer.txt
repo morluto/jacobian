@@ -1,1 +1,0 @@
-The 3x2 integer matrix [[2,4],[4,8],[6,12]] has rank 1 and a single Smith invariant factor 2.

@@ -1,1 +1,0 @@
-The three residue classes are {0,3,6,9}, {1,4,7,10}, and {2,5,8,11}; they are disjoint and their union is the full twelve-element universe.

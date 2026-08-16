@@ -1,3 +1,0 @@
-The submitted four classes partition 1 through 44, and direct pairwise replay
-shows that each class is sum-free. The verifier separately proves the upper
-bound by checking the complete 4-coloring constraint system for 1 through 45.

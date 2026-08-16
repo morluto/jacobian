@@ -1,1 +1,0 @@
-The two x^2 terms cancel, leaving 3*x*y^2 + 5.

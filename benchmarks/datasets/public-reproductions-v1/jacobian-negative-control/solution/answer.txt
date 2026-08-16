@@ -1,1 +1,0 @@
-The mutated claimed_image (-1/3,0,0) does not match the true common image, so no collision is verified; the conclusion is UNKNOWN with no verification record.

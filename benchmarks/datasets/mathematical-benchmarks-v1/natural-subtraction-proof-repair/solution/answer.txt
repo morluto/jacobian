@@ -1,1 +1,0 @@
-The rewrite pattern a+d is absent because the target's left side is (a-b)+d. Under b<=a, set u=a-b and recover u+b=a. Adding the coefficient vectors for a+d=c+b and u+b=a cancels a and b, leaving u+d-c=0, exactly the goal u+d=c.

@@ -1,1 +1,0 @@
-Direct image commutes with relative complement on every subset exactly for the frozen bijection. The empty subset exposes missing surjectivity, while subset `{3}` exposes the collision in the surjective non-injection.

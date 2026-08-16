@@ -1,1 +1,0 @@
-An asymmetric band pattern can admit both a rank-one completion and an invertible completion. The latter's existence gives no lower bound on a minimum over all completions.

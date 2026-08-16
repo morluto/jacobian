@@ -1,1 +1,0 @@
-The locally finite sets A_n=(n,0) and B_n=(n,1/n) are closed and disjoint, but their cross-distance infimum is zero, so the candidate prediction is strictly stronger than separation.

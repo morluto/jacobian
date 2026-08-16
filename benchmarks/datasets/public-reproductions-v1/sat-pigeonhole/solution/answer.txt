@@ -1,1 +1,0 @@
-Three pigeons cannot be placed into two holes without collision; the CNF is unsatisfiable.

@@ -1,1 +1,0 @@
-Take f(x)=2+3x for x<=0 and f(x)=2-x/2 for x>=0. Both branches equal 2 at zero, so the function is continuous. The positive left slope and negative right slope make every nonzero point in [-1,1] strictly lower than f(0). The one-sided derivatives 3 and -1/2 differ, so f is not differentiable at zero.

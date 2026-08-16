@@ -1,1 +1,0 @@
-The rational generating-function query selects combinatorics.generating_function.coefficients.compute.

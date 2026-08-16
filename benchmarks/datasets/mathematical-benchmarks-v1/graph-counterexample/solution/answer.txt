@@ -1,1 +1,0 @@
-Edges 0-1, 1-2, 2-3, 3-4, 4-0, 5-0, 5-2 form a connected triangle-free graph with minimum degree 2 and an odd 5-cycle, so it is not bipartite.

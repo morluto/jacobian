@@ -1,1 +1,0 @@
-The quarter-turn cyclically permutes all four vertices into one orbit and all four edges into one orbit.

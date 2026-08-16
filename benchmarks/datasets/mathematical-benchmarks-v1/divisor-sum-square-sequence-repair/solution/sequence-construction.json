@@ -1,1 +1,0 @@
-{"schema_version":"1","task_id":"jacobian/divisor-sum-square-sequence-repair","result":{"a_1":1,"default_exponent_offset":1,"probes":[{"a_p":208,"b_p":625,"prime":3,"square_root":25},{"a_p":5184,"b_p":25921,"prime":5,"square_root":161},{"a_p":114944,"b_p":804609,"prime":7,"square_root":897},{"a_p":46141440,"b_p":507555841,"prime":11,"square_root":22529}]}}

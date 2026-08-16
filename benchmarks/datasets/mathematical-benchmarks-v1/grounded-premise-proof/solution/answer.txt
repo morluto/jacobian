@@ -1,1 +1,0 @@
-Because G is abelian, its subgroup N is normal, so G/N is defined. For arbitrary cosets X=xN and Y=yN, the coset-product rule gives XY=(xy)N. Commutativity in G gives (xy)N=(yx)N, and the coset-product rule again gives (yx)N=YX. Hence XY=YX.

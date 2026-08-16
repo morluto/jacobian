@@ -1,1 +1,0 @@
-The CNF (x) AND (not x) AND (y or z) is unsatisfiable because x and not x cannot both hold.

@@ -1,1 +1,0 @@
-The sixth moment of the standard complex Gaussian variable Z is E[Z^6] = 15 (real), 0 (imaginary).

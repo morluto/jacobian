@@ -1,1 +1,0 @@
-The source uses an existential prime quantifier where gcd one requires a zero minimum valuation for every prime. The attached tables refute the weak condition and satisfy the repaired local gcd, lcm, and product contracts.

@@ -1,1 +1,0 @@
-The nonnegative-norm filter retains the two exact zero residuals.

@@ -1,1 +1,0 @@
-The query 'compute the Lucas number at index n' selects combinatorics.compute.lucas.

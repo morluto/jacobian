@@ -1,1 +1,0 @@
-The query 'compute the Fibonacci number at index n' selects combinatorics.compute.fibonacci.

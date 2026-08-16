@@ -1,1 +1,0 @@
-The value complement p_i -> 8-p_i is a fixed-point-free involution. Each of the 21 position pairs changes inversion status, so paired inversion counts sum to 21 and the total is 2520*21=52920.

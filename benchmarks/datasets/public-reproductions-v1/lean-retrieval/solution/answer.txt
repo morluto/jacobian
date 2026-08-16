@@ -1,1 +1,0 @@
-The top retrieved tactic for Nat.gcd n 0 = n is `exact Nat.gcd_zero_right n`; retrieval is not exhaustive.

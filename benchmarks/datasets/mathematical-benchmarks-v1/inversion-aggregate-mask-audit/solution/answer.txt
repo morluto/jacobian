@@ -1,1 +1,0 @@
-The identity permutation has zero intended inversions but the implementation counts all six increasing pairs. Across all permutations the two complementary counts each total 72, so the aggregate equality masks the pointwise error.

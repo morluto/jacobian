@@ -1,1 +1,0 @@
-The exact orbit and rational-function solution certificate are machine-readable.

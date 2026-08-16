@@ -1,1 +1,0 @@
-Exact countermodel certificate generated; see submission.json.

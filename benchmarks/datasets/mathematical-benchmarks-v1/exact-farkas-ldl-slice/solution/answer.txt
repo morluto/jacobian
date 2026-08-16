@@ -1,1 +1,0 @@
-The exact local certificate and its assurance boundary are machine-readable.

@@ -1,1 +1,0 @@
-The one-point complex has reduced integral homology free rank 0 and no torsion.

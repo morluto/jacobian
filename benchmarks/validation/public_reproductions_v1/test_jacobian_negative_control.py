@@ -96,3 +96,15 @@ def test_unrelated_collision_is_rejected(tmp_path: Path) -> None:
     rejected = _run_verifier(task, app, logs)
     assert rejected.details["correctness"] == pytest.approx(0.0)
     assert rejected.reward == pytest.approx(0.0)
+
+
+def test_short_collision_vector_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _prepare_case(tmp_path, "jacobian-negative-control", "claimed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["collision"]["first_point"] = [
+        {"num": -1, "den": 4},
+        {"num": 0, "den": 1},
+    ]
+    _write_json(app / "submission.json", submission)
+    rejected = _run_verifier(task, app, logs)
+    assert rejected.reward == pytest.approx(0.0)

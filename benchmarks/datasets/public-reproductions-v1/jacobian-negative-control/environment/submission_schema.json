@@ -26,7 +26,8 @@
                 ],
                 "type": "object"
               },
-              "minItems": 1,
+              "minItems": 3,
+              "maxItems": 3,
               "type": "array"
             },
             "first_point": {
@@ -47,7 +48,8 @@
                 ],
                 "type": "object"
               },
-              "minItems": 1,
+              "minItems": 3,
+              "maxItems": 3,
               "type": "array"
             },
             "second_image": {
@@ -68,7 +70,8 @@
                 ],
                 "type": "object"
               },
-              "minItems": 1,
+              "minItems": 3,
+              "maxItems": 3,
               "type": "array"
             },
             "second_point": {
@@ -89,7 +92,8 @@
                 ],
                 "type": "object"
               },
-              "minItems": 1,
+              "minItems": 3,
+              "maxItems": 3,
               "type": "array"
             }
           },

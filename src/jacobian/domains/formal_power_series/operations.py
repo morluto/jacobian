@@ -443,4 +443,10 @@ def compute_from_polynomial(
 
 def compute_to_polynomial(series: TruncatedSeries) -> SeriesToPolynomialResult:
     """Return the canonical truncated polynomial representative of the series."""
-    return SeriesToPolynomialResult(result=series)
+    return SeriesToPolynomialResult(
+        result=TruncatedSeries(
+            variable=series.variable,
+            truncation_order=series.truncation_order,
+            coefficients=series.coefficients,
+        )
+    )

@@ -28,10 +28,12 @@ Every built-in `MathTool` declaration must publish at least one small valid
 invocation example. An example is part of the public contract: it must validate
 against the declaration's request model, use canonical values where required,
 and be executable in Jacobian's supported local environment. Keep it close to
-the operation and adapt it when a request contract changes. The composition catalog test executes every published example: the payload
-must validate, the domain function must return a typed result, and that result
-must re-validate. The operation's owning tests still own nontrivial example
-behavior, plus the adversarial and request-boundary cases below.
+the operation and adapt it when a request contract changes. The composition
+catalog test executes every published example: the payload must validate, the
+domain function must return a typed result, and that result must re-validate.
+The operation's owning tests still own nontrivial example behavior and the
+adversarial and request-boundary cases in the preflight below. Those two cases
+are written with the operation; they are not a separate CI program.
 
 Write an invocation example's description in two parts: first state the
 computation the operation performs on the supplied values, then state the
@@ -97,8 +99,11 @@ Before declaring the operation, provide tests for:
 - a public-operation assertion that the returned value satisfies its defining
   mathematical invariant or witness, rather than merely parsing or reaching a
   backend; and
-- request validation proving schema-valid inputs reach the backend without a
-  representation or shape failure.
+- request validation proving a schema-valid input either returns a typed
+  result or is rejected by the request model—never a host exception.
+
+CI executes every advertised invocation example. The adversarial case and the
+schema-valid request-boundary case belong in the owning domain tests.
 
 If no bounded implementation can support the public claim, do not expose the
 operation yet. A backend import or native function is not evidence that its

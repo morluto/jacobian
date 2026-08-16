@@ -35,6 +35,8 @@ def test_advertised_invocation_example_executes_successfully(
         serialized = outcome.model_dump(mode="json")
         assert serialized, f"{operation_id} example produced an empty result"
         validated = operation.result_type.model_validate(serialized)
-        assert (
-            validated.model_dump(mode="json") == serialized
-        ), (operation_id, serialized, validated.model_dump(mode="json"))
+        assert validated.model_dump(mode="json") == serialized, (
+            operation_id,
+            serialized,
+            validated.model_dump(mode="json"),
+        )

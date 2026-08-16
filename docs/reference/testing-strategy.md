@@ -30,7 +30,8 @@ as a substitute for a focused regression test.
 ## What to test
 
 For an operation, test the typed request boundary, the domain result, and a
-real caller-visible invocation when the MCP projection changed. A result that
+real caller-visible invocation when the MCP projection changed. The composition
+catalog test executes every advertised invocation example. A result that
 feeds another operation should be passed as the next typed payload; do not add
 tests for producer IDs, stored references, serialization round trips inside the
 kernel, or hidden runtime state.

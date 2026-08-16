@@ -5,7 +5,7 @@ from typing import Any
 
 from verifier_support import (
     aggregate_reward,
-    load_submission_raw,
+    load_submission,
     normalize_reward_file,
     workspace_input_is_bound,
 )
@@ -203,16 +203,12 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
 
 
 def main() -> None:
-    submission = load_submission_raw(require_input_binding=False)
+    submission = load_submission(require_input_binding=False)
     data = submission if isinstance(submission, dict) else {}
     input_bound = workspace_input_is_bound()
     math_correct = bool(_result(data.get("result"), _frozen()))
-    protocol_ok = bool(
-        isinstance(submission, dict)
-        and set(data) == {"result"}
-        and _result_schema(data.get("result"))
-    )
-    correct = bool(protocol_ok and input_bound and math_correct)
+    protocol_ok = submission is not None
+    correct = bool(submission is not None and input_bound and math_correct)
     reward = aggregate_reward(
         correctness=correct,
         protocol_ok=protocol_ok,

@@ -5,7 +5,6 @@ from typing import Any
 
 from verifier_support import (
     load_submission,
-    load_submission_raw,
     normalize_reward_file,
     workspace_input_is_bound,
 )
@@ -153,10 +152,9 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
 
 
 def main() -> None:
-    raw = load_submission_raw(require_input_binding=False)
     submission = load_submission(require_input_binding=False)
     protocol_ok = submission is not None and workspace_input_is_bound()
-    data = raw if isinstance(raw, dict) else {}
+    data = submission if isinstance(submission, dict) else {}
     frozen = _load()
     math_correct = bool(_result(data.get("result"), frozen))
     reward = float(protocol_ok and math_correct)

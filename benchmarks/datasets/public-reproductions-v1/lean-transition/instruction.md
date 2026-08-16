@@ -1,6 +1,6 @@
 # Lean proof-state tactic application
 
-Apply the declared tactic to the Lean proof state in `input.json` and report the resulting goal count and whether the proof is completed. Write `submission.json` to the exact agent-visible `submission_schema.json`. Claim `COMPUTED` assurance; do not claim `VERIFIED`.
+Apply the declared tactic to the Lean proof state in `input.json` and report the resulting goal count and whether the proof is completed. Write `submission.json` to the exact agent-visible `submission_schema.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

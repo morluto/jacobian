@@ -232,6 +232,8 @@ _LEGACY_ADAPTER_MODE_NAMES = frozenset({"TypedInputAdapter", "typed_input"})
 _PUBLIC_CONTRACT_DATASET_PREFIXES = (
     PurePosixPath("benchmarks/datasets/mathematical-benchmarks-v1"),
     PurePosixPath("benchmarks/datasets/conjecture-probes-v1"),
+    PurePosixPath("benchmarks/datasets/public-reproductions-v1"),
+    PurePosixPath("benchmarks/datasets/symbolic-coordination-v1"),
 )
 
 # Unsupported surfaces: scan supported src, tests, schemas, catalog, and docs.

@@ -111,7 +111,10 @@ def test_public_submission_validation_accepts_complete_object(
     monkeypatch.setattr(
         _VS, "_load_public_contract", lambda: json.loads(contract_path.read_text())
     )
-    assert _VS._public_submission_is_valid({"result": {"count": 1, "labels": ["one"]}}) is True
+    assert (
+        _VS._public_submission_is_valid({"result": {"count": 1, "labels": ["one"]}})
+        is True
+    )
 
 
 def test_load_public_contract_rejects_invalid_schema(tmp_path: Path) -> None:
@@ -216,12 +219,16 @@ def test_submission_matches_public_schema_validates_against_contract(
     monkeypatch.setattr(
         _VS, "_load_public_contract", lambda: json.loads(contract_path.read_text())
     )
-    assert _VS.submission_matches_public_schema(
-        {"result": {"count": 1, "labels": ["one"]}}
-    ) is True
-    assert _VS.submission_matches_public_schema(
-        {"result": {"count": -1, "labels": []}}
-    ) is False
+    assert (
+        _VS.submission_matches_public_schema(
+            {"result": {"count": 1, "labels": ["one"]}}
+        )
+        is True
+    )
+    assert (
+        _VS.submission_matches_public_schema({"result": {"count": -1, "labels": []}})
+        is False
+    )
 
 
 def test_derive_submission_schema_prefers_declarations_over_stored_copy() -> None:

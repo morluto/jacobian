@@ -325,7 +325,9 @@ def load_contract(path: Path) -> PublicContract:
     except (OSError, json.JSONDecodeError) as exc:
         raise ContractError(f"cannot read contract {path}: {exc}") from exc
     if not isinstance(raw, dict):
-        raise ContractError(f"contract {path} is invalid: top-level JSON must be an object")
+        raise ContractError(
+            f"contract {path} is invalid: top-level JSON must be an object"
+        )
     # submission_schema is a derived projection, not a stored field.
     # Strip it if present so older contract files still validate.
     raw.pop("submission_schema", None)

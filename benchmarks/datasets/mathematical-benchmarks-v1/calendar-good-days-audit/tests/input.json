@@ -1,14 +1,22 @@
 {
-  "task_id":"jacobian/calendar-good-days-audit",
+  "task_id": "jacobian/calendar-good-days-audit",
   "claim": "Across March, April, and May, exactly 15 dates are good.",
   "definition": "A date in month m with day d is good when the base-10 integer formed by concatenating m and d, with no zero padding, is divisible by both m and d.",
   "months": [
-    {"month": 3, "days": 31},
-    {"month": 4, "days": 30},
-    {"month": 5, "days": 31}
+    {
+      "month": 3,
+      "days": 31
+    },
+    {
+      "month": 4,
+      "days": 30
+    },
+    {
+      "month": 5,
+      "days": 31
+    }
   ],
   "required_output": {
-    "audit_claim": true,
     "list_every_good_date_in_calendar_order": true,
     "include_concatenated_values": true,
     "report_exact_count": true

@@ -43,9 +43,10 @@ Run one installed math tool by ID with its typed `payload`. A successful call re
 the operation-owned mathematical value in `output`; read its fields to determine what
 the calculation established. MCP reports malformed payloads, unknown IDs, and host
 failures as tool errors, not as mathematical results. If the payload shape is unknown,
-inspect the exact operation with math.find, select one item from `examples`, and copy
-and adapt that item's `input` object as the `payload`. Do not call math.run with an
-empty `payload` merely to discover required fields; inspection is authoritative.
+inspect the exact operation with math.find. When it publishes an `examples` item, copy
+and adapt that item's `input` object as the `payload`; otherwise, form the payload from
+the input schema and its field descriptions. Do not call math.run with an empty
+`payload` merely to discover required fields; inspection is authoritative.
 
 Timeout, incomplete search, and missing witnesses appear only in the concrete domain
 result that owns them; none is a mathematical conclusion by itself.

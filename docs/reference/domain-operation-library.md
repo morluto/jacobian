@@ -24,6 +24,23 @@ or model description and a minimal valid example in the exported schema. The
 validator remains authoritative; the metadata lets a caller form a valid first
 request rather than discover the rule only through a rejected call.
 
+Every built-in `MathTool` declaration must publish at least one small valid
+invocation example. An example is part of the public contract: it must validate
+against the declaration's request model, use canonical values where required,
+and be executable in Jacobian's supported local environment. Keep it close to
+the operation and adapt it when a request contract changes. The catalog test
+checks every published example at the request boundary; the operation's owning
+tests should exercise any nontrivial example behavior.
+
+Examples help an agent form its first request without guessing. JSON Schema can
+name fields and simple bounds, but it cannot fully communicate validator-owned
+rules such as nested value shape, canonical ordering, coupled fields, or the
+smallest useful composition. On exact inspection, an agent can copy an example
+payload and adapt its mathematical content instead of discovering that wire
+contract through a failed call, a lengthy ad-hoc script, or trial and error.
+Examples illustrate a valid representation; they do not prescribe a proof
+strategy or restrict how operations may be composed.
+
 Use maintained backends through thin private adapters. Direct bounded results
 compose by being supplied as the next operation's typed
 payload.

@@ -301,6 +301,35 @@ _DIAMOND: dict[str, Any] = {
     "reflexive_pairs": "FORBIDDEN",
 }
 
+_MATERIALIZED_DIAMOND: dict[str, Any] = {
+    "poset_format": "jacobian.finite-poset/v1",
+    "elements": ["0", "1", "a", "b"],
+    "strict_order_pairs": [
+        {"lower": "0", "upper": "1"},
+        {"lower": "0", "upper": "a"},
+        {"lower": "0", "upper": "b"},
+        {"lower": "a", "upper": "1"},
+        {"lower": "b", "upper": "1"},
+    ],
+    "cover_relations": [
+        {"lower": "0", "upper": "a"},
+        {"lower": "0", "upper": "b"},
+        {"lower": "a", "upper": "1"},
+        {"lower": "b", "upper": "1"},
+    ],
+    "incomparable_pairs": [{"left": "a", "right": "b"}],
+    "minimal_elements": ["0"],
+    "maximal_elements": ["1"],
+    "graded": True,
+    "ranks": [
+        {"element": "0", "rank": 0},
+        {"element": "1", "rank": 2},
+        {"element": "a", "rank": 1},
+        {"element": "b", "rank": 1},
+    ],
+    "poset_digest": "sha256:bb8df218b7f750edddcb9259c6aff4ca7128e1d1e73bd092306c350583ab8e96",
+}
+
 FINITE_POSET_OPERATIONS: MathTools = (
     MathTool(
         operation_id="poset.finite.compute",
@@ -351,6 +380,13 @@ FINITE_POSET_OPERATIONS: MathTools = (
             "dilworth",
             "exact",
         ),
+        examples=(
+            example(
+                "materialized_diamond",
+                "Compute the width of the canonical four-element diamond.",
+                {"poset": _MATERIALIZED_DIAMOND},
+            ),
+        ),
     ),
     MathTool(
         operation_id="poset.linear_extensions.count",
@@ -366,6 +402,13 @@ FINITE_POSET_OPERATIONS: MathTools = (
             "exact-count",
             "order-ideal",
             "dynamic-programming",
+        ),
+        examples=(
+            example(
+                "materialized_diamond",
+                "Count the linear extensions of the canonical diamond.",
+                {"poset": _MATERIALIZED_DIAMOND},
+            ),
         ),
     ),
     MathTool(
@@ -385,6 +428,13 @@ FINITE_POSET_OPERATIONS: MathTools = (
             "incidence-algebra",
             "interval",
             "exact",
+        ),
+        examples=(
+            example(
+                "materialized_diamond",
+                "Compute every Möbius value of the canonical diamond.",
+                {"poset": _MATERIALIZED_DIAMOND},
+            ),
         ),
     ),
 )

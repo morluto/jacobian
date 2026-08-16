@@ -28,12 +28,12 @@ value in the next payload; the agent owns the evolving conjecture and hypothesis
 ## Form a payload from an inspected contract
 
 Inspect an operation before constructing an unfamiliar payload. Start from one
-of its valid examples and adapt it to the mathematical input. Field descriptions
-and the input schema state the required representation, including units, bounds,
-and canonical encodings or ordering where they matter. An error from `math.run`
-means the request did not meet that operation's contract; use its diagnostic to
-make the smallest correction before drawing a mathematical
-conclusion from any result.
+of its valid examples, when it has one, and adapt it to the mathematical input.
+Otherwise form the payload from the input schema and field descriptions. They
+state the required representation, including units, bounds, and canonical
+encodings or ordering where they matter. An error from `math.run` means the
+request did not meet that operation's contract; use its diagnostic to make the
+smallest correction before drawing a mathematical conclusion from any result.
 
 `browse` is recomputed from immutable declarations on every request. Its cursor is
 only caller-supplied pagination state, so it creates no catalog identity, saved

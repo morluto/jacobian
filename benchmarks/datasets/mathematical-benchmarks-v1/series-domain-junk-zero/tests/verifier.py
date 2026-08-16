@@ -106,7 +106,6 @@ def main():
     math_correct = bool(protocol_ok and _valid_result(submission.get("result"), frozen))
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)

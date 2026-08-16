@@ -3,44 +3,65 @@
   "additionalProperties": false,
   "properties": {
     "result": {
-      "additionalProperties": false,
-      "properties": {
-        "assignment": {
-          "additionalProperties": true,
+      "oneOf": [
+        {
+          "additionalProperties": false,
           "properties": {
-            "p1h1": {
-              "type": "boolean"
+            "assignment": {
+              "additionalProperties": false,
+              "properties": {
+                "p1h1": {
+                  "type": "boolean"
+                },
+                "p1h2": {
+                  "type": "boolean"
+                },
+                "p2h1": {
+                  "type": "boolean"
+                },
+                "p2h2": {
+                  "type": "boolean"
+                },
+                "p3h1": {
+                  "type": "boolean"
+                },
+                "p3h2": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "p1h1",
+                "p1h2",
+                "p2h1",
+                "p2h2",
+                "p3h1",
+                "p3h2"
+              ],
+              "type": "object"
             },
-            "p1h2": {
-              "type": "boolean"
-            },
-            "p2h1": {
-              "type": "boolean"
-            },
-            "p2h2": {
-              "type": "boolean"
-            },
-            "p3h1": {
-              "type": "boolean"
-            },
-            "p3h2": {
-              "type": "boolean"
+            "status": {
+              "const": "SATISFIABLE"
             }
           },
+          "required": [
+            "status",
+            "assignment"
+          ],
           "type": "object"
         },
-        "status": {
-          "enum": [
-            "SATISFIABLE",
-            "UNSATISFIABLE"
-          ]
+        {
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "const": "UNSATISFIABLE"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
         }
-      },
-      "required": [
-        "status",
-        "assignment"
-      ],
-      "type": "object"
+      ]
     }
   },
   "required": [

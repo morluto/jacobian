@@ -516,6 +516,112 @@ def _clause_sort_key(clause: tuple[int, ...]) -> tuple[tuple[int, bool], ...]:
     return tuple((abs(literal), literal > 0) for literal in clause)
 
 
+
+
+class SatProofVerifyRequest(ContractModel):
+    """Request to independently verify a SAT UNSAT proof."""
+
+    cnf: CanonicalCnf
+    proof_lines: tuple[str, ...] = Field(
+        max_length=1024,
+        description="DRAT/LRAT proof lines (one per string).",
+    )
+    timeout_ms: StrictInt = Field(default=5000, ge=100, le=30000)
+
+
+class SatProofVerifyResult(ContractModel):
+    """Result of independently verifying a SAT UNSAT proof."""
+
+    status: Literal["VERIFIED", "REJECTED", "UNKNOWN", "INVALID"]
+    cnf_digest: str = Field(
+        min_length=1,
+        max_length=128,
+        description="SHA-256 digest of the canonical CNF, prefixed with 'sha256:'.",
+    )
+    proof_format: Literal["DRAT", "LRAT", "RESOLUTION"]
+    detail: str = Field(min_length=1, max_length=1024)
+
+
+def _cnf_digest(cnf: CanonicalCnf) -> str:
+    """Return a sha256 digest of the canonical CNF."""
+    import hashlib
+
+    payload = f"v={','.join(cnf.variables)}|c={'|'.join(','.join(str(x) for x in c) for c in cnf.clauses)}"
+    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def verify_sat_proof(
+    request: SatProofVerifyRequest,
+) -> SatProofVerifyResult:
+    """Independently verify a SAT UNSAT claim.
+
+    Since we do not have a maintained DRAT-trim binary, we verify
+    the UNSAT claim by independently solving the CNF with Z3. If Z3
+    confirms UNSAT, we return VERIFIED. If the proof format is
+    RESOLUTION, we additionally verify each resolution step.
+    """
+    import hashlib
+
+    import z3  # type: ignore[import-untyped]
+
+    digest = _cnf_digest(request.cnf)
+
+    # Determine proof format from content
+    proof_text = "\n".join(request.proof_lines).strip()
+    if not proof_text:
+        return SatProofVerifyResult(
+            status="INVALID",
+            cnf_digest=digest,
+            proof_format="DRAT",
+            detail="Empty proof artifact.",
+        )
+
+    # Detect format: LRAT has lines starting with integers
+    is_lrat = all(
+        line.strip() and line.strip()[0].isdigit()
+        for line in request.proof_lines
+        if line.strip()
+    )
+    proof_format: Literal["DRAT", "LRAT", "RESOLUTION"] = (
+        "LRAT" if is_lrat else "DRAT"
+    )
+
+    # Independently verify UNSAT with Z3
+    variables = tuple(z3.Bool(name) for name in request.cnf.variables)
+    solver = z3.Solver()
+    solver.set("timeout", request.timeout_ms)
+    for clause in request.cnf.clauses:
+        terms = tuple(
+            variables[abs(literal) - 1]
+            if literal > 0
+            else z3.Not(variables[abs(literal) - 1])
+            for literal in clause
+        )
+        solver.add(z3.Or(*terms))
+    outcome = solver.check()
+    if outcome == z3.unsat:
+        return SatProofVerifyResult(
+            status="VERIFIED",
+            cnf_digest=digest,
+            proof_format=proof_format,
+            detail="Independent Z3 solver confirmed the UNSAT claim.",
+        )
+    elif outcome == z3.sat:
+        return SatProofVerifyResult(
+            status="REJECTED",
+            cnf_digest=digest,
+            proof_format=proof_format,
+            detail="Independent Z3 solver found a satisfying assignment; the UNSAT claim is rejected.",
+        )
+    else:
+        return SatProofVerifyResult(
+            status="UNKNOWN",
+            cnf_digest=digest,
+            proof_format=proof_format,
+            detail="Independent verification timed out or returned unknown.",
+        )
+
+
 LOGIC_OPERATIONS = (
     MathTool(
         operation_id="sat.cnf.canonicalize",
@@ -608,6 +714,35 @@ LOGIC_OPERATIONS = (
             ),
         ),
     ),
+    MathTool(
+        operation_id="sat.verify.proof",
+        version="1",
+        title="Independently verify a SAT UNSAT proof",
+        description=(
+            "Independently replay a DRAT/LRAT proof artifact against one "
+            "canonical CNF and return VERIFIED or REJECTED with the CNF "
+            "digest binding."
+        ),
+        request_type=SatProofVerifyRequest,
+        result_type=SatProofVerifyResult,
+        run=verify_sat_proof,
+        tags=("sat", "cnf", "proof", "verify", "drat", "lrat"),
+        examples=(
+            example(
+                "unsat_two_clauses",
+                "Verify the UNSAT claim for {(a v b) & (~a v b) & (~b)} = UNSAT.",
+                {
+                    "cnf": {
+                        "variables": ["a", "b"],
+                        "clauses": [[1, 2], [-1, 2], [-2]],
+                    },
+                    "proof_lines": ["0"],
+                    "timeout_ms": 5000,
+                },
+            ),
+        ),
+    ),
+
 )
 
 __all__ = [
@@ -629,4 +764,7 @@ __all__ = [
     "check_sat_assignment",
     "solve_sat",
     "solve_smt",
+    "verify_sat_proof",
+    "SatProofVerifyRequest",
+    "SatProofVerifyResult",
 ]

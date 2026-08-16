@@ -166,8 +166,6 @@ def compute_dirichlet_inverse(
     """
     f = [v.as_fraction() for v in request.values]
     n = len(request.values)
-    if f[0] == 0:
-        raise ValueError("f(1) must be non-zero for the Dirichlet inverse")
     g: list[Fraction] = [Fraction(0)] * n
     g[0] = Fraction(1) / f[0]
     for k in range(2, n + 1):

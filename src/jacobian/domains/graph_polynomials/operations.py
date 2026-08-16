@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from itertools import combinations
+from functools import cache
 
 import networkx as nx
 import sympy
@@ -11,11 +11,12 @@ from sympy import Poly, Symbol, expand
 from jacobian.contracts.graph_polynomials import (
     GraphPolynomialRequest,
     GraphPolynomialResult,
+    MatchingPolynomialRequest,
     PolynomialTerm,
 )
 
 
-def _build_graph(request: GraphPolynomialRequest) -> nx.Graph[int]:
+def _build_graph(request: GraphPolynomialRequest | MatchingPolynomialRequest) -> nx.Graph[int]:
     g = nx.Graph()  # type: ignore[var-annotated]
     g.add_nodes_from(range(request.graph.vertex_count))
     for edge in request.graph.edges:
@@ -24,16 +25,14 @@ def _build_graph(request: GraphPolynomialRequest) -> nx.Graph[int]:
 
 
 def _poly_to_terms(poly_expr: object, var: sympy.Symbol) -> tuple[PolynomialTerm, ...]:
-    """Convert a sympy polynomial expression to sorted PolynomialTerm tuples."""
+    """Convert a sympy polynomial expression to sorted nonzero PolynomialTerm tuples."""
     poly = Poly(poly_expr, var)
     terms: list[PolynomialTerm] = []
     for monom, coeff in poly.terms():
         if coeff == 0:
             continue
         terms.append(PolynomialTerm(coefficient=int(coeff), degree=monom[0]))
-    if not terms:
-        terms.append(PolynomialTerm(coefficient=0, degree=0))
-    return tuple(sorted(terms, key=lambda t: t.degree))
+    return tuple(sorted(terms, key=lambda term: term.degree))
 
 
 def compute_tutte_polynomial(request: GraphPolynomialRequest) -> GraphPolynomialResult:
@@ -52,9 +51,7 @@ def compute_tutte_polynomial(request: GraphPolynomialRequest) -> GraphPolynomial
             continue
         x_deg, y_deg = monom
         terms.append(PolynomialTerm(coefficient=int(coeff), degree=x_deg * 100 + y_deg))
-    if not terms:
-        terms.append(PolynomialTerm(coefficient=0, degree=0))
-    return GraphPolynomialResult(terms=tuple(sorted(terms, key=lambda t: t.degree)))
+    return GraphPolynomialResult(terms=tuple(sorted(terms, key=lambda term: term.degree)))
 
 
 def compute_chromatic_polynomial(
@@ -64,68 +61,68 @@ def compute_chromatic_polynomial(
     x = Symbol("x")
     g = _build_graph(request)
     result = nx.chromatic_polynomial(g)
-    terms = _poly_to_terms(result, x)
-    return GraphPolynomialResult(terms=terms)
+    return GraphPolynomialResult(terms=_poly_to_terms(result, x))
 
 
 def compute_flow_polynomial(request: GraphPolynomialRequest) -> GraphPolynomialResult:
     """Compute the exact nowhere-zero flow polynomial F_G(x).
 
-    Derived from the Tutte polynomial: F_G(x) = (-1)^n * T_G(0, 1-x).
+    The identity is F_G(x) = (-1)^{|E|-|V|+k(G)} T_G(0, 1-x).
     """
     g = _build_graph(request)
     tutte = nx.tutte_polynomial(g)
-    n = g.number_of_nodes()
-    # The Tutte polynomial uses symbols x and y. Extract them.
-    sym_x = sympy.Symbol("x")
-    sym_y = sympy.Symbol("y")
+    sign = (-1) ** g.number_of_nodes()
     flow_x = sympy.Symbol("flow_x")
-    # Substitute: Tutte's x -> 0, Tutte's y -> 1 - flow_x
-    flow_expr = tutte.subs({sym_x: 0, sym_y: 1 - flow_x})
-    flow_expr = (-1) ** n * expand(flow_expr)
-    terms = _poly_to_terms(flow_expr, flow_x)
-    return GraphPolynomialResult(terms=terms)
+    flow_expr = tutte.subs({sympy.Symbol("x"): 0, sympy.Symbol("y"): 1 - flow_x})
+    flow_expr = sign * expand(flow_expr)
+    return GraphPolynomialResult(terms=_poly_to_terms(flow_expr, flow_x))
 
 
 def compute_matching_polynomial(
-    request: GraphPolynomialRequest,
+    request: MatchingPolynomialRequest,
 ) -> GraphPolynomialResult:
     """Compute the exact matching polynomial M_G(x).
 
-    M_G(x) = sum_{k=0}^{n/2} (-1)^k * m_k * x^{n - 2k}
-    where m_k is the number of k-matchings (sets of k independent edges).
+    M_G(x) = sum_{k} (-1)^k m_k x^{n-2k}, computed by the deletion recurrence
+    on induced subgraphs of at most 16 vertices.
     """
-    x = Symbol("x")  # noqa: F841
     g = _build_graph(request)
     n = g.number_of_nodes()
     if n == 0:
         return GraphPolynomialResult(terms=(PolynomialTerm(coefficient=1, degree=0),))
 
-    edges = list(g.edges())
-    matching_counts = [0] * (n + 1)
-    matching_counts[0] = 1
+    adjacency = [0] * n
+    for u, v in g.edges():
+        adjacency[u] |= 1 << v
+        adjacency[v] |= 1 << u
 
-    max_k = min(n // 2, len(edges))
-    for k in range(1, max_k + 1):
-        for edge_set in combinations(edges, k):
-            used: set[int] = set()
-            for u, v in edge_set:
-                if u in used or v in used:
-                    break
-                used.add(u)
-                used.add(v)
-            else:
-                matching_counts[k] += 1
+    @cache
+    def coefficients(mask: int) -> tuple[int, ...]:
+        bits = mask.bit_count()
+        if bits == 0:
+            return (1,)
+        vertex = (mask & -mask).bit_length() - 1
+        rest = mask ^ (1 << vertex)
+        without = coefficients(rest)
+        result = [0] * (bits + 1)
+        for degree, coeff in enumerate(without):
+            result[degree + 1] += coeff
+        neighbors = adjacency[vertex] & rest
+        while neighbors:
+            bit = neighbors & -neighbors
+            neighbor = bit.bit_length() - 1
+            deleted = coefficients(rest ^ (1 << neighbor))
+            for degree, coeff in enumerate(deleted):
+                result[degree] -= coeff
+            neighbors ^= bit
+        return tuple(result)
 
-    terms: list[PolynomialTerm] = []
-    for k in range(n // 2 + 1):
-        coeff = ((-1) ** k) * matching_counts[k]
-        if coeff != 0:
-            degree = n - 2 * k
-            terms.append(PolynomialTerm(coefficient=coeff, degree=degree))
-    if not terms:
-        terms.append(PolynomialTerm(coefficient=0, degree=0))
-    return GraphPolynomialResult(terms=tuple(sorted(terms, key=lambda t: t.degree)))
+    terms = tuple(
+        PolynomialTerm(coefficient=coeff, degree=degree)
+        for degree, coeff in enumerate(coefficients((1 << n) - 1))
+        if coeff
+    )
+    return GraphPolynomialResult(terms=terms)
 
 
 __all__ = [

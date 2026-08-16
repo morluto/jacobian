@@ -7,7 +7,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 
 from jacobian.contracts.base import ContractModel
-from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
 
 # ---------------------------------------------------------------------------
 # Public bounds
@@ -59,13 +59,25 @@ class TruncatedSeries(ContractModel):
                 "coefficient tuple must have exactly truncation_order entries"
             )
         for value in self.coefficients:
-            num = value.num
-            den = value.den
-            if (
-                len(num.lstrip("-")) > MAX_RATIONAL_DIGITS
-                or len(den) > MAX_RATIONAL_DIGITS
-            ):
-                raise ValueError("coefficient exceeds the 256-digit rational bound")
+            require_bounded_rational(
+                value,
+                max_digits=MAX_RESULT_RATIONAL_DIGITS,
+                label="coefficient",
+            )
+        return self
+
+
+class InputTruncatedSeries(TruncatedSeries):
+    """A truncated series admitted as an operation input."""
+
+    @model_validator(mode="after")
+    def require_input_digit_bound(self) -> Self:
+        for value in self.coefficients:
+            require_bounded_rational(
+                value,
+                max_digits=MAX_RATIONAL_DIGITS,
+                label="input coefficient",
+            )
         return self
 
 
@@ -77,8 +89,8 @@ class TruncatedSeries(ContractModel):
 class _SeriesPairRequest(ContractModel):
     """Base request with two series that must share variable and order."""
 
-    left: TruncatedSeries
-    right: TruncatedSeries
+    left: InputTruncatedSeries
+    right: InputTruncatedSeries
 
     @model_validator(mode="after")
     def require_matching_context(self) -> Self:
@@ -110,7 +122,7 @@ class SeriesMultiplyResult(ContractModel):
 
 
 class SeriesScalarMultiplyRequest(ContractModel):
-    series: TruncatedSeries
+    series: InputTruncatedSeries
     scalar: CanonicalRational
 
 
@@ -125,7 +137,7 @@ class SeriesScalarMultiplyResult(ContractModel):
 
 
 class SeriesPowerRequest(ContractModel):
-    series: TruncatedSeries
+    series: InputTruncatedSeries
     exponent: StrictInt = Field(ge=0, le=MAX_POWER_EXPONENT)
 
 
@@ -174,8 +186,8 @@ class SeriesDivideResult(ContractModel):
 
 
 class SeriesComposeRequest(ContractModel):
-    outer: TruncatedSeries
-    inner: TruncatedSeries
+    outer: InputTruncatedSeries
+    inner: InputTruncatedSeries
 
     @model_validator(mode="after")
     def require_matching_variable_and_zero_inner_constant(self) -> Self:
@@ -226,7 +238,7 @@ class SeriesDerivativeResult(ContractModel):
 
 
 class SeriesIntegralRequest(ContractModel):
-    series: TruncatedSeries
+    series: InputTruncatedSeries
     output_order: StrictInt = Field(ge=1, le=MAX_TRUNCATION_ORDER)
 
 
@@ -241,7 +253,7 @@ class SeriesIntegralResult(ContractModel):
 
 
 class SeriesTruncateRequest(ContractModel):
-    series: TruncatedSeries
+    series: InputTruncatedSeries
     target_order: StrictInt = Field(ge=1)
 
     @model_validator(mode="after")
@@ -302,6 +314,12 @@ class SeriesFromPolynomialRequest(ContractModel):
     def require_dense_tuple(self) -> Self:
         if len(self.coefficients) != self.truncation_order:
             raise ValueError("input coefficients must match truncation_order exactly")
+        for value in self.coefficients:
+            require_bounded_rational(
+                value,
+                max_digits=MAX_RATIONAL_DIGITS,
+                label="input coefficient",
+            )
         return self
 
 

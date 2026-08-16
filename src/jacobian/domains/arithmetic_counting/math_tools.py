@@ -62,7 +62,7 @@ ARITHMETIC_COUNTING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "simple_floor_sum",
                 "floor_sum(5, 3, 2, 1).",
-                {"n": "5", "m": "3", "a": "2", "b": "1"},
+                {"n": 5, "m": 3, "a": 2, "b": 1},
             ),
         ),
     ),

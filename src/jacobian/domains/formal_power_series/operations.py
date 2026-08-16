@@ -339,7 +339,10 @@ def compute_derivative(series: TruncatedSeries) -> SeriesDerivativeResult:
     n = series.truncation_order
     a = _series_fractions(series)
     output_order = max(n - 1, 1)
-    result = [Fraction((i + 1) * a[i + 1]) for i in range(output_order)]
+    if n == 1:
+        result = [Fraction(0)]
+    else:
+        result = [Fraction((i + 1) * a[i + 1]) for i in range(output_order)]
     return SeriesDerivativeResult(
         result=_series_result(series.variable, output_order, result)
     )

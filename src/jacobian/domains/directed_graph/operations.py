@@ -91,11 +91,9 @@ def compute_condensation(request: CondensationRequest) -> CondensationResult:
 def compute_acyclic_order(request: AcyclicOrderRequest) -> AcyclicOrderResult:
     """Compute a topological ordering of a directed acyclic graph.
 
-    Raises :class:`networkx.NetworkXUnfeasible` if the graph contains a cycle,
-    so the caller can detect the cyclic case as a typed failure.
+    A cyclic graph is a typed ``acyclic=false`` outcome, not a host failure.
     """
     g = _build_digraph(request.graph)
     if not nx.is_directed_acyclic_graph(g):
-        raise nx.NetworkXUnfeasible("graph is not acyclic")
-    order = tuple(nx.topological_sort(g))
-    return AcyclicOrderResult(order=order)
+        return AcyclicOrderResult(acyclic=False, order=())
+    return AcyclicOrderResult(acyclic=True, order=tuple(nx.topological_sort(g)))

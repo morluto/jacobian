@@ -104,6 +104,11 @@ class ErasureNoiseRequest(ContractModel):
             "uniform random bits."
         ),
     )
+    base_input: tuple[int, ...] = Field(
+        min_length=MIN_VARIABLES,
+        max_length=MAX_VARIABLES,
+        description="Original Boolean assignment at which the noise operator is evaluated.",
+    )
 
     @model_validator(mode="after")
     def require_valid_request(self) -> Self:
@@ -120,6 +125,10 @@ class ErasureNoiseRequest(ContractModel):
         p = self.probability.as_fraction()
         if not (0 <= p <= 1):
             raise ValueError("probability must be in [0, 1]")
+        if len(self.base_input) != variable_count:
+            raise ValueError("base_input must have one bit per variable")
+        if any(bit not in (0, 1) for bit in self.base_input):
+            raise ValueError("base_input bits must be 0 or 1")
         return self
 
     def as_int_list(self) -> list[int]:

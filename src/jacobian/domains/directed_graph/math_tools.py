@@ -136,7 +136,8 @@ DIRECTED_GRAPH_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "graph.directed.acyclic_order.compute",
         "Compute a topological order of a directed acyclic graph",
         "Compute a topological ordering of a simple directed graph using "
-        "NetworkX. Fails with a typed error if the graph contains a cycle.",
+        "NetworkX. Reports acyclic=false and an empty order when the graph "
+        "contains a cycle.",
         AcyclicOrderRequest,
         AcyclicOrderResult,
         compute_acyclic_order,

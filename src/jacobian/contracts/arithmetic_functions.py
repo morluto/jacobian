@@ -107,11 +107,13 @@ class DirichletInverseRequest(ContractModel):
     values: tuple[CanonicalRational, ...]
 
     @model_validator(mode="after")
-    def require_valid_length(self) -> Self:
+    def require_valid_length_and_nonzero_unit(self) -> Self:
         if not (_MIN_LENGTH <= len(self.values) <= _MAX_LENGTH):
             raise ValueError(
                 f"values must have between {_MIN_LENGTH} and {_MAX_LENGTH} entries",
             )
+        if self.values[0].as_fraction() == 0:
+            raise ValueError("f(1) must be nonzero")
         return self
 
 

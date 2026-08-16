@@ -117,7 +117,7 @@ BOOLEAN_ANALYSIS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     boolean_analysis_operation(
         "boolean.erasure_noise.compute",
         "Compute the expected value of a Boolean function under erasure noise",
-        "With probability p each coordinate is kept; with probability (1-p) it is replaced by an independent uniform random bit. Returns the exact rational expected value, computed via the Fourier expansion weighted by p^|S|.",
+        "With probability p each coordinate of the supplied base assignment is kept; with probability (1-p) it is replaced by an independent uniform random bit. Returns the exact rational expected value T_p f(x), computed via the Fourier expansion weighted by p^|S| chi_S(x).",
         ErasureNoiseRequest,
         ErasureNoiseResult,
         compute_erasure_noise,
@@ -129,10 +129,11 @@ BOOLEAN_ANALYSIS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "single_variable_p_half",
-                "Compute the erasure-noise expected value of f(0)=0, f(1)=1 with p=1/2.",
+                "Compute the erasure-noise expected value of f(0)=0, f(1)=1 at the origin with p=1/2.",
                 {
                     "truth_table": [_z("0"), _z("1")],
                     "probability": {"num": "1", "den": "2"},
+                    "base_input": [0],
                 },
             ),
         ),

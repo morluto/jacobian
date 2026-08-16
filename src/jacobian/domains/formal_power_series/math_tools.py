@@ -23,6 +23,7 @@ from jacobian.contracts.formal_power_series import (
     SeriesToPolynomialResult,
     SeriesTruncateRequest,
     SeriesTruncateResult,
+    InputTruncatedSeries,
     TruncatedSeries,
     _SeriesPairRequest,
 )
@@ -282,7 +283,7 @@ FORMAL_POWER_SERIES_OPERATIONS = (
             "Compute the multiplicative inverse B(x) of A(x) modulo x^N, requiring "
             "a_0 != 0.  Returns the exact product residual A*B - 1."
         ),
-        request_type=TruncatedSeries,
+        request_type=InputTruncatedSeries,
         result_type=SeriesInverseResult,
         run=lambda request: compute_inverse(request),
         tags=(
@@ -416,7 +417,7 @@ FORMAL_POWER_SERIES_OPERATIONS = (
             "F(0)=0 and f_1 != 0.  Validates both left and right identities "
             "exactly."
         ),
-        request_type=TruncatedSeries,
+        request_type=InputTruncatedSeries,
         result_type=SeriesReversionResult,
         run=lambda request: compute_reversion(request),
         tags=(
@@ -453,7 +454,7 @@ FORMAL_POWER_SERIES_OPERATIONS = (
             "Compute the formal derivative of a truncated series in QQ[[x]]/(x^N). "
             "Output order convention: max(N-1, 1)."
         ),
-        request_type=TruncatedSeries,
+        request_type=InputTruncatedSeries,
         result_type=SeriesDerivativeResult,
         run=lambda request: compute_derivative(request),
         tags=(
@@ -644,7 +645,7 @@ FORMAL_POWER_SERIES_OPERATIONS = (
             "Return the canonical truncated polynomial containing exactly the "
             "known coefficients below x^N."
         ),
-        request_type=TruncatedSeries,
+        request_type=InputTruncatedSeries,
         result_type=SeriesToPolynomialResult,
         run=lambda request: compute_to_polynomial(request),
         tags=(

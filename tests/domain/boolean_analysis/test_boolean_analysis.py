@@ -205,6 +205,7 @@ def test_erasure_noise_p_one_is_mean() -> None:
         ErasureNoiseRequest(
             truth_table=_truth_table([0, 1]),
             probability=_rational(1, 1),
+            base_input=(0,),
         )
     )
     assert isinstance(result, ErasureNoiseResult)
@@ -218,6 +219,7 @@ def test_erasure_noise_p_zero_is_half() -> None:
         ErasureNoiseRequest(
             truth_table=_truth_table([0, 1]),
             probability=_rational(0, 1),
+            base_input=(0,),
         )
     )
     assert result.expected_value.as_integer_ratio() == (1, 2)
@@ -232,6 +234,7 @@ def test_erasure_noise_p_half() -> None:
         ErasureNoiseRequest(
             truth_table=_truth_table([0, 1]),
             probability=_rational(1, 2),
+            base_input=(0,),
         )
     )
     assert result.expected_value.as_integer_ratio() == (1, 4)
@@ -242,6 +245,7 @@ def test_erasure_noise_constant_one() -> None:
         ErasureNoiseRequest(
             truth_table=_truth_table([1, 1, 1, 1]),
             probability=_rational(3, 7),
+            base_input=(0, 0),
         )
     )
     assert result.expected_value.as_fraction() == 1  # type: ignore[comparison]
@@ -252,6 +256,7 @@ def test_erasure_noise_rejects_invalid_probability() -> None:
         ErasureNoiseRequest(
             truth_table=_truth_table([0, 1]),
             probability=_rational(3, 2),
+            base_input=(0,),
         )
 
 
@@ -260,6 +265,7 @@ def test_erasure_noise_rejects_negative_probability() -> None:
         ErasureNoiseRequest(
             truth_table=_truth_table([0, 1]),
             probability=_rational(-1, 2),
+            base_input=(0,),
         )
 
 
@@ -273,5 +279,6 @@ def test_erasure_noise_rejects_non_power_of_two() -> None:
                     {"num": "1", "den": "1"},
                 ],
                 "probability": {"num": "1", "den": "2"},
+                "base_input": [0, 0, 0],
             }
         )

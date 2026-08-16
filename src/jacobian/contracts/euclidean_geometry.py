@@ -62,6 +62,20 @@ class AngleEqualityRequest(ContractModel):
     ray2_a: RationalPoint2D
     ray2_b: RationalPoint2D
 
+    @model_validator(mode="after")
+    def require_nonzero_rays(self) -> Self:
+        for vertex, first, second in (
+            (self.vertex1, self.ray1_a, self.ray1_b),
+            (self.vertex2, self.ray2_a, self.ray2_b),
+        ):
+            for endpoint in (first, second):
+                if (
+                    endpoint.x.as_fraction() == vertex.x.as_fraction()
+                    and endpoint.y.as_fraction() == vertex.y.as_fraction()
+                ):
+                    raise ValueError("angle rays must be nonzero")
+        return self
+
 
 class AngleEqualityResult(ContractModel):
     """Whether the two angles are equal."""

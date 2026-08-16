@@ -7,6 +7,7 @@ from jacobian.contracts.base import ContractModel
 from jacobian.contracts.graph_polynomials import (
     GraphPolynomialRequest,
     GraphPolynomialResult,
+    MatchingPolynomialRequest,
 )
 from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
@@ -135,8 +136,8 @@ GRAPH_POLYNOMIAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "graph.polynomial.matching.compute",
         "Compute the matching polynomial",
         "Compute the exact matching polynomial M_G(x) of a finite simple "
-        "graph by bounded enumeration of matchings.",
-        GraphPolynomialRequest,
+        "graph by the deletion recurrence on graphs with at most 16 vertices.",
+        MatchingPolynomialRequest,
         GraphPolynomialResult,
         compute_matching_polynomial,
         "graph",

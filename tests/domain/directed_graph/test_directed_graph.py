@@ -234,6 +234,7 @@ class TestAcyclicOrder:
     def test_valid_topological_order_for_dag(self) -> None:
         graph = {"vertex_count": 4, "edges": [[0, 1], [0, 2], [1, 3], [2, 3]]}
         result = _acyclic_order(graph)
+        assert result.acyclic
         order = result.order
         # Every vertex must appear exactly once.
         assert sorted(order) == [0, 1, 2, 3]
@@ -244,21 +245,25 @@ class TestAcyclicOrder:
     def test_chain_topological_order(self) -> None:
         graph = {"vertex_count": 3, "edges": [[0, 1], [1, 2]]}
         result = _acyclic_order(graph)
+        assert result.acyclic
         # The only valid topological order is (0, 1, 2).
         assert result.order == (0, 1, 2)
 
     def test_cyclic_graph_raises(self) -> None:
         graph = {"vertex_count": 3, "edges": [[0, 1], [1, 2], [2, 0]]}
-        with pytest.raises(nx.NetworkXUnfeasible):
-            _acyclic_order(graph)
+        result = _acyclic_order(graph)
+        assert not result.acyclic
+        assert result.order == ()
 
     def test_two_node_cycle_raises(self) -> None:
         graph = {"vertex_count": 2, "edges": [[0, 1], [1, 0]]}
-        with pytest.raises(nx.NetworkXUnfeasible):
-            _acyclic_order(graph)
+        result = _acyclic_order(graph)
+        assert not result.acyclic
+        assert result.order == ()
 
     def test_single_edge_dag(self) -> None:
         result = _acyclic_order({"vertex_count": 2, "edges": [[0, 1]]})
+        assert result.acyclic
         assert result.order == (0, 1)
 
 

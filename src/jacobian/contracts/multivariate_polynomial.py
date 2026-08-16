@@ -71,6 +71,8 @@ class MultivariateDivisionRequest(ContractModel):
     @model_validator(mode="after")
     def require_multivariate_ring(self) -> Self:
         _validate_multivariate_pair(self.left, self.right)
+        if not self.right.polynomial.terms:
+            raise ValueError("divisor polynomial must be nonzero")
         for polynomial in (self.left, self.right):
             require_polynomial_budget(
                 polynomial,

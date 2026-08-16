@@ -30,7 +30,7 @@ class PointConfiguration(ContractModel):
     """A finite set of labelled rational points in a fixed dimension."""
 
     points: tuple[LabelledRationalPoint, ...] = Field(
-        min_length=1,
+        min_length=2,
         max_length=MAX_POINTS,
     )
 
@@ -57,7 +57,7 @@ class DistanceProfileRequest(ContractModel):
 class DistanceMultiplicityEntry(ContractModel):
     """One squared distance and how many pairs have it."""
 
-    squared_distance: str
+    squared_distance: CanonicalRational
     pair_count: int = Field(gt=0)
 
 
@@ -73,7 +73,7 @@ class DistanceGraphRequest(ContractModel):
     """Build the graph induced by a selected squared distance."""
 
     configuration: PointConfiguration
-    target_squared_distance: str
+    target_squared_distance: CanonicalRational
 
 
 class DistanceGraphResult(ContractModel):

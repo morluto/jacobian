@@ -6,6 +6,7 @@ from jacobian.contracts.exact_geometry import (
     LabelledRationalPoint,
     PointConfiguration,
 )
+from jacobian.contracts.exact import CanonicalRational
 from jacobian.domains.exact_geometry.operations import (
     compute_distance_graph,
     compute_distance_profile,
@@ -32,8 +33,10 @@ class TestDistanceProfile:
         )
         result = compute_distance_profile(req)
         entries = {e.squared_distance: e.pair_count for e in result.entries}
-        assert entries.get("1") == 4  # 4 unit-distance pairs
-        assert entries.get("2") == 2  # 2 diagonal pairs
+        one = CanonicalRational(num="1", den="1")
+        two = CanonicalRational(num="2", den="1")
+        assert entries.get(one) == 4  # 4 unit-distance pairs
+        assert entries.get(two) == 2  # 2 diagonal pairs
 
     def test_collinear(self):
         pts = (
@@ -46,8 +49,10 @@ class TestDistanceProfile:
         )
         result = compute_distance_profile(req)
         entries = {e.squared_distance: e.pair_count for e in result.entries}
-        assert entries.get("1") == 2  # a-b and b-c
-        assert entries.get("4") == 1  # a-c
+        one = CanonicalRational(num="1", den="1")
+        four = CanonicalRational(num="4", den="1")
+        assert entries.get(one) == 2  # a-b and b-c
+        assert entries.get(four) == 1  # a-c
 
 
 class TestDistanceGraph:
@@ -60,7 +65,14 @@ class TestDistanceGraph:
         )
         req = DistanceGraphRequest(
             configuration=PointConfiguration(points=pts),
-            target_squared_distance="1",
+            target_squared_distance=CanonicalRational(num="1", den="1"),
         )
         result = compute_distance_graph(req)
         assert len(result.edges) == 4
+
+    def test_rejects_single_point_configuration(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            PointConfiguration(points=(_make_point("a", [("0", "1")]),))

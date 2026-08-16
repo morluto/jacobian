@@ -35,6 +35,22 @@ class TestSemigroupSummary:
         assert result.frobenius_number == "1"
         assert result.genus == 1
 
+    def test_two_and_one_hundred_one(self):
+        req = NumericalSemigroupSummaryRequest(generators=("2", "101"))
+        result = compute_summary(req)
+        assert result.frobenius_number == "99"
+        assert result.conductor == "100"
+        assert result.genus == 50
+
+    def test_rejects_nonpositive_generators(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="positive"):
+            NumericalSemigroupSummaryRequest(generators=("-1",))
+        with pytest.raises(ValidationError, match="positive"):
+            SemigroupMembershipRequest(generators=("0", "2"), value="4")
+
 
 class TestSemigroupMembership:
     def test_in_semigroup(self):

@@ -9,7 +9,7 @@ from pydantic import Field, model_validator
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalRational
 
-MAX_GROUND_SET = 20
+MAX_GROUND_SET = 12
 
 
 class SetFunctionEntry(ContractModel):
@@ -26,11 +26,27 @@ class SetFunction(ContractModel):
     entries: tuple[SetFunctionEntry, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def require_valid_subsets(self) -> Self:
+    def require_complete_table(self) -> Self:
+        expected = 1 << self.ground_set_size
+        if len(self.entries) != expected:
+            raise ValueError(
+                "set function table must contain exactly one value per subset"
+            )
+        seen: set[tuple[int, ...]] = set()
         for entry in self.entries:
+            if len(entry.subset) != len(set(entry.subset)):
+                raise ValueError("subset elements must be unique")
             for elem in entry.subset:
                 if not (0 <= elem < self.ground_set_size):
                     raise ValueError("subset elements must be in 0..ground_set_size-1")
+            key = tuple(sorted(entry.subset))
+            if key in seen:
+                raise ValueError("set function subsets must be unique")
+            seen.add(key)
+        if len(seen) != expected:
+            raise ValueError(
+                "set function table must contain every subset of the ground set"
+            )
         return self
 
 

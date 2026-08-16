@@ -67,15 +67,13 @@ def compute_angle_equality(request: AngleEqualityRequest) -> AngleEqualityResult
     cross2 = _cross(v2a, v2b)
     dot2 = _dot(v2a, v2b)
 
-    # Angles are equal iff cross1/dot1 == cross2/dot2
-    # => cross1 * dot2 == cross2 * dot1
-    if dot1 == 0 and dot2 == 0:
-        # Both angles are 90 degrees
-        return AngleEqualityResult(equal=True)
-    if dot1 == 0 or dot2 == 0:
-        return AngleEqualityResult(equal=False)
-
-    return AngleEqualityResult(equal=cross1 * dot2 == cross2 * dot1)
+    abs_cross1 = abs(cross1)
+    abs_cross2 = abs(cross2)
+    equal = (
+        dot1 * abs_cross2 == dot2 * abs_cross1
+        and (dot1 == 0 or dot2 == 0 or (dot1 > 0) == (dot2 > 0))
+    )
+    return AngleEqualityResult(equal=equal)
 
 
 def compute_triangle_similarity(

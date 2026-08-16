@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
+import sympy
 from pydantic import Field, model_validator
 
 from jacobian.contracts.base import ContractModel
@@ -30,6 +31,8 @@ class VariablePoint(ContractModel):
     def require_matching_lengths(self) -> Self:
         if len(self.variables) != len(self.values):
             raise ValueError("variables and values must have the same length")
+        if len(set(self.variables)) != len(self.variables):
+            raise ValueError("variable names must be unique")
         return self
 
 
@@ -38,6 +41,22 @@ class EvalRequest(ContractModel):
 
     polynomial: RationalPolynomialExpr
     point: VariablePoint
+
+    @model_validator(mode="after")
+    def require_complete_rational_evaluation(self) -> Self:
+        try:
+            expression = sympy.sympify(self.polynomial.expression)
+        except (sympy.SympifyError, TypeError, SyntaxError) as exc:
+            raise ValueError("polynomial expression must be a rational polynomial") from exc
+        if expression.free_symbols and not expression.is_rational_function(
+            *expression.free_symbols
+        ):
+            raise ValueError("polynomial expression must be a rational polynomial")
+        free = {str(symbol) for symbol in expression.free_symbols}
+        given = set(self.point.variables)
+        if not free <= given:
+            raise ValueError("evaluation point must cover every free variable")
+        return self
 
 
 class EvalResult(ContractModel):

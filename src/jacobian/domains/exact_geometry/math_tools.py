@@ -106,7 +106,7 @@ EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "unit_square_distance_1",
                 "Graph of unit-distance pairs in the unit square.",
-                {**UNIT_SQUARE, "target_squared_distance": "1"},
+                {**UNIT_SQUARE, "target_squared_distance": {"num": "1", "den": "1"}},
             ),
         ),
     ),

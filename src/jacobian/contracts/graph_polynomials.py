@@ -48,6 +48,28 @@ class GraphPolynomialRequest(ContractModel):
     graph: GraphSpec
 
 
+MAX_MATCHING_VERTICES = 16
+MAX_MATCHING_EDGES = 48
+
+
+class MatchingPolynomialRequest(ContractModel):
+    """Request a matching polynomial on a graph this recurrence can exhaust."""
+
+    graph: GraphSpec
+
+    @model_validator(mode="after")
+    def require_matching_budget(self) -> Self:
+        if self.graph.vertex_count > MAX_MATCHING_VERTICES:
+            raise ValueError(
+                f"matching polynomial graphs may have at most {MAX_MATCHING_VERTICES} vertices"
+            )
+        if len(self.graph.edges) > MAX_MATCHING_EDGES:
+            raise ValueError(
+                f"matching polynomial graphs may have at most {MAX_MATCHING_EDGES} edges"
+            )
+        return self
+
+
 class PolynomialTerm(ContractModel):
     """One monomial term: coefficient times x^degree."""
 
@@ -77,5 +99,6 @@ __all__ = [
     "GraphPolynomialRequest",
     "GraphPolynomialResult",
     "GraphSpec",
+    "MatchingPolynomialRequest",
     "PolynomialTerm",
 ]

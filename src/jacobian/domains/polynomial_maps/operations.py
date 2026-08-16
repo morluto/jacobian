@@ -27,7 +27,9 @@ def evaluate_polynomial(request: EvalRequest) -> EvalResult:
         sym = Symbol(var_name)
         substitutions[sym] = var_value.as_fraction()
 
-    result = expr.subs(substitutions)
+    result = simplify(expr.subs(substitutions))
+    if result.free_symbols:
+        raise ValueError("evaluation point must cover every free variable")
     return EvalResult(value=str(result))
 
 

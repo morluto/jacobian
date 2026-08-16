@@ -18,6 +18,13 @@ class HypothesisSpec(ContractModel):
     hypothesis_id: str = Field(min_length=1, max_length=64)
     p_value: CanonicalRational
 
+    @model_validator(mode="after")
+    def require_probability(self) -> Self:
+        value = self.p_value.as_fraction()
+        if not 0 <= value <= 1:
+            raise ValueError("p-value must be in [0, 1]")
+        return self
+
 
 class BHStepUpRequest(ContractModel):
     """Benjamini-Hochberg step-up procedure."""
@@ -28,10 +35,13 @@ class BHStepUpRequest(ContractModel):
     level: CanonicalRational
 
     @model_validator(mode="after")
-    def require_unique_ids(self) -> Self:
+    def require_unique_ids_and_probability_level(self) -> Self:
         ids = [h.hypothesis_id for h in self.hypotheses]
         if len(ids) != len(set(ids)):
             raise ValueError("hypothesis IDs must be unique")
+        level = self.level.as_fraction()
+        if not 0 <= level <= 1:
+            raise ValueError("level must be in [0, 1]")
         return self
 
 

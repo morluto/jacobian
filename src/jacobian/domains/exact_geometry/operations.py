@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.exact_geometry import (
     DistanceGraphRequest,
     DistanceGraphResult,
@@ -47,7 +48,7 @@ def compute_distance_profile(
 
     entries = tuple(
         DistanceMultiplicityEntry(
-            squared_distance=str(d),
+            squared_distance=CanonicalRational.from_fraction(d),
             pair_count=count,
         )
         for d, count in sorted(distances.items())
@@ -66,7 +67,7 @@ def compute_distance_graph(
     config = request.configuration
     n = len(config.points)
     points = [_to_fraction_point(p) for p in config.points]
-    target = Fraction(request.target_squared_distance)
+    target = request.target_squared_distance.as_fraction()
 
     edges: list[tuple[int, int]] = []
     for i in range(n):

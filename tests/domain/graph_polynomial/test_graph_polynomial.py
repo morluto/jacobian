@@ -4,6 +4,7 @@ from jacobian.contracts.graph_polynomials import (
     GraphEdge,
     GraphPolynomialRequest,
     GraphSpec,
+    MatchingPolynomialRequest,
 )
 from jacobian.domains.graph_polynomials.operations import (
     compute_chromatic_polynomial,
@@ -75,16 +76,22 @@ class TestFlowPolynomial:
     def test_cycle_c4(self):
         req = GraphPolynomialRequest(graph=_cycle_graph(4))
         result = compute_flow_polynomial(req)
-        # C4 is bipartite, so F(C4) = 1 - x (trivial: only 1 nowhere-zero
-        # flow mod any q, which is the zero flow)
+        # F(C4) = x - 1, from (-1)^{|E|-|V|+k} T(0, 1-x).
         d = _terms_to_dict(result)
-        assert d.get(1) == -1
-        assert d.get(0) == 1
+        assert d.get(1) == 1
+        assert d.get(0) == -1
+
+    def test_bridge_is_zero_polynomial(self):
+        req = GraphPolynomialRequest(
+            graph=GraphSpec(vertex_count=2, edges=(GraphEdge(u=0, v=1),))
+        )
+        result = compute_flow_polynomial(req)
+        assert result.terms == ()
 
 
 class TestMatchingPolynomial:
     def test_single_edge(self):
-        req = GraphPolynomialRequest(
+        req = MatchingPolynomialRequest(
             graph=GraphSpec(vertex_count=2, edges=(GraphEdge(u=0, v=1),))
         )
         result = compute_matching_polynomial(req)
@@ -94,7 +101,7 @@ class TestMatchingPolynomial:
         assert d.get(0) == -1
 
     def test_path_p3(self):
-        req = GraphPolynomialRequest(graph=_path_graph(3))
+        req = MatchingPolynomialRequest(graph=_path_graph(3))
         result = compute_matching_polynomial(req)
         # P3 has edges (0,1) and (1,2)
         # 0-matchings: 1, 1-matching: 2, no 2-matchings

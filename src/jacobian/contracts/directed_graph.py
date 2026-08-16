@@ -83,5 +83,15 @@ class AcyclicOrderRequest(ContractModel):
 
 
 class AcyclicOrderResult(ContractModel):
+    acyclic: bool
     order: tuple[int, ...]
     convention: Literal["NETWORKX_TOPOLOGICAL_SORT"] = "NETWORKX_TOPOLOGICAL_SORT"
+
+    @model_validator(mode="after")
+    def require_order_matches_acyclicity(self) -> Self:
+        if self.acyclic:
+            if not self.order:
+                raise ValueError("acyclic order must list every vertex")
+        elif self.order:
+            raise ValueError("cyclic graph must not report a topological order")
+        return self

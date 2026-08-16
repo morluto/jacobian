@@ -167,7 +167,7 @@ class DirectSumPredicateResult(ContractModel):
     @model_validator(mode="after")
     def require_canonical_diagnostics(self) -> Self:
         for name in ("collisions", "missing"):
-            values = list(getattr(self, name))
+            values = [parse_canonical_integer(value) for value in getattr(self, name)]
             if values != sorted(set(values)):
                 raise ValueError(
                     f"direct-sum {name} values must be sorted and unique",

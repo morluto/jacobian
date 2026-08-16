@@ -69,9 +69,7 @@ def compute_subdifferential(
         elif v == max_value:
             active_gradients.append(piece)
 
-    active_grads = tuple(
-        tuple(str(c) for c in piece.coefficients) for piece in active_gradients
-    )
+    active_grads = tuple(piece.coefficients for piece in active_gradients)
     return MaxAffineSubdifferentialResult(active_gradients=active_grads)
 
 

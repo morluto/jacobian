@@ -73,6 +73,11 @@ class FarkasCertificateRequest(ContractModel):
             raise ValueError("rhs_vector length must match constraint count")
         if len(self.multipliers) != n_constraints:
             raise ValueError("multipliers length must match constraint count")
+        widths = {len(row) for row in self.constraint_matrix}
+        if len(widths) != 1 or 0 in widths:
+            raise ValueError(
+                "constraint matrix must be rectangular with positive row width"
+            )
         return self
 
 

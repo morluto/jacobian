@@ -10,7 +10,7 @@ from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalRational
 
 MAX_PLAYERS = 10
-MAX_STRATEGIES = 20
+MAX_STRATEGIES = 8
 
 
 class PayoffMatrix(ContractModel):

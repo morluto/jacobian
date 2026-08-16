@@ -76,11 +76,18 @@ class MaxAffineSubdifferentialRequest(ContractModel):
     function: MaxAffineFunction
     point: RationalPoint
 
+    @model_validator(mode="after")
+    def require_matching_dimension(self) -> Self:
+        dim = len(self.function.pieces[0].coefficients)
+        if len(self.point.coordinates) != dim:
+            raise ValueError("point dimension must match function dimension")
+        return self
+
 
 class MaxAffineSubdifferentialResult(ContractModel):
     """Subdifferential: set of active gradients (one per active piece)."""
 
-    active_gradients: tuple[tuple[str, ...], ...]
+    active_gradients: tuple[tuple[CanonicalRational, ...], ...]
 
 
 __all__ = [

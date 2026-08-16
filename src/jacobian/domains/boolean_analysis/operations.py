@@ -96,20 +96,25 @@ def compute_erasure_noise(request: ErasureNoiseRequest) -> ErasureNoiseResult:
     With probability ``p`` each coordinate is kept; with probability ``(1-p)``
     it is replaced by an independent uniform random bit.  By the Fourier
     characterization of erasure noise, the expected value equals
-    ``sum_S f_hat(S) * p^|S|`` where ``f_hat(S) = W_f(S) / 2^n`` is the Fourier
-    coefficient.  All arithmetic is exact rational.
+    ``sum_S f_hat(S) * p^|S| * chi_S(x)`` at the supplied base assignment
+    ``x``, where ``f_hat(S) = W_f(S) / 2^n``.  All arithmetic is exact rational.
     """
     truth = request.as_int_list()
     n = _variable_count(len(truth))
     spectrum = _fast_walsh_hadamard_transform(truth)
     total = len(truth)
+    one_mask = 0
+    for bit_idx, bit in enumerate(request.base_input):
+        if bit == 1:
+            one_mask |= 1 << bit_idx
 
     p = request.probability.as_fraction()
     result = Fraction(0)
     for subset_mask in range(total):
         subset_size = bin(subset_mask).count("1")
+        sign = -1 if (bin(subset_mask & one_mask).count("1") % 2) else 1
         fourier_coeff = Fraction(spectrum[subset_mask], total)
-        result += fourier_coeff * (p**subset_size)
+        result += sign * fourier_coeff * (p**subset_size)
 
     return ErasureNoiseResult(
         expected_value=_rational(result),

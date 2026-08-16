@@ -27,6 +27,7 @@ BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
     ("jacobian.domains.finite_sets", "finite_set_operations"),
     ("jacobian.domains.finite_fields", "finite_field_operations"),
     ("jacobian.domains.logic", "logic_operations"),
+    ("jacobian.domains.finite_model", "finite_model_operations"),
     ("jacobian.domains.sequences", "sequence_operations"),
     ("jacobian.domains.geometry", "geometry_operations"),
     (

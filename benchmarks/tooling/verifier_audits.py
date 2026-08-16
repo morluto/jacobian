@@ -128,9 +128,259 @@ def canonical_string_rational_schema_failures(schema_path: Path) -> list[str]:
     return failures
 
 
+_FORMULA_FIELD_NAMES = frozenset(
+    {
+        "count_formula",
+        "determinant_identity",
+        "event_mass_formula",
+        "identity_scope",
+        "limit_function",
+        "maximum_formula",
+        "remainder_coefficient",
+        "singleton_cap",
+        "schur_weight",
+        "tangent_weight",
+    }
+)
+_FORMULA_NAME_MARKERS = ("formula",)
+_ENUM_CONST = frozenset(
+    {
+        "AT_LEAST_ONE",
+        "ZERO",
+        "SUM_OF_SQUARED_CLASS_SIZES",
+        "NOT_REQUIRED_FOR_POLYNOMIAL_IDENTITY",
+    }
+)
+_FORMULA_CONST_MARKERS = ("^", "floor(", "det(", "->")
+_FORMULA_SKIP_FIELDS = frozenset(
+    {
+        "path",
+        "sha256",
+        "claim_id",
+        "frozen_answer",
+        "frozen_inference",
+        "constraint",
+        "invertibility_assumption",
+        "pair_count_formula",
+        "frozen_formula_holds",
+    }
+)
+
+
+def _is_enum_label(value: object) -> bool:
+    return (
+        isinstance(value, str) and value.replace("_", "").isalnum() and value.isupper()
+    )
+
+
+def _formula_like_const(value: object) -> bool:
+    if not isinstance(value, str) or _is_enum_label(value) or value in _ENUM_CONST:
+        return False
+    return any(marker in value for marker in _FORMULA_CONST_MARKERS)
+
+
+def _formula_field_name(path: str) -> str:
+    return path.rsplit(".", 1)[-1]
+
+
+def formula_string_schema_failures(schema_path: Path) -> list[str]:
+    """Return failures when a scored formula field is a privileged string."""
+
+    if not schema_path.is_file():
+        return []
+    try:
+        relative = schema_path.resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        relative = schema_path.as_posix()
+    try:
+        payload = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"{relative}: cannot parse schema: {exc}"]
+    failures: list[str] = []
+    for path, node in _schema_paths(payload, relative):
+        if not isinstance(node, dict):
+            continue
+        name = _formula_field_name(path)
+        if name in _FORMULA_SKIP_FIELDS:
+            continue
+        tracked = name in _FORMULA_FIELD_NAMES or any(
+            marker in name for marker in _FORMULA_NAME_MARKERS
+        )
+        if not tracked:
+            continue
+        const = node.get("const")
+        enum = node.get("enum")
+        if _is_enum_label(const) or const in _ENUM_CONST:
+            continue
+        if isinstance(enum, list) and enum and all(
+            _is_enum_label(value) for value in enum
+        ):
+            continue
+        if node.get("type") == "string" or _formula_like_const(const):
+            failures.append(
+                f"{path}: encode mathematical formulas as structured objects, not strings"
+            )
+    return failures
+
+
+def _relative(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _parse(path: Path) -> ast.AST | list[str]:
+    relative = _relative(path)
+    if not path.is_file():
+        return []
+    try:
+        return ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError) as exc:
+        return [f"{relative}: cannot parse verifier: {exc}"]
+
+
+def mirror_witness_failures(verifier_path: Path) -> list[str]:
+    """Return failures when evidence is only an equality copy of ``result``."""
+
+    parsed = _parse(verifier_path)
+    if isinstance(parsed, list):
+        return parsed
+    relative = _relative(verifier_path)
+    failures: list[str] = []
+    for node in ast.walk(parsed):
+        keys: set[str] = set()
+        if isinstance(node, ast.Set):
+            for elt in node.elts:
+                if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                    keys.add(elt.value)
+        elif isinstance(node, ast.List) or isinstance(node, ast.Tuple):
+            for elt in node.elts:
+                if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                    keys.add(elt.value)
+        elif isinstance(node, ast.Dict):
+            for key in node.keys:
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    keys.add(key.value)
+        if keys >= {"schema_version", "task_id", "result"} and keys <= {
+            "schema_version",
+            "task_id",
+            "result",
+            "limitations",
+            "claimed_assurance",
+            "scope",
+        }:
+            failures.append(
+                f"{relative}:{node.lineno}: evidence must not mirror submission.result"
+            )
+    return failures
+
+
+_SEMANTIC_READERS = frozenset(
+    {"read_evidence_json", "resolve_evidence", "read_evidence_text"}
+)
+
+
+def unread_hash_witness_failures(verifier_path: Path) -> list[str]:
+    """Return failures when a bound witness file is never semantically read."""
+
+    parsed = _parse(verifier_path)
+    if isinstance(parsed, list):
+        return parsed
+    relative = _relative(verifier_path)
+    names = {node.id for node in ast.walk(parsed) if isinstance(node, ast.Name)}
+    attrs = {node.attr for node in ast.walk(parsed) if isinstance(node, ast.Attribute)}
+    called = names | attrs
+    if "witness_list_is_bound" not in called:
+        return []
+    if called & _SEMANTIC_READERS:
+        return []
+    failures = [
+        f"{relative}: witness_list_is_bound must be followed by a semantic evidence read"
+    ]
+    return failures
+
+
+def hidden_expected_scoring_failures(verifier_path: Path) -> list[str]:
+    """Return failures when correctness is hidden-expected equality without input."""
+
+    parsed = _parse(verifier_path)
+    if isinstance(parsed, list):
+        return parsed
+    relative = _relative(verifier_path)
+    failures: list[str] = []
+    for node in ast.walk(parsed):
+        if not isinstance(node, ast.FunctionDef) or node.name != "_math":
+            continue
+        arg_names = [arg.arg for arg in node.args.args]
+        if "e" not in arg_names or "x" not in arg_names:
+            continue
+        used = {child.id for child in ast.walk(node) if isinstance(child, ast.Name)}
+        if "e" in used and "x" not in used:
+            failures.append(
+                f"{relative}:{node.lineno}: derive the scored predicate from frozen input, not expected.json"
+            )
+    source = (
+        verifier_path.read_text(encoding="utf-8") if verifier_path.is_file() else ""
+    )
+    if "expected.json" in source and "e['expected_" in source.replace('"', "'"):
+        tree_uses_input = False
+        for node in ast.walk(parsed):
+            if isinstance(node, ast.FunctionDef) and node.name == "_math":
+                used = {
+                    child.id for child in ast.walk(node) if isinstance(child, ast.Name)
+                }
+                if "x" in used:
+                    tree_uses_input = True
+        if not tree_uses_input:
+            failures.append(
+                f"{relative}: do not score equality with hidden expected.json while ignoring frozen input"
+            )
+    return failures
+
+
+_PROSE_KEYWORDS = ("RESULT_JSON:", "result_sha256", "BOUNDARY_FAMILY_JSON:")
+
+
+def prose_witness_failures(verifier_path: Path) -> list[str]:
+    """Return failures when evidence is a digest, result copy, or keyword gate."""
+
+    if not verifier_path.is_file():
+        return []
+    relative = _relative(verifier_path)
+    source = verifier_path.read_text(encoding="utf-8")
+    failures: list[str] = []
+    for marker in _PROSE_KEYWORDS:
+        if marker in source:
+            failures.append(
+                f"{relative}: do not score result hashes, RESULT_JSON copies, or keyword prose as witnesses"
+            )
+            break
+    parsed = _parse(verifier_path)
+    if isinstance(parsed, list):
+        return [*failures, *parsed]
+    for node in ast.walk(parsed):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Attribute) and func.attr == "strip":
+            parent = func.value
+            if isinstance(parent, ast.Call) and isinstance(parent.func, ast.Attribute):
+                if parent.func.attr == "read_text":
+                    failures.append(
+                        f"{relative}:{node.lineno}: nonempty text is not a mathematical witness"
+                    )
+    return failures
+
+
 __all__ = [
     "STRUCTURED_RATIONAL_SCHEMA",
     "canonical_string_rational_schema_failures",
+    "formula_string_schema_failures",
     "fraction_coprimality_failures",
+    "hidden_expected_scoring_failures",
     "is_canonical_rational_string_schema",
+    "mirror_witness_failures",
+    "prose_witness_failures",
+    "unread_hash_witness_failures",
 ]

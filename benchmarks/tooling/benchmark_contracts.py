@@ -27,7 +27,12 @@ from benchmarks.tooling.strict_boundaries import (
 )
 from benchmarks.tooling.verifier_audits import (
     canonical_string_rational_schema_failures,
+    formula_string_schema_failures,
     fraction_coprimality_failures,
+    hidden_expected_scoring_failures,
+    mirror_witness_failures,
+    prose_witness_failures,
+    unread_hash_witness_failures,
 )
 
 SCHEMAS = BENCHMARKS / "schemas"
@@ -250,6 +255,13 @@ def _validate_task(suite: Suite, task_dir: Path) -> list[str]:
         )
     failures.extend(fraction_coprimality_failures(task_dir / "tests" / "verifier.py"))
     failures.extend(canonical_string_rational_schema_failures(schema_path))
+    failures.extend(mirror_witness_failures(task_dir / "tests" / "verifier.py"))
+    failures.extend(unread_hash_witness_failures(task_dir / "tests" / "verifier.py"))
+    failures.extend(formula_string_schema_failures(schema_path))
+    failures.extend(
+        hidden_expected_scoring_failures(task_dir / "tests" / "verifier.py")
+    )
+    failures.extend(prose_witness_failures(task_dir / "tests" / "verifier.py"))
     solution_path = task_dir / "solution" / "submission.json"
     if not solution_path.is_file():
         # Measurement and provider tasks construct their Oracle submission at

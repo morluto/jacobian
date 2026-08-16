@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="23a75ae6f3d3faec6fa734847eb83d97930fcebc21e26ebd1f3f31bde435851c"
+LABEL jacobian.checksum="e7afe1e22a1a830ec5f73389c1c5a72fe5ee91fb783d4fbddd24c3e3ed256635"
 LABEL jacobian.task="jacobian/reciprocal-polynomial-classification"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

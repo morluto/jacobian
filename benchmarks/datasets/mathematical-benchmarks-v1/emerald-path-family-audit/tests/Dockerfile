@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="aea1b2b8a0351149f3a9fe2e28c63b07bab56670d95550623e8bdd981ded8acf"
+LABEL jacobian.checksum="8a228457dd7059b8937dde947776047df3d0b82a8b11894c41c1d4e0cb2d10cb"
 LABEL jacobian.task="jacobian/emerald-path-family-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

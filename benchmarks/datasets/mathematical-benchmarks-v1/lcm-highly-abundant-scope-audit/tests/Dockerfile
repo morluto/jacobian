@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="7f17b861943203bb2d58716838fa6bb1f51a3eebc3701a050dc1032ec8538ecd"
+LABEL jacobian.checksum="62984369b7422e7596402540bf57f491bb0baf6419dcffabfe13d9aa4bc88443"
 LABEL jacobian.task="jacobian/lcm-highly-abundant-scope-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

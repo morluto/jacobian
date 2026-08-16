@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact radical-elimination audit verifier.
 LABEL jacobian.task="jacobian/radical-system-uniqueness-audit" \
-      jacobian.checksum="7947fd78f20af51aac2ffd5a7a84e77d4ab599cce3eebe87ac92392af901faac"
+      jacobian.checksum="7e7b2453bb283200c4a51f228405e30aff9e11520c79a73351b1066cd2ceff2d"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

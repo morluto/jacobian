@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 LABEL jacobian.task="jacobian/perfect-cuboid-scope-audit" \
-      jacobian.checksum="267bd00c9369bd884c36e056513e659b9109e4024fcb0500eda27cfe3ff32537"
+      jacobian.checksum="3d5bd1e15f09b1cce5e744b97df716ea8113c061fb0fcc903166f71715f64afe"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 COPY input.json public_contract.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

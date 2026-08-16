@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="90673143ca9c78ddbb582c5727bc382295a8be38f84ccec4d04f80dbbe9d0e60"
+LABEL jacobian.checksum="c965f212477b74402d22f3097a4482d5b5eea692e309a0188fc2040ad6e2a107"
 LABEL jacobian.task="jacobian/nonclosed-projection-image"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

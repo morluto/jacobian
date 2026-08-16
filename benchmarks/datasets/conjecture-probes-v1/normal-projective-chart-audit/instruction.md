@@ -8,7 +8,7 @@ Submit the three finite roots of `t(1-t^2)`, their exact parametrized points, th
 
 at `(h,k)=(0,0)`. Rational values are `{numerator, denominator}` objects. Equivalent encodings such as `2/2` and `1` are accepted after exact `Fraction` normalization. The verifier independently evaluates the finite parametrization, its homogeneous extension, the ellipse equation, and the normal condition. Ordering is canonical by point coordinates.
 
-This Assurance audit certifies one chart-completeness defect on one ellipse. It does not establish any general concurrent-normals conjecture. Claim at most `COMPUTED`.
+This Assurance audit certifies one chart-completeness defect on one ellipse. It does not establish any general concurrent-normals conjecture.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

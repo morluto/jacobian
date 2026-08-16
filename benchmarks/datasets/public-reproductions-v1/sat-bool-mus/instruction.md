@@ -1,6 +1,6 @@
 # SAT decision with witness
 
-Decide the exact CNF formula in `input.json`. For a satisfiable formula, return `SATISFIABLE` and a complete Boolean assignment satisfying every clause. For an unsatisfiable formula, return `UNSATISFIABLE`. Write `submission.json` to the exact agent-visible `submission_schema.json`. Claim `COMPUTED` assurance; do not claim `VERIFIED`.
+Decide the exact CNF formula in `input.json`. For a satisfiable formula, return `SATISFIABLE` and a complete Boolean assignment satisfying every clause. For an unsatisfiable formula, return `UNSATISFIABLE`. Write `submission.json` to the exact agent-visible `submission_schema.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

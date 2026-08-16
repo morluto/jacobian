@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="c23cb013139a38afc2e56c775f63bbcf28e35cf9ced85aaed4c405fbf3fc849c"
+LABEL jacobian.checksum="a70381015a794ac1c45259a7eab0b9c78be53cbcc9724933b4d7f33bd458ba92"
 LABEL jacobian.task="jacobian/cubic-image-classification"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

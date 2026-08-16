@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 LABEL jacobian.task="jacobian/modular-cubic-obstruction" \
-      jacobian.checksum="2675d452c9caffc50a882d4fe1e2ad9bf51cd340c3c012a107154a8a5e6fa02a"
+      jacobian.checksum="3c9259c24bdcc8520daec163c4de8226f2218e2d86177b5ab3e2fe85f463232b"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

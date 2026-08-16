@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 LABEL jacobian.task="jacobian/recurrence-rational-series" \
-      jacobian.checksum="d519d077ed63e2c875471876bb110012b89fdd0a7560cefe7d9ccce7ac984cc0"
+      jacobian.checksum="f1ac4dc7f502bb2dedf4fe4bd858fe1d5495cb06c4a19b9d5de373f1b66f131a"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

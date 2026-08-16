@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Bounded exhaustive audit verifier.
 LABEL jacobian.task="jacobian/calendar-good-days-audit" \
-      jacobian.checksum="7354b9edf5e2028909ebba3c4375ce5e11a0c1c313dcd11d795e63deb97a3d56"
+      jacobian.checksum="6dc0bd096878921a211d7a41ac91581c01e04389e363999522a5e3634e9c3102"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

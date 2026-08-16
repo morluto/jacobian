@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="3e435405260ca8c45843ce6ff0deb6b6d55fa3f0cc59eefd9e19fc134796d2f8"
+LABEL jacobian.checksum="2c303074d5698e4a1d031afdbe9f335a8cf42f1a8bb3d0f65ff95ec0fec2ca4f"
 # Exact symbolic verifier for a cyclic sharp inequality.
 LABEL jacobian.task="jacobian/cyclic-vector-inequality"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/

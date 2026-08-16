@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact verifier for a strict-monotonicity missing-continuity audit.
 LABEL jacobian.task="jacobian/monotone-inverse-continuity-audit" \
-      jacobian.checksum="69a4a12005ebe6810a51a0992c715721cc83095c1ed43c320cf7dadb1a5ffc3e"
+      jacobian.checksum="719c799f23babd4f0976ba6ba3ccf6644468bea01e9ed164f1686b5f985ea4d8"
 COPY expected.json input.json public_contract.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

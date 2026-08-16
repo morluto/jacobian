@@ -12,7 +12,7 @@ Submit:
 
 The verifier multiplies the factors back to the frozen polynomial, classifies the two cyclotomic factors, checks the reciprocal quadratic roots algebraically, and recomputes all radical products. Equivalent factor signs are normalized by requiring positive leading coefficients and primitive coefficient gcd one.
 
-This Assurance result concerns one exact polynomial and one formula defect only. It does not determine Lehmer's problem or compare all integer polynomials. Claim at most `COMPUTED`.
+This Assurance result concerns one exact polynomial and one formula defect only. It does not determine Lehmer's problem or compare all integer polynomials.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

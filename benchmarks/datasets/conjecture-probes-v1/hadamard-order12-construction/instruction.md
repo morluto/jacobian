@@ -11,7 +11,6 @@ not required to match a particular Paley presentation.
 
 This finite construction is evidence for one admissible order only. It does
 not prove the Hadamard matrix conjecture for every positive multiple of four.
-Claim `COMPUTED` only for this order-12 certificate.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

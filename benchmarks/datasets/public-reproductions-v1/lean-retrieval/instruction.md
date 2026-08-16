@@ -1,6 +1,6 @@
 # Lean premise retrieval
 
-Retrieve candidate premises/tactics for the Lean statement in `input.json` and report the top candidate as a structured tactic with a command, theorem identifier, and argument identifiers. Also report whether retrieval was exhaustive. Write `submission.json` to the exact agent-visible `submission_schema.json`. Claim `COMPUTED` assurance; do not claim `VERIFIED`.
+Retrieve candidate premises/tactics for the Lean statement in `input.json` and report the top candidate as a structured tactic with a command, theorem identifier, and argument identifiers. Also report whether retrieval was exhaustive. Write `submission.json` to the exact agent-visible `submission_schema.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

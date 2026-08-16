@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 LABEL jacobian.task="jacobian/reconstruction-deck-certificate" \
-      jacobian.checksum="4edd472a3be0dfd4753eb1666e11dbf8e06fd8b79666c843698192128d294e5e"
+      jacobian.checksum="eed96bb48c19dd5f2fa40a25c418910be2fa354914abb84f92a33726d37e30f5"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 COPY input.json public_contract.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

@@ -67,7 +67,6 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return dict(pairs)
 
 
-
 _JSON_SCHEMA_DRAFT = "https://json-schema.org/draft/2020-12/schema"
 
 
@@ -131,6 +130,7 @@ def _derive_submission_schema(contract: dict[str, Any]) -> dict[str, Any] | None
     if schema_definitions:
         schema["$defs"] = dict(schema_definitions)
     return schema
+
 
 def _load_public_contract(
     path: Path = TESTS / "public_contract.json",

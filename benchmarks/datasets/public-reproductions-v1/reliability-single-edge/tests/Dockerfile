@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 LABEL jacobian.task="jacobian/reliability-single-edge" \
-      jacobian.checksum="760cc74ddd0a93cfdb88b7782495b742b7091fce2521a742c717d25bf17c2b66"
+      jacobian.checksum="06809099537d624d73d016d8ae4e9c0796d8d625621fde49e1f3c6c4d3fdf43a"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

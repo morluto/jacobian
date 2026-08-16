@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="5e8f7c4562f388505124b9c635932460f2106ef1472207b98a0b2c08d64d6daf"
+LABEL jacobian.checksum="45326783804306c7fff8a6b2aaf0f1434d61471f3023012caa1a48f814400f0a"
 LABEL jacobian.task="jacobian/cyclotomic-reciprocity-certificate"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

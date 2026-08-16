@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="37dbdbd46f45c157af617c1bebe34ad16dd2a835f37d7e2b86a0d43d9efd9de3"
+LABEL jacobian.checksum="2910370e64f842024acc5f01f54312d6126e1075cb6abd61f3749b49a3d6866b"
 LABEL jacobian.task="jacobian/subset-incidence-determinant"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 LABEL jacobian.task="jacobian/littlewood-certified-finite-search" \
-      jacobian.checksum="0ed6c2b2a4b6c699f9882e69af733b97bfab63bac5d6bc0b285af0b1beb2eb20"
+      jacobian.checksum="61653b5a535da74b9437d5ec34732653e4b4319888e606667c0724fc08cea07e"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 COPY input.json public_contract.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

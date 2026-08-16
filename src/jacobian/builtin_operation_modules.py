@@ -80,7 +80,7 @@ BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
         "jacobian.domains.discrepancy_theory",
         "discrepancy_theory_operations",
     ),
-    ("jacobian.domains.graph_polynomial", "graph_polynomial_operations"),
+    ("jacobian.domains.graph_polynomials", "graph_polynomial_operations"),
     ("jacobian.domains.numerical_semigroups", "numerical_semigroup_operations"),
     ("jacobian.domains.multiple_testing", "multiple_testing_operations"),
     ("jacobian.domains.exact_geometry", "exact_geometry_operations"),

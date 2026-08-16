@@ -1,127 +1,62 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "proof_steps": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "pattern": "^[a-z][a-z0-9_]{0,31}$",
-              "type": "string"
-            },
-            "inputs": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array",
-              "uniqueItems": true
-            },
-            "output": {
-              "type": "string"
-            },
-            "rule": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "id",
-            "rule",
-            "inputs",
-            "output"
-          ],
-          "type": "object"
-        },
-        "maxItems": 12,
-        "minItems": 1,
-        "type": "array"
-      },
-      "selected_premises": {
-        "items": {
-          "type": "string"
-        },
-        "type": "array",
-        "uniqueItems": true
-      },
-      "target_fact": {
-        "type": "string"
-      }
-    },
-    "required": [
-      "selected_premises",
-      "proof_steps",
-      "target_fact"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "proof_steps": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "id": {
-                  "pattern": "^[a-z][a-z0-9_]{0,31}$",
-                  "type": "string"
+            "proof_steps": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "id": {
+                            "pattern": "^[a-z][a-z0-9_]{0,31}$",
+                            "type": "string"
+                        },
+                        "inputs": {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array",
+                            "uniqueItems": true
+                        },
+                        "output": {
+                            "type": "string"
+                        },
+                        "rule": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "id",
+                        "rule",
+                        "inputs",
+                        "output"
+                    ],
+                    "type": "object"
                 },
-                "inputs": {
-                  "items": {
+                "maxItems": 12,
+                "minItems": 1,
+                "type": "array"
+            },
+            "selected_premises": {
+                "items": {
                     "type": "string"
-                  },
-                  "type": "array",
-                  "uniqueItems": true
                 },
-                "output": {
-                  "type": "string"
-                },
-                "rule": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "rule",
-                "inputs",
-                "output"
-              ],
-              "type": "object"
+                "type": "array",
+                "uniqueItems": true
             },
-            "maxItems": 12,
-            "minItems": 1,
-            "type": "array"
-          },
-          "selected_premises": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "target_fact": {
-            "type": "string"
-          }
+            "target_fact": {
+                "type": "string"
+            }
         },
         "required": [
-          "selected_premises",
-          "proof_steps",
-          "target_fact"
+            "selected_premises",
+            "proof_steps",
+            "target_fact"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/grounded-premise-proof"
+    "task_id": "jacobian/grounded-premise-proof"
 }

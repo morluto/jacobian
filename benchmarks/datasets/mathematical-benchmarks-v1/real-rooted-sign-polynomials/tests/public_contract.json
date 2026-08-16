@@ -1,200 +1,98 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "case": {
-      "additionalProperties": false,
-      "properties": {
-        "all_roots_real": {
-          "type": "boolean"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "case": {
+            "additionalProperties": false,
+            "properties": {
+                "all_roots_real": {
+                    "type": "boolean"
+                },
+                "coefficients": {
+                    "items": {
+                        "enum": [
+                            -1,
+                            1
+                        ]
+                    },
+                    "maxItems": 4,
+                    "minItems": 2,
+                    "type": "array"
+                },
+                "degree": {
+                    "maximum": 3,
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "discriminant": {
+                    "type": [
+                        "integer",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "coefficients",
+                "degree",
+                "discriminant",
+                "all_roots_real"
+            ],
+            "type": "object"
         },
-        "coefficients": {
-          "items": {
-            "enum": [
-              -1,
-              1
-            ]
-          },
-          "maxItems": 4,
-          "minItems": 2,
-          "type": "array"
-        },
-        "degree": {
-          "maximum": 3,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "discriminant": {
-          "type": [
-            "integer",
-            "null"
-          ]
+        "result": {
+            "additionalProperties": false,
+            "properties": {
+                "candidate_audit": {
+                    "items": {
+                        "$ref": "#/$defs/case"
+                    },
+                    "maxItems": 28,
+                    "minItems": 28,
+                    "type": "array"
+                },
+                "classified_polynomials": {
+                    "items": {
+                        "items": {
+                            "enum": [
+                                -1,
+                                1
+                            ]
+                        },
+                        "maxItems": 4,
+                        "minItems": 2,
+                        "type": "array"
+                    },
+                    "maxItems": 12,
+                    "minItems": 12,
+                    "type": "array"
+                },
+                "maximum_degree": {
+                    "const": 3
+                },
+                "normalized_second_coefficient": {
+                    "const": -1
+                },
+                "root_product_square": {
+                    "const": 1
+                },
+                "second_power_sum": {
+                    "const": 3
+                }
+            },
+            "required": [
+                "normalized_second_coefficient",
+                "second_power_sum",
+                "root_product_square",
+                "maximum_degree",
+                "candidate_audit",
+                "classified_polynomials"
+            ],
+            "type": "object"
         }
-      },
-      "required": [
-        "coefficients",
-        "degree",
-        "discriminant",
-        "all_roots_real"
-      ],
-      "type": "object"
     },
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "candidate_audit": {
-          "items": {
-            "$ref": "#/$defs/case"
-          },
-          "maxItems": 28,
-          "minItems": 28,
-          "type": "array"
-        },
-        "classified_polynomials": {
-          "items": {
-            "items": {
-              "enum": [
-                -1,
-                1
-              ]
-            },
-            "maxItems": 4,
-            "minItems": 2,
-            "type": "array"
-          },
-          "maxItems": 12,
-          "minItems": 12,
-          "type": "array"
-        },
-        "maximum_degree": {
-          "const": 3
-        },
-        "normalized_second_coefficient": {
-          "const": -1
-        },
-        "root_product_square": {
-          "const": 1
-        },
-        "second_power_sum": {
-          "const": 3
-        }
-      },
-      "required": [
-        "normalized_second_coefficient",
-        "second_power_sum",
-        "root_product_square",
-        "maximum_degree",
-        "candidate_audit",
-        "classified_polynomials"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "$ref": "#/$defs/result"
-  },
-  "submission_schema": {
-    "$defs": {
-      "case": {
-        "additionalProperties": false,
-        "properties": {
-          "all_roots_real": {
-            "type": "boolean"
-          },
-          "coefficients": {
-            "items": {
-              "enum": [
-                -1,
-                1
-              ]
-            },
-            "maxItems": 4,
-            "minItems": 2,
-            "type": "array"
-          },
-          "degree": {
-            "maximum": 3,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "discriminant": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "coefficients",
-          "degree",
-          "discriminant",
-          "all_roots_real"
-        ],
-        "type": "object"
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "candidate_audit": {
-            "items": {
-              "$ref": "#/$defs/case"
-            },
-            "maxItems": 28,
-            "minItems": 28,
-            "type": "array"
-          },
-          "classified_polynomials": {
-            "items": {
-              "items": {
-                "enum": [
-                  -1,
-                  1
-                ]
-              },
-              "maxItems": 4,
-              "minItems": 2,
-              "type": "array"
-            },
-            "maxItems": 12,
-            "minItems": 12,
-            "type": "array"
-          },
-          "maximum_degree": {
-            "const": 3
-          },
-          "normalized_second_coefficient": {
-            "const": -1
-          },
-          "root_product_square": {
-            "const": 1
-          },
-          "second_power_sum": {
-            "const": 3
-          }
-        },
-        "required": [
-          "normalized_second_coefficient",
-          "second_power_sum",
-          "root_product_square",
-          "maximum_degree",
-          "candidate_audit",
-          "classified_polynomials"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "$ref": "#/$defs/result"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/real-rooted-sign-polynomials"
+    "task_id": "jacobian/real-rooted-sign-polynomials"
 }

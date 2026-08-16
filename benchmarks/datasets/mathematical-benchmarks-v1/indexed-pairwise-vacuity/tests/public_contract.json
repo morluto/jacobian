@@ -1,205 +1,101 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "cosets": {
-        "items": {
-          "items": {
-            "type": "integer"
-          },
-          "type": "array",
-          "uniqueItems": true
-        },
-        "type": "array"
-      },
-      "covering_part_references": {
-        "items": {
-          "const": 0
-        },
-        "type": "array"
-      },
-      "duplicate_indices": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "indexed_pairwise_truth": {
-        "type": "boolean"
-      },
-      "modulus": {
-        "maximum": 24,
-        "minimum": 8,
-        "type": "integer"
-      },
-      "part_artifact": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "elements": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "id": {
-            "const": 0
-          },
-          "kind": {
-            "const": "SUBGROUP"
-          }
-        },
-        "required": [
-          "id",
-          "kind",
-          "elements"
-        ],
-        "type": "object"
-      },
-      "range_pairwise_truth": {
-        "type": "boolean"
-      },
-      "representatives": {
-        "items": {
-          "type": "integer"
-        },
-        "type": "array",
-        "uniqueItems": true
-      },
-      "subgroup": {
-        "items": {
-          "type": "integer"
-        },
-        "type": "array",
-        "uniqueItems": true
-      },
-      "subgroup_step": {
-        "type": "integer"
-      }
-    },
-    "required": [
-      "modulus",
-      "subgroup_step",
-      "subgroup",
-      "representatives",
-      "cosets",
-      "part_artifact",
-      "covering_part_references",
-      "range_pairwise_truth",
-      "indexed_pairwise_truth",
-      "duplicate_indices"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "cosets": {
-            "items": {
-              "items": {
-                "type": "integer"
-              },
-              "type": "array",
-              "uniqueItems": true
-            },
-            "type": "array"
-          },
-          "covering_part_references": {
-            "items": {
-              "const": 0
-            },
-            "type": "array"
-          },
-          "duplicate_indices": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "indexed_pairwise_truth": {
-            "type": "boolean"
-          },
-          "modulus": {
-            "maximum": 24,
-            "minimum": 8,
-            "type": "integer"
-          },
-          "part_artifact": {
-            "additionalProperties": false,
-            "properties": {
-              "elements": {
+            "cosets": {
                 "items": {
-                  "type": "integer"
+                    "items": {
+                        "type": "integer"
+                    },
+                    "type": "array",
+                    "uniqueItems": true
+                },
+                "type": "array"
+            },
+            "covering_part_references": {
+                "items": {
+                    "const": 0
+                },
+                "type": "array"
+            },
+            "duplicate_indices": {
+                "items": {
+                    "type": "integer"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            },
+            "indexed_pairwise_truth": {
+                "type": "boolean"
+            },
+            "modulus": {
+                "maximum": 24,
+                "minimum": 8,
+                "type": "integer"
+            },
+            "part_artifact": {
+                "additionalProperties": false,
+                "properties": {
+                    "elements": {
+                        "items": {
+                            "type": "integer"
+                        },
+                        "type": "array",
+                        "uniqueItems": true
+                    },
+                    "id": {
+                        "const": 0
+                    },
+                    "kind": {
+                        "const": "SUBGROUP"
+                    }
+                },
+                "required": [
+                    "id",
+                    "kind",
+                    "elements"
+                ],
+                "type": "object"
+            },
+            "range_pairwise_truth": {
+                "type": "boolean"
+            },
+            "representatives": {
+                "items": {
+                    "type": "integer"
                 },
                 "type": "array",
                 "uniqueItems": true
-              },
-              "id": {
-                "const": 0
-              },
-              "kind": {
-                "const": "SUBGROUP"
-              }
             },
-            "required": [
-              "id",
-              "kind",
-              "elements"
-            ],
-            "type": "object"
-          },
-          "range_pairwise_truth": {
-            "type": "boolean"
-          },
-          "representatives": {
-            "items": {
-              "type": "integer"
+            "subgroup": {
+                "items": {
+                    "type": "integer"
+                },
+                "type": "array",
+                "uniqueItems": true
             },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "subgroup": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "subgroup_step": {
-            "type": "integer"
-          }
+            "subgroup_step": {
+                "type": "integer"
+            }
         },
         "required": [
-          "modulus",
-          "subgroup_step",
-          "subgroup",
-          "representatives",
-          "cosets",
-          "part_artifact",
-          "covering_part_references",
-          "range_pairwise_truth",
-          "indexed_pairwise_truth",
-          "duplicate_indices"
+            "modulus",
+            "subgroup_step",
+            "subgroup",
+            "representatives",
+            "cosets",
+            "part_artifact",
+            "covering_part_references",
+            "range_pairwise_truth",
+            "indexed_pairwise_truth",
+            "duplicate_indices"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/indexed-pairwise-vacuity"
+    "task_id": "jacobian/indexed-pairwise-vacuity"
 }

@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact dependence-aware expectation verifier.
 LABEL jacobian.task="jacobian/random-function-expectation-audit" \
-      jacobian.checksum="2994546e3eb6a67f390671816dfcb2894df918098d8fde0f8e11d37b8d1ad1d1"
+      jacobian.checksum="18bc2dccdce4357d3ed7f06693518801caaadf22c01f021a1a304356a791fee8"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

@@ -1,216 +1,106 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "factor": {
-      "items": {
-        "minimum": 1,
-        "type": "integer"
-      },
-      "maxItems": 2,
-      "minItems": 2,
-      "type": "array"
-    },
-    "option": {
-      "additionalProperties": false,
-      "properties": {
-        "exponents": {
-          "items": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 6,
-          "minItems": 2,
-          "type": "array"
-        },
-        "prime": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "prime",
-        "exponents"
-      ],
-      "type": "object"
-    },
-    "solution": {
-      "additionalProperties": false,
-      "properties": {
-        "factorization": {
-          "items": {
-            "$ref": "#/$defs/factor"
-          },
-          "maxItems": 6,
-          "minItems": 1,
-          "type": "array"
-        },
-        "n": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "totient": {
-          "const": 48
-        }
-      },
-      "required": [
-        "n",
-        "factorization",
-        "totient"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "accepted_count": {
-        "const": 11
-      },
-      "candidate_primes": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 6,
-        "minItems": 6,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "enumerated_branch_count": {
-        "const": 288
-      },
-      "prime_power_options": {
-        "items": {
-          "$ref": "#/$defs/option"
-        },
-        "maxItems": 6,
-        "minItems": 6,
-        "type": "array"
-      },
-      "solutions": {
-        "items": {
-          "$ref": "#/$defs/solution"
-        },
-        "maxItems": 11,
-        "minItems": 11,
-        "type": "array"
-      }
-    },
-    "required": [
-      "solutions",
-      "accepted_count"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "factor": {
-        "items": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "option": {
-        "additionalProperties": false,
-        "properties": {
-          "exponents": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "factor": {
             "items": {
-              "minimum": 0,
-              "type": "integer"
+                "minimum": 1,
+                "type": "integer"
             },
-            "maxItems": 6,
+            "maxItems": 2,
             "minItems": 2,
             "type": "array"
-          },
-          "prime": {
-            "type": "integer"
-          }
         },
-        "required": [
-          "prime",
-          "exponents"
-        ],
-        "type": "object"
-      },
-      "solution": {
+        "option": {
+            "additionalProperties": false,
+            "properties": {
+                "exponents": {
+                    "items": {
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "maxItems": 6,
+                    "minItems": 2,
+                    "type": "array"
+                },
+                "prime": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "prime",
+                "exponents"
+            ],
+            "type": "object"
+        },
+        "solution": {
+            "additionalProperties": false,
+            "properties": {
+                "factorization": {
+                    "items": {
+                        "$ref": "#/$defs/factor"
+                    },
+                    "maxItems": 6,
+                    "minItems": 1,
+                    "type": "array"
+                },
+                "n": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "totient": {
+                    "const": 48
+                }
+            },
+            "required": [
+                "n",
+                "factorization",
+                "totient"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "factorization": {
-            "items": {
-              "$ref": "#/$defs/factor"
+            "accepted_count": {
+                "const": 11
             },
-            "maxItems": 6,
-            "minItems": 1,
-            "type": "array"
-          },
-          "n": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "totient": {
-            "const": 48
-          }
+            "candidate_primes": {
+                "items": {
+                    "type": "integer"
+                },
+                "maxItems": 6,
+                "minItems": 6,
+                "type": "array",
+                "uniqueItems": true
+            },
+            "enumerated_branch_count": {
+                "const": 288
+            },
+            "prime_power_options": {
+                "items": {
+                    "$ref": "#/$defs/option"
+                },
+                "maxItems": 6,
+                "minItems": 6,
+                "type": "array"
+            },
+            "solutions": {
+                "items": {
+                    "$ref": "#/$defs/solution"
+                },
+                "maxItems": 11,
+                "minItems": 11,
+                "type": "array"
+            }
         },
         "required": [
-          "n",
-          "factorization",
-          "totient"
+            "solutions",
+            "accepted_count"
         ],
         "type": "object"
-      }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "accepted_count": {
-            "const": 11
-          },
-          "candidate_primes": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 6,
-            "minItems": 6,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "enumerated_branch_count": {
-            "const": 288
-          },
-          "prime_power_options": {
-            "items": {
-              "$ref": "#/$defs/option"
-            },
-            "maxItems": 6,
-            "minItems": 6,
-            "type": "array"
-          },
-          "solutions": {
-            "items": {
-              "$ref": "#/$defs/solution"
-            },
-            "maxItems": 11,
-            "minItems": 11,
-            "type": "array"
-          }
-        },
-        "required": [
-          "solutions",
-          "accepted_count"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/totient-preimage-completeness-certificate"
+    "task_id": "jacobian/totient-preimage-completeness-certificate"
 }

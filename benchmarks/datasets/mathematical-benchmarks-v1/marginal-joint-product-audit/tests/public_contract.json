@@ -1,288 +1,142 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "joint_entry": {
-      "additionalProperties": false,
-      "properties": {
-        "mass": {
-          "additionalProperties": false,
-          "properties": {
-            "denominator": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "numerator": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "numerator",
-            "denominator"
-          ],
-          "type": "object"
-        },
-        "x": {
-          "type": "integer"
-        },
-        "y": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "x",
-        "y",
-        "mass"
-      ],
-      "type": "object"
-    },
-    "product_entry": {
-      "additionalProperties": false,
-      "properties": {
-        "mass": {
-          "additionalProperties": false,
-          "properties": {
-            "denominator": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "numerator": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "numerator",
-            "denominator"
-          ],
-          "type": "object"
-        },
-        "value": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "value",
-        "mass"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "diagnosis": {
-        "const": "MISSING_JOINT_LAW_CONTROL"
-      },
-      "limit_joint": {
-        "items": {
-          "$ref": "#/$defs/joint_entry"
-        },
-        "maxItems": 16,
-        "minItems": 16,
-        "type": "array"
-      },
-      "limit_product_distribution": {
-        "items": {
-          "$ref": "#/$defs/product_entry"
-        },
-        "minItems": 1,
-        "type": "array"
-      },
-      "missing_assumption": {
-        "enum": [
-          "JOINT_CONVERGENCE",
-          "LIMIT_PAIR_INDEPENDENCE"
-        ]
-      },
-      "prelimit_joint": {
-        "items": {
-          "$ref": "#/$defs/joint_entry"
-        },
-        "maxItems": 16,
-        "minItems": 16,
-        "type": "array"
-      },
-      "prelimit_product_distribution": {
-        "items": {
-          "$ref": "#/$defs/product_entry"
-        },
-        "minItems": 1,
-        "type": "array"
-      },
-      "sequence_model": {
-        "const": "CONSTANT_IN_N"
-      },
-      "support": {
-        "const": [
-          -3,
-          -1,
-          2,
-          5
-        ]
-      },
-      "witness_product_value": {
-        "type": "integer"
-      }
-    },
-    "required": [
-      "diagnosis",
-      "sequence_model",
-      "support",
-      "prelimit_joint",
-      "limit_joint",
-      "prelimit_product_distribution",
-      "limit_product_distribution",
-      "witness_product_value",
-      "missing_assumption"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "joint_entry": {
-        "additionalProperties": false,
-        "properties": {
-          "mass": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "joint_entry": {
             "additionalProperties": false,
             "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
+                "mass": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "denominator": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "numerator": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "numerator",
+                        "denominator"
+                    ],
+                    "type": "object"
+                },
+                "x": {
+                    "type": "integer"
+                },
+                "y": {
+                    "type": "integer"
+                }
             },
             "required": [
-              "numerator",
-              "denominator"
+                "x",
+                "y",
+                "mass"
             ],
             "type": "object"
-          },
-          "x": {
-            "type": "integer"
-          },
-          "y": {
-            "type": "integer"
-          }
         },
-        "required": [
-          "x",
-          "y",
-          "mass"
-        ],
-        "type": "object"
-      },
-      "product_entry": {
-        "additionalProperties": false,
-        "properties": {
-          "mass": {
+        "product_entry": {
             "additionalProperties": false,
             "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
+                "mass": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "denominator": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "numerator": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "numerator",
+                        "denominator"
+                    ],
+                    "type": "object"
+                },
+                "value": {
+                    "type": "integer"
+                }
             },
             "required": [
-              "numerator",
-              "denominator"
+                "value",
+                "mass"
             ],
             "type": "object"
-          },
-          "value": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "value",
-          "mass"
-        ],
-        "type": "object"
-      }
+        }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "diagnosis": {
-            "const": "MISSING_JOINT_LAW_CONTROL"
-          },
-          "limit_joint": {
-            "items": {
-              "$ref": "#/$defs/joint_entry"
+            "diagnosis": {
+                "const": "MISSING_JOINT_LAW_CONTROL"
             },
-            "maxItems": 16,
-            "minItems": 16,
-            "type": "array"
-          },
-          "limit_product_distribution": {
-            "items": {
-              "$ref": "#/$defs/product_entry"
+            "limit_joint": {
+                "items": {
+                    "$ref": "#/$defs/joint_entry"
+                },
+                "maxItems": 16,
+                "minItems": 16,
+                "type": "array"
             },
-            "minItems": 1,
-            "type": "array"
-          },
-          "missing_assumption": {
-            "enum": [
-              "JOINT_CONVERGENCE",
-              "LIMIT_PAIR_INDEPENDENCE"
-            ]
-          },
-          "prelimit_joint": {
-            "items": {
-              "$ref": "#/$defs/joint_entry"
+            "limit_product_distribution": {
+                "items": {
+                    "$ref": "#/$defs/product_entry"
+                },
+                "minItems": 1,
+                "type": "array"
             },
-            "maxItems": 16,
-            "minItems": 16,
-            "type": "array"
-          },
-          "prelimit_product_distribution": {
-            "items": {
-              "$ref": "#/$defs/product_entry"
+            "missing_assumption": {
+                "enum": [
+                    "JOINT_CONVERGENCE",
+                    "LIMIT_PAIR_INDEPENDENCE"
+                ]
             },
-            "minItems": 1,
-            "type": "array"
-          },
-          "sequence_model": {
-            "const": "CONSTANT_IN_N"
-          },
-          "support": {
-            "const": [
-              -3,
-              -1,
-              2,
-              5
-            ]
-          },
-          "witness_product_value": {
-            "type": "integer"
-          }
+            "prelimit_joint": {
+                "items": {
+                    "$ref": "#/$defs/joint_entry"
+                },
+                "maxItems": 16,
+                "minItems": 16,
+                "type": "array"
+            },
+            "prelimit_product_distribution": {
+                "items": {
+                    "$ref": "#/$defs/product_entry"
+                },
+                "minItems": 1,
+                "type": "array"
+            },
+            "sequence_model": {
+                "const": "CONSTANT_IN_N"
+            },
+            "support": {
+                "const": [
+                    -3,
+                    -1,
+                    2,
+                    5
+                ]
+            },
+            "witness_product_value": {
+                "type": "integer"
+            }
         },
         "required": [
-          "diagnosis",
-          "sequence_model",
-          "support",
-          "prelimit_joint",
-          "limit_joint",
-          "prelimit_product_distribution",
-          "limit_product_distribution",
-          "witness_product_value",
-          "missing_assumption"
+            "diagnosis",
+            "sequence_model",
+            "support",
+            "prelimit_joint",
+            "limit_joint",
+            "prelimit_product_distribution",
+            "limit_product_distribution",
+            "witness_product_value",
+            "missing_assumption"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/marginal-joint-product-audit"
+    "task_id": "jacobian/marginal-joint-product-audit"
 }

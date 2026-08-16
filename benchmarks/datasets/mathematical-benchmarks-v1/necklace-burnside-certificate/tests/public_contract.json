@@ -1,134 +1,65 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "burnside_numerator": {
-        "description": "Sum of all 32 rotation and reflection fixed-point counts.",
-        "minimum": 1,
-        "type": "integer"
-      },
-      "canonical_representatives": {
-        "description": "Sorted list of the lexicographically least representative of every orbit.",
-        "items": {
-          "pattern": "^[01]{16}$",
-          "type": "string"
-        },
-        "minItems": 1,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "orbit_count": {
-        "description": "Number of dihedral orbits on valid words.",
-        "minimum": 1,
-        "type": "integer"
-      },
-      "reflection_fixed_counts": {
-        "description": "Index k is the count of valid words fixed by the reflection through index k (word[i] == word[(k-i) mod 16]).",
-        "items": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 16,
-        "minItems": 16,
-        "type": "array"
-      },
-      "rotation_fixed_counts": {
-        "description": "Index k is the count of valid words fixed by rotation by k positions (word[i] == word[(i+k) mod 16]).",
-        "items": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 16,
-        "minItems": 16,
-        "type": "array"
-      },
-      "valid_labelled_words": {
-        "description": "Total number of valid labelled binary words of length 16 with no cyclic run of three equal bits.",
-        "minimum": 1,
-        "type": "integer"
-      }
-    },
-    "required": [
-      "valid_labelled_words",
-      "rotation_fixed_counts",
-      "reflection_fixed_counts",
-      "burnside_numerator",
-      "orbit_count",
-      "canonical_representatives"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "burnside_numerator": {
-            "description": "Sum of all 32 rotation and reflection fixed-point counts.",
-            "minimum": 1,
-            "type": "integer"
-          },
-          "canonical_representatives": {
-            "description": "Sorted list of the lexicographically least representative of every orbit.",
-            "items": {
-              "pattern": "^[01]{16}$",
-              "type": "string"
+            "burnside_numerator": {
+                "description": "Sum of all 32 rotation and reflection fixed-point counts.",
+                "minimum": 1,
+                "type": "integer"
             },
-            "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "orbit_count": {
-            "description": "Number of dihedral orbits on valid words.",
-            "minimum": 1,
-            "type": "integer"
-          },
-          "reflection_fixed_counts": {
-            "description": "Index k is the count of valid words fixed by the reflection through index k (word[i] == word[(k-i) mod 16]).",
-            "items": {
-              "minimum": 0,
-              "type": "integer"
+            "canonical_representatives": {
+                "description": "Sorted list of the lexicographically least representative of every orbit.",
+                "items": {
+                    "pattern": "^[01]{16}$",
+                    "type": "string"
+                },
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
             },
-            "maxItems": 16,
-            "minItems": 16,
-            "type": "array"
-          },
-          "rotation_fixed_counts": {
-            "description": "Index k is the count of valid words fixed by rotation by k positions (word[i] == word[(i+k) mod 16]).",
-            "items": {
-              "minimum": 0,
-              "type": "integer"
+            "orbit_count": {
+                "description": "Number of dihedral orbits on valid words.",
+                "minimum": 1,
+                "type": "integer"
             },
-            "maxItems": 16,
-            "minItems": 16,
-            "type": "array"
-          },
-          "valid_labelled_words": {
-            "description": "Total number of valid labelled binary words of length 16 with no cyclic run of three equal bits.",
-            "minimum": 1,
-            "type": "integer"
-          }
+            "reflection_fixed_counts": {
+                "description": "Index k is the count of valid words fixed by the reflection through index k (word[i] == word[(k-i) mod 16]).",
+                "items": {
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "maxItems": 16,
+                "minItems": 16,
+                "type": "array"
+            },
+            "rotation_fixed_counts": {
+                "description": "Index k is the count of valid words fixed by rotation by k positions (word[i] == word[(i+k) mod 16]).",
+                "items": {
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "maxItems": 16,
+                "minItems": 16,
+                "type": "array"
+            },
+            "valid_labelled_words": {
+                "description": "Total number of valid labelled binary words of length 16 with no cyclic run of three equal bits.",
+                "minimum": 1,
+                "type": "integer"
+            }
         },
         "required": [
-          "valid_labelled_words",
-          "rotation_fixed_counts",
-          "reflection_fixed_counts",
-          "burnside_numerator",
-          "orbit_count",
-          "canonical_representatives"
+            "valid_labelled_words",
+            "rotation_fixed_counts",
+            "reflection_fixed_counts",
+            "burnside_numerator",
+            "orbit_count",
+            "canonical_representatives"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/necklace-burnside-certificate"
+    "task_id": "jacobian/necklace-burnside-certificate"
 }

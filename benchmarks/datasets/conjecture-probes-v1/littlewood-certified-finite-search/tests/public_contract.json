@@ -1,208 +1,102 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rat": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rat": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
         },
-        "numerator": {
-          "type": "integer"
+        "record": {
+            "additionalProperties": false,
+            "properties": {
+                "floors": {
+                    "items": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                },
+                "lower": {
+                    "$ref": "#/$defs/rat"
+                },
+                "n": {
+                    "maximum": 2000,
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "nearest": {
+                    "items": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                },
+                "upper": {
+                    "$ref": "#/$defs/rat"
+                }
+            },
+            "required": [
+                "n",
+                "floors",
+                "nearest",
+                "lower",
+                "upper"
+            ],
+            "type": "object"
         }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
     },
-    "record": {
-      "additionalProperties": false,
-      "properties": {
-        "floors": {
-          "items": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "maxItems": 2,
-          "minItems": 2,
-          "type": "array"
-        },
-        "lower": {
-          "$ref": "#/$defs/rat"
-        },
-        "n": {
-          "maximum": 2000,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "nearest": {
-          "items": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "maxItems": 2,
-          "minItems": 2,
-          "type": "array"
-        },
-        "upper": {
-          "$ref": "#/$defs/rat"
-        }
-      },
-      "required": [
-        "n",
-        "floors",
-        "nearest",
-        "lower",
-        "upper"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "argmin_n": {
-        "maximum": 2000,
-        "minimum": 1,
-        "type": "integer"
-      },
-      "comparison_status": {
-        "const": "STRICTLY_SEPARATED_INTERVALS"
-      },
-      "minimum_lower": {
-        "$ref": "#/$defs/rat"
-      },
-      "minimum_upper": {
-        "$ref": "#/$defs/rat"
-      },
-      "records": {
-        "items": {
-          "$ref": "#/$defs/record"
-        },
-        "maxItems": 100,
-        "minItems": 2,
-        "type": "array"
-      }
-    },
-    "required": [
-      "records",
-      "argmin_n",
-      "minimum_lower",
-      "minimum_upper",
-      "comparison_status"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "rat": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
+            "argmin_n": {
+                "maximum": 2000,
+                "minimum": 1,
+                "type": "integer"
+            },
+            "comparison_status": {
+                "const": "STRICTLY_SEPARATED_INTERVALS"
+            },
+            "minimum_lower": {
+                "$ref": "#/$defs/rat"
+            },
+            "minimum_upper": {
+                "$ref": "#/$defs/rat"
+            },
+            "records": {
+                "items": {
+                    "$ref": "#/$defs/record"
+                },
+                "maxItems": 100,
+                "minItems": 2,
+                "type": "array"
+            }
         },
         "required": [
-          "numerator",
-          "denominator"
+            "records",
+            "argmin_n",
+            "minimum_lower",
+            "minimum_upper",
+            "comparison_status"
         ],
         "type": "object"
-      },
-      "record": {
-        "additionalProperties": false,
-        "properties": {
-          "floors": {
-            "items": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "lower": {
-            "$ref": "#/$defs/rat"
-          },
-          "n": {
-            "maximum": 2000,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "nearest": {
-            "items": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "upper": {
-            "$ref": "#/$defs/rat"
-          }
-        },
-        "required": [
-          "n",
-          "floors",
-          "nearest",
-          "lower",
-          "upper"
-        ],
-        "type": "object"
-      }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "argmin_n": {
-            "maximum": 2000,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "comparison_status": {
-            "const": "STRICTLY_SEPARATED_INTERVALS"
-          },
-          "minimum_lower": {
-            "$ref": "#/$defs/rat"
-          },
-          "minimum_upper": {
-            "$ref": "#/$defs/rat"
-          },
-          "records": {
-            "items": {
-              "$ref": "#/$defs/record"
-            },
-            "maxItems": 100,
-            "minItems": 2,
-            "type": "array"
-          }
-        },
-        "required": [
-          "records",
-          "argmin_n",
-          "minimum_lower",
-          "minimum_upper",
-          "comparison_status"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/littlewood-certified-finite-search"
+    "task_id": "jacobian/littlewood-certified-finite-search"
 }

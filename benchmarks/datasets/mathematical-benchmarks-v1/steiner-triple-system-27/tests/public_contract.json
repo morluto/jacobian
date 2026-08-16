@@ -1,77 +1,37 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "blocks": {
-        "items": {
-          "items": {
-            "maximum": 26,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array",
-          "uniqueItems": true
-        },
-        "maxItems": 117,
-        "minItems": 117,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "order": {
-        "const": 27
-      }
-    },
-    "required": [
-      "order",
-      "blocks"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "blocks": {
-            "items": {
-              "items": {
-                "maximum": 26,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "maxItems": 3,
-              "minItems": 3,
-              "type": "array",
-              "uniqueItems": true
+            "blocks": {
+                "items": {
+                    "items": {
+                        "maximum": 26,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array",
+                    "uniqueItems": true
+                },
+                "maxItems": 117,
+                "minItems": 117,
+                "type": "array",
+                "uniqueItems": true
             },
-            "maxItems": 117,
-            "minItems": 117,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "order": {
-            "const": 27
-          }
+            "order": {
+                "const": 27
+            }
         },
         "required": [
-          "order",
-          "blocks"
+            "order",
+            "blocks"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/steiner-triple-system-27"
+    "task_id": "jacobian/steiner-triple-system-27"
 }

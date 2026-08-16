@@ -1,249 +1,123 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "exponent_p": {
-        "maximum": 5,
-        "minimum": 1,
-        "type": "integer"
-      },
-      "function": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "denominator_terms": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "x_power": {
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "y_power": {
-                  "minimum": 0,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "x_power",
-                "y_power"
-              ],
-              "type": "object"
+            "exponent_p": {
+                "maximum": 5,
+                "minimum": 1,
+                "type": "integer"
             },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "numerator_x_power": {
-            "type": "integer"
-          },
-          "numerator_y_power": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator_x_power",
-          "numerator_y_power",
-          "denominator_terms"
-        ],
-        "type": "object"
-      },
-      "line_certificate": {
-        "additionalProperties": false,
-        "properties": {
-          "arbitrary_nonzero_slope_limit": {
-            "const": "0"
-          },
-          "axes_zero": {
-            "const": true
-          },
-          "denominator_leading_order": {
-            "type": "integer"
-          },
-          "numerator_order": {
-            "type": "integer"
-          },
-          "quotient_order": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "axes_zero",
-          "numerator_order",
-          "denominator_leading_order",
-          "quotient_order",
-          "arbitrary_nonzero_slope_limit"
-        ],
-        "type": "object"
-      },
-      "nonlinear_paths": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "c": {
-              "pattern": "^[+-]?(?:[0-9]+/[0-9]+|[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)$",
-              "type": "string"
-            },
-            "limit": {
-              "pattern": "^[+-]?(?:[0-9]+/[0-9]+|[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)$",
-              "type": "string"
-            },
-            "y_x_power": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "c",
-            "y_x_power",
-            "limit"
-          ],
-          "type": "object"
-        },
-        "maxItems": 8,
-        "minItems": 3,
-        "type": "array"
-      },
-      "origin_value": {
-        "const": "0"
-      }
-    },
-    "required": [
-      "exponent_p",
-      "function",
-      "origin_value",
-      "line_certificate",
-      "nonlinear_paths"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "exponent_p": {
-            "maximum": 5,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "function": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator_terms": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "x_power": {
-                      "minimum": 0,
-                      "type": "integer"
+            "function": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator_terms": {
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "x_power": {
+                                    "minimum": 0,
+                                    "type": "integer"
+                                },
+                                "y_power": {
+                                    "minimum": 0,
+                                    "type": "integer"
+                                }
+                            },
+                            "required": [
+                                "x_power",
+                                "y_power"
+                            ],
+                            "type": "object"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
                     },
-                    "y_power": {
-                      "minimum": 0,
-                      "type": "integer"
+                    "numerator_x_power": {
+                        "type": "integer"
+                    },
+                    "numerator_y_power": {
+                        "type": "integer"
                     }
-                  },
-                  "required": [
-                    "x_power",
-                    "y_power"
-                  ],
-                  "type": "object"
                 },
-                "maxItems": 2,
-                "minItems": 2,
+                "required": [
+                    "numerator_x_power",
+                    "numerator_y_power",
+                    "denominator_terms"
+                ],
+                "type": "object"
+            },
+            "line_certificate": {
+                "additionalProperties": false,
+                "properties": {
+                    "arbitrary_nonzero_slope_limit": {
+                        "const": "0"
+                    },
+                    "axes_zero": {
+                        "const": true
+                    },
+                    "denominator_leading_order": {
+                        "type": "integer"
+                    },
+                    "numerator_order": {
+                        "type": "integer"
+                    },
+                    "quotient_order": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "axes_zero",
+                    "numerator_order",
+                    "denominator_leading_order",
+                    "quotient_order",
+                    "arbitrary_nonzero_slope_limit"
+                ],
+                "type": "object"
+            },
+            "nonlinear_paths": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "c": {
+                            "pattern": "^[+-]?(?:[0-9]+/[0-9]+|[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)$",
+                            "type": "string"
+                        },
+                        "limit": {
+                            "pattern": "^[+-]?(?:[0-9]+/[0-9]+|[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)$",
+                            "type": "string"
+                        },
+                        "y_x_power": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "c",
+                        "y_x_power",
+                        "limit"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 8,
+                "minItems": 3,
                 "type": "array"
-              },
-              "numerator_x_power": {
-                "type": "integer"
-              },
-              "numerator_y_power": {
-                "type": "integer"
-              }
             },
-            "required": [
-              "numerator_x_power",
-              "numerator_y_power",
-              "denominator_terms"
-            ],
-            "type": "object"
-          },
-          "line_certificate": {
-            "additionalProperties": false,
-            "properties": {
-              "arbitrary_nonzero_slope_limit": {
+            "origin_value": {
                 "const": "0"
-              },
-              "axes_zero": {
-                "const": true
-              },
-              "denominator_leading_order": {
-                "type": "integer"
-              },
-              "numerator_order": {
-                "type": "integer"
-              },
-              "quotient_order": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "axes_zero",
-              "numerator_order",
-              "denominator_leading_order",
-              "quotient_order",
-              "arbitrary_nonzero_slope_limit"
-            ],
-            "type": "object"
-          },
-          "nonlinear_paths": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "c": {
-                  "pattern": "^[+-]?(?:[0-9]+/[0-9]+|[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)$",
-                  "type": "string"
-                },
-                "limit": {
-                  "pattern": "^[+-]?(?:[0-9]+/[0-9]+|[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)$",
-                  "type": "string"
-                },
-                "y_x_power": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "c",
-                "y_x_power",
-                "limit"
-              ],
-              "type": "object"
-            },
-            "maxItems": 8,
-            "minItems": 3,
-            "type": "array"
-          },
-          "origin_value": {
-            "const": "0"
-          }
+            }
         },
         "required": [
-          "exponent_p",
-          "function",
-          "origin_value",
-          "line_certificate",
-          "nonlinear_paths"
+            "exponent_p",
+            "function",
+            "origin_value",
+            "line_certificate",
+            "nonlinear_paths"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/path-dependent-limit"
+    "task_id": "jacobian/path-dependent-limit"
 }

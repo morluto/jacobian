@@ -1,150 +1,73 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "open_set": {
-      "items": {
-        "maximum": 6,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "type": "array",
-      "uniqueItems": true
-    },
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "bad_factor_is_hausdorff": {
-          "const": false
-        },
-        "bad_factor_is_t0": {
-          "const": true
-        },
-        "bad_factor_topology": {
-          "items": {
-            "$ref": "#/$defs/open_set"
-          },
-          "maxItems": 64,
-          "minItems": 5,
-          "type": "array",
-          "uniqueItems": true
-        },
-        "empty_factor_index": {
-          "const": 1
-        },
-        "factor_cardinalities": {
-          "items": {
-            "maximum": 7,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "missing_assumption": {
-          "const": "ALL_FACTORS_NONEMPTY"
-        },
-        "product_cardinality": {
-          "const": 0
-        },
-        "product_is_hausdorff": {
-          "const": true
-        }
-      },
-      "required": [
-        "factor_cardinalities",
-        "bad_factor_topology",
-        "empty_factor_index",
-        "product_cardinality",
-        "product_is_hausdorff",
-        "bad_factor_is_t0",
-        "bad_factor_is_hausdorff",
-        "missing_assumption"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "$ref": "#/$defs/result"
-  },
-  "submission_schema": {
-    "$defs": {
-      "open_set": {
-        "items": {
-          "maximum": 6,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "type": "array",
-        "uniqueItems": true
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "bad_factor_is_hausdorff": {
-            "const": false
-          },
-          "bad_factor_is_t0": {
-            "const": true
-          },
-          "bad_factor_topology": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "open_set": {
             "items": {
-              "$ref": "#/$defs/open_set"
+                "maximum": 6,
+                "minimum": 0,
+                "type": "integer"
             },
-            "maxItems": 64,
-            "minItems": 5,
             "type": "array",
             "uniqueItems": true
-          },
-          "empty_factor_index": {
-            "const": 1
-          },
-          "factor_cardinalities": {
-            "items": {
-              "maximum": 7,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "missing_assumption": {
-            "const": "ALL_FACTORS_NONEMPTY"
-          },
-          "product_cardinality": {
-            "const": 0
-          },
-          "product_is_hausdorff": {
-            "const": true
-          }
         },
-        "required": [
-          "factor_cardinalities",
-          "bad_factor_topology",
-          "empty_factor_index",
-          "product_cardinality",
-          "product_is_hausdorff",
-          "bad_factor_is_t0",
-          "bad_factor_is_hausdorff",
-          "missing_assumption"
-        ],
-        "type": "object"
-      }
+        "result": {
+            "additionalProperties": false,
+            "properties": {
+                "bad_factor_is_hausdorff": {
+                    "const": false
+                },
+                "bad_factor_is_t0": {
+                    "const": true
+                },
+                "bad_factor_topology": {
+                    "items": {
+                        "$ref": "#/$defs/open_set"
+                    },
+                    "maxItems": 64,
+                    "minItems": 5,
+                    "type": "array",
+                    "uniqueItems": true
+                },
+                "empty_factor_index": {
+                    "const": 1
+                },
+                "factor_cardinalities": {
+                    "items": {
+                        "maximum": 7,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "missing_assumption": {
+                    "const": "ALL_FACTORS_NONEMPTY"
+                },
+                "product_cardinality": {
+                    "const": 0
+                },
+                "product_is_hausdorff": {
+                    "const": true
+                }
+            },
+            "required": [
+                "factor_cardinalities",
+                "bad_factor_topology",
+                "empty_factor_index",
+                "product_cardinality",
+                "product_is_hausdorff",
+                "bad_factor_is_t0",
+                "bad_factor_is_hausdorff",
+                "missing_assumption"
+            ],
+            "type": "object"
+        }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "$ref": "#/$defs/result"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/product-hausdorff-nonempty-scope-audit"
+    "task_id": "jacobian/product-hausdorff-nonempty-scope-audit"
 }

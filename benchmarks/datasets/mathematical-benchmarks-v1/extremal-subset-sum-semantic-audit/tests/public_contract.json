@@ -1,262 +1,129 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "defects": {
-        "items": {
-          "enum": [
-            "OUTER_PARAMETER_SHADOWED",
-            "WHOLE_SET_SUM_REPLACES_SUBSET_SUM"
-          ]
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "predicate_certificate": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "blocking_subset": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 3,
-            "type": "array"
-          },
-          "intended_extremum": {
-            "maximum": 3,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "intended_witness": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 3,
-            "type": "array"
-          },
-          "legacy_extremum": {
-            "maximum": 3,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "legacy_witness": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 3,
-            "type": "array"
-          },
-          "target": {
-            "const": 4
-          },
-          "universe": {
-            "const": [
-              1,
-              2,
-              3
-            ]
-          }
-        },
-        "required": [
-          "target",
-          "universe",
-          "legacy_extremum",
-          "intended_extremum",
-          "legacy_witness",
-          "intended_witness",
-          "blocking_subset"
-        ],
-        "type": "object"
-      },
-      "semantic_status": {
-        "enum": [
-          "EQUIVALENT",
-          "NOT_EQUIVALENT",
-          "NOT_ASSESSED"
-        ]
-      },
-      "shadowing_certificate": {
-        "additionalProperties": false,
-        "properties": {
-          "first_extremum": {
-            "maximum": 4,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "first_multiplier": {
-            "maximum": 4,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "second_extremum": {
-            "maximum": 4,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "second_multiplier": {
-            "maximum": 4,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "target": {
-            "const": 1
-          }
-        },
-        "required": [
-          "target",
-          "first_multiplier",
-          "second_multiplier",
-          "first_extremum",
-          "second_extremum"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "semantic_status",
-      "defects",
-      "shadowing_certificate",
-      "predicate_certificate"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "defects": {
-            "items": {
-              "enum": [
-                "OUTER_PARAMETER_SHADOWED",
-                "WHOLE_SET_SUM_REPLACES_SUBSET_SUM"
-              ]
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "predicate_certificate": {
-            "additionalProperties": false,
-            "properties": {
-              "blocking_subset": {
+            "defects": {
                 "items": {
-                  "type": "integer"
+                    "enum": [
+                        "OUTER_PARAMETER_SHADOWED",
+                        "WHOLE_SET_SUM_REPLACES_SUBSET_SUM"
+                    ]
                 },
-                "maxItems": 3,
-                "type": "array"
-              },
-              "intended_extremum": {
-                "maximum": 3,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "intended_witness": {
-                "items": {
-                  "type": "integer"
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array",
+                "uniqueItems": true
+            },
+            "predicate_certificate": {
+                "additionalProperties": false,
+                "properties": {
+                    "blocking_subset": {
+                        "items": {
+                            "type": "integer"
+                        },
+                        "maxItems": 3,
+                        "type": "array"
+                    },
+                    "intended_extremum": {
+                        "maximum": 3,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "intended_witness": {
+                        "items": {
+                            "type": "integer"
+                        },
+                        "maxItems": 3,
+                        "type": "array"
+                    },
+                    "legacy_extremum": {
+                        "maximum": 3,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "legacy_witness": {
+                        "items": {
+                            "type": "integer"
+                        },
+                        "maxItems": 3,
+                        "type": "array"
+                    },
+                    "target": {
+                        "const": 4
+                    },
+                    "universe": {
+                        "const": [
+                            1,
+                            2,
+                            3
+                        ]
+                    }
                 },
-                "maxItems": 3,
-                "type": "array"
-              },
-              "legacy_extremum": {
-                "maximum": 3,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "legacy_witness": {
-                "items": {
-                  "type": "integer"
-                },
-                "maxItems": 3,
-                "type": "array"
-              },
-              "target": {
-                "const": 4
-              },
-              "universe": {
-                "const": [
-                  1,
-                  2,
-                  3
+                "required": [
+                    "target",
+                    "universe",
+                    "legacy_extremum",
+                    "intended_extremum",
+                    "legacy_witness",
+                    "intended_witness",
+                    "blocking_subset"
+                ],
+                "type": "object"
+            },
+            "semantic_status": {
+                "enum": [
+                    "EQUIVALENT",
+                    "NOT_EQUIVALENT",
+                    "NOT_ASSESSED"
                 ]
-              }
             },
-            "required": [
-              "target",
-              "universe",
-              "legacy_extremum",
-              "intended_extremum",
-              "legacy_witness",
-              "intended_witness",
-              "blocking_subset"
-            ],
-            "type": "object"
-          },
-          "semantic_status": {
-            "enum": [
-              "EQUIVALENT",
-              "NOT_EQUIVALENT",
-              "NOT_ASSESSED"
-            ]
-          },
-          "shadowing_certificate": {
-            "additionalProperties": false,
-            "properties": {
-              "first_extremum": {
-                "maximum": 4,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "first_multiplier": {
-                "maximum": 4,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "second_extremum": {
-                "maximum": 4,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "second_multiplier": {
-                "maximum": 4,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "target": {
-                "const": 1
-              }
-            },
-            "required": [
-              "target",
-              "first_multiplier",
-              "second_multiplier",
-              "first_extremum",
-              "second_extremum"
-            ],
-            "type": "object"
-          }
+            "shadowing_certificate": {
+                "additionalProperties": false,
+                "properties": {
+                    "first_extremum": {
+                        "maximum": 4,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "first_multiplier": {
+                        "maximum": 4,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "second_extremum": {
+                        "maximum": 4,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "second_multiplier": {
+                        "maximum": 4,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "target": {
+                        "const": 1
+                    }
+                },
+                "required": [
+                    "target",
+                    "first_multiplier",
+                    "second_multiplier",
+                    "first_extremum",
+                    "second_extremum"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "semantic_status",
-          "defects",
-          "shadowing_certificate",
-          "predicate_certificate"
+            "semantic_status",
+            "defects",
+            "shadowing_certificate",
+            "predicate_certificate"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/extremal-subset-sum-semantic-audit"
+    "task_id": "jacobian/extremal-subset-sum-semantic-audit"
 }

@@ -1,238 +1,117 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "remainder": {
-      "additionalProperties": false,
-      "properties": {
-        "coefficient": {
-          "type": "integer"
-        },
-        "integrand": {
-          "enum": [
-            "SIN",
-            "COS"
-          ]
-        },
-        "power": {
-          "minimum": 1,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "integrand",
-        "power",
-        "coefficient"
-      ],
-      "type": "object"
-    },
-    "term": {
-      "additionalProperties": false,
-      "properties": {
-        "coefficient": {
-          "type": "integer"
-        },
-        "function": {
-          "enum": [
-            "SIN",
-            "COS"
-          ]
-        },
-        "power": {
-          "minimum": 1,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "function",
-        "power",
-        "coefficient"
-      ],
-      "type": "object"
-    },
-    "terms": {
-      "items": {
-        "$ref": "#/$defs/term"
-      },
-      "maxItems": 5,
-      "minItems": 5,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "absolute_remainder_bound": {
-        "additionalProperties": false,
-        "properties": {
-          "domain": {
-            "const": "x>0"
-          },
-          "numerator": {
-            "type": "integer"
-          },
-          "power": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "power",
-          "domain"
-        ],
-        "type": "object"
-      },
-      "corrected_sine_coefficient": {
-        "type": "integer"
-      },
-      "published_sine_coefficient": {
-        "type": "integer"
-      },
-      "si_remainder": {
-        "$ref": "#/$defs/remainder"
-      },
-      "si_terms": {
-        "$ref": "#/$defs/terms"
-      },
-      "tail_remainder": {
-        "$ref": "#/$defs/remainder"
-      },
-      "tail_terms": {
-        "$ref": "#/$defs/terms"
-      }
-    },
-    "required": [
-      "tail_terms",
-      "tail_remainder",
-      "si_terms",
-      "si_remainder",
-      "absolute_remainder_bound",
-      "published_sine_coefficient",
-      "corrected_sine_coefficient"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "remainder": {
-        "additionalProperties": false,
-        "properties": {
-          "coefficient": {
-            "type": "integer"
-          },
-          "integrand": {
-            "enum": [
-              "SIN",
-              "COS"
-            ]
-          },
-          "power": {
-            "minimum": 1,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "integrand",
-          "power",
-          "coefficient"
-        ],
-        "type": "object"
-      },
-      "term": {
-        "additionalProperties": false,
-        "properties": {
-          "coefficient": {
-            "type": "integer"
-          },
-          "function": {
-            "enum": [
-              "SIN",
-              "COS"
-            ]
-          },
-          "power": {
-            "minimum": 1,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "function",
-          "power",
-          "coefficient"
-        ],
-        "type": "object"
-      },
-      "terms": {
-        "items": {
-          "$ref": "#/$defs/term"
-        },
-        "maxItems": 5,
-        "minItems": 5,
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "absolute_remainder_bound": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "remainder": {
             "additionalProperties": false,
             "properties": {
-              "domain": {
-                "const": "x>0"
-              },
-              "numerator": {
-                "type": "integer"
-              },
-              "power": {
-                "type": "integer"
-              }
+                "coefficient": {
+                    "type": "integer"
+                },
+                "integrand": {
+                    "enum": [
+                        "SIN",
+                        "COS"
+                    ]
+                },
+                "power": {
+                    "minimum": 1,
+                    "type": "integer"
+                }
             },
             "required": [
-              "numerator",
-              "power",
-              "domain"
+                "integrand",
+                "power",
+                "coefficient"
             ],
             "type": "object"
-          },
-          "corrected_sine_coefficient": {
-            "type": "integer"
-          },
-          "published_sine_coefficient": {
-            "type": "integer"
-          },
-          "si_remainder": {
-            "$ref": "#/$defs/remainder"
-          },
-          "si_terms": {
-            "$ref": "#/$defs/terms"
-          },
-          "tail_remainder": {
-            "$ref": "#/$defs/remainder"
-          },
-          "tail_terms": {
-            "$ref": "#/$defs/terms"
-          }
+        },
+        "term": {
+            "additionalProperties": false,
+            "properties": {
+                "coefficient": {
+                    "type": "integer"
+                },
+                "function": {
+                    "enum": [
+                        "SIN",
+                        "COS"
+                    ]
+                },
+                "power": {
+                    "minimum": 1,
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "function",
+                "power",
+                "coefficient"
+            ],
+            "type": "object"
+        },
+        "terms": {
+            "items": {
+                "$ref": "#/$defs/term"
+            },
+            "maxItems": 5,
+            "minItems": 5,
+            "type": "array"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "absolute_remainder_bound": {
+                "additionalProperties": false,
+                "properties": {
+                    "domain": {
+                        "const": "x>0"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    },
+                    "power": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "power",
+                    "domain"
+                ],
+                "type": "object"
+            },
+            "corrected_sine_coefficient": {
+                "type": "integer"
+            },
+            "published_sine_coefficient": {
+                "type": "integer"
+            },
+            "si_remainder": {
+                "$ref": "#/$defs/remainder"
+            },
+            "si_terms": {
+                "$ref": "#/$defs/terms"
+            },
+            "tail_remainder": {
+                "$ref": "#/$defs/remainder"
+            },
+            "tail_terms": {
+                "$ref": "#/$defs/terms"
+            }
         },
         "required": [
-          "tail_terms",
-          "tail_remainder",
-          "si_terms",
-          "si_remainder",
-          "absolute_remainder_bound",
-          "published_sine_coefficient",
-          "corrected_sine_coefficient"
+            "tail_terms",
+            "tail_remainder",
+            "si_terms",
+            "si_remainder",
+            "absolute_remainder_bound",
+            "published_sine_coefficient",
+            "corrected_sine_coefficient"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/sine-integral-asymptotic-audit"
+    "task_id": "jacobian/sine-integral-asymptotic-audit"
 }

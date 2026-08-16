@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="7623e91ad31e4ae9a952c7f4dbd4e3ae6c792a4dfec6f003cc4dc51e4d206564"
+LABEL jacobian.checksum="0b136bd1d3adc7dccd68326dcb62c1235149f49457a2df4911a8eef9ac8cde0d"
 LABEL jacobian.task="jacobian/valuation-gcd-quantifier-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

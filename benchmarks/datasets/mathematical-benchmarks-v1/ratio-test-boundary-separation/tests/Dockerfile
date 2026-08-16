@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="ed84a0c6ba5dffaf6128d6d9d6352abffffdc83837b3acf5c1ed13330ee67b03"
+LABEL jacobian.checksum="45cbcb45f954b89dfde740c576725689494eb9bfc342682bc7fe2123916da40c"
 # Exact verifier for paired ratio-test boundary certificates.
 LABEL jacobian.task="jacobian/ratio-test-boundary-separation"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/

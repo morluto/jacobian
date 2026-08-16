@@ -7,36 +7,19 @@
     "additionalProperties": false,
     "properties": {
       "codewords": {
-        "items": {"pattern": "^[0-7][0-9a-f]{5}$", "type": "string"},
+        "items": {
+          "pattern": "^[0-7][0-9a-f]{5}$",
+          "type": "string"
+        },
         "maxItems": 2992,
         "minItems": 2992,
         "type": "array",
         "uniqueItems": true
       }
     },
-    "required": ["codewords"],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "codewords": {
-            "items": {"pattern": "^[0-7][0-9a-f]{5}$", "type": "string"},
-            "maxItems": 2992,
-            "minItems": 2992,
-            "type": "array",
-            "uniqueItems": true
-          }
-        },
-        "required": ["codewords"],
-        "type": "object"
-      }
-    },
-    "required": ["result"],
+    "required": [
+      "codewords"
+    ],
     "type": "object"
   }
 }

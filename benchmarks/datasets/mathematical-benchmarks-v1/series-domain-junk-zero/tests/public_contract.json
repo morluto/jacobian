@@ -1,200 +1,106 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {"minimum": 1, "type": "integer"},
-        "numerator": {"type": "integer"}
-      },
-      "required": ["numerator", "denominator"],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "blocks": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "block_sum_power_lower_bound": {
-              "type": "integer"
-            },
-            "level": {
-              "type": "integer"
-            },
-            "term_count": {
-              "type": "integer"
-            },
-            "upper_power_of_two": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "level",
-            "term_count",
-            "upper_power_of_two",
-            "block_sum_power_lower_bound"
-          ],
-          "type": "object"
-        },
-        "maxItems": 9,
-        "minItems": 9,
-        "type": "array"
-      },
-      "critical_line_relation": {
-        "const": "REAL_PART_NOT_ONE_HALF"
-      },
-      "general_block_power_exponent": {
-        "additionalProperties": false,
-        "properties": {
-          "constant": {
-            "type": "integer"
-          },
-          "level_coefficient": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "level_coefficient",
-          "constant"
-        ],
-        "type": "object"
-      },
-      "real_part": {
-        "$ref": "#/$defs/rational"
-      },
-      "reciprocal_denominator": {
-        "maximum": 7,
-        "minimum": 3,
-        "type": "integer"
-      },
-      "returned_value": {
-        "const": 0
-      },
-      "summability_status": {
-        "const": "DIVERGENT"
-      },
-      "zero_classification": {
-        "const": "FALLBACK_ARTIFACT"
-      }
-    },
-    "required": [
-      "reciprocal_denominator",
-      "real_part",
-      "general_block_power_exponent",
-      "blocks",
-      "summability_status",
-      "returned_value",
-      "zero_classification",
-      "critical_line_relation"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$defs": {
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {"minimum": 1, "type": "integer"},
-          "numerator": {"type": "integer"}
-        },
-        "required": ["numerator", "denominator"],
-        "type": "object"
-      }
-    },
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "blocks": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "block_sum_power_lower_bound": {
-                  "type": "integer"
-                },
-                "level": {
-                  "type": "integer"
-                },
-                "term_count": {
-                  "type": "integer"
-                },
-                "upper_power_of_two": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "level",
-                "term_count",
-                "upper_power_of_two",
-                "block_sum_power_lower_bound"
-              ],
-              "type": "object"
-            },
-            "maxItems": 9,
-            "minItems": 9,
-            "type": "array"
-          },
-          "critical_line_relation": {
-            "const": "REAL_PART_NOT_ONE_HALF"
-          },
-          "general_block_power_exponent": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rational": {
             "additionalProperties": false,
             "properties": {
-              "constant": {
-                "type": "integer"
-              },
-              "level_coefficient": {
-                "type": "integer"
-              }
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
             },
             "required": [
-              "level_coefficient",
-              "constant"
+                "numerator",
+                "denominator"
             ],
             "type": "object"
-          },
-          "real_part": {
-            "$ref": "#/$defs/rational"
-          },
-          "reciprocal_denominator": {
-            "maximum": 7,
-            "minimum": 3,
-            "type": "integer"
-          },
-          "returned_value": {
-            "const": 0
-          },
-          "summability_status": {
-            "const": "DIVERGENT"
-          },
-          "zero_classification": {
-            "const": "FALLBACK_ARTIFACT"
-          }
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "blocks": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "block_sum_power_lower_bound": {
+                            "type": "integer"
+                        },
+                        "level": {
+                            "type": "integer"
+                        },
+                        "term_count": {
+                            "type": "integer"
+                        },
+                        "upper_power_of_two": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "level",
+                        "term_count",
+                        "upper_power_of_two",
+                        "block_sum_power_lower_bound"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 9,
+                "minItems": 9,
+                "type": "array"
+            },
+            "critical_line_relation": {
+                "const": "REAL_PART_NOT_ONE_HALF"
+            },
+            "general_block_power_exponent": {
+                "additionalProperties": false,
+                "properties": {
+                    "constant": {
+                        "type": "integer"
+                    },
+                    "level_coefficient": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "level_coefficient",
+                    "constant"
+                ],
+                "type": "object"
+            },
+            "real_part": {
+                "$ref": "#/$defs/rational"
+            },
+            "reciprocal_denominator": {
+                "maximum": 7,
+                "minimum": 3,
+                "type": "integer"
+            },
+            "returned_value": {
+                "const": 0
+            },
+            "summability_status": {
+                "const": "DIVERGENT"
+            },
+            "zero_classification": {
+                "const": "FALLBACK_ARTIFACT"
+            }
         },
         "required": [
-          "reciprocal_denominator",
-          "real_part",
-          "general_block_power_exponent",
-          "blocks",
-          "summability_status",
-          "returned_value",
-          "zero_classification",
-          "critical_line_relation"
+            "reciprocal_denominator",
+            "real_part",
+            "general_block_power_exponent",
+            "blocks",
+            "summability_status",
+            "returned_value",
+            "zero_classification",
+            "critical_line_relation"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/series-domain-junk-zero"
+    "task_id": "jacobian/series-domain-junk-zero"
 }

@@ -1,160 +1,78 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "edge": {
-      "items": {
-        "type": "integer"
-      },
-      "maxItems": 2,
-      "minItems": 2,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "cycle_coordinate_matrix": {
-        "items": {
-          "items": {
-            "type": "integer"
-          },
-          "maxItems": 10,
-          "minItems": 10,
-          "type": "array"
-        },
-        "maxItems": 10,
-        "minItems": 10,
-        "type": "array"
-      },
-      "determinant": {
-        "type": "integer"
-      },
-      "facet_order": {
-        "items": {
-          "items": {
-            "type": "integer"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "maxItems": 10,
-        "minItems": 10,
-        "type": "array"
-      },
-      "homology": {
-        "const": "Z/2Z"
-      },
-      "non_tree_edges": {
-        "items": {
-          "$ref": "#/$defs/edge"
-        },
-        "maxItems": 10,
-        "minItems": 10,
-        "type": "array"
-      },
-      "spanning_tree": {
-        "items": {
-          "$ref": "#/$defs/edge"
-        },
-        "maxItems": 5,
-        "minItems": 5,
-        "type": "array"
-      }
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "edge": {
+            "items": {
+                "type": "integer"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+        }
     },
-    "required": [
-      "spanning_tree",
-      "non_tree_edges",
-      "facet_order",
-      "cycle_coordinate_matrix",
-      "determinant",
-      "homology"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "edge": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "cycle_coordinate_matrix": {
-            "items": {
-              "items": {
+            "cycle_coordinate_matrix": {
+                "items": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "maxItems": 10,
+                    "minItems": 10,
+                    "type": "array"
+                },
+                "maxItems": 10,
+                "minItems": 10,
+                "type": "array"
+            },
+            "determinant": {
                 "type": "integer"
-              },
-              "maxItems": 10,
-              "minItems": 10,
-              "type": "array"
             },
-            "maxItems": 10,
-            "minItems": 10,
-            "type": "array"
-          },
-          "determinant": {
-            "type": "integer"
-          },
-          "facet_order": {
-            "items": {
-              "items": {
-                "type": "integer"
-              },
-              "maxItems": 3,
-              "minItems": 3,
-              "type": "array"
+            "facet_order": {
+                "items": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "maxItems": 10,
+                "minItems": 10,
+                "type": "array"
             },
-            "maxItems": 10,
-            "minItems": 10,
-            "type": "array"
-          },
-          "homology": {
-            "const": "Z/2Z"
-          },
-          "non_tree_edges": {
-            "items": {
-              "$ref": "#/$defs/edge"
+            "homology": {
+                "const": "Z/2Z"
             },
-            "maxItems": 10,
-            "minItems": 10,
-            "type": "array"
-          },
-          "spanning_tree": {
-            "items": {
-              "$ref": "#/$defs/edge"
+            "non_tree_edges": {
+                "items": {
+                    "$ref": "#/$defs/edge"
+                },
+                "maxItems": 10,
+                "minItems": 10,
+                "type": "array"
             },
-            "maxItems": 5,
-            "minItems": 5,
-            "type": "array"
-          }
+            "spanning_tree": {
+                "items": {
+                    "$ref": "#/$defs/edge"
+                },
+                "maxItems": 5,
+                "minItems": 5,
+                "type": "array"
+            }
         },
         "required": [
-          "spanning_tree",
-          "non_tree_edges",
-          "facet_order",
-          "cycle_coordinate_matrix",
-          "determinant",
-          "homology"
+            "spanning_tree",
+            "non_tree_edges",
+            "facet_order",
+            "cycle_coordinate_matrix",
+            "determinant",
+            "homology"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/rp2-homology-lattice"
+    "task_id": "jacobian/rp2-homology-lattice"
 }

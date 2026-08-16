@@ -1,128 +1,62 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "matrix": {
-      "items": {
-        "$ref": "#/$defs/row"
-      },
-      "maxItems": 14,
-      "minItems": 8,
-      "type": "array"
-    },
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "defects": {
-          "const": [
-            "BAND_SUPPORT_DOES_NOT_IMPLY_SYMMETRY",
-            "EXISTENCE_OF_FULL_RANK_COMPLETION_DOES_NOT_LOWER_BOUND_MINIMUM"
-          ]
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "matrix": {
+            "items": {
+                "$ref": "#/$defs/row"
+            },
+            "maxItems": 14,
+            "minItems": 8,
+            "type": "array"
         },
-        "dimension": {
-          "maximum": 14,
-          "minimum": 8,
-          "type": "integer"
+        "result": {
+            "additionalProperties": false,
+            "properties": {
+                "defects": {
+                    "const": [
+                        "BAND_SUPPORT_DOES_NOT_IMPLY_SYMMETRY",
+                        "EXISTENCE_OF_FULL_RANK_COMPLETION_DOES_NOT_LOWER_BOUND_MINIMUM"
+                    ]
+                },
+                "dimension": {
+                    "maximum": 14,
+                    "minimum": 8,
+                    "type": "integer"
+                },
+                "full_rank_completion": {
+                    "$ref": "#/$defs/matrix"
+                },
+                "low_rank_completion": {
+                    "$ref": "#/$defs/matrix"
+                },
+                "pattern": {
+                    "$ref": "#/$defs/matrix"
+                }
+            },
+            "required": [
+                "dimension",
+                "defects",
+                "pattern",
+                "low_rank_completion",
+                "full_rank_completion"
+            ],
+            "type": "object"
         },
-        "full_rank_completion": {
-          "$ref": "#/$defs/matrix"
-        },
-        "low_rank_completion": {
-          "$ref": "#/$defs/matrix"
-        },
-        "pattern": {
-          "$ref": "#/$defs/matrix"
+        "row": {
+            "items": {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "integer"
+            },
+            "maxItems": 14,
+            "minItems": 8,
+            "type": "array"
         }
-      },
-      "required": [
-        "dimension",
-        "defects",
-        "pattern",
-        "low_rank_completion",
-        "full_rank_completion"
-      ],
-      "type": "object"
     },
-    "row": {
-      "items": {
-        "maximum": 1,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "maxItems": 14,
-      "minItems": 8,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "$ref": "#/$defs/result"
-  },
-  "submission_schema": {
-    "$defs": {
-      "matrix": {
-        "items": {
-          "$ref": "#/$defs/row"
-        },
-        "maxItems": 14,
-        "minItems": 8,
-        "type": "array"
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "defects": {
-            "const": [
-              "BAND_SUPPORT_DOES_NOT_IMPLY_SYMMETRY",
-              "EXISTENCE_OF_FULL_RANK_COMPLETION_DOES_NOT_LOWER_BOUND_MINIMUM"
-            ]
-          },
-          "dimension": {
-            "maximum": 14,
-            "minimum": 8,
-            "type": "integer"
-          },
-          "full_rank_completion": {
-            "$ref": "#/$defs/matrix"
-          },
-          "low_rank_completion": {
-            "$ref": "#/$defs/matrix"
-          },
-          "pattern": {
-            "$ref": "#/$defs/matrix"
-          }
-        },
-        "required": [
-          "dimension",
-          "defects",
-          "pattern",
-          "low_rank_completion",
-          "full_rank_completion"
-        ],
-        "type": "object"
-      },
-      "row": {
-        "items": {
-          "maximum": 1,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 14,
-        "minItems": 8,
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "$ref": "#/$defs/result"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/gf2-matrix-completion-quantifier-audit"
+    "task_id": "jacobian/gf2-matrix-completion-quantifier-audit"
 }

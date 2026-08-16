@@ -1,49 +1,23 @@
 {
-  "public_notes": "The verifier matches the submitted goal count and completion flag against the frozen CORE tactic transition determined by this statement, prefix, and tactic.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "completed": {
-        "type": "boolean"
-      },
-      "goal_count": {
-        "type": "integer"
-      }
-    },
-    "required": [
-      "goal_count",
-      "completed"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier matches the submitted goal count and completion flag against the frozen CORE tactic transition determined by this statement, prefix, and tactic.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "completed": {
-            "type": "boolean"
-          },
-          "goal_count": {
-            "type": "integer"
-          }
+            "completed": {
+                "type": "boolean"
+            },
+            "goal_count": {
+                "type": "integer"
+            }
         },
         "required": [
-          "goal_count",
-          "completed"
+            "goal_count",
+            "completed"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/lean-transition"
+    "task_id": "jacobian/lean-transition"
 }

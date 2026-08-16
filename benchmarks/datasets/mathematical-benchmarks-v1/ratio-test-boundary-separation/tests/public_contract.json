@@ -1,358 +1,177 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "polynomial": {
-      "items": {
-        "type": "integer"
-      },
-      "maxItems": 4,
-      "minItems": 1,
-      "type": "array"
-    },
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "numerator": {
-          "type": "integer"
-        },
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    },
-    "rational_function": {
-      "additionalProperties": false,
-      "properties": {
-        "numerator_coefficients": {
-          "$ref": "#/$defs/polynomial"
-        },
-        "denominator_coefficients": {
-          "$ref": "#/$defs/polynomial"
-        }
-      },
-      "required": [
-        "numerator_coefficients",
-        "denominator_coefficients"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "convergent_witness": {
-        "additionalProperties": false,
-        "properties": {
-          "checkpoints": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "polynomial": {
             "items": {
-              "additionalProperties": false,
-              "properties": {
-                "N": {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "partial_sum": {
-                  "$ref": "#/$defs/rational"
-                },
-                "tail": {
-                  "$ref": "#/$defs/rational"
-                }
-              },
-              "required": [
-                "N",
-                "partial_sum",
-                "tail"
-              ],
-              "type": "object"
+                "type": "integer"
             },
-            "maxItems": 12,
-            "minItems": 4,
+            "maxItems": 4,
+            "minItems": 1,
             "type": "array"
-          },
-          "ratio": {
-            "$ref": "#/$defs/rational_function"
-          },
-          "ratio_error": {
-            "$ref": "#/$defs/rational_function"
-          },
-          "telescoping_identity": {
-            "items": {
-              "$ref": "#/$defs/rational_function"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "term": {
-            "$ref": "#/$defs/rational_function"
-          }
         },
-        "required": [
-          "term",
-          "telescoping_identity",
-          "ratio",
-          "ratio_error",
-          "checkpoints"
-        ],
-        "type": "object"
-      },
-      "divergent_witness": {
-        "additionalProperties": false,
-        "properties": {
-          "blocks": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "block_lower_bound": {
-                  "$ref": "#/$defs/rational"
-                },
-                "count": {
-                  "type": "integer"
-                },
-                "end": {
-                  "type": "integer"
-                },
-                "level": {
-                  "type": "integer"
-                },
-                "start": {
-                  "type": "integer"
-                },
-                "term_lower_bound": {
-                  "$ref": "#/$defs/rational"
-                }
-              },
-              "required": [
-                "level",
-                "start",
-                "end",
-                "count",
-                "term_lower_bound",
-                "block_lower_bound"
-              ],
-              "type": "object"
-            },
-            "maxItems": 9,
-            "minItems": 9,
-            "type": "array"
-          },
-          "ratio": {
-            "$ref": "#/$defs/rational_function"
-          },
-          "ratio_error": {
-            "$ref": "#/$defs/rational_function"
-          },
-          "term": {
-            "$ref": "#/$defs/rational_function"
-          }
-        },
-        "required": [
-          "term",
-          "ratio",
-          "ratio_error",
-          "blocks"
-        ],
-        "type": "object"
-      },
-      "ratio_limit": {
-        "$ref": "#/$defs/rational"
-      }
-    },
-    "required": [
-      "ratio_limit",
-      "divergent_witness",
-      "convergent_witness"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "convergent_witness": {
+        "rational": {
             "additionalProperties": false,
             "properties": {
-              "checkpoints": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "N": {
-                      "minimum": 1,
-                      "type": "integer"
-                    },
-                    "partial_sum": {
-                      "$ref": "#/$defs/rational"
-                    },
-                    "tail": {
-                      "$ref": "#/$defs/rational"
-                    }
-                  },
-                  "required": [
-                    "N",
-                    "partial_sum",
-                    "tail"
-                  ],
-                  "type": "object"
+                "numerator": {
+                    "type": "integer"
                 },
-                "maxItems": 12,
-                "minItems": 4,
-                "type": "array"
-              },
-              "ratio": {
-                "$ref": "#/$defs/rational_function"
-              },
-              "ratio_error": {
-                "$ref": "#/$defs/rational_function"
-              },
-              "telescoping_identity": {
-                "items": {
-                  "$ref": "#/$defs/rational_function"
-                },
-                "maxItems": 2,
-                "minItems": 2,
-                "type": "array"
-              },
-              "term": {
-                "$ref": "#/$defs/rational_function"
-              }
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                }
             },
             "required": [
-              "term",
-              "telescoping_identity",
-              "ratio",
-              "ratio_error",
-              "checkpoints"
+                "numerator",
+                "denominator"
             ],
             "type": "object"
-          },
-          "divergent_witness": {
+        },
+        "rational_function": {
             "additionalProperties": false,
             "properties": {
-              "blocks": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "block_lower_bound": {
-                      "$ref": "#/$defs/rational"
-                    },
-                    "count": {
-                      "type": "integer"
-                    },
-                    "end": {
-                      "type": "integer"
-                    },
-                    "level": {
-                      "type": "integer"
-                    },
-                    "start": {
-                      "type": "integer"
-                    },
-                    "term_lower_bound": {
-                      "$ref": "#/$defs/rational"
-                    }
-                  },
-                  "required": [
-                    "level",
-                    "start",
-                    "end",
-                    "count",
-                    "term_lower_bound",
-                    "block_lower_bound"
-                  ],
-                  "type": "object"
+                "numerator_coefficients": {
+                    "$ref": "#/$defs/polynomial"
                 },
-                "maxItems": 9,
-                "minItems": 9,
-                "type": "array"
-              },
-              "ratio": {
-                "$ref": "#/$defs/rational_function"
-              },
-              "ratio_error": {
-                "$ref": "#/$defs/rational_function"
-              },
-              "term": {
-                "$ref": "#/$defs/rational_function"
-              }
+                "denominator_coefficients": {
+                    "$ref": "#/$defs/polynomial"
+                }
             },
             "required": [
-              "term",
-              "ratio",
-              "ratio_error",
-              "blocks"
+                "numerator_coefficients",
+                "denominator_coefficients"
             ],
             "type": "object"
-          },
-          "ratio_limit": {
-            "$ref": "#/$defs/rational"
-          }
-        },
-        "required": [
-          "ratio_limit",
-          "divergent_witness",
-          "convergent_witness"
-        ],
-        "type": "object"
-      }
+        }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object",
-    "$defs": {
-      "polynomial": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 4,
-        "minItems": 1,
-        "type": "array"
-      },
-      "rational": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "numerator": {
-            "type": "integer"
-          },
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          }
+            "convergent_witness": {
+                "additionalProperties": false,
+                "properties": {
+                    "checkpoints": {
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "N": {
+                                    "minimum": 1,
+                                    "type": "integer"
+                                },
+                                "partial_sum": {
+                                    "$ref": "#/$defs/rational"
+                                },
+                                "tail": {
+                                    "$ref": "#/$defs/rational"
+                                }
+                            },
+                            "required": [
+                                "N",
+                                "partial_sum",
+                                "tail"
+                            ],
+                            "type": "object"
+                        },
+                        "maxItems": 12,
+                        "minItems": 4,
+                        "type": "array"
+                    },
+                    "ratio": {
+                        "$ref": "#/$defs/rational_function"
+                    },
+                    "ratio_error": {
+                        "$ref": "#/$defs/rational_function"
+                    },
+                    "telescoping_identity": {
+                        "items": {
+                            "$ref": "#/$defs/rational_function"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                    },
+                    "term": {
+                        "$ref": "#/$defs/rational_function"
+                    }
+                },
+                "required": [
+                    "term",
+                    "telescoping_identity",
+                    "ratio",
+                    "ratio_error",
+                    "checkpoints"
+                ],
+                "type": "object"
+            },
+            "divergent_witness": {
+                "additionalProperties": false,
+                "properties": {
+                    "blocks": {
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "block_lower_bound": {
+                                    "$ref": "#/$defs/rational"
+                                },
+                                "count": {
+                                    "type": "integer"
+                                },
+                                "end": {
+                                    "type": "integer"
+                                },
+                                "level": {
+                                    "type": "integer"
+                                },
+                                "start": {
+                                    "type": "integer"
+                                },
+                                "term_lower_bound": {
+                                    "$ref": "#/$defs/rational"
+                                }
+                            },
+                            "required": [
+                                "level",
+                                "start",
+                                "end",
+                                "count",
+                                "term_lower_bound",
+                                "block_lower_bound"
+                            ],
+                            "type": "object"
+                        },
+                        "maxItems": 9,
+                        "minItems": 9,
+                        "type": "array"
+                    },
+                    "ratio": {
+                        "$ref": "#/$defs/rational_function"
+                    },
+                    "ratio_error": {
+                        "$ref": "#/$defs/rational_function"
+                    },
+                    "term": {
+                        "$ref": "#/$defs/rational_function"
+                    }
+                },
+                "required": [
+                    "term",
+                    "ratio",
+                    "ratio_error",
+                    "blocks"
+                ],
+                "type": "object"
+            },
+            "ratio_limit": {
+                "$ref": "#/$defs/rational"
+            }
         },
         "required": [
-          "numerator",
-          "denominator"
+            "ratio_limit",
+            "divergent_witness",
+            "convergent_witness"
         ],
         "type": "object"
-      },
-      "rational_function": {
-        "additionalProperties": false,
-        "properties": {
-          "numerator_coefficients": {
-            "$ref": "#/$defs/polynomial"
-          },
-          "denominator_coefficients": {
-            "$ref": "#/$defs/polynomial"
-          }
-        },
-        "required": [
-          "numerator_coefficients",
-          "denominator_coefficients"
-        ],
-        "type": "object"
-      }
-    }
-  },
-  "task_id": "jacobian/ratio-test-boundary-separation"
+    },
+    "task_id": "jacobian/ratio-test-boundary-separation"
 }

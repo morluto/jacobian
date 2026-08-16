@@ -1,160 +1,78 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "basis_order": {
-        "items": false,
-        "minItems": 2,
-        "prefixItems": [
-          {
-            "const": "HD"
-          },
-          {
-            "const": "SUB_RECOVERY"
-          }
-        ],
-        "type": "array"
-      },
-      "derived_coefficients": {
-        "items": {
-          "$ref": "#/$defs/rational"
-        },
-        "maxItems": 5,
-        "minItems": 5,
-        "type": "array"
-      },
-      "failed_pattern_occurs": {
-        "type": "boolean"
-      },
-      "multipliers": {
-        "items": false,
-        "minItems": 2,
-        "prefixItems": [
-          {
-            "$ref": "#/$defs/rational"
-          },
-          {
-            "$ref": "#/$defs/rational"
-          }
-        ],
-        "type": "array"
-      },
-      "side_condition_used": {
-        "const": "b<=a"
-      }
-    },
-    "required": [
-      "failed_pattern_occurs",
-      "basis_order",
-      "multipliers",
-      "derived_coefficients",
-      "side_condition_used"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "basis_order": {
-            "items": false,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "const": "HD"
-              },
-              {
-                "const": "SUB_RECOVERY"
-              }
-            ],
-            "type": "array"
-          },
-          "derived_coefficients": {
-            "items": {
-              "$ref": "#/$defs/rational"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rational": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
             },
-            "maxItems": 5,
-            "minItems": 5,
-            "type": "array"
-          },
-          "failed_pattern_occurs": {
-            "type": "boolean"
-          },
-          "multipliers": {
-            "items": false,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "$ref": "#/$defs/rational"
-              },
-              {
-                "$ref": "#/$defs/rational"
-              }
+            "required": [
+                "numerator",
+                "denominator"
             ],
-            "type": "array"
-          },
-          "side_condition_used": {
-            "const": "b<=a"
-          }
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "basis_order": {
+                "items": false,
+                "minItems": 2,
+                "prefixItems": [
+                    {
+                        "const": "HD"
+                    },
+                    {
+                        "const": "SUB_RECOVERY"
+                    }
+                ],
+                "type": "array"
+            },
+            "derived_coefficients": {
+                "items": {
+                    "$ref": "#/$defs/rational"
+                },
+                "maxItems": 5,
+                "minItems": 5,
+                "type": "array"
+            },
+            "failed_pattern_occurs": {
+                "type": "boolean"
+            },
+            "multipliers": {
+                "items": false,
+                "minItems": 2,
+                "prefixItems": [
+                    {
+                        "$ref": "#/$defs/rational"
+                    },
+                    {
+                        "$ref": "#/$defs/rational"
+                    }
+                ],
+                "type": "array"
+            },
+            "side_condition_used": {
+                "const": "b<=a"
+            }
         },
         "required": [
-          "failed_pattern_occurs",
-          "basis_order",
-          "multipliers",
-          "derived_coefficients",
-          "side_condition_used"
+            "failed_pattern_occurs",
+            "basis_order",
+            "multipliers",
+            "derived_coefficients",
+            "side_condition_used"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/natural-subtraction-proof-repair"
+    "task_id": "jacobian/natural-subtraction-proof-repair"
 }

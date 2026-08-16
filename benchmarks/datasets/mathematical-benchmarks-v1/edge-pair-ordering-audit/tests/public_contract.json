@@ -1,187 +1,92 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "formula": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "incident_vertex_offsets": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "free_edge_base": {
-            "maximum": 10,
-            "minimum": 2,
-            "type": "integer"
-          },
-          "free_edge_exponent": {
-            "additionalProperties": false,
-            "properties": {
-              "binomial_order": {
-                "maximum": 5,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "offset": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "binomial_order",
-              "offset"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "incident_vertex_offsets",
-          "free_edge_base",
-          "free_edge_exponent"
-        ],
-        "type": "object"
-      },
-      "pair_semantics": {
-        "enum": [
-          "ORDERED",
-          "UNORDERED"
-        ]
-      },
-      "probe_values": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "coefficient": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "n": {
-              "maximum": 6,
-              "minimum": 3,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "n",
-            "coefficient"
-          ],
-          "type": "object"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array",
-        "uniqueItems": true
-      }
-    },
-    "required": [
-      "pair_semantics",
-      "formula",
-      "probe_values"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "formula": {
-            "additionalProperties": false,
-            "properties": {
-              "incident_vertex_offsets": {
-                "items": {
-                  "type": "integer"
-                },
-                "maxItems": 3,
-                "minItems": 3,
-                "type": "array",
-                "uniqueItems": true
-              },
-              "free_edge_base": {
-                "maximum": 10,
-                "minimum": 2,
-                "type": "integer"
-              },
-              "free_edge_exponent": {
+            "formula": {
                 "additionalProperties": false,
                 "properties": {
-                  "binomial_order": {
-                    "maximum": 5,
-                    "minimum": 1,
-                    "type": "integer"
-                  },
-                  "offset": {
-                    "type": "integer"
-                  }
+                    "incident_vertex_offsets": {
+                        "items": {
+                            "type": "integer"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array",
+                        "uniqueItems": true
+                    },
+                    "free_edge_base": {
+                        "maximum": 10,
+                        "minimum": 2,
+                        "type": "integer"
+                    },
+                    "free_edge_exponent": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "binomial_order": {
+                                "maximum": 5,
+                                "minimum": 1,
+                                "type": "integer"
+                            },
+                            "offset": {
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "binomial_order",
+                            "offset"
+                        ],
+                        "type": "object"
+                    }
                 },
                 "required": [
-                  "binomial_order",
-                  "offset"
+                    "incident_vertex_offsets",
+                    "free_edge_base",
+                    "free_edge_exponent"
                 ],
                 "type": "object"
-              }
             },
-            "required": [
-              "incident_vertex_offsets",
-              "free_edge_base",
-              "free_edge_exponent"
-            ],
-            "type": "object"
-          },
-          "pair_semantics": {
-            "enum": [
-              "ORDERED",
-              "UNORDERED"
-            ]
-          },
-          "probe_values": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "coefficient": {
-                  "minimum": 1,
-                  "type": "integer"
+            "pair_semantics": {
+                "enum": [
+                    "ORDERED",
+                    "UNORDERED"
+                ]
+            },
+            "probe_values": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "coefficient": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "n": {
+                            "maximum": 6,
+                            "minimum": 3,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "n",
+                        "coefficient"
+                    ],
+                    "type": "object"
                 },
-                "n": {
-                  "maximum": 6,
-                  "minimum": 3,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "n",
-                "coefficient"
-              ],
-              "type": "object"
-            },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array",
-            "uniqueItems": true
-          }
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array",
+                "uniqueItems": true
+            }
         },
         "required": [
-          "pair_semantics",
-          "formula",
-          "probe_values"
+            "pair_semantics",
+            "formula",
+            "probe_values"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/edge-pair-ordering-audit"
+    "task_id": "jacobian/edge-pair-ordering-audit"
 }

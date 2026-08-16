@@ -1,292 +1,144 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "even_numbers": {
-          "items": {
-            "minimum": 2,
-            "type": "integer"
-          },
-          "maxItems": 50,
-          "minItems": 1,
-          "type": "array",
-          "uniqueItems": true
-        },
-        "frontier": {
-          "items": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "result": {
             "additionalProperties": false,
             "properties": {
-              "max_even_count": {
-                "maximum": 44,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "minimum_sum": {
-                "type": "integer"
-              },
-              "objective": {
-                "type": "integer"
-              },
-              "odd_count": {
-                "maximum": 45,
-                "minimum": 1,
-                "type": "integer"
-              }
+                "even_numbers": {
+                    "items": {
+                        "minimum": 2,
+                        "type": "integer"
+                    },
+                    "maxItems": 50,
+                    "minItems": 1,
+                    "type": "array",
+                    "uniqueItems": true
+                },
+                "frontier": {
+                    "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "max_even_count": {
+                                "maximum": 44,
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "minimum_sum": {
+                                "type": "integer"
+                            },
+                            "objective": {
+                                "type": "integer"
+                            },
+                            "odd_count": {
+                                "maximum": 45,
+                                "minimum": 1,
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "odd_count",
+                            "max_even_count",
+                            "minimum_sum",
+                            "objective"
+                        ],
+                        "type": "object"
+                    },
+                    "maxItems": 23,
+                    "minItems": 23,
+                    "type": "array"
+                },
+                "objective": {
+                    "type": "integer"
+                },
+                "odd_numbers": {
+                    "items": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "maxItems": 45,
+                    "minItems": 1,
+                    "type": "array",
+                    "uniqueItems": true
+                }
             },
             "required": [
-              "odd_count",
-              "max_even_count",
-              "minimum_sum",
-              "objective"
+                "even_numbers",
+                "odd_numbers",
+                "objective",
+                "frontier"
             ],
             "type": "object"
-          },
-          "maxItems": 23,
-          "minItems": 23,
-          "type": "array"
-        },
-        "objective": {
-          "type": "integer"
-        },
-        "odd_numbers": {
-          "items": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "maxItems": 45,
-          "minItems": 1,
-          "type": "array",
-          "uniqueItems": true
         }
-      },
-      "required": [
-        "even_numbers",
-        "odd_numbers",
-        "objective",
-        "frontier"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "even_numbers": {
-        "items": {
-          "minimum": 2,
-          "type": "integer"
-        },
-        "maxItems": 50,
-        "minItems": 1,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "frontier": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "max_even_count": {
-              "maximum": 44,
-              "minimum": 0,
-              "type": "integer"
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "even_numbers": {
+                "items": {
+                    "minimum": 2,
+                    "type": "integer"
+                },
+                "maxItems": 50,
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
             },
-            "minimum_sum": {
-              "type": "integer"
+            "frontier": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "max_even_count": {
+                            "maximum": 44,
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "minimum_sum": {
+                            "type": "integer"
+                        },
+                        "objective": {
+                            "type": "integer"
+                        },
+                        "odd_count": {
+                            "maximum": 45,
+                            "minimum": 1,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "odd_count",
+                        "max_even_count",
+                        "minimum_sum",
+                        "objective"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 23,
+                "minItems": 23,
+                "type": "array"
             },
             "objective": {
-              "type": "integer"
+                "type": "integer"
             },
-            "odd_count": {
-              "maximum": 45,
-              "minimum": 1,
-              "type": "integer"
+            "odd_numbers": {
+                "items": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "maxItems": 45,
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
             }
-          },
-          "required": [
-            "odd_count",
-            "max_even_count",
-            "minimum_sum",
-            "objective"
-          ],
-          "type": "object"
-        },
-        "maxItems": 23,
-        "minItems": 23,
-        "type": "array"
-      },
-      "objective": {
-        "type": "integer"
-      },
-      "odd_numbers": {
-        "items": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "maxItems": 45,
-        "minItems": 1,
-        "type": "array",
-        "uniqueItems": true
-      }
-    },
-    "required": [
-      "even_numbers",
-      "odd_numbers",
-      "objective",
-      "frontier"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "even_numbers": {
-            "items": {
-              "minimum": 2,
-              "type": "integer"
-            },
-            "maxItems": 50,
-            "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "frontier": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "max_even_count": {
-                  "maximum": 44,
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "minimum_sum": {
-                  "type": "integer"
-                },
-                "objective": {
-                  "type": "integer"
-                },
-                "odd_count": {
-                  "maximum": 45,
-                  "minimum": 1,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "odd_count",
-                "max_even_count",
-                "minimum_sum",
-                "objective"
-              ],
-              "type": "object"
-            },
-            "maxItems": 23,
-            "minItems": 23,
-            "type": "array"
-          },
-          "objective": {
-            "type": "integer"
-          },
-          "odd_numbers": {
-            "items": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "maxItems": 45,
-            "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
-          }
         },
         "required": [
-          "even_numbers",
-          "odd_numbers",
-          "objective",
-          "frontier"
+            "even_numbers",
+            "odd_numbers",
+            "objective",
+            "frontier"
         ],
         "type": "object"
-      }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "even_numbers": {
-            "items": {
-              "minimum": 2,
-              "type": "integer"
-            },
-            "maxItems": 50,
-            "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "frontier": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "max_even_count": {
-                  "maximum": 44,
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "minimum_sum": {
-                  "type": "integer"
-                },
-                "objective": {
-                  "type": "integer"
-                },
-                "odd_count": {
-                  "maximum": 45,
-                  "minimum": 1,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "odd_count",
-                "max_even_count",
-                "minimum_sum",
-                "objective"
-              ],
-              "type": "object"
-            },
-            "maxItems": 23,
-            "minItems": 23,
-            "type": "array"
-          },
-          "objective": {
-            "type": "integer"
-          },
-          "odd_numbers": {
-            "items": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "maxItems": 45,
-            "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
-          }
-        },
-        "required": [
-          "even_numbers",
-          "odd_numbers",
-          "objective",
-          "frontier"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/distinct-parity-primal-dual"
+    "task_id": "jacobian/distinct-parity-primal-dual"
 }

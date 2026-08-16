@@ -1,291 +1,144 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "counterexample": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "compact_support_cohomology": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "degree": {
-                  "maximum": 1,
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "dimension": {
-                  "maximum": 1,
-                  "minimum": 0,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "degree",
-                "dimension"
-              ],
-              "type": "object"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "fixed_point_equation": {
-            "const": "x+q=x"
-          },
-          "fixed_point_exists": {
-            "type": "boolean"
-          },
-          "lefschetz_number": {
-            "maximum": 1,
-            "minimum": -1,
-            "type": "integer"
-          },
-          "proper": {
-            "type": "boolean"
-          },
-          "space": {
-            "const": "R"
-          },
-          "top_degree_action": {
-            "enum": [
-              -1,
-              1
-            ]
-          },
-          "translation": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "maximum": 1000000,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "maximum": 1000000,
-                "minimum": -1000000,
-                "type": "integer"
-              }
-            },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "space",
-          "translation",
-          "fixed_point_equation",
-          "fixed_point_exists",
-          "proper",
-          "compact_support_cohomology",
-          "top_degree_action",
-          "lefschetz_number"
-        ],
-        "type": "object"
-      },
-      "downstream_status": {
-        "enum": [
-          "UNSUPPORTED_BY_FROZEN_ARGUMENT",
-          "ESTABLISHED_BY_FROZEN_ARGUMENT"
-        ]
-      },
-      "original_question_status": {
-        "const": "NOT_ASSESSED"
-      },
-      "theorem_audit": {
-        "additionalProperties": false,
-        "properties": {
-          "frozen_lemma_status": {
-            "enum": [
-              "FALSE",
-              "TRUE",
-              "NOT_ASSESSED"
-            ]
-          },
-          "invalid_step": {
-            "enum": [
-              "COMPACTLY_SUPPORTED_DIAGONAL_THOM_CLASS",
-              "FIXED_POINT_EQUATION",
-              "POINCARE_DUALITY",
-              "NONE"
-            ]
-          },
-          "repair_boundary": {
-            "enum": [
-              "REQUIRES_ADDITIONAL_HYPOTHESES_OR_DIFFERENT_ARGUMENT",
-              "NO_REPAIR_REQUIRED"
-            ]
-          }
-        },
-        "required": [
-          "frozen_lemma_status",
-          "invalid_step",
-          "repair_boundary"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "counterexample",
-      "theorem_audit",
-      "downstream_status",
-      "original_question_status"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "counterexample": {
-            "additionalProperties": false,
-            "properties": {
-              "compact_support_cohomology": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "degree": {
-                      "maximum": 1,
-                      "minimum": 0,
-                      "type": "integer"
-                    },
-                    "dimension": {
-                      "maximum": 1,
-                      "minimum": 0,
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "degree",
-                    "dimension"
-                  ],
-                  "type": "object"
-                },
-                "maxItems": 2,
-                "minItems": 2,
-                "type": "array"
-              },
-              "fixed_point_equation": {
-                "const": "x+q=x"
-              },
-              "fixed_point_exists": {
-                "type": "boolean"
-              },
-              "lefschetz_number": {
-                "maximum": 1,
-                "minimum": -1,
-                "type": "integer"
-              },
-              "proper": {
-                "type": "boolean"
-              },
-              "space": {
-                "const": "R"
-              },
-              "top_degree_action": {
-                "enum": [
-                  -1,
-                  1
-                ]
-              },
-              "translation": {
+            "counterexample": {
                 "additionalProperties": false,
                 "properties": {
-                  "denominator": {
-                    "maximum": 1000000,
-                    "minimum": 1,
-                    "type": "integer"
-                  },
-                  "numerator": {
-                    "maximum": 1000000,
-                    "minimum": -1000000,
-                    "type": "integer"
-                  }
+                    "compact_support_cohomology": {
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "degree": {
+                                    "maximum": 1,
+                                    "minimum": 0,
+                                    "type": "integer"
+                                },
+                                "dimension": {
+                                    "maximum": 1,
+                                    "minimum": 0,
+                                    "type": "integer"
+                                }
+                            },
+                            "required": [
+                                "degree",
+                                "dimension"
+                            ],
+                            "type": "object"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                    },
+                    "fixed_point_equation": {
+                        "const": "x+q=x"
+                    },
+                    "fixed_point_exists": {
+                        "type": "boolean"
+                    },
+                    "lefschetz_number": {
+                        "maximum": 1,
+                        "minimum": -1,
+                        "type": "integer"
+                    },
+                    "proper": {
+                        "type": "boolean"
+                    },
+                    "space": {
+                        "const": "R"
+                    },
+                    "top_degree_action": {
+                        "enum": [
+                            -1,
+                            1
+                        ]
+                    },
+                    "translation": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "denominator": {
+                                "maximum": 1000000,
+                                "minimum": 1,
+                                "type": "integer"
+                            },
+                            "numerator": {
+                                "maximum": 1000000,
+                                "minimum": -1000000,
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "numerator",
+                            "denominator"
+                        ],
+                        "type": "object"
+                    }
                 },
                 "required": [
-                  "numerator",
-                  "denominator"
+                    "space",
+                    "translation",
+                    "fixed_point_equation",
+                    "fixed_point_exists",
+                    "proper",
+                    "compact_support_cohomology",
+                    "top_degree_action",
+                    "lefschetz_number"
                 ],
                 "type": "object"
-              }
             },
-            "required": [
-              "space",
-              "translation",
-              "fixed_point_equation",
-              "fixed_point_exists",
-              "proper",
-              "compact_support_cohomology",
-              "top_degree_action",
-              "lefschetz_number"
-            ],
-            "type": "object"
-          },
-          "downstream_status": {
-            "enum": [
-              "UNSUPPORTED_BY_FROZEN_ARGUMENT",
-              "ESTABLISHED_BY_FROZEN_ARGUMENT"
-            ]
-          },
-          "original_question_status": {
-            "const": "NOT_ASSESSED"
-          },
-          "theorem_audit": {
-            "additionalProperties": false,
-            "properties": {
-              "frozen_lemma_status": {
+            "downstream_status": {
                 "enum": [
-                  "FALSE",
-                  "TRUE",
-                  "NOT_ASSESSED"
+                    "UNSUPPORTED_BY_FROZEN_ARGUMENT",
+                    "ESTABLISHED_BY_FROZEN_ARGUMENT"
                 ]
-              },
-              "invalid_step": {
-                "enum": [
-                  "COMPACTLY_SUPPORTED_DIAGONAL_THOM_CLASS",
-                  "FIXED_POINT_EQUATION",
-                  "POINCARE_DUALITY",
-                  "NONE"
-                ]
-              },
-              "repair_boundary": {
-                "enum": [
-                  "REQUIRES_ADDITIONAL_HYPOTHESES_OR_DIFFERENT_ARGUMENT",
-                  "NO_REPAIR_REQUIRED"
-                ]
-              }
             },
-            "required": [
-              "frozen_lemma_status",
-              "invalid_step",
-              "repair_boundary"
-            ],
-            "type": "object"
-          }
+            "original_question_status": {
+                "const": "NOT_ASSESSED"
+            },
+            "theorem_audit": {
+                "additionalProperties": false,
+                "properties": {
+                    "frozen_lemma_status": {
+                        "enum": [
+                            "FALSE",
+                            "TRUE",
+                            "NOT_ASSESSED"
+                        ]
+                    },
+                    "invalid_step": {
+                        "enum": [
+                            "COMPACTLY_SUPPORTED_DIAGONAL_THOM_CLASS",
+                            "FIXED_POINT_EQUATION",
+                            "POINCARE_DUALITY",
+                            "NONE"
+                        ]
+                    },
+                    "repair_boundary": {
+                        "enum": [
+                            "REQUIRES_ADDITIONAL_HYPOTHESES_OR_DIFFERENT_ARGUMENT",
+                            "NO_REPAIR_REQUIRED"
+                        ]
+                    }
+                },
+                "required": [
+                    "frozen_lemma_status",
+                    "invalid_step",
+                    "repair_boundary"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "counterexample",
-          "theorem_audit",
-          "downstream_status",
-          "original_question_status"
+            "counterexample",
+            "theorem_audit",
+            "downstream_status",
+            "original_question_status"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/noncompact-lefschetz-proof-audit"
+    "task_id": "jacobian/noncompact-lefschetz-proof-audit"
 }

@@ -1,150 +1,73 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "model": {
-      "additionalProperties": false,
-      "properties": {
-        "distinguishing_index": {
-          "maximum": 7,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "intended_truth": {
-          "type": "boolean"
-        },
-        "limsup_values": {
-          "items": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "model": {
             "additionalProperties": false,
             "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
+                "distinguishing_index": {
+                    "maximum": 7,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "intended_truth": {
+                    "type": "boolean"
+                },
+                "limsup_values": {
+                    "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "denominator": {
+                                "minimum": 1,
+                                "type": "integer"
+                            },
+                            "numerator": {
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "numerator",
+                            "denominator"
+                        ],
+                        "type": "object"
+                    },
+                    "maxItems": 8,
+                    "minItems": 2,
+                    "type": "array"
+                },
+                "proposed_truth": {
+                    "type": "boolean"
+                }
             },
             "required": [
-              "numerator",
-              "denominator"
+                "limsup_values",
+                "intended_truth",
+                "proposed_truth",
+                "distinguishing_index"
             ],
             "type": "object"
-          },
-          "maxItems": 8,
-          "minItems": 2,
-          "type": "array"
-        },
-        "proposed_truth": {
-          "type": "boolean"
         }
-      },
-      "required": [
-        "limsup_values",
-        "intended_truth",
-        "proposed_truth",
-        "distinguishing_index"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "intended_only_model": {
-        "$ref": "#/$defs/model"
-      },
-      "proposed_only_model": {
-        "$ref": "#/$defs/model"
-      },
-      "relationship": {
-        "const": "INCOMPARABLE"
-      }
     },
-    "required": [
-      "relationship",
-      "intended_only_model",
-      "proposed_only_model"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "model": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "distinguishing_index": {
-            "maximum": 7,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "intended_truth": {
-            "type": "boolean"
-          },
-          "limsup_values": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "denominator": {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "numerator": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "numerator",
-                "denominator"
-              ],
-              "type": "object"
+            "intended_only_model": {
+                "$ref": "#/$defs/model"
             },
-            "maxItems": 8,
-            "minItems": 2,
-            "type": "array"
-          },
-          "proposed_truth": {
-            "type": "boolean"
-          }
+            "proposed_only_model": {
+                "$ref": "#/$defs/model"
+            },
+            "relationship": {
+                "const": "INCOMPARABLE"
+            }
         },
         "required": [
-          "limsup_values",
-          "intended_truth",
-          "proposed_truth",
-          "distinguishing_index"
+            "relationship",
+            "intended_only_model",
+            "proposed_only_model"
         ],
         "type": "object"
-      }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "intended_only_model": {
-            "$ref": "#/$defs/model"
-          },
-          "proposed_only_model": {
-            "$ref": "#/$defs/model"
-          },
-          "relationship": {
-            "const": "INCOMPARABLE"
-          }
-        },
-        "required": [
-          "relationship",
-          "intended_only_model",
-          "proposed_only_model"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/limsup-quantifier-alignment"
+    "task_id": "jacobian/limsup-quantifier-alignment"
 }

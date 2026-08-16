@@ -1,198 +1,97 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "cleared_identity_residual": {
-          "maxItems": 0,
-          "type": "array"
-        },
-        "degree": {
-          "maximum": 39,
-          "minimum": 11,
-          "type": "integer"
-        },
-        "m": {
-          "maximum": 20,
-          "minimum": 6,
-          "type": "integer"
-        },
-        "polynomial_terms": {
-          "items": {
-            "$ref": "#/$defs/term"
-          },
-          "maxItems": 20,
-          "minItems": 6,
-          "type": "array"
-        },
-        "quotient_degree": {
-          "maximum": 38,
-          "minimum": 10,
-          "type": "integer"
-        },
-        "quotient_terms": {
-          "items": {
-            "$ref": "#/$defs/term"
-          },
-          "maxItems": 20,
-          "minItems": 6,
-          "type": "array"
-        },
-        "reverse_quotient_constant": {
-          "enum": [
-            -1,
-            1
-          ],
-          "type": "integer"
-        },
-        "reverse_terms": {
-          "items": {
-            "$ref": "#/$defs/term"
-          },
-          "maxItems": 20,
-          "minItems": 6,
-          "type": "array"
-        }
-      },
-      "required": [
-        "m",
-        "polynomial_terms",
-        "quotient_terms",
-        "reverse_terms",
-        "reverse_quotient_constant",
-        "degree",
-        "quotient_degree",
-        "cleared_identity_residual"
-      ],
-      "type": "object"
-    },
-    "term": {
-      "additionalProperties": false,
-      "properties": {
-        "coefficient": {
-          "maximum": 1,
-          "minimum": -1,
-          "type": "integer"
-        },
-        "exponent": {
-          "maximum": 39,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "exponent",
-        "coefficient"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "$ref": "#/$defs/result"
-  },
-  "submission_schema": {
-    "$defs": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "cleared_identity_residual": {
-            "maxItems": 0,
-            "type": "array"
-          },
-          "degree": {
-            "maximum": 39,
-            "minimum": 11,
-            "type": "integer"
-          },
-          "m": {
-            "maximum": 20,
-            "minimum": 6,
-            "type": "integer"
-          },
-          "polynomial_terms": {
-            "items": {
-              "$ref": "#/$defs/term"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "result": {
+            "additionalProperties": false,
+            "properties": {
+                "cleared_identity_residual": {
+                    "maxItems": 0,
+                    "type": "array"
+                },
+                "degree": {
+                    "maximum": 39,
+                    "minimum": 11,
+                    "type": "integer"
+                },
+                "m": {
+                    "maximum": 20,
+                    "minimum": 6,
+                    "type": "integer"
+                },
+                "polynomial_terms": {
+                    "items": {
+                        "$ref": "#/$defs/term"
+                    },
+                    "maxItems": 20,
+                    "minItems": 6,
+                    "type": "array"
+                },
+                "quotient_degree": {
+                    "maximum": 38,
+                    "minimum": 10,
+                    "type": "integer"
+                },
+                "quotient_terms": {
+                    "items": {
+                        "$ref": "#/$defs/term"
+                    },
+                    "maxItems": 20,
+                    "minItems": 6,
+                    "type": "array"
+                },
+                "reverse_quotient_constant": {
+                    "enum": [
+                        -1,
+                        1
+                    ],
+                    "type": "integer"
+                },
+                "reverse_terms": {
+                    "items": {
+                        "$ref": "#/$defs/term"
+                    },
+                    "maxItems": 20,
+                    "minItems": 6,
+                    "type": "array"
+                }
             },
-            "maxItems": 20,
-            "minItems": 6,
-            "type": "array"
-          },
-          "quotient_degree": {
-            "maximum": 38,
-            "minimum": 10,
-            "type": "integer"
-          },
-          "quotient_terms": {
-            "items": {
-              "$ref": "#/$defs/term"
-            },
-            "maxItems": 20,
-            "minItems": 6,
-            "type": "array"
-          },
-          "reverse_quotient_constant": {
-            "enum": [
-              -1,
-              1
+            "required": [
+                "m",
+                "polynomial_terms",
+                "quotient_terms",
+                "reverse_terms",
+                "reverse_quotient_constant",
+                "degree",
+                "quotient_degree",
+                "cleared_identity_residual"
             ],
-            "type": "integer"
-          },
-          "reverse_terms": {
-            "items": {
-              "$ref": "#/$defs/term"
+            "type": "object"
+        },
+        "term": {
+            "additionalProperties": false,
+            "properties": {
+                "coefficient": {
+                    "maximum": 1,
+                    "minimum": -1,
+                    "type": "integer"
+                },
+                "exponent": {
+                    "maximum": 39,
+                    "minimum": 0,
+                    "type": "integer"
+                }
             },
-            "maxItems": 20,
-            "minItems": 6,
-            "type": "array"
-          }
-        },
-        "required": [
-          "m",
-          "polynomial_terms",
-          "quotient_terms",
-          "reverse_terms",
-          "reverse_quotient_constant",
-          "degree",
-          "quotient_degree",
-          "cleared_identity_residual"
-        ],
-        "type": "object"
-      },
-      "term": {
-        "additionalProperties": false,
-        "properties": {
-          "coefficient": {
-            "maximum": 1,
-            "minimum": -1,
-            "type": "integer"
-          },
-          "exponent": {
-            "maximum": 39,
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "exponent",
-          "coefficient"
-        ],
-        "type": "object"
-      }
+            "required": [
+                "exponent",
+                "coefficient"
+            ],
+            "type": "object"
+        }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "$ref": "#/$defs/result"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/reciprocal-polynomial-classification"
+    "task_id": "jacobian/reciprocal-polynomial-classification"
 }

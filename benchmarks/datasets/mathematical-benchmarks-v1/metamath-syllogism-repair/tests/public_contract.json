@@ -1,254 +1,125 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "expression": {
-      "items": {
-        "maxLength": 8,
-        "minLength": 1,
-        "type": "string"
-      },
-      "maxItems": 20,
-      "minItems": 2,
-      "type": "array"
-    },
-    "step": {
-      "additionalProperties": false,
-      "properties": {
-        "label": {
-          "enum": [
-            "wu",
-            "wv",
-            "ww",
-            "h1",
-            "h2",
-            "wi",
-            "a1i",
-            "mpd"
-          ]
-        },
-        "position": {
-          "maximum": 10,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "stack_depth": {
-          "maximum": 8,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "stack_top": {
-          "$ref": "#/$defs/expression"
-        },
-        "substitution": {
-          "additionalProperties": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "expression": {
             "items": {
-              "type": "string"
-            },
-            "maxItems": 16,
-            "minItems": 1,
-            "type": "array"
-          },
-          "propertyNames": {
-            "enum": [
-              "u",
-              "v",
-              "w"
-            ]
-          },
-          "type": "object"
-        }
-      },
-      "required": [
-        "position",
-        "label",
-        "substitution",
-        "stack_depth",
-        "stack_top"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "changed_positions": {
-        "items": {
-          "maximum": 10,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "final_expression": {
-        "$ref": "#/$defs/expression"
-      },
-      "repaired_proof": {
-        "items": {
-          "enum": [
-            "wu",
-            "wv",
-            "ww",
-            "h1",
-            "h2",
-            "wi",
-            "a1i",
-            "mpd"
-          ]
-        },
-        "maxItems": 11,
-        "minItems": 11,
-        "type": "array"
-      },
-      "trace": {
-        "items": {
-          "$ref": "#/$defs/step"
-        },
-        "maxItems": 11,
-        "minItems": 11,
-        "type": "array"
-      }
-    },
-    "required": [
-      "repaired_proof",
-      "changed_positions",
-      "trace",
-      "final_expression"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "expression": {
-        "items": {
-          "maxLength": 8,
-          "minLength": 1,
-          "type": "string"
-        },
-        "maxItems": 20,
-        "minItems": 2,
-        "type": "array"
-      },
-      "step": {
-        "additionalProperties": false,
-        "properties": {
-          "label": {
-            "enum": [
-              "wu",
-              "wv",
-              "ww",
-              "h1",
-              "h2",
-              "wi",
-              "a1i",
-              "mpd"
-            ]
-          },
-          "position": {
-            "maximum": 10,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "stack_depth": {
-            "maximum": 8,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "stack_top": {
-            "$ref": "#/$defs/expression"
-          },
-          "substitution": {
-            "additionalProperties": {
-              "items": {
+                "maxLength": 8,
+                "minLength": 1,
                 "type": "string"
-              },
-              "maxItems": 16,
-              "minItems": 1,
-              "type": "array"
             },
-            "propertyNames": {
-              "enum": [
-                "u",
-                "v",
-                "w"
-              ]
-            },
-            "type": "object"
-          }
+            "maxItems": 20,
+            "minItems": 2,
+            "type": "array"
         },
-        "required": [
-          "position",
-          "label",
-          "substitution",
-          "stack_depth",
-          "stack_top"
-        ],
-        "type": "object"
-      }
+        "step": {
+            "additionalProperties": false,
+            "properties": {
+                "label": {
+                    "enum": [
+                        "wu",
+                        "wv",
+                        "ww",
+                        "h1",
+                        "h2",
+                        "wi",
+                        "a1i",
+                        "mpd"
+                    ]
+                },
+                "position": {
+                    "maximum": 10,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "stack_depth": {
+                    "maximum": 8,
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "stack_top": {
+                    "$ref": "#/$defs/expression"
+                },
+                "substitution": {
+                    "additionalProperties": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "maxItems": 16,
+                        "minItems": 1,
+                        "type": "array"
+                    },
+                    "propertyNames": {
+                        "enum": [
+                            "u",
+                            "v",
+                            "w"
+                        ]
+                    },
+                    "type": "object"
+                }
+            },
+            "required": [
+                "position",
+                "label",
+                "substitution",
+                "stack_depth",
+                "stack_top"
+            ],
+            "type": "object"
+        }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "changed_positions": {
-            "items": {
-              "maximum": 10,
-              "minimum": 0,
-              "type": "integer"
+            "changed_positions": {
+                "items": {
+                    "maximum": 10,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array",
+                "uniqueItems": true
             },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "final_expression": {
-            "$ref": "#/$defs/expression"
-          },
-          "repaired_proof": {
-            "items": {
-              "enum": [
-                "wu",
-                "wv",
-                "ww",
-                "h1",
-                "h2",
-                "wi",
-                "a1i",
-                "mpd"
-              ]
+            "final_expression": {
+                "$ref": "#/$defs/expression"
             },
-            "maxItems": 11,
-            "minItems": 11,
-            "type": "array"
-          },
-          "trace": {
-            "items": {
-              "$ref": "#/$defs/step"
+            "repaired_proof": {
+                "items": {
+                    "enum": [
+                        "wu",
+                        "wv",
+                        "ww",
+                        "h1",
+                        "h2",
+                        "wi",
+                        "a1i",
+                        "mpd"
+                    ]
+                },
+                "maxItems": 11,
+                "minItems": 11,
+                "type": "array"
             },
-            "maxItems": 11,
-            "minItems": 11,
-            "type": "array"
-          }
+            "trace": {
+                "items": {
+                    "$ref": "#/$defs/step"
+                },
+                "maxItems": 11,
+                "minItems": 11,
+                "type": "array"
+            }
         },
         "required": [
-          "repaired_proof",
-          "changed_positions",
-          "trace",
-          "final_expression"
+            "repaired_proof",
+            "changed_positions",
+            "trace",
+            "final_expression"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/metamath-syllogism-repair"
+    "task_id": "jacobian/metamath-syllogism-repair"
 }

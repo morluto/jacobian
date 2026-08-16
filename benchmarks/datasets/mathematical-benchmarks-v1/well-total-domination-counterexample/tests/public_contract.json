@@ -1,159 +1,78 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "average_degree": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
+            "average_degree": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
+            },
+            "connected": {
+                "const": true
+            },
+            "degree_sum": {
+                "minimum": 0,
+                "type": "integer"
+            },
+            "hypothesis_holds": {
+                "const": true
+            },
+            "minimal_total_dominating_sets": {
+                "items": {
+                    "items": {
+                        "type": [
+                            "string",
+                            "integer"
+                        ]
+                    },
+                    "minItems": 1,
+                    "type": "array",
+                    "uniqueItems": true
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            },
+            "pendant_vertices": {
+                "items": {
+                    "type": [
+                        "string",
+                        "integer"
+                    ]
+                },
+                "type": "array",
+                "uniqueItems": true
+            },
+            "well_totally_dominated": {
+                "const": false
+            }
         },
         "required": [
-          "numerator",
-          "denominator"
+            "connected",
+            "degree_sum",
+            "average_degree",
+            "pendant_vertices",
+            "hypothesis_holds",
+            "minimal_total_dominating_sets",
+            "well_totally_dominated"
         ],
         "type": "object"
-      },
-      "connected": {
-        "const": true
-      },
-      "degree_sum": {
-        "minimum": 0,
-        "type": "integer"
-      },
-      "hypothesis_holds": {
-        "const": true
-      },
-      "minimal_total_dominating_sets": {
-        "items": {
-          "items": {
-            "type": [
-              "string",
-              "integer"
-            ]
-          },
-          "minItems": 1,
-          "type": "array",
-          "uniqueItems": true
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "pendant_vertices": {
-        "items": {
-          "type": [
-            "string",
-            "integer"
-          ]
-        },
-        "type": "array",
-        "uniqueItems": true
-      },
-      "well_totally_dominated": {
-        "const": false
-      }
     },
-    "required": [
-      "connected",
-      "degree_sum",
-      "average_degree",
-      "pendant_vertices",
-      "hypothesis_holds",
-      "minimal_total_dominating_sets",
-      "well_totally_dominated"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "type": "object",
-    "additionalProperties": false,
-    "required": [
-      "result"
-    ],
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "average_degree": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          },
-          "connected": {
-            "const": true
-          },
-          "degree_sum": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "hypothesis_holds": {
-            "const": true
-          },
-          "minimal_total_dominating_sets": {
-            "items": {
-              "items": {
-                "type": [
-                  "string",
-                  "integer"
-                ]
-              },
-              "minItems": 1,
-              "type": "array",
-              "uniqueItems": true
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "pendant_vertices": {
-            "items": {
-              "type": [
-                "string",
-                "integer"
-              ]
-            },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "well_totally_dominated": {
-            "const": false
-          }
-        },
-        "required": [
-          "connected",
-          "degree_sum",
-          "average_degree",
-          "pendant_vertices",
-          "hypothesis_holds",
-          "minimal_total_dominating_sets",
-          "well_totally_dominated"
-        ],
-        "type": "object"
-      }
-    }
-  },
-  "task_id": "jacobian/well-total-domination-counterexample"
+    "task_id": "jacobian/well-total-domination-counterexample"
 }

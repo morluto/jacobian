@@ -1,205 +1,101 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "exact_period_coefficients": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      },
-      "infinite_prime_step": {
-        "enum": [
-          "FOR_EACH_PRIME_q_ALL_OTHER_PRIMES_p_DIVIDE_P(q)-P(1)_SO_P(q)=P(1)",
-          "FOR_EACH_PRIME_p_ALL_OTHER_PRIMES_q_DIVIDE_P(p)-P(1)_SO_P(p)=P(1)",
-          "ALL_PRIMES_DIVIDE_P(1)_SO_P_IS_CONSTANT",
-          "INFINITE_PRIMES_GIVE_DISTINCT_VALUES_OF_P"
-        ]
-      },
-      "modular_reductions": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "conclusion": {
-              "enum": [
-                "p_DIVIDES_P(q)-P(1)",
-                "q_DIVIDES_P(p)-P(1)"
-              ]
-            },
-            "modulus": {
-              "enum": [
-                "p",
-                "q"
-              ]
-            },
-            "residue_basis": {
-              "items": {
-                "type": "string"
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
-            },
-            "residue_coefficients": {
-              "items": {
-                "type": "integer"
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
-            }
-          },
-          "required": [
-            "modulus",
-            "residue_basis",
-            "residue_coefficients",
-            "conclusion"
-          ],
-          "type": "object"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "orbit_basis": {
-        "const": [
-          "F(pq)",
-          "F(p)",
-          "F(q)",
-          "F(1)"
-        ]
-      },
-      "orbit_divisibility": {
-        "const": "pq_DIVIDES_F(pq)-F(p)-F(q)+F(1)"
-      },
-      "polynomial_identity_step": {
-        "enum": [
-          "P_EQUALS_CONSTANT_P(1)_ON_INFINITELY_MANY_PRIMES",
-          "P_EQUALS_CONSTANT_P(0)_ON_INFINITELY_MANY_PRIMES",
-          "P_IS_NONCONSTANT_ON_INFINITELY_MANY_PRIMES",
-          "P_EQUALS_IDENTITY_ON_ALL_PRIMES"
-        ]
-      }
-    },
-    "required": [
-      "orbit_basis",
-      "exact_period_coefficients",
-      "orbit_divisibility",
-      "modular_reductions",
-      "infinite_prime_step",
-      "polynomial_identity_step"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "exact_period_coefficients": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          },
-          "infinite_prime_step": {
-            "enum": [
-              "FOR_EACH_PRIME_q_ALL_OTHER_PRIMES_p_DIVIDE_P(q)-P(1)_SO_P(q)=P(1)",
-              "FOR_EACH_PRIME_p_ALL_OTHER_PRIMES_q_DIVIDE_P(p)-P(1)_SO_P(p)=P(1)",
-              "ALL_PRIMES_DIVIDE_P(1)_SO_P_IS_CONSTANT",
-              "INFINITE_PRIMES_GIVE_DISTINCT_VALUES_OF_P"
-            ]
-          },
-          "modular_reductions": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "conclusion": {
-                  "enum": [
-                    "p_DIVIDES_P(q)-P(1)",
-                    "q_DIVIDES_P(p)-P(1)"
-                  ]
-                },
-                "modulus": {
-                  "enum": [
-                    "p",
-                    "q"
-                  ]
-                },
-                "residue_basis": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "residue_coefficients": {
-                  "items": {
+            "exact_period_coefficients": {
+                "items": {
                     "type": "integer"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                }
-              },
-              "required": [
-                "modulus",
-                "residue_basis",
-                "residue_coefficients",
-                "conclusion"
-              ],
-              "type": "object"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
             },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "orbit_basis": {
-            "const": [
-              "F(pq)",
-              "F(p)",
-              "F(q)",
-              "F(1)"
-            ]
-          },
-          "orbit_divisibility": {
-            "const": "pq_DIVIDES_F(pq)-F(p)-F(q)+F(1)"
-          },
-          "polynomial_identity_step": {
-            "enum": [
-              "P_EQUALS_CONSTANT_P(1)_ON_INFINITELY_MANY_PRIMES",
-              "P_EQUALS_CONSTANT_P(0)_ON_INFINITELY_MANY_PRIMES",
-              "P_IS_NONCONSTANT_ON_INFINITELY_MANY_PRIMES",
-              "P_EQUALS_IDENTITY_ON_ALL_PRIMES"
-            ]
-          }
+            "infinite_prime_step": {
+                "enum": [
+                    "FOR_EACH_PRIME_q_ALL_OTHER_PRIMES_p_DIVIDE_P(q)-P(1)_SO_P(q)=P(1)",
+                    "FOR_EACH_PRIME_p_ALL_OTHER_PRIMES_q_DIVIDE_P(p)-P(1)_SO_P(p)=P(1)",
+                    "ALL_PRIMES_DIVIDE_P(1)_SO_P_IS_CONSTANT",
+                    "INFINITE_PRIMES_GIVE_DISTINCT_VALUES_OF_P"
+                ]
+            },
+            "modular_reductions": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "conclusion": {
+                            "enum": [
+                                "p_DIVIDES_P(q)-P(1)",
+                                "q_DIVIDES_P(p)-P(1)"
+                            ]
+                        },
+                        "modulus": {
+                            "enum": [
+                                "p",
+                                "q"
+                            ]
+                        },
+                        "residue_basis": {
+                            "items": {
+                                "type": "string"
+                            },
+                            "maxItems": 2,
+                            "minItems": 2,
+                            "type": "array"
+                        },
+                        "residue_coefficients": {
+                            "items": {
+                                "type": "integer"
+                            },
+                            "maxItems": 2,
+                            "minItems": 2,
+                            "type": "array"
+                        }
+                    },
+                    "required": [
+                        "modulus",
+                        "residue_basis",
+                        "residue_coefficients",
+                        "conclusion"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            },
+            "orbit_basis": {
+                "const": [
+                    "F(pq)",
+                    "F(p)",
+                    "F(q)",
+                    "F(1)"
+                ]
+            },
+            "orbit_divisibility": {
+                "const": "pq_DIVIDES_F(pq)-F(p)-F(q)+F(1)"
+            },
+            "polynomial_identity_step": {
+                "enum": [
+                    "P_EQUALS_CONSTANT_P(1)_ON_INFINITELY_MANY_PRIMES",
+                    "P_EQUALS_CONSTANT_P(0)_ON_INFINITELY_MANY_PRIMES",
+                    "P_IS_NONCONSTANT_ON_INFINITELY_MANY_PRIMES",
+                    "P_EQUALS_IDENTITY_ON_ALL_PRIMES"
+                ]
+            }
         },
         "required": [
-          "orbit_basis",
-          "exact_period_coefficients",
-          "orbit_divisibility",
-          "modular_reductions",
-          "infinite_prime_step",
-          "polynomial_identity_step"
+            "orbit_basis",
+            "exact_period_coefficients",
+            "orbit_divisibility",
+            "modular_reductions",
+            "infinite_prime_step",
+            "polynomial_identity_step"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/periodic-orbit-polynomial-obstruction"
+    "task_id": "jacobian/periodic-orbit-polynomial-obstruction"
 }

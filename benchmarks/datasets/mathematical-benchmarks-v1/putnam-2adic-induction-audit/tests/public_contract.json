@@ -1,554 +1,275 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "affine": {
-      "items": {
-        "type": "integer"
-      },
-      "maxItems": 2,
-      "minItems": 2,
-      "type": "array"
-    },
-    "integer_triple": {
-      "items": {
-        "type": "integer"
-      },
-      "maxItems": 3,
-      "minItems": 3,
-      "type": "array"
-    },
-    "pair": {
-      "items": {
-        "$ref": "#/$defs/affine"
-      },
-      "maxItems": 2,
-      "minItems": 2,
-      "type": "array"
-    },
-    "triple": {
-      "items": {
-        "$ref": "#/$defs/affine"
-      },
-      "maxItems": 3,
-      "minItems": 3,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "base": {
-        "additionalProperties": false,
-        "properties": {
-          "P": {
-            "$ref": "#/$defs/integer_triple"
-          },
-          "b": {
-            "$ref": "#/$defs/integer_triple"
-          },
-          "u": {
-            "$ref": "#/$defs/integer_triple"
-          },
-          "valuations": {
-            "additionalProperties": false,
-            "properties": {
-              "P2_minus_1": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "P2_plus_1": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "u2": {
-                "minimum": 0,
-                "type": "integer"
-              }
-            },
-            "required": [
-              "u2",
-              "P2_minus_1",
-              "P2_plus_1"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "b",
-          "u",
-          "P",
-          "valuations"
-        ],
-        "type": "object"
-      },
-      "difference_identity": {
-        "additionalProperties": false,
-        "properties": {
-          "left_function_coefficients": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "affine": {
             "items": {
-              "type": "integer"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "right_factors": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "a_coefficient": {
-                  "type": "integer"
-                },
-                "b_coefficient": {
-                  "type": "integer"
-                },
-                "constant": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "a_coefficient",
-                "b_coefficient",
-                "constant"
-              ],
-              "type": "object"
+                "type": "integer"
             },
             "maxItems": 2,
             "minItems": 2,
             "type": "array"
-          }
         },
-        "required": [
-          "left_function_coefficients",
-          "right_factors"
-        ],
-        "type": "object"
-      },
-      "doubling_identities": {
-        "additionalProperties": false,
-        "properties": {
-          "taylor": {
-            "additionalProperties": false,
-            "properties": {
-              "u_2n": {
+        "integer_triple": {
+            "items": {
                 "type": "integer"
-              },
-              "u_n": {
-                "type": "integer"
-              },
-              "u_n_times_P_n": {
-                "type": "integer"
-              },
-              "u_n_squared_times_K": {
-                "type": "integer"
-              }
             },
-            "required": [
-              "u_2n",
-              "u_n",
-              "u_n_times_P_n",
-              "u_n_squared_times_K"
-            ],
-            "type": "object"
-          },
-          "product": {
-            "additionalProperties": false,
-            "properties": {
-              "P_2n": {
-                "type": "integer"
-              },
-              "P_n_squared": {
-                "type": "integer"
-              },
-              "P_n_times_u_n_times_delta": {
-                "type": "integer"
-              }
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+        },
+        "pair": {
+            "items": {
+                "$ref": "#/$defs/affine"
             },
-            "required": [
-              "P_2n",
-              "P_n_squared",
-              "P_n_times_u_n_times_delta"
-            ],
-            "type": "object"
-          }
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
         },
-        "required": [
-          "taylor",
-          "product"
-        ],
-        "type": "object"
-      },
-      "finite_testing_role": {
-        "minLength": 1,
-        "type": "string"
-      },
-      "target_transfer": {
-        "additionalProperties": false,
-        "properties": {
-          "b_difference": {
-            "$ref": "#/$defs/affine"
-          },
-          "divides_exponent": {
-            "$ref": "#/$defs/affine"
-          },
-          "not_divides_exponent": {
-            "$ref": "#/$defs/affine"
-          },
-          "scale_v2": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "u_difference": {
-            "$ref": "#/$defs/affine"
-          },
-          "u_difference_term_lower_bounds": {
-            "$ref": "#/$defs/pair"
-          }
-        },
-        "required": [
-          "u_difference_term_lower_bounds",
-          "u_difference",
-          "scale_v2",
-          "b_difference",
-          "divides_exponent",
-          "not_divides_exponent"
-        ],
-        "type": "object"
-      },
-      "valuation_induction": {
-        "additionalProperties": false,
-        "properties": {
-          "add_one_reason": {
-            "additionalProperties": false,
-            "properties": {
-              "premise_minimum_v2": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "conclusion_exact_v2": {
-                "minimum": 0,
-                "type": "integer"
-              }
+        "triple": {
+            "items": {
+                "$ref": "#/$defs/affine"
             },
-            "required": [
-              "premise_minimum_v2",
-              "conclusion_exact_v2"
-            ],
-            "type": "object"
-          },
-          "hypotheses": {
-            "$ref": "#/$defs/triple"
-          },
-          "sub_one_term_lower_bounds": {
-            "$ref": "#/$defs/pair"
-          },
-          "successor": {
-            "$ref": "#/$defs/triple"
-          },
-          "u_term_lower_bounds": {
-            "$ref": "#/$defs/pair"
-          }
-        },
-        "required": [
-          "hypotheses",
-          "sub_one_term_lower_bounds",
-          "add_one_reason",
-          "u_term_lower_bounds",
-          "successor"
-        ],
-        "type": "object"
-      }
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+        }
     },
-    "required": [
-      "base",
-      "difference_identity",
-      "doubling_identities",
-      "valuation_induction",
-      "target_transfer",
-      "finite_testing_role"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "affine": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "integer_triple": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "pair": {
-        "items": {
-          "$ref": "#/$defs/affine"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "triple": {
-        "items": {
-          "$ref": "#/$defs/affine"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "base": {
-            "additionalProperties": false,
-            "properties": {
-              "P": {
-                "$ref": "#/$defs/integer_triple"
-              },
-              "b": {
-                "$ref": "#/$defs/integer_triple"
-              },
-              "u": {
-                "$ref": "#/$defs/integer_triple"
-              },
-              "valuations": {
+            "base": {
                 "additionalProperties": false,
                 "properties": {
-                  "P2_minus_1": {
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "P2_plus_1": {
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "u2": {
-                    "minimum": 0,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "u2",
-                  "P2_minus_1",
-                  "P2_plus_1"
-                ],
-                "type": "object"
-              }
-            },
-            "required": [
-              "b",
-              "u",
-              "P",
-              "valuations"
-            ],
-            "type": "object"
-          },
-          "difference_identity": {
-            "additionalProperties": false,
-            "properties": {
-              "left_function_coefficients": {
-                "items": {
-                  "type": "integer"
-                },
-                "maxItems": 3,
-                "minItems": 3,
-                "type": "array"
-              },
-              "right_factors": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "a_coefficient": {
-                      "type": "integer"
+                    "P": {
+                        "$ref": "#/$defs/integer_triple"
                     },
-                    "b_coefficient": {
-                      "type": "integer"
+                    "b": {
+                        "$ref": "#/$defs/integer_triple"
                     },
-                    "constant": {
-                      "type": "integer"
+                    "u": {
+                        "$ref": "#/$defs/integer_triple"
+                    },
+                    "valuations": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "P2_minus_1": {
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "P2_plus_1": {
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "u2": {
+                                "minimum": 0,
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "u2",
+                            "P2_minus_1",
+                            "P2_plus_1"
+                        ],
+                        "type": "object"
                     }
-                  },
-                  "required": [
-                    "a_coefficient",
-                    "b_coefficient",
-                    "constant"
-                  ],
-                  "type": "object"
-                },
-                "maxItems": 2,
-                "minItems": 2,
-                "type": "array"
-              }
-            },
-            "required": [
-              "left_function_coefficients",
-              "right_factors"
-            ],
-            "type": "object"
-          },
-          "doubling_identities": {
-            "additionalProperties": false,
-            "properties": {
-              "taylor": {
-                "additionalProperties": false,
-                "properties": {
-                  "u_2n": {
-                    "type": "integer"
-                  },
-                  "u_n": {
-                    "type": "integer"
-                  },
-                  "u_n_times_P_n": {
-                    "type": "integer"
-                  },
-                  "u_n_squared_times_K": {
-                    "type": "integer"
-                  }
                 },
                 "required": [
-                  "u_2n",
-                  "u_n",
-                  "u_n_times_P_n",
-                  "u_n_squared_times_K"
+                    "b",
+                    "u",
+                    "P",
+                    "valuations"
                 ],
                 "type": "object"
-              },
-              "product": {
+            },
+            "difference_identity": {
                 "additionalProperties": false,
                 "properties": {
-                  "P_2n": {
-                    "type": "integer"
-                  },
-                  "P_n_squared": {
-                    "type": "integer"
-                  },
-                  "P_n_times_u_n_times_delta": {
-                    "type": "integer"
-                  }
+                    "left_function_coefficients": {
+                        "items": {
+                            "type": "integer"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                    },
+                    "right_factors": {
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "a_coefficient": {
+                                    "type": "integer"
+                                },
+                                "b_coefficient": {
+                                    "type": "integer"
+                                },
+                                "constant": {
+                                    "type": "integer"
+                                }
+                            },
+                            "required": [
+                                "a_coefficient",
+                                "b_coefficient",
+                                "constant"
+                            ],
+                            "type": "object"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                    }
                 },
                 "required": [
-                  "P_2n",
-                  "P_n_squared",
-                  "P_n_times_u_n_times_delta"
+                    "left_function_coefficients",
+                    "right_factors"
                 ],
                 "type": "object"
-              }
             },
-            "required": [
-              "taylor",
-              "product"
-            ],
-            "type": "object"
-          },
-          "finite_testing_role": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "target_transfer": {
-            "additionalProperties": false,
-            "properties": {
-              "b_difference": {
-                "$ref": "#/$defs/affine"
-              },
-              "divides_exponent": {
-                "$ref": "#/$defs/affine"
-              },
-              "not_divides_exponent": {
-                "$ref": "#/$defs/affine"
-              },
-              "scale_v2": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "u_difference": {
-                "$ref": "#/$defs/affine"
-              },
-              "u_difference_term_lower_bounds": {
-                "$ref": "#/$defs/pair"
-              }
-            },
-            "required": [
-              "u_difference_term_lower_bounds",
-              "u_difference",
-              "scale_v2",
-              "b_difference",
-              "divides_exponent",
-              "not_divides_exponent"
-            ],
-            "type": "object"
-          },
-          "valuation_induction": {
-            "additionalProperties": false,
-            "properties": {
-              "add_one_reason": {
+            "doubling_identities": {
                 "additionalProperties": false,
                 "properties": {
-                  "premise_minimum_v2": {
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "conclusion_exact_v2": {
-                    "minimum": 0,
-                    "type": "integer"
-                  }
+                    "taylor": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "u_2n": {
+                                "type": "integer"
+                            },
+                            "u_n": {
+                                "type": "integer"
+                            },
+                            "u_n_times_P_n": {
+                                "type": "integer"
+                            },
+                            "u_n_squared_times_K": {
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "u_2n",
+                            "u_n",
+                            "u_n_times_P_n",
+                            "u_n_squared_times_K"
+                        ],
+                        "type": "object"
+                    },
+                    "product": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "P_2n": {
+                                "type": "integer"
+                            },
+                            "P_n_squared": {
+                                "type": "integer"
+                            },
+                            "P_n_times_u_n_times_delta": {
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "P_2n",
+                            "P_n_squared",
+                            "P_n_times_u_n_times_delta"
+                        ],
+                        "type": "object"
+                    }
                 },
                 "required": [
-                  "premise_minimum_v2",
-                  "conclusion_exact_v2"
+                    "taylor",
+                    "product"
                 ],
                 "type": "object"
-              },
-              "hypotheses": {
-                "$ref": "#/$defs/triple"
-              },
-              "sub_one_term_lower_bounds": {
-                "$ref": "#/$defs/pair"
-              },
-              "successor": {
-                "$ref": "#/$defs/triple"
-              },
-              "u_term_lower_bounds": {
-                "$ref": "#/$defs/pair"
-              }
             },
-            "required": [
-              "hypotheses",
-              "sub_one_term_lower_bounds",
-              "add_one_reason",
-              "u_term_lower_bounds",
-              "successor"
-            ],
-            "type": "object"
-          }
+            "finite_testing_role": {
+                "minLength": 1,
+                "type": "string"
+            },
+            "target_transfer": {
+                "additionalProperties": false,
+                "properties": {
+                    "b_difference": {
+                        "$ref": "#/$defs/affine"
+                    },
+                    "divides_exponent": {
+                        "$ref": "#/$defs/affine"
+                    },
+                    "not_divides_exponent": {
+                        "$ref": "#/$defs/affine"
+                    },
+                    "scale_v2": {
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "u_difference": {
+                        "$ref": "#/$defs/affine"
+                    },
+                    "u_difference_term_lower_bounds": {
+                        "$ref": "#/$defs/pair"
+                    }
+                },
+                "required": [
+                    "u_difference_term_lower_bounds",
+                    "u_difference",
+                    "scale_v2",
+                    "b_difference",
+                    "divides_exponent",
+                    "not_divides_exponent"
+                ],
+                "type": "object"
+            },
+            "valuation_induction": {
+                "additionalProperties": false,
+                "properties": {
+                    "add_one_reason": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "premise_minimum_v2": {
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "conclusion_exact_v2": {
+                                "minimum": 0,
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "premise_minimum_v2",
+                            "conclusion_exact_v2"
+                        ],
+                        "type": "object"
+                    },
+                    "hypotheses": {
+                        "$ref": "#/$defs/triple"
+                    },
+                    "sub_one_term_lower_bounds": {
+                        "$ref": "#/$defs/pair"
+                    },
+                    "successor": {
+                        "$ref": "#/$defs/triple"
+                    },
+                    "u_term_lower_bounds": {
+                        "$ref": "#/$defs/pair"
+                    }
+                },
+                "required": [
+                    "hypotheses",
+                    "sub_one_term_lower_bounds",
+                    "add_one_reason",
+                    "u_term_lower_bounds",
+                    "successor"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "base",
-          "difference_identity",
-          "doubling_identities",
-          "valuation_induction",
-          "target_transfer",
-          "finite_testing_role"
+            "base",
+            "difference_identity",
+            "doubling_identities",
+            "valuation_induction",
+            "target_transfer",
+            "finite_testing_role"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/putnam-2adic-induction-audit"
+    "task_id": "jacobian/putnam-2adic-induction-audit"
 }

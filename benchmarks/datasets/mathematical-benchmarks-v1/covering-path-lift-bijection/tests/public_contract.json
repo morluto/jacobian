@@ -1,204 +1,100 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "lifts": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "endpoint": {
-            "type": "string"
-          },
-          "start": {
-            "type": "string"
-          },
-          "trace": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "lifts": {
             "items": {
-              "type": "string"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          }
-        },
-        "required": [
-          "start",
-          "trace",
-          "endpoint"
-        ],
-        "type": "object"
-      },
-      "maxItems": 3,
-      "minItems": 3,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "base_path": {
-        "items": {
-          "type": "string"
-        },
-        "maxItems": 4,
-        "minItems": 3,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "bijection": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "source": {
-              "type": "string"
-            },
-            "target": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "source",
-            "target"
-          ],
-          "type": "object"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "forward_lifts": {
-        "$ref": "#/$defs/lifts"
-      },
-      "local_covering_checked": {
-        "const": true
-      },
-      "reverse_lifts": {
-        "$ref": "#/$defs/lifts"
-      },
-      "reverse_path": {
-        "items": {
-          "type": "string"
-        },
-        "maxItems": 4,
-        "minItems": 3,
-        "type": "array",
-        "uniqueItems": true
-      }
-    },
-    "required": [
-      "base_path",
-      "reverse_path",
-      "forward_lifts",
-      "reverse_lifts",
-      "bijection",
-      "local_covering_checked"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "lifts": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "endpoint": {
-              "type": "string"
-            },
-            "start": {
-              "type": "string"
-            },
-            "trace": {
-              "items": {
-                "type": "string"
-              },
-              "maxItems": 4,
-              "minItems": 3,
-              "type": "array"
-            }
-          },
-          "required": [
-            "start",
-            "trace",
-            "endpoint"
-          ],
-          "type": "object"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "base_path": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "bijection": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "source": {
-                  "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                    "endpoint": {
+                        "type": "string"
+                    },
+                    "start": {
+                        "type": "string"
+                    },
+                    "trace": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "maxItems": 4,
+                        "minItems": 3,
+                        "type": "array"
+                    }
                 },
-                "target": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "source",
-                "target"
-              ],
-              "type": "object"
+                "required": [
+                    "start",
+                    "trace",
+                    "endpoint"
+                ],
+                "type": "object"
             },
             "maxItems": 3,
             "minItems": 3,
             "type": "array"
-          },
-          "forward_lifts": {
-            "$ref": "#/$defs/lifts"
-          },
-          "local_covering_checked": {
-            "const": true
-          },
-          "reverse_lifts": {
-            "$ref": "#/$defs/lifts"
-          },
-          "reverse_path": {
-            "items": {
-              "type": "string"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "base_path": {
+                "items": {
+                    "type": "string"
+                },
+                "maxItems": 4,
+                "minItems": 3,
+                "type": "array",
+                "uniqueItems": true
             },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array",
-            "uniqueItems": true
-          }
+            "bijection": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "source": {
+                            "type": "string"
+                        },
+                        "target": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "source",
+                        "target"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+            },
+            "forward_lifts": {
+                "$ref": "#/$defs/lifts"
+            },
+            "local_covering_checked": {
+                "const": true
+            },
+            "reverse_lifts": {
+                "$ref": "#/$defs/lifts"
+            },
+            "reverse_path": {
+                "items": {
+                    "type": "string"
+                },
+                "maxItems": 4,
+                "minItems": 3,
+                "type": "array",
+                "uniqueItems": true
+            }
         },
         "required": [
-          "base_path",
-          "reverse_path",
-          "forward_lifts",
-          "reverse_lifts",
-          "bijection",
-          "local_covering_checked"
+            "base_path",
+            "reverse_path",
+            "forward_lifts",
+            "reverse_lifts",
+            "bijection",
+            "local_covering_checked"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/covering-path-lift-bijection"
+    "task_id": "jacobian/covering-path-lift-bijection"
 }

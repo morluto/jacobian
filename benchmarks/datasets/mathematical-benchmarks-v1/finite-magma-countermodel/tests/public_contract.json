@@ -1,141 +1,69 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "minimality_checked_orders": {
-        "items": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "type": "array",
-        "uniqueItems": true
-      },
-      "order": {
-        "minimum": 1,
-        "type": "integer"
-      },
-      "premise_holds_universally": {
-        "const": true
-      },
-      "refuting_assignment": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "x": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "y": {
-            "minimum": 0,
-            "type": "integer"
-          }
+            "minimality_checked_orders": {
+                "items": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "type": "array",
+                "uniqueItems": true
+            },
+            "order": {
+                "minimum": 1,
+                "type": "integer"
+            },
+            "premise_holds_universally": {
+                "const": true
+            },
+            "refuting_assignment": {
+                "additionalProperties": false,
+                "properties": {
+                    "x": {
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "y": {
+                        "minimum": 0,
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "x",
+                    "y"
+                ],
+                "type": "object"
+            },
+            "table": {
+                "items": {
+                    "items": {
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                },
+                "minItems": 1,
+                "type": "array"
+            },
+            "target_holds_universally": {
+                "const": false
+            }
         },
         "required": [
-          "x",
-          "y"
+            "order",
+            "table",
+            "refuting_assignment",
+            "premise_holds_universally",
+            "target_holds_universally",
+            "minimality_checked_orders"
         ],
         "type": "object"
-      },
-      "table": {
-        "items": {
-          "items": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "minItems": 1,
-          "type": "array"
-        },
-        "minItems": 1,
-        "type": "array"
-      },
-      "target_holds_universally": {
-        "const": false
-      }
     },
-    "required": [
-      "order",
-      "table",
-      "refuting_assignment",
-      "premise_holds_universally",
-      "target_holds_universally",
-      "minimality_checked_orders"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "minimality_checked_orders": {
-            "items": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "order": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "premise_holds_universally": {
-            "const": true
-          },
-          "refuting_assignment": {
-            "additionalProperties": false,
-            "properties": {
-              "x": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "y": {
-                "minimum": 0,
-                "type": "integer"
-              }
-            },
-            "required": [
-              "x",
-              "y"
-            ],
-            "type": "object"
-          },
-          "table": {
-            "items": {
-              "items": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "minItems": 1,
-              "type": "array"
-            },
-            "minItems": 1,
-            "type": "array"
-          },
-          "target_holds_universally": {
-            "const": false
-          }
-        },
-        "required": [
-          "order",
-          "table",
-          "refuting_assignment",
-          "premise_holds_universally",
-          "target_holds_universally",
-          "minimality_checked_orders"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/finite-magma-countermodel"
+    "task_id": "jacobian/finite-magma-countermodel"
 }

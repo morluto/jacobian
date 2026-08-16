@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="012f8e9a01f14155c8c839df5ed71a7a70cbe887af688154a5324949accb5b98"
+LABEL jacobian.checksum="48637301678476987c4d9cf336b40990b7b78681a2f4c3907c2246666cfe9d44"
 LABEL jacobian.task="jacobian/gaussian-moment-generality-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

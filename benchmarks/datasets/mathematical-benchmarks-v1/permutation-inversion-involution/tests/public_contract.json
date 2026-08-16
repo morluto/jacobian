@@ -1,203 +1,100 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "fixed_point_count": {
-        "minimum": 0,
-        "type": "integer"
-      },
-      "pair_count": {
-        "minimum": 0,
-        "type": "integer"
-      },
-      "pair_inversion_sum": {
-        "type": "integer"
-      },
-      "total_inversions": {
-        "minimum": 0,
-        "type": "integer"
-      },
-      "traces": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "inversions": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "permutation": {
-              "items": {
-                "maximum": 7,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "maxItems": 7,
-              "minItems": 7,
-              "type": "array"
-            },
-            "transformed": {
-              "items": {
-                "maximum": 7,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "maxItems": 7,
-              "minItems": 7,
-              "type": "array"
-            },
-            "transformed_inversions": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "permutation",
-            "transformed",
-            "inversions",
-            "transformed_inversions"
-          ],
-          "type": "object"
-        },
-        "maxItems": 6,
-        "minItems": 6,
-        "type": "array"
-      },
-      "transformation": {
-        "enum": [
-          "REVERSE_POSITIONS",
-          "COMPLEMENT_VALUES",
-          "INVERSE_PERMUTATION"
-        ]
-      },
-      "value_multiplier": {
-        "maximum": 1,
-        "minimum": -1,
-        "type": "integer"
-      },
-      "value_offset": {
-        "maximum": 8,
-        "minimum": 0,
-        "type": "integer"
-      }
-    },
-    "required": [
-      "transformation",
-      "value_multiplier",
-      "value_offset",
-      "pair_inversion_sum",
-      "fixed_point_count",
-      "pair_count",
-      "total_inversions",
-      "traces"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "fixed_point_count": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "pair_count": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "pair_inversion_sum": {
-            "type": "integer"
-          },
-          "total_inversions": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "traces": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "inversions": {
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "permutation": {
-                  "items": {
-                    "maximum": 7,
-                    "minimum": 1,
-                    "type": "integer"
-                  },
-                  "maxItems": 7,
-                  "minItems": 7,
-                  "type": "array"
-                },
-                "transformed": {
-                  "items": {
-                    "maximum": 7,
-                    "minimum": 1,
-                    "type": "integer"
-                  },
-                  "maxItems": 7,
-                  "minItems": 7,
-                  "type": "array"
-                },
-                "transformed_inversions": {
-                  "minimum": 0,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "permutation",
-                "transformed",
-                "inversions",
-                "transformed_inversions"
-              ],
-              "type": "object"
+            "fixed_point_count": {
+                "minimum": 0,
+                "type": "integer"
             },
-            "maxItems": 6,
-            "minItems": 6,
-            "type": "array"
-          },
-          "transformation": {
-            "enum": [
-              "REVERSE_POSITIONS",
-              "COMPLEMENT_VALUES",
-              "INVERSE_PERMUTATION"
-            ]
-          },
-          "value_multiplier": {
-            "maximum": 1,
-            "minimum": -1,
-            "type": "integer"
-          },
-          "value_offset": {
-            "maximum": 8,
-            "minimum": 0,
-            "type": "integer"
-          }
+            "pair_count": {
+                "minimum": 0,
+                "type": "integer"
+            },
+            "pair_inversion_sum": {
+                "type": "integer"
+            },
+            "total_inversions": {
+                "minimum": 0,
+                "type": "integer"
+            },
+            "traces": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "inversions": {
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "permutation": {
+                            "items": {
+                                "maximum": 7,
+                                "minimum": 1,
+                                "type": "integer"
+                            },
+                            "maxItems": 7,
+                            "minItems": 7,
+                            "type": "array"
+                        },
+                        "transformed": {
+                            "items": {
+                                "maximum": 7,
+                                "minimum": 1,
+                                "type": "integer"
+                            },
+                            "maxItems": 7,
+                            "minItems": 7,
+                            "type": "array"
+                        },
+                        "transformed_inversions": {
+                            "minimum": 0,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "permutation",
+                        "transformed",
+                        "inversions",
+                        "transformed_inversions"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 6,
+                "minItems": 6,
+                "type": "array"
+            },
+            "transformation": {
+                "enum": [
+                    "REVERSE_POSITIONS",
+                    "COMPLEMENT_VALUES",
+                    "INVERSE_PERMUTATION"
+                ]
+            },
+            "value_multiplier": {
+                "maximum": 1,
+                "minimum": -1,
+                "type": "integer"
+            },
+            "value_offset": {
+                "maximum": 8,
+                "minimum": 0,
+                "type": "integer"
+            }
         },
         "required": [
-          "transformation",
-          "value_multiplier",
-          "value_offset",
-          "pair_inversion_sum",
-          "fixed_point_count",
-          "pair_count",
-          "total_inversions",
-          "traces"
+            "transformation",
+            "value_multiplier",
+            "value_offset",
+            "pair_inversion_sum",
+            "fixed_point_count",
+            "pair_count",
+            "total_inversions",
+            "traces"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/permutation-inversion-involution"
+    "task_id": "jacobian/permutation-inversion-involution"
 }

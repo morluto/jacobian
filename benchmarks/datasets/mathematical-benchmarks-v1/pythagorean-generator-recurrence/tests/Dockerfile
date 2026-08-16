@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact recurrence and quadratic-invariant verifier.
 LABEL jacobian.task="jacobian/pythagorean-generator-recurrence" \
-      jacobian.checksum="3d001f5a9f72b4a9f62710daf3735d917e8014bcfe55121364280dc772687e5c"
+      jacobian.checksum="b244b16170ebbbf995c417c1b3e98834a9297bd20798a6b8903dbf2b1299b06b"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && python -c 'import json; assert json.load(open("/tests/expected.json"))["task_id"] == "jacobian/pythagorean-generator-recurrence"'

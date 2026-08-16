@@ -1,125 +1,61 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "axioms": {
-        "items": {
-          "maximum": 8,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "type": "array",
-        "uniqueItems": true
-      },
-      "root": {
-        "const": 7
-      },
-      "steps": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "child": {
-              "maximum": 8,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "parents": {
-              "items": {
-                "maximum": 8,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array",
-              "uniqueItems": true
-            }
-          },
-          "required": [
-            "child",
-            "parents"
-          ],
-          "type": "object"
-        },
-        "maxItems": 7,
-        "minItems": 1,
-        "type": "array"
-      }
-    },
-    "required": [
-      "axioms",
-      "steps",
-      "root"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "axioms": {
-            "items": {
-              "maximum": 8,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "root": {
-            "const": 7
-          },
-          "steps": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "child": {
-                  "maximum": 8,
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "parents": {
-                  "items": {
+            "axioms": {
+                "items": {
                     "maximum": 8,
                     "minimum": 1,
                     "type": "integer"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array",
-                  "uniqueItems": true
-                }
-              },
-              "required": [
-                "child",
-                "parents"
-              ],
-              "type": "object"
+                },
+                "type": "array",
+                "uniqueItems": true
             },
-            "maxItems": 7,
-            "minItems": 1,
-            "type": "array"
-          }
+            "root": {
+                "const": 7
+            },
+            "steps": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "child": {
+                            "maximum": 8,
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "parents": {
+                            "items": {
+                                "maximum": 8,
+                                "minimum": 1,
+                                "type": "integer"
+                            },
+                            "maxItems": 2,
+                            "minItems": 2,
+                            "type": "array",
+                            "uniqueItems": true
+                        }
+                    },
+                    "required": [
+                        "child",
+                        "parents"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 7,
+                "minItems": 1,
+                "type": "array"
+            }
         },
         "required": [
-          "axioms",
-          "steps",
-          "root"
+            "axioms",
+            "steps",
+            "root"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/superposition-proof-replay"
+    "task_id": "jacobian/superposition-proof-replay"
 }

@@ -1,275 +1,136 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "elimination_coefficients": {
-        "description": "Coefficients of the elimination polynomial in ascending power order: [u^0, u^1, u^2, u^3, u^4].",
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 5,
-        "minItems": 5,
-        "type": "array"
-      },
-      "linear_factors": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "constant": {
-              "type": "integer"
-            },
-            "x_coefficient": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "constant",
-            "x_coefficient"
-          ],
-          "type": "object"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      },
-      "root_classification": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "reason": {
-              "enum": [
-                "PRINCIPAL_SIXTH_ROOT_REQUIRES_U_NONNEGATIVE",
-                "FOURTH_ROOT_RHS_REQUIRES_U_SQUARED_AT_LEAST_ONE",
-                "SATISFIES_ALL_ROOT_DOMAINS"
-              ]
-            },
-            "status": {
-              "enum": [
-                "ACCEPTED",
-                "REJECTED"
-              ]
-            },
-            "u": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "u",
-            "status",
-            "reason"
-          ],
-          "type": "object"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "solutions": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "a": {
-              "type": "integer"
-            },
-            "b": {
-              "type": "integer"
-            },
-            "c": {
-              "type": "integer"
-            },
-            "equation_values": {
-              "items": {
-                "additionalProperties": false,
-                "properties": {
-                  "left": {
-                    "type": "integer"
-                  },
-                  "right": {
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "left",
-                  "right"
-                ],
-                "type": "object"
-              },
-              "maxItems": 3,
-              "minItems": 3,
-              "type": "array"
-            },
-            "u": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "a",
-            "b",
-            "c",
-            "u",
-            "equation_values"
-          ],
-          "type": "object"
-        },
-        "maxItems": 3,
-        "minItems": 1,
-        "type": "array"
-      },
-      "substitution": {
-        "const": "u=b^(1/6)"
-      }
-    },
-    "required": [
-      "substitution",
-      "elimination_coefficients",
-      "linear_factors",
-      "root_classification",
-      "solutions"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "elimination_coefficients": {
-            "description": "Coefficients of the elimination polynomial in ascending power order: [u^0, u^1, u^2, u^3, u^4].",
-            "items": {
-              "type": "integer"
+            "elimination_coefficients": {
+                "description": "Coefficients of the elimination polynomial in ascending power order: [u^0, u^1, u^2, u^3, u^4].",
+                "items": {
+                    "type": "integer"
+                },
+                "maxItems": 5,
+                "minItems": 5,
+                "type": "array"
             },
-            "maxItems": 5,
-            "minItems": 5,
-            "type": "array"
-          },
-          "linear_factors": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "constant": {
-                  "type": "integer"
-                },
-                "x_coefficient": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "constant",
-                "x_coefficient"
-              ],
-              "type": "object"
-            },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          },
-          "root_classification": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "reason": {
-                  "enum": [
-                    "PRINCIPAL_SIXTH_ROOT_REQUIRES_U_NONNEGATIVE",
-                    "FOURTH_ROOT_RHS_REQUIRES_U_SQUARED_AT_LEAST_ONE",
-                    "SATISFIES_ALL_ROOT_DOMAINS"
-                  ]
-                },
-                "status": {
-                  "enum": [
-                    "ACCEPTED",
-                    "REJECTED"
-                  ]
-                },
-                "u": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "u",
-                "status",
-                "reason"
-              ],
-              "type": "object"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "solutions": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "a": {
-                  "type": "integer"
-                },
-                "b": {
-                  "type": "integer"
-                },
-                "c": {
-                  "type": "integer"
-                },
-                "equation_values": {
-                  "items": {
+            "linear_factors": {
+                "items": {
                     "additionalProperties": false,
                     "properties": {
-                      "left": {
-                        "type": "integer"
-                      },
-                      "right": {
-                        "type": "integer"
-                      }
+                        "constant": {
+                            "type": "integer"
+                        },
+                        "x_coefficient": {
+                            "type": "integer"
+                        }
                     },
                     "required": [
-                      "left",
-                      "right"
+                        "constant",
+                        "x_coefficient"
                     ],
                     "type": "object"
-                  },
-                  "maxItems": 3,
-                  "minItems": 3,
-                  "type": "array"
                 },
-                "u": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "a",
-                "b",
-                "c",
-                "u",
-                "equation_values"
-              ],
-              "type": "object"
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
             },
-            "maxItems": 3,
-            "minItems": 1,
-            "type": "array"
-          },
-          "substitution": {
-            "const": "u=b^(1/6)"
-          }
+            "root_classification": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "reason": {
+                            "enum": [
+                                "PRINCIPAL_SIXTH_ROOT_REQUIRES_U_NONNEGATIVE",
+                                "FOURTH_ROOT_RHS_REQUIRES_U_SQUARED_AT_LEAST_ONE",
+                                "SATISFIES_ALL_ROOT_DOMAINS"
+                            ]
+                        },
+                        "status": {
+                            "enum": [
+                                "ACCEPTED",
+                                "REJECTED"
+                            ]
+                        },
+                        "u": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "u",
+                        "status",
+                        "reason"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+            },
+            "solutions": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "a": {
+                            "type": "integer"
+                        },
+                        "b": {
+                            "type": "integer"
+                        },
+                        "c": {
+                            "type": "integer"
+                        },
+                        "equation_values": {
+                            "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "left": {
+                                        "type": "integer"
+                                    },
+                                    "right": {
+                                        "type": "integer"
+                                    }
+                                },
+                                "required": [
+                                    "left",
+                                    "right"
+                                ],
+                                "type": "object"
+                            },
+                            "maxItems": 3,
+                            "minItems": 3,
+                            "type": "array"
+                        },
+                        "u": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "a",
+                        "b",
+                        "c",
+                        "u",
+                        "equation_values"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 3,
+                "minItems": 1,
+                "type": "array"
+            },
+            "substitution": {
+                "const": "u=b^(1/6)"
+            }
         },
         "required": [
-          "substitution",
-          "elimination_coefficients",
-          "linear_factors",
-          "root_classification",
-          "solutions"
+            "substitution",
+            "elimination_coefficients",
+            "linear_factors",
+            "root_classification",
+            "solutions"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/radical-system-uniqueness-audit"
+    "task_id": "jacobian/radical-system-uniqueness-audit"
 }

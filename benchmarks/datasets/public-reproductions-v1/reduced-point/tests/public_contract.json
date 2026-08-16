@@ -1,67 +1,32 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "free_ranks": {
-        "items": {
-          "type": "integer"
-        },
-        "type": "array"
-      },
-      "torsion": {
-        "items": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "type": "array"
-      }
-    },
-    "required": [
-      "free_ranks",
-      "torsion"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "free_ranks": {
-            "items": {
-              "type": "integer"
+            "free_ranks": {
+                "items": {
+                    "type": "integer"
+                },
+                "type": "array"
             },
-            "type": "array"
-          },
-          "torsion": {
-            "items": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "type": "array"
-          }
+            "torsion": {
+                "items": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "type": "array"
+            }
         },
         "required": [
-          "free_ranks",
-          "torsion"
+            "free_ranks",
+            "torsion"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/reduced-point"
+    "task_id": "jacobian/reduced-point"
 }

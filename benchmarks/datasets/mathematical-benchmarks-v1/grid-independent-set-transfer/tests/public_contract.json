@@ -1,143 +1,70 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "cases": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "compatible_pair_count": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "independent_set_count": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "layer_totals": {
-              "items": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "maxItems": 5,
-              "minItems": 2,
-              "type": "array"
-            },
-            "n": {
-              "maximum": 5,
-              "minimum": 2,
-              "type": "integer"
-            },
-            "valid_row_masks": {
-              "items": {
-                "maximum": 31,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "type": "array",
-              "uniqueItems": true
-            }
-          },
-          "required": [
-            "n",
-            "valid_row_masks",
-            "compatible_pair_count",
-            "layer_totals",
-            "independent_set_count"
-          ],
-          "type": "object"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      },
-      "total": {
-        "minimum": 1,
-        "type": "integer"
-      }
-    },
-    "required": [
-      "cases",
-      "total"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "cases": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "compatible_pair_count": {
-                  "minimum": 1,
-                  "type": "integer"
+            "cases": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "compatible_pair_count": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "independent_set_count": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "layer_totals": {
+                            "items": {
+                                "minimum": 1,
+                                "type": "integer"
+                            },
+                            "maxItems": 5,
+                            "minItems": 2,
+                            "type": "array"
+                        },
+                        "n": {
+                            "maximum": 5,
+                            "minimum": 2,
+                            "type": "integer"
+                        },
+                        "valid_row_masks": {
+                            "items": {
+                                "maximum": 31,
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "type": "array",
+                            "uniqueItems": true
+                        }
+                    },
+                    "required": [
+                        "n",
+                        "valid_row_masks",
+                        "compatible_pair_count",
+                        "layer_totals",
+                        "independent_set_count"
+                    ],
+                    "type": "object"
                 },
-                "independent_set_count": {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "layer_totals": {
-                  "items": {
-                    "minimum": 1,
-                    "type": "integer"
-                  },
-                  "maxItems": 5,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "n": {
-                  "maximum": 5,
-                  "minimum": 2,
-                  "type": "integer"
-                },
-                "valid_row_masks": {
-                  "items": {
-                    "maximum": 31,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "type": "array",
-                  "uniqueItems": true
-                }
-              },
-              "required": [
-                "n",
-                "valid_row_masks",
-                "compatible_pair_count",
-                "layer_totals",
-                "independent_set_count"
-              ],
-              "type": "object"
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
             },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          },
-          "total": {
-            "minimum": 1,
-            "type": "integer"
-          }
+            "total": {
+                "minimum": 1,
+                "type": "integer"
+            }
         },
         "required": [
-          "cases",
-          "total"
+            "cases",
+            "total"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/grid-independent-set-transfer"
+    "task_id": "jacobian/grid-independent-set-transfer"
 }

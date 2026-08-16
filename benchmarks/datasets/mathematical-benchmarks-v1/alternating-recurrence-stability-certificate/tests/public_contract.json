@@ -1,222 +1,109 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "checkpoint": {
-      "additionalProperties": false,
-      "properties": {
-        "a_n": {
-          "$ref": "#/$defs/rat"
-        },
-        "difference": {
-          "$ref": "#/$defs/rat"
-        },
-        "n": {
-          "maximum": 30,
-          "minimum": 1,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "n",
-        "a_n",
-        "difference"
-      ],
-      "type": "object"
-    },
-    "rat": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    },
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "a0": {
-          "$ref": "#/$defs/rat"
-        },
-        "checkpoints": {
-          "items": {
-            "$ref": "#/$defs/checkpoint"
-          },
-          "maxItems": 10,
-          "minItems": 4,
-          "type": "array"
-        },
-        "difference_delta_coefficient": {
-          "maximum": -1,
-          "minimum": -12,
-          "type": "integer"
-        },
-        "dominance_base": {
-          "$ref": "#/$defs/rat"
-        },
-        "homogeneous_base": {
-          "maximum": -2,
-          "minimum": -10,
-          "type": "integer"
-        },
-        "negative_delta_bad_parity": {
-          "enum": [
-            "EVEN",
-            "ODD"
-          ]
-        },
-        "particular_coefficient": {
-          "$ref": "#/$defs/rat"
-        },
-        "positive_delta_bad_parity": {
-          "enum": [
-            "EVEN",
-            "ODD"
-          ]
-        },
-        "reciprocal": {
-          "$ref": "#/$defs/rat"
-        }
-      },
-      "required": [
-        "particular_coefficient",
-        "homogeneous_base",
-        "difference_delta_coefficient",
-        "positive_delta_bad_parity",
-        "negative_delta_bad_parity",
-        "dominance_base",
-        "checkpoints",
-        "a0",
-        "reciprocal"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "$ref": "#/$defs/result"
-  },
-  "submission_schema": {
-    "$defs": {
-      "checkpoint": {
-        "additionalProperties": false,
-        "properties": {
-          "a_n": {
-            "$ref": "#/$defs/rat"
-          },
-          "difference": {
-            "$ref": "#/$defs/rat"
-          },
-          "n": {
-            "maximum": 30,
-            "minimum": 1,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "n",
-          "a_n",
-          "difference"
-        ],
-        "type": "object"
-      },
-      "rat": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "a0": {
-            "$ref": "#/$defs/rat"
-          },
-          "checkpoints": {
-            "items": {
-              "$ref": "#/$defs/checkpoint"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "checkpoint": {
+            "additionalProperties": false,
+            "properties": {
+                "a_n": {
+                    "$ref": "#/$defs/rat"
+                },
+                "difference": {
+                    "$ref": "#/$defs/rat"
+                },
+                "n": {
+                    "maximum": 30,
+                    "minimum": 1,
+                    "type": "integer"
+                }
             },
-            "maxItems": 10,
-            "minItems": 4,
-            "type": "array"
-          },
-          "difference_delta_coefficient": {
-            "maximum": -1,
-            "minimum": -12,
-            "type": "integer"
-          },
-          "dominance_base": {
-            "$ref": "#/$defs/rat"
-          },
-          "homogeneous_base": {
-            "maximum": -2,
-            "minimum": -10,
-            "type": "integer"
-          },
-          "negative_delta_bad_parity": {
-            "enum": [
-              "EVEN",
-              "ODD"
-            ]
-          },
-          "particular_coefficient": {
-            "$ref": "#/$defs/rat"
-          },
-          "positive_delta_bad_parity": {
-            "enum": [
-              "EVEN",
-              "ODD"
-            ]
-          },
-          "reciprocal": {
-            "$ref": "#/$defs/rat"
-          }
+            "required": [
+                "n",
+                "a_n",
+                "difference"
+            ],
+            "type": "object"
         },
-        "required": [
-          "particular_coefficient",
-          "homogeneous_base",
-          "difference_delta_coefficient",
-          "positive_delta_bad_parity",
-          "negative_delta_bad_parity",
-          "dominance_base",
-          "checkpoints",
-          "a0",
-          "reciprocal"
-        ],
-        "type": "object"
-      }
+        "rat": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        },
+        "result": {
+            "additionalProperties": false,
+            "properties": {
+                "a0": {
+                    "$ref": "#/$defs/rat"
+                },
+                "checkpoints": {
+                    "items": {
+                        "$ref": "#/$defs/checkpoint"
+                    },
+                    "maxItems": 10,
+                    "minItems": 4,
+                    "type": "array"
+                },
+                "difference_delta_coefficient": {
+                    "maximum": -1,
+                    "minimum": -12,
+                    "type": "integer"
+                },
+                "dominance_base": {
+                    "$ref": "#/$defs/rat"
+                },
+                "homogeneous_base": {
+                    "maximum": -2,
+                    "minimum": -10,
+                    "type": "integer"
+                },
+                "negative_delta_bad_parity": {
+                    "enum": [
+                        "EVEN",
+                        "ODD"
+                    ]
+                },
+                "particular_coefficient": {
+                    "$ref": "#/$defs/rat"
+                },
+                "positive_delta_bad_parity": {
+                    "enum": [
+                        "EVEN",
+                        "ODD"
+                    ]
+                },
+                "reciprocal": {
+                    "$ref": "#/$defs/rat"
+                }
+            },
+            "required": [
+                "particular_coefficient",
+                "homogeneous_base",
+                "difference_delta_coefficient",
+                "positive_delta_bad_parity",
+                "negative_delta_bad_parity",
+                "dominance_base",
+                "checkpoints",
+                "a0",
+                "reciprocal"
+            ],
+            "type": "object"
+        }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "$ref": "#/$defs/result"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/alternating-recurrence-stability-certificate"
+    "task_id": "jacobian/alternating-recurrence-stability-certificate"
 }

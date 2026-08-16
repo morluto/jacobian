@@ -1,113 +1,55 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "distance_to_set": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "distance": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "vertex": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "vertex",
-            "distance"
-          ],
-          "type": "object"
-        },
-        "type": "array"
-      },
-      "maximizing_vertices": {
-        "items": {
-          "type": "string"
-        },
-        "type": "array"
-      },
-      "maximum_degree_vertices": {
-        "items": {
-          "type": "string"
-        },
-        "type": "array"
-      },
-      "maximum_distance_to_set": {
-        "minimum": 0,
-        "type": "integer"
-      }
-    },
-    "required": [
-      "maximum_degree_vertices",
-      "distance_to_set",
-      "maximum_distance_to_set",
-      "maximizing_vertices"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "distance_to_set": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "distance": {
-                  "minimum": 0,
-                  "type": "integer"
+            "distance_to_set": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "distance": {
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "vertex": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "vertex",
+                        "distance"
+                    ],
+                    "type": "object"
                 },
-                "vertex": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "vertex",
-                "distance"
-              ],
-              "type": "object"
+                "type": "array"
             },
-            "type": "array"
-          },
-          "maximizing_vertices": {
-            "items": {
-              "type": "string"
+            "maximizing_vertices": {
+                "items": {
+                    "type": "string"
+                },
+                "type": "array"
             },
-            "type": "array"
-          },
-          "maximum_degree_vertices": {
-            "items": {
-              "type": "string"
+            "maximum_degree_vertices": {
+                "items": {
+                    "type": "string"
+                },
+                "type": "array"
             },
-            "type": "array"
-          },
-          "maximum_distance_to_set": {
-            "minimum": 0,
-            "type": "integer"
-          }
+            "maximum_distance_to_set": {
+                "minimum": 0,
+                "type": "integer"
+            }
         },
         "required": [
-          "maximum_degree_vertices",
-          "distance_to_set",
-          "maximum_distance_to_set",
-          "maximizing_vertices"
+            "maximum_degree_vertices",
+            "distance_to_set",
+            "maximum_distance_to_set",
+            "maximizing_vertices"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/graph-artifact-composition"
+    "task_id": "jacobian/graph-artifact-composition"
 }

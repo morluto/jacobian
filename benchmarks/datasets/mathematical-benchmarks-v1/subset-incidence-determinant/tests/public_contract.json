@@ -1,227 +1,112 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "diagonal_weights": {
-        "items": {
-          "enum": [
-            -1,
-            1
-          ]
-        },
-        "type": "array"
-      },
-      "general_determinant": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "n_equals_1": {
-            "enum": [
-              -1,
-              1
-            ]
-          },
-          "otherwise": {
-            "enum": [
-              -1,
-              1
-            ]
-          }
-        },
-        "required": [
-          "n_equals_1",
-          "otherwise"
-        ],
-        "type": "object"
-      },
-      "general_even_count": {
-        "additionalProperties": false,
-        "properties": {
-          "base": {
-            "minimum": 2,
-            "type": "integer"
-          },
-          "exponent_offset": {
-            "type": "integer"
-          },
-          "constant_offset": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "base",
-          "exponent_offset",
-          "constant_offset"
-        ],
-        "type": "object"
-      },
-      "mask_order": {
-        "items": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "type": "array",
-        "uniqueItems": true
-      },
-      "sample_n": {
-        "type": "integer"
-      },
-      "trace": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "determinant": {
-              "enum": [
-                -1,
-                1
-              ]
+            "diagonal_weights": {
+                "items": {
+                    "enum": [
+                        -1,
+                        1
+                    ]
+                },
+                "type": "array"
             },
-            "even_nonempty_count": {
-              "minimum": 0,
-              "type": "integer"
+            "general_determinant": {
+                "additionalProperties": false,
+                "properties": {
+                    "n_equals_1": {
+                        "enum": [
+                            -1,
+                            1
+                        ]
+                    },
+                    "otherwise": {
+                        "enum": [
+                            -1,
+                            1
+                        ]
+                    }
+                },
+                "required": [
+                    "n_equals_1",
+                    "otherwise"
+                ],
+                "type": "object"
             },
-            "n": {
-              "minimum": 1,
-              "type": "integer"
+            "general_even_count": {
+                "additionalProperties": false,
+                "properties": {
+                    "base": {
+                        "minimum": 2,
+                        "type": "integer"
+                    },
+                    "exponent_offset": {
+                        "type": "integer"
+                    },
+                    "constant_offset": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "base",
+                    "exponent_offset",
+                    "constant_offset"
+                ],
+                "type": "object"
+            },
+            "mask_order": {
+                "items": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "type": "array",
+                "uniqueItems": true
+            },
+            "sample_n": {
+                "type": "integer"
+            },
+            "trace": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "determinant": {
+                            "enum": [
+                                -1,
+                                1
+                            ]
+                        },
+                        "even_nonempty_count": {
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "n": {
+                            "minimum": 1,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "n",
+                        "even_nonempty_count",
+                        "determinant"
+                    ],
+                    "type": "object"
+                },
+                "type": "array"
             }
-          },
-          "required": [
-            "n",
-            "even_nonempty_count",
-            "determinant"
-          ],
-          "type": "object"
-        },
-        "type": "array"
-      }
-    },
-    "required": [
-      "sample_n",
-      "mask_order",
-      "diagonal_weights",
-      "trace",
-      "general_even_count",
-      "general_determinant"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "diagonal_weights": {
-            "items": {
-              "enum": [
-                -1,
-                1
-              ]
-            },
-            "type": "array"
-          },
-          "general_determinant": {
-            "additionalProperties": false,
-            "properties": {
-              "n_equals_1": {
-                "enum": [
-                  -1,
-                  1
-                ]
-              },
-              "otherwise": {
-                "enum": [
-                  -1,
-                  1
-                ]
-              }
-            },
-            "required": [
-              "n_equals_1",
-              "otherwise"
-            ],
-            "type": "object"
-          },
-          "general_even_count": {
-            "additionalProperties": false,
-            "properties": {
-              "base": {
-                "minimum": 2,
-                "type": "integer"
-              },
-              "exponent_offset": {
-                "type": "integer"
-              },
-              "constant_offset": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "base",
-              "exponent_offset",
-              "constant_offset"
-            ],
-            "type": "object"
-          },
-          "mask_order": {
-            "items": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "type": "array",
-            "uniqueItems": true
-          },
-          "sample_n": {
-            "type": "integer"
-          },
-          "trace": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "determinant": {
-                  "enum": [
-                    -1,
-                    1
-                  ]
-                },
-                "even_nonempty_count": {
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "n": {
-                  "minimum": 1,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "n",
-                "even_nonempty_count",
-                "determinant"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
         },
         "required": [
-          "sample_n",
-          "mask_order",
-          "diagonal_weights",
-          "trace",
-          "general_even_count",
-          "general_determinant"
+            "sample_n",
+            "mask_order",
+            "diagonal_weights",
+            "trace",
+            "general_even_count",
+            "general_determinant"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/subset-incidence-determinant"
+    "task_id": "jacobian/subset-incidence-determinant"
 }

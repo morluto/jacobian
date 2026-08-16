@@ -1,266 +1,131 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rational": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
         }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "closedness_conclusion": {
-        "const": "BOTH_SETS_CLOSED_BY_LOCAL_FINITENESS"
-      },
-      "epsilon_witnesses": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "distance": {
-              "$ref": "#/$defs/rational"
-            },
-            "epsilon": {
-              "$ref": "#/$defs/rational"
-            },
-            "index": {
-              "maximum": 100000,
-              "minimum": 4,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "epsilon",
-            "index",
-            "distance"
-          ],
-          "type": "object"
-        },
-        "maxItems": 8,
-        "minItems": 4,
-        "type": "array"
-      },
-      "local_finiteness_rule": {
-        "const": "FIRST_COORDINATE_EQUALS_UNBOUNDED_INDEX"
-      },
-      "missing_assumption": {
-        "const": "COMPACTNESS_OF_ONE_SET"
-      },
-      "natural_conclusion": {
-        "const": "SEPARATED_SETS"
-      },
-      "point_pairs": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "a": {
-              "items": {
-                "$ref": "#/$defs/rational"
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
-            },
-            "b": {
-              "items": {
-                "$ref": "#/$defs/rational"
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
-            },
-            "distance": {
-              "$ref": "#/$defs/rational"
-            },
-            "index": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "index",
-            "a",
-            "b",
-            "distance"
-          ],
-          "type": "object"
-        },
-        "maxItems": 8,
-        "minItems": 8,
-        "type": "array"
-      },
-      "predicted_conclusion": {
-        "const": "UNIFORM_POSITIVE_DISTANCE"
-      },
-      "semantic_relation": {
-        "const": "PREDICTION_STRICTLY_STRONGER"
-      },
-      "start_index": {
-        "maximum": 20,
-        "minimum": 4,
-        "type": "integer"
-      }
     },
-    "required": [
-      "start_index",
-      "point_pairs",
-      "epsilon_witnesses",
-      "natural_conclusion",
-      "predicted_conclusion",
-      "semantic_relation",
-      "missing_assumption",
-      "local_finiteness_rule",
-      "closedness_conclusion"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$defs": {
-      "rational": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
+            "closedness_conclusion": {
+                "const": "BOTH_SETS_CLOSED_BY_LOCAL_FINITENESS"
+            },
+            "epsilon_witnesses": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "distance": {
+                            "$ref": "#/$defs/rational"
+                        },
+                        "epsilon": {
+                            "$ref": "#/$defs/rational"
+                        },
+                        "index": {
+                            "maximum": 100000,
+                            "minimum": 4,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "epsilon",
+                        "index",
+                        "distance"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 8,
+                "minItems": 4,
+                "type": "array"
+            },
+            "local_finiteness_rule": {
+                "const": "FIRST_COORDINATE_EQUALS_UNBOUNDED_INDEX"
+            },
+            "missing_assumption": {
+                "const": "COMPACTNESS_OF_ONE_SET"
+            },
+            "natural_conclusion": {
+                "const": "SEPARATED_SETS"
+            },
+            "point_pairs": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "a": {
+                            "items": {
+                                "$ref": "#/$defs/rational"
+                            },
+                            "maxItems": 2,
+                            "minItems": 2,
+                            "type": "array"
+                        },
+                        "b": {
+                            "items": {
+                                "$ref": "#/$defs/rational"
+                            },
+                            "maxItems": 2,
+                            "minItems": 2,
+                            "type": "array"
+                        },
+                        "distance": {
+                            "$ref": "#/$defs/rational"
+                        },
+                        "index": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "index",
+                        "a",
+                        "b",
+                        "distance"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 8,
+                "minItems": 8,
+                "type": "array"
+            },
+            "predicted_conclusion": {
+                "const": "UNIFORM_POSITIVE_DISTANCE"
+            },
+            "semantic_relation": {
+                "const": "PREDICTION_STRICTLY_STRONGER"
+            },
+            "start_index": {
+                "maximum": 20,
+                "minimum": 4,
+                "type": "integer"
+            }
         },
         "required": [
-          "numerator",
-          "denominator"
+            "start_index",
+            "point_pairs",
+            "epsilon_witnesses",
+            "natural_conclusion",
+            "predicted_conclusion",
+            "semantic_relation",
+            "missing_assumption",
+            "local_finiteness_rule",
+            "closedness_conclusion"
         ],
         "type": "object"
-      }
     },
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "closedness_conclusion": {
-            "const": "BOTH_SETS_CLOSED_BY_LOCAL_FINITENESS"
-          },
-          "epsilon_witnesses": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "distance": {
-                  "$ref": "#/$defs/rational"
-                },
-                "epsilon": {
-                  "$ref": "#/$defs/rational"
-                },
-                "index": {
-                  "maximum": 100000,
-                  "minimum": 4,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "epsilon",
-                "index",
-                "distance"
-              ],
-              "type": "object"
-            },
-            "maxItems": 8,
-            "minItems": 4,
-            "type": "array"
-          },
-          "local_finiteness_rule": {
-            "const": "FIRST_COORDINATE_EQUALS_UNBOUNDED_INDEX"
-          },
-          "missing_assumption": {
-            "const": "COMPACTNESS_OF_ONE_SET"
-          },
-          "natural_conclusion": {
-            "const": "SEPARATED_SETS"
-          },
-          "point_pairs": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "a": {
-                  "items": {
-                    "$ref": "#/$defs/rational"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "b": {
-                  "items": {
-                    "$ref": "#/$defs/rational"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "distance": {
-                  "$ref": "#/$defs/rational"
-                },
-                "index": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "index",
-                "a",
-                "b",
-                "distance"
-              ],
-              "type": "object"
-            },
-            "maxItems": 8,
-            "minItems": 8,
-            "type": "array"
-          },
-          "predicted_conclusion": {
-            "const": "UNIFORM_POSITIVE_DISTANCE"
-          },
-          "semantic_relation": {
-            "const": "PREDICTION_STRICTLY_STRONGER"
-          },
-          "start_index": {
-            "maximum": 20,
-            "minimum": 4,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "start_index",
-          "point_pairs",
-          "epsilon_witnesses",
-          "natural_conclusion",
-          "predicted_conclusion",
-          "semantic_relation",
-          "missing_assumption",
-          "local_finiteness_rule",
-          "closedness_conclusion"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/closed-set-distance-strengthening-audit"
+    "task_id": "jacobian/closed-set-distance-strengthening-audit"
 }

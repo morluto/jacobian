@@ -1,350 +1,173 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "squareWitness": {
-      "additionalProperties": false,
-      "properties": {
-        "a": {
-          "maximum": 1000000,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "antecedent_holds": {
-          "type": "boolean"
-        },
-        "b": {
-          "maximum": 1000000,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "bounds_hold": {
-          "type": "boolean"
-        },
-        "frozen_formula_holds": {
-          "type": "boolean"
-        },
-        "k": {
-          "maximum": 1000000,
-          "minimum": 0,
-          "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "squareWitness": {
+            "additionalProperties": false,
+            "properties": {
+                "a": {
+                    "maximum": 1000000,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "antecedent_holds": {
+                    "type": "boolean"
+                },
+                "b": {
+                    "maximum": 1000000,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "bounds_hold": {
+                    "type": "boolean"
+                },
+                "frozen_formula_holds": {
+                    "type": "boolean"
+                },
+                "k": {
+                    "maximum": 1000000,
+                    "minimum": 0,
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "a",
+                "b",
+                "k",
+                "antecedent_holds",
+                "frozen_formula_holds",
+                "bounds_hold"
+            ],
+            "type": "object"
         }
-      },
-      "required": [
-        "a",
-        "b",
-        "k",
-        "antecedent_holds",
-        "frozen_formula_holds",
-        "bounds_hold"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "common_divisor_audit": {
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "a": {
-            "maximum": 1000000,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "b": {
-            "maximum": 1000000,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "d": {
-            "maximum": 1000000,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "defect": {
-            "enum": [
-              "TRIVIAL_EXISTENTIAL_WITNESS",
-              "NONE"
-            ]
-          },
-          "dividends": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "original_premise_holds": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "defect",
-          "a",
-          "b",
-          "d",
-          "dividends",
-          "original_premise_holds"
-        ],
-        "type": "object"
-      },
-      "source_theorem_status": {
-        "const": "NOT_ASSESSED"
-      },
-      "square_bound_audit": {
-        "additionalProperties": false,
-        "properties": {
-          "corrected_contract_ast": {
-            "additionalProperties": false,
-            "properties": {
-              "body": {
+            "common_divisor_audit": {
                 "additionalProperties": false,
                 "properties": {
-                  "antecedent": {
-                    "const": "a_plus_b_equals_k_squared"
-                  },
-                  "consequent": {
-                    "const": "k_between_declared_bounds"
-                  },
-                  "operator": {
-                    "enum": [
-                      "IMPLIES",
-                      "AND"
-                    ]
-                  }
-                },
-                "required": [
-                  "operator",
-                  "antecedent",
-                  "consequent"
-                ],
-                "type": "object"
-              },
-              "quantifier": {
-                "enum": [
-                  "FORALL",
-                  "EXISTS"
-                ]
-              },
-              "variable": {
-                "const": "k"
-              }
-            },
-            "required": [
-              "quantifier",
-              "variable",
-              "body"
-            ],
-            "type": "object"
-          },
-          "defect": {
-            "enum": [
-              "EXISTENTIAL_IMPLICATION_VACUITY",
-              "NONE"
-            ]
-          },
-          "nonvacuous_check": {
-            "$ref": "#/$defs/squareWitness"
-          },
-          "vacuity_witness": {
-            "$ref": "#/$defs/squareWitness"
-          }
-        },
-        "required": [
-          "defect",
-          "vacuity_witness",
-          "corrected_contract_ast",
-          "nonvacuous_check"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "square_bound_audit",
-      "common_divisor_audit",
-      "source_theorem_status"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "squareWitness": {
-        "additionalProperties": false,
-        "properties": {
-          "a": {
-            "maximum": 1000000,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "antecedent_holds": {
-            "type": "boolean"
-          },
-          "b": {
-            "maximum": 1000000,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "bounds_hold": {
-            "type": "boolean"
-          },
-          "frozen_formula_holds": {
-            "type": "boolean"
-          },
-          "k": {
-            "maximum": 1000000,
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "a",
-          "b",
-          "k",
-          "antecedent_holds",
-          "frozen_formula_holds",
-          "bounds_hold"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "common_divisor_audit": {
-            "additionalProperties": false,
-            "properties": {
-              "a": {
-                "maximum": 1000000,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "b": {
-                "maximum": 1000000,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "d": {
-                "maximum": 1000000,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "defect": {
-                "enum": [
-                  "TRIVIAL_EXISTENTIAL_WITNESS",
-                  "NONE"
-                ]
-              },
-              "dividends": {
-                "items": {
-                  "type": "integer"
-                },
-                "maxItems": 3,
-                "minItems": 3,
-                "type": "array"
-              },
-              "original_premise_holds": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "defect",
-              "a",
-              "b",
-              "d",
-              "dividends",
-              "original_premise_holds"
-            ],
-            "type": "object"
-          },
-          "source_theorem_status": {
-            "const": "NOT_ASSESSED"
-          },
-          "square_bound_audit": {
-            "additionalProperties": false,
-            "properties": {
-              "corrected_contract_ast": {
-                "additionalProperties": false,
-                "properties": {
-                  "body": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "antecedent": {
-                        "const": "a_plus_b_equals_k_squared"
-                      },
-                      "consequent": {
-                        "const": "k_between_declared_bounds"
-                      },
-                      "operator": {
-                        "enum": [
-                          "IMPLIES",
-                          "AND"
-                        ]
-                      }
+                    "a": {
+                        "maximum": 1000000,
+                        "minimum": 1,
+                        "type": "integer"
                     },
-                    "required": [
-                      "operator",
-                      "antecedent",
-                      "consequent"
-                    ],
-                    "type": "object"
-                  },
-                  "quantifier": {
-                    "enum": [
-                      "FORALL",
-                      "EXISTS"
-                    ]
-                  },
-                  "variable": {
-                    "const": "k"
-                  }
+                    "b": {
+                        "maximum": 1000000,
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "d": {
+                        "maximum": 1000000,
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "defect": {
+                        "enum": [
+                            "TRIVIAL_EXISTENTIAL_WITNESS",
+                            "NONE"
+                        ]
+                    },
+                    "dividends": {
+                        "items": {
+                            "type": "integer"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                    },
+                    "original_premise_holds": {
+                        "type": "boolean"
+                    }
                 },
                 "required": [
-                  "quantifier",
-                  "variable",
-                  "body"
+                    "defect",
+                    "a",
+                    "b",
+                    "d",
+                    "dividends",
+                    "original_premise_holds"
                 ],
                 "type": "object"
-              },
-              "defect": {
-                "enum": [
-                  "EXISTENTIAL_IMPLICATION_VACUITY",
-                  "NONE"
-                ]
-              },
-              "nonvacuous_check": {
-                "$ref": "#/$defs/squareWitness"
-              },
-              "vacuity_witness": {
-                "$ref": "#/$defs/squareWitness"
-              }
             },
-            "required": [
-              "defect",
-              "vacuity_witness",
-              "corrected_contract_ast",
-              "nonvacuous_check"
-            ],
-            "type": "object"
-          }
+            "source_theorem_status": {
+                "const": "NOT_ASSESSED"
+            },
+            "square_bound_audit": {
+                "additionalProperties": false,
+                "properties": {
+                    "corrected_contract_ast": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "body": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "antecedent": {
+                                        "const": "a_plus_b_equals_k_squared"
+                                    },
+                                    "consequent": {
+                                        "const": "k_between_declared_bounds"
+                                    },
+                                    "operator": {
+                                        "enum": [
+                                            "IMPLIES",
+                                            "AND"
+                                        ]
+                                    }
+                                },
+                                "required": [
+                                    "operator",
+                                    "antecedent",
+                                    "consequent"
+                                ],
+                                "type": "object"
+                            },
+                            "quantifier": {
+                                "enum": [
+                                    "FORALL",
+                                    "EXISTS"
+                                ]
+                            },
+                            "variable": {
+                                "const": "k"
+                            }
+                        },
+                        "required": [
+                            "quantifier",
+                            "variable",
+                            "body"
+                        ],
+                        "type": "object"
+                    },
+                    "defect": {
+                        "enum": [
+                            "EXISTENTIAL_IMPLICATION_VACUITY",
+                            "NONE"
+                        ]
+                    },
+                    "nonvacuous_check": {
+                        "$ref": "#/$defs/squareWitness"
+                    },
+                    "vacuity_witness": {
+                        "$ref": "#/$defs/squareWitness"
+                    }
+                },
+                "required": [
+                    "defect",
+                    "vacuity_witness",
+                    "corrected_contract_ast",
+                    "nonvacuous_check"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "square_bound_audit",
-          "common_divisor_audit",
-          "source_theorem_status"
+            "square_bound_audit",
+            "common_divisor_audit",
+            "source_theorem_status"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/generated-lemma-vacuity-audit"
+    "task_id": "jacobian/generated-lemma-vacuity-audit"
 }

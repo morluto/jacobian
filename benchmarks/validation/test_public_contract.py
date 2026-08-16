@@ -458,6 +458,15 @@ class TestSyncCheck:
         with pytest.raises(ContractError, match="cannot read"):
             load_contract(bad)
 
+    @pytest.mark.parametrize("payload", ("[]", "null", "1"))
+    def test_load_contract_rejects_non_object_json(
+        self, tmp_path: Path, payload: str
+    ) -> None:
+        bad = tmp_path / "bad.json"
+        bad.write_text(payload, encoding="utf-8")
+        with pytest.raises(ContractError, match="top-level JSON must be an object"):
+            load_contract(bad)
+
 
 # ---------------------------------------------------------------------------
 # CLI entry point

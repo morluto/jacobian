@@ -12,6 +12,7 @@
               "items": {
                 "type": "integer"
               },
+              "maxItems": 1000,
               "type": "array"
             },
             "b_max": {
@@ -24,12 +25,14 @@
               "items": {
                 "type": "integer"
               },
+              "maxItems": 1000,
               "type": "array"
             },
             "cancellation_indices": {
               "items": {
                 "type": "integer"
               },
+              "maxItems": 1000,
               "type": "array",
               "uniqueItems": true
             },
@@ -40,6 +43,7 @@
               "items": {
                 "type": "integer"
               },
+              "maxItems": 1000,
               "type": "array"
             }
           },

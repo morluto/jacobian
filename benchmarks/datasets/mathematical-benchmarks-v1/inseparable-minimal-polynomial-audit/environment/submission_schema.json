@@ -99,6 +99,7 @@
             },
             "residue_contradiction": {
               "items": false,
+              "maxItems": 1000,
               "prefixItems": [
                 {
                   "const": 1

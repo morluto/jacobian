@@ -11,17 +11,6 @@
     "result": {
       "additionalProperties": false,
       "properties": {
-        "defects": {
-          "const": [
-            "BAND_SUPPORT_DOES_NOT_IMPLY_SYMMETRY",
-            "EXISTENCE_OF_FULL_RANK_COMPLETION_DOES_NOT_LOWER_BOUND_MINIMUM"
-          ]
-        },
-        "dimension": {
-          "maximum": 14,
-          "minimum": 8,
-          "type": "integer"
-        },
         "full_rank_completion": {
           "$ref": "#/$defs/matrix"
         },
@@ -33,8 +22,6 @@
         }
       },
       "required": [
-        "dimension",
-        "defects",
         "pattern",
         "low_rank_completion",
         "full_rank_completion"

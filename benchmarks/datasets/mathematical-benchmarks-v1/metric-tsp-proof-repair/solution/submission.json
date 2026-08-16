@@ -1,66 +1,63 @@
 {
-  "result": {
-    "corrected_claim": "DOUBLE_TREE_TWO_APPROXIMATION",
-    "euler_walk": [
-      "A",
-      "B",
-      "E",
-      "B",
-      "A",
-      "D",
-      "C",
-      "D",
-      "A",
-      "F",
-      "A"
-    ],
-    "flaw_location": "STEP_4",
-    "invalid_inference": "SHORTCUTTING_PRESERVES_EXACT_COST",
-    "mst_edges": [
-      [
-        "A",
-        "B"
-      ],
-      [
-        "B",
-        "E"
-      ],
-      [
-        "C",
-        "D"
-      ],
-      [
-        "A",
-        "F"
-      ],
-      [
-        "A",
-        "D"
-      ]
-    ],
-    "optimal_tour": [
-      "A",
-      "B",
-      "E",
-      "F",
-      "C",
-      "D",
-      "A"
-    ],
-    "shortcut_tour": [
-      "A",
-      "B",
-      "E",
-      "D",
-      "C",
-      "F",
-      "A"
-    ],
-    "weights": {
-      "euler": 40,
-      "mst": 20,
-      "optimal": 32,
-      "shortcut": 38
+    "result": {
+        "euler_walk": [
+            "A",
+            "B",
+            "E",
+            "B",
+            "A",
+            "D",
+            "C",
+            "D",
+            "A",
+            "F",
+            "A"
+        ],
+        "mst_edges": [
+            [
+                "A",
+                "B"
+            ],
+            [
+                "B",
+                "E"
+            ],
+            [
+                "C",
+                "D"
+            ],
+            [
+                "A",
+                "F"
+            ],
+            [
+                "A",
+                "D"
+            ]
+        ],
+        "optimal_tour": [
+            "A",
+            "B",
+            "E",
+            "F",
+            "C",
+            "D",
+            "A"
+        ],
+        "shortcut_tour": [
+            "A",
+            "B",
+            "E",
+            "D",
+            "C",
+            "F",
+            "A"
+        ],
+        "weights": {
+            "euler": 40,
+            "mst": 20,
+            "optimal": 32,
+            "shortcut": 38
+        }
     }
-  }
 }

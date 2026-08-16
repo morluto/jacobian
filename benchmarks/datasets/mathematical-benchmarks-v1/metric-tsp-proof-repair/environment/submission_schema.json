@@ -5,9 +5,6 @@
     "result": {
       "additionalProperties": false,
       "properties": {
-        "corrected_claim": {
-          "const": "DOUBLE_TREE_TWO_APPROXIMATION"
-        },
         "euler_walk": {
           "items": {
             "enum": [
@@ -22,12 +19,6 @@
           "maxItems": 11,
           "minItems": 11,
           "type": "array"
-        },
-        "flaw_location": {
-          "const": "STEP_4"
-        },
-        "invalid_inference": {
-          "const": "SHORTCUTTING_PRESERVES_EXACT_COST"
         },
         "mst_edges": {
           "items": {
@@ -109,9 +100,6 @@
         }
       },
       "required": [
-        "flaw_location",
-        "invalid_inference",
-        "corrected_claim",
         "mst_edges",
         "euler_walk",
         "shortcut_tour",

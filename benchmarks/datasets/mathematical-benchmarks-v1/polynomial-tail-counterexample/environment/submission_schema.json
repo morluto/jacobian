@@ -23,6 +23,7 @@
             ],
             "type": "object"
           },
+          "maxItems": 1000,
           "minItems": 3,
           "type": "array"
         },
@@ -44,6 +45,7 @@
             ],
             "type": "object"
           },
+          "maxItems": 1000,
           "type": "array"
         },
         "q_coefficients": {
@@ -64,6 +66,7 @@
             ],
             "type": "object"
           },
+          "maxItems": 1000,
           "minItems": 2,
           "type": "array"
         },
@@ -85,6 +88,7 @@
             ],
             "type": "object"
           },
+          "maxItems": 1000,
           "type": "array"
         },
         "x1": {

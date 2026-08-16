@@ -5,9 +5,6 @@
     "result": {
       "additionalProperties": false,
       "properties": {
-        "conclusion": {
-          "const": "DIVISIBLE_FOR_ALL_POSITIVE_N"
-        },
         "induction_cases": {
           "items": {
             "additionalProperties": false,
@@ -100,8 +97,7 @@
         "initial_power_sums",
         "recurrence_coefficients",
         "terms",
-        "induction_cases",
-        "conclusion"
+        "induction_cases"
       ],
       "type": "object"
     }

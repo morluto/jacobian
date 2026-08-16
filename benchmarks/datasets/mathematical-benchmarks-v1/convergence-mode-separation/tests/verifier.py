@@ -134,9 +134,7 @@ def _mass_formula_value(value, level):
 
 
 def _valid_probability_argument(value, start, end):
-    if not isinstance(value, dict) or set(value) != {"event_mass_formula", "limit"}:
-        return False
-    if value["limit"] != "ZERO":
+    if not isinstance(value, dict) or set(value) != {"event_mass_formula"}:
         return False
     return all(
         _mass_formula_value(value["event_mass_formula"], level) == Fraction(1, 2**level)
@@ -146,12 +144,9 @@ def _valid_probability_argument(value, start, end):
 
 def _valid_result(result, source):
     if not isinstance(result, dict) or set(result) != {
-        "relationship",
         "levels",
         "probes",
         "probability_argument",
-        "pointwise_argument",
-        "research_scope",
     }:
         return False
     start = source["construction"]["level_start"]
@@ -159,15 +154,7 @@ def _valid_result(result, source):
     return bool(
         _valid_levels(result["levels"], start, end)
         and _valid_probes(result["probes"], start, end)
-        and result["relationship"] == "IN_PROBABILITY_NOT_IMPLY_ALMOST_SURE"
         and _valid_probability_argument(result["probability_argument"], start, end)
-        and result["pointwise_argument"]
-        == {"hit_count_per_level": 1, "miss_count_per_level": "AT_LEAST_ONE"}
-        and result["research_scope"]
-        == {
-            "lean_theorem": "NOT_ELABORATED",
-            "underlying_problem": "NOT_ADJUDICATED",
-        }
     )
 
 

@@ -47,6 +47,7 @@
             "pattern": "^P(?:0[0-9]|1[0-2])$",
             "type": "string"
           },
+          "maxItems": 1000,
           "minItems": 3,
           "type": "array",
           "uniqueItems": true

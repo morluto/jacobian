@@ -17,6 +17,7 @@
                 "items": {
                   "type": "string"
                 },
+                "maxItems": 1000,
                 "type": "array",
                 "uniqueItems": true
               },
@@ -43,6 +44,7 @@
           "items": {
             "type": "string"
           },
+          "maxItems": 1000,
           "type": "array",
           "uniqueItems": true
         },

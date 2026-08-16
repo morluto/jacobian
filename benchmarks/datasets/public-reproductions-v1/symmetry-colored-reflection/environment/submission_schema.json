@@ -11,10 +11,13 @@
               "items": {
                 "type": "string"
               },
+              "maxItems": 1000,
               "type": "array"
             },
+            "maxItems": 1000,
             "type": "array"
           },
+          "maxItems": 1000,
           "type": "array"
         },
         "vertex_orbits": {
@@ -22,8 +25,10 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 1000,
             "type": "array"
           },
+          "maxItems": 1000,
           "type": "array"
         }
       },

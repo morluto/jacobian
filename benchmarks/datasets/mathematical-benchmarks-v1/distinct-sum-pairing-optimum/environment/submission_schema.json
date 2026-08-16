@@ -12,6 +12,7 @@
         "pairs": {
           "items": {
             "items": false,
+            "maxItems": 1000,
             "minItems": 2,
             "prefixItems": [
               {
@@ -23,12 +24,14 @@
             ],
             "type": "array"
           },
+          "maxItems": 1000,
           "type": "array"
         },
         "sums": {
           "items": {
             "type": "integer"
           },
+          "maxItems": 1000,
           "type": "array"
         }
       },

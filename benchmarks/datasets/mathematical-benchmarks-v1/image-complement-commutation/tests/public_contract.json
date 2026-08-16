@@ -1,207 +1,213 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "cases": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "checked_subsets": {
-              "maximum": 32,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "classification": {
-              "enum": [
-                "BIJECTIVE",
-                "INJECTIVE_NOT_SURJECTIVE",
-                "SURJECTIVE_NOT_INJECTIVE"
-              ]
-            },
-            "commutes": {
-              "type": "boolean"
-            },
-            "first_failure": {
-              "oneOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "items": {
-                    "maximum": 4,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "type": "array",
-                  "uniqueItems": true
-                }
-              ]
-            },
-            "id": {
-              "type": "string"
-            },
-            "left_image": {
-              "oneOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "items": {
-                    "maximum": 4,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "type": "array",
-                  "uniqueItems": true
-                }
-              ]
-            },
-            "right_complement": {
-              "oneOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "items": {
-                    "maximum": 4,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "type": "array",
-                  "uniqueItems": true
-                }
-              ]
-            }
-          },
-          "required": [
-            "id",
-            "classification",
-            "commutes",
-            "checked_subsets",
-            "first_failure",
-            "left_image",
-            "right_complement"
-          ],
-          "type": "object"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      }
-    },
-    "required": [
-      "cases"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "cases": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "checked_subsets": {
-                  "maximum": 32,
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "classification": {
-                  "enum": [
-                    "BIJECTIVE",
-                    "INJECTIVE_NOT_SURJECTIVE",
-                    "SURJECTIVE_NOT_INJECTIVE"
-                  ]
-                },
-                "commutes": {
-                  "type": "boolean"
-                },
-                "first_failure": {
-                  "oneOf": [
-                    {
-                      "type": "null"
+            "cases": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "checked_subsets": {
+                            "maximum": 32,
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "classification": {
+                            "enum": [
+                                "BIJECTIVE",
+                                "INJECTIVE_NOT_SURJECTIVE",
+                                "SURJECTIVE_NOT_INJECTIVE"
+                            ]
+                        },
+                        "commutes": {
+                            "type": "boolean"
+                        },
+                        "first_failure": {
+                            "oneOf": [
+                                {
+                                    "type": "null"
+                                },
+                                {
+                                    "items": {
+                                        "maximum": 4,
+                                        "minimum": 0,
+                                        "type": "integer"
+                                    },
+                                    "type": "array",
+                                    "uniqueItems": true,
+                                    "maxItems": 1000
+                                }
+                            ]
+                        },
+                        "id": {
+                            "type": "string"
+                        },
+                        "left_image": {
+                            "oneOf": [
+                                {
+                                    "type": "null"
+                                },
+                                {
+                                    "items": {
+                                        "maximum": 4,
+                                        "minimum": 0,
+                                        "type": "integer"
+                                    },
+                                    "type": "array",
+                                    "uniqueItems": true,
+                                    "maxItems": 1000
+                                }
+                            ]
+                        },
+                        "right_complement": {
+                            "oneOf": [
+                                {
+                                    "type": "null"
+                                },
+                                {
+                                    "items": {
+                                        "maximum": 4,
+                                        "minimum": 0,
+                                        "type": "integer"
+                                    },
+                                    "type": "array",
+                                    "uniqueItems": true,
+                                    "maxItems": 1000
+                                }
+                            ]
+                        }
                     },
-                    {
-                      "items": {
-                        "maximum": 4,
-                        "minimum": 0,
-                        "type": "integer"
-                      },
-                      "type": "array",
-                      "uniqueItems": true
-                    }
-                  ]
+                    "required": [
+                        "id",
+                        "classification",
+                        "commutes",
+                        "checked_subsets",
+                        "first_failure",
+                        "left_image",
+                        "right_complement"
+                    ],
+                    "type": "object"
                 },
-                "id": {
-                  "type": "string"
-                },
-                "left_image": {
-                  "oneOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "items": {
-                        "maximum": 4,
-                        "minimum": 0,
-                        "type": "integer"
-                      },
-                      "type": "array",
-                      "uniqueItems": true
-                    }
-                  ]
-                },
-                "right_complement": {
-                  "oneOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "items": {
-                        "maximum": 4,
-                        "minimum": 0,
-                        "type": "integer"
-                      },
-                      "type": "array",
-                      "uniqueItems": true
-                    }
-                  ]
-                }
-              },
-              "required": [
-                "id",
-                "classification",
-                "commutes",
-                "checked_subsets",
-                "first_failure",
-                "left_image",
-                "right_complement"
-              ],
-              "type": "object"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          }
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+            }
         },
         "required": [
-          "cases"
+            "cases"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/image-complement-commutation"
+    "submission_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+            "result"
+        ],
+        "properties": {
+            "result": {
+                "additionalProperties": false,
+                "properties": {
+                    "cases": {
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "checked_subsets": {
+                                    "maximum": 32,
+                                    "minimum": 1,
+                                    "type": "integer"
+                                },
+                                "classification": {
+                                    "enum": [
+                                        "BIJECTIVE",
+                                        "INJECTIVE_NOT_SURJECTIVE",
+                                        "SURJECTIVE_NOT_INJECTIVE"
+                                    ]
+                                },
+                                "commutes": {
+                                    "type": "boolean"
+                                },
+                                "first_failure": {
+                                    "oneOf": [
+                                        {
+                                            "type": "null"
+                                        },
+                                        {
+                                            "items": {
+                                                "maximum": 4,
+                                                "minimum": 0,
+                                                "type": "integer"
+                                            },
+                                            "type": "array",
+                                            "uniqueItems": true,
+                                            "maxItems": 1000
+                                        }
+                                    ]
+                                },
+                                "id": {
+                                    "type": "string"
+                                },
+                                "left_image": {
+                                    "oneOf": [
+                                        {
+                                            "type": "null"
+                                        },
+                                        {
+                                            "items": {
+                                                "maximum": 4,
+                                                "minimum": 0,
+                                                "type": "integer"
+                                            },
+                                            "type": "array",
+                                            "uniqueItems": true,
+                                            "maxItems": 1000
+                                        }
+                                    ]
+                                },
+                                "right_complement": {
+                                    "oneOf": [
+                                        {
+                                            "type": "null"
+                                        },
+                                        {
+                                            "items": {
+                                                "maximum": 4,
+                                                "minimum": 0,
+                                                "type": "integer"
+                                            },
+                                            "type": "array",
+                                            "uniqueItems": true,
+                                            "maxItems": 1000
+                                        }
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "id",
+                                "classification",
+                                "commutes",
+                                "checked_subsets",
+                                "first_failure",
+                                "left_image",
+                                "right_complement"
+                            ],
+                            "type": "object"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                    }
+                },
+                "required": [
+                    "cases"
+                ],
+                "type": "object"
+            }
+        }
+    },
+    "task_id": "jacobian/image-complement-commutation"
 }

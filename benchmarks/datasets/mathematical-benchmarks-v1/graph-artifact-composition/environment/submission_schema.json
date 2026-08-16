@@ -23,18 +23,21 @@
             ],
             "type": "object"
           },
+          "maxItems": 1000,
           "type": "array"
         },
         "maximizing_vertices": {
           "items": {
             "type": "string"
           },
+          "maxItems": 1000,
           "type": "array"
         },
         "maximum_degree_vertices": {
           "items": {
             "type": "string"
           },
+          "maxItems": 1000,
           "type": "array"
         },
         "maximum_distance_to_set": {

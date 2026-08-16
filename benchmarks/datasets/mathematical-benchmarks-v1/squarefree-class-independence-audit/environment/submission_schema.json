@@ -29,9 +29,6 @@
           ],
           "type": "object"
         },
-        "consequence": {
-          "const": "AT_LEAST_FOUR_SQUAREFREE_CLASSES"
-        },
         "modular_obstruction": {
           "additionalProperties": false,
           "properties": {
@@ -48,6 +45,7 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "maxItems": 1000,
               "minItems": 2,
               "type": "array",
               "uniqueItems": true
@@ -64,16 +62,11 @@
             "maximum_squares_ruled_out"
           ],
           "type": "object"
-        },
-        "ordered_pair_count": {
-          "const": 2023
         }
       },
       "required": [
-        "ordered_pair_count",
         "classification",
-        "modular_obstruction",
-        "consequence"
+        "modular_obstruction"
       ],
       "type": "object"
     }

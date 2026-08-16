@@ -9,6 +9,7 @@
           "items": {
             "type": "integer"
           },
+          "maxItems": 1000,
           "minItems": 2,
           "type": "array"
         },
@@ -19,6 +20,7 @@
           "items": {
             "type": "integer"
           },
+          "maxItems": 1000,
           "minItems": 1,
           "type": "array"
         },
@@ -26,6 +28,7 @@
           "items": {
             "type": "integer"
           },
+          "maxItems": 1000,
           "minItems": 1,
           "type": "array"
         },
@@ -33,6 +36,7 @@
           "items": {
             "type": "integer"
           },
+          "maxItems": 1000,
           "minItems": 1,
           "type": "array"
         }

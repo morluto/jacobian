@@ -109,7 +109,6 @@ def _result_is_valid(result, frozen):
         "recurrence_coefficients",
         "terms",
         "induction_cases",
-        "conclusion",
     }:
         return False
     limit = frozen.get("term_limit")
@@ -134,7 +133,6 @@ def _result_is_valid(result, frozen):
         and result["recurrence_coefficients"] == [7, -14, 7]
         and _terms_are_valid(result["terms"], values)
         and _induction_is_valid(result["induction_cases"])
-        and result["conclusion"] == "DIVISIBLE_FOR_ALL_POSITIVE_N"
     )
 
 

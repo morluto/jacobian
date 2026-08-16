@@ -61,6 +61,7 @@
             ],
             "type": "object"
           },
+          "maxItems": 1000,
           "minItems": 1,
           "type": "array",
           "uniqueItems": true

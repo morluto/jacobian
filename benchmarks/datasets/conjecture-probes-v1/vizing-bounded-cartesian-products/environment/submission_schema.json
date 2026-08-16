@@ -40,6 +40,7 @@
                   "minimum": 0,
                   "type": "integer"
                 },
+                "maxItems": 1000,
                 "minItems": 1,
                 "type": "array"
               },
@@ -101,6 +102,7 @@
                   "minimum": 0,
                   "type": "integer"
                 },
+                "maxItems": 1000,
                 "minItems": 1,
                 "type": "array"
               },
@@ -114,6 +116,7 @@
                   "minItems": 2,
                   "type": "array"
                 },
+                "maxItems": 1000,
                 "minItems": 1,
                 "type": "array"
               },
@@ -138,6 +141,7 @@
                   "minimum": 0,
                   "type": "integer"
                 },
+                "maxItems": 1000,
                 "minItems": 1,
                 "type": "array"
               }

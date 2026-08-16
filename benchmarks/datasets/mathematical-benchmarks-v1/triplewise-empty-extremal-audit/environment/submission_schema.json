@@ -16,9 +16,11 @@
                     "minimum": 0,
                     "type": "integer"
                   },
+                  "maxItems": 1000,
                   "type": "array",
                   "uniqueItems": true
                 },
+                "maxItems": 1000,
                 "type": "array"
               },
               "n": {

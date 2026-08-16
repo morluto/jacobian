@@ -12,6 +12,7 @@
               "items": {
                 "type": "integer"
               },
+              "maxItems": 1000,
               "type": "array"
             },
             "first_constant": {
@@ -21,6 +22,7 @@
               "items": {
                 "type": "integer"
               },
+              "maxItems": 1000,
               "type": "array"
             },
             "second_constant": {
@@ -82,6 +84,7 @@
               "items": {
                 "const": "1/2"
               },
+              "maxItems": 1000,
               "type": "array"
             }
           },

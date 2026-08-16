@@ -13,6 +13,7 @@
               "OTHER"
             ]
           },
+          "maxItems": 1000,
           "type": "array",
           "uniqueItems": true
         },

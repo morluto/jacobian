@@ -10,15 +10,18 @@
             "items": {
               "type": "integer"
             },
+            "maxItems": 1000,
             "type": "array",
             "uniqueItems": true
           },
+          "maxItems": 1000,
           "type": "array"
         },
         "covering_part_references": {
           "items": {
             "const": 0
           },
+          "maxItems": 1000,
           "type": "array"
         },
         "duplicate_indices": {
@@ -44,6 +47,7 @@
               "items": {
                 "type": "integer"
               },
+              "maxItems": 1000,
               "type": "array",
               "uniqueItems": true
             },
@@ -68,6 +72,7 @@
           "items": {
             "type": "integer"
           },
+          "maxItems": 1000,
           "type": "array",
           "uniqueItems": true
         },
@@ -75,6 +80,7 @@
           "items": {
             "type": "integer"
           },
+          "maxItems": 1000,
           "type": "array",
           "uniqueItems": true
         },

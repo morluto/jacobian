@@ -34,6 +34,7 @@
           "items": {
             "type": "object"
           },
+          "maxItems": 1000,
           "type": "array"
         },
         "right_fourth_power": {

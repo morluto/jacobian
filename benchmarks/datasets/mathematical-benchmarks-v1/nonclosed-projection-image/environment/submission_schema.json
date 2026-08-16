@@ -28,6 +28,7 @@
           "items": {
             "$ref": "#/$defs/rational"
           },
+          "maxItems": 1000,
           "minItems": 100,
           "type": "array"
         },
@@ -70,6 +71,7 @@
             ],
             "type": "object"
           },
+          "maxItems": 1000,
           "type": "array"
         },
         "preimage_growth": {

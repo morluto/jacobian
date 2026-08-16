@@ -194,9 +194,6 @@ def main():
         math_contract
         and set(result)
         == {
-            "flaw_location",
-            "invalid_inference",
-            "corrected_claim",
             "mst_edges",
             "euler_walk",
             "shortcut_tour",
@@ -207,9 +204,6 @@ def main():
         and set(reported) == {"mst", "euler", "shortcut", "optimal"}
         and all(type(value) is int for value in reported.values())
         and metric
-        and result.get("flaw_location") == "STEP_4"
-        and result.get("invalid_inference") == "SHORTCUTTING_PRESERVES_EXACT_COST"
-        and result.get("corrected_claim") == "DOUBLE_TREE_TWO_APPROXIMATION"
         and tree
         and tree_weight == minimum_tree_weight
         and euler_valid

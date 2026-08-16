@@ -1,79 +1,79 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "assignment": {
-        "additionalProperties": true,
-        "properties": {
-          "x": {
-            "type": "boolean"
-          },
-          "y": {
-            "type": "boolean"
-          },
-          "z": {
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "status": {
-        "enum": [
-          "SATISFIABLE",
-          "UNSATISFIABLE"
-        ]
-      }
-    },
-    "required": [
-      "status",
-      "assignment"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "assignment": {
-            "additionalProperties": true,
-            "properties": {
-              "x": {
-                "type": "boolean"
-              },
-              "y": {
-                "type": "boolean"
-              },
-              "z": {
-                "type": "boolean"
-              }
+            "assignment": {
+                "additionalProperties": true,
+                "properties": {
+                    "x": {
+                        "type": "boolean"
+                    },
+                    "y": {
+                        "type": "boolean"
+                    },
+                    "z": {
+                        "type": "boolean"
+                    }
+                },
+                "type": "object"
             },
-            "type": "object"
-          },
-          "status": {
-            "enum": [
-              "SATISFIABLE",
-              "UNSATISFIABLE"
-            ]
-          }
+            "status": {
+                "enum": [
+                    "SATISFIABLE",
+                    "UNSATISFIABLE"
+                ]
+            }
         },
         "required": [
-          "status",
-          "assignment"
+            "status",
+            "assignment"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/sat-bool-mus"
+    "submission_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+            "result"
+        ],
+        "properties": {
+            "result": {
+                "additionalProperties": false,
+                "properties": {
+                    "assignment": {
+                        "additionalProperties": true,
+                        "properties": {
+                            "x": {
+                                "type": "boolean"
+                            },
+                            "y": {
+                                "type": "boolean"
+                            },
+                            "z": {
+                                "type": "boolean"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "status": {
+                        "enum": [
+                            "SATISFIABLE",
+                            "UNSATISFIABLE"
+                        ]
+                    }
+                },
+                "required": [
+                    "status",
+                    "assignment"
+                ],
+                "type": "object"
+            }
+        }
+    },
+    "task_id": "jacobian/sat-bool-mus"
 }

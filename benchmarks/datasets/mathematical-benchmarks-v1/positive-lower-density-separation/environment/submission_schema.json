@@ -95,9 +95,6 @@
           ],
           "type": "object"
         },
-        "family": {
-          "const": "ALTERNATING_GEOMETRIC_BLOCKS"
-        },
         "levels": {
           "items": {
             "$ref": "#/$defs/level"
@@ -109,29 +106,16 @@
         "lower_density": {
           "$ref": "#/$defs/rational"
         },
-        "lower_density_positive": {
-          "const": true
-        },
-        "natural_density_exists": {
-          "const": false
-        },
-        "semantic_relation": {
-          "const": "FORMALIZED_PREDICATE_STRICTLY_STRONGER"
-        },
         "upper_density": {
           "$ref": "#/$defs/rational"
         }
       },
       "required": [
         "base",
-        "family",
         "count_formula",
         "levels",
         "lower_density",
-        "upper_density",
-        "lower_density_positive",
-        "natural_density_exists",
-        "semantic_relation"
+        "upper_density"
       ],
       "type": "object"
     }

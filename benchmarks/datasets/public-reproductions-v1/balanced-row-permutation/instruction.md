@@ -14,7 +14,7 @@ position binding, exactly-once use of all input positions, all row
 permutations, and all column histograms.  Alternative valid decompositions are
 accepted.
 Do not claim proof-assistant verification; the result is an exact computation
-for this frozen instance.  Claim at most `COMPUTED` assurance.
+for this frozen instance.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

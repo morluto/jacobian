@@ -68,7 +68,7 @@ def test_unreduced_probe_is_accepted(tmp_path: Path) -> None:
 def test_rejects_unbounded_research_status_fact(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
-    submission["result"]["research_scope"]["underlying_problem"] = "ADJUDICATED"
+    submission["result"]["research_scope"] = {"underlying_problem": "ADJUDICATED"}
     _write_json(app / "submission.json", submission)
 
     rejected = _run_verifier(task, app, logs)
@@ -81,10 +81,7 @@ def test_result_requires_checked_structural_convergence_arguments(
 ) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
-    submission["result"]["pointwise_argument"] = {
-        "hit_count_per_level": 1,
-        "miss_count_per_level": "UNSPECIFIED",
-    }
+    submission["result"]["pointwise_argument"] = True
     _write_json(app / "submission.json", submission)
 
     rejected = _run_verifier(task, app, logs)

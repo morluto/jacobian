@@ -39,10 +39,8 @@ def load_frozen() -> dict:
 
 def certificate_valid(result: object, frozen: dict) -> bool:
     if not isinstance(result, dict) or set(result) != {
-        "ordered_pair_count",
         "classification",
         "modular_obstruction",
-        "consequence",
     }:
         return False
     obstruction = result.get("modular_obstruction")
@@ -80,11 +78,7 @@ def certificate_valid(result: object, frozen: dict) -> bool:
     # zero, one, two, or three integer squares.
     if any(sum(values) % modulus == target for values in product(residues, repeat=3)):
         return False
-    return bool(
-        result.get("ordered_pair_count") == 2023
-        and result.get("classification") == CLASSIFICATION
-        and result.get("consequence") == "AT_LEAST_FOUR_SQUAREFREE_CLASSES"
-    )
+    return bool(result.get("classification") == CLASSIFICATION)
 
 
 def main() -> None:

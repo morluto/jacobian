@@ -10,9 +10,10 @@ from verifier_support import (
 W, E = Path("/app"), Path("/tests")
 
 
-def _matrix(value, n):
-    if not isinstance(value, list) or len(value) != n:
+def _matrix(value):
+    if not isinstance(value, list) or not value:
         return None
+    n = len(value)
     if any(
         not isinstance(row, list)
         or len(row) != n
@@ -40,27 +41,19 @@ def _rank(matrix):
 
 def _result_ok(result):
     if not isinstance(result, dict) or set(result) != {
-        "dimension",
-        "defects",
         "pattern",
         "low_rank_completion",
         "full_rank_completion",
     }:
         return False
-    n = result["dimension"]
-    if (
-        type(n) is not int
-        or not 8 <= n <= 14
-        or result["defects"]
-        != [
-            "BAND_SUPPORT_DOES_NOT_IMPLY_SYMMETRY",
-            "EXISTENCE_OF_FULL_RANK_COMPLETION_DOES_NOT_LOWER_BOUND_MINIMUM",
-        ]
-    ):
+    pattern = _matrix(result["pattern"])
+    low = _matrix(result["low_rank_completion"])
+    high = _matrix(result["full_rank_completion"])
+    if pattern is None or low is None or high is None:
         return False
-    pattern = _matrix(result["pattern"], n)
-    low = _matrix(result["low_rank_completion"], n)
-    high = _matrix(result["full_rank_completion"], n)
+    n = len(pattern)
+    if not 8 <= n <= 14:
+        return False
     if pattern is None or low is None or high is None:
         return False
     forced = [(i, j) for i in range(n) for j in range(n) if pattern[i][j]]

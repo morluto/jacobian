@@ -336,11 +336,6 @@ _UNSUPPORTED_SURFACE_TEXT_EXCLUDED: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("docs/explanation/operation-runtime-target.md"),
         PurePosixPath("tools/check_architecture.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_process_policies.py"),
-        # Harbor host-verifier regression tests spawn the verifier in a child process.
-        PurePosixPath("benchmarks/validation/conjecture_probes_v1/test_constant_weight_code_a23_6_10_2992.py"),
-        PurePosixPath("benchmarks/validation/conjecture_probes_v1/test_hadamard_order664_construction.py"),
-        PurePosixPath("benchmarks/validation/conjecture_probes_v1/test_projective_plane_order11_construction.py"),
-        PurePosixPath("benchmarks/validation/conjecture_probes_v1/test_ramsey_r3_13_lower_bound_61.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_harbor_contracts.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_unsupported_surfaces.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_diagnostics.py"),
@@ -1362,11 +1357,6 @@ _UNSUPPORTED_SURFACE_AST_EXCLUDED: frozenset[PurePosixPath] = frozenset(
     {
         PurePosixPath("tools/check_architecture.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_process_policies.py"),
-        # Harbor host-verifier regression tests spawn the verifier in a child process.
-        PurePosixPath("benchmarks/validation/conjecture_probes_v1/test_constant_weight_code_a23_6_10_2992.py"),
-        PurePosixPath("benchmarks/validation/conjecture_probes_v1/test_hadamard_order664_construction.py"),
-        PurePosixPath("benchmarks/validation/conjecture_probes_v1/test_projective_plane_order11_construction.py"),
-        PurePosixPath("benchmarks/validation/conjecture_probes_v1/test_ramsey_r3_13_lower_bound_61.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_harbor_contracts.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_unsupported_surfaces.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_diagnostics.py"),

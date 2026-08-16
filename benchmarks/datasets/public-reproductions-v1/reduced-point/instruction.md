@@ -1,6 +1,6 @@
 # Reduced integral homology of a simplicial complex
 
-Compute the reduced integral homology of the simplicial complex in `input.json`. Return the free ranks and the torsion coefficients per degree. Write `submission.json` to the exact agent-visible `submission_schema.json`. Claim `COMPUTED` assurance; do not claim `VERIFIED`.
+Compute the reduced integral homology of the simplicial complex in `input.json`. Return the free ranks and the torsion coefficients per degree. Write `submission.json` to the exact agent-visible `submission_schema.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

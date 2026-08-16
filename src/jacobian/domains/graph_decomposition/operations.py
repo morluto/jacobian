@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import networkx as nx
 
 from jacobian.contracts.graph_decomposition import (
@@ -19,7 +17,7 @@ from jacobian.contracts.graph_decomposition import (
 )
 
 
-def _build_graph(graph: UndirectedGraph) -> nx.Graph:  # type: ignore[type-arg]
+def _build_graph(graph: UndirectedGraph) -> nx.Graph:
     """Build a NetworkX undirected graph from the contract model.
 
     All declared vertices are added as nodes, even isolated ones, so that
@@ -48,11 +46,11 @@ def compute_block_cut_tree(request: BlockCutTreeRequest) -> BlockCutTreeResult:
     tree_edges: list[tuple[int, int]] = []
     for block_index, block in enumerate(blocks):
         for vertex in articulation_points:
-            if vertex in block:  # type: ignore
+            if vertex in block:
                 tree_edges.append((block_index, vertex))
 
     return BlockCutTreeResult(
-        blocks=tuple(tuple(sorted(block)) for block in blocks),  # type: ignore
+        blocks=tuple(tuple(sorted(block)) for block in blocks),
         articulation_points=tuple(articulation_points),
         tree=tuple(tree_edges),
     )
@@ -71,7 +69,7 @@ def compute_bridge_block_tree(request: BridgeBlockRequest) -> BridgeBlockResult:
     # Contract each non-bridge edge to form the 2-edge-connected components.
     contracted: nx.Graph = nx.Graph()
     contracted.add_nodes_from(g.nodes())
-    bridge_set = {(min(u, v), max(u, v)) for u, v in bridges}  # type: ignore
+    bridge_set = {(min(u, v), max(u, v)) for u, v in bridges}
     for source, target in g.edges():
         edge = (min(source, target), max(source, target))
         if edge not in bridge_set:
@@ -87,7 +85,7 @@ def compute_bridge_block_tree(request: BridgeBlockRequest) -> BridgeBlockResult:
 
     tree_edges: list[tuple[int, int]] = []
     normalised_bridges: list[tuple[int, int]] = []
-    for source, target in bridges:  # type: ignore
+    for source, target in bridges:
         normalised_bridges.append((min(source, target), max(source, target)))
         source_component = component_index[source]
         target_component = component_index[target]
@@ -235,5 +233,5 @@ def compute_biconnected_components(
     g = _build_graph(request.graph)
     components = list(nx.biconnected_components(g))
     return BiconnectedComponentsResult(
-        components=tuple(tuple(sorted(component)) for component in components),  # type: ignore
+        components=tuple(tuple(sorted(component)) for component in components),
     )

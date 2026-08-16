@@ -38,7 +38,7 @@ def compute_bh_step_up(request: BHStepUpRequest) -> BHStepUpResult:
     return BHStepUpResult(
         critical_index=critical_k,
         cutoff_threshold=str(cutoff),
-        rejected=sorted(rejected_ids),
+        rejected=tuple(sorted(rejected_ids)),
         total_hypotheses=n,
     )
 

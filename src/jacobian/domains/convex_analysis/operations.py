@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian.contracts.convex_analysis import (
+    AffinePiece,
     MaxAffineEvalRequest,
     MaxAffineEvalResult,
     MaxAffineSubdifferentialRequest,
@@ -12,7 +13,7 @@ from jacobian.contracts.convex_analysis import (
 )
 
 
-def _evaluate_piece(piece, point_coords) -> Fraction:
+def _evaluate_piece(piece: AffinePiece, point_coords: tuple) -> Fraction:
     """Evaluate one affine piece at a point."""
     value = piece.intercept.as_fraction()
     for coeff, coord in zip(piece.coefficients, point_coords, strict=True):

@@ -15,7 +15,7 @@ from jacobian.contracts.graph_polynomials import (
 )
 
 
-def _build_graph(request: GraphPolynomialRequest) -> nx.Graph:
+def _build_graph(request: GraphPolynomialRequest) -> nx.Graph[int]:
     g = nx.Graph()
     g.add_nodes_from(range(request.graph.vertex_count))
     for edge in request.graph.edges:
@@ -23,7 +23,7 @@ def _build_graph(request: GraphPolynomialRequest) -> nx.Graph:
     return g
 
 
-def _poly_to_terms(poly_expr, var: sympy.Symbol) -> tuple[PolynomialTerm, ...]:
+def _poly_to_terms(poly_expr: object, var: sympy.Symbol) -> tuple[PolynomialTerm, ...]:
     """Convert a sympy polynomial expression to sorted PolynomialTerm tuples."""
     poly = Poly(poly_expr, var)
     terms: list[PolynomialTerm] = []

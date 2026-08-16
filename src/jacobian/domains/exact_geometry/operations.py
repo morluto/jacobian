@@ -10,10 +10,11 @@ from jacobian.contracts.exact_geometry import (
     DistanceMultiplicityEntry,
     DistanceProfileRequest,
     DistanceProfileResult,
+    LabelledRationalPoint,
 )
 
 
-def _to_fraction_point(point) -> tuple[Fraction, ...]:
+def _to_fraction_point(point: LabelledRationalPoint) -> tuple[Fraction, ...]:
     return tuple(c.as_fraction() for c in point.coordinates)
 
 
@@ -21,7 +22,10 @@ def _squared_distance(
     p: tuple[Fraction, ...],
     q: tuple[Fraction, ...],
 ) -> Fraction:
-    return sum((a - b) ** 2 for a, b in zip(p, q, strict=True))
+    result = Fraction(0)
+    for a, b in zip(p, q, strict=True):
+        result += (a - b) ** 2
+    return result
 
 
 def compute_distance_profile(

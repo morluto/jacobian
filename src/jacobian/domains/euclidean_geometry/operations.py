@@ -7,6 +7,7 @@ from fractions import Fraction
 from jacobian.contracts.euclidean_geometry import (
     AngleEqualityRequest,
     AngleEqualityResult,
+    RationalPoint2D,
     SegmentRatioRequest,
     SegmentRatioResult,
     TriangleSimilarityRequest,
@@ -14,7 +15,7 @@ from jacobian.contracts.euclidean_geometry import (
 )
 
 
-def _squared_dist_sq(p, q) -> Fraction:
+def _squared_dist_sq(p: RationalPoint2D, q: RationalPoint2D) -> Fraction:
     """Squared distance between two points."""
     dx = q.x.as_fraction() - p.x.as_fraction()
     dy = q.y.as_fraction() - p.y.as_fraction()
@@ -35,15 +36,15 @@ def compute_segment_ratio(request: SegmentRatioRequest) -> SegmentRatioResult:
     )
 
 
-def _dot(v1, v2) -> Fraction:
+def _dot(v1: tuple[Fraction, Fraction], v2: tuple[Fraction, Fraction]) -> Fraction:
     return v1[0] * v2[0] + v1[1] * v2[1]
 
 
-def _cross(v1, v2) -> Fraction:
+def _cross(v1: tuple[Fraction, Fraction], v2: tuple[Fraction, Fraction]) -> Fraction:
     return v1[0] * v2[1] - v1[1] * v2[0]
 
 
-def _vec(p, q):
+def _vec(p: RationalPoint2D, q: RationalPoint2D) -> tuple[Fraction, Fraction]:
     return (
         q.x.as_fraction() - p.x.as_fraction(),
         q.y.as_fraction() - p.y.as_fraction(),

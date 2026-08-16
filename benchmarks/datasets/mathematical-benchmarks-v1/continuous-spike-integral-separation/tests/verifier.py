@@ -70,14 +70,7 @@ def _valid_spikes(spikes, alpha):
 
 
 def valid_result(result):
-    if not isinstance(result, dict) or set(result) != {
-        "alpha",
-        "baseline_power",
-        "spike_height",
-        "spikes",
-        "integral_classification",
-        "sample_series_classification",
-    }:
+    if not isinstance(result, dict) or set(result) != {"alpha", "spikes"}:
         return False
     try:
         alpha = fraction(result["alpha"])

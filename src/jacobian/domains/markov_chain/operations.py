@@ -5,10 +5,16 @@ from __future__ import annotations
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.markov_chain import (
     ErgodicDecisionResult,
+    MixingTimeRequest,
+    MixingTimeResult,
     StationaryDistributionResult,
     TransitionMatrixRequest,
 )
-from jacobian.math.markov_chain import ergodic_properties, stationary_distribution
+from jacobian.math.markov_chain import (
+    ergodic_properties,
+    mixing_time,
+    stationary_distribution,
+)
 
 
 def compute_stationary_distribution(
@@ -31,3 +37,10 @@ def compute_ergodic_decision(request: TransitionMatrixRequest) -> ErgodicDecisio
         is_irreducible=irreducible,
         is_aperiodic=aperiodic,
     )
+
+
+def compute_mixing_time(request: MixingTimeRequest) -> MixingTimeResult:
+    matrix = [[{"num": c.num, "den": c.den} for c in row] for row in request.matrix]
+    epsilon = {"num": request.epsilon.num, "den": request.epsilon.den}
+    result = mixing_time(matrix, epsilon, request.max_steps)  # type: ignore[no-untyped-call]
+    return MixingTimeResult(mixing_time=result)

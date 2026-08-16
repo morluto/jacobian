@@ -6,6 +6,8 @@ from typing import Any
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.markov_chain import (
     ErgodicDecisionResult,
+    MixingTimeRequest,
+    MixingTimeResult,
     StationaryDistributionResult,
     TransitionMatrixRequest,
 )
@@ -13,6 +15,7 @@ from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
 from jacobian.domains.markov_chain.operations import (
     compute_ergodic_decision,
+    compute_mixing_time,
     compute_stationary_distribution,
 )
 from jacobian.math_tools import MathTool
@@ -100,6 +103,32 @@ MARKOV_CHAIN_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                             {"num": "1", "den": "2"},
                         ],
                     ]
+                },
+            ),
+        ),
+    ),
+    mc_operation(
+        "probability.markov_chain.mixing_time.compute",
+        "Compute the exact mixing time of a Markov chain",
+        "Compute the exact mixing time of a finite Markov chain: the smallest t such that the total variation distance from every row to the stationary distribution is at most epsilon, using SymPy exact rational arithmetic.",
+        MixingTimeRequest,
+        MixingTimeResult,
+        compute_mixing_time,
+        "probability",
+        "markov-chain",
+        "mixing-time",
+        "exact",
+        examples=(
+            example(
+                "two_state_chain",
+                "Mixing time of a two-state rational Markov chain.",
+                {
+                    "matrix": [
+                        [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
+                        [{"num": "1", "den": "4"}, {"num": "3", "den": "4"}],
+                    ],
+                    "epsilon": {"num": "1", "den": "100"},
+                    "max_steps": 100,
                 },
             ),
         ),

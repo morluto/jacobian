@@ -1,5 +1,5 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
-LABEL jacobian.checksum="45ac0a6da1934b5809c9ffd48a1287ee26c42d366ac4a1eb92a0dacbd6fa4c13"
+LABEL jacobian.checksum="517d64506a30e590a575f8a2293c4a80b3ed0e1aab654d9b73dc546b6073680a"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 LABEL jacobian.task="jacobian/prime-power-divisibility-gap-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/

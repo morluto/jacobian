@@ -10,7 +10,7 @@ For the oriented Petersen graph, submit:
 
 Flows are fifteen integers in the frozen edge order, each in `0..4`. For an edge `(u,v)`, its value contributes positively at `u` and negatively at `v`; every balance must be zero modulo five. The verifier independently recomputes balances, zero support, and all domain constraints. Alternative valid flows are accepted.
 
-This finite Assurance audit demonstrates one contract defect and one Petersen-graph repair. It does not establish Tutte's 5-Flow Conjecture. Claim at most `COMPUTED`.
+This finite Assurance audit demonstrates one contract defect and one Petersen-graph repair. It does not establish Tutte's 5-Flow Conjecture.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

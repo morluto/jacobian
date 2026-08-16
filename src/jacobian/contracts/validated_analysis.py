@@ -88,9 +88,11 @@ class ArbPointEnclosureResult(ContractModel):
         if not enclosed and (self.relative_accuracy_bits is not None or self.exact):
             raise ValueError("a non-enclosure cannot claim accuracy or exactness")
         if enclosed:
-            assert self.lower is not None
-            assert self.upper is not None
-            if self.lower.as_fraction() > self.upper.as_fraction():
+            lower = self.lower
+            upper = self.upper
+            if lower is None or upper is None:
+                raise ValueError("only an enclosed result may carry dyadic endpoints")
+            if lower.as_fraction() > upper.as_fraction():
                 raise ValueError("enclosure lower endpoint exceeds upper endpoint")
             if self.exact != (self.relative_accuracy_bits is None):
                 raise ValueError(

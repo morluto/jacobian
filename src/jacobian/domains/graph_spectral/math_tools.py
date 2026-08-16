@@ -1,6 +1,7 @@
 """Exact graph spectral operation declarations."""
 
 from collections.abc import Callable
+from typing import Any
 
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.graph_spectral import GraphSpectrumRequest, GraphSpectrumResult
@@ -40,7 +41,7 @@ def graph_spectral_operation[
     )
 
 
-GRAPH_SPECTRAL_OPERATIONS = (
+GRAPH_SPECTRAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     graph_spectral_operation(
         "graph.spectrum.adjacency.compute",
         "Compute exact adjacency matrix eigenvalues",

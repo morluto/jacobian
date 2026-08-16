@@ -1,10 +1,14 @@
 """Number field operation declarations."""
 
+from collections.abc import Callable
+from typing import Any
+
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.number_field import (
     NumberFieldDiscriminantResult,
     NumberFieldRequest,
 )
+from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
 from jacobian.domains.number_field.operations import (
     compute_nf_discriminant,
@@ -13,15 +17,15 @@ from jacobian.math_tools import MathTool
 
 
 def nf_operation[RequestT: ContractModel, ResultT: ContractModel](
-    operation_id,
-    title,
-    description,
-    request_model,
-    result_model,
-    operation,
-    *tags,
-    examples=(),
-    version="1",
+    operation_id: str,
+    title: str,
+    description: str,
+    request_model: type[RequestT],
+    result_model: type[ResultT],
+    operation: Callable[[RequestT], ResultT],
+    *tags: str,
+    examples: tuple[OperationExample, ...] = (),
+    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
@@ -36,7 +40,7 @@ def nf_operation[RequestT: ContractModel, ResultT: ContractModel](
     )
 
 
-NUMBER_FIELD_OPERATIONS = (
+NUMBER_FIELD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     nf_operation(
         "number_field.discriminant.compute",
         "Compute the discriminant of a number field",

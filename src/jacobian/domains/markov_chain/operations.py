@@ -15,7 +15,7 @@ def compute_stationary_distribution(
     request: TransitionMatrixRequest,
 ) -> StationaryDistributionResult:
     matrix = [[{"num": c.num, "den": c.den} for c in row] for row in request.matrix]
-    dist = stationary_distribution(matrix)
+    dist = stationary_distribution(matrix)  # type: ignore[no-untyped-call]
     return StationaryDistributionResult(
         distribution=tuple(
             CanonicalRational.from_integer_ratio(int(v.p), int(v.q)) for v in dist
@@ -25,7 +25,7 @@ def compute_stationary_distribution(
 
 def compute_ergodic_decision(request: TransitionMatrixRequest) -> ErgodicDecisionResult:
     matrix = [[{"num": c.num, "den": c.den} for c in row] for row in request.matrix]
-    ergodic = is_ergodic(matrix)
+    ergodic = is_ergodic(matrix)  # type: ignore[no-untyped-call]
     return ErgodicDecisionResult(
         is_ergodic=ergodic,
         is_irreducible=ergodic,

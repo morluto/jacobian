@@ -15,7 +15,7 @@ from jacobian.math.multivariate_polynomial import (
 
 
 def compute_multivariate_gcd(request: MultivariateGCDRequest) -> MultivariateGCDResult:
-    gcd = multivariate_gcd(
+    gcd = multivariate_gcd(  # type: ignore[no-untyped-call]
         request.left.expression,
         list(request.left.variables),
         request.right.expression,
@@ -27,7 +27,7 @@ def compute_multivariate_gcd(request: MultivariateGCDRequest) -> MultivariateGCD
 def compute_multivariate_resultant(
     request: MultivariateResultantRequest,
 ) -> MultivariateResultantResult:
-    res = multivariate_resultant(
+    res = multivariate_resultant(  # type: ignore[no-untyped-call]
         request.left.expression,
         list(request.left.variables),
         request.right.expression,

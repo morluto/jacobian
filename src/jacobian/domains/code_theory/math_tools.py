@@ -1,11 +1,15 @@
 """Code theory operation declarations."""
 
+from collections.abc import Callable
+from typing import Any
+
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.code_theory import (
     LinearCodeRequest,
     MinimumDistanceResult,
     WeightDistributionResult,
 )
+from jacobian.contracts.operations import OperationExample
 from jacobian.domains.code_theory.operations import (
     compute_min_distance,
     compute_weight_dist,
@@ -14,15 +18,15 @@ from jacobian.math_tools import MathTool
 
 
 def ct_operation[RequestT: ContractModel, ResultT: ContractModel](
-    operation_id,
-    title,
-    description,
-    request_model,
-    result_model,
-    operation,
-    *tags,
-    examples=(),
-    version="1",
+    operation_id: str,
+    title: str,
+    description: str,
+    request_model: type[RequestT],
+    result_model: type[ResultT],
+    operation: Callable[[RequestT], ResultT],
+    *tags: str,
+    examples: tuple[OperationExample, ...] = (),
+    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
@@ -37,7 +41,7 @@ def ct_operation[RequestT: ContractModel, ResultT: ContractModel](
     )
 
 
-CODE_THEORY_OPERATIONS = (
+CODE_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ct_operation(
         "code.minimum_distance.compute",
         "Compute the minimum distance of a linear code",

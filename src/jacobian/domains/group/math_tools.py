@@ -1,6 +1,7 @@
 """Exact finite group operation declarations."""
 
 from collections.abc import Callable
+from typing import Any
 
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.group import (
@@ -48,7 +49,7 @@ def group_operation[
     )
 
 
-GROUP_OPERATIONS = (
+GROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     group_operation(
         "group.order.compute",
         "Compute the exact order of a finite permutation group",

@@ -1,6 +1,7 @@
 """Exact graph coloring operation declarations."""
 
 from collections.abc import Callable
+from typing import Any
 
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.graph_coloring_ops import (
@@ -45,7 +46,7 @@ def graph_coloring_operation[
     )
 
 
-GRAPH_COLORING_OPERATIONS = (
+GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     graph_coloring_operation(
         "graph.coloring.k_colorability.decide",
         "Decide k-colorability of a graph",

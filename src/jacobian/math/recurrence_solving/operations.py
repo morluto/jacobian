@@ -7,7 +7,7 @@ from fractions import Fraction
 __all__ = ["closed_form", "find_recurrence"]
 
 
-def find_recurrence(sequence):
+def find_recurrence(sequence):  # type: ignore[no-untyped-def]
     n = len(sequence)
     vals = [Fraction(s) for s in sequence]
     for order in range(1, n // 2 + 1):
@@ -25,7 +25,7 @@ def find_recurrence(sequence):
     return {"coefficients": (), "order": 0}
 
 
-def closed_form(char_coeffs, initial_values):
+def closed_form(char_coeffs, initial_values):  # type: ignore[no-untyped-def]
     import sympy
 
     x = sympy.Symbol("x")

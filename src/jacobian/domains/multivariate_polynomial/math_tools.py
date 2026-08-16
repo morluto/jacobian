@@ -1,5 +1,8 @@
 """Multivariate polynomial operation declarations."""
 
+from collections.abc import Callable
+from typing import Any
+
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.multivariate_polynomial import (
     MultivariateGCDRequest,
@@ -7,6 +10,7 @@ from jacobian.contracts.multivariate_polynomial import (
     MultivariateResultantRequest,
     MultivariateResultantResult,
 )
+from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
 from jacobian.domains.multivariate_polynomial.operations import (
     compute_multivariate_gcd,
@@ -16,15 +20,15 @@ from jacobian.math_tools import MathTool
 
 
 def mp_operation[RequestT: ContractModel, ResultT: ContractModel](
-    operation_id,
-    title,
-    description,
-    request_model,
-    result_model,
-    operation,
-    *tags,
-    examples=(),
-    version="1",
+    operation_id: str,
+    title: str,
+    description: str,
+    request_model: type[RequestT],
+    result_model: type[ResultT],
+    operation: Callable[[RequestT], ResultT],
+    *tags: str,
+    examples: tuple[OperationExample, ...] = (),
+    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
@@ -39,7 +43,7 @@ def mp_operation[RequestT: ContractModel, ResultT: ContractModel](
     )
 
 
-MULTIVARIATE_POLYNOMIAL_OPERATIONS = (
+MULTIVARIATE_POLYNOMIAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     mp_operation(
         "polynomial.multivariate.gcd.compute",
         "Compute multivariate polynomial GCD",

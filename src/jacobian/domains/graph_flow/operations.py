@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import Any
 
 import networkx as nx
 
@@ -17,8 +18,8 @@ from jacobian.contracts.graph_flow import (
 )
 
 
-def _build_digraph(graph: FlowGraph) -> nx.DiGraph:
-    g = nx.DiGraph()
+def _build_digraph(graph: FlowGraph) -> nx.DiGraph[int]:
+    g: nx.DiGraph[Any] = nx.DiGraph[int]()
     g.add_nodes_from(range(graph.vertex_count))
     for edge in graph.edges:
         cap = edge.capacity.as_fraction()

@@ -1,11 +1,15 @@
 """Markov chain operation declarations."""
 
+from collections.abc import Callable
+from typing import Any
+
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.markov_chain import (
     ErgodicDecisionResult,
     StationaryDistributionResult,
     TransitionMatrixRequest,
 )
+from jacobian.contracts.operations import OperationExample
 from jacobian.domains.markov_chain.operations import (
     compute_ergodic_decision,
     compute_stationary_distribution,
@@ -14,15 +18,15 @@ from jacobian.math_tools import MathTool
 
 
 def mc_operation[RequestT: ContractModel, ResultT: ContractModel](
-    operation_id,
-    title,
-    description,
-    request_model,
-    result_model,
-    operation,
-    *tags,
-    examples=(),
-    version="1",
+    operation_id: str,
+    title: str,
+    description: str,
+    request_model: type[RequestT],
+    result_model: type[ResultT],
+    operation: Callable[[RequestT], ResultT],
+    *tags: str,
+    examples: tuple[OperationExample, ...] = (),
+    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
@@ -37,7 +41,7 @@ def mc_operation[RequestT: ContractModel, ResultT: ContractModel](
     )
 
 
-MARKOV_CHAIN_OPERATIONS = (
+MARKOV_CHAIN_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     mc_operation(
         "probability.markov_chain.stationary_distribution.compute",
         "Compute the stationary distribution of a Markov chain",

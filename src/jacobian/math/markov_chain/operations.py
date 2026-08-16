@@ -5,7 +5,7 @@ from __future__ import annotations
 __all__ = ["is_ergodic", "stationary_distribution"]
 
 
-def stationary_distribution(matrix):
+def stationary_distribution(matrix):  # type: ignore[no-untyped-def]
     import sympy
 
     n = len(matrix)
@@ -26,7 +26,7 @@ def stationary_distribution(matrix):
     return []
 
 
-def is_ergodic(matrix):
+def is_ergodic(matrix):  # type: ignore[no-untyped-def]
     import sympy
 
     n = len(matrix)

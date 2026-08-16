@@ -5,7 +5,7 @@ from __future__ import annotations
 __all__ = ["compare_algebraic", "isolate_real_roots"]
 
 
-def isolate_real_roots(coeffs_desc):
+def isolate_real_roots(coeffs_desc):  # type: ignore[no-untyped-def]
     import sympy
 
     poly = sum(
@@ -17,7 +17,7 @@ def isolate_real_roots(coeffs_desc):
     return real_roots
 
 
-def compare_algebraic(
+def compare_algebraic(  # type: ignore[no-untyped-def]
     left_poly, left_lower, left_upper, right_poly, right_lower, right_upper
 ):
     import sympy

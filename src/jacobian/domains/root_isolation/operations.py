@@ -12,7 +12,7 @@ from jacobian.math.root_isolation import compare_algebraic, isolate_real_roots
 
 
 def compute_root_isolation(request: UnivariatePolynomialRequest) -> RootIsolationResult:
-    roots = isolate_real_roots(
+    roots = isolate_real_roots(  # type: ignore[no-untyped-call]
         [{"num": c.num, "den": c.den} for c in request.coefficients_descending]
     )
     return RootIsolationResult(
@@ -24,7 +24,7 @@ def compute_root_isolation(request: UnivariatePolynomialRequest) -> RootIsolatio
 def compute_algebraic_compare(
     request: AlgebraicCompareRequest,
 ) -> AlgebraicCompareResult:
-    order = compare_algebraic(
+    order = compare_algebraic(  # type: ignore[no-untyped-call]
         [{"num": c.num, "den": c.den} for c in request.left.polynomial],
         request.left.isolating_interval_lower,
         request.left.isolating_interval_upper,

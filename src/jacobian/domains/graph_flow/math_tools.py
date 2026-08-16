@@ -1,6 +1,7 @@
 """Exact graph flow operation declarations."""
 
 from collections.abc import Callable
+from typing import Any
 
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.graph_flow import (
@@ -42,7 +43,7 @@ def graph_flow_operation[
     )
 
 
-GRAPH_FLOW_OPERATIONS = (
+GRAPH_FLOW_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     graph_flow_operation(
         "graph.flow.maximum.compute",
         "Compute the maximum flow in a capacitated graph",

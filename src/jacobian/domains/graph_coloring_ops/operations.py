@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import networkx as nx
 
 from jacobian.contracts.graph_coloring_ops import (
@@ -13,8 +15,8 @@ from jacobian.contracts.graph_coloring_ops import (
 )
 
 
-def _build_graph(graph: GraphEdgeList) -> nx.Graph:
-    g = nx.Graph()
+def _build_graph(graph: GraphEdgeList) -> nx.Graph[int]:
+    g: nx.Graph[Any] = nx.Graph[Any]()
     g.add_nodes_from(range(graph.vertex_count))
     g.add_edges_from(graph.edges)
     return g

@@ -1,6 +1,10 @@
 """Permutation group operation declarations."""
 
+from collections.abc import Callable
+from typing import Any
+
 from jacobian.contracts.base import ContractModel
+from jacobian.contracts.operations import OperationExample
 from jacobian.contracts.permutation_group import (
     PermutationGroupOrbitRequest,
     PermutationGroupOrbitResult,
@@ -16,15 +20,15 @@ from jacobian.math_tools import MathTool
 
 
 def pg_operation[RequestT: ContractModel, ResultT: ContractModel](
-    operation_id,
-    title,
-    description,
-    request_model,
-    result_model,
-    operation,
-    *tags,
-    examples=(),
-    version="1",
+    operation_id: str,
+    title: str,
+    description: str,
+    request_model: type[RequestT],
+    result_model: type[ResultT],
+    operation: Callable[[RequestT], ResultT],
+    *tags: str,
+    examples: tuple[OperationExample, ...] = (),
+    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
@@ -39,7 +43,7 @@ def pg_operation[RequestT: ContractModel, ResultT: ContractModel](
     )
 
 
-PERMUTATION_GROUP_OPERATIONS = (
+PERMUTATION_GROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     pg_operation(
         "permutation_group.order.compute",
         "Compute the order of a permutation group",

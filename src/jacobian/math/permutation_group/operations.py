@@ -5,7 +5,7 @@ from __future__ import annotations
 __all__ = ["pg_orbit", "pg_order"]
 
 
-def pg_order(degree, generators):
+def pg_order(degree, generators):  # type: ignore[no-untyped-def]
     from sympy.combinatorics import Permutation, PermutationGroup
 
     perms = []
@@ -16,7 +16,7 @@ def pg_order(degree, generators):
     return int(PermutationGroup(perms).order())
 
 
-def pg_orbit(degree, generators, point):
+def pg_orbit(degree, generators, point):  # type: ignore[no-untyped-def]
     from sympy.combinatorics import Permutation, PermutationGroup
 
     if not 0 <= point < degree:

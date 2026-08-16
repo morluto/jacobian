@@ -1,25 +1,29 @@
 """Certified factoring operation declarations."""
 
+from collections.abc import Callable
+from typing import Any
+
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.certified_factoring import (
     CertifiedFactorRequest,
     CertifiedFactorResult,
 )
+from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
 from jacobian.domains.certified_factoring.operations import compute_certified_factor
 from jacobian.math_tools import MathTool
 
 
 def cf_operation[RequestT: ContractModel, ResultT: ContractModel](
-    operation_id,
-    title,
-    description,
-    request_model,
-    result_model,
-    operation,
-    *tags,
-    examples=(),
-    version="1",
+    operation_id: str,
+    title: str,
+    description: str,
+    request_model: type[RequestT],
+    result_model: type[ResultT],
+    operation: Callable[[RequestT], ResultT],
+    *tags: str,
+    examples: tuple[OperationExample, ...] = (),
+    version: str = "1",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
@@ -34,7 +38,7 @@ def cf_operation[RequestT: ContractModel, ResultT: ContractModel](
     )
 
 
-CERTIFIED_FACTORING_OPERATIONS = (
+CERTIFIED_FACTORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     cf_operation(
         "integer.factor.certified_compute",
         "Certified integer factorization",

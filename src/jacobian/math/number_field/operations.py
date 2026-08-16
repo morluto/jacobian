@@ -5,7 +5,7 @@ from __future__ import annotations
 __all__ = ["discriminant", "ring_of_integers"]
 
 
-def discriminant(coefficients_descending, variable):
+def discriminant(coefficients_descending, variable):  # type: ignore[no-untyped-def]
     import sympy
 
     x = sympy.Symbol(variable)
@@ -17,7 +17,7 @@ def discriminant(coefficients_descending, variable):
     return str(p.discriminant())
 
 
-def ring_of_integers(coefficients_descending, variable):
+def ring_of_integers(coefficients_descending, variable):  # type: ignore[no-untyped-def]
     import sympy
 
     x = sympy.Symbol(variable)

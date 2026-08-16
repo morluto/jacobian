@@ -59,3 +59,24 @@ directly. `smt.solve` accepts one bounded QF SMT-LIB query. `lean.check` accepts
 one bounded source snippet and returns elaboration diagnostics after a one-shot
 process invocation. None of these operations consumes or produces a stored
 reference.
+
+## Operation preflight
+
+Do not add a public operation until its stated mathematical claim has a bounded,
+appropriate backend method. A heuristic or approximation may be useful only when
+its result contract states that limited scope. It must not return a negative
+decision, exact invariant, or optimum that the method cannot establish.
+
+Before declaring the operation, provide tests for:
+
+- a known-answer input and its claimed mathematical result;
+- a boundary or degenerate input, including valid empty, zero, singleton, or
+  identity values where the domain admits them;
+- an adversarial input that distinguishes the stated semantics from a tempting
+  weaker algorithm; and
+- request validation proving schema-valid inputs reach the backend without a
+  representation or shape failure.
+
+If no maintained bounded method can support the public claim, do not expose the
+operation yet. A backend import is not evidence that its result has the desired
+mathematical semantics.

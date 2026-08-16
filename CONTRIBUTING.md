@@ -12,6 +12,8 @@ Read the [documentation home](docs/index.md), the
 [product model](docs/explanation/product-blueprint.md), and the
 [testing strategy](docs/reference/testing-strategy.md).
 Use the installed catalog and current references for present tool membership.
+Before proposing a public operation, follow the
+[operation preflight](docs/reference/domain-operation-library.md#operation-preflight).
 
 ## Contributor quick path
 

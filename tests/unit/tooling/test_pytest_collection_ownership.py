@@ -8,12 +8,10 @@ from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).parents[3]
 SPECIALIST_ROOTS = (
-    PurePosixPath("tests/boundary/storage"),
     PurePosixPath("tests/boundary/process"),
     PurePosixPath("tests/boundary/mcp"),
-    PurePosixPath("tests/boundary/providers/lean"),
 )
-ORDINARY_OWNERS = frozenset({"unit", "component", "domain", "composition", "e2e"})
+ORDINARY_OWNERS = frozenset({"unit", "component", "domain", "composition"})
 
 
 def _configured_testpaths() -> tuple[PurePosixPath, ...]:

@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 LABEL jacobian.task="jacobian/yang-mills-gauge-invariance-certificate" \
-      jacobian.checksum="e3b15d1bc12cc1b7ab88be88d9fc4f957771f88529b8131a7934cc83407d5975"
+      jacobian.checksum="ccfe3117dea745e201e74d7ec109946b69d405f26daa1f83319de29ddc051d3e"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 COPY input.json public_contract.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

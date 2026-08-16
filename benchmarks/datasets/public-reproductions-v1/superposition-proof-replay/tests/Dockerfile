@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Independent first-order resolution replay verifier.
 LABEL jacobian.task="jacobian/superposition-proof-replay" \
-      jacobian.checksum="d9dd35d6ed86dd8bb9341c9f888b5351bfb8fd158ad731dcda8ab9311700a446"
+      jacobian.checksum="de8fcb0b3cdd0256d4e3963ce36b19fe303a17d28eacd0d0d0b61914ea5b2d3e"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

@@ -14,7 +14,7 @@ checks all pairs on both sides, and replays the extremal upper bound. For a
 `sum_i binom(d_i,2) <= binom(13,2)`. Convexity then rules out 53 edges, while
 the submitted 52-edge construction attains the bound.
 
-and `limitations`. This finite certificate establishes only
+This finite certificate establishes only
 `z(13,13;2,2)=52`; it does not settle the general Zarankiewicz problem.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->

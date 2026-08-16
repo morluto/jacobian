@@ -61,7 +61,10 @@ def test_makefile_public_commands_match_the_command_contract() -> None:
     assert COMMAND_BY_NAME["fix"].mutates_checkout is True
     assert "not PR-equivalent" in COMMAND_BY_NAME["check"].ci_relationship
     assert "not all CI" in COMMAND_BY_NAME["check-all"].ci_relationship
-    assert COMMAND_BY_NAME["check-external"].scope == "tests/boundary/providers/lean"
+    assert (
+        COMMAND_BY_NAME["check-external"].scope
+        == "tests/unit/domains/test_logic_operations.py"
+    )
 
 
 def test_help_all_retains_specialist_and_compatibility_commands() -> None:

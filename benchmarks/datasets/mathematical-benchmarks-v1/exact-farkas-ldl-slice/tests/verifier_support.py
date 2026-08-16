@@ -385,10 +385,9 @@ def aggregate_reward(
         return 0.0
     try:
         correctness_score = _as_unit_score(correctness)
-        evidence_score = 1.0
     except ValueError:
         return 0.0
-    if correctness_score < 1.0 or evidence_score < 1.0:
+    if correctness_score < 1.0:
         return 0.0
     return 1.0
 

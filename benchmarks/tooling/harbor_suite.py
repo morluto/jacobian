@@ -62,7 +62,12 @@ DATASET_CACHE_DIRS = frozenset(
 MEMBER_SCHEMA_VERSION = "2"
 VERIFIER_CONTRACT_VERSION = "1"
 PUBLIC_CONTRACT_DATASETS = frozenset(
-    {"mathematical-benchmarks-v1", "conjecture-probes-v1"}
+    {
+        "mathematical-benchmarks-v1",
+        "conjecture-probes-v1",
+        "public-reproductions-v1",
+        "symbolic-coordination-v1",
+    }
 )
 NETWORK_MODES = frozenset({"public", "no-network", "allowlist"})
 FORBIDDEN_VISIBLE_NAMES = frozenset(
@@ -640,8 +645,6 @@ def suite_digests(suite: Suite) -> tuple[TaskDigest, ...]:
 def _workflow_fixture_digest_failures(
     task_dir: Path, rel: str, metadata: dict[str, Any]
 ) -> list[str]:
-    if metadata.get("evaluation_kind") != "workflow":
-        return []
     fixture = task_dir / "environment" / "input.json"
     if not fixture.is_file():
         return []

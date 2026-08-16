@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="27421335bae5e2da5226aadc48cce115623de95a9c16e78d33e4e21e0cf295c5"
+LABEL jacobian.checksum="ae8649b162c6ab07f2fa35e330703f9b35e5592c4d02d5baab3e87c065eb3b5c"
 LABEL jacobian.task="jacobian/sine-integral-asymptotic-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

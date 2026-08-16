@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="599e4aff4da372c2f74603a50efa86eaea97fb5ad6e612d6d5ca62c922c14a7c"
+LABEL jacobian.checksum="5d0b1dc44824648385408fa2ad265bbbe52ed040062dcd321a1b0cc51b51f53b"
 LABEL jacobian.task="jacobian/continuant-reversal-certificate"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

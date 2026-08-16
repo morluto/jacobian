@@ -78,6 +78,10 @@ def _derive_submission_schema(contract: dict[str, Any]) -> dict[str, Any] | None
     schema) and ``witness`` (the witness rule) exactly as the repository-time
     tooling does in ``benchmarks.tooling.public_contract._declared_schema``.
     """
+    # Fall back to stored submission_schema for backwards compatibility
+    stored = contract.get("submission_schema")
+    if isinstance(stored, dict):
+        return dict(stored)
     submission_result = contract.get("submission_result")
     if not isinstance(submission_result, dict):
         return None

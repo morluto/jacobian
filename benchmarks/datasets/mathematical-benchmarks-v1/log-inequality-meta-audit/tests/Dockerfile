@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Layered mathematical and rubric-audit verifier.
 LABEL jacobian.task="jacobian/log-inequality-meta-audit" \
-      jacobian.checksum="d006d70d46e73d6dfd2b8a5a719bba732b64275dbe1ad8277d2b67d5b61b6e7c"
+      jacobian.checksum="0d12b81412db1dfb249e49ab544c9c7f295f656a1a0e1a64b194b007f8475483"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

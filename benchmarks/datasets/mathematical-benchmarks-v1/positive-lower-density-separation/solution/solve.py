@@ -24,7 +24,6 @@ for m in range(8):
     )
 result = {
     "base": b,
-    "family": "ALTERNATING_GEOMETRIC_BLOCKS",
     "count_formula": {
         "base_variable": "b",
         "level_variable": "m",
@@ -36,8 +35,5 @@ result = {
     "levels": levels,
     "lower_density": rational(Fraction(1, b + 1)),
     "upper_density": rational(Fraction(b, b + 1)),
-    "lower_density_positive": True,
-    "natural_density_exists": False,
-    "semantic_relation": "FORMALIZED_PREDICATE_STRICTLY_STRONGER",
 }
 Path("/app/submission.json").write_text(json.dumps({"result": result}, indent=2) + "\n")

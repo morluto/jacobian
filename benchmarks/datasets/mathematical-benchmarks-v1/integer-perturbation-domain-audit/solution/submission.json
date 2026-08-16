@@ -1,38 +1,26 @@
 {
-  "result": {
-    "integer_witness": {
-      "a_values": [
-        2,
-        3,
-        5,
-        7
-      ],
-      "b_max": 2,
-      "b_min": -5,
-      "b_values": [
-        -2,
-        1,
-        -5,
-        2
-      ],
-      "cancellation_indices": [
-        0,
-        2
-      ],
-      "period": 4,
-      "sum_values": [
-        0,
-        4,
-        0,
-        9
-      ]
-    },
-    "nat_redundancy": {
-      "a_lower_bound": 0,
-      "b_lower_bound": 1,
-      "rule": "ORDERED_ADDITION_LOWER_BOUND",
-      "sum_lower_bound": 1
-    },
-    "semantic_status": "STRICTLY_WEAKER"
-  }
+    "result": {
+        "integer_witness": {
+            "a_values": [
+                2,
+                3,
+                5,
+                7
+            ],
+            "b_values": [
+                -2,
+                1,
+                -5,
+                2
+            ],
+            "period": 4
+        },
+        "nat_redundancy": {
+            "a_lower_bound": 0,
+            "b_lower_bound": 1,
+            "rule": "ORDERED_ADDITION_LOWER_BOUND",
+            "sum_lower_bound": 1
+        },
+        "semantic_status": "STRICTLY_WEAKER"
+    }
 }

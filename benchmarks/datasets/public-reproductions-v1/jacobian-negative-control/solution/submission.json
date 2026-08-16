@@ -1,6 +1,62 @@
 {
   "result": {
-    "both_points_map_to_claimed_image": false,
-    "noninvertibility_verified": true
+    "collision": {
+      "first_point": [
+        {
+          "num": 0,
+          "den": 1
+        },
+        {
+          "num": 0,
+          "den": 1
+        },
+        {
+          "num": -1,
+          "den": 4
+        }
+      ],
+      "second_point": [
+        {
+          "num": 1,
+          "den": 1
+        },
+        {
+          "num": -3,
+          "den": 2
+        },
+        {
+          "num": 13,
+          "den": 2
+        }
+      ],
+      "first_image": [
+        {
+          "num": -1,
+          "den": 4
+        },
+        {
+          "num": 0,
+          "den": 1
+        },
+        {
+          "num": 0,
+          "den": 1
+        }
+      ],
+      "second_image": [
+        {
+          "num": -1,
+          "den": 4
+        },
+        {
+          "num": 0,
+          "den": 1
+        },
+        {
+          "num": 0,
+          "den": 1
+        }
+      ]
+    }
   }
 }

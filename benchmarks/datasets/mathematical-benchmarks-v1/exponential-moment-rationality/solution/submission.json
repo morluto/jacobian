@@ -1,111 +1,110 @@
 {
-  "result": {
-    "branch_partition": [
-      "GENERIC_DENOMINATOR_NONZERO",
-      "RANK_ONE_X_EQUALS_Y"
-    ],
-    "generic_formula": {
-      "denominator": [
-        {
-          "coefficient": {
-            "numerator": -1,
-            "denominator": 1
-          },
-          "exponents": [
-            0,
-            2,
-            0,
-            0
-          ]
+    "result": {
+        "branch_partition": [
+            "GENERIC_DENOMINATOR_NONZERO",
+            "RANK_ONE_X_EQUALS_Y"
+        ],
+        "generic_formula": {
+            "denominator": [
+                {
+                    "coefficient": {
+                        "numerator": -1,
+                        "denominator": 1
+                    },
+                    "exponents": [
+                        0,
+                        2,
+                        0,
+                        0
+                    ]
+                },
+                {
+                    "coefficient": {
+                        "numerator": 1,
+                        "denominator": 1
+                    },
+                    "exponents": [
+                        1,
+                        0,
+                        1,
+                        0
+                    ]
+                }
+            ],
+            "numerator": [
+                {
+                    "coefficient": {
+                        "numerator": 1,
+                        "denominator": 1
+                    },
+                    "exponents": [
+                        0,
+                        0,
+                        3,
+                        0
+                    ]
+                },
+                {
+                    "coefficient": {
+                        "numerator": -2,
+                        "denominator": 1
+                    },
+                    "exponents": [
+                        0,
+                        1,
+                        1,
+                        1
+                    ]
+                },
+                {
+                    "coefficient": {
+                        "numerator": 1,
+                        "denominator": 1
+                    },
+                    "exponents": [
+                        1,
+                        0,
+                        0,
+                        2
+                    ]
+                }
+            ]
         },
-        {
-          "coefficient": {
-            "numerator": 1,
-            "denominator": 1
-          },
-          "exponents": [
-            1,
-            0,
-            1,
-            0
-          ]
-        }
-      ],
-      "numerator": [
-        {
-          "coefficient": {
-            "numerator": 1,
-            "denominator": 1
-          },
-          "exponents": [
-            0,
-            0,
-            3,
-            0
-          ]
+        "singular_formula": {
+            "denominator": [
+                {
+                    "coefficient": {
+                        "numerator": 1,
+                        "denominator": 1
+                    },
+                    "exponents": [
+                        3,
+                        0,
+                        0,
+                        0
+                    ]
+                }
+            ],
+            "numerator": [
+                {
+                    "coefficient": {
+                        "numerator": 1,
+                        "denominator": 1
+                    },
+                    "exponents": [
+                        0,
+                        4,
+                        0,
+                        0
+                    ]
+                }
+            ]
         },
-        {
-          "coefficient": {
-            "numerator": -2,
-            "denominator": 1
-          },
-          "exponents": [
-            0,
-            1,
-            1,
-            1
-          ]
-        },
-        {
-          "coefficient": {
-            "numerator": 1,
-            "denominator": 1
-          },
-          "exponents": [
-            1,
-            0,
-            0,
-            2
-          ]
-        }
-      ]
-    },
-    "rationality_conclusion": "E_RATIONAL_IN_BOTH_BRANCHES",
-    "singular_formula": {
-      "denominator": [
-        {
-          "coefficient": {
-            "numerator": 1,
-            "denominator": 1
-          },
-          "exponents": [
-            3,
-            0,
-            0,
-            0
-          ]
-        }
-      ],
-      "numerator": [
-        {
-          "coefficient": {
-            "numerator": 1,
-            "denominator": 1
-          },
-          "exponents": [
-            0,
-            4,
-            0,
-            0
-          ]
-        }
-      ]
-    },
-    "variables": [
-      "A",
-      "B",
-      "C",
-      "D"
-    ]
-  }
+        "variables": [
+            "A",
+            "B",
+            "C",
+            "D"
+        ]
+    }
 }

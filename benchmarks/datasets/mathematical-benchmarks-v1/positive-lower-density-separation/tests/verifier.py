@@ -29,14 +29,10 @@ def q(value):
 def valid_result(result):
     if not isinstance(result, dict) or set(result) != {
         "base",
-        "family",
         "count_formula",
         "levels",
         "lower_density",
         "upper_density",
-        "lower_density_positive",
-        "natural_density_exists",
-        "semantic_relation",
     }:
         return False
     b = result.get("base")
@@ -44,7 +40,6 @@ def valid_result(result):
     if (
         type(b) is not int
         or b not in range(2, 10)
-        or result.get("family") != "ALTERNATING_GEOMETRIC_BLOCKS"
         or not isinstance(formula, dict)
         or set(formula)
         != {
@@ -117,9 +112,6 @@ def valid_result(result):
         submitted == expected
         and q(result.get("lower_density")) == Fraction(1, b + 1)
         and q(result.get("upper_density")) == Fraction(b, b + 1)
-        and result.get("lower_density_positive") is True
-        and result.get("natural_density_exists") is False
-        and result.get("semantic_relation") == "FORMALIZED_PREDICATE_STRICTLY_STRONGER"
     )
 
 

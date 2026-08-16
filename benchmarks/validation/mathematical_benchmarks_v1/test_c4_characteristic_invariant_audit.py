@@ -1,3 +1,5 @@
-from __future__ import annotations
+from ._fixtures import assert_result_witness_protocol
 
-TASK = "c4-characteristic-invariant-audit"
+
+def test_result_protocol(tmp_path):
+    assert_result_witness_protocol(tmp_path, "c4-characteristic-invariant-audit")

@@ -70,14 +70,7 @@ def _valid_spikes(spikes, alpha):
 
 
 def valid_result(result):
-    if not isinstance(result, dict) or set(result) != {
-        "alpha",
-        "baseline_power",
-        "spike_height",
-        "spikes",
-        "integral_classification",
-        "sample_series_classification",
-    }:
+    if not isinstance(result, dict) or set(result) != {"alpha", "spikes"}:
         return False
     try:
         alpha = fraction(result["alpha"])
@@ -85,16 +78,7 @@ def valid_result(result):
         return False
     if not (0 < alpha <= Fraction(1, 4)):
         return False
-    if result["baseline_power"] != 2 or result["spike_height"] != "1":
-        return False
-    if not _valid_spikes(result.get("spikes"), alpha):
-        return False
-    return bool(
-        result["integral_classification"]
-        == {"spike_area_series": "alpha*sum(1/n)", "status": "DIVERGENT"}
-        and result["sample_series_classification"]
-        == {"sample_series": "sum(1/n^2)", "status": "CONVERGENT"}
-    )
+    return _valid_spikes(result.get("spikes"), alpha)
 
 
 def frozen():

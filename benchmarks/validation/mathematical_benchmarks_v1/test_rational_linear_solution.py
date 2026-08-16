@@ -1,3 +1,5 @@
-from __future__ import annotations
+from ._fixtures import assert_result_witness_protocol
 
-TASK = "rational-linear-solution"
+
+def test_result_protocol(tmp_path):
+    assert_result_witness_protocol(tmp_path, "rational-linear-solution")

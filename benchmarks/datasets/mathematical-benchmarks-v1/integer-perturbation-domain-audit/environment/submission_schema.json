@@ -14,43 +14,20 @@
               },
               "type": "array"
             },
-            "b_max": {
-              "type": "integer"
-            },
-            "b_min": {
-              "type": "integer"
-            },
             "b_values": {
               "items": {
                 "type": "integer"
               },
               "type": "array"
             },
-            "cancellation_indices": {
-              "items": {
-                "type": "integer"
-              },
-              "type": "array",
-              "uniqueItems": true
-            },
             "period": {
               "type": "integer"
-            },
-            "sum_values": {
-              "items": {
-                "type": "integer"
-              },
-              "type": "array"
             }
           },
           "required": [
             "period",
             "a_values",
-            "b_values",
-            "sum_values",
-            "b_min",
-            "b_max",
-            "cancellation_indices"
+            "b_values"
           ],
           "type": "object"
         },

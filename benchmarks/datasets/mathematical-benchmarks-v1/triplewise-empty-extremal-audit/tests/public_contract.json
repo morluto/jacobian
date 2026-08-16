@@ -1,205 +1,145 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "constructions": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "family": {
-              "items": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "constructions": {
                 "items": {
-                  "maximum": 10,
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              "type": "array"
-            },
-            "n": {
-              "enum": [
-                7,
-                8,
-                11
-              ]
-            }
-          },
-          "required": [
-            "n",
-            "family"
-          ],
-          "type": "object"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "maximum_formula": {
-        "additionalProperties": false,
-        "properties": {
-          "constant": {
-            "type": "integer"
-          },
-          "floor_half": {
-            "type": "integer"
-          },
-          "linear": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "constant",
-          "linear",
-          "floor_half"
-        ],
-        "type": "object"
-      },
-      "upper_bound_certificate": {
-        "additionalProperties": false,
-        "properties": {
-          "element_frequency_cap": {
-            "const": 2
-          },
-          "nonsingleton_incidence_floor": {
-            "const": 2
-          },
-          "singleton_cap": {
-            "additionalProperties": false,
-            "properties": {
-              "variable": {
-                "const": "n"
-              }
-            },
-            "required": [
-              "variable"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "element_frequency_cap",
-          "singleton_cap",
-          "nonsingleton_incidence_floor"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "maximum_formula",
-      "upper_bound_certificate",
-      "constructions"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "constructions": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "family": {
-                  "items": {
-                    "items": {
-                      "maximum": 10,
-                      "minimum": 0,
-                      "type": "integer"
+                    "additionalProperties": false,
+                    "properties": {
+                        "family": {
+                            "items": {
+                                "items": {
+                                    "maximum": 10,
+                                    "minimum": 0,
+                                    "type": "integer"
+                                },
+                                "type": "array",
+                                "uniqueItems": true
+                            },
+                            "type": "array"
+                        },
+                        "n": {
+                            "enum": [
+                                7,
+                                8,
+                                11
+                            ]
+                        }
                     },
-                    "type": "array",
-                    "uniqueItems": true
-                  },
-                  "type": "array"
+                    "required": [
+                        "n",
+                        "family"
+                    ],
+                    "type": "object"
                 },
-                "n": {
-                  "enum": [
-                    7,
-                    8,
-                    11
-                  ]
-                }
-              },
-              "required": [
-                "n",
-                "family"
-              ],
-              "type": "object"
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
             },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "maximum_formula": {
-            "additionalProperties": false,
-            "properties": {
-              "constant": {
-                "type": "integer"
-              },
-              "floor_half": {
-                "type": "integer"
-              },
-              "linear": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "constant",
-              "linear",
-              "floor_half"
-            ],
-            "type": "object"
-          },
-          "upper_bound_certificate": {
-            "additionalProperties": false,
-            "properties": {
-              "element_frequency_cap": {
-                "const": 2
-              },
-              "nonsingleton_incidence_floor": {
-                "const": 2
-              },
-              "singleton_cap": {
+            "maximum_formula": {
                 "additionalProperties": false,
                 "properties": {
-                  "variable": {
-                    "const": "n"
-                  }
+                    "constant": {
+                        "type": "integer"
+                    },
+                    "floor_half": {
+                        "type": "integer"
+                    },
+                    "linear": {
+                        "type": "integer"
+                    }
                 },
                 "required": [
-                  "variable"
+                    "constant",
+                    "linear",
+                    "floor_half"
                 ],
                 "type": "object"
-              }
-            },
-            "required": [
-              "element_frequency_cap",
-              "singleton_cap",
-              "nonsingleton_incidence_floor"
-            ],
-            "type": "object"
-          }
+            }
         },
         "required": [
-          "maximum_formula",
-          "upper_bound_certificate",
-          "constructions"
+            "maximum_formula",
+            "constructions"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/triplewise-empty-extremal-audit"
+    "submission_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+            "result": {
+                "additionalProperties": false,
+                "properties": {
+                    "constructions": {
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "family": {
+                                    "items": {
+                                        "items": {
+                                            "maximum": 10,
+                                            "minimum": 0,
+                                            "type": "integer"
+                                        },
+                                        "type": "array",
+                                        "uniqueItems": true
+                                    },
+                                    "type": "array"
+                                },
+                                "n": {
+                                    "enum": [
+                                        7,
+                                        8,
+                                        11
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "n",
+                                "family"
+                            ],
+                            "type": "object"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                    },
+                    "maximum_formula": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "constant": {
+                                "type": "integer"
+                            },
+                            "floor_half": {
+                                "type": "integer"
+                            },
+                            "linear": {
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "constant",
+                            "linear",
+                            "floor_half"
+                        ],
+                        "type": "object"
+                    }
+                },
+                "required": [
+                    "maximum_formula",
+                    "constructions"
+                ],
+                "type": "object"
+            }
+        },
+        "required": [
+            "result"
+        ],
+        "type": "object"
+    },
+    "task_id": "jacobian/triplewise-empty-extremal-audit"
 }

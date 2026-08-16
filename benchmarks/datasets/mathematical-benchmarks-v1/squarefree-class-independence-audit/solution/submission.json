@@ -1,22 +1,19 @@
 {
-  "result": {
-    "classification": {
-      "class_key": "SQUAREFREE_KERNEL",
-      "independent_selection": "ONE_ELEMENT_PER_DISTINCT_CLASS",
-      "pair_count_formula": "SUM_OF_SQUARED_CLASS_SIZES",
-      "product_square_iff": "KERNELS_EQUAL"
-    },
-    "consequence": "AT_LEAST_FOUR_SQUAREFREE_CLASSES",
-    "modular_obstruction": {
-      "maximum_squares_ruled_out": 3,
-      "modulus": 8,
-      "quadratic_residues": [
-        0,
-        1,
-        4
-      ],
-      "target_residue": 7
-    },
-    "ordered_pair_count": 2023
-  }
+    "result": {
+        "classification": {
+            "class_key": "SQUAREFREE_KERNEL",
+            "independent_selection": "ONE_ELEMENT_PER_DISTINCT_CLASS",
+            "pair_count_formula": "SUM_OF_SQUARED_CLASS_SIZES",
+            "product_square_iff": "KERNELS_EQUAL"
+        },
+        "modular_obstruction": {
+            "modulus": 8,
+            "quadratic_residues": [
+                0,
+                1,
+                4
+            ],
+            "target_residue": 7
+        }
+    }
 }

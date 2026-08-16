@@ -1,4 +1,4 @@
-"""Regression coverage for the corrupted Jacobian collision witness."""
+"""Regression coverage for the Jacobian collision witness."""
 
 from __future__ import annotations
 
@@ -14,43 +14,24 @@ from benchmarks.validation.public_reproductions_v1._fixtures import (
 from benchmarks.validation.public_reproductions_v1._verifier import _run_verifier
 
 
-def test_negative_control_recomputes_the_claimed_image(tmp_path: Path) -> None:
+def test_collision_witness_is_accepted(tmp_path: Path) -> None:
     task, app, logs = _prepare_case(tmp_path, "jacobian-negative-control", "claimed")
     accepted = _run_verifier(task, app, logs)
     assert accepted.reward == pytest.approx(1.0)
+
+
+def test_wrong_image_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _prepare_case(tmp_path, "jacobian-negative-control", "claimed")
     submission = json.loads((app / "submission.json").read_text())
-    assert submission["result"] == {
-        "both_points_map_to_claimed_image": False,
-        "noninvertibility_verified": True,
-    }
-
-    submission["result"] = {
-        "both_points_map_to_claimed_image": True,
-        "noninvertibility_verified": True,
-    }
-    _write_json(app / "submission.json", submission)
-
-    rejected = _run_verifier(task, app, logs)
-    assert rejected.details["correctness"] == pytest.approx(0.0)
-    assert rejected.reward == pytest.approx(0.0)
-
-
-def test_false_false_on_the_frozen_collision_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _prepare_case(
-        tmp_path, "jacobian-negative-control", "false-false"
-    )
-    submission = json.loads((app / "submission.json").read_text())
-    submission["result"] = {
-        "both_points_map_to_claimed_image": False,
-        "noninvertibility_verified": False,
-    }
+    # Corrupt the first image so it no longer matches the computed map
+    submission["result"]["collision"]["first_image"][0]["num"] = 999
     _write_json(app / "submission.json", submission)
     rejected = _run_verifier(task, app, logs)
     assert rejected.details["correctness"] == pytest.approx(0.0)
     assert rejected.reward == pytest.approx(0.0)
 
 
-def test_distinct_non_colliding_points_do_not_verify_noninvertibility(
+def test_identical_points_do_not_verify_noninvertibility(
     tmp_path: Path,
 ) -> None:
     task, app, logs = _prepare_case(
@@ -68,23 +49,24 @@ def test_distinct_non_colliding_points_do_not_verify_noninvertibility(
     _write_json(app / "input.json", frozen)
 
     submission = json.loads((app / "submission.json").read_text())
-    submission["result"] = {
-        "both_points_map_to_claimed_image": False,
-        "noninvertibility_verified": True,
-    }
+    # Both points are now identical — a collision requires distinct points
+    submission["result"]["collision"]["second_point"] = [
+        {"num": 0, "den": 1},
+        {"num": 0, "den": 1},
+        {"num": 0, "den": 1},
+    ]
+    submission["result"]["collision"]["second_image"] = [
+        {"num": 0, "den": 1},
+        {"num": 0, "den": 1},
+        {"num": 0, "den": 1},
+    ]
     _write_json(app / "submission.json", submission)
     rejected = _run_verifier(copied_task, app, logs)
     assert rejected.details["correctness"] == pytest.approx(0.0)
     assert rejected.reward == pytest.approx(0.0)
 
-    submission["result"]["noninvertibility_verified"] = False
-    _write_json(app / "submission.json", submission)
-    accepted = _run_verifier(copied_task, app, logs)
-    assert accepted.details["correctness"] == pytest.approx(1.0)
-    assert accepted.reward == pytest.approx(1.0)
 
-
-def test_expected_fixture_does_not_rewrite_noninvertibility(tmp_path: Path) -> None:
+def test_expected_fixture_does_not_rewrite_the_collision(tmp_path: Path) -> None:
     task, app, logs = _prepare_case(
         tmp_path, "jacobian-negative-control", "expected-mutation"
     )
@@ -95,3 +77,34 @@ def test_expected_fixture_does_not_rewrite_noninvertibility(tmp_path: Path) -> N
     expected["expected_noninvertibility_verified"] = False
     _write_json(expected_path, expected)
     assert _run_verifier(copied_task, app, logs).reward == pytest.approx(1.0)
+
+
+def test_unrelated_collision_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _prepare_case(tmp_path, "jacobian-negative-control", "claimed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["collision"]["first_point"] = [
+        {"num": -2, "den": 1},
+        {"num": 1, "den": 1},
+        {"num": 2, "den": 1},
+    ]
+    submission["result"]["collision"]["second_point"] = [
+        {"num": 0, "den": 1},
+        {"num": 1, "den": 1},
+        {"num": -4, "den": 1},
+    ]
+    _write_json(app / "submission.json", submission)
+    rejected = _run_verifier(task, app, logs)
+    assert rejected.details["correctness"] == pytest.approx(0.0)
+    assert rejected.reward == pytest.approx(0.0)
+
+
+def test_short_collision_vector_is_rejected(tmp_path: Path) -> None:
+    task, app, logs = _prepare_case(tmp_path, "jacobian-negative-control", "claimed")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["collision"]["first_point"] = [
+        {"num": -1, "den": 4},
+        {"num": 0, "den": 1},
+    ]
+    _write_json(app / "submission.json", submission)
+    rejected = _run_verifier(task, app, logs)
+    assert rejected.reward == pytest.approx(0.0)

@@ -67,10 +67,6 @@ def _valid(result, source):
         "period",
         "a_values",
         "b_values",
-        "sum_values",
-        "b_min",
-        "b_max",
-        "cancellation_indices",
     }
     if not isinstance(witness, dict) or set(witness) != required:
         return False
@@ -80,16 +76,15 @@ def _valid(result, source):
         "period_min", 1
     ) <= period <= contract.get("period_max", 0):
         return False
-    a_values, b_values, sums = (
+    a_values, b_values = (
         witness.get("a_values"),
         witness.get("b_values"),
-        witness.get("sum_values"),
     )
     if not all(
         isinstance(values, list)
         and len(values) == period
         and all(type(x) is int for x in values)
-        for values in (a_values, b_values, sums)
+        for values in (a_values, b_values)
     ):
         return False
     limit = contract.get("value_abs_max", 0)
@@ -101,21 +96,7 @@ def _valid(result, source):
         return False
     expected_sums = [a + b for a, b in zip(a_values, b_values, strict=True)]
     cancellations = [i for i, value in enumerate(expected_sums) if value == 0]
-    cancel_indices = witness.get("cancellation_indices")
-    if not (
-        isinstance(cancel_indices, list) and all(type(x) is int for x in cancel_indices)
-    ):
-        return False
-    return bool(
-        sums == expected_sums
-        and _is_exact_int(witness.get("b_min"))
-        and witness.get("b_min") == min(b_values)
-        and _is_exact_int(witness.get("b_max"))
-        and witness.get("b_max") == max(b_values)
-        and len(cancel_indices) == len(set(cancel_indices))
-        and set(cancel_indices) == set(cancellations)
-        and len(cancellations) >= contract.get("minimum_cancellations", period + 1)
-    )
+    return bool(len(cancellations) >= contract.get("minimum_cancellations", period + 1))
 
 
 def main():

@@ -1,486 +1,428 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "argument": {
-        "additionalProperties": false,
-        "properties": {
-          "implication": {
-            "const": "UNIFORM_CONVERGENCE_DOES_NOT_FORCE_VARIATION_CONVERGENCE"
-          },
-          "uniform_convergence": {
-            "const": "SUP_NORM_1_OVER_QN_TENDS_TO_ZERO"
-          },
-          "variation_behavior": {
-            "const": "TOTAL_VARIATION_IS_CONSTANTLY_FOUR"
-          }
-        },
-        "required": [
-          "uniform_convergence",
-          "variation_behavior",
-          "implication"
-        ],
-        "type": "object"
-      },
-      "checkpoints": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "amplitude": {
-              "$ref": "#/$defs/rational"
-            },
-            "endpoint_contribution": {
-              "$ref": "#/$defs/rational"
-            },
-            "frequency": {
-              "type": "integer"
-            },
-            "interior_contribution": {
-              "$ref": "#/$defs/rational"
-            },
-            "interior_segments": {
-              "type": "integer"
-            },
-            "n": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "total_variation": {
-              "$ref": "#/$defs/rational"
-            }
-          },
-          "required": [
-            "n",
-            "frequency",
-            "amplitude",
-            "interior_segments",
-            "endpoint_contribution",
-            "interior_contribution",
-            "total_variation"
-          ],
-          "type": "object"
-        },
-        "maxItems": 10,
-        "minItems": 4,
-        "type": "array"
-      },
-      "limit_function": {
-        "additionalProperties": false,
-        "properties": {
-          "kind": {
-            "const": "CONSTANT"
-          },
-          "value": {
-            "$ref": "#/$defs/rational"
-          }
-        },
-        "required": [
-          "kind",
-          "value"
-        ],
-        "type": "object"
-      },
-      "scale_q": {
-        "maximum": 9,
-        "minimum": 2,
-        "type": "integer"
-      },
-      "sequence": {
-        "additionalProperties": false,
-        "properties": {
-          "argument_exponents": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rational": {
             "additionalProperties": false,
             "properties": {
-              "n": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "q": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "x": {
-                "minimum": 0,
-                "type": "integer"
-              }
-            },
-            "required": [
-              "q",
-              "n",
-              "x"
-            ],
-            "type": "object"
-          },
-          "denominator_exponents": {
-            "additionalProperties": false,
-            "properties": {
-              "n": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "q": {
-                "minimum": 0,
-                "type": "integer"
-              }
-            },
-            "required": [
-              "q",
-              "n"
-            ],
-            "type": "object"
-          },
-          "function": {
-            "enum": [
-              "SIN"
-            ]
-          }
-        },
-        "required": [
-          "function",
-          "argument_exponents",
-          "denominator_exponents"
-        ],
-        "type": "object"
-      },
-      "uniform_certificate": {
-        "additionalProperties": false,
-        "properties": {
-          "sup_norm_denominator_coefficient": {
-            "type": "integer"
-          },
-          "sup_norm_numerator": {
-            "const": 1
-          },
-          "tends_to_zero": {
-            "const": true
-          }
-        },
-        "required": [
-          "sup_norm_numerator",
-          "sup_norm_denominator_coefficient",
-          "tends_to_zero"
-        ],
-        "type": "object"
-      },
-      "variation_formula": {
-        "additionalProperties": false,
-        "properties": {
-          "endpoint_jump_multiplier": {
-            "const": 1
-          },
-          "endpoint_segment_count": {
-            "const": 2
-          },
-          "interior_jump_multiplier": {
-            "const": 2
-          },
-          "interior_segment_count": {
-            "additionalProperties": false,
-            "properties": {
-              "constant": {
-                "type": "integer"
-              },
-              "frequency_multiplier": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "frequency_multiplier",
-              "constant"
-            ],
-            "type": "object"
-          },
-          "total_variation": {
-            "$ref": "#/$defs/rational"
-          }
-        },
-        "required": [
-          "endpoint_segment_count",
-          "interior_segment_count",
-          "endpoint_jump_multiplier",
-          "interior_jump_multiplier",
-          "total_variation"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "scale_q",
-      "sequence",
-      "limit_function",
-      "argument",
-      "uniform_certificate",
-      "variation_formula",
-      "checkpoints"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "argument": {
-            "additionalProperties": false,
-            "properties": {
-              "implication": {
-                "const": "UNIFORM_CONVERGENCE_DOES_NOT_FORCE_VARIATION_CONVERGENCE"
-              },
-              "uniform_convergence": {
-                "const": "SUP_NORM_1_OVER_QN_TENDS_TO_ZERO"
-              },
-              "variation_behavior": {
-                "const": "TOTAL_VARIATION_IS_CONSTANTLY_FOUR"
-              }
-            },
-            "required": [
-              "uniform_convergence",
-              "variation_behavior",
-              "implication"
-            ],
-            "type": "object"
-          },
-          "checkpoints": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "amplitude": {
-                  "$ref": "#/$defs/rational"
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
                 },
-                "endpoint_contribution": {
-                  "$ref": "#/$defs/rational"
-                },
-                "frequency": {
-                  "type": "integer"
-                },
-                "interior_contribution": {
-                  "$ref": "#/$defs/rational"
-                },
-                "interior_segments": {
-                  "type": "integer"
-                },
-                "n": {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "total_variation": {
-                  "$ref": "#/$defs/rational"
+                "numerator": {
+                    "type": "integer"
                 }
-              },
-              "required": [
-                "n",
-                "frequency",
-                "amplitude",
-                "interior_segments",
-                "endpoint_contribution",
-                "interior_contribution",
-                "total_variation"
-              ],
-              "type": "object"
-            },
-            "maxItems": 10,
-            "minItems": 4,
-            "type": "array"
-          },
-          "limit_function": {
-            "additionalProperties": false,
-            "properties": {
-              "kind": {
-                "const": "CONSTANT"
-              },
-              "value": {
-                "$ref": "#/$defs/rational"
-              }
             },
             "required": [
-              "kind",
-              "value"
+                "numerator",
+                "denominator"
             ],
             "type": "object"
-          },
-          "scale_q": {
-            "maximum": 9,
-            "minimum": 2,
-            "type": "integer"
-          },
-          "sequence": {
-            "additionalProperties": false,
-            "properties": {
-              "argument_exponents": {
-                "additionalProperties": false,
-                "properties": {
-                  "n": {
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "q": {
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "x": {
-                    "minimum": 0,
-                    "type": "integer"
-                  }
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "checkpoints": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "amplitude": {
+                            "$ref": "#/$defs/rational"
+                        },
+                        "endpoint_contribution": {
+                            "$ref": "#/$defs/rational"
+                        },
+                        "frequency": {
+                            "type": "integer"
+                        },
+                        "interior_contribution": {
+                            "$ref": "#/$defs/rational"
+                        },
+                        "interior_segments": {
+                            "type": "integer"
+                        },
+                        "n": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "total_variation": {
+                            "$ref": "#/$defs/rational"
+                        }
+                    },
+                    "required": [
+                        "n",
+                        "frequency",
+                        "amplitude",
+                        "interior_segments",
+                        "endpoint_contribution",
+                        "interior_contribution",
+                        "total_variation"
+                    ],
+                    "type": "object"
                 },
-                "required": [
-                  "q",
-                  "n",
-                  "x"
-                ],
-                "type": "object"
-              },
-              "denominator_exponents": {
-                "additionalProperties": false,
-                "properties": {
-                  "n": {
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "q": {
-                    "minimum": 0,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "q",
-                  "n"
-                ],
-                "type": "object"
-              },
-              "function": {
-                "enum": [
-                  "SIN"
-                ]
-              }
+                "maxItems": 10,
+                "minItems": 4,
+                "type": "array"
             },
-            "required": [
-              "function",
-              "argument_exponents",
-              "denominator_exponents"
-            ],
-            "type": "object"
-          },
-          "uniform_certificate": {
-            "additionalProperties": false,
-            "properties": {
-              "sup_norm_denominator_coefficient": {
+            "limit_function": {
+                "additionalProperties": false,
+                "properties": {
+                    "value": {
+                        "$ref": "#/$defs/rational"
+                    }
+                },
+                "required": [
+                    "value"
+                ],
+                "type": "object"
+            },
+            "scale_q": {
+                "maximum": 9,
+                "minimum": 2,
                 "type": "integer"
-              },
-              "sup_norm_numerator": {
-                "const": 1
-              },
-              "tends_to_zero": {
-                "const": true
-              }
             },
-            "required": [
-              "sup_norm_numerator",
-              "sup_norm_denominator_coefficient",
-              "tends_to_zero"
-            ],
-            "type": "object"
-          },
-          "variation_formula": {
-            "additionalProperties": false,
-            "properties": {
-              "endpoint_jump_multiplier": {
-                "const": 1
-              },
-              "endpoint_segment_count": {
-                "const": 2
-              },
-              "interior_jump_multiplier": {
-                "const": 2
-              },
-              "interior_segment_count": {
+            "sequence": {
                 "additionalProperties": false,
                 "properties": {
-                  "constant": {
-                    "type": "integer"
-                  },
-                  "frequency_multiplier": {
-                    "type": "integer"
-                  }
+                    "argument_exponents": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "n": {
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "q": {
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "x": {
+                                "minimum": 0,
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "q",
+                            "n",
+                            "x"
+                        ],
+                        "type": "object"
+                    },
+                    "denominator_exponents": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "n": {
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "q": {
+                                "minimum": 0,
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "q",
+                            "n"
+                        ],
+                        "type": "object"
+                    },
+                    "function": {
+                        "enum": [
+                            "SIN"
+                        ]
+                    }
                 },
                 "required": [
-                  "frequency_multiplier",
-                  "constant"
+                    "function",
+                    "argument_exponents",
+                    "denominator_exponents"
                 ],
                 "type": "object"
-              },
-              "total_variation": {
-                "$ref": "#/$defs/rational"
-              }
             },
-            "required": [
-              "endpoint_segment_count",
-              "interior_segment_count",
-              "endpoint_jump_multiplier",
-              "interior_jump_multiplier",
-              "total_variation"
-            ],
-            "type": "object"
-          }
+            "uniform_certificate": {
+                "additionalProperties": false,
+                "properties": {
+                    "sup_norm_denominator_coefficient": {
+                        "type": "integer"
+                    },
+                    "sup_norm_numerator": {
+                        "const": 1
+                    }
+                },
+                "required": [
+                    "sup_norm_numerator",
+                    "sup_norm_denominator_coefficient"
+                ],
+                "type": "object"
+            },
+            "variation_formula": {
+                "additionalProperties": false,
+                "properties": {
+                    "endpoint_jump_multiplier": {
+                        "const": 1
+                    },
+                    "endpoint_segment_count": {
+                        "const": 2
+                    },
+                    "interior_jump_multiplier": {
+                        "const": 2
+                    },
+                    "interior_segment_count": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "constant": {
+                                "type": "integer"
+                            },
+                            "frequency_multiplier": {
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "frequency_multiplier",
+                            "constant"
+                        ],
+                        "type": "object"
+                    },
+                    "total_variation": {
+                        "$ref": "#/$defs/rational"
+                    }
+                },
+                "required": [
+                    "endpoint_segment_count",
+                    "interior_segment_count",
+                    "endpoint_jump_multiplier",
+                    "interior_jump_multiplier",
+                    "total_variation"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "scale_q",
-          "sequence",
-          "limit_function",
-          "argument",
-          "uniform_certificate",
-          "variation_formula",
-          "checkpoints"
+            "scale_q",
+            "sequence",
+            "limit_function",
+            "uniform_certificate",
+            "variation_formula",
+            "checkpoints"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/bounded-variation-uniform-limit"
+    "submission_schema": {
+        "$defs": {
+            "rational": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
+            }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+            "result": {
+                "additionalProperties": false,
+                "properties": {
+                    "checkpoints": {
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "amplitude": {
+                                    "$ref": "#/$defs/rational"
+                                },
+                                "endpoint_contribution": {
+                                    "$ref": "#/$defs/rational"
+                                },
+                                "frequency": {
+                                    "type": "integer"
+                                },
+                                "interior_contribution": {
+                                    "$ref": "#/$defs/rational"
+                                },
+                                "interior_segments": {
+                                    "type": "integer"
+                                },
+                                "n": {
+                                    "minimum": 1,
+                                    "type": "integer"
+                                },
+                                "total_variation": {
+                                    "$ref": "#/$defs/rational"
+                                }
+                            },
+                            "required": [
+                                "n",
+                                "frequency",
+                                "amplitude",
+                                "interior_segments",
+                                "endpoint_contribution",
+                                "interior_contribution",
+                                "total_variation"
+                            ],
+                            "type": "object"
+                        },
+                        "maxItems": 10,
+                        "minItems": 4,
+                        "type": "array"
+                    },
+                    "limit_function": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "value": {
+                                "$ref": "#/$defs/rational"
+                            }
+                        },
+                        "required": [
+                            "value"
+                        ],
+                        "type": "object"
+                    },
+                    "scale_q": {
+                        "maximum": 9,
+                        "minimum": 2,
+                        "type": "integer"
+                    },
+                    "sequence": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "argument_exponents": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "n": {
+                                        "minimum": 0,
+                                        "type": "integer"
+                                    },
+                                    "q": {
+                                        "minimum": 0,
+                                        "type": "integer"
+                                    },
+                                    "x": {
+                                        "minimum": 0,
+                                        "type": "integer"
+                                    }
+                                },
+                                "required": [
+                                    "q",
+                                    "n",
+                                    "x"
+                                ],
+                                "type": "object"
+                            },
+                            "denominator_exponents": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "n": {
+                                        "minimum": 0,
+                                        "type": "integer"
+                                    },
+                                    "q": {
+                                        "minimum": 0,
+                                        "type": "integer"
+                                    }
+                                },
+                                "required": [
+                                    "q",
+                                    "n"
+                                ],
+                                "type": "object"
+                            },
+                            "function": {
+                                "enum": [
+                                    "SIN"
+                                ]
+                            }
+                        },
+                        "required": [
+                            "function",
+                            "argument_exponents",
+                            "denominator_exponents"
+                        ],
+                        "type": "object"
+                    },
+                    "uniform_certificate": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "sup_norm_denominator_coefficient": {
+                                "type": "integer"
+                            },
+                            "sup_norm_numerator": {
+                                "const": 1
+                            }
+                        },
+                        "required": [
+                            "sup_norm_numerator",
+                            "sup_norm_denominator_coefficient"
+                        ],
+                        "type": "object"
+                    },
+                    "variation_formula": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "endpoint_jump_multiplier": {
+                                "const": 1
+                            },
+                            "endpoint_segment_count": {
+                                "const": 2
+                            },
+                            "interior_jump_multiplier": {
+                                "const": 2
+                            },
+                            "interior_segment_count": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "constant": {
+                                        "type": "integer"
+                                    },
+                                    "frequency_multiplier": {
+                                        "type": "integer"
+                                    }
+                                },
+                                "required": [
+                                    "frequency_multiplier",
+                                    "constant"
+                                ],
+                                "type": "object"
+                            },
+                            "total_variation": {
+                                "$ref": "#/$defs/rational"
+                            }
+                        },
+                        "required": [
+                            "endpoint_segment_count",
+                            "interior_segment_count",
+                            "endpoint_jump_multiplier",
+                            "interior_jump_multiplier",
+                            "total_variation"
+                        ],
+                        "type": "object"
+                    }
+                },
+                "required": [
+                    "scale_q",
+                    "sequence",
+                    "limit_function",
+                    "uniform_certificate",
+                    "variation_formula",
+                    "checkpoints"
+                ],
+                "type": "object"
+            }
+        },
+        "required": [
+            "result"
+        ],
+        "type": "object"
+    },
+    "task_id": "jacobian/bounded-variation-uniform-limit"
 }

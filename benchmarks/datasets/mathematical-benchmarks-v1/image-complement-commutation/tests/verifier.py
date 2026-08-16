@@ -11,7 +11,8 @@ W, T = Path("/app"), Path("/tests")
 _CLASSIFICATIONS = frozenset(
     {"BIJECTIVE", "INJECTIVE_NOT_SURJECTIVE", "SURJECTIVE_NOT_INJECTIVE"}
 )
-_ROW_KEYS = frozenset(
+_ROW_KEYS_COMMUTES = frozenset({"id", "classification", "commutes", "checked_subsets"})
+_ROW_KEYS_NOT_COMMUTES = frozenset(
     {
         "id",
         "classification",
@@ -69,17 +70,19 @@ def _int_set_ok(value):
 
 
 def _row_schema_ok(row):
-    if set(row) != _ROW_KEYS:
+    if not isinstance(row.get("id"), str):
         return False
-    if not isinstance(row["id"], str):
-        return False
-    if not isinstance(row["classification"], str):
+    if not isinstance(row.get("classification"), str):
         return False
     if row["classification"] not in _CLASSIFICATIONS:
         return False
-    if type(row["commutes"]) is not bool:
+    if type(row.get("commutes")) is not bool:
         return False
-    if not (_is_int(row["checked_subsets"]) and 1 <= row["checked_subsets"] <= 32):
+    if not (_is_int(row.get("checked_subsets")) and 1 <= row["checked_subsets"] <= 32):
+        return False
+    if row["commutes"]:
+        return set(row) == _ROW_KEYS_COMMUTES
+    if set(row) != _ROW_KEYS_NOT_COMMUTES:
         return False
     return all(
         _int_set_ok(row[key])
@@ -89,9 +92,13 @@ def _row_schema_ok(row):
 
 def _normalize_row(row):
     out = dict(row)
-    for key in ("first_failure", "left_image", "right_complement"):
-        value = out[key]
-        out[key] = None if value is None else sorted(value)
+    if row["commutes"]:
+        out["first_failure"] = None
+        out["left_image"] = None
+        out["right_complement"] = None
+    else:
+        for key in ("first_failure", "left_image", "right_complement"):
+            out[key] = sorted(out[key]) if out[key] is not None else None
     return out
 
 

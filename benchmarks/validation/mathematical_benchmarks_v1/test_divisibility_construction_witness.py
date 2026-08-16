@@ -1,3 +1,5 @@
-from __future__ import annotations
+from ._fixtures import assert_result_witness_protocol
 
-TASK = "divisibility-construction-witness"
+
+def test_result_protocol(tmp_path):
+    assert_result_witness_protocol(tmp_path, "divisibility-construction-witness")

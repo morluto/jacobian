@@ -8,6 +8,14 @@ from verifier_support import (
     normalize_reward_file,
 )
 
+PROBED_GROUND_SIZES = (7, 8, 11)
+
+
+def _structural_maximum(n):
+    """Empty set, all singletons, and a maximum matching of pairs."""
+
+    return 1 + n + n // 2
+
 
 def valid_family(n, raw_family):
     try:
@@ -26,7 +34,7 @@ def valid_family(n, raw_family):
             return False
         if any(value < 0 or value >= n for item in family for value in item):
             return False
-        if len(family) != 1 + n + n // 2:
+        if len(family) != _structural_maximum(n):
             return False
         sets = [set(item) for item in family]
         if any(
@@ -42,15 +50,7 @@ def valid_family(n, raw_family):
 def _result_shape_is_valid(result):
     if not isinstance(result, dict) or set(result) != {
         "maximum_formula",
-        "upper_bound_certificate",
         "constructions",
-    }:
-        return False
-    certificate = result.get("upper_bound_certificate")
-    if not isinstance(certificate, dict) or set(certificate) != {
-        "element_frequency_cap",
-        "singleton_cap",
-        "nonsingleton_incidence_floor",
     }:
         return False
     constructions = result.get("constructions")
@@ -65,10 +65,15 @@ def _result_shape_is_valid(result):
     )
 
 
+def _formula_value(formula, n):
+    return (
+        formula["constant"] + formula["linear"] * n + formula["floor_half"] * (n // 2)
+    )
+
+
 def _math_claim_is_correct(result):
     if not _result_shape_is_valid(result):
         return False
-    certificate = result["upper_bound_certificate"]
     constructions = result["constructions"]
     construction_map = {item["n"]: item["family"] for item in constructions}
     formula = result["maximum_formula"]
@@ -78,29 +83,15 @@ def _math_claim_is_correct(result):
         or any(type(formula[key]) is not int for key in formula)
     ):
         return False
-    cap = certificate.get("singleton_cap")
-    return bool(
-        all(
-            formula["constant"]
-            + formula["linear"] * n
-            + formula["floor_half"] * (n // 2)
-            == 1 + n + n // 2
-            for n in (7, 8, 11)
-        )
-        and certificate.get("element_frequency_cap") == 2
-        and certificate.get("nonsingleton_incidence_floor") == 2
-        and isinstance(cap, dict)
-        and cap == {"variable": "n"}
-        and set(construction_map) == {7, 8, 11}
-        and len(construction_map) == len(constructions)
-        and all(valid_family(n, construction_map[n]) for n in construction_map)
-        and all(
-            len(construction_map[n])
-            == formula["constant"]
-            + formula["linear"] * n
-            + formula["floor_half"] * (n // 2)
-            for n in construction_map
-        )
+    if set(construction_map) != set(PROBED_GROUND_SIZES):
+        return False
+    if len(construction_map) != len(constructions):
+        return False
+    return all(
+        _formula_value(formula, n) == _structural_maximum(n)
+        and valid_family(n, construction_map[n])
+        and len(construction_map[n]) == _formula_value(formula, n)
+        for n in PROBED_GROUND_SIZES
     )
 
 

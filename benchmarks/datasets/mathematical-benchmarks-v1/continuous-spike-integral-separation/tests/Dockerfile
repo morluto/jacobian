@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact verifier for a continuous triangular-spike construction.
 LABEL jacobian.task="jacobian/continuous-spike-integral-separation" \
-      jacobian.checksum="3d29889c61b0f81261cbb92362184d5c51594c1b6928c2db21c49cf8a0f9ed65"
+      jacobian.checksum="26073bff6566b157f3bba31f572b29669e7bbb38e97202386d1fef00d593e21d"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && python -c 'import json; assert json.load(open("/tests/expected.json"))["task_id"] == "jacobian/continuous-spike-integral-separation"'

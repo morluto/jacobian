@@ -1,0 +1,8 @@
+{
+  "task_id": "jacobian/constant-weight-code-a23-6-10-2992",
+  "length": 23,
+  "minimum_distance": 6,
+  "weight": 10,
+  "required_size": 2992,
+  "frontier_cutoff": "2026-08-14"
+}

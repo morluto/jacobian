@@ -1,282 +1,250 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "level": {
-      "additionalProperties": false,
-      "properties": {
-        "cumulative_count": {
-          "type": "integer"
-        },
-        "excluded_density": {
-          "$ref": "#/$defs/rational"
-        },
-        "excluded_endpoint": {
-          "type": "integer"
-        },
-        "included_density": {
-          "$ref": "#/$defs/rational"
-        },
-        "included_endpoint": {
-          "type": "integer"
-        },
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
         "level": {
-          "maximum": 7,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "level",
-        "included_endpoint",
-        "excluded_endpoint",
-        "cumulative_count",
-        "included_density",
-        "excluded_density"
-      ],
-      "type": "object"
-    },
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "base": {
-        "maximum": 9,
-        "minimum": 2,
-        "type": "integer"
-      },
-      "count_formula": {
-        "additionalProperties": false,
-        "properties": {
-          "base_variable": {
-            "const": "b"
-          },
-          "denominator_offset": {
-            "type": "integer"
-          },
-          "level_variable": {
-            "const": "m"
-          },
-          "numerator_constant": {
-            "type": "integer"
-          },
-          "numerator_exponent_coefficient": {
-            "type": "integer"
-          },
-          "numerator_exponent_offset": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "base_variable",
-          "level_variable",
-          "numerator_exponent_coefficient",
-          "numerator_exponent_offset",
-          "numerator_constant",
-          "denominator_offset"
-        ],
-        "type": "object"
-      },
-      "family": {
-        "const": "ALTERNATING_GEOMETRIC_BLOCKS"
-      },
-      "levels": {
-        "items": {
-          "$ref": "#/$defs/level"
-        },
-        "maxItems": 8,
-        "minItems": 8,
-        "type": "array"
-      },
-      "lower_density": {
-        "$ref": "#/$defs/rational"
-      },
-      "lower_density_positive": {
-        "const": true
-      },
-      "natural_density_exists": {
-        "const": false
-      },
-      "semantic_relation": {
-        "const": "FORMALIZED_PREDICATE_STRICTLY_STRONGER"
-      },
-      "upper_density": {
-        "$ref": "#/$defs/rational"
-      }
-    },
-    "required": [
-      "base",
-      "family",
-      "count_formula",
-      "levels",
-      "lower_density",
-      "upper_density",
-      "lower_density_positive",
-      "natural_density_exists",
-      "semantic_relation"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "level": {
-        "additionalProperties": false,
-        "properties": {
-          "cumulative_count": {
-            "type": "integer"
-          },
-          "excluded_density": {
-            "$ref": "#/$defs/rational"
-          },
-          "excluded_endpoint": {
-            "type": "integer"
-          },
-          "included_density": {
-            "$ref": "#/$defs/rational"
-          },
-          "included_endpoint": {
-            "type": "integer"
-          },
-          "level": {
-            "maximum": 7,
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "level",
-          "included_endpoint",
-          "excluded_endpoint",
-          "cumulative_count",
-          "included_density",
-          "excluded_density"
-        ],
-        "type": "object"
-      },
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "base": {
-            "maximum": 9,
-            "minimum": 2,
-            "type": "integer"
-          },
-          "count_formula": {
             "additionalProperties": false,
             "properties": {
-              "base_variable": {
-                "const": "b"
-              },
-              "denominator_offset": {
-                "type": "integer"
-              },
-              "level_variable": {
-                "const": "m"
-              },
-              "numerator_constant": {
-                "type": "integer"
-              },
-              "numerator_exponent_coefficient": {
-                "type": "integer"
-              },
-              "numerator_exponent_offset": {
-                "type": "integer"
-              }
+                "cumulative_count": {
+                    "type": "integer"
+                },
+                "excluded_density": {
+                    "$ref": "#/$defs/rational"
+                },
+                "excluded_endpoint": {
+                    "type": "integer"
+                },
+                "included_density": {
+                    "$ref": "#/$defs/rational"
+                },
+                "included_endpoint": {
+                    "type": "integer"
+                },
+                "level": {
+                    "maximum": 7,
+                    "minimum": 0,
+                    "type": "integer"
+                }
             },
             "required": [
-              "base_variable",
-              "level_variable",
-              "numerator_exponent_coefficient",
-              "numerator_exponent_offset",
-              "numerator_constant",
-              "denominator_offset"
+                "level",
+                "included_endpoint",
+                "excluded_endpoint",
+                "cumulative_count",
+                "included_density",
+                "excluded_density"
             ],
             "type": "object"
-          },
-          "family": {
-            "const": "ALTERNATING_GEOMETRIC_BLOCKS"
-          },
-          "levels": {
-            "items": {
-              "$ref": "#/$defs/level"
+        },
+        "rational": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
             },
-            "maxItems": 8,
-            "minItems": 8,
-            "type": "array"
-          },
-          "lower_density": {
-            "$ref": "#/$defs/rational"
-          },
-          "lower_density_positive": {
-            "const": true
-          },
-          "natural_density_exists": {
-            "const": false
-          },
-          "semantic_relation": {
-            "const": "FORMALIZED_PREDICATE_STRICTLY_STRONGER"
-          },
-          "upper_density": {
-            "$ref": "#/$defs/rational"
-          }
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "base": {
+                "maximum": 9,
+                "minimum": 2,
+                "type": "integer"
+            },
+            "count_formula": {
+                "additionalProperties": false,
+                "properties": {
+                    "base_variable": {
+                        "const": "b"
+                    },
+                    "denominator_offset": {
+                        "type": "integer"
+                    },
+                    "level_variable": {
+                        "const": "m"
+                    },
+                    "numerator_constant": {
+                        "type": "integer"
+                    },
+                    "numerator_exponent_coefficient": {
+                        "type": "integer"
+                    },
+                    "numerator_exponent_offset": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "base_variable",
+                    "level_variable",
+                    "numerator_exponent_coefficient",
+                    "numerator_exponent_offset",
+                    "numerator_constant",
+                    "denominator_offset"
+                ],
+                "type": "object"
+            },
+            "levels": {
+                "items": {
+                    "$ref": "#/$defs/level"
+                },
+                "maxItems": 8,
+                "minItems": 8,
+                "type": "array"
+            },
+            "lower_density": {
+                "$ref": "#/$defs/rational"
+            },
+            "upper_density": {
+                "$ref": "#/$defs/rational"
+            }
         },
         "required": [
-          "base",
-          "family",
-          "count_formula",
-          "levels",
-          "lower_density",
-          "upper_density",
-          "lower_density_positive",
-          "natural_density_exists",
-          "semantic_relation"
+            "base",
+            "count_formula",
+            "levels",
+            "lower_density",
+            "upper_density"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/positive-lower-density-separation"
+    "submission_schema": {
+        "$defs": {
+            "level": {
+                "additionalProperties": false,
+                "properties": {
+                    "cumulative_count": {
+                        "type": "integer"
+                    },
+                    "excluded_density": {
+                        "$ref": "#/$defs/rational"
+                    },
+                    "excluded_endpoint": {
+                        "type": "integer"
+                    },
+                    "included_density": {
+                        "$ref": "#/$defs/rational"
+                    },
+                    "included_endpoint": {
+                        "type": "integer"
+                    },
+                    "level": {
+                        "maximum": 7,
+                        "minimum": 0,
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "level",
+                    "included_endpoint",
+                    "excluded_endpoint",
+                    "cumulative_count",
+                    "included_density",
+                    "excluded_density"
+                ],
+                "type": "object"
+            },
+            "rational": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
+            }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+            "result": {
+                "additionalProperties": false,
+                "properties": {
+                    "base": {
+                        "maximum": 9,
+                        "minimum": 2,
+                        "type": "integer"
+                    },
+                    "count_formula": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "base_variable": {
+                                "const": "b"
+                            },
+                            "denominator_offset": {
+                                "type": "integer"
+                            },
+                            "level_variable": {
+                                "const": "m"
+                            },
+                            "numerator_constant": {
+                                "type": "integer"
+                            },
+                            "numerator_exponent_coefficient": {
+                                "type": "integer"
+                            },
+                            "numerator_exponent_offset": {
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "base_variable",
+                            "level_variable",
+                            "numerator_exponent_coefficient",
+                            "numerator_exponent_offset",
+                            "numerator_constant",
+                            "denominator_offset"
+                        ],
+                        "type": "object"
+                    },
+                    "levels": {
+                        "items": {
+                            "$ref": "#/$defs/level"
+                        },
+                        "maxItems": 8,
+                        "minItems": 8,
+                        "type": "array"
+                    },
+                    "lower_density": {
+                        "$ref": "#/$defs/rational"
+                    },
+                    "upper_density": {
+                        "$ref": "#/$defs/rational"
+                    }
+                },
+                "required": [
+                    "base",
+                    "count_formula",
+                    "levels",
+                    "lower_density",
+                    "upper_density"
+                ],
+                "type": "object"
+            }
+        },
+        "required": [
+            "result"
+        ],
+        "type": "object"
+    },
+    "task_id": "jacobian/positive-lower-density-separation"
 }

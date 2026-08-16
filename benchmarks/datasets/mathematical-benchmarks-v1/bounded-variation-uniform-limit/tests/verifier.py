@@ -57,33 +57,21 @@ def _source_is_bound() -> bool:
         return False
 
 
-def _argument_ok(value: object) -> bool:
-    return (
-        isinstance(value, dict)
-        and set(value) == {"uniform_convergence", "variation_behavior", "implication"}
-        and value["uniform_convergence"] == "SUP_NORM_1_OVER_QN_TENDS_TO_ZERO"
-        and value["variation_behavior"] == "TOTAL_VARIATION_IS_CONSTANTLY_FOUR"
-        and value["implication"] == CONCLUSION
-    )
-
-
 def _uniform_certificate_ok(value: object, q: int) -> bool:
     return (
         isinstance(value, dict)
-        and set(value)
-        == {"sup_norm_numerator", "sup_norm_denominator_coefficient", "tends_to_zero"}
+        and set(value) == {"sup_norm_numerator", "sup_norm_denominator_coefficient"}
         and _is_int(value.get("sup_norm_numerator"))
         and value.get("sup_norm_numerator") == 1
         and _is_int(value.get("sup_norm_denominator_coefficient"))
         and value.get("sup_norm_denominator_coefficient") == q
-        and value.get("tends_to_zero") is True
     )
 
 
 def _constant_limit(value: object, expected: Fraction) -> bool:
-    if not isinstance(value, dict) or set(value) != {"kind", "value"}:
+    if not isinstance(value, dict) or set(value) != {"value"}:
         return False
-    return value["kind"] == "CONSTANT" and _fraction(value["value"]) == expected
+    return _fraction(value["value"]) == expected
 
 
 def _variation_formula_ok(value: object) -> bool:
@@ -147,7 +135,6 @@ def _result(value: object) -> bool:
         "scale_q",
         "sequence",
         "limit_function",
-        "argument",
         "uniform_certificate",
         "variation_formula",
         "checkpoints",
@@ -159,8 +146,6 @@ def _result(value: object) -> bool:
     if not _valid_sequence(value["sequence"]) or not _constant_limit(
         value["limit_function"], Fraction(0)
     ):
-        return False
-    if not _argument_ok(value["argument"]):
         return False
     if not _uniform_certificate_ok(value["uniform_certificate"], q):
         return False

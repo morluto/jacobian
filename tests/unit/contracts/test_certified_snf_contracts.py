@@ -98,5 +98,5 @@ def test_zero_dimensional_matrices_remain_explicit_for_chain_boundaries() -> Non
         entries=(),
     )
 
-    assert matrix.model_dump(mode="json")["entries"] == []
+    assert matrix.entries == ()
     assert matrix.column_count == 3

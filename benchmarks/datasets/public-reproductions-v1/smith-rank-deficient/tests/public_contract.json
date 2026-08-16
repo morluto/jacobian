@@ -1,57 +1,27 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "invariant_factors": {
-        "items": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "type": "array"
-      },
-      "rank": {
-        "type": "integer"
-      }
-    },
-    "required": [
-      "rank",
-      "invariant_factors"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "invariant_factors": {
-            "items": {
-              "minimum": 1,
-              "type": "integer"
+            "invariant_factors": {
+                "items": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "type": "array"
             },
-            "type": "array"
-          },
-          "rank": {
-            "type": "integer"
-          }
+            "rank": {
+                "type": "integer"
+            }
         },
         "required": [
-          "rank",
-          "invariant_factors"
+            "rank",
+            "invariant_factors"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/smith-rank-deficient"
+    "task_id": "jacobian/smith-rank-deficient"
 }

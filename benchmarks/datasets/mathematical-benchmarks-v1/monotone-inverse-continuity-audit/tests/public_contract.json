@@ -1,126 +1,69 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {"minimum": 1, "type": "integer"},
-        "numerator": {"type": "integer"}
-      },
-      "required": ["numerator", "denominator"],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "gap_witness": {
-        "$ref": "#/$defs/rational"
-      },
-      "jump": {
-        "$ref": "#/$defs/rational"
-      },
-      "left_endpoint_value": {
-        "$ref": "#/$defs/rational"
-      },
-      "left_limit": {
-        "$ref": "#/$defs/rational"
-      },
-      "left_slope": {
-        "$ref": "#/$defs/rational"
-      },
-      "offset": {
-        "$ref": "#/$defs/rational"
-      },
-      "right_breakpoint_value": {
-        "$ref": "#/$defs/rational"
-      },
-      "right_endpoint_value": {
-        "$ref": "#/$defs/rational"
-      },
-      "right_slope": {
-        "$ref": "#/$defs/rational"
-      }
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rational": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        }
     },
-    "required": [
-      "left_slope",
-      "right_slope",
-      "offset",
-      "jump",
-      "left_endpoint_value",
-      "left_limit",
-      "right_breakpoint_value",
-      "right_endpoint_value",
-      "gap_witness"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$defs": {
-      "rational": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {"minimum": 1, "type": "integer"},
-          "numerator": {"type": "integer"}
-        },
-        "required": ["numerator", "denominator"],
-        "type": "object"
-      }
-    },
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "gap_witness": {
-            "$ref": "#/$defs/rational"
-          },
-          "jump": {
-            "$ref": "#/$defs/rational"
-          },
-          "left_endpoint_value": {
-            "$ref": "#/$defs/rational"
-          },
-          "left_limit": {
-            "$ref": "#/$defs/rational"
-          },
-          "left_slope": {
-            "$ref": "#/$defs/rational"
-          },
-          "offset": {
-            "$ref": "#/$defs/rational"
-          },
-          "right_breakpoint_value": {
-            "$ref": "#/$defs/rational"
-          },
-          "right_endpoint_value": {
-            "$ref": "#/$defs/rational"
-          },
-          "right_slope": {
-            "$ref": "#/$defs/rational"
-          }
+            "gap_witness": {
+                "$ref": "#/$defs/rational"
+            },
+            "jump": {
+                "$ref": "#/$defs/rational"
+            },
+            "left_endpoint_value": {
+                "$ref": "#/$defs/rational"
+            },
+            "left_limit": {
+                "$ref": "#/$defs/rational"
+            },
+            "left_slope": {
+                "$ref": "#/$defs/rational"
+            },
+            "offset": {
+                "$ref": "#/$defs/rational"
+            },
+            "right_breakpoint_value": {
+                "$ref": "#/$defs/rational"
+            },
+            "right_endpoint_value": {
+                "$ref": "#/$defs/rational"
+            },
+            "right_slope": {
+                "$ref": "#/$defs/rational"
+            }
         },
         "required": [
-          "left_slope",
-          "right_slope",
-          "offset",
-          "jump",
-          "left_endpoint_value",
-          "left_limit",
-          "right_breakpoint_value",
-          "right_endpoint_value",
-          "gap_witness"
+            "left_slope",
+            "right_slope",
+            "offset",
+            "jump",
+            "left_endpoint_value",
+            "left_limit",
+            "right_breakpoint_value",
+            "right_endpoint_value",
+            "gap_witness"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/monotone-inverse-continuity-audit"
+    "task_id": "jacobian/monotone-inverse-continuity-audit"
 }

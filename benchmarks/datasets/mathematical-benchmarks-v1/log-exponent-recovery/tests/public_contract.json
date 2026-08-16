@@ -1,112 +1,62 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {"minimum": 1, "type": "integer"},
-        "numerator": {"type": "integer"}
-      },
-      "required": ["numerator", "denominator"],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "reciprocal_log_contributions": {
-        "additionalProperties": false,
-        "properties": {
-          "x": {
-            "$ref": "#/$defs/rational"
-          },
-          "xyz": {
-            "$ref": "#/$defs/rational"
-          },
-          "y": {
-            "$ref": "#/$defs/rational"
-          },
-          "z": {
-            "$ref": "#/$defs/rational"
-          }
-        },
-        "required": [
-          "x",
-          "y",
-          "z",
-          "xyz"
-        ],
-        "type": "object"
-      },
-      "value": {
-        "type": "integer"
-      }
-    },
-    "required": [
-      "value",
-      "reciprocal_log_contributions"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$defs": {
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {"minimum": 1, "type": "integer"},
-          "numerator": {"type": "integer"}
-        },
-        "required": ["numerator", "denominator"],
-        "type": "object"
-      }
-    },
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "reciprocal_log_contributions": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rational": {
             "additionalProperties": false,
             "properties": {
-              "x": {
-                "$ref": "#/$defs/rational"
-              },
-              "xyz": {
-                "$ref": "#/$defs/rational"
-              },
-              "y": {
-                "$ref": "#/$defs/rational"
-              },
-              "z": {
-                "$ref": "#/$defs/rational"
-              }
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "type": "integer"
+                }
             },
             "required": [
-              "x",
-              "y",
-              "z",
-              "xyz"
+                "numerator",
+                "denominator"
             ],
             "type": "object"
-          },
-          "value": {
-            "type": "integer"
-          }
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "reciprocal_log_contributions": {
+                "additionalProperties": false,
+                "properties": {
+                    "x": {
+                        "$ref": "#/$defs/rational"
+                    },
+                    "xyz": {
+                        "$ref": "#/$defs/rational"
+                    },
+                    "y": {
+                        "$ref": "#/$defs/rational"
+                    },
+                    "z": {
+                        "$ref": "#/$defs/rational"
+                    }
+                },
+                "required": [
+                    "x",
+                    "y",
+                    "z",
+                    "xyz"
+                ],
+                "type": "object"
+            },
+            "value": {
+                "type": "integer"
+            }
         },
         "required": [
-          "value",
-          "reciprocal_log_contributions"
+            "value",
+            "reciprocal_log_contributions"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/log-exponent-recovery"
+    "task_id": "jacobian/log-exponent-recovery"
 }

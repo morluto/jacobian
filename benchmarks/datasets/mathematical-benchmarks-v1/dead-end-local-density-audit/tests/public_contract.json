@@ -1,140 +1,68 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "case": {
-      "additionalProperties": false,
-      "properties": {
-        "branch": {
-          "enum": [
-            "INVERTIBLE",
-            "SINGLY_DIVISIBLE",
-            "SQUARE_DIVISIBLE"
-          ]
-        },
-        "case_id": {
-          "type": "string"
-        },
-        "density_denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "density_numerator": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "forbidden_residues": {
-          "items": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "valid_count": {
-          "minimum": 0,
-          "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "case": {
+            "additionalProperties": false,
+            "properties": {
+                "branch": {
+                    "enum": [
+                        "INVERTIBLE",
+                        "SINGLY_DIVISIBLE",
+                        "SQUARE_DIVISIBLE"
+                    ]
+                },
+                "case_id": {
+                    "type": "string"
+                },
+                "density_denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "density_numerator": {
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "forbidden_residues": {
+                    "items": {
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "type": "array"
+                },
+                "valid_count": {
+                    "minimum": 0,
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "case_id",
+                "branch",
+                "forbidden_residues",
+                "valid_count",
+                "density_numerator",
+                "density_denominator"
+            ],
+            "type": "object"
         }
-      },
-      "required": [
-        "case_id",
-        "branch",
-        "forbidden_residues",
-        "valid_count",
-        "density_numerator",
-        "density_denominator"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "cases": {
-        "items": {
-          "$ref": "#/$defs/case"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      }
     },
-    "required": [
-      "cases"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "case": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "branch": {
-            "enum": [
-              "INVERTIBLE",
-              "SINGLY_DIVISIBLE",
-              "SQUARE_DIVISIBLE"
-            ]
-          },
-          "case_id": {
-            "type": "string"
-          },
-          "density_denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "density_numerator": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "forbidden_residues": {
-            "items": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "valid_count": {
-            "minimum": 0,
-            "type": "integer"
-          }
+            "cases": {
+                "items": {
+                    "$ref": "#/$defs/case"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
+            }
         },
         "required": [
-          "case_id",
-          "branch",
-          "forbidden_residues",
-          "valid_count",
-          "density_numerator",
-          "density_denominator"
+            "cases"
         ],
         "type": "object"
-      }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "cases": {
-            "items": {
-              "$ref": "#/$defs/case"
-            },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          }
-        },
-        "required": [
-          "cases"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/dead-end-local-density-audit"
+    "task_id": "jacobian/dead-end-local-density-audit"
 }

@@ -1,154 +1,75 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "branch": {
-      "items": {
-        "maximum": 10,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "maxItems": 8,
-      "minItems": 1,
-      "type": "array",
-      "uniqueItems": true
-    },
-    "edge": {
-      "items": {
-        "maximum": 10,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "maxItems": 2,
-      "minItems": 2,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "branch_sets": {
-        "items": {
-          "$ref": "#/$defs/branch"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      },
-      "chromatic_number": {
-        "const": 4
-      },
-      "edges": {
-        "items": {
-          "$ref": "#/$defs/edge"
-        },
-        "maxItems": 20,
-        "minItems": 20,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "four_coloring": {
-        "items": {
-          "maximum": 3,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 11,
-        "minItems": 11,
-        "type": "array"
-      },
-      "minor_order": {
-        "const": 4
-      }
-    },
-    "required": [
-      "edges",
-      "four_coloring",
-      "branch_sets",
-      "chromatic_number",
-      "minor_order"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "branch": {
-        "items": {
-          "maximum": 10,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 8,
-        "minItems": 1,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "edge": {
-        "items": {
-          "maximum": 10,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "branch_sets": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "branch": {
             "items": {
-              "$ref": "#/$defs/branch"
+                "maximum": 10,
+                "minimum": 0,
+                "type": "integer"
             },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          },
-          "chromatic_number": {
-            "const": 4
-          },
-          "edges": {
-            "items": {
-              "$ref": "#/$defs/edge"
-            },
-            "maxItems": 20,
-            "minItems": 20,
+            "maxItems": 8,
+            "minItems": 1,
             "type": "array",
             "uniqueItems": true
-          },
-          "four_coloring": {
+        },
+        "edge": {
             "items": {
-              "maximum": 3,
-              "minimum": 0,
-              "type": "integer"
+                "maximum": 10,
+                "minimum": 0,
+                "type": "integer"
             },
-            "maxItems": 11,
-            "minItems": 11,
+            "maxItems": 2,
+            "minItems": 2,
             "type": "array"
-          },
-          "minor_order": {
-            "const": 4
-          }
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "branch_sets": {
+                "items": {
+                    "$ref": "#/$defs/branch"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
+            },
+            "chromatic_number": {
+                "const": 4
+            },
+            "edges": {
+                "items": {
+                    "$ref": "#/$defs/edge"
+                },
+                "maxItems": 20,
+                "minItems": 20,
+                "type": "array",
+                "uniqueItems": true
+            },
+            "four_coloring": {
+                "items": {
+                    "maximum": 3,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "maxItems": 11,
+                "minItems": 11,
+                "type": "array"
+            },
+            "minor_order": {
+                "const": 4
+            }
         },
         "required": [
-          "edges",
-          "four_coloring",
-          "branch_sets",
-          "chromatic_number",
-          "minor_order"
+            "edges",
+            "four_coloring",
+            "branch_sets",
+            "chromatic_number",
+            "minor_order"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/hadwiger-triangle-free-minor-certificate"
+    "task_id": "jacobian/hadwiger-triangle-free-minor-certificate"
 }

@@ -1,274 +1,135 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "cycle_row": {
-      "additionalProperties": false,
-      "properties": {
-        "class_size": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "contributes": {
-          "type": "boolean"
-        },
-        "fixed_points": {
-          "maximum": 4,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "partition": {
-          "enum": [
-            "1+1+1+1",
-            "2+1+1",
-            "2+2",
-            "3+1",
-            "4"
-          ]
-        }
-      },
-      "required": [
-        "partition",
-        "class_size",
-        "fixed_points",
-        "contributes"
-      ],
-      "type": "object"
-    },
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "actual_discriminant": {
-          "type": "integer"
-        },
-        "cycle_types": {
-          "items": {
-            "$ref": "#/$defs/cycle_row"
-          },
-          "maxItems": 5,
-          "minItems": 5,
-          "type": "array"
-        },
-        "defects": {
-          "items": {
-            "enum": [
-              "MOD2_IRREDUCIBILITY_FALSE",
-              "DISCRIMINANT_WRONG",
-              "DOUBLE_TRANSPOSITIONS_HAVE_NO_FIXED_POINTS",
-              "PUBLISHED_DENSITY_WRONG"
-            ]
-          },
-          "maxItems": 4,
-          "minItems": 4,
-          "type": "array",
-          "uniqueItems": true
-        },
-        "density": {
-          "additionalProperties": false,
-          "properties": {
-            "denominator": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "numerator": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "numerator",
-            "denominator"
-          ],
-          "type": "object"
-        },
-        "encoded_answer": {
-          "type": "integer"
-        },
-        "fixed_point_total": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "mod2_factor": {
-          "additionalProperties": false,
-          "properties": {
-            "factor_coefficients": {
-              "items": {
-                "enum": [
-                  0,
-                  1
-                ]
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
-            },
-            "multiplicity": {
-              "maximum": 8,
-              "minimum": 1,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "factor_coefficients",
-            "multiplicity"
-          ],
-          "type": "object"
-        }
-      },
-      "required": [
-        "mod2_factor",
-        "actual_discriminant",
-        "cycle_types",
-        "fixed_point_total",
-        "density",
-        "encoded_answer",
-        "defects"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "$ref": "#/$defs/result"
-  },
-  "submission_schema": {
-    "$defs": {
-      "cycle_row": {
-        "additionalProperties": false,
-        "properties": {
-          "class_size": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "contributes": {
-            "type": "boolean"
-          },
-          "fixed_points": {
-            "maximum": 4,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "partition": {
-            "enum": [
-              "1+1+1+1",
-              "2+1+1",
-              "2+2",
-              "3+1",
-              "4"
-            ]
-          }
-        },
-        "required": [
-          "partition",
-          "class_size",
-          "fixed_points",
-          "contributes"
-        ],
-        "type": "object"
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "actual_discriminant": {
-            "type": "integer"
-          },
-          "cycle_types": {
-            "items": {
-              "$ref": "#/$defs/cycle_row"
-            },
-            "maxItems": 5,
-            "minItems": 5,
-            "type": "array"
-          },
-          "defects": {
-            "items": {
-              "enum": [
-                "MOD2_IRREDUCIBILITY_FALSE",
-                "DISCRIMINANT_WRONG",
-                "DOUBLE_TRANSPOSITIONS_HAVE_NO_FIXED_POINTS",
-                "PUBLISHED_DENSITY_WRONG"
-              ]
-            },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "density": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "cycle_row": {
             "additionalProperties": false,
             "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "minimum": 0,
-                "type": "integer"
-              }
-            },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          },
-          "encoded_answer": {
-            "type": "integer"
-          },
-          "fixed_point_total": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "mod2_factor": {
-            "additionalProperties": false,
-            "properties": {
-              "factor_coefficients": {
-                "items": {
-                  "enum": [
-                    0,
-                    1
-                  ]
+                "class_size": {
+                    "minimum": 1,
+                    "type": "integer"
                 },
-                "maxItems": 2,
-                "minItems": 2,
-                "type": "array"
-              },
-              "multiplicity": {
-                "maximum": 8,
-                "minimum": 1,
-                "type": "integer"
-              }
+                "contributes": {
+                    "type": "boolean"
+                },
+                "fixed_points": {
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "partition": {
+                    "enum": [
+                        "1+1+1+1",
+                        "2+1+1",
+                        "2+2",
+                        "3+1",
+                        "4"
+                    ]
+                }
             },
             "required": [
-              "factor_coefficients",
-              "multiplicity"
+                "partition",
+                "class_size",
+                "fixed_points",
+                "contributes"
             ],
             "type": "object"
-          }
         },
-        "required": [
-          "mod2_factor",
-          "actual_discriminant",
-          "cycle_types",
-          "fixed_point_total",
-          "density",
-          "encoded_answer",
-          "defects"
-        ],
-        "type": "object"
-      }
+        "result": {
+            "additionalProperties": false,
+            "properties": {
+                "actual_discriminant": {
+                    "type": "integer"
+                },
+                "cycle_types": {
+                    "items": {
+                        "$ref": "#/$defs/cycle_row"
+                    },
+                    "maxItems": 5,
+                    "minItems": 5,
+                    "type": "array"
+                },
+                "defects": {
+                    "items": {
+                        "enum": [
+                            "MOD2_IRREDUCIBILITY_FALSE",
+                            "DISCRIMINANT_WRONG",
+                            "DOUBLE_TRANSPOSITIONS_HAVE_NO_FIXED_POINTS",
+                            "PUBLISHED_DENSITY_WRONG"
+                        ]
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array",
+                    "uniqueItems": true
+                },
+                "density": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "denominator": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "numerator": {
+                            "minimum": 0,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "numerator",
+                        "denominator"
+                    ],
+                    "type": "object"
+                },
+                "encoded_answer": {
+                    "type": "integer"
+                },
+                "fixed_point_total": {
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "mod2_factor": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "factor_coefficients": {
+                            "items": {
+                                "enum": [
+                                    0,
+                                    1
+                                ]
+                            },
+                            "maxItems": 2,
+                            "minItems": 2,
+                            "type": "array"
+                        },
+                        "multiplicity": {
+                            "maximum": 8,
+                            "minimum": 1,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "factor_coefficients",
+                        "multiplicity"
+                    ],
+                    "type": "object"
+                }
+            },
+            "required": [
+                "mod2_factor",
+                "actual_discriminant",
+                "cycle_types",
+                "fixed_point_total",
+                "density",
+                "encoded_answer",
+                "defects"
+            ],
+            "type": "object"
+        }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "$ref": "#/$defs/result"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/chebotarev-fixed-point-proof-audit"
+    "task_id": "jacobian/chebotarev-fixed-point-proof-audit"
 }

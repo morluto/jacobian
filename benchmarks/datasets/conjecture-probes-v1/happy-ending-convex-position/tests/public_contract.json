@@ -1,140 +1,68 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "count_row": {
-      "additionalProperties": false,
-      "properties": {
-        "count": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "size": {
-          "maximum": 13,
-          "minimum": 3,
-          "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "count_row": {
+            "additionalProperties": false,
+            "properties": {
+                "count": {
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "size": {
+                    "maximum": 13,
+                    "minimum": 3,
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "size",
+                "count"
+            ],
+            "type": "object"
         }
-      },
-      "required": [
-        "size",
-        "count"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "convex_subset_counts": {
-        "items": {
-          "$ref": "#/$defs/count_row"
-        },
-        "maxItems": 11,
-        "minItems": 11,
-        "type": "array"
-      },
-      "general_position": {
-        "const": true
-      },
-      "maximum_convex_size": {
-        "maximum": 13,
-        "minimum": 3,
-        "type": "integer"
-      },
-      "maximum_witness_cyclic": {
-        "items": {
-          "pattern": "^P(?:0[0-9]|1[0-2])$",
-          "type": "string"
-        },
-        "minItems": 3,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "scope_identity": {
-        "const": "happy-ending-convex-position:points-v1"
-      }
     },
-    "required": [
-      "general_position",
-      "convex_subset_counts",
-      "maximum_convex_size",
-      "maximum_witness_cyclic",
-      "scope_identity"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "count_row": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "count": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "size": {
-            "maximum": 13,
-            "minimum": 3,
-            "type": "integer"
-          }
+            "convex_subset_counts": {
+                "items": {
+                    "$ref": "#/$defs/count_row"
+                },
+                "maxItems": 11,
+                "minItems": 11,
+                "type": "array"
+            },
+            "general_position": {
+                "const": true
+            },
+            "maximum_convex_size": {
+                "maximum": 13,
+                "minimum": 3,
+                "type": "integer"
+            },
+            "maximum_witness_cyclic": {
+                "items": {
+                    "pattern": "^P(?:0[0-9]|1[0-2])$",
+                    "type": "string"
+                },
+                "minItems": 3,
+                "type": "array",
+                "uniqueItems": true
+            },
+            "scope_identity": {
+                "const": "happy-ending-convex-position:points-v1"
+            }
         },
         "required": [
-          "size",
-          "count"
+            "general_position",
+            "convex_subset_counts",
+            "maximum_convex_size",
+            "maximum_witness_cyclic",
+            "scope_identity"
         ],
         "type": "object"
-      }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "convex_subset_counts": {
-            "items": {
-              "$ref": "#/$defs/count_row"
-            },
-            "maxItems": 11,
-            "minItems": 11,
-            "type": "array"
-          },
-          "general_position": {
-            "const": true
-          },
-          "maximum_convex_size": {
-            "maximum": 13,
-            "minimum": 3,
-            "type": "integer"
-          },
-          "maximum_witness_cyclic": {
-            "items": {
-              "pattern": "^P(?:0[0-9]|1[0-2])$",
-              "type": "string"
-            },
-            "minItems": 3,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "scope_identity": {
-            "const": "happy-ending-convex-position:points-v1"
-          }
-        },
-        "required": [
-          "general_position",
-          "convex_subset_counts",
-          "maximum_convex_size",
-          "maximum_witness_cyclic",
-          "scope_identity"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/happy-ending-convex-position"
+    "task_id": "jacobian/happy-ending-convex-position"
 }

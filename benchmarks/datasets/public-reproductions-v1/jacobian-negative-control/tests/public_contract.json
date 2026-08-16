@@ -1,49 +1,23 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "both_points_map_to_claimed_image": {
-        "type": "boolean"
-      },
-      "noninvertibility_verified": {
-        "type": "boolean"
-      }
-    },
-    "required": [
-      "both_points_map_to_claimed_image",
-      "noninvertibility_verified"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "both_points_map_to_claimed_image": {
-            "type": "boolean"
-          },
-          "noninvertibility_verified": {
-            "type": "boolean"
-          }
+            "both_points_map_to_claimed_image": {
+                "type": "boolean"
+            },
+            "noninvertibility_verified": {
+                "type": "boolean"
+            }
         },
         "required": [
-          "both_points_map_to_claimed_image",
-          "noninvertibility_verified"
+            "both_points_map_to_claimed_image",
+            "noninvertibility_verified"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/jacobian-negative-control"
+    "task_id": "jacobian/jacobian-negative-control"
 }

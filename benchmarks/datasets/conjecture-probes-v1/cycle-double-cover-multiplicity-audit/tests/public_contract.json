@@ -1,148 +1,72 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "counts": {
-      "items": {
-        "maximum": 12,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "maxItems": 15,
-      "minItems": 15,
-      "type": "array"
-    },
-    "cycle": {
-      "items": {
-        "maximum": 9,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "maxItems": 9,
-      "minItems": 5,
-      "type": "array",
-      "uniqueItems": true
-    },
-    "cycles": {
-      "items": {
-        "$ref": "#/$defs/cycle"
-      },
-      "maxItems": 12,
-      "minItems": 4,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "flawed_cycles": {
-        "$ref": "#/$defs/cycles"
-      },
-      "flawed_multiplicities": {
-        "$ref": "#/$defs/counts"
-      },
-      "non_double_edge_indices": {
-        "items": {
-          "maximum": 14,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "minItems": 1,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "repair_cycles": {
-        "$ref": "#/$defs/cycles"
-      },
-      "repair_multiplicities": {
-        "$ref": "#/$defs/counts"
-      }
-    },
-    "required": [
-      "flawed_cycles",
-      "flawed_multiplicities",
-      "non_double_edge_indices",
-      "repair_cycles",
-      "repair_multiplicities"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "counts": {
-        "items": {
-          "maximum": 12,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 15,
-        "minItems": 15,
-        "type": "array"
-      },
-      "cycle": {
-        "items": {
-          "maximum": 9,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 9,
-        "minItems": 5,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "cycles": {
-        "items": {
-          "$ref": "#/$defs/cycle"
-        },
-        "maxItems": 12,
-        "minItems": 4,
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "flawed_cycles": {
-            "$ref": "#/$defs/cycles"
-          },
-          "flawed_multiplicities": {
-            "$ref": "#/$defs/counts"
-          },
-          "non_double_edge_indices": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "counts": {
             "items": {
-              "maximum": 14,
-              "minimum": 0,
-              "type": "integer"
+                "maximum": 12,
+                "minimum": 0,
+                "type": "integer"
             },
-            "minItems": 1,
+            "maxItems": 15,
+            "minItems": 15,
+            "type": "array"
+        },
+        "cycle": {
+            "items": {
+                "maximum": 9,
+                "minimum": 0,
+                "type": "integer"
+            },
+            "maxItems": 9,
+            "minItems": 5,
             "type": "array",
             "uniqueItems": true
-          },
-          "repair_cycles": {
-            "$ref": "#/$defs/cycles"
-          },
-          "repair_multiplicities": {
-            "$ref": "#/$defs/counts"
-          }
+        },
+        "cycles": {
+            "items": {
+                "$ref": "#/$defs/cycle"
+            },
+            "maxItems": 12,
+            "minItems": 4,
+            "type": "array"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "flawed_cycles": {
+                "$ref": "#/$defs/cycles"
+            },
+            "flawed_multiplicities": {
+                "$ref": "#/$defs/counts"
+            },
+            "non_double_edge_indices": {
+                "items": {
+                    "maximum": 14,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
+            },
+            "repair_cycles": {
+                "$ref": "#/$defs/cycles"
+            },
+            "repair_multiplicities": {
+                "$ref": "#/$defs/counts"
+            }
         },
         "required": [
-          "flawed_cycles",
-          "flawed_multiplicities",
-          "non_double_edge_indices",
-          "repair_cycles",
-          "repair_multiplicities"
+            "flawed_cycles",
+            "flawed_multiplicities",
+            "non_double_edge_indices",
+            "repair_cycles",
+            "repair_multiplicities"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/cycle-double-cover-multiplicity-audit"
+    "task_id": "jacobian/cycle-double-cover-multiplicity-audit"
 }

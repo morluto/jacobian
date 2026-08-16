@@ -1,316 +1,156 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "codewords": {
-        "items": {
-          "pattern": "^[012]{6}$",
-          "type": "string"
-        },
-        "maxItems": 18,
-        "minItems": 18,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "distance_distribution": {
-        "additionalProperties": false,
-        "properties": {
-          "A0": {
-            "const": "1"
-          },
-          "A4": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rational": {
             "additionalProperties": false,
             "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          },
-          "A6": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "A0",
-          "A4",
-          "A6"
-        ],
-        "type": "object"
-      },
-      "upper_bound_certificate": {
-        "additionalProperties": false,
-        "properties": {
-          "bound": {
-            "const": 18
-          },
-          "dual_multipliers": {
-            "additionalProperties": false,
-            "properties": {
-              "order_1": {
-                "$ref": "#/$defs/rational"
-              },
-              "order_2": {
-                "$ref": "#/$defs/rational"
-              }
-            },
-            "required": [
-              "order_1",
-              "order_2"
-            ],
-            "type": "object"
-          },
-          "krawtchouk_rows": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "K0": {
-                  "type": "integer"
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
                 },
-                "K4": {
-                  "type": "integer"
-                },
-                "K6": {
-                  "type": "integer"
-                },
-                "order": {
-                  "enum": [
-                    1,
-                    2
-                  ]
+                "numerator": {
+                    "type": "integer"
                 }
-              },
-              "required": [
-                "order",
-                "K0",
-                "K4",
-                "K6"
-              ],
-              "type": "object"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          }
-        },
-        "required": [
-          "krawtchouk_rows",
-          "dual_multipliers",
-          "bound"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "codewords",
-      "distance_distribution",
-      "upper_bound_certificate"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "codewords": {
-            "items": {
-              "pattern": "^[012]{6}$",
-              "type": "string"
-            },
-            "maxItems": 18,
-            "minItems": 18,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "distance_distribution": {
-            "additionalProperties": false,
-            "properties": {
-              "A0": {
-                "const": "1"
-              },
-              "A4": {
-                "additionalProperties": false,
-                "properties": {
-                  "denominator": {
-                    "minimum": 1,
-                    "type": "integer"
-                  },
-                  "numerator": {
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "numerator",
-                  "denominator"
-                ],
-                "type": "object"
-              },
-              "A6": {
-                "additionalProperties": false,
-                "properties": {
-                  "denominator": {
-                    "minimum": 1,
-                    "type": "integer"
-                  },
-                  "numerator": {
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "numerator",
-                  "denominator"
-                ],
-                "type": "object"
-              }
             },
             "required": [
-              "A0",
-              "A4",
-              "A6"
+                "numerator",
+                "denominator"
             ],
             "type": "object"
-          },
-          "upper_bound_certificate": {
-            "additionalProperties": false,
-            "properties": {
-              "bound": {
-                "const": 18
-              },
-              "dual_multipliers": {
-                "additionalProperties": false,
-                "properties": {
-                  "order_1": {
-                    "$ref": "#/$defs/rational"
-                  },
-                  "order_2": {
-                    "$ref": "#/$defs/rational"
-                  }
-                },
-                "required": [
-                  "order_1",
-                  "order_2"
-                ],
-                "type": "object"
-              },
-              "krawtchouk_rows": {
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "codewords": {
                 "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "K0": {
-                      "type": "integer"
-                    },
-                    "K4": {
-                      "type": "integer"
-                    },
-                    "K6": {
-                      "type": "integer"
-                    },
-                    "order": {
-                      "enum": [
-                        1,
-                        2
-                      ]
-                    }
-                  },
-                  "required": [
-                    "order",
-                    "K0",
-                    "K4",
-                    "K6"
-                  ],
-                  "type": "object"
+                    "pattern": "^[012]{6}$",
+                    "type": "string"
                 },
-                "maxItems": 2,
-                "minItems": 2,
-                "type": "array"
-              }
+                "maxItems": 18,
+                "minItems": 18,
+                "type": "array",
+                "uniqueItems": true
             },
-            "required": [
-              "krawtchouk_rows",
-              "dual_multipliers",
-              "bound"
-            ],
-            "type": "object"
-          }
+            "distance_distribution": {
+                "additionalProperties": false,
+                "properties": {
+                    "A0": {
+                        "const": "1"
+                    },
+                    "A4": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "denominator": {
+                                "minimum": 1,
+                                "type": "integer"
+                            },
+                            "numerator": {
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "numerator",
+                            "denominator"
+                        ],
+                        "type": "object"
+                    },
+                    "A6": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "denominator": {
+                                "minimum": 1,
+                                "type": "integer"
+                            },
+                            "numerator": {
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "numerator",
+                            "denominator"
+                        ],
+                        "type": "object"
+                    }
+                },
+                "required": [
+                    "A0",
+                    "A4",
+                    "A6"
+                ],
+                "type": "object"
+            },
+            "upper_bound_certificate": {
+                "additionalProperties": false,
+                "properties": {
+                    "bound": {
+                        "const": 18
+                    },
+                    "dual_multipliers": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "order_1": {
+                                "$ref": "#/$defs/rational"
+                            },
+                            "order_2": {
+                                "$ref": "#/$defs/rational"
+                            }
+                        },
+                        "required": [
+                            "order_1",
+                            "order_2"
+                        ],
+                        "type": "object"
+                    },
+                    "krawtchouk_rows": {
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "K0": {
+                                    "type": "integer"
+                                },
+                                "K4": {
+                                    "type": "integer"
+                                },
+                                "K6": {
+                                    "type": "integer"
+                                },
+                                "order": {
+                                    "enum": [
+                                        1,
+                                        2
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "order",
+                                "K0",
+                                "K4",
+                                "K6"
+                            ],
+                            "type": "object"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                    }
+                },
+                "required": [
+                    "krawtchouk_rows",
+                    "dual_multipliers",
+                    "bound"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "codewords",
-          "distance_distribution",
-          "upper_bound_certificate"
+            "codewords",
+            "distance_distribution",
+            "upper_bound_certificate"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/ternary-distance-code-optimum"
+    "task_id": "jacobian/ternary-distance-code-optimum"
 }

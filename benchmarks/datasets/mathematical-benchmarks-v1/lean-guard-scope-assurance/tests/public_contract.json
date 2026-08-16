@@ -1,113 +1,55 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "cases": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "findings": {
-              "items": {
-                "enum": [
-                  "DIVISION_BY_ZERO",
-                  "INTEGER_DIVISION_TRUNCATION",
-                  "NAT_SUBTRACTION_TRUNCATION"
-                ]
-              },
-              "type": "array",
-              "uniqueItems": true
-            },
-            "id": {
-              "type": "string"
-            },
-            "reason": {
-              "enum": [
-                "FULL_SCOPE_GUARD_BUT_NAT_DIVISION_MAY_TRUNCATE",
-                "LITERAL_ONE_IS_DEFINITIONALLY_ZERO_IN_CUSTOM_TYPE",
-                "ARBITRARY_LT_DOES_NOT_ESTABLISH_NONZERO",
-                "PROOF_TERMS_EXCLUDED_FROM_STATEMENT_ANALYSIS",
-                "ZERO_NUMERATOR_IS_EXACT_BUT_DIVISOR_IS_UNGUARDED"
-              ]
-            }
-          },
-          "required": [
-            "id",
-            "findings",
-            "reason"
-          ],
-          "type": "object"
-        },
-        "maxItems": 5,
-        "minItems": 5,
-        "type": "array"
-      }
-    },
-    "required": [
-      "cases"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "cases": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "findings": {
-                  "items": {
-                    "enum": [
-                      "DIVISION_BY_ZERO",
-                      "INTEGER_DIVISION_TRUNCATION",
-                      "NAT_SUBTRACTION_TRUNCATION"
-                    ]
-                  },
-                  "type": "array",
-                  "uniqueItems": true
+            "cases": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "findings": {
+                            "items": {
+                                "enum": [
+                                    "DIVISION_BY_ZERO",
+                                    "INTEGER_DIVISION_TRUNCATION",
+                                    "NAT_SUBTRACTION_TRUNCATION"
+                                ]
+                            },
+                            "type": "array",
+                            "uniqueItems": true
+                        },
+                        "id": {
+                            "type": "string"
+                        },
+                        "reason": {
+                            "enum": [
+                                "FULL_SCOPE_GUARD_BUT_NAT_DIVISION_MAY_TRUNCATE",
+                                "LITERAL_ONE_IS_DEFINITIONALLY_ZERO_IN_CUSTOM_TYPE",
+                                "ARBITRARY_LT_DOES_NOT_ESTABLISH_NONZERO",
+                                "PROOF_TERMS_EXCLUDED_FROM_STATEMENT_ANALYSIS",
+                                "ZERO_NUMERATOR_IS_EXACT_BUT_DIVISOR_IS_UNGUARDED"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "id",
+                        "findings",
+                        "reason"
+                    ],
+                    "type": "object"
                 },
-                "id": {
-                  "type": "string"
-                },
-                "reason": {
-                  "enum": [
-                    "FULL_SCOPE_GUARD_BUT_NAT_DIVISION_MAY_TRUNCATE",
-                    "LITERAL_ONE_IS_DEFINITIONALLY_ZERO_IN_CUSTOM_TYPE",
-                    "ARBITRARY_LT_DOES_NOT_ESTABLISH_NONZERO",
-                    "PROOF_TERMS_EXCLUDED_FROM_STATEMENT_ANALYSIS",
-                    "ZERO_NUMERATOR_IS_EXACT_BUT_DIVISOR_IS_UNGUARDED"
-                  ]
-                }
-              },
-              "required": [
-                "id",
-                "findings",
-                "reason"
-              ],
-              "type": "object"
-            },
-            "maxItems": 5,
-            "minItems": 5,
-            "type": "array"
-          }
+                "maxItems": 5,
+                "minItems": 5,
+                "type": "array"
+            }
         },
         "required": [
-          "cases"
+            "cases"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/lean-guard-scope-assurance"
+    "task_id": "jacobian/lean-guard-scope-assurance"
 }

@@ -1,270 +1,133 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "case": {
-      "additionalProperties": false,
-      "properties": {
-        "class": {
-          "enum": [
-            "PERFECT_CUBOID",
-            "EULER_BRICK_ONLY",
-            "SPACE_AND_TWO_FACES",
-            "OTHER"
-          ]
-        },
-        "edges": {
-          "items": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "face_radicands": {
-          "items": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "face_roots": {
-          "items": {
-            "$ref": "#/$defs/root_or_null"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "id": {
-          "pattern": "^PC(?:0[1-9]|1[0-2])$",
-          "type": "string"
-        },
-        "space_radicand": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "space_root": {
-          "$ref": "#/$defs/root_or_null"
-        }
-      },
-      "required": [
-        "id",
-        "edges",
-        "face_radicands",
-        "face_roots",
-        "space_radicand",
-        "space_root",
-        "class"
-      ],
-      "type": "object"
-    },
-    "root_or_null": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "case_counts": {
-        "additionalProperties": false,
-        "properties": {
-          "EULER_BRICK_ONLY": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "OTHER": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "PERFECT_CUBOID": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "SPACE_AND_TWO_FACES": {
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "PERFECT_CUBOID",
-          "EULER_BRICK_ONLY",
-          "SPACE_AND_TWO_FACES",
-          "OTHER"
-        ],
-        "type": "object"
-      },
-      "cases": {
-        "items": {
-          "$ref": "#/$defs/case"
-        },
-        "maxItems": 12,
-        "minItems": 12,
-        "type": "array"
-      },
-      "contains_perfect_cuboid": {
-        "type": "boolean"
-      },
-      "scope_identity": {
-        "const": "perfect-cuboid-scope-audit:case-set-v1"
-      }
-    },
-    "required": [
-      "cases",
-      "case_counts",
-      "contains_perfect_cuboid",
-      "scope_identity"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "case": {
-        "additionalProperties": false,
-        "properties": {
-          "class": {
-            "enum": [
-              "PERFECT_CUBOID",
-              "EULER_BRICK_ONLY",
-              "SPACE_AND_TWO_FACES",
-              "OTHER"
-            ]
-          },
-          "edges": {
-            "items": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "face_radicands": {
-            "items": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "face_roots": {
-            "items": {
-              "$ref": "#/$defs/root_or_null"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "id": {
-            "pattern": "^PC(?:0[1-9]|1[0-2])$",
-            "type": "string"
-          },
-          "space_radicand": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "space_root": {
-            "$ref": "#/$defs/root_or_null"
-          }
-        },
-        "required": [
-          "id",
-          "edges",
-          "face_radicands",
-          "face_roots",
-          "space_radicand",
-          "space_root",
-          "class"
-        ],
-        "type": "object"
-      },
-      "root_or_null": {
-        "anyOf": [
-          {
-            "minimum": 0,
-            "type": "integer"
-          },
-          {
-            "type": "null"
-          }
-        ]
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "case_counts": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "case": {
             "additionalProperties": false,
             "properties": {
-              "EULER_BRICK_ONLY": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "OTHER": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "PERFECT_CUBOID": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "SPACE_AND_TWO_FACES": {
-                "minimum": 0,
-                "type": "integer"
-              }
+                "class": {
+                    "enum": [
+                        "PERFECT_CUBOID",
+                        "EULER_BRICK_ONLY",
+                        "SPACE_AND_TWO_FACES",
+                        "OTHER"
+                    ]
+                },
+                "edges": {
+                    "items": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "face_radicands": {
+                    "items": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "face_roots": {
+                    "items": {
+                        "$ref": "#/$defs/root_or_null"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "id": {
+                    "pattern": "^PC(?:0[1-9]|1[0-2])$",
+                    "type": "string"
+                },
+                "space_radicand": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "space_root": {
+                    "$ref": "#/$defs/root_or_null"
+                }
             },
             "required": [
-              "PERFECT_CUBOID",
-              "EULER_BRICK_ONLY",
-              "SPACE_AND_TWO_FACES",
-              "OTHER"
+                "id",
+                "edges",
+                "face_radicands",
+                "face_roots",
+                "space_radicand",
+                "space_root",
+                "class"
             ],
             "type": "object"
-          },
-          "cases": {
-            "items": {
-              "$ref": "#/$defs/case"
+        },
+        "root_or_null": {
+            "anyOf": [
+                {
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "case_counts": {
+                "additionalProperties": false,
+                "properties": {
+                    "EULER_BRICK_ONLY": {
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "OTHER": {
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "PERFECT_CUBOID": {
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "SPACE_AND_TWO_FACES": {
+                        "minimum": 0,
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "PERFECT_CUBOID",
+                    "EULER_BRICK_ONLY",
+                    "SPACE_AND_TWO_FACES",
+                    "OTHER"
+                ],
+                "type": "object"
             },
-            "maxItems": 12,
-            "minItems": 12,
-            "type": "array"
-          },
-          "contains_perfect_cuboid": {
-            "type": "boolean"
-          },
-          "scope_identity": {
-            "const": "perfect-cuboid-scope-audit:case-set-v1"
-          }
+            "cases": {
+                "items": {
+                    "$ref": "#/$defs/case"
+                },
+                "maxItems": 12,
+                "minItems": 12,
+                "type": "array"
+            },
+            "contains_perfect_cuboid": {
+                "type": "boolean"
+            },
+            "scope_identity": {
+                "const": "perfect-cuboid-scope-audit:case-set-v1"
+            }
         },
         "required": [
-          "cases",
-          "case_counts",
-          "contains_perfect_cuboid",
-          "scope_identity"
+            "cases",
+            "case_counts",
+            "contains_perfect_cuboid",
+            "scope_identity"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/perfect-cuboid-scope-audit"
+    "task_id": "jacobian/perfect-cuboid-scope-audit"
 }

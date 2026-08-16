@@ -1,223 +1,110 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "conclusion": {
-        "const": "DIVISIBLE_FOR_ALL_POSITIVE_N"
-      },
-      "induction_cases": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "coefficient_adjusted_offsets": {
-              "items": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "maxItems": 3,
-              "minItems": 3,
-              "type": "array"
-            },
-            "residue": {
-              "maximum": 2,
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "residue",
-            "coefficient_adjusted_offsets"
-          ],
-          "type": "object"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "initial_power_sums": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "minimal_polynomial_descending": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      },
-      "recurrence_coefficients": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "terms": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "n": {
-              "maximum": 24,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "required_valuation": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "seven_adic_valuation": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "value": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "n",
-            "value",
-            "seven_adic_valuation",
-            "required_valuation"
-          ],
-          "type": "object"
-        },
-        "maxItems": 25,
-        "minItems": 25,
-        "type": "array"
-      }
-    },
-    "required": [
-      "minimal_polynomial_descending",
-      "initial_power_sums",
-      "recurrence_coefficients",
-      "terms",
-      "induction_cases",
-      "conclusion"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "conclusion": {
-            "const": "DIVISIBLE_FOR_ALL_POSITIVE_N"
-          },
-          "induction_cases": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "coefficient_adjusted_offsets": {
-                  "items": {
-                    "minimum": 0,
+            "conclusion": {
+                "const": "DIVISIBLE_FOR_ALL_POSITIVE_N"
+            },
+            "induction_cases": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "coefficient_adjusted_offsets": {
+                            "items": {
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "maxItems": 3,
+                            "minItems": 3,
+                            "type": "array"
+                        },
+                        "residue": {
+                            "maximum": 2,
+                            "minimum": 0,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "residue",
+                        "coefficient_adjusted_offsets"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+            },
+            "initial_power_sums": {
+                "items": {
                     "type": "integer"
-                  },
-                  "maxItems": 3,
-                  "minItems": 3,
-                  "type": "array"
                 },
-                "residue": {
-                  "maximum": 2,
-                  "minimum": 0,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "residue",
-                "coefficient_adjusted_offsets"
-              ],
-              "type": "object"
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
             },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "initial_power_sums": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "minimal_polynomial_descending": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          },
-          "recurrence_coefficients": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "terms": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "n": {
-                  "maximum": 24,
-                  "minimum": 0,
-                  "type": "integer"
+            "minimal_polynomial_descending": {
+                "items": {
+                    "type": "integer"
                 },
-                "required_valuation": {
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "seven_adic_valuation": {
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "value": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "n",
-                "value",
-                "seven_adic_valuation",
-                "required_valuation"
-              ],
-              "type": "object"
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
             },
-            "maxItems": 25,
-            "minItems": 25,
-            "type": "array"
-          }
+            "recurrence_coefficients": {
+                "items": {
+                    "type": "integer"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+            },
+            "terms": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "n": {
+                            "maximum": 24,
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "required_valuation": {
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "seven_adic_valuation": {
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "value": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "n",
+                        "value",
+                        "seven_adic_valuation",
+                        "required_valuation"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 25,
+                "minItems": 25,
+                "type": "array"
+            }
         },
         "required": [
-          "minimal_polynomial_descending",
-          "initial_power_sums",
-          "recurrence_coefficients",
-          "terms",
-          "induction_cases",
-          "conclusion"
+            "minimal_polynomial_descending",
+            "initial_power_sums",
+            "recurrence_coefficients",
+            "terms",
+            "induction_cases",
+            "conclusion"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/trigonometric-power-sum-valuation"
+    "task_id": "jacobian/trigonometric-power-sum-valuation"
 }

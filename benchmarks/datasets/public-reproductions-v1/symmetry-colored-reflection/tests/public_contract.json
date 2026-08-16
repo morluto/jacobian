@@ -1,79 +1,38 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "edge_orbits": {
-        "items": {
-          "items": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "type": "array"
-        },
-        "type": "array"
-      },
-      "vertex_orbits": {
-        "items": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "type": "array"
-      }
-    },
-    "required": [
-      "vertex_orbits",
-      "edge_orbits"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "edge_orbits": {
-            "items": {
-              "items": {
+            "edge_orbits": {
                 "items": {
-                  "type": "string"
+                    "items": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array"
+                    },
+                    "type": "array"
                 },
                 "type": "array"
-              },
-              "type": "array"
             },
-            "type": "array"
-          },
-          "vertex_orbits": {
-            "items": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "type": "array"
-          }
+            "vertex_orbits": {
+                "items": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "type": "array"
+            }
         },
         "required": [
-          "vertex_orbits",
-          "edge_orbits"
+            "vertex_orbits",
+            "edge_orbits"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/symmetry-colored-reflection"
+    "task_id": "jacobian/symmetry-colored-reflection"
 }

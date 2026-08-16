@@ -1,105 +1,51 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "common_gcd": {
-        "items": {
-          "type": "integer"
-        },
-        "minItems": 2,
-        "type": "array"
-      },
-      "parameter": {
-        "type": "integer"
-      },
-      "quotient": {
-        "items": {
-          "type": "integer"
-        },
-        "minItems": 1,
-        "type": "array"
-      },
-      "remainder_constant": {
-        "items": {
-          "type": "integer"
-        },
-        "minItems": 1,
-        "type": "array"
-      },
-      "remainder_x": {
-        "items": {
-          "type": "integer"
-        },
-        "minItems": 1,
-        "type": "array"
-      }
-    },
-    "required": [
-      "parameter",
-      "remainder_constant",
-      "remainder_x",
-      "common_gcd",
-      "quotient"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "common_gcd": {
-            "items": {
-              "type": "integer"
+            "common_gcd": {
+                "items": {
+                    "type": "integer"
+                },
+                "minItems": 2,
+                "type": "array"
             },
-            "minItems": 2,
-            "type": "array"
-          },
-          "parameter": {
-            "type": "integer"
-          },
-          "quotient": {
-            "items": {
-              "type": "integer"
+            "parameter": {
+                "type": "integer"
             },
-            "minItems": 1,
-            "type": "array"
-          },
-          "remainder_constant": {
-            "items": {
-              "type": "integer"
+            "quotient": {
+                "items": {
+                    "type": "integer"
+                },
+                "minItems": 1,
+                "type": "array"
             },
-            "minItems": 1,
-            "type": "array"
-          },
-          "remainder_x": {
-            "items": {
-              "type": "integer"
+            "remainder_constant": {
+                "items": {
+                    "type": "integer"
+                },
+                "minItems": 1,
+                "type": "array"
             },
-            "minItems": 1,
-            "type": "array"
-          }
+            "remainder_x": {
+                "items": {
+                    "type": "integer"
+                },
+                "minItems": 1,
+                "type": "array"
+            }
         },
         "required": [
-          "parameter",
-          "remainder_constant",
-          "remainder_x",
-          "common_gcd",
-          "quotient"
+            "parameter",
+            "remainder_constant",
+            "remainder_x",
+            "common_gcd",
+            "quotient"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/polynomial-divisibility-uniqueness"
+    "task_id": "jacobian/polynomial-divisibility-uniqueness"
 }

@@ -1,265 +1,131 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "claimed_maximum": {
-        "const": 180
-      },
-      "conclusion": {
-        "const": "EXACT_MAXIMUM_CERTIFIED"
-      },
-      "factorizations": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "core": {
-              "maximum": 100000000,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "index": {
-              "maximum": 99,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "three_exponent": {
-              "maximum": 17,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "two_exponent": {
-              "maximum": 26,
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "index",
-            "core",
-            "two_exponent",
-            "three_exponent"
-          ],
-          "type": "object"
-        },
-        "maxItems": 100,
-        "minItems": 100,
-        "type": "array"
-      },
-      "good_pairs": {
-        "items": {
-          "items": {
-            "maximum": 99,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 2,
-          "minItems": 2,
-          "type": "array"
-        },
-        "maxItems": 180,
-        "minItems": 180,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "numbers": {
-        "items": {
-          "maximum": 100000000,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "maxItems": 100,
-        "minItems": 100,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "projection_summary": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "component_count": {
-            "maximum": 100,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "nonempty_columns": {
-            "maximum": 100,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "nonempty_rows": {
-            "maximum": 100,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "universal_edge_bound": {
-            "const": 180
-          },
-          "universal_projection_cost": {
-            "const": 20
-          },
-          "witness_projection_cost": {
-            "maximum": 200,
-            "minimum": 2,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "component_count",
-          "nonempty_rows",
-          "nonempty_columns",
-          "witness_projection_cost",
-          "universal_projection_cost",
-          "universal_edge_bound"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "numbers",
-      "good_pairs",
-      "factorizations",
-      "projection_summary",
-      "claimed_maximum",
-      "conclusion"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "claimed_maximum": {
-            "const": 180
-          },
-          "conclusion": {
-            "const": "EXACT_MAXIMUM_CERTIFIED"
-          },
-          "factorizations": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "core": {
-                  "maximum": 100000000,
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "index": {
-                  "maximum": 99,
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "three_exponent": {
-                  "maximum": 17,
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "two_exponent": {
-                  "maximum": 26,
-                  "minimum": 0,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "index",
-                "core",
-                "two_exponent",
-                "three_exponent"
-              ],
-              "type": "object"
-            },
-            "maxItems": 100,
-            "minItems": 100,
-            "type": "array"
-          },
-          "good_pairs": {
-            "items": {
-              "items": {
-                "maximum": 99,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
-            },
-            "maxItems": 180,
-            "minItems": 180,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "numbers": {
-            "items": {
-              "maximum": 100000000,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "maxItems": 100,
-            "minItems": 100,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "projection_summary": {
-            "additionalProperties": false,
-            "properties": {
-              "component_count": {
-                "maximum": 100,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "nonempty_columns": {
-                "maximum": 100,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "nonempty_rows": {
-                "maximum": 100,
-                "minimum": 1,
-                "type": "integer"
-              },
-              "universal_edge_bound": {
+            "claimed_maximum": {
                 "const": 180
-              },
-              "universal_projection_cost": {
-                "const": 20
-              },
-              "witness_projection_cost": {
-                "maximum": 200,
-                "minimum": 2,
-                "type": "integer"
-              }
             },
-            "required": [
-              "component_count",
-              "nonempty_rows",
-              "nonempty_columns",
-              "witness_projection_cost",
-              "universal_projection_cost",
-              "universal_edge_bound"
-            ],
-            "type": "object"
-          }
+            "conclusion": {
+                "const": "EXACT_MAXIMUM_CERTIFIED"
+            },
+            "factorizations": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "core": {
+                            "maximum": 100000000,
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "index": {
+                            "maximum": 99,
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "three_exponent": {
+                            "maximum": 17,
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "two_exponent": {
+                            "maximum": 26,
+                            "minimum": 0,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "index",
+                        "core",
+                        "two_exponent",
+                        "three_exponent"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 100,
+                "minItems": 100,
+                "type": "array"
+            },
+            "good_pairs": {
+                "items": {
+                    "items": {
+                        "maximum": 99,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                },
+                "maxItems": 180,
+                "minItems": 180,
+                "type": "array",
+                "uniqueItems": true
+            },
+            "numbers": {
+                "items": {
+                    "maximum": 100000000,
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "maxItems": 100,
+                "minItems": 100,
+                "type": "array",
+                "uniqueItems": true
+            },
+            "projection_summary": {
+                "additionalProperties": false,
+                "properties": {
+                    "component_count": {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "nonempty_columns": {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "nonempty_rows": {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "universal_edge_bound": {
+                        "const": 180
+                    },
+                    "universal_projection_cost": {
+                        "const": 20
+                    },
+                    "witness_projection_cost": {
+                        "maximum": 200,
+                        "minimum": 2,
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "component_count",
+                    "nonempty_rows",
+                    "nonempty_columns",
+                    "witness_projection_cost",
+                    "universal_projection_cost",
+                    "universal_edge_bound"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "numbers",
-          "good_pairs",
-          "factorizations",
-          "projection_summary",
-          "claimed_maximum",
-          "conclusion"
+            "numbers",
+            "good_pairs",
+            "factorizations",
+            "projection_summary",
+            "claimed_maximum",
+            "conclusion"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/multiplicative-grid-extremum"
+    "task_id": "jacobian/multiplicative-grid-extremum"
 }

@@ -1,172 +1,84 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "edge": {
-      "items": {
-        "maximum": 8,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "maxItems": 2,
-      "minItems": 2,
-      "type": "array"
-    },
-    "embedding": {
-      "additionalProperties": false,
-      "properties": {
-        "card_id": {
-          "pattern": "^card-[0-8]$",
-          "type": "string"
-        },
-        "deleted_vertex": {
-          "maximum": 8,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "local_to_original": {
-          "items": {
-            "maximum": 8,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 8,
-          "minItems": 8,
-          "type": "array",
-          "uniqueItems": true
-        }
-      },
-      "required": [
-        "card_id",
-        "deleted_vertex",
-        "local_to_original"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "edge_card_multiplicity": {
-        "const": 7
-      },
-      "embeddings": {
-        "items": {
-          "$ref": "#/$defs/embedding"
-        },
-        "maxItems": 9,
-        "minItems": 9,
-        "type": "array"
-      },
-      "original_edges": {
-        "items": {
-          "$ref": "#/$defs/edge"
-        },
-        "maxItems": 15,
-        "minItems": 15,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "reconstruction_status": {
-        "const": "EXACT_UP_TO_RELABELING"
-      }
-    },
-    "required": [
-      "original_edges",
-      "embeddings",
-      "edge_card_multiplicity",
-      "reconstruction_status"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "edge": {
-        "items": {
-          "maximum": 8,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "embedding": {
-        "additionalProperties": false,
-        "properties": {
-          "card_id": {
-            "pattern": "^card-[0-8]$",
-            "type": "string"
-          },
-          "deleted_vertex": {
-            "maximum": 8,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "local_to_original": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "edge": {
             "items": {
-              "maximum": 8,
-              "minimum": 0,
-              "type": "integer"
+                "maximum": 8,
+                "minimum": 0,
+                "type": "integer"
             },
-            "maxItems": 8,
-            "minItems": 8,
-            "type": "array",
-            "uniqueItems": true
-          }
-        },
-        "required": [
-          "card_id",
-          "deleted_vertex",
-          "local_to_original"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "edge_card_multiplicity": {
-            "const": 7
-          },
-          "embeddings": {
-            "items": {
-              "$ref": "#/$defs/embedding"
-            },
-            "maxItems": 9,
-            "minItems": 9,
+            "maxItems": 2,
+            "minItems": 2,
             "type": "array"
-          },
-          "original_edges": {
-            "items": {
-              "$ref": "#/$defs/edge"
+        },
+        "embedding": {
+            "additionalProperties": false,
+            "properties": {
+                "card_id": {
+                    "pattern": "^card-[0-8]$",
+                    "type": "string"
+                },
+                "deleted_vertex": {
+                    "maximum": 8,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "local_to_original": {
+                    "items": {
+                        "maximum": 8,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "maxItems": 8,
+                    "minItems": 8,
+                    "type": "array",
+                    "uniqueItems": true
+                }
             },
-            "maxItems": 15,
-            "minItems": 15,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "reconstruction_status": {
-            "const": "EXACT_UP_TO_RELABELING"
-          }
+            "required": [
+                "card_id",
+                "deleted_vertex",
+                "local_to_original"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "edge_card_multiplicity": {
+                "const": 7
+            },
+            "embeddings": {
+                "items": {
+                    "$ref": "#/$defs/embedding"
+                },
+                "maxItems": 9,
+                "minItems": 9,
+                "type": "array"
+            },
+            "original_edges": {
+                "items": {
+                    "$ref": "#/$defs/edge"
+                },
+                "maxItems": 15,
+                "minItems": 15,
+                "type": "array",
+                "uniqueItems": true
+            },
+            "reconstruction_status": {
+                "const": "EXACT_UP_TO_RELABELING"
+            }
         },
         "required": [
-          "original_edges",
-          "embeddings",
-          "edge_card_multiplicity",
-          "reconstruction_status"
+            "original_edges",
+            "embeddings",
+            "edge_card_multiplicity",
+            "reconstruction_status"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/reconstruction-deck-certificate"
+    "task_id": "jacobian/reconstruction-deck-certificate"
 }

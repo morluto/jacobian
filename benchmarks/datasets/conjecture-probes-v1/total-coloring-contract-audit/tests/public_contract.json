@@ -1,164 +1,80 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "assignment": {
-      "additionalProperties": false,
-      "properties": {
-        "edge_colors": {
-          "items": {
-            "maximum": 3,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 15,
-          "minItems": 15,
-          "type": "array"
-        },
-        "vertex_colors": {
-          "items": {
-            "maximum": 3,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 10,
-          "minItems": 10,
-          "type": "array"
-        }
-      },
-      "required": [
-        "vertex_colors",
-        "edge_colors"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "flawed_pass": {
-        "$ref": "#/$defs/assignment"
-      },
-      "incidence_collisions": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "edge_index": {
-              "maximum": 14,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "vertex": {
-              "maximum": 9,
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "vertex",
-            "edge_index"
-          ],
-          "type": "object"
-        },
-        "minItems": 1,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "repair": {
-        "$ref": "#/$defs/assignment"
-      }
-    },
-    "required": [
-      "flawed_pass",
-      "incidence_collisions",
-      "repair"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "assignment": {
-        "additionalProperties": false,
-        "properties": {
-          "edge_colors": {
-            "items": {
-              "maximum": 3,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "maxItems": 15,
-            "minItems": 15,
-            "type": "array"
-          },
-          "vertex_colors": {
-            "items": {
-              "maximum": 3,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "maxItems": 10,
-            "minItems": 10,
-            "type": "array"
-          }
-        },
-        "required": [
-          "vertex_colors",
-          "edge_colors"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "flawed_pass": {
-            "$ref": "#/$defs/assignment"
-          },
-          "incidence_collisions": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "edge_index": {
-                  "maximum": 14,
-                  "minimum": 0,
-                  "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "assignment": {
+            "additionalProperties": false,
+            "properties": {
+                "edge_colors": {
+                    "items": {
+                        "maximum": 3,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "maxItems": 15,
+                    "minItems": 15,
+                    "type": "array"
                 },
-                "vertex": {
-                  "maximum": 9,
-                  "minimum": 0,
-                  "type": "integer"
+                "vertex_colors": {
+                    "items": {
+                        "maximum": 3,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "maxItems": 10,
+                    "minItems": 10,
+                    "type": "array"
                 }
-              },
-              "required": [
-                "vertex",
-                "edge_index"
-              ],
-              "type": "object"
             },
-            "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "repair": {
-            "$ref": "#/$defs/assignment"
-          }
+            "required": [
+                "vertex_colors",
+                "edge_colors"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "flawed_pass": {
+                "$ref": "#/$defs/assignment"
+            },
+            "incidence_collisions": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "edge_index": {
+                            "maximum": 14,
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "vertex": {
+                            "maximum": 9,
+                            "minimum": 0,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "vertex",
+                        "edge_index"
+                    ],
+                    "type": "object"
+                },
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
+            },
+            "repair": {
+                "$ref": "#/$defs/assignment"
+            }
         },
         "required": [
-          "flawed_pass",
-          "incidence_collisions",
-          "repair"
+            "flawed_pass",
+            "incidence_collisions",
+            "repair"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/total-coloring-contract-audit"
+    "task_id": "jacobian/total-coloring-contract-audit"
 }

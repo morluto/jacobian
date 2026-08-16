@@ -1,194 +1,95 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "point_check": {
-      "additionalProperties": false,
-      "properties": {
-        "gradient": {
-          "items": {
-            "type": "integer"
-          },
-          "maxItems": 3,
-          "minItems": 3,
-          "type": "array"
-        },
-        "multiplicity": {
-          "const": 1
-        },
-        "point_index": {
-          "maximum": 5,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "value": {
-          "const": 0
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "point_check": {
+            "additionalProperties": false,
+            "properties": {
+                "gradient": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "multiplicity": {
+                    "const": 1
+                },
+                "point_index": {
+                    "maximum": 5,
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "value": {
+                    "const": 0
+                }
+            },
+            "required": [
+                "point_index",
+                "value",
+                "gradient",
+                "multiplicity"
+            ],
+            "type": "object"
         }
-      },
-      "required": [
-        "point_index",
-        "value",
-        "gradient",
-        "multiplicity"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "arithmetic_genus": {
-        "const": 1
-      },
-      "canonical_intersection": {
-        "const": -3
-      },
-      "coefficients": {
-        "items": {
-          "maximum": 20,
-          "minimum": -20,
-          "type": "integer"
-        },
-        "maxItems": 10,
-        "minItems": 10,
-        "type": "array"
-      },
-      "cycle_classification": {
-        "const": "ALGEBRAIC_DIVISOR_HODGE_1_1"
-      },
-      "divisor_class": {
-        "const": [
-          3,
-          -1,
-          -1,
-          -1,
-          -1,
-          -1,
-          -1
-        ]
-      },
-      "point_checks": {
-        "items": {
-          "$ref": "#/$defs/point_check"
-        },
-        "maxItems": 6,
-        "minItems": 6,
-        "type": "array"
-      },
-      "self_intersection": {
-        "const": 3
-      }
     },
-    "required": [
-      "coefficients",
-      "point_checks",
-      "divisor_class",
-      "self_intersection",
-      "canonical_intersection",
-      "arithmetic_genus",
-      "cycle_classification"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "point_check": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "gradient": {
-            "items": {
-              "type": "integer"
+            "arithmetic_genus": {
+                "const": 1
             },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "multiplicity": {
-            "const": 1
-          },
-          "point_index": {
-            "maximum": 5,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "value": {
-            "const": 0
-          }
+            "canonical_intersection": {
+                "const": -3
+            },
+            "coefficients": {
+                "items": {
+                    "maximum": 20,
+                    "minimum": -20,
+                    "type": "integer"
+                },
+                "maxItems": 10,
+                "minItems": 10,
+                "type": "array"
+            },
+            "cycle_classification": {
+                "const": "ALGEBRAIC_DIVISOR_HODGE_1_1"
+            },
+            "divisor_class": {
+                "const": [
+                    3,
+                    -1,
+                    -1,
+                    -1,
+                    -1,
+                    -1,
+                    -1
+                ]
+            },
+            "point_checks": {
+                "items": {
+                    "$ref": "#/$defs/point_check"
+                },
+                "maxItems": 6,
+                "minItems": 6,
+                "type": "array"
+            },
+            "self_intersection": {
+                "const": 3
+            }
         },
         "required": [
-          "point_index",
-          "value",
-          "gradient",
-          "multiplicity"
+            "coefficients",
+            "point_checks",
+            "divisor_class",
+            "self_intersection",
+            "canonical_intersection",
+            "arithmetic_genus",
+            "cycle_classification"
         ],
         "type": "object"
-      }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "arithmetic_genus": {
-            "const": 1
-          },
-          "canonical_intersection": {
-            "const": -3
-          },
-          "coefficients": {
-            "items": {
-              "maximum": 20,
-              "minimum": -20,
-              "type": "integer"
-            },
-            "maxItems": 10,
-            "minItems": 10,
-            "type": "array"
-          },
-          "cycle_classification": {
-            "const": "ALGEBRAIC_DIVISOR_HODGE_1_1"
-          },
-          "divisor_class": {
-            "const": [
-              3,
-              -1,
-              -1,
-              -1,
-              -1,
-              -1,
-              -1
-            ]
-          },
-          "point_checks": {
-            "items": {
-              "$ref": "#/$defs/point_check"
-            },
-            "maxItems": 6,
-            "minItems": 6,
-            "type": "array"
-          },
-          "self_intersection": {
-            "const": 3
-          }
-        },
-        "required": [
-          "coefficients",
-          "point_checks",
-          "divisor_class",
-          "self_intersection",
-          "canonical_intersection",
-          "arithmetic_genus",
-          "cycle_classification"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/hodge-blowup-divisor-certificate"
+    "task_id": "jacobian/hodge-blowup-divisor-certificate"
 }

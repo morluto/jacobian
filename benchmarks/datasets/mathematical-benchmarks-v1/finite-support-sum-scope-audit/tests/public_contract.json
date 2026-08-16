@@ -1,238 +1,117 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "checkpoint": {
-      "additionalProperties": false,
-      "properties": {
-        "n": {
-          "maximum": 20,
-          "minimum": 2,
-          "type": "integer"
-        },
-        "value": {
-          "$ref": "#/$defs/rat"
-        }
-      },
-      "required": [
-        "n",
-        "value"
-      ],
-      "type": "object"
-    },
-    "rat": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    },
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "n": {
-          "maximum": 12,
-          "minimum": 4,
-          "type": "integer"
-        },
-        "partial_sum_lower_bound": {
-          "minimum": 6,
-          "type": "integer"
-        },
-        "ratio_bound": {
-          "additionalProperties": false,
-          "properties": {
-            "denominator": {
-              "const": 4
-            },
-            "numerator": {
-              "const": 3
-            }
-          },
-          "required": [
-            "numerator",
-            "denominator"
-          ],
-          "type": "object"
-        },
-        "ratio_threshold": {
-          "const": 2
-        },
-        "summand_values": {
-          "items": {
-            "$ref": "#/$defs/rat"
-          },
-          "maxItems": 12,
-          "minItems": 6,
-          "type": "array"
-        },
-        "tail_singletons": {
-          "items": {
-            "maximum": 100,
-            "minimum": 5,
-            "type": "integer"
-          },
-          "maxItems": 12,
-          "minItems": 6,
-          "type": "array",
-          "uniqueItems": true
-        },
-        "truncated_checkpoints": {
-          "items": {
-            "$ref": "#/$defs/checkpoint"
-          },
-          "maxItems": 8,
-          "minItems": 3,
-          "type": "array"
-        }
-      },
-      "required": [
-        "n",
-        "tail_singletons",
-        "summand_values",
-        "partial_sum_lower_bound",
-        "truncated_checkpoints",
-        "ratio_threshold",
-        "ratio_bound"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "$ref": "#/$defs/result"
-  },
-  "submission_schema": {
-    "$defs": {
-      "checkpoint": {
-        "additionalProperties": false,
-        "properties": {
-          "n": {
-            "maximum": 20,
-            "minimum": 2,
-            "type": "integer"
-          },
-          "value": {
-            "$ref": "#/$defs/rat"
-          }
-        },
-        "required": [
-          "n",
-          "value"
-        ],
-        "type": "object"
-      },
-      "rat": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "n": {
-            "maximum": 12,
-            "minimum": 4,
-            "type": "integer"
-          },
-          "partial_sum_lower_bound": {
-            "minimum": 6,
-            "type": "integer"
-          },
-          "ratio_bound": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "checkpoint": {
             "additionalProperties": false,
             "properties": {
-              "denominator": {
-                "const": 4
-              },
-              "numerator": {
-                "const": 3
-              }
+                "n": {
+                    "maximum": 20,
+                    "minimum": 2,
+                    "type": "integer"
+                },
+                "value": {
+                    "$ref": "#/$defs/rat"
+                }
             },
             "required": [
-              "numerator",
-              "denominator"
+                "n",
+                "value"
             ],
             "type": "object"
-          },
-          "ratio_threshold": {
-            "const": 2
-          },
-          "summand_values": {
-            "items": {
-              "$ref": "#/$defs/rat"
-            },
-            "maxItems": 12,
-            "minItems": 6,
-            "type": "array"
-          },
-          "tail_singletons": {
-            "items": {
-              "maximum": 100,
-              "minimum": 5,
-              "type": "integer"
-            },
-            "maxItems": 12,
-            "minItems": 6,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "truncated_checkpoints": {
-            "items": {
-              "$ref": "#/$defs/checkpoint"
-            },
-            "maxItems": 8,
-            "minItems": 3,
-            "type": "array"
-          }
         },
-        "required": [
-          "n",
-          "tail_singletons",
-          "summand_values",
-          "partial_sum_lower_bound",
-          "truncated_checkpoints",
-          "ratio_threshold",
-          "ratio_bound"
-        ],
-        "type": "object"
-      }
+        "rat": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "minimum": 0,
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        },
+        "result": {
+            "additionalProperties": false,
+            "properties": {
+                "n": {
+                    "maximum": 12,
+                    "minimum": 4,
+                    "type": "integer"
+                },
+                "partial_sum_lower_bound": {
+                    "minimum": 6,
+                    "type": "integer"
+                },
+                "ratio_bound": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "denominator": {
+                            "const": 4
+                        },
+                        "numerator": {
+                            "const": 3
+                        }
+                    },
+                    "required": [
+                        "numerator",
+                        "denominator"
+                    ],
+                    "type": "object"
+                },
+                "ratio_threshold": {
+                    "const": 2
+                },
+                "summand_values": {
+                    "items": {
+                        "$ref": "#/$defs/rat"
+                    },
+                    "maxItems": 12,
+                    "minItems": 6,
+                    "type": "array"
+                },
+                "tail_singletons": {
+                    "items": {
+                        "maximum": 100,
+                        "minimum": 5,
+                        "type": "integer"
+                    },
+                    "maxItems": 12,
+                    "minItems": 6,
+                    "type": "array",
+                    "uniqueItems": true
+                },
+                "truncated_checkpoints": {
+                    "items": {
+                        "$ref": "#/$defs/checkpoint"
+                    },
+                    "maxItems": 8,
+                    "minItems": 3,
+                    "type": "array"
+                }
+            },
+            "required": [
+                "n",
+                "tail_singletons",
+                "summand_values",
+                "partial_sum_lower_bound",
+                "truncated_checkpoints",
+                "ratio_threshold",
+                "ratio_bound"
+            ],
+            "type": "object"
+        }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "$ref": "#/$defs/result"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/finite-support-sum-scope-audit"
+    "task_id": "jacobian/finite-support-sum-scope-audit"
 }

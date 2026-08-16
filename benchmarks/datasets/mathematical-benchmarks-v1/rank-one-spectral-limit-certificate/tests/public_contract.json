@@ -1,266 +1,131 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "checkpoint": {
-      "additionalProperties": false,
-      "properties": {
-        "n": {
-          "maximum": 30,
-          "minimum": 4,
-          "type": "integer"
-        },
-        "reciprocal_sum": {
-          "$ref": "#/$defs/rat"
-        },
-        "root": {
-          "$ref": "#/$defs/rat"
-        }
-      },
-      "required": [
-        "n",
-        "reciprocal_sum",
-        "root"
-      ],
-      "type": "object"
-    },
-    "rat": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    },
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "checkpoints": {
-          "items": {
-            "$ref": "#/$defs/checkpoint"
-          },
-          "maxItems": 8,
-          "minItems": 3,
-          "type": "array"
-        },
-        "limit": {
-          "$ref": "#/$defs/rat"
-        },
-        "partial_fraction": {
-          "additionalProperties": false,
-          "properties": {
-            "left_coefficient": {
-              "maximum": 3,
-              "minimum": -3,
-              "type": "integer"
-            },
-            "right_coefficient": {
-              "maximum": 3,
-              "minimum": -3,
-              "type": "integer"
-            },
-            "scale": {
-              "$ref": "#/$defs/rat"
-            }
-          },
-          "required": [
-            "scale",
-            "left_coefficient",
-            "right_coefficient"
-          ],
-          "type": "object"
-        },
-        "rank_one_sign": {
-          "const": "DIAGONAL_MINUS_LAMBDA_ONES"
-        },
-        "root_formula": {
-          "additionalProperties": false,
-          "properties": {
-            "coefficient": {
-              "type": "integer"
-            },
-            "denominator_offsets": {
-              "items": {
-                "type": "integer"
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
-            },
-            "numerator_offsets": {
-              "items": {
-                "type": "integer"
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
-            }
-          },
-          "required": [
-            "coefficient",
-            "numerator_offsets",
-            "denominator_offsets"
-          ],
-          "type": "object"
-        }
-      },
-      "required": [
-        "rank_one_sign",
-        "partial_fraction",
-        "checkpoints",
-        "root_formula",
-        "limit"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "$ref": "#/$defs/result"
-  },
-  "submission_schema": {
-    "$defs": {
-      "checkpoint": {
-        "additionalProperties": false,
-        "properties": {
-          "n": {
-            "maximum": 30,
-            "minimum": 4,
-            "type": "integer"
-          },
-          "reciprocal_sum": {
-            "$ref": "#/$defs/rat"
-          },
-          "root": {
-            "$ref": "#/$defs/rat"
-          }
-        },
-        "required": [
-          "n",
-          "reciprocal_sum",
-          "root"
-        ],
-        "type": "object"
-      },
-      "rat": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "checkpoints": {
-            "items": {
-              "$ref": "#/$defs/checkpoint"
-            },
-            "maxItems": 8,
-            "minItems": 3,
-            "type": "array"
-          },
-          "limit": {
-            "$ref": "#/$defs/rat"
-          },
-          "partial_fraction": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "checkpoint": {
             "additionalProperties": false,
             "properties": {
-              "left_coefficient": {
-                "maximum": 3,
-                "minimum": -3,
-                "type": "integer"
-              },
-              "right_coefficient": {
-                "maximum": 3,
-                "minimum": -3,
-                "type": "integer"
-              },
-              "scale": {
-                "$ref": "#/$defs/rat"
-              }
+                "n": {
+                    "maximum": 30,
+                    "minimum": 4,
+                    "type": "integer"
+                },
+                "reciprocal_sum": {
+                    "$ref": "#/$defs/rat"
+                },
+                "root": {
+                    "$ref": "#/$defs/rat"
+                }
             },
             "required": [
-              "scale",
-              "left_coefficient",
-              "right_coefficient"
+                "n",
+                "reciprocal_sum",
+                "root"
             ],
             "type": "object"
-          },
-          "rank_one_sign": {
-            "const": "DIAGONAL_MINUS_LAMBDA_ONES"
-          },
-          "root_formula": {
+        },
+        "rat": {
             "additionalProperties": false,
             "properties": {
-              "coefficient": {
-                "type": "integer"
-              },
-              "denominator_offsets": {
-                "items": {
-                  "type": "integer"
+                "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
                 },
-                "maxItems": 2,
-                "minItems": 2,
-                "type": "array"
-              },
-              "numerator_offsets": {
-                "items": {
-                  "type": "integer"
-                },
-                "maxItems": 2,
-                "minItems": 2,
-                "type": "array"
-              }
+                "numerator": {
+                    "type": "integer"
+                }
             },
             "required": [
-              "coefficient",
-              "numerator_offsets",
-              "denominator_offsets"
+                "numerator",
+                "denominator"
             ],
             "type": "object"
-          }
         },
-        "required": [
-          "rank_one_sign",
-          "partial_fraction",
-          "checkpoints",
-          "root_formula",
-          "limit"
-        ],
-        "type": "object"
-      }
+        "result": {
+            "additionalProperties": false,
+            "properties": {
+                "checkpoints": {
+                    "items": {
+                        "$ref": "#/$defs/checkpoint"
+                    },
+                    "maxItems": 8,
+                    "minItems": 3,
+                    "type": "array"
+                },
+                "limit": {
+                    "$ref": "#/$defs/rat"
+                },
+                "partial_fraction": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "left_coefficient": {
+                            "maximum": 3,
+                            "minimum": -3,
+                            "type": "integer"
+                        },
+                        "right_coefficient": {
+                            "maximum": 3,
+                            "minimum": -3,
+                            "type": "integer"
+                        },
+                        "scale": {
+                            "$ref": "#/$defs/rat"
+                        }
+                    },
+                    "required": [
+                        "scale",
+                        "left_coefficient",
+                        "right_coefficient"
+                    ],
+                    "type": "object"
+                },
+                "rank_one_sign": {
+                    "const": "DIAGONAL_MINUS_LAMBDA_ONES"
+                },
+                "root_formula": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "coefficient": {
+                            "type": "integer"
+                        },
+                        "denominator_offsets": {
+                            "items": {
+                                "type": "integer"
+                            },
+                            "maxItems": 2,
+                            "minItems": 2,
+                            "type": "array"
+                        },
+                        "numerator_offsets": {
+                            "items": {
+                                "type": "integer"
+                            },
+                            "maxItems": 2,
+                            "minItems": 2,
+                            "type": "array"
+                        }
+                    },
+                    "required": [
+                        "coefficient",
+                        "numerator_offsets",
+                        "denominator_offsets"
+                    ],
+                    "type": "object"
+                }
+            },
+            "required": [
+                "rank_one_sign",
+                "partial_fraction",
+                "checkpoints",
+                "root_formula",
+                "limit"
+            ],
+            "type": "object"
+        }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "$ref": "#/$defs/result"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/rank-one-spectral-limit-certificate"
+    "task_id": "jacobian/rank-one-spectral-limit-certificate"
 }

@@ -1,210 +1,111 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {"minimum": 1, "type": "integer"},
-        "numerator": {"type": "integer"}
-      },
-      "required": ["numerator", "denominator"],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "basis": {
-        "items": {
-          "items": {
-            "type": "integer"
-          },
-          "maxItems": 10,
-          "minItems": 10,
-          "type": "array"
-        },
-        "maxItems": 8,
-        "minItems": 8,
-        "type": "array"
-      },
-      "constraints": {
-        "items": {
-          "items": {
-            "type": "integer"
-          },
-          "maxItems": 10,
-          "minItems": 10,
-          "type": "array"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "dimension": {
-        "const": 8
-      },
-      "potentials": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "terms": {
-              "items": {
-                "additionalProperties": false,
-                "properties": {
-                "coefficient": {
-                  "$ref": "#/$defs/rational"
-                  },
-                  "x_power": {
-                    "maximum": 4,
-                    "minimum": 0,
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rational": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
                     "type": "integer"
-                  },
-                  "y_power": {
-                    "maximum": 4,
-                    "minimum": 0,
-                    "type": "integer"
-                  }
                 },
-                "required": [
-                  "coefficient",
-                  "x_power",
-                  "y_power"
-                ],
-                "type": "object"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "terms"
-          ],
-          "type": "object"
-        },
-        "maxItems": 8,
-        "minItems": 8,
-        "type": "array"
-      },
-      "rank": {
-        "const": 2
-      }
+                "numerator": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        }
     },
-    "required": [
-      "constraints",
-      "rank",
-      "dimension",
-      "basis",
-      "potentials"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$defs": {
-      "rational": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {"minimum": 1, "type": "integer"},
-          "numerator": {"type": "integer"}
-        },
-        "required": ["numerator", "denominator"],
-        "type": "object"
-      }
-    },
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "basis": {
-            "items": {
-              "items": {
-                "type": "integer"
-              },
-              "maxItems": 10,
-              "minItems": 10,
-              "type": "array"
+            "basis": {
+                "items": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "maxItems": 10,
+                    "minItems": 10,
+                    "type": "array"
+                },
+                "maxItems": 8,
+                "minItems": 8,
+                "type": "array"
             },
-            "maxItems": 8,
-            "minItems": 8,
-            "type": "array"
-          },
-          "constraints": {
-            "items": {
-              "items": {
-                "type": "integer"
-              },
-              "maxItems": 10,
-              "minItems": 10,
-              "type": "array"
+            "constraints": {
+                "items": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "maxItems": 10,
+                    "minItems": 10,
+                    "type": "array"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
             },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "dimension": {
-            "const": 8
-          },
-          "potentials": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "terms": {
-                  "items": {
+            "dimension": {
+                "const": 8
+            },
+            "potentials": {
+                "items": {
                     "additionalProperties": false,
                     "properties": {
-                    "coefficient": {
-                      "$ref": "#/$defs/rational"
-                      },
-                      "x_power": {
-                        "maximum": 4,
-                        "minimum": 0,
-                        "type": "integer"
-                      },
-                      "y_power": {
-                        "maximum": 4,
-                        "minimum": 0,
-                        "type": "integer"
-                      }
+                        "terms": {
+                            "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "coefficient": {
+                                        "$ref": "#/$defs/rational"
+                                    },
+                                    "x_power": {
+                                        "maximum": 4,
+                                        "minimum": 0,
+                                        "type": "integer"
+                                    },
+                                    "y_power": {
+                                        "maximum": 4,
+                                        "minimum": 0,
+                                        "type": "integer"
+                                    }
+                                },
+                                "required": [
+                                    "coefficient",
+                                    "x_power",
+                                    "y_power"
+                                ],
+                                "type": "object"
+                            },
+                            "type": "array"
+                        }
                     },
                     "required": [
-                      "coefficient",
-                      "x_power",
-                      "y_power"
+                        "terms"
                     ],
                     "type": "object"
-                  },
-                  "type": "array"
-                }
-              },
-              "required": [
-                "terms"
-              ],
-              "type": "object"
+                },
+                "maxItems": 8,
+                "minItems": 8,
+                "type": "array"
             },
-            "maxItems": 8,
-            "minItems": 8,
-            "type": "array"
-          },
-          "rank": {
-            "const": 2
-          }
+            "rank": {
+                "const": 2
+            }
         },
         "required": [
-          "constraints",
-          "rank",
-          "dimension",
-          "basis",
-          "potentials"
+            "constraints",
+            "rank",
+            "dimension",
+            "basis",
+            "potentials"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/closed-one-form-polynomial-classification"
+    "task_id": "jacobian/closed-one-form-polynomial-classification"
 }

@@ -1,183 +1,90 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "center_distance_squared": {
-        "type": "integer"
-      },
-      "equality_witness": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "expanded_radicands": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "a2": {
-              "type": "integer"
-            },
-            "a_sqrt2": {
-              "type": "integer"
-            },
-            "b2": {
-              "type": "integer"
-            },
-            "b_sqrt2": {
-              "type": "integer"
-            },
-            "constant": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "a2",
-            "b2",
-            "a_sqrt2",
-            "b_sqrt2",
-            "constant"
-          ],
-          "type": "object"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "lower_bound": {
-        "type": "integer"
-      },
-      "method": {
-        "enum": [
-          "DISTANCE_TRIANGLE_INEQUALITY",
-          "SQUARING_AND_CALCULUS",
-          "NUMERICAL_SAMPLING"
-        ]
-      },
-      "scaled_centers": {
-        "items": {
-          "items": {
-            "maximum": 4,
-            "minimum": -4,
-            "type": "integer"
-          },
-          "maxItems": 2,
-          "minItems": 2,
-          "type": "array"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      }
-    },
-    "required": [
-      "method",
-      "scaled_centers",
-      "expanded_radicands",
-      "center_distance_squared",
-      "lower_bound",
-      "equality_witness"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "center_distance_squared": {
-            "type": "integer"
-          },
-          "equality_witness": {
-            "items": {
-              "type": "integer"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "expanded_radicands": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "a2": {
-                  "type": "integer"
-                },
-                "a_sqrt2": {
-                  "type": "integer"
-                },
-                "b2": {
-                  "type": "integer"
-                },
-                "b_sqrt2": {
-                  "type": "integer"
-                },
-                "constant": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "a2",
-                "b2",
-                "a_sqrt2",
-                "b_sqrt2",
-                "constant"
-              ],
-              "type": "object"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "lower_bound": {
-            "type": "integer"
-          },
-          "method": {
-            "enum": [
-              "DISTANCE_TRIANGLE_INEQUALITY",
-              "SQUARING_AND_CALCULUS",
-              "NUMERICAL_SAMPLING"
-            ]
-          },
-          "scaled_centers": {
-            "items": {
-              "items": {
-                "maximum": 4,
-                "minimum": -4,
+            "center_distance_squared": {
                 "type": "integer"
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
             },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          }
+            "equality_witness": {
+                "items": {
+                    "type": "integer"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            },
+            "expanded_radicands": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "a2": {
+                            "type": "integer"
+                        },
+                        "a_sqrt2": {
+                            "type": "integer"
+                        },
+                        "b2": {
+                            "type": "integer"
+                        },
+                        "b_sqrt2": {
+                            "type": "integer"
+                        },
+                        "constant": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "a2",
+                        "b2",
+                        "a_sqrt2",
+                        "b_sqrt2",
+                        "constant"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            },
+            "lower_bound": {
+                "type": "integer"
+            },
+            "method": {
+                "enum": [
+                    "DISTANCE_TRIANGLE_INEQUALITY",
+                    "SQUARING_AND_CALCULUS",
+                    "NUMERICAL_SAMPLING"
+                ]
+            },
+            "scaled_centers": {
+                "items": {
+                    "items": {
+                        "maximum": 4,
+                        "minimum": -4,
+                        "type": "integer"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            }
         },
         "required": [
-          "method",
-          "scaled_centers",
-          "expanded_radicands",
-          "center_distance_squared",
-          "lower_bound",
-          "equality_witness"
+            "method",
+            "scaled_centers",
+            "expanded_radicands",
+            "center_distance_squared",
+            "lower_bound",
+            "equality_witness"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/radical-distance-triangle-certificate"
+    "task_id": "jacobian/radical-distance-triangle-certificate"
 }

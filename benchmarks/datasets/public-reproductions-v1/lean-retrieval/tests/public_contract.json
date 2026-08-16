@@ -1,101 +1,49 @@
 {
-  "public_notes": "The verifier matches the submitted tactic against the frozen MATHLIB retrieval record determined by this statement and proof prefix.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "candidate_tactic": {
+    "public_notes": "The verifier matches the submitted tactic against the frozen MATHLIB retrieval record determined by this statement and proof prefix.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "arguments": {
-            "items": {
-              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
-              "type": "string"
-            },
-            "maxItems": 8,
-            "type": "array"
-          },
-          "command": {
-            "enum": [
-              "exact"
-            ],
-            "type": "string"
-          },
-          "theorem": {
-            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "command",
-          "theorem",
-          "arguments"
-        ],
-        "type": "object"
-      },
-      "exhaustive": {
-        "type": "boolean"
-      }
-    },
-    "required": [
-      "candidate_tactic",
-      "exhaustive"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "candidate_tactic": {
-            "additionalProperties": false,
-            "properties": {
-              "arguments": {
-                "items": {
-                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
-                  "type": "string"
+            "candidate_tactic": {
+                "additionalProperties": false,
+                "properties": {
+                    "arguments": {
+                        "items": {
+                            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                            "type": "string"
+                        },
+                        "maxItems": 8,
+                        "type": "array"
+                    },
+                    "command": {
+                        "enum": [
+                            "exact"
+                        ],
+                        "type": "string"
+                    },
+                    "theorem": {
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$",
+                        "type": "string"
+                    }
                 },
-                "maxItems": 8,
-                "type": "array"
-              },
-              "command": {
-                "enum": [
-                  "exact"
+                "required": [
+                    "command",
+                    "theorem",
+                    "arguments"
                 ],
-                "type": "string"
-              },
-              "theorem": {
-                "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$",
-                "type": "string"
-              }
+                "type": "object"
             },
-            "required": [
-              "command",
-              "theorem",
-              "arguments"
-            ],
-            "type": "object"
-          },
-          "exhaustive": {
-            "type": "boolean"
-          }
+            "exhaustive": {
+                "type": "boolean"
+            }
         },
         "required": [
-          "candidate_tactic",
-          "exhaustive"
+            "candidate_tactic",
+            "exhaustive"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/lean-retrieval"
+    "task_id": "jacobian/lean-retrieval"
 }

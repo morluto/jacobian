@@ -1,120 +1,58 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "rational": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "terms": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "coefficient": {
-              "$ref": "#/$defs/rational"
-            },
-            "exponents": {
-              "items": {
-                "type": "integer"
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
-            }
-          },
-          "required": [
-            "coefficient",
-            "exponents"
-          ],
-          "type": "object"
-        },
-        "type": "array"
-      }
-    },
-    "required": [
-      "terms"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$defs": {
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      }
-    },
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "terms": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "coefficient": {
-                  "$ref": "#/$defs/rational"
-                },
-                "exponents": {
-                  "items": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "rational": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "minimum": 1,
                     "type": "integer"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
+                },
+                "numerator": {
+                    "type": "integer"
                 }
-              },
-              "required": [
-                "coefficient",
-                "exponents"
-              ],
-              "type": "object"
             },
-            "type": "array"
-          }
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "terms": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "coefficient": {
+                            "$ref": "#/$defs/rational"
+                        },
+                        "exponents": {
+                            "items": {
+                                "type": "integer"
+                            },
+                            "maxItems": 2,
+                            "minItems": 2,
+                            "type": "array"
+                        }
+                    },
+                    "required": [
+                        "coefficient",
+                        "exponents"
+                    ],
+                    "type": "object"
+                },
+                "type": "array"
+            }
         },
         "required": [
-          "terms"
+            "terms"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/polynomial-normalization"
+    "task_id": "jacobian/polynomial-normalization"
 }

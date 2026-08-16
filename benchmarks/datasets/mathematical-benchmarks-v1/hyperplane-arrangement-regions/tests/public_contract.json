@@ -1,155 +1,76 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "duplicate_groups": {
-        "items": {
-          "items": {
-            "type": "string"
-          },
-          "maxItems": 2,
-          "minItems": 2,
-          "type": "array"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
-      },
-      "ordered_planes": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "coefficients": {
-              "items": {
-                "type": "integer"
-              },
-              "maxItems": 4,
-              "minItems": 4,
-              "type": "array"
-            },
-            "increment": {
-              "minimum": 0,
-              "type": "integer"
-            },
-            "label": {
-              "enum": [
-                "cube_x0",
-                "cube_x1",
-                "cube_y0",
-                "cube_y1",
-                "cube_z0",
-                "cube_z1",
-                "tetra_A1C1D1",
-                "tetra_BC1D1",
-                "tetra_BA1D1",
-                "tetra_BA1C1"
-              ]
-            }
-          },
-          "required": [
-            "label",
-            "coefficients",
-            "increment"
-          ],
-          "type": "object"
-        },
-        "maxItems": 10,
-        "minItems": 10,
-        "type": "array"
-      },
-      "regions": {
-        "type": "integer"
-      }
-    },
-    "required": [
-      "regions",
-      "ordered_planes",
-      "duplicate_groups"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "duplicate_groups": {
-            "items": {
-              "items": {
-                "type": "string"
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
-            },
-            "maxItems": 1,
-            "minItems": 1,
-            "type": "array"
-          },
-          "ordered_planes": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "coefficients": {
-                  "items": {
-                    "type": "integer"
-                  },
-                  "maxItems": 4,
-                  "minItems": 4,
-                  "type": "array"
+            "duplicate_groups": {
+                "items": {
+                    "items": {
+                        "type": "string"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
                 },
-                "increment": {
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "label": {
-                  "enum": [
-                    "cube_x0",
-                    "cube_x1",
-                    "cube_y0",
-                    "cube_y1",
-                    "cube_z0",
-                    "cube_z1",
-                    "tetra_A1C1D1",
-                    "tetra_BC1D1",
-                    "tetra_BA1D1",
-                    "tetra_BA1C1"
-                  ]
-                }
-              },
-              "required": [
-                "label",
-                "coefficients",
-                "increment"
-              ],
-              "type": "object"
+                "maxItems": 1,
+                "minItems": 1,
+                "type": "array"
             },
-            "maxItems": 10,
-            "minItems": 10,
-            "type": "array"
-          },
-          "regions": {
-            "type": "integer"
-          }
+            "ordered_planes": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "coefficients": {
+                            "items": {
+                                "type": "integer"
+                            },
+                            "maxItems": 4,
+                            "minItems": 4,
+                            "type": "array"
+                        },
+                        "increment": {
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        "label": {
+                            "enum": [
+                                "cube_x0",
+                                "cube_x1",
+                                "cube_y0",
+                                "cube_y1",
+                                "cube_z0",
+                                "cube_z1",
+                                "tetra_A1C1D1",
+                                "tetra_BC1D1",
+                                "tetra_BA1D1",
+                                "tetra_BA1C1"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "label",
+                        "coefficients",
+                        "increment"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 10,
+                "minItems": 10,
+                "type": "array"
+            },
+            "regions": {
+                "type": "integer"
+            }
         },
         "required": [
-          "regions",
-          "ordered_planes",
-          "duplicate_groups"
+            "regions",
+            "ordered_planes",
+            "duplicate_groups"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/hyperplane-arrangement-regions"
+    "task_id": "jacobian/hyperplane-arrangement-regions"
 }

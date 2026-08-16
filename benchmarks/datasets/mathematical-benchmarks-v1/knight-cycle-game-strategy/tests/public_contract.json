@@ -1,237 +1,117 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "lower_strategy": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "counts": {
-            "additionalProperties": false,
-            "properties": {
-              "ben_moves_before_100th": {
-                "const": 99
-              },
-              "eligible": {
-                "const": 200
-              }
-            },
-            "required": [
-              "eligible",
-              "ben_moves_before_100th"
-            ],
-            "type": "object"
-          },
-          "eligible_sites": {
-            "items": {
-              "pattern": "^(?:[1-9]|1[0-9]|20),(?:[1-9]|1[0-9]|20)$",
-              "type": "string"
-            },
-            "maxItems": 200,
-            "minItems": 200,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "guaranteed_red": {
-            "const": 100
-          },
-          "parity": {
-            "enum": [
-              0,
-              1
-            ]
-          }
-        },
-        "required": [
-          "parity",
-          "eligible_sites",
-          "guaranteed_red",
-          "counts"
-        ],
-        "type": "object"
-      },
-      "upper_strategy": {
-        "additionalProperties": false,
-        "properties": {
-          "cycles": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "opposite_pairs": {
-                  "items": {
-                    "items": {
-                      "pattern": "^(?:[1-9]|1[0-9]|20),(?:[1-9]|1[0-9]|20)$",
-                      "type": "string"
-                    },
-                    "maxItems": 2,
-                    "minItems": 2,
-                    "type": "array",
-                    "uniqueItems": true
-                  },
-                  "maxItems": 2,
-                  "minItems": 2,
-                  "type": "array"
-                },
-                "sites": {
-                  "items": {
-                    "pattern": "^(?:[1-9]|1[0-9]|20),(?:[1-9]|1[0-9]|20)$",
-                    "type": "string"
-                  },
-                  "maxItems": 4,
-                  "minItems": 4,
-                  "type": "array",
-                  "uniqueItems": true
-                }
-              },
-              "required": [
-                "sites",
-                "opposite_pairs"
-              ],
-              "type": "object"
-            },
-            "maxItems": 100,
-            "minItems": 100,
-            "type": "array"
-          },
-          "maximum_red": {
-            "const": 100
-          }
-        },
-        "required": [
-          "cycles",
-          "maximum_red"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "lower_strategy",
-      "upper_strategy"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "lower_strategy": {
-            "additionalProperties": false,
-            "properties": {
-              "counts": {
+            "lower_strategy": {
                 "additionalProperties": false,
                 "properties": {
-                  "ben_moves_before_100th": {
-                    "const": 99
-                  },
-                  "eligible": {
-                    "const": 200
-                  }
-                },
-                "required": [
-                  "eligible",
-                  "ben_moves_before_100th"
-                ],
-                "type": "object"
-              },
-              "eligible_sites": {
-                "items": {
-                  "pattern": "^(?:[1-9]|1[0-9]|20),(?:[1-9]|1[0-9]|20)$",
-                  "type": "string"
-                },
-                "maxItems": 200,
-                "minItems": 200,
-                "type": "array",
-                "uniqueItems": true
-              },
-              "guaranteed_red": {
-                "const": 100
-              },
-              "parity": {
-                "enum": [
-                  0,
-                  1
-                ]
-              }
-            },
-            "required": [
-              "parity",
-              "eligible_sites",
-              "guaranteed_red",
-              "counts"
-            ],
-            "type": "object"
-          },
-          "upper_strategy": {
-            "additionalProperties": false,
-            "properties": {
-              "cycles": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "opposite_pairs": {
-                      "items": {
-                        "items": {
-                          "pattern": "^(?:[1-9]|1[0-9]|20),(?:[1-9]|1[0-9]|20)$",
-                          "type": "string"
+                    "counts": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "ben_moves_before_100th": {
+                                "const": 99
+                            },
+                            "eligible": {
+                                "const": 200
+                            }
                         },
-                        "maxItems": 2,
-                        "minItems": 2,
+                        "required": [
+                            "eligible",
+                            "ben_moves_before_100th"
+                        ],
+                        "type": "object"
+                    },
+                    "eligible_sites": {
+                        "items": {
+                            "pattern": "^(?:[1-9]|1[0-9]|20),(?:[1-9]|1[0-9]|20)$",
+                            "type": "string"
+                        },
+                        "maxItems": 200,
+                        "minItems": 200,
                         "type": "array",
                         "uniqueItems": true
-                      },
-                      "maxItems": 2,
-                      "minItems": 2,
-                      "type": "array"
                     },
-                    "sites": {
-                      "items": {
-                        "pattern": "^(?:[1-9]|1[0-9]|20),(?:[1-9]|1[0-9]|20)$",
-                        "type": "string"
-                      },
-                      "maxItems": 4,
-                      "minItems": 4,
-                      "type": "array",
-                      "uniqueItems": true
+                    "guaranteed_red": {
+                        "const": 100
+                    },
+                    "parity": {
+                        "enum": [
+                            0,
+                            1
+                        ]
                     }
-                  },
-                  "required": [
-                    "sites",
-                    "opposite_pairs"
-                  ],
-                  "type": "object"
                 },
-                "maxItems": 100,
-                "minItems": 100,
-                "type": "array"
-              },
-              "maximum_red": {
-                "const": 100
-              }
+                "required": [
+                    "parity",
+                    "eligible_sites",
+                    "guaranteed_red",
+                    "counts"
+                ],
+                "type": "object"
             },
-            "required": [
-              "cycles",
-              "maximum_red"
-            ],
-            "type": "object"
-          }
+            "upper_strategy": {
+                "additionalProperties": false,
+                "properties": {
+                    "cycles": {
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "opposite_pairs": {
+                                    "items": {
+                                        "items": {
+                                            "pattern": "^(?:[1-9]|1[0-9]|20),(?:[1-9]|1[0-9]|20)$",
+                                            "type": "string"
+                                        },
+                                        "maxItems": 2,
+                                        "minItems": 2,
+                                        "type": "array",
+                                        "uniqueItems": true
+                                    },
+                                    "maxItems": 2,
+                                    "minItems": 2,
+                                    "type": "array"
+                                },
+                                "sites": {
+                                    "items": {
+                                        "pattern": "^(?:[1-9]|1[0-9]|20),(?:[1-9]|1[0-9]|20)$",
+                                        "type": "string"
+                                    },
+                                    "maxItems": 4,
+                                    "minItems": 4,
+                                    "type": "array",
+                                    "uniqueItems": true
+                                }
+                            },
+                            "required": [
+                                "sites",
+                                "opposite_pairs"
+                            ],
+                            "type": "object"
+                        },
+                        "maxItems": 100,
+                        "minItems": 100,
+                        "type": "array"
+                    },
+                    "maximum_red": {
+                        "const": 100
+                    }
+                },
+                "required": [
+                    "cycles",
+                    "maximum_red"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "lower_strategy",
-          "upper_strategy"
+            "lower_strategy",
+            "upper_strategy"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/knight-cycle-game-strategy"
+    "task_id": "jacobian/knight-cycle-game-strategy"
 }

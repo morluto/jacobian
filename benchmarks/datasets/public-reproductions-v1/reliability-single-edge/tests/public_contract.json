@@ -1,77 +1,37 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "probability": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "den": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "num": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "num",
-          "den"
-        ],
-        "type": "object"
-      },
-      "states": {
-        "type": "integer"
-      }
-    },
-    "required": [
-      "probability",
-      "states"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "probability": {
-            "additionalProperties": false,
-            "properties": {
-              "den": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "num": {
-                "type": "integer"
-              }
+            "probability": {
+                "additionalProperties": false,
+                "properties": {
+                    "den": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "num": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "num",
+                    "den"
+                ],
+                "type": "object"
             },
-            "required": [
-              "num",
-              "den"
-            ],
-            "type": "object"
-          },
-          "states": {
-            "type": "integer"
-          }
+            "states": {
+                "type": "integer"
+            }
         },
         "required": [
-          "probability",
-          "states"
+            "probability",
+            "states"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/reliability-single-edge"
+    "task_id": "jacobian/reliability-single-edge"
 }

@@ -1,81 +1,39 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "exact_even_fixed_histogram": {
-        "items": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 5,
-        "minItems": 5,
-        "type": "array"
-      },
-      "inclusion_sum": {
-        "minimum": 1,
-        "type": "integer"
-      },
-      "signed_inclusion_terms": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 5,
-        "minItems": 5,
-        "type": "array"
-      }
-    },
-    "required": [
-      "signed_inclusion_terms",
-      "inclusion_sum",
-      "exact_even_fixed_histogram"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "exact_even_fixed_histogram": {
-            "items": {
-              "minimum": 0,
-              "type": "integer"
+            "exact_even_fixed_histogram": {
+                "items": {
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "maxItems": 5,
+                "minItems": 5,
+                "type": "array"
             },
-            "maxItems": 5,
-            "minItems": 5,
-            "type": "array"
-          },
-          "inclusion_sum": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "signed_inclusion_terms": {
-            "items": {
-              "type": "integer"
+            "inclusion_sum": {
+                "minimum": 1,
+                "type": "integer"
             },
-            "maxItems": 5,
-            "minItems": 5,
-            "type": "array"
-          }
+            "signed_inclusion_terms": {
+                "items": {
+                    "type": "integer"
+                },
+                "maxItems": 5,
+                "minItems": 5,
+                "type": "array"
+            }
         },
         "required": [
-          "signed_inclusion_terms",
-          "inclusion_sum",
-          "exact_even_fixed_histogram"
+            "signed_inclusion_terms",
+            "inclusion_sum",
+            "exact_even_fixed_histogram"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/even-fixed-point-inclusion"
+    "task_id": "jacobian/even-fixed-point-inclusion"
 }

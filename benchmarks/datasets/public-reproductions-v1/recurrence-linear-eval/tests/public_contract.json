@@ -1,41 +1,19 @@
 {
-  "public_notes": "The verifier selects the Jacobian operation for the frozen query by a deterministic registry rule and checks the submitted operation identifier.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "selected_operation": {
-        "type": "string"
-      }
-    },
-    "required": [
-      "selected_operation"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier selects the Jacobian operation for the frozen query by a deterministic registry rule and checks the submitted operation identifier.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "selected_operation": {
-            "type": "string"
-          }
+            "selected_operation": {
+                "type": "string"
+            }
         },
         "required": [
-          "selected_operation"
+            "selected_operation"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/recurrence-linear-eval"
+    "task_id": "jacobian/recurrence-linear-eval"
 }

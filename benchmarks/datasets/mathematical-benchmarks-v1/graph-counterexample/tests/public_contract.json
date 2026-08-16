@@ -1,83 +1,40 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "edges": {
-        "items": {
-          "items": {
-            "type": [
-              "string",
-              "integer"
-            ]
-          },
-          "maxItems": 2,
-          "minItems": 2,
-          "type": "array"
-        },
-        "type": "array"
-      },
-      "vertices": {
-        "items": {
-          "type": [
-            "string",
-            "integer"
-          ]
-        },
-        "type": "array"
-      }
-    },
-    "required": [
-      "vertices",
-      "edges"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "edges": {
-            "items": {
-              "items": {
-                "type": [
-                  "string",
-                  "integer"
-                ]
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
+            "edges": {
+                "items": {
+                    "items": {
+                        "type": [
+                            "string",
+                            "integer"
+                        ]
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                },
+                "type": "array"
             },
-            "type": "array"
-          },
-          "vertices": {
-            "items": {
-              "type": [
-                "string",
-                "integer"
-              ]
-            },
-            "type": "array"
-          }
+            "vertices": {
+                "items": {
+                    "type": [
+                        "string",
+                        "integer"
+                    ]
+                },
+                "type": "array"
+            }
         },
         "required": [
-          "vertices",
-          "edges"
+            "vertices",
+            "edges"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/graph-counterexample"
+    "task_id": "jacobian/graph-counterexample"
 }

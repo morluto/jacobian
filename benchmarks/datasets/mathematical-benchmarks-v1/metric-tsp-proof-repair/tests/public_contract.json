@@ -1,253 +1,125 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "corrected_claim": {
-        "const": "DOUBLE_TREE_TWO_APPROXIMATION"
-      },
-      "euler_walk": {
-        "items": {
-          "enum": [
-            "A",
-            "B",
-            "C",
-            "D",
-            "E",
-            "F"
-          ]
-        },
-        "maxItems": 11,
-        "minItems": 11,
-        "type": "array"
-      },
-      "flaw_location": {
-        "const": "STEP_4"
-      },
-      "invalid_inference": {
-        "const": "SHORTCUTTING_PRESERVES_EXACT_COST"
-      },
-      "mst_edges": {
-        "items": {
-          "items": {
-            "enum": [
-              "A",
-              "B",
-              "C",
-              "D",
-              "E",
-              "F"
-            ]
-          },
-          "maxItems": 2,
-          "minItems": 2,
-          "type": "array"
-        },
-        "maxItems": 5,
-        "minItems": 5,
-        "type": "array"
-      },
-      "optimal_tour": {
-        "items": {
-          "enum": [
-            "A",
-            "B",
-            "C",
-            "D",
-            "E",
-            "F"
-          ]
-        },
-        "maxItems": 7,
-        "minItems": 7,
-        "type": "array"
-      },
-      "shortcut_tour": {
-        "items": {
-          "enum": [
-            "A",
-            "B",
-            "C",
-            "D",
-            "E",
-            "F"
-          ]
-        },
-        "maxItems": 7,
-        "minItems": 7,
-        "type": "array"
-      },
-      "weights": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "euler": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "mst": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "optimal": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "shortcut": {
-            "minimum": 0,
-            "type": "integer"
-          }
+            "corrected_claim": {
+                "const": "DOUBLE_TREE_TWO_APPROXIMATION"
+            },
+            "euler_walk": {
+                "items": {
+                    "enum": [
+                        "A",
+                        "B",
+                        "C",
+                        "D",
+                        "E",
+                        "F"
+                    ]
+                },
+                "maxItems": 11,
+                "minItems": 11,
+                "type": "array"
+            },
+            "flaw_location": {
+                "const": "STEP_4"
+            },
+            "invalid_inference": {
+                "const": "SHORTCUTTING_PRESERVES_EXACT_COST"
+            },
+            "mst_edges": {
+                "items": {
+                    "items": {
+                        "enum": [
+                            "A",
+                            "B",
+                            "C",
+                            "D",
+                            "E",
+                            "F"
+                        ]
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": "array"
+                },
+                "maxItems": 5,
+                "minItems": 5,
+                "type": "array"
+            },
+            "optimal_tour": {
+                "items": {
+                    "enum": [
+                        "A",
+                        "B",
+                        "C",
+                        "D",
+                        "E",
+                        "F"
+                    ]
+                },
+                "maxItems": 7,
+                "minItems": 7,
+                "type": "array"
+            },
+            "shortcut_tour": {
+                "items": {
+                    "enum": [
+                        "A",
+                        "B",
+                        "C",
+                        "D",
+                        "E",
+                        "F"
+                    ]
+                },
+                "maxItems": 7,
+                "minItems": 7,
+                "type": "array"
+            },
+            "weights": {
+                "additionalProperties": false,
+                "properties": {
+                    "euler": {
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "mst": {
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "optimal": {
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "shortcut": {
+                        "minimum": 0,
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "mst",
+                    "euler",
+                    "shortcut",
+                    "optimal"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "mst",
-          "euler",
-          "shortcut",
-          "optimal"
+            "flaw_location",
+            "invalid_inference",
+            "corrected_claim",
+            "mst_edges",
+            "euler_walk",
+            "shortcut_tour",
+            "optimal_tour",
+            "weights"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "flaw_location",
-      "invalid_inference",
-      "corrected_claim",
-      "mst_edges",
-      "euler_walk",
-      "shortcut_tour",
-      "optimal_tour",
-      "weights"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "corrected_claim": {
-            "const": "DOUBLE_TREE_TWO_APPROXIMATION"
-          },
-          "euler_walk": {
-            "items": {
-              "enum": [
-                "A",
-                "B",
-                "C",
-                "D",
-                "E",
-                "F"
-              ]
-            },
-            "maxItems": 11,
-            "minItems": 11,
-            "type": "array"
-          },
-          "flaw_location": {
-            "const": "STEP_4"
-          },
-          "invalid_inference": {
-            "const": "SHORTCUTTING_PRESERVES_EXACT_COST"
-          },
-          "mst_edges": {
-            "items": {
-              "items": {
-                "enum": [
-                  "A",
-                  "B",
-                  "C",
-                  "D",
-                  "E",
-                  "F"
-                ]
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
-            },
-            "maxItems": 5,
-            "minItems": 5,
-            "type": "array"
-          },
-          "optimal_tour": {
-            "items": {
-              "enum": [
-                "A",
-                "B",
-                "C",
-                "D",
-                "E",
-                "F"
-              ]
-            },
-            "maxItems": 7,
-            "minItems": 7,
-            "type": "array"
-          },
-          "shortcut_tour": {
-            "items": {
-              "enum": [
-                "A",
-                "B",
-                "C",
-                "D",
-                "E",
-                "F"
-              ]
-            },
-            "maxItems": 7,
-            "minItems": 7,
-            "type": "array"
-          },
-          "weights": {
-            "additionalProperties": false,
-            "properties": {
-              "euler": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "mst": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "optimal": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "shortcut": {
-                "minimum": 0,
-                "type": "integer"
-              }
-            },
-            "required": [
-              "mst",
-              "euler",
-              "shortcut",
-              "optimal"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "flaw_location",
-          "invalid_inference",
-          "corrected_claim",
-          "mst_edges",
-          "euler_walk",
-          "shortcut_tour",
-          "optimal_tour",
-          "weights"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/metric-tsp-proof-repair"
+    "task_id": "jacobian/metric-tsp-proof-repair"
 }

@@ -1,205 +1,101 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "diagnosis": {
-        "const": "PROPOSED_DECOMPOSITION_DOES_NOT_PARTITION_ALL_TILINGS"
-      },
-      "exponentiation_trace": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "after": {
-              "items": {
-                "maximum": 18,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "maxItems": 8,
-              "minItems": 8,
-              "type": "array"
-            },
-            "before": {
-              "items": {
-                "maximum": 18,
-                "minimum": 0,
-                "type": "integer"
-              },
-              "maxItems": 8,
-              "minItems": 8,
-              "type": "array"
-            },
-            "bit": {
-              "maximum": 10,
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "bit",
-            "before",
-            "after"
-          ],
-          "type": "object"
-        },
-        "maxItems": 8,
-        "minItems": 8,
-        "type": "array"
-      },
-      "initial_vector": {
-        "items": {
-          "maximum": 18,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 8,
-        "minItems": 8,
-        "type": "array"
-      },
-      "remainder": {
-        "maximum": 18,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "removed_row": {
-        "enum": [
-          0,
-          2
-        ]
-      },
-      "transition_matrix": {
-        "items": {
-          "items": {
-            "maximum": 18,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 8,
-          "minItems": 8,
-          "type": "array"
-        },
-        "maxItems": 8,
-        "minItems": 8,
-        "type": "array"
-      }
-    },
-    "required": [
-      "removed_row",
-      "transition_matrix",
-      "initial_vector",
-      "exponentiation_trace",
-      "remainder",
-      "diagnosis"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "diagnosis": {
-            "const": "PROPOSED_DECOMPOSITION_DOES_NOT_PARTITION_ALL_TILINGS"
-          },
-          "exponentiation_trace": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "after": {
-                  "items": {
+            "diagnosis": {
+                "const": "PROPOSED_DECOMPOSITION_DOES_NOT_PARTITION_ALL_TILINGS"
+            },
+            "exponentiation_trace": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "after": {
+                            "items": {
+                                "maximum": 18,
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "maxItems": 8,
+                            "minItems": 8,
+                            "type": "array"
+                        },
+                        "before": {
+                            "items": {
+                                "maximum": 18,
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "maxItems": 8,
+                            "minItems": 8,
+                            "type": "array"
+                        },
+                        "bit": {
+                            "maximum": 10,
+                            "minimum": 0,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "bit",
+                        "before",
+                        "after"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 8,
+                "minItems": 8,
+                "type": "array"
+            },
+            "initial_vector": {
+                "items": {
                     "maximum": 18,
                     "minimum": 0,
                     "type": "integer"
-                  },
-                  "maxItems": 8,
-                  "minItems": 8,
-                  "type": "array"
                 },
-                "before": {
-                  "items": {
-                    "maximum": 18,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  "maxItems": 8,
-                  "minItems": 8,
-                  "type": "array"
-                },
-                "bit": {
-                  "maximum": 10,
-                  "minimum": 0,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "bit",
-                "before",
-                "after"
-              ],
-              "type": "object"
+                "maxItems": 8,
+                "minItems": 8,
+                "type": "array"
             },
-            "maxItems": 8,
-            "minItems": 8,
-            "type": "array"
-          },
-          "initial_vector": {
-            "items": {
-              "maximum": 18,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "maxItems": 8,
-            "minItems": 8,
-            "type": "array"
-          },
-          "remainder": {
-            "maximum": 18,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "removed_row": {
-            "enum": [
-              0,
-              2
-            ]
-          },
-          "transition_matrix": {
-            "items": {
-              "items": {
+            "remainder": {
                 "maximum": 18,
                 "minimum": 0,
                 "type": "integer"
-              },
-              "maxItems": 8,
-              "minItems": 8,
-              "type": "array"
             },
-            "maxItems": 8,
-            "minItems": 8,
-            "type": "array"
-          }
+            "removed_row": {
+                "enum": [
+                    0,
+                    2
+                ]
+            },
+            "transition_matrix": {
+                "items": {
+                    "items": {
+                        "maximum": 18,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "maxItems": 8,
+                    "minItems": 8,
+                    "type": "array"
+                },
+                "maxItems": 8,
+                "minItems": 8,
+                "type": "array"
+            }
         },
         "required": [
-          "removed_row",
-          "transition_matrix",
-          "initial_vector",
-          "exponentiation_trace",
-          "remainder",
-          "diagnosis"
+            "removed_row",
+            "transition_matrix",
+            "initial_vector",
+            "exponentiation_trace",
+            "remainder",
+            "diagnosis"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/domino-profile-transfer-audit"
+    "task_id": "jacobian/domino-profile-transfer-audit"
 }

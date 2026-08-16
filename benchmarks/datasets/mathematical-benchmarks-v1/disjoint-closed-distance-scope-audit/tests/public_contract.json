@@ -1,286 +1,141 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "epsilon": {
-      "additionalProperties": false,
-      "properties": {
-        "distance_squared": {
-          "$ref": "#/$defs/rat"
-        },
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
         "epsilon": {
-          "$ref": "#/$defs/rat"
-        },
-        "index": {
-          "maximum": 1000000,
-          "minimum": 1,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "epsilon",
-        "index",
-        "distance_squared"
-      ],
-      "type": "object"
-    },
-    "rat": {
-      "additionalProperties": false,
-      "properties": {
-        "denominator": {
-          "maximum": 1000000000,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "numerator": {
-          "maximum": 1000000000,
-          "minimum": -1000000000,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
-      "type": "object"
-    },
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "corrected_conclusion": {
-          "const": "SEPARATED_BUT_DISTANCE_INFIMUM_ZERO"
-        },
-        "distance_squared": {
-          "items": {
-            "$ref": "#/$defs/rat"
-          },
-          "maxItems": 10,
-          "minItems": 10,
-          "type": "array"
-        },
-        "epsilon_witnesses": {
-          "items": {
-            "$ref": "#/$defs/epsilon"
-          },
-          "maxItems": 8,
-          "minItems": 8,
-          "type": "array"
-        },
-        "formal_conclusion": {
-          "const": "POSITIVE_DISTANCE"
-        },
-        "horizontal_step": {
-          "maximum": 20,
-          "minimum": 2,
-          "type": "integer"
-        },
-        "offset": {
-          "maximum": 20,
-          "minimum": 2,
-          "type": "integer"
-        },
-        "sample_indices": {
-          "items": {
-            "maximum": 1000000,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "maxItems": 10,
-          "minItems": 10,
-          "type": "array",
-          "uniqueItems": true
-        },
-        "separation_certificate": {
-          "$ref": "#/$defs/separation"
-        },
-        "vertical_scale": {
-          "maximum": 20,
-          "minimum": 1,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "horizontal_step",
-        "vertical_scale",
-        "offset",
-        "sample_indices",
-        "distance_squared",
-        "epsilon_witnesses",
-        "separation_certificate",
-        "formal_conclusion",
-        "corrected_conclusion"
-      ],
-      "type": "object"
-    },
-    "separation": {
-      "additionalProperties": false,
-      "properties": {
-        "closedness_reason": {
-          "const": "DISTINCT_INDICES_HAVE_HORIZONTAL_GAP"
-        },
-        "cross_family_vertical_nonzero": {
-          "const": true
-        },
-        "same_family_lower_bound_squared": {
-          "$ref": "#/$defs/rat"
-        }
-      },
-      "required": [
-        "same_family_lower_bound_squared",
-        "cross_family_vertical_nonzero",
-        "closedness_reason"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "$ref": "#/$defs/result"
-  },
-  "submission_schema": {
-    "$defs": {
-      "epsilon": {
-        "additionalProperties": false,
-        "properties": {
-          "distance_squared": {
-            "$ref": "#/$defs/rat"
-          },
-          "epsilon": {
-            "$ref": "#/$defs/rat"
-          },
-          "index": {
-            "maximum": 1000000,
-            "minimum": 1,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "epsilon",
-          "index",
-          "distance_squared"
-        ],
-        "type": "object"
-      },
-      "rat": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "maximum": 1000000000,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "maximum": 1000000000,
-            "minimum": -1000000000,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "corrected_conclusion": {
-            "const": "SEPARATED_BUT_DISTANCE_INFIMUM_ZERO"
-          },
-          "distance_squared": {
-            "items": {
-              "$ref": "#/$defs/rat"
+            "additionalProperties": false,
+            "properties": {
+                "distance_squared": {
+                    "$ref": "#/$defs/rat"
+                },
+                "epsilon": {
+                    "$ref": "#/$defs/rat"
+                },
+                "index": {
+                    "maximum": 1000000,
+                    "minimum": 1,
+                    "type": "integer"
+                }
             },
-            "maxItems": 10,
-            "minItems": 10,
-            "type": "array"
-          },
-          "epsilon_witnesses": {
-            "items": {
-              "$ref": "#/$defs/epsilon"
-            },
-            "maxItems": 8,
-            "minItems": 8,
-            "type": "array"
-          },
-          "formal_conclusion": {
-            "const": "POSITIVE_DISTANCE"
-          },
-          "horizontal_step": {
-            "maximum": 20,
-            "minimum": 2,
-            "type": "integer"
-          },
-          "offset": {
-            "maximum": 20,
-            "minimum": 2,
-            "type": "integer"
-          },
-          "sample_indices": {
-            "items": {
-              "maximum": 1000000,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "maxItems": 10,
-            "minItems": 10,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "separation_certificate": {
-            "$ref": "#/$defs/separation"
-          },
-          "vertical_scale": {
-            "maximum": 20,
-            "minimum": 1,
-            "type": "integer"
-          }
+            "required": [
+                "epsilon",
+                "index",
+                "distance_squared"
+            ],
+            "type": "object"
         },
-        "required": [
-          "horizontal_step",
-          "vertical_scale",
-          "offset",
-          "sample_indices",
-          "distance_squared",
-          "epsilon_witnesses",
-          "separation_certificate",
-          "formal_conclusion",
-          "corrected_conclusion"
-        ],
-        "type": "object"
-      },
-      "separation": {
-        "additionalProperties": false,
-        "properties": {
-          "closedness_reason": {
-            "const": "DISTINCT_INDICES_HAVE_HORIZONTAL_GAP"
-          },
-          "cross_family_vertical_nonzero": {
-            "const": true
-          },
-          "same_family_lower_bound_squared": {
-            "$ref": "#/$defs/rat"
-          }
+        "rat": {
+            "additionalProperties": false,
+            "properties": {
+                "denominator": {
+                    "maximum": 1000000000,
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "numerator": {
+                    "maximum": 1000000000,
+                    "minimum": -1000000000,
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "numerator",
+                "denominator"
+            ],
+            "type": "object"
         },
-        "required": [
-          "same_family_lower_bound_squared",
-          "cross_family_vertical_nonzero",
-          "closedness_reason"
-        ],
-        "type": "object"
-      }
+        "result": {
+            "additionalProperties": false,
+            "properties": {
+                "corrected_conclusion": {
+                    "const": "SEPARATED_BUT_DISTANCE_INFIMUM_ZERO"
+                },
+                "distance_squared": {
+                    "items": {
+                        "$ref": "#/$defs/rat"
+                    },
+                    "maxItems": 10,
+                    "minItems": 10,
+                    "type": "array"
+                },
+                "epsilon_witnesses": {
+                    "items": {
+                        "$ref": "#/$defs/epsilon"
+                    },
+                    "maxItems": 8,
+                    "minItems": 8,
+                    "type": "array"
+                },
+                "formal_conclusion": {
+                    "const": "POSITIVE_DISTANCE"
+                },
+                "horizontal_step": {
+                    "maximum": 20,
+                    "minimum": 2,
+                    "type": "integer"
+                },
+                "offset": {
+                    "maximum": 20,
+                    "minimum": 2,
+                    "type": "integer"
+                },
+                "sample_indices": {
+                    "items": {
+                        "maximum": 1000000,
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "maxItems": 10,
+                    "minItems": 10,
+                    "type": "array",
+                    "uniqueItems": true
+                },
+                "separation_certificate": {
+                    "$ref": "#/$defs/separation"
+                },
+                "vertical_scale": {
+                    "maximum": 20,
+                    "minimum": 1,
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "horizontal_step",
+                "vertical_scale",
+                "offset",
+                "sample_indices",
+                "distance_squared",
+                "epsilon_witnesses",
+                "separation_certificate",
+                "formal_conclusion",
+                "corrected_conclusion"
+            ],
+            "type": "object"
+        },
+        "separation": {
+            "additionalProperties": false,
+            "properties": {
+                "closedness_reason": {
+                    "const": "DISTINCT_INDICES_HAVE_HORIZONTAL_GAP"
+                },
+                "cross_family_vertical_nonzero": {
+                    "const": true
+                },
+                "same_family_lower_bound_squared": {
+                    "$ref": "#/$defs/rat"
+                }
+            },
+            "required": [
+                "same_family_lower_bound_squared",
+                "cross_family_vertical_nonzero",
+                "closedness_reason"
+            ],
+            "type": "object"
+        }
     },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "$ref": "#/$defs/result"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/disjoint-closed-distance-scope-audit"
+    "task_id": "jacobian/disjoint-closed-distance-scope-audit"
 }

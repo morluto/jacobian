@@ -1,165 +1,81 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "corrected_count": {
-        "maximum": 2025,
-        "minimum": 1,
-        "type": "integer"
-      },
-      "defects": {
-        "items": {
-          "enum": [
-            "PRIME_POWER_CLASSIFICATION_FALSE",
-            "COPRIMALITY_DOES_NOT_IMPLY_DIVISIBILITY",
-            "N_MINUS_ONE_NOT_DIVISOR_OF_N_SQUARED",
-            "CLAIMED_N8_WITNESSES_NOT_DIVISORS",
-            "PUBLISHED_COUNT_WRONG"
-          ]
-        },
-        "maxItems": 5,
-        "minItems": 5,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "membership_bitmap_hex": {
-        "pattern": "^[0-9a-f]{508}$",
-        "type": "string"
-      },
-      "nonmember_counterexamples": {
-        "items": {
-          "enum": [
-            3,
-            5,
-            8
-          ]
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "witnesses": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "d": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "n": {
-              "maximum": 2025,
-              "minimum": 1,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "n",
-            "d"
-          ],
-          "type": "object"
-        },
-        "maxItems": 30,
-        "minItems": 10,
-        "type": "array"
-      }
-    },
-    "required": [
-      "corrected_count",
-      "membership_bitmap_hex",
-      "witnesses",
-      "nonmember_counterexamples",
-      "defects"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "corrected_count": {
-            "maximum": 2025,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "defects": {
-            "items": {
-              "enum": [
-                "PRIME_POWER_CLASSIFICATION_FALSE",
-                "COPRIMALITY_DOES_NOT_IMPLY_DIVISIBILITY",
-                "N_MINUS_ONE_NOT_DIVISOR_OF_N_SQUARED",
-                "CLAIMED_N8_WITNESSES_NOT_DIVISORS",
-                "PUBLISHED_COUNT_WRONG"
-              ]
+            "corrected_count": {
+                "maximum": 2025,
+                "minimum": 1,
+                "type": "integer"
             },
-            "maxItems": 5,
-            "minItems": 5,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "membership_bitmap_hex": {
-            "pattern": "^[0-9a-f]{508}$",
-            "type": "string"
-          },
-          "nonmember_counterexamples": {
-            "items": {
-              "enum": [
-                3,
-                5,
-                8
-              ]
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array",
-            "uniqueItems": true
-          },
-          "witnesses": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "d": {
-                  "minimum": 1,
-                  "type": "integer"
+            "defects": {
+                "items": {
+                    "enum": [
+                        "PRIME_POWER_CLASSIFICATION_FALSE",
+                        "COPRIMALITY_DOES_NOT_IMPLY_DIVISIBILITY",
+                        "N_MINUS_ONE_NOT_DIVISOR_OF_N_SQUARED",
+                        "CLAIMED_N8_WITNESSES_NOT_DIVISORS",
+                        "PUBLISHED_COUNT_WRONG"
+                    ]
                 },
-                "n": {
-                  "maximum": 2025,
-                  "minimum": 1,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "n",
-                "d"
-              ],
-              "type": "object"
+                "maxItems": 5,
+                "minItems": 5,
+                "type": "array",
+                "uniqueItems": true
             },
-            "maxItems": 30,
-            "minItems": 10,
-            "type": "array"
-          }
+            "membership_bitmap_hex": {
+                "pattern": "^[0-9a-f]{508}$",
+                "type": "string"
+            },
+            "nonmember_counterexamples": {
+                "items": {
+                    "enum": [
+                        3,
+                        5,
+                        8
+                    ]
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array",
+                "uniqueItems": true
+            },
+            "witnesses": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "d": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "n": {
+                            "maximum": 2025,
+                            "minimum": 1,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "n",
+                        "d"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 30,
+                "minItems": 10,
+                "type": "array"
+            }
         },
         "required": [
-          "corrected_count",
-          "membership_bitmap_hex",
-          "witnesses",
-          "nonmember_counterexamples",
-          "defects"
+            "corrected_count",
+            "membership_bitmap_hex",
+            "witnesses",
+            "nonmember_counterexamples",
+            "defects"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/unit-fraction-classification-repair"
+    "task_id": "jacobian/unit-fraction-classification-repair"
 }

@@ -1,377 +1,187 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "c": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "center": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "circle_coefficients": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "denominator": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "numerator": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "numerator",
-            "denominator"
-          ],
-          "type": "object"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      },
-      "distance_coefficients": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "denominator": {
-              "minimum": 1,
-              "type": "integer"
-            },
-            "numerator": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "numerator",
-            "denominator"
-          ],
-          "type": "object"
-        },
-        "maxItems": 4,
-        "minItems": 4,
-        "type": "array"
-      },
-      "k": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "multiplier": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "p": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "q": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      },
-      "radius": {
-        "additionalProperties": false,
-        "properties": {
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "numerator": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      }
-    },
-    "required": [
-      "k",
-      "c",
-      "p",
-      "q",
-      "center",
-      "radius",
-      "circle_coefficients",
-      "distance_coefficients",
-      "multiplier"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "c": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          },
-          "center": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          },
-          "circle_coefficients": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "denominator": {
-                  "minimum": 1,
-                  "type": "integer"
+            "c": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
                 },
-                "numerator": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "numerator",
-                "denominator"
-              ],
-              "type": "object"
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
             },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          },
-          "distance_coefficients": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "denominator": {
-                  "minimum": 1,
-                  "type": "integer"
+            "center": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
                 },
-                "numerator": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "numerator",
-                "denominator"
-              ],
-              "type": "object"
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
             },
-            "maxItems": 4,
-            "minItems": 4,
-            "type": "array"
-          },
-          "k": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
+            "circle_coefficients": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "denominator": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "numerator": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "numerator",
+                        "denominator"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
             },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          },
-          "multiplier": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
+            "distance_coefficients": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "denominator": {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "numerator": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "numerator",
+                        "denominator"
+                    ],
+                    "type": "object"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
             },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          },
-          "p": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
+            "k": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
             },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          },
-          "q": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
+            "multiplier": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
             },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          },
-          "radius": {
-            "additionalProperties": false,
-            "properties": {
-              "denominator": {
-                "minimum": 1,
-                "type": "integer"
-              },
-              "numerator": {
-                "type": "integer"
-              }
+            "p": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
             },
-            "required": [
-              "numerator",
-              "denominator"
-            ],
-            "type": "object"
-          }
+            "q": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
+            },
+            "radius": {
+                "additionalProperties": false,
+                "properties": {
+                    "denominator": {
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "numerator": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "numerator",
+                    "denominator"
+                ],
+                "type": "object"
+            }
         },
         "required": [
-          "k",
-          "c",
-          "p",
-          "q",
-          "center",
-          "radius",
-          "circle_coefficients",
-          "distance_coefficients",
-          "multiplier"
+            "k",
+            "c",
+            "p",
+            "q",
+            "center",
+            "radius",
+            "circle_coefficients",
+            "distance_coefficients",
+            "multiplier"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/apollonius-gap-repair"
+    "task_id": "jacobian/apollonius-gap-repair"
 }

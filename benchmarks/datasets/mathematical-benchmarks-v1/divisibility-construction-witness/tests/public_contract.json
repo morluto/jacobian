@@ -1,85 +1,41 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "a": {
-        "maximum": 1000,
-        "minimum": 1,
-        "type": "integer"
-      },
-      "b": {
-        "maximum": 1000,
-        "minimum": 1,
-        "type": "integer"
-      },
-      "power_difference": {
-        "type": "integer"
-      },
-      "product_mod_7": {
-        "maximum": 6,
-        "minimum": 1,
-        "type": "integer"
-      },
-      "quotient_by_7_pow_7": {
-        "type": "integer"
-      }
-    },
-    "required": [
-      "a",
-      "b",
-      "product_mod_7",
-      "power_difference",
-      "quotient_by_7_pow_7"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "a": {
-            "maximum": 1000,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "b": {
-            "maximum": 1000,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "power_difference": {
-            "type": "integer"
-          },
-          "product_mod_7": {
-            "maximum": 6,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "quotient_by_7_pow_7": {
-            "type": "integer"
-          }
+            "a": {
+                "maximum": 1000,
+                "minimum": 1,
+                "type": "integer"
+            },
+            "b": {
+                "maximum": 1000,
+                "minimum": 1,
+                "type": "integer"
+            },
+            "power_difference": {
+                "type": "integer"
+            },
+            "product_mod_7": {
+                "maximum": 6,
+                "minimum": 1,
+                "type": "integer"
+            },
+            "quotient_by_7_pow_7": {
+                "type": "integer"
+            }
         },
         "required": [
-          "a",
-          "b",
-          "product_mod_7",
-          "power_difference",
-          "quotient_by_7_pow_7"
+            "a",
+            "b",
+            "product_mod_7",
+            "power_difference",
+            "quotient_by_7_pow_7"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/divisibility-construction-witness"
+    "task_id": "jacobian/divisibility-construction-witness"
 }

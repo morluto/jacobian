@@ -1,131 +1,64 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {},
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "determinant": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {},
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "terms": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "coefficient": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "den": {
-                      "type": "string"
-                    },
-                    "num": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "num",
-                    "den"
-                  ],
-                  "type": "object"
-                },
-                "exponents": {
-                  "items": {
-                    "type": "integer"
-                  },
-                  "type": "array"
-                }
-              },
-              "required": [
-                "coefficient",
-                "exponents"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "terms"
-        ],
-        "type": "object"
-      },
-      "keller_condition_verified": {
-        "type": "boolean"
-      }
-    },
-    "required": [
-      "keller_condition_verified",
-      "determinant"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "determinant": {
-            "additionalProperties": false,
-            "properties": {
-              "terms": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "coefficient": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "den": {
-                          "type": "string"
+            "determinant": {
+                "additionalProperties": false,
+                "properties": {
+                    "terms": {
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "coefficient": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                        "den": {
+                                            "type": "string"
+                                        },
+                                        "num": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "num",
+                                        "den"
+                                    ],
+                                    "type": "object"
+                                },
+                                "exponents": {
+                                    "items": {
+                                        "type": "integer"
+                                    },
+                                    "type": "array"
+                                }
+                            },
+                            "required": [
+                                "coefficient",
+                                "exponents"
+                            ],
+                            "type": "object"
                         },
-                        "num": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "num",
-                        "den"
-                      ],
-                      "type": "object"
-                    },
-                    "exponents": {
-                      "items": {
-                        "type": "integer"
-                      },
-                      "type": "array"
+                        "type": "array"
                     }
-                  },
-                  "required": [
-                    "coefficient",
-                    "exponents"
-                  ],
-                  "type": "object"
                 },
-                "type": "array"
-              }
+                "required": [
+                    "terms"
+                ],
+                "type": "object"
             },
-            "required": [
-              "terms"
-            ],
-            "type": "object"
-          },
-          "keller_condition_verified": {
-            "type": "boolean"
-          }
+            "keller_condition_verified": {
+                "type": "boolean"
+            }
         },
         "required": [
-          "keller_condition_verified",
-          "determinant"
+            "keller_condition_verified",
+            "determinant"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/jacobian-keller"
+    "task_id": "jacobian/jacobian-keller"
 }

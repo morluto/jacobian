@@ -1,252 +1,124 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "candidate": {
-      "additionalProperties": false,
-      "properties": {
-        "partition": {
-          "items": {
-            "maximum": 13,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "maxItems": 13,
-          "minItems": 1,
-          "type": "array"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "candidate": {
+            "additionalProperties": false,
+            "properties": {
+                "partition": {
+                    "items": {
+                        "maximum": 13,
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "maxItems": 13,
+                    "minItems": 1,
+                    "type": "array"
+                },
+                "value": {
+                    "minimum": 1,
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "partition",
+                "value"
+            ],
+            "type": "object"
         },
-        "value": {
-          "minimum": 1,
-          "type": "integer"
+        "factor": {
+            "additionalProperties": false,
+            "properties": {
+                "exponent": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "prime": {
+                    "minimum": 2,
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "prime",
+                "exponent"
+            ],
+            "type": "object"
+        },
+        "result": {
+            "additionalProperties": false,
+            "properties": {
+                "current_candidates": {
+                    "items": {
+                        "$ref": "#/$defs/candidate"
+                    },
+                    "maxItems": 77,
+                    "minItems": 77,
+                    "type": "array"
+                },
+                "current_divisor_count": {
+                    "const": 4096
+                },
+                "current_factors": {
+                    "items": {
+                        "$ref": "#/$defs/factor"
+                    },
+                    "maxItems": 13,
+                    "minItems": 1,
+                    "type": "array"
+                },
+                "current_minimizer": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "k": {
+                    "const": 12
+                },
+                "next_candidates": {
+                    "items": {
+                        "$ref": "#/$defs/candidate"
+                    },
+                    "maxItems": 101,
+                    "minItems": 101,
+                    "type": "array"
+                },
+                "next_divisor_count": {
+                    "const": 8192
+                },
+                "next_factors": {
+                    "items": {
+                        "$ref": "#/$defs/factor"
+                    },
+                    "maxItems": 14,
+                    "minItems": 1,
+                    "type": "array"
+                },
+                "next_minimizer": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "quotient": {
+                    "minimum": 2,
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "k",
+                "current_minimizer",
+                "current_factors",
+                "current_divisor_count",
+                "current_candidates",
+                "next_minimizer",
+                "next_factors",
+                "next_divisor_count",
+                "next_candidates",
+                "quotient"
+            ],
+            "type": "object"
         }
-      },
-      "required": [
-        "partition",
-        "value"
-      ],
-      "type": "object"
     },
-    "factor": {
-      "additionalProperties": false,
-      "properties": {
-        "exponent": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "prime": {
-          "minimum": 2,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "prime",
-        "exponent"
-      ],
-      "type": "object"
-    },
-    "result": {
-      "additionalProperties": false,
-      "properties": {
-        "current_candidates": {
-          "items": {
-            "$ref": "#/$defs/candidate"
-          },
-          "maxItems": 77,
-          "minItems": 77,
-          "type": "array"
-        },
-        "current_divisor_count": {
-          "const": 4096
-        },
-        "current_factors": {
-          "items": {
-            "$ref": "#/$defs/factor"
-          },
-          "maxItems": 13,
-          "minItems": 1,
-          "type": "array"
-        },
-        "current_minimizer": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "k": {
-          "const": 12
-        },
-        "next_candidates": {
-          "items": {
-            "$ref": "#/$defs/candidate"
-          },
-          "maxItems": 101,
-          "minItems": 101,
-          "type": "array"
-        },
-        "next_divisor_count": {
-          "const": 8192
-        },
-        "next_factors": {
-          "items": {
-            "$ref": "#/$defs/factor"
-          },
-          "maxItems": 14,
-          "minItems": 1,
-          "type": "array"
-        },
-        "next_minimizer": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "quotient": {
-          "minimum": 2,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "k",
-        "current_minimizer",
-        "current_factors",
-        "current_divisor_count",
-        "current_candidates",
-        "next_minimizer",
-        "next_factors",
-        "next_divisor_count",
-        "next_candidates",
-        "quotient"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "$ref": "#/$defs/result"
-  },
-  "submission_schema": {
-    "$defs": {
-      "candidate": {
-        "additionalProperties": false,
-        "properties": {
-          "partition": {
-            "items": {
-              "maximum": 13,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "maxItems": 13,
-            "minItems": 1,
-            "type": "array"
-          },
-          "value": {
-            "minimum": 1,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "partition",
-          "value"
-        ],
-        "type": "object"
-      },
-      "factor": {
-        "additionalProperties": false,
-        "properties": {
-          "exponent": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "prime": {
-            "minimum": 2,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "prime",
-          "exponent"
-        ],
-        "type": "object"
-      },
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "current_candidates": {
-            "items": {
-              "$ref": "#/$defs/candidate"
-            },
-            "maxItems": 77,
-            "minItems": 77,
-            "type": "array"
-          },
-          "current_divisor_count": {
-            "const": 4096
-          },
-          "current_factors": {
-            "items": {
-              "$ref": "#/$defs/factor"
-            },
-            "maxItems": 13,
-            "minItems": 1,
-            "type": "array"
-          },
-          "current_minimizer": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "k": {
-            "const": 12
-          },
-          "next_candidates": {
-            "items": {
-              "$ref": "#/$defs/candidate"
-            },
-            "maxItems": 101,
-            "minItems": 101,
-            "type": "array"
-          },
-          "next_divisor_count": {
-            "const": 8192
-          },
-          "next_factors": {
-            "items": {
-              "$ref": "#/$defs/factor"
-            },
-            "maxItems": 14,
-            "minItems": 1,
-            "type": "array"
-          },
-          "next_minimizer": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "quotient": {
-            "minimum": 2,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "k",
-          "current_minimizer",
-          "current_factors",
-          "current_divisor_count",
-          "current_candidates",
-          "next_minimizer",
-          "next_factors",
-          "next_divisor_count",
-          "next_candidates",
-          "quotient"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "$ref": "#/$defs/result"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/divisor-minimizer-exchange-audit"
+    "task_id": "jacobian/divisor-minimizer-exchange-audit"
 }

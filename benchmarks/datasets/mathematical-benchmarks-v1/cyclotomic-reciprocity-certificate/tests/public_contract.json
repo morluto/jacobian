@@ -1,164 +1,80 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "coefficients": {
-      "items": {
-        "type": "integer"
-      },
-      "maxItems": 17,
-      "minItems": 17,
-      "type": "array"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "expanded_coefficients": {
-        "$ref": "#/$defs/coefficients"
-      },
-      "factors": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "multiplicity": {
-              "maximum": 8,
-              "minimum": 1,
-              "type": "integer"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "coefficients": {
+            "items": {
+                "type": "integer"
             },
-            "order": {
-              "maximum": 30,
-              "minimum": 2,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "order",
-            "multiplicity"
-          ],
-          "type": "object"
-        },
-        "maxItems": 8,
-        "minItems": 1,
-        "type": "array"
-      },
-      "leading_coefficient": {
-        "not": {
-          "const": 0
-        },
-        "type": "integer"
-      },
-      "p_at_one": {
-        "not": {
-          "const": 0
-        },
-        "type": "integer"
-      },
-      "reciprocal_coefficients": {
-        "$ref": "#/$defs/coefficients"
-      },
-      "reciprocal_scalar": {
-        "const": 1
-      },
-      "root_orbit_conclusion": {
-        "const": "INVERSION_CLOSED_WITH_EQUAL_MULTIPLICITIES"
-      }
+            "maxItems": 17,
+            "minItems": 17,
+            "type": "array"
+        }
     },
-    "required": [
-      "leading_coefficient",
-      "factors",
-      "expanded_coefficients",
-      "reciprocal_coefficients",
-      "p_at_one",
-      "reciprocal_scalar",
-      "root_orbit_conclusion"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "coefficients": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 17,
-        "minItems": 17,
-        "type": "array"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
         "additionalProperties": false,
         "properties": {
-          "expanded_coefficients": {
-            "$ref": "#/$defs/coefficients"
-          },
-          "factors": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "multiplicity": {
-                  "maximum": 8,
-                  "minimum": 1,
-                  "type": "integer"
+            "expanded_coefficients": {
+                "$ref": "#/$defs/coefficients"
+            },
+            "factors": {
+                "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                        "multiplicity": {
+                            "maximum": 8,
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        "order": {
+                            "maximum": 30,
+                            "minimum": 2,
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "order",
+                        "multiplicity"
+                    ],
+                    "type": "object"
                 },
-                "order": {
-                  "maximum": 30,
-                  "minimum": 2,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "order",
-                "multiplicity"
-              ],
-              "type": "object"
+                "maxItems": 8,
+                "minItems": 1,
+                "type": "array"
             },
-            "maxItems": 8,
-            "minItems": 1,
-            "type": "array"
-          },
-          "leading_coefficient": {
-            "not": {
-              "const": 0
+            "leading_coefficient": {
+                "not": {
+                    "const": 0
+                },
+                "type": "integer"
             },
-            "type": "integer"
-          },
-          "p_at_one": {
-            "not": {
-              "const": 0
+            "p_at_one": {
+                "not": {
+                    "const": 0
+                },
+                "type": "integer"
             },
-            "type": "integer"
-          },
-          "reciprocal_coefficients": {
-            "$ref": "#/$defs/coefficients"
-          },
-          "reciprocal_scalar": {
-            "const": 1
-          },
-          "root_orbit_conclusion": {
-            "const": "INVERSION_CLOSED_WITH_EQUAL_MULTIPLICITIES"
-          }
+            "reciprocal_coefficients": {
+                "$ref": "#/$defs/coefficients"
+            },
+            "reciprocal_scalar": {
+                "const": 1
+            },
+            "root_orbit_conclusion": {
+                "const": "INVERSION_CLOSED_WITH_EQUAL_MULTIPLICITIES"
+            }
         },
         "required": [
-          "leading_coefficient",
-          "factors",
-          "expanded_coefficients",
-          "reciprocal_coefficients",
-          "p_at_one",
-          "reciprocal_scalar",
-          "root_orbit_conclusion"
+            "leading_coefficient",
+            "factors",
+            "expanded_coefficients",
+            "reciprocal_coefficients",
+            "p_at_one",
+            "reciprocal_scalar",
+            "root_orbit_conclusion"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/cyclotomic-reciprocity-certificate"
+    "task_id": "jacobian/cyclotomic-reciprocity-certificate"
 }

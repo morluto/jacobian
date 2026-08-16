@@ -1,250 +1,123 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "degrees": {
-      "items": {
-        "const": 4
-      },
-      "maxItems": 13,
-      "minItems": 13,
-      "type": "array"
-    },
-    "edge": {
-      "items": {
-        "maximum": 12,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "maxItems": 2,
-      "minItems": 2,
-      "type": "array"
-    },
-    "pair_count": {
-      "additionalProperties": false,
-      "properties": {
-        "common_neighbors": {
-          "const": 1
-        },
-        "pair": {
-          "$ref": "#/$defs/edge"
-        }
-      },
-      "required": [
-        "pair",
-        "common_neighbors"
-      ],
-      "type": "object"
-    },
-    "pair_counts": {
-      "items": {
-        "$ref": "#/$defs/pair_count"
-      },
-      "maxItems": 78,
-      "minItems": 78,
-      "type": "array"
-    },
-    "triple": {
-      "items": {
-        "maximum": 2,
-        "minimum": 0,
-        "type": "integer"
-      },
-      "maxItems": 3,
-      "minItems": 3,
-      "type": "array"
-    },
-    "triples": {
-      "items": {
-        "$ref": "#/$defs/triple"
-      },
-      "maxItems": 13,
-      "minItems": 13,
-      "type": "array",
-      "uniqueItems": true
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "edge_count": {
-        "const": 52
-      },
-      "edges": {
-        "items": {
-          "$ref": "#/$defs/edge"
-        },
-        "maxItems": 52,
-        "minItems": 52,
-        "type": "array",
-        "uniqueItems": true
-      },
-      "excluded_edge_count": {
-        "const": 53
-      },
-      "left_degrees": {
-        "$ref": "#/$defs/degrees"
-      },
-      "left_pair_common_counts": {
-        "$ref": "#/$defs/pair_counts"
-      },
-      "lines": {
-        "$ref": "#/$defs/triples"
-      },
-      "pair_budget": {
-        "const": 78
-      },
-      "points": {
-        "$ref": "#/$defs/triples"
-      },
-      "right_degrees": {
-        "$ref": "#/$defs/degrees"
-      },
-      "right_pair_common_counts": {
-        "$ref": "#/$defs/pair_counts"
-      }
-    },
-    "required": [
-      "points",
-      "lines",
-      "edges",
-      "left_degrees",
-      "right_degrees",
-      "left_pair_common_counts",
-      "right_pair_common_counts",
-      "edge_count",
-      "pair_budget",
-      "excluded_edge_count"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "degrees": {
-        "items": {
-          "const": 4
-        },
-        "maxItems": 13,
-        "minItems": 13,
-        "type": "array"
-      },
-      "edge": {
-        "items": {
-          "maximum": 12,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "pair_count": {
-        "additionalProperties": false,
-        "properties": {
-          "common_neighbors": {
-            "const": 1
-          },
-          "pair": {
-            "$ref": "#/$defs/edge"
-          }
-        },
-        "required": [
-          "pair",
-          "common_neighbors"
-        ],
-        "type": "object"
-      },
-      "pair_counts": {
-        "items": {
-          "$ref": "#/$defs/pair_count"
-        },
-        "maxItems": 78,
-        "minItems": 78,
-        "type": "array"
-      },
-      "triple": {
-        "items": {
-          "maximum": 2,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxItems": 3,
-        "minItems": 3,
-        "type": "array"
-      },
-      "triples": {
-        "items": {
-          "$ref": "#/$defs/triple"
-        },
-        "maxItems": 13,
-        "minItems": 13,
-        "type": "array",
-        "uniqueItems": true
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "edge_count": {
-            "const": 52
-          },
-          "edges": {
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "degrees": {
             "items": {
-              "$ref": "#/$defs/edge"
+                "const": 4
             },
-            "maxItems": 52,
-            "minItems": 52,
+            "maxItems": 13,
+            "minItems": 13,
+            "type": "array"
+        },
+        "edge": {
+            "items": {
+                "maximum": 12,
+                "minimum": 0,
+                "type": "integer"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+        },
+        "pair_count": {
+            "additionalProperties": false,
+            "properties": {
+                "common_neighbors": {
+                    "const": 1
+                },
+                "pair": {
+                    "$ref": "#/$defs/edge"
+                }
+            },
+            "required": [
+                "pair",
+                "common_neighbors"
+            ],
+            "type": "object"
+        },
+        "pair_counts": {
+            "items": {
+                "$ref": "#/$defs/pair_count"
+            },
+            "maxItems": 78,
+            "minItems": 78,
+            "type": "array"
+        },
+        "triple": {
+            "items": {
+                "maximum": 2,
+                "minimum": 0,
+                "type": "integer"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+        },
+        "triples": {
+            "items": {
+                "$ref": "#/$defs/triple"
+            },
+            "maxItems": 13,
+            "minItems": 13,
             "type": "array",
             "uniqueItems": true
-          },
-          "excluded_edge_count": {
-            "const": 53
-          },
-          "left_degrees": {
-            "$ref": "#/$defs/degrees"
-          },
-          "left_pair_common_counts": {
-            "$ref": "#/$defs/pair_counts"
-          },
-          "lines": {
-            "$ref": "#/$defs/triples"
-          },
-          "pair_budget": {
-            "const": 78
-          },
-          "points": {
-            "$ref": "#/$defs/triples"
-          },
-          "right_degrees": {
-            "$ref": "#/$defs/degrees"
-          },
-          "right_pair_common_counts": {
-            "$ref": "#/$defs/pair_counts"
-          }
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "edge_count": {
+                "const": 52
+            },
+            "edges": {
+                "items": {
+                    "$ref": "#/$defs/edge"
+                },
+                "maxItems": 52,
+                "minItems": 52,
+                "type": "array",
+                "uniqueItems": true
+            },
+            "excluded_edge_count": {
+                "const": 53
+            },
+            "left_degrees": {
+                "$ref": "#/$defs/degrees"
+            },
+            "left_pair_common_counts": {
+                "$ref": "#/$defs/pair_counts"
+            },
+            "lines": {
+                "$ref": "#/$defs/triples"
+            },
+            "pair_budget": {
+                "const": 78
+            },
+            "points": {
+                "$ref": "#/$defs/triples"
+            },
+            "right_degrees": {
+                "$ref": "#/$defs/degrees"
+            },
+            "right_pair_common_counts": {
+                "$ref": "#/$defs/pair_counts"
+            }
         },
         "required": [
-          "points",
-          "lines",
-          "edges",
-          "left_degrees",
-          "right_degrees",
-          "left_pair_common_counts",
-          "right_pair_common_counts",
-          "edge_count",
-          "pair_budget",
-          "excluded_edge_count"
+            "points",
+            "lines",
+            "edges",
+            "left_degrees",
+            "right_degrees",
+            "left_pair_common_counts",
+            "right_pair_common_counts",
+            "edge_count",
+            "pair_budget",
+            "excluded_edge_count"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/zarankiewicz-projective-plane-certificate"
+    "task_id": "jacobian/zarankiewicz-projective-plane-certificate"
 }

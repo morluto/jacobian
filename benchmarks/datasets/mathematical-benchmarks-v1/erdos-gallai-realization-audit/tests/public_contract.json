@@ -1,182 +1,89 @@
 {
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-  "schema_definitions": {
-    "case": {
-      "additionalProperties": false,
-      "properties": {
-        "case_id": {
-          "type": "string"
-        },
-        "edges": {
-          "items": {
-            "$ref": "#/$defs/edge"
-          },
-          "type": "array"
-        },
-        "status": {
-          "enum": [
-            "GRAPHICAL",
-            "NONGRAPHICAL"
-          ]
-        },
-        "violations": {
-          "items": {
-            "$ref": "#/$defs/violation"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "case_id",
-        "status",
-        "edges",
-        "violations"
-      ],
-      "type": "object"
-    },
-    "edge": {
-      "items": {
-        "type": "integer"
-      },
-      "maxItems": 2,
-      "minItems": 2,
-      "type": "array"
-    },
-    "violation": {
-      "additionalProperties": false,
-      "properties": {
-        "k": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "lhs": {
-          "minimum": 0,
-          "type": "integer"
-        },
-        "rhs": {
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "k",
-        "lhs",
-        "rhs"
-      ],
-      "type": "object"
-    }
-  },
-  "schema_version": "1",
-  "submission_path": "/app/submission.json",
-  "submission_result": {
-    "additionalProperties": false,
-    "properties": {
-      "cases": {
-        "items": {
-          "$ref": "#/$defs/case"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      }
-    },
-    "required": [
-      "cases"
-    ],
-    "type": "object"
-  },
-  "submission_schema": {
-    "$defs": {
-      "case": {
-        "additionalProperties": false,
-        "properties": {
-          "case_id": {
-            "type": "string"
-          },
-          "edges": {
-            "items": {
-              "$ref": "#/$defs/edge"
+    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+    "schema_definitions": {
+        "case": {
+            "additionalProperties": false,
+            "properties": {
+                "case_id": {
+                    "type": "string"
+                },
+                "edges": {
+                    "items": {
+                        "$ref": "#/$defs/edge"
+                    },
+                    "type": "array"
+                },
+                "status": {
+                    "enum": [
+                        "GRAPHICAL",
+                        "NONGRAPHICAL"
+                    ]
+                },
+                "violations": {
+                    "items": {
+                        "$ref": "#/$defs/violation"
+                    },
+                    "type": "array"
+                }
             },
-            "type": "array"
-          },
-          "status": {
-            "enum": [
-              "GRAPHICAL",
-              "NONGRAPHICAL"
-            ]
-          },
-          "violations": {
+            "required": [
+                "case_id",
+                "status",
+                "edges",
+                "violations"
+            ],
+            "type": "object"
+        },
+        "edge": {
             "items": {
-              "$ref": "#/$defs/violation"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "case_id",
-          "status",
-          "edges",
-          "violations"
-        ],
-        "type": "object"
-      },
-      "edge": {
-        "items": {
-          "type": "integer"
-        },
-        "maxItems": 2,
-        "minItems": 2,
-        "type": "array"
-      },
-      "violation": {
-        "additionalProperties": false,
-        "properties": {
-          "k": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "lhs": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "rhs": {
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "k",
-          "lhs",
-          "rhs"
-        ],
-        "type": "object"
-      }
-    },
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "additionalProperties": false,
-    "properties": {
-      "result": {
-        "additionalProperties": false,
-        "properties": {
-          "cases": {
-            "items": {
-              "$ref": "#/$defs/case"
+                "type": "integer"
             },
             "maxItems": 2,
             "minItems": 2,
             "type": "array"
-          }
+        },
+        "violation": {
+            "additionalProperties": false,
+            "properties": {
+                "k": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "lhs": {
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "rhs": {
+                    "minimum": 0,
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "k",
+                "lhs",
+                "rhs"
+            ],
+            "type": "object"
+        }
+    },
+    "schema_version": "1",
+    "submission_path": "/app/submission.json",
+    "submission_result": {
+        "additionalProperties": false,
+        "properties": {
+            "cases": {
+                "items": {
+                    "$ref": "#/$defs/case"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            }
         },
         "required": [
-          "cases"
+            "cases"
         ],
         "type": "object"
-      }
     },
-    "required": [
-      "result"
-    ],
-    "type": "object"
-  },
-  "task_id": "jacobian/erdos-gallai-realization-audit"
+    "task_id": "jacobian/erdos-gallai-realization-audit"
 }

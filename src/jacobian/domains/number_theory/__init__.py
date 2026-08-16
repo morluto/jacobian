@@ -20,6 +20,9 @@ def number_theory_operations() -> MathTools:
     from jacobian.domains.number_theory.modular_identity import (
         MODULAR_IDENTITY_OPERATIONS,
     )
+    from jacobian.domains.number_theory.numerical_semigroup_math_tools import (
+        NUMERICAL_SEMIGROUP_OPERATIONS,
+    )
     from jacobian.domains.number_theory.primes import PRIME_OPERATIONS
 
     return (
@@ -29,4 +32,5 @@ def number_theory_operations() -> MathTools:
         *MODULAR_IDENTITY_OPERATIONS,
         *DERIVED_NUMBER_THEORY_OPERATIONS,
         FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION,
+        *NUMERICAL_SEMIGROUP_OPERATIONS,
     )

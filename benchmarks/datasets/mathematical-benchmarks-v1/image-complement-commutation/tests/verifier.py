@@ -130,12 +130,13 @@ def main():
     data = submission if isinstance(submission, dict) else {}
     result = data.get("result")
     math_ok = bool(protocol_ok and valid(result))
-    math_ok = math_ok and _input_binding
     reward = aggregate_reward(
         correctness=math_ok,
         witness_validity=True,
         protocol_ok=protocol_ok,
     )
+    if not _input_binding:
+        reward = 0.0
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(

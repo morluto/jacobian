@@ -249,16 +249,15 @@ def main() -> None:
     source = _source()
     submission = load_submission()
     protocol_ok = submission is not None
-    correctness = bool(
-        _input_binding
-        and protocol_ok
+    math_ok = bool(
+        protocol_ok
         and source is not None
         and _result_valid(submission.get("result"), source)
     )
-    reward = float(correctness)
+    reward = float(_input_binding and math_ok)
     _write_reward(
         {
-            "correctness": float(correctness),
+            "correctness": float(math_ok),
             "reward": reward,
         }
     )

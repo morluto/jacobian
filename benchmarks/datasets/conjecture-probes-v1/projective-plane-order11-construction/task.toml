@@ -1,0 +1,44 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json"]
+
+[task]
+name = "jacobian/projective-plane-order11-construction"
+version = "1.0.0"
+description = "Construct and exactly check a projective plane of order 11."
+keywords = ["finite-geometry", "projective-plane", "block-design", "construction"]
+
+[metadata]
+evaluation_kind = "conjecture-probe"
+domain = "mathematical-sciences"
+primary_domain = "geometry-topology"
+field = "finite-geometry"
+answer_visibility = "public"
+provenance_class = "authored-conjecture-probe"
+fixture_digest = "sha256:661bc252b585dcfb15e6c681573a96a9145e8cfac15a8e34105a40d22d766366"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "finite-geometry", "incidence-structure", "offline"]
+case_version = "conjecture-probes-v1"
+contamination_class = "public-formula-derived-construction"
+derivation = "Prime-order finite-plane construction calibration adjacent to the unscored order-12 intake target at cutoff 2026-08-14."
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

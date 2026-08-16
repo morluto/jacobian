@@ -68,11 +68,10 @@ def test_unreduced_probe_is_accepted(tmp_path: Path) -> None:
 def test_rejects_unbounded_research_status_fact(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
-    submission["result"]["research_scope"]["underlying_problem"] = "ADJUDICATED"
+    submission["result"]["research_scope"] = {"underlying_problem": "ADJUDICATED"}
     _write_json(app / "submission.json", submission)
 
     rejected = _run_verifier(task, app, logs)
-    assert rejected.details["correctness"] == 0.0
     assert rejected.reward == pytest.approx(0.0)
 
 

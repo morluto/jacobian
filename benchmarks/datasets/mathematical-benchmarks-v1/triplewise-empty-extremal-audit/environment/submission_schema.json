@@ -58,40 +58,10 @@
             "floor_half"
           ],
           "type": "object"
-        },
-        "upper_bound_certificate": {
-          "additionalProperties": false,
-          "properties": {
-            "element_frequency_cap": {
-              "const": 2
-            },
-            "nonsingleton_incidence_floor": {
-              "const": 2
-            },
-            "singleton_cap": {
-              "additionalProperties": false,
-              "properties": {
-                "variable": {
-                  "const": "n"
-                }
-              },
-              "required": [
-                "variable"
-              ],
-              "type": "object"
-            }
-          },
-          "required": [
-            "element_frequency_cap",
-            "singleton_cap",
-            "nonsingleton_incidence_floor"
-          ],
-          "type": "object"
         }
       },
       "required": [
         "maximum_formula",
-        "upper_bound_certificate",
         "constructions"
       ],
       "type": "object"

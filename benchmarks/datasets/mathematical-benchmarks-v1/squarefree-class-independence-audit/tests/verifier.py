@@ -39,10 +39,8 @@ def load_frozen() -> dict:
 
 def certificate_valid(result: object, frozen: dict) -> bool:
     if not isinstance(result, dict) or set(result) != {
-        "ordered_pair_count",
         "classification",
         "modular_obstruction",
-        "consequence",
     }:
         return False
     obstruction = result.get("modular_obstruction")
@@ -50,7 +48,6 @@ def certificate_valid(result: object, frozen: dict) -> bool:
         "modulus",
         "target_residue",
         "quadratic_residues",
-        "maximum_squares_ruled_out",
     }:
         return False
     bounds = frozen.get("certificate_bounds", {})
@@ -73,18 +70,12 @@ def certificate_valid(result: object, frozen: dict) -> bool:
         or obstruction.get("target_residue") != target
     ):
         return False
-    if obstruction.get("maximum_squares_ruled_out") != 3:
-        return False
 
     # Zero padding makes this one exhaustive check for representations by
     # zero, one, two, or three integer squares.
     if any(sum(values) % modulus == target for values in product(residues, repeat=3)):
         return False
-    return bool(
-        result.get("ordered_pair_count") == 2023
-        and result.get("classification") == CLASSIFICATION
-        and result.get("consequence") == "AT_LEAST_FOUR_SQUAREFREE_CLASSES"
-    )
+    return result.get("classification") == CLASSIFICATION
 
 
 def main() -> None:

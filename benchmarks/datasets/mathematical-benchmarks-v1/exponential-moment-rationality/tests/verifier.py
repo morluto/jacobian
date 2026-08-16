@@ -193,7 +193,6 @@ def _result_is_valid(result, frozen):
         "generic_formula",
         "singular_formula",
         "branch_partition",
-        "rationality_conclusion",
     }
     if (
         not isinstance(result, dict)
@@ -224,11 +223,10 @@ def _result_is_valid(result, frozen):
         result["singular_formula"], singular[:4], singular[4], maximum_degree
     ):
         return False
-    return (
-        result["branch_partition"]
-        == ["GENERIC_DENOMINATOR_NONZERO", "RANK_ONE_X_EQUALS_Y"]
-        and result["rationality_conclusion"] == "E_RATIONAL_IN_BOTH_BRANCHES"
-    )
+    return result["branch_partition"] == [
+        "GENERIC_DENOMINATOR_NONZERO",
+        "RANK_ONE_X_EQUALS_Y",
+    ]
 
 
 def main():

@@ -57,22 +57,6 @@
           "minItems": 8,
           "type": "array"
         },
-        "pointwise_argument": {
-          "additionalProperties": false,
-          "properties": {
-            "hit_count_per_level": {
-              "const": 1
-            },
-            "miss_count_per_level": {
-              "const": "AT_LEAST_ONE"
-            }
-          },
-          "required": [
-            "hit_count_per_level",
-            "miss_count_per_level"
-          ],
-          "type": "object"
-        },
         "probability_argument": {
           "additionalProperties": false,
           "properties": {
@@ -99,14 +83,10 @@
                 "variable"
               ],
               "type": "object"
-            },
-            "limit": {
-              "const": "ZERO"
             }
           },
           "required": [
-            "event_mass_formula",
-            "limit"
+            "event_mass_formula"
           ],
           "type": "object"
         },
@@ -135,34 +115,12 @@
           "maxItems": 8,
           "minItems": 3,
           "type": "array"
-        },
-        "relationship": {
-          "const": "IN_PROBABILITY_NOT_IMPLY_ALMOST_SURE"
-        },
-        "research_scope": {
-          "additionalProperties": false,
-          "properties": {
-            "lean_theorem": {
-              "const": "NOT_ELABORATED"
-            },
-            "underlying_problem": {
-              "const": "NOT_ADJUDICATED"
-            }
-          },
-          "required": [
-            "underlying_problem",
-            "lean_theorem"
-          ],
-          "type": "object"
         }
       },
       "required": [
-        "relationship",
         "levels",
         "probes",
-        "probability_argument",
-        "pointwise_argument",
-        "research_scope"
+        "probability_argument"
       ],
       "type": "object"
     }

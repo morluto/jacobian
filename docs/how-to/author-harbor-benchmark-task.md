@@ -29,6 +29,14 @@ complete rewarded protocol. They must agree with the verifier:
    prose while the verifier constructs `Fraction`.
 4. For a generated family, emit one schema licensed by that task's claim
    family. Do not publish a universal `oneOf` of every certificate kind.
+5. Submit mathematics the verifier can replay. Do not require leaked answer
+   constants, derived status fields, or `Claim COMPUTED` on a result-only
+   schema. Closed success variants omit inapplicable failure fields; they do
+   not send JSON `null`.
+6. When a schema shrinks, update the instruction, verifier, gold, public
+   contract, and host tests together. Align a mismatch by shrinking, never by
+   restoring leaked fields. After merging `main`, re-read every touched
+   `instruction.md` for truncated sentences and leftover contract fragments.
 
 Declare the protocol in `tests/public_contract.json` and generate the marked
 submission block plus schema with `benchmarks.tooling.public_contract`. Do not
@@ -57,7 +65,10 @@ Do not award credit for:
 
 Independent propositions must be derived independently. Do not couple a
 collision, invertibility, or completeness claim to an unrelated corrupted
-field.
+field. If input binding is a separate diagnostic, parse the submission without
+requiring workspace-input equality, replay math against the frozen tests
+input, and AND binding only into `reward`. Gold witness descriptors must
+resolve to regular files under a non-symlink `solution/` root.
 
 ## Validate the exact task
 
@@ -67,11 +78,16 @@ make harbor-validate-task DATASET=<dataset-id> TASKS="<task-id>"
 ```
 
 `harbor-prepare-task` formats selected task Python and refreshes public-contract
-and verifier checksums. `harbor-validate-task` is the source-read-only leaf
-gate: static contracts, host tests, then the exact Oracle. Neither command
-starts a model. Use `make harbor-check` only when changing shared Harbor
-tooling, schemas, registry, or suite policy. Create a snapshot lock only when
-freezing an intentional evaluation or publication set.
+and verifier checksums. The checksum hashes filenames, NUL separators, and
+bytes; do not concatenate `sha256(verifier.py)` with
+`sha256(verifier_support.py)`, and do not rewrite every task-local support
+copy. `harbor-validate-task` is the source-read-only leaf gate: static
+contracts, host tests, then the exact Oracle. Neither command starts a model.
+Use `make harbor-check` only when changing shared Harbor tooling, schemas,
+registry, or suite policy. Do not exclude Harbor host-verifier tests from
+unsupported-surface AST or text scans merely because they spawn a verifier
+subprocess. Create a snapshot lock only when freezing an intentional
+evaluation or publication set.
 
 The task's verifier owns correctness; Jacobian owns neither that verifier nor
 its data lifecycle. Keep the task's score distinct from Jacobian's two-tool

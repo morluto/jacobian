@@ -5,10 +5,6 @@
     "result": {
       "additionalProperties": false,
       "properties": {
-        "pair_count": {
-          "minimum": 0,
-          "type": "integer"
-        },
         "pairs": {
           "items": {
             "items": false,
@@ -24,18 +20,10 @@
             "type": "array"
           },
           "type": "array"
-        },
-        "sums": {
-          "items": {
-            "type": "integer"
-          },
-          "type": "array"
         }
       },
       "required": [
-        "pair_count",
-        "pairs",
-        "sums"
+        "pairs"
       ],
       "type": "object"
     }

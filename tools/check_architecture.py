@@ -126,6 +126,11 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         # Real analysis domain test uses external analysis executables.
         # This checker's own test file uses subprocess in synthetic probes.
         PurePosixPath("tests/unit/tooling/test_architecture_process_policies.py"),
+        # Harbor host-verifier regression tests spawn the verifier in a child process.
+        PurePosixPath("benchmarks/validation/conjecture_probes_v1/test_constant_weight_code_a23_6_10_2992.py"),
+        PurePosixPath("benchmarks/validation/conjecture_probes_v1/test_hadamard_order664_construction.py"),
+        PurePosixPath("benchmarks/validation/conjecture_probes_v1/test_projective_plane_order11_construction.py"),
+        PurePosixPath("benchmarks/validation/conjecture_probes_v1/test_ramsey_r3_13_lower_bound_61.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_harbor_contracts.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_unsupported_surfaces.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_diagnostics.py"),

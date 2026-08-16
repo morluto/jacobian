@@ -49,7 +49,8 @@ Each task owns its `tests/verifier_support.py` file because Harbor builds the
 separate verifier image from that task's `tests/` directory. The task template
 contains the current generic helper for newly scaffolded tasks; existing tasks
 are not silently rewritten. `make harbor-sync DATASET=<id> TASKS="<ids>"`
-updates only the selected verifier checksum labels. The read-only Harbor gates
+updates only the selected verifier checksum labels. The checksum hashes
+filenames, NUL separators, and bytes. The read-only Harbor gates
 validate local support files and never synchronize unrelated tasks.
 
 `benchmarks/tooling/public_contract.py` is internal repository tooling, not an

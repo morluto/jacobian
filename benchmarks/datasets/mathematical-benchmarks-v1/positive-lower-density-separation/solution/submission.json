@@ -1,139 +1,135 @@
 {
-  "result": {
-    "base": 3,
-    "count_formula": {
-      "base_variable": "b",
-      "denominator_offset": 1,
-      "level_variable": "m",
-      "numerator_constant": -1,
-      "numerator_exponent_coefficient": 2,
-      "numerator_exponent_offset": 2
-    },
-    "family": "ALTERNATING_GEOMETRIC_BLOCKS",
-    "levels": [
-      {
-        "cumulative_count": 2,
-        "excluded_density": {
-          "denominator": 9,
-          "numerator": 2
+    "result": {
+        "base": 3,
+        "count_formula": {
+            "base_variable": "b",
+            "denominator_offset": 1,
+            "level_variable": "m",
+            "numerator_constant": -1,
+            "numerator_exponent_coefficient": 2,
+            "numerator_exponent_offset": 2
         },
-        "excluded_endpoint": 9,
-        "included_density": {
-          "denominator": 3,
-          "numerator": 2
+        "levels": [
+            {
+                "cumulative_count": 2,
+                "excluded_density": {
+                    "denominator": 9,
+                    "numerator": 2
+                },
+                "excluded_endpoint": 9,
+                "included_density": {
+                    "denominator": 3,
+                    "numerator": 2
+                },
+                "included_endpoint": 3,
+                "level": 0
+            },
+            {
+                "cumulative_count": 20,
+                "excluded_density": {
+                    "denominator": 81,
+                    "numerator": 20
+                },
+                "excluded_endpoint": 81,
+                "included_density": {
+                    "denominator": 27,
+                    "numerator": 20
+                },
+                "included_endpoint": 27,
+                "level": 1
+            },
+            {
+                "cumulative_count": 182,
+                "excluded_density": {
+                    "denominator": 729,
+                    "numerator": 182
+                },
+                "excluded_endpoint": 729,
+                "included_density": {
+                    "denominator": 243,
+                    "numerator": 182
+                },
+                "included_endpoint": 243,
+                "level": 2
+            },
+            {
+                "cumulative_count": 1640,
+                "excluded_density": {
+                    "denominator": 6561,
+                    "numerator": 1640
+                },
+                "excluded_endpoint": 6561,
+                "included_density": {
+                    "denominator": 2187,
+                    "numerator": 1640
+                },
+                "included_endpoint": 2187,
+                "level": 3
+            },
+            {
+                "cumulative_count": 14762,
+                "excluded_density": {
+                    "denominator": 59049,
+                    "numerator": 14762
+                },
+                "excluded_endpoint": 59049,
+                "included_density": {
+                    "denominator": 19683,
+                    "numerator": 14762
+                },
+                "included_endpoint": 19683,
+                "level": 4
+            },
+            {
+                "cumulative_count": 132860,
+                "excluded_density": {
+                    "denominator": 531441,
+                    "numerator": 132860
+                },
+                "excluded_endpoint": 531441,
+                "included_density": {
+                    "denominator": 177147,
+                    "numerator": 132860
+                },
+                "included_endpoint": 177147,
+                "level": 5
+            },
+            {
+                "cumulative_count": 1195742,
+                "excluded_density": {
+                    "denominator": 4782969,
+                    "numerator": 1195742
+                },
+                "excluded_endpoint": 4782969,
+                "included_density": {
+                    "denominator": 1594323,
+                    "numerator": 1195742
+                },
+                "included_endpoint": 1594323,
+                "level": 6
+            },
+            {
+                "cumulative_count": 10761680,
+                "excluded_density": {
+                    "denominator": 43046721,
+                    "numerator": 10761680
+                },
+                "excluded_endpoint": 43046721,
+                "included_density": {
+                    "denominator": 14348907,
+                    "numerator": 10761680
+                },
+                "included_endpoint": 14348907,
+                "level": 7
+            }
+        ],
+        "lower_density": {
+            "denominator": 4,
+            "numerator": 1
         },
-        "included_endpoint": 3,
-        "level": 0
-      },
-      {
-        "cumulative_count": 20,
-        "excluded_density": {
-          "denominator": 81,
-          "numerator": 20
-        },
-        "excluded_endpoint": 81,
-        "included_density": {
-          "denominator": 27,
-          "numerator": 20
-        },
-        "included_endpoint": 27,
-        "level": 1
-      },
-      {
-        "cumulative_count": 182,
-        "excluded_density": {
-          "denominator": 729,
-          "numerator": 182
-        },
-        "excluded_endpoint": 729,
-        "included_density": {
-          "denominator": 243,
-          "numerator": 182
-        },
-        "included_endpoint": 243,
-        "level": 2
-      },
-      {
-        "cumulative_count": 1640,
-        "excluded_density": {
-          "denominator": 6561,
-          "numerator": 1640
-        },
-        "excluded_endpoint": 6561,
-        "included_density": {
-          "denominator": 2187,
-          "numerator": 1640
-        },
-        "included_endpoint": 2187,
-        "level": 3
-      },
-      {
-        "cumulative_count": 14762,
-        "excluded_density": {
-          "denominator": 59049,
-          "numerator": 14762
-        },
-        "excluded_endpoint": 59049,
-        "included_density": {
-          "denominator": 19683,
-          "numerator": 14762
-        },
-        "included_endpoint": 19683,
-        "level": 4
-      },
-      {
-        "cumulative_count": 132860,
-        "excluded_density": {
-          "denominator": 531441,
-          "numerator": 132860
-        },
-        "excluded_endpoint": 531441,
-        "included_density": {
-          "denominator": 177147,
-          "numerator": 132860
-        },
-        "included_endpoint": 177147,
-        "level": 5
-      },
-      {
-        "cumulative_count": 1195742,
-        "excluded_density": {
-          "denominator": 4782969,
-          "numerator": 1195742
-        },
-        "excluded_endpoint": 4782969,
-        "included_density": {
-          "denominator": 1594323,
-          "numerator": 1195742
-        },
-        "included_endpoint": 1594323,
-        "level": 6
-      },
-      {
-        "cumulative_count": 10761680,
-        "excluded_density": {
-          "denominator": 43046721,
-          "numerator": 10761680
-        },
-        "excluded_endpoint": 43046721,
-        "included_density": {
-          "denominator": 14348907,
-          "numerator": 10761680
-        },
-        "included_endpoint": 14348907,
-        "level": 7
-      }
-    ],
-    "lower_density": {
-      "denominator": 4,
-      "numerator": 1
-    },
-    "lower_density_positive": true,
-    "natural_density_exists": false,
-    "semantic_relation": "FORMALIZED_PREDICATE_STRICTLY_STRONGER",
-    "upper_density": {
-      "denominator": 4,
-      "numerator": 3
+        "upper_density": {
+            "denominator": 4,
+            "numerator": 3
+        }
     }
-  }
 }

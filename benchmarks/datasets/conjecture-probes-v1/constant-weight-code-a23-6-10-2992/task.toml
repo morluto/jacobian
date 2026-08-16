@@ -1,0 +1,44 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json"]
+
+[task]
+name = "jacobian/constant-weight-code-a23-6-10-2992"
+version = "1.0.0"
+description = "Construct 2992 binary words witnessing A(23,6,10) at least 2992."
+keywords = ["coding-theory", "constant-weight-code", "hamming-distance", "construction"]
+
+[metadata]
+evaluation_kind = "conjecture-probe"
+domain = "mathematical-sciences"
+primary_domain = "combinatorics"
+field = "coding-theory"
+answer_visibility = "public"
+provenance_class = "public-dataset-snapshot"
+fixture_digest = "sha256:ff0a9c4873971be3fc120bf35f36961d46f0ecf676acae2a4386dddf027233ee"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "hard"
+category = "mathematics"
+tags = ["difficulty-provisional", "public-construction", "coding-theory", "offline"]
+case_version = "conjecture-probes-v1"
+contamination_class = "public-answer-known-construction"
+derivation = "Public 2992-word construction calibration at frontier cutoff 2026-08-14; corrects the intake target of 2982."
+
+[agent]
+timeout_sec = 1800.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

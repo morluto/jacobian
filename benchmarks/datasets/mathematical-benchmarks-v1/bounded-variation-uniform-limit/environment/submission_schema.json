@@ -24,26 +24,6 @@
     "result": {
       "additionalProperties": false,
       "properties": {
-        "argument": {
-          "additionalProperties": false,
-          "properties": {
-            "implication": {
-              "const": "UNIFORM_CONVERGENCE_DOES_NOT_FORCE_VARIATION_CONVERGENCE"
-            },
-            "uniform_convergence": {
-              "const": "SUP_NORM_1_OVER_QN_TENDS_TO_ZERO"
-            },
-            "variation_behavior": {
-              "const": "TOTAL_VARIATION_IS_CONSTANTLY_FOUR"
-            }
-          },
-          "required": [
-            "uniform_convergence",
-            "variation_behavior",
-            "implication"
-          ],
-          "type": "object"
-        },
         "checkpoints": {
           "items": {
             "additionalProperties": false,
@@ -89,15 +69,11 @@
         "limit_function": {
           "additionalProperties": false,
           "properties": {
-            "kind": {
-              "const": "CONSTANT"
-            },
             "value": {
               "$ref": "#/$defs/rational"
             }
           },
           "required": [
-            "kind",
             "value"
           ],
           "type": "object"
@@ -172,15 +148,11 @@
             },
             "sup_norm_numerator": {
               "const": 1
-            },
-            "tends_to_zero": {
-              "const": true
             }
           },
           "required": [
             "sup_norm_numerator",
-            "sup_norm_denominator_coefficient",
-            "tends_to_zero"
+            "sup_norm_denominator_coefficient"
           ],
           "type": "object"
         },
@@ -230,7 +202,6 @@
         "scale_q",
         "sequence",
         "limit_function",
-        "argument",
         "uniform_certificate",
         "variation_formula",
         "checkpoints"

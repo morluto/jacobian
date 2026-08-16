@@ -1,1 +1,9 @@
-{"task_id":"jacobian/jacobian-negative-control","conclusion":"UNKNOWN","maximum_assurance":"COMPUTED","required_scope_terms":["jacobian/jacobian-negative-control","complete finite input"],"expected_both_points_map_to_claimed_image":false,"expected_noninvertibility_verified":true}
+{
+  "task_id": "jacobian/jacobian-negative-control",
+  "conclusion": "UNKNOWN",
+  "maximum_assurance": "COMPUTED",
+  "required_scope_terms": [
+    "jacobian/jacobian-negative-control",
+    "complete finite input"
+  ]
+}

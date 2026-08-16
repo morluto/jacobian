@@ -28,9 +28,10 @@ Every built-in `MathTool` declaration must publish at least one small valid
 invocation example. An example is part of the public contract: it must validate
 against the declaration's request model, use canonical values where required,
 and be executable in Jacobian's supported local environment. Keep it close to
-the operation and adapt it when a request contract changes. The catalog test
-checks every published example at the request boundary; the operation's owning
-tests should exercise any nontrivial example behavior.
+the operation and adapt it when a request contract changes. The composition catalog test executes every published example: the payload
+must validate, the domain function must return a typed result, and that result
+must re-validate. The operation's owning tests still own nontrivial example
+behavior, plus the adversarial and request-boundary cases below.
 
 Write an invocation example's description in two parts: first state the
 computation the operation performs on the supplied values, then state the

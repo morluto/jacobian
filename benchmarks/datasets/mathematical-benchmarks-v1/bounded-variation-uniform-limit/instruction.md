@@ -11,9 +11,10 @@ segments. Include at least four distinct freely chosen positive indices with
 their frequency, amplitude, segment counts, endpoint contribution, interior
 contribution, and total variation.
 Represent every exact rational as a numerator/positive-denominator object.
-Encode the sequence by the exponents of `q`, `n`, and `x` in the sine argument
-and of `q` and `n` in the denominator. Encode the interior segment count as an
-affine function of the frequency `q*n`.
+Encode the sequence descriptor `argument_exponents` by the exponents of `q`,
+`n`, and `x` in the sine argument and of `q` and `n` in the denominator.
+Encode the interior segment count as an affine function of the frequency
+`q*n`.
 The verifier recomputes every integer and rational identity. Sampling, a graph,
 or a conclusion label alone is insufficient.
 

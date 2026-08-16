@@ -150,11 +150,6 @@
             "constant": 1,
             "floor_half": 1,
             "linear": 1
-        },
-        "upper_bound_certificate": {
-            "singleton_cap": {
-                "variable": "n"
-            }
         }
     }
 }

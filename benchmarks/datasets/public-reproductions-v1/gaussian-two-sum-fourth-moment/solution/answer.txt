@@ -1,1 +1,0 @@
-The fourth moment of Z1+Z2 (independent standard complex Gaussians) is 12 (real), 0 (imaginary).

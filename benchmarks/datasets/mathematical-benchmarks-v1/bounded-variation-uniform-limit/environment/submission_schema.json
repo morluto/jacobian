@@ -87,7 +87,20 @@
           "type": "array"
         },
         "limit_function": {
-          "const": "0"
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "CONSTANT"
+            },
+            "value": {
+              "$ref": "#/$defs/rational"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
         },
         "scale_q": {
           "maximum": 9,

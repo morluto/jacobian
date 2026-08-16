@@ -1,74 +1,68 @@
 {
   "result": {
     "c": {
-      "numerator": 3,
-      "denominator": 1
+      "denominator": 1,
+      "numerator": 3
     },
     "center": {
-      "numerator": 4,
-      "denominator": 1
+      "denominator": 1,
+      "numerator": 4
     },
     "circle_coefficients": [
       {
-        "numerator": 1,
-        "denominator": 1
+        "denominator": 1,
+        "numerator": 1
       },
       {
-        "numerator": 1,
-        "denominator": 1
+        "denominator": 1,
+        "numerator": 1
       },
       {
-        "numerator": -8,
-        "denominator": 1
+        "denominator": 1,
+        "numerator": -8
       },
       {
-        "numerator": 12,
-        "denominator": 1
+        "denominator": 1,
+        "numerator": 12
       }
     ],
     "distance_coefficients": [
       {
-        "numerator": -3,
-        "denominator": 1
+        "denominator": 1,
+        "numerator": -3
       },
       {
-        "numerator": -3,
-        "denominator": 1
+        "denominator": 1,
+        "numerator": -3
       },
       {
-        "numerator": 24,
-        "denominator": 1
+        "denominator": 1,
+        "numerator": 24
       },
       {
-        "numerator": -36,
-        "denominator": 1
+        "denominator": 1,
+        "numerator": -36
       }
     ],
     "k": {
-      "numerator": 2,
-      "denominator": 1
+      "denominator": 1,
+      "numerator": 2
     },
     "multiplier": {
-      "numerator": -3,
-      "denominator": 1
+      "denominator": 1,
+      "numerator": -3
     },
     "p": {
-      "numerator": 2,
-      "denominator": 1
+      "denominator": 1,
+      "numerator": 2
     },
     "q": {
-      "numerator": 6,
-      "denominator": 1
+      "denominator": 1,
+      "numerator": 6
     },
     "radius": {
-      "numerator": 2,
-      "denominator": 1
+      "denominator": 1,
+      "numerator": 2
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:8d12f081c3635b68270b883f50f46b4a215c26b84961226697a695658514ce05"
-    }
-  ]
+  }
 }

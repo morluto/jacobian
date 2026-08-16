@@ -360,11 +360,5 @@
     "normalized_second_coefficient": -1,
     "root_product_square": 1,
     "second_power_sum": 3
-  },
-  "witness": [
-    {
-      "path": "evidence/classification-certificate.json",
-      "sha256": "sha256:2f96e24af805b07cafd214677622c93cbb780214c3d664421ead3da90c9e4fb7"
-    }
-  ]
+  }
 }

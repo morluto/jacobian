@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 import shutil
@@ -42,32 +41,10 @@ result = {
     "formal_selected_indices": [0, 1, 2, 3, 4, 5],
     "intended_selected_indices": [0, 1, 2, 3],
 }
-limitations = [
-    "LEAN_ELABORATION_NOT_ASSESSED",
-    "NORMALIZATION_OF_NONZERO_RESIDUALS_NOT_REQUIRED",
-]
-evidence = {
-    "schema_version": "1",
-    "task_id": "jacobian/gram-schmidt-nonzero-filter-audit",
-    "result": result,
-    "limitations": limitations,
-}
 root = Path(os.environ.get("SOLUTION_ROOT", "/app"))
 if root == Path("/app"):
     shutil.copyfile("/solution/input.json", root / "input.json")
-p = root / "evidence/gram-schmidt-audit.json"
-p.parent.mkdir(parents=True, exist_ok=True)
-p.write_text(json.dumps(evidence, separators=(",", ":")))
 submission = {
     "result": result,
-    "witness": [
-        {
-            "path": "evidence/gram-schmidt-audit.json",
-            "sha256": "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest(),
-        }
-    ],
 }
 (root / "submission.json").write_text(json.dumps(submission, indent=2) + "\n")
-(root / "answer.txt").write_text(
-    "The nonnegative-norm filter retains the two exact zero residuals.\n"
-)

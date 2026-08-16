@@ -1,6 +1,0 @@
-emerald-path-family-certificate-v1
-alpha: 3/2
-beta: 1/2
-even_offset: 0
-odd_offset: 1/2
-trace_sha256: 626775c15ce5b8c547a39c5348efd7c21de2f09ff4b7b97309f9ebd4161fe2a4

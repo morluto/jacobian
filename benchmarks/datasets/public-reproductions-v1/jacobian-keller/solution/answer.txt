@@ -1,1 +1,0 @@
-The three-variable Keller map has Jacobian determinant -2 (constant) and satisfies the Keller condition over Q.

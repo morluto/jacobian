@@ -1,1 +1,0 @@
-Maximum-degree set is {4}; distances in order 0..5 are 1,1,1,1,0,2; maximum 2 is attained by 5.

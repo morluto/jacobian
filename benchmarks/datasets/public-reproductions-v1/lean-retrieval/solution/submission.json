@@ -8,11 +8,5 @@
       "theorem": "Nat.gcd_zero_right"
     },
     "exhaustive": false
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:e45f86b0d3b3e8f735e6bda1ec71bd67a9e26c160639719c98d6e8d8cb600275"
-    }
-  ]
+  }
 }

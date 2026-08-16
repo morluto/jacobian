@@ -40,7 +40,24 @@
           "type": "array"
         },
         "maximum_formula": {
-          "const": "1+n+floor(n/2)"
+          "additionalProperties": false,
+          "properties": {
+            "constant": {
+              "type": "integer"
+            },
+            "floor_half": {
+              "type": "integer"
+            },
+            "linear": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "constant",
+            "linear",
+            "floor_half"
+          ],
+          "type": "object"
         },
         "upper_bound_certificate": {
           "additionalProperties": false,
@@ -52,7 +69,16 @@
               "const": 2
             },
             "singleton_cap": {
-              "const": "n"
+              "additionalProperties": false,
+              "properties": {
+                "variable": {
+                  "const": "n"
+                }
+              },
+              "required": [
+                "variable"
+              ],
+              "type": "object"
             }
           },
           "required": [

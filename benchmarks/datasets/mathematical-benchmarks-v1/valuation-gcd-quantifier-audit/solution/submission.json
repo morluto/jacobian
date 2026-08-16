@@ -59,11 +59,5 @@
         "prime": 5
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/valuation-audit.json",
-      "sha256": "sha256:cd95ca9f0e1537a54a97b16902fb3c60bc6b099911ba28fc3fa9e5f725b4e668"
-    }
-  ]
+  }
 }

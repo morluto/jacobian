@@ -1,1 +1,0 @@
-{"schema_version":"1","task_id":"jacobian/cyclic-lipschitz-duality","primal":{"sequence_length":60,"zero_sum":"0","adjacent_bound":"1","objective":"15"},"dual":{"divergence":"q_i-q_(i-1)=w_i","l1_cost":"15","minimum_cost":"15"},"optimality":"weak_duality_after_median_minimum","limitations":["The verifier certifies only the frozen finite linear program."]}

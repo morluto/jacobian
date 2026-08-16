@@ -1,13 +1,7 @@
 import json
 from fractions import Fraction
 from pathlib import Path
-
-from verifier_support import (
-    aggregate_reward,
-    load_submission,
-    normalize_reward_file,
-    witness_list_is_bound,
-)
+from verifier_support import load_submission, normalize_reward_file
 
 W = Path("/app")
 E = Path("/tests")
@@ -22,9 +16,9 @@ def _math(s, x):
         return False
     try:
         polynomial_map = x["map"]
-        first = tuple(_fraction(value) for value in x["first_point"])
-        second = tuple(_fraction(value) for value in x["second_point"])
-        claimed = tuple(_fraction(value) for value in x["claimed_image"])
+        first = tuple((_fraction(value) for value in x["first_point"]))
+        second = tuple((_fraction(value) for value in x["second_point"]))
+        claimed = tuple((_fraction(value) for value in x["claimed_image"]))
         if len(first) != len(second) or len(first) != len(polynomial_map["variables"]):
             return False
         first_image = _evaluate_map(polynomial_map, first)
@@ -55,7 +49,7 @@ def _evaluate_map(polynomial_map, point):
         for term in coordinate["terms"]:
             exponents = term["exponents"]
             if len(exponents) != len(point) or any(
-                type(exponent) is not int or exponent < 0 for exponent in exponents
+                (type(exponent) is not int or exponent < 0 for exponent in exponents)
             ):
                 raise ValueError("invalid monomial exponents")
             monomial = _fraction(term["coefficient"])
@@ -71,20 +65,10 @@ def main():
     protocol_ok = s is not None
     x = json.loads(next(E.glob("*input*.json")).read_text())
     math_correct = _math(s, x) if protocol_ok else False
-    correct = bool(protocol_ok and math_correct)
-    good = bool(protocol_ok and witness_list_is_bound(s["witness"]))
-    reward = aggregate_reward(
-        correctness=correct, witness_validity=good, protocol_ok=protocol_ok
-    )
+    reward = float(protocol_ok and math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
-    (Path("/logs/verifier/reward.json")).write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(good),
-                "reward": reward,
-            }
-        )
+    Path("/logs/verifier/reward.json").write_text(
+        json.dumps({"correctness": float(math_correct), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

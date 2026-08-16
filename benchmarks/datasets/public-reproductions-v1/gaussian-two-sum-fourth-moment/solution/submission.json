@@ -10,11 +10,5 @@
         "num": "12"
       }
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:0dab19cb9bf7e33b309c61637a2c377110292bcfa8d0a010dcb55f0d472395c3"
-    }
-  ]
+  }
 }

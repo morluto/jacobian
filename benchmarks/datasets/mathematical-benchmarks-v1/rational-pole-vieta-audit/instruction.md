@@ -5,9 +5,6 @@ The frozen trace claims that the poles of
 the computation of the sum of all complex solutions.
 
 Submit `/app/submission.json` following `/app/submission_schema.json` and a
-digest-bound JSON task-specific witness at
-`/app/evidence/pole-vieta-certificate.json`. The witness contains
-`schema_version` (value `"1"`), `task_id`, and the submitted `result`.
 Coefficient arrays are low-to-high. Provide the common denominator, combined
 numerator, cleared polynomial, the value of the surviving numerator at each
 denominator square value `k=1,2,3,4`, and the resulting root sum. The verifier

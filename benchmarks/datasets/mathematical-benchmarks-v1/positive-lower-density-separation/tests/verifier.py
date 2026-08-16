@@ -40,17 +40,45 @@ def valid_result(result):
     }:
         return False
     b = result.get("base")
+    formula = result.get("count_formula")
     if (
         type(b) is not int
         or b not in range(2, 10)
         or result.get("family") != "ALTERNATING_GEOMETRIC_BLOCKS"
-        or result.get("count_formula") != "(b^(2m+2)-1)/(b+1)"
+        or not isinstance(formula, dict)
+        or set(formula)
+        != {
+            "base_variable",
+            "level_variable",
+            "numerator_exponent_coefficient",
+            "numerator_exponent_offset",
+            "numerator_constant",
+            "denominator_offset",
+        }
+        or formula.get("base_variable") != "b"
+        or formula.get("level_variable") != "m"
+        or type(formula.get("numerator_exponent_coefficient")) is not int
+        or type(formula.get("numerator_exponent_offset")) is not int
+        or type(formula.get("numerator_constant")) is not int
+        or type(formula.get("denominator_offset")) is not int
+        or formula["denominator_offset"] + b == 0
     ):
         return False
     expected = {}
     for m in range(8):
         high, low = b ** (2 * m + 1), b ** (2 * m + 2)
         count = (low - 1) // (b + 1)
+        exponent = (
+            formula["numerator_exponent_coefficient"] * m
+            + formula["numerator_exponent_offset"]
+        )
+        if exponent < 0:
+            return False
+        formula_count = (b**exponent + formula["numerator_constant"]) // (
+            b + formula["denominator_offset"]
+        )
+        if formula_count != count:
+            return False
         expected[m] = (
             high,
             low,

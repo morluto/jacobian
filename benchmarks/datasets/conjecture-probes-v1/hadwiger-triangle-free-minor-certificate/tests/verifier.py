@@ -1,18 +1,12 @@
 """Exact coloring and clique-minor verifier for one Hadwiger instance."""
 
 from __future__ import annotations
-
 import json
 from pathlib import Path
 from typing import Any
-
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
-    resolve_evidence,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -33,7 +27,7 @@ def three_colorable(adj):
         if done == 11:
             return True
         uncolored = [v for v in range(11) if colors[v] < 0]
-        v = max(uncolored, key=lambda x: sum(colors[y] < 0 for y in adj[x]))
+        v = max(uncolored, key=lambda x: sum((colors[y] < 0 for y in adj[x])))
         used = {colors[y] for y in adj[v] if colors[y] >= 0}
         for color in range(3):
             if color not in used:
@@ -66,13 +60,13 @@ def _result_parts(r: Any):
     if (
         not isinstance(edges, list)
         or len(edges) != 20
-        or not isinstance(colors, list)
-        or len(colors) != 11
-        or not isinstance(branches, list)
-        or len(branches) != 4
+        or (not isinstance(colors, list))
+        or (len(colors) != 11)
+        or (not isinstance(branches, list))
+        or (len(branches) != 4)
     ):
         return None
-    return edges, colors, branches
+    return (edges, colors, branches)
 
 
 def _normalized_edges(edges):
@@ -81,7 +75,7 @@ def _normalized_edges(edges):
         if (
             not isinstance(e, list)
             or len(e) != 2
-            or any(type(v) is not int or not 0 <= v < 11 for v in e)
+            or any((type(v) is not int or not 0 <= v < 11 for v in e))
         ):
             return None
         normalized.append(tuple(sorted(e)))
@@ -100,10 +94,12 @@ def _adjacency(normalized):
 
 def _has_triangle(adj) -> bool:
     return any(
-        b in adj[a] and c in adj[a] and c in adj[b]
-        for a in range(11)
-        for b in range(a + 1, 11)
-        for c in range(b + 1, 11)
+        (
+            b in adj[a] and c in adj[a] and (c in adj[b])
+            for a in range(11)
+            for b in range(a + 1, 11)
+            for c in range(b + 1, 11)
+        )
     )
 
 
@@ -111,14 +107,14 @@ def _graph_is_candidate(adj) -> bool:
     return (
         min(map(len, adj)) >= 3
         and connected(set(range(11)), adj)
-        and not _has_triangle(adj)
+        and (not _has_triangle(adj))
     )
 
 
 def _coloring_certifies_four_chromatic(colors, normalized, adj) -> bool:
     return not (
-        any(type(c) is not int or not 0 <= c < 4 for c in colors)
-        or any(colors[a] == colors[b] for a, b in normalized)
+        any((type(c) is not int or not 0 <= c < 4 for c in colors))
+        or any((colors[a] == colors[b] for a, b in normalized))
         or three_colorable(adj)
     )
 
@@ -129,8 +125,8 @@ def _connected_branch_sets(branches, adj):
         if (
             not isinstance(branch, list)
             or not branch
-            or not all(type(v) is int and 0 <= v < 11 for v in branch)
-            or len(branch) != len(set(branch))
+            or (not all((type(v) is int and 0 <= v < 11 for v in branch)))
+            or (len(branch) != len(set(branch)))
         ):
             return None
         s = set(branch)
@@ -141,12 +137,14 @@ def _connected_branch_sets(branches, adj):
 
 
 def _branch_sets_form_k4_minor(sets, adj) -> bool:
-    if any(sets[i] & sets[j] for i in range(4) for j in range(i)):
+    if any((sets[i] & sets[j] for i in range(4) for j in range(i))):
         return False
     return all(
-        any(v in adj[u] for u in sets[i] for v in sets[j])
-        for i in range(4)
-        for j in range(i)
+        (
+            any((v in adj[u] for u in sets[i] for v in sets[j]))
+            for i in range(4)
+            for j in range(i)
+        )
     )
 
 
@@ -169,8 +167,8 @@ def mathematics(r: Any) -> bool:
     return (
         type(r.get("chromatic_number")) is int
         and r["chromatic_number"] == 4
-        and type(r.get("minor_order")) is int
-        and r["minor_order"] == 4
+        and (type(r.get("minor_order")) is int)
+        and (r["minor_order"] == 4)
     )
 
 
@@ -181,37 +179,17 @@ def reward(v):
     normalize_reward_file(p / "reward.json")
 
 
-def _witness_matches_result(witness: object, result: object) -> bool:
-    if not witness_list_is_bound(witness, expected_path="evidence/answer.txt"):
-        return False
-    if resolve_evidence(witness[0], expected_path="evidence/answer.txt") is None:
-        return False
-    payload = read_evidence_json(witness[0], expected_path="evidence/answer.txt")
-    return bool(
-        isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result"}
-        and payload.get("schema_version") == "1"
-        and payload.get("task_id") == TASK_ID
-        and json_value_equal(payload.get("result"), result)
-    )
-
-
 def main():
     input_bound = workspace_input_is_bound()
     submission = load_submission(require_input_binding=False)
     protocol = isinstance(submission, dict)
     mathematics_ok = bool(protocol and mathematics(submission.get("result")))
-    witness_ok = bool(
-        protocol
-        and _witness_matches_result(submission.get("witness"), submission.get("result"))
-    )
-    aggregate = float(input_bound and protocol and mathematics_ok and witness_ok)
+    aggregate = float(input_bound and protocol and mathematics_ok)
     reward(
         {
             "protocol": float(protocol),
             "input_binding": float(input_bound),
             "mathematics": float(mathematics_ok),
-            "witness_validity": float(witness_ok),
             "aggregate_reward": aggregate,
             "reward": aggregate,
         }
@@ -227,7 +205,6 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

@@ -12,11 +12,6 @@ cubics, include the exact discriminant and the resulting real-rooted decision.
 The verifier independently enumerates the whole finite residue class and
 recomputes every discriminant; a copied final list is insufficient.
 
-Write `submission.json` and digest-bind
-`evidence/classification-certificate.json`.
-
-The digest-bound task-specific witness file must be a JSON object with exactly three keys:
-`schema_version` (the string `"1"`), `task_id` (the task identifier),
 `result` (the same result object placed in `submission.json`).
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->

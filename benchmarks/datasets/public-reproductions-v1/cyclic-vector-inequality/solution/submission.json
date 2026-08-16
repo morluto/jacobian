@@ -83,11 +83,5 @@
         "second_variable": 1
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:f9098c171bdfdd045ed02e26544160d66a32a943aa8918d663ac99263658a4f8"
-    }
-  ]
+  }
 }

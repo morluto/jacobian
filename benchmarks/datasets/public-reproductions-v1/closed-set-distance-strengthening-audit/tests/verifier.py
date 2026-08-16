@@ -5,16 +5,12 @@ from typing import Any
 
 from verifier_support import (
     aggregate_reward,
-    json_value_equal,
     load_submission_raw,
     normalize_reward_file,
-    read_evidence_json,
-    valid_sha256_uri,
     workspace_input_is_bound,
 )
 
 WORKSPACE, TESTS = Path("/app"), Path("/tests")
-EVIDENCE_PATH = "evidence/distance-audit.json"
 
 
 def _frozen() -> dict[str, Any]:
@@ -206,45 +202,20 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     )
 
 
-def _evidence(submission: dict[str, Any]) -> bool:
-    evidence = submission.get("witness")
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    payload = read_evidence_json(evidence[0], expected_path=EVIDENCE_PATH)
-    return bool(
-        isinstance(payload, dict)
-        and payload.get("schema_version") == "1"
-        and json_value_equal(payload.get("result"), submission.get("result"))
-    )
-
-
-def _evidence_schema(value: object) -> bool:
-    return bool(
-        isinstance(value, list)
-        and len(value) == 1
-        and isinstance(value[0], dict)
-        and set(value[0]) == {"path", "sha256"}
-        and value[0]["path"] == EVIDENCE_PATH
-        and valid_sha256_uri(value[0]["sha256"])
-    )
-
-
 def main() -> None:
     submission = load_submission_raw(require_input_binding=False)
     data = submission if isinstance(submission, dict) else {}
     input_bound = workspace_input_is_bound()
     math_correct = bool(_result(data.get("result"), _frozen()))
-    evidence_valid = bool(_evidence(data))
     protocol_ok = bool(
         isinstance(submission, dict)
-        and set(data) == {"result", "witness"}
+        and set(data) == {"result"}
         and _result_schema(data.get("result"))
-        and _evidence_schema(data.get("witness"))
     )
     correct = bool(protocol_ok and input_bound and math_correct)
     reward = aggregate_reward(
         correctness=correct,
-        witness_validity=evidence_valid,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     out = Path("/logs/verifier")
@@ -254,7 +225,6 @@ def main() -> None:
             {
                 "correctness": float(math_correct),
                 "input_binding": float(input_bound),
-                "witness_validity": float(evidence_valid),
                 "protocol_compliance": float(protocol_ok),
                 "reward": reward,
             }

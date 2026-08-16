@@ -71,11 +71,5 @@
         "power": 5
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:e92e4a6261d38c3d24667abd89d0b3ce6c1edf4374fb2f289743751ce4314f17"
-    }
-  ]
+  }
 }

@@ -1,1 +1,0 @@
-The distinct rational points (0,0,-1/4) and (1,-3/2,13/2) both map to (-1/4,0,0), witnessing non-invertibility over Q.

@@ -1,1 +1,0 @@
-The deterministic construction makes every sufficiently late term divisible by each fixed power of two, while every odd prime index has b_p=(1+p*2^p)^2.

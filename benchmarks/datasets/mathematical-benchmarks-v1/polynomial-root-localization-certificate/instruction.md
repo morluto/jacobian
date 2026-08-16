@@ -11,9 +11,6 @@ of `(1-z)Q(z)`, the rearranged root identity, and the powers controlled when
 `|z|<1`. Do not use numerical sampling.
 
 Write `submission.json` to the supplied schema. Write the declared
-task-specific witness at `evidence/root-bound-certificate.json` with
-`schema_version: "1"`, the task ID, and the submitted `result`, then bind its
-SHA-256 digest in the submission.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

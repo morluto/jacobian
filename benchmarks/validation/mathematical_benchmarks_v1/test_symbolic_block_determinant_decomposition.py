@@ -83,6 +83,19 @@ def test_rejects_corrupted_certificates(
     assert rejected.reward == 0.0
 
 
+def test_reordered_determinant_factors_are_accepted(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path)
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["determinant_identity"]["factors"] = [
+        {"matrix": "A+2B", "exponent": 1},
+        {"matrix": "A-B", "exponent": 2},
+    ]
+    _rewrite(app, submission)
+    accepted = _verifier._run_verifier(task, app, logs)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.reward == pytest.approx(1.0)
+
+
 def test_enforces_common_channel_first(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())

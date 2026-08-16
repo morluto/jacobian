@@ -20,19 +20,26 @@ def test_verifier_execution_does_not_mutate_task_bundles(tmp_path: Path) -> None
     assert _fixtures._task_tree_snapshot() == before
 
 
-def test_generated_json_witness_fixture_starts_valid(tmp_path: Path) -> None:
+def test_generated_result_only_fixture_starts_valid(tmp_path: Path) -> None:
     task, app, logs = _fixtures._prepare_case(
-        tmp_path, "inversion-aggregate-mask-audit", "computed"
+        tmp_path, "rational-linear-solution", "computed"
     )
 
-    witness_path = app / "evidence" / "inversion-audit.json"
     submission = json.loads((app / "submission.json").read_text())
-    assert witness_path.is_file()
-    assert submission["witness"][0]["sha256"] == _fixtures._digest(witness_path)
+    assert "witness" not in submission
     assert _verifier._run_verifier(task, app, logs).reward == pytest.approx(1.0)
 
 
-@pytest.mark.parametrize("task_name", _fixtures.SINGLE_EVIDENCE_TASKS)
+@pytest.mark.parametrize(
+    "task_name",
+    _fixtures.SINGLE_EVIDENCE_TASKS
+    or [
+        pytest.param(
+            None,
+            marks=pytest.mark.skip(reason="no remaining file-witness tasks"),
+        )
+    ],
+)
 def test_verifiers_enforce_single_witness_cardinality(
     tmp_path: Path,
     task_name: str,

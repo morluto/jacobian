@@ -37,11 +37,5 @@
         ]
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/resolution-proof.json",
-      "sha256": "sha256:bd6891a144f2502b06d774567e742b3f9fe9ec2fd4164bff68fa3b0f17f097ab"
-    }
-  ]
+  }
 }

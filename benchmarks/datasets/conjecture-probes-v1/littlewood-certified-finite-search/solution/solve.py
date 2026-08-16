@@ -1,18 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from fractions import Fraction
 from math import isqrt
 from pathlib import Path
 
-TASK_ID = "jacobian/littlewood-certified-finite-search"
-LIMITATIONS = [
-    "ONE_FIXED_QUADRATIC_IRRATIONAL_PAIR",
-    "N_AT_MOST_2000",
-    "NO_LIMINF_OR_LITTLEWOOD_CONCLUSION",
-]
 SCALE = 10**80
 
 
@@ -66,18 +59,8 @@ def main():
         "minimum_upper": best["upper"],
         "comparison_status": "STRICTLY_SEPARATED_INTERVALS",
     }
-    payload = {"schema_version": "1", "task_id": TASK_ID, "result": result}
-    e = root / "evidence/answer.txt"
-    e.parent.mkdir(parents=True, exist_ok=True)
-    e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
     s = {
         "result": result,
-        "witness": [
-            {
-                "path": "evidence/answer.txt",
-                "sha256": "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest(),
-            }
-        ],
     }
     (root / "submission.json").write_text(json.dumps(s, sort_keys=True) + "\n")
 

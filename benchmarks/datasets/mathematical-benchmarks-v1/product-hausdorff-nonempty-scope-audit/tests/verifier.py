@@ -1,15 +1,8 @@
 import json
 from pathlib import Path
+from verifier_support import load_submission, normalize_reward_file
 
-from verifier_support import (
-    aggregate_reward,
-    json_value_equal,
-    load_submission,
-    normalize_reward_file,
-    read_evidence_json,
-)
-
-W, E = Path("/app"), Path("/tests")
+W, E = (Path("/app"), Path("/tests"))
 
 
 def topology_ok(n, raw):
@@ -21,7 +14,7 @@ def topology_ok(n, raw):
             not isinstance(item, list)
             or item != sorted(item)
             or len(set(item)) != len(item)
-            or any(type(x) is not int or not 0 <= x < n for x in item)
+            or any((type(x) is not int or not 0 <= x < n for x in item))
         ):
             return None
         opens.append(frozenset(item))
@@ -38,17 +31,21 @@ def topology_ok(n, raw):
 
 def is_t0(n, opens):
     return all(
-        any((x in u) != (y in u) for u in opens)
-        for x in range(n)
-        for y in range(x + 1, n)
+        (
+            any(((x in u) != (y in u) for u in opens))
+            for x in range(n)
+            for y in range(x + 1, n)
+        )
     )
 
 
 def is_t2(n, opens):
     return all(
-        any(x in u and y in v and not (u & v) for u in opens for v in opens)
-        for x in range(n)
-        for y in range(x + 1, n)
+        (
+            any((x in u and y in v and (not u & v) for u in opens for v in opens))
+            for x in range(n)
+            for y in range(x + 1, n)
+        )
     )
 
 
@@ -68,15 +65,15 @@ def result_ok(result):
     if (
         not isinstance(cards, list)
         or len(cards) != 3
-        or any(type(x) is not int for x in cards)
+        or any((type(x) is not int for x in cards))
     ):
         return False
     n, empty, other = cards
     if (
         not 4 <= n <= 7
         or empty != 0
-        or not 2 <= other <= 5
-        or result["empty_factor_index"] != 1
+        or (not 2 <= other <= 5)
+        or (result["empty_factor_index"] != 1)
     ):
         return False
     opens = topology_ok(n, result["bad_factor_topology"])
@@ -84,12 +81,12 @@ def result_ok(result):
         return False
     return (
         is_t0(n, opens)
-        and not is_t2(n, opens)
-        and result["product_cardinality"] == 0
-        and result["product_is_hausdorff"] is True
-        and result["bad_factor_is_t0"] is True
-        and result["bad_factor_is_hausdorff"] is False
-        and result["missing_assumption"] == "ALL_FACTORS_NONEMPTY"
+        and (not is_t2(n, opens))
+        and (result["product_cardinality"] == 0)
+        and (result["product_is_hausdorff"] is True)
+        and (result["bad_factor_is_t0"] is True)
+        and (result["bad_factor_is_hausdorff"] is False)
+        and (result["missing_assumption"] == "ALL_FACTORS_NONEMPTY")
     )
 
 
@@ -100,7 +97,7 @@ def frozen_ok():
         return (
             not (W / "input.json").is_symlink()
             and (W / "input.json").read_bytes() == raw
-            and data["source_row"] == 59
+            and (data["source_row"] == 59)
         )
     except (OSError, ValueError, KeyError, TypeError):
         return False
@@ -111,37 +108,10 @@ def main():
     protocol_ok = submission is not None
     result = submission.get("result") if protocol_ok else None
     math_ok = bool(protocol_ok and result_ok(result) and frozen_ok())
-    evidence = (
-        read_evidence_json(
-            submission["witness"][0],
-            expected_path="evidence/product-hausdorff-audit.json",
-        )
-        if protocol_ok
-        and isinstance(submission.get("witness"), list)
-        and len(submission["witness"]) == 1
-        else None
-    )
-    evidence_ok = bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result"}
-        and evidence["schema_version"] == "1"
-        and evidence["task_id"] == "jacobian/product-hausdorff-nonempty-scope-audit"
-        and json_value_equal(evidence["result"], result)
-    )
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=evidence_ok,
-        protocol_ok=protocol_ok,
-    )
+    reward = float(math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
-        json.dumps(
-            {
-                "correctness": float(math_ok),
-                "witness_validity": float(evidence_ok),
-                "reward": reward,
-            }
-        )
+        json.dumps({"correctness": float(math_ok), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

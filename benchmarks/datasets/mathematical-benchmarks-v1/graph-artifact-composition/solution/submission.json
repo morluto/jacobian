@@ -33,11 +33,5 @@
       "4"
     ],
     "maximum_distance_to_set": 2
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:12a8ffa59d8af416048a3e43ba55d13c35ffcf1474f255beb511036825460818"
-    }
-  ]
+  }
 }

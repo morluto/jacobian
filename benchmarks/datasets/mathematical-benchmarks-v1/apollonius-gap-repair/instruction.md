@@ -6,9 +6,6 @@ Choose a positive structured rational `k != 1` and `c`. Put `A=(0,0)`, `B=(c,0)`
 
 Every rational field is a `{numerator, denominator}` object. Equivalent encodings such as `2/2` and `1` are accepted after exact `Fraction` normalization.
 
-The digest-bound `evidence/answer.txt` must contain exactly four nonempty lines: `apollonius-coefficient-certificate-v1`, `multiplier: <normalized multiplier>`, `circle_coefficients: <four normalized values joined by commas>`, and `distance_coefficients: <four normalized values joined by commas>`.
-
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 

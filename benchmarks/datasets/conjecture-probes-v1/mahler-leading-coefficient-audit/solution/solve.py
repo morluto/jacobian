@@ -1,16 +1,8 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from fractions import Fraction
 from pathlib import Path
-
-TASK_ID = "jacobian/mahler-leading-coefficient-audit"
-LIMITATIONS = [
-    "ONE_DEGREE_EIGHT_POLYNOMIAL",
-    "EXACT_FACTOR_FORMULA_AUDIT_ONLY",
-    "LEHMER_PROBLEM_NOT_ASSESSED",
-]
 
 
 def rat(value) -> dict[str, int]:
@@ -36,26 +28,7 @@ def main():
         "leading_coefficient": rat("2"),
         "corrected_mahler_measure": pair(["6", "2"]),
     }
-    payload = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": result,
-        "limitations": LIMITATIONS,
-    }
-    evidence = root / "evidence/answer.json"
-    evidence.parent.mkdir(parents=True, exist_ok=True)
-    evidence.write_text(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
-    )
-    submission = {
-        "result": result,
-        "witness": [
-            {
-                "path": "evidence/answer.json",
-                "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
-            }
-        ],
-    }
+    submission = {"result": result}
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 
 

@@ -1,1 +1,0 @@
-The machine-readable certificate is stored in rewrite-trace.json.

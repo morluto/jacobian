@@ -1,6 +1,6 @@
 # Keller condition and Jacobian determinant
 
-For the polynomial map in `input.json` over Q, verify the Keller condition and compute the exact Jacobian determinant. Return whether the Keller condition holds and the determinant as a polynomial. Write `submission.json` to the exact agent-visible `submission_schema.json`, record the calculation in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence list. Claim `COMPUTED` assurance; do not claim `VERIFIED`.
+For the polynomial map in `input.json` over Q, verify the Keller condition and compute the exact Jacobian determinant. Return whether the Keller condition holds and the determinant as a polynomial. Write `submission.json` to the exact agent-visible `submission_schema.json`. Claim `COMPUTED` assurance; do not claim `VERIFIED`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

@@ -77,7 +77,28 @@
           "additionalProperties": false,
           "properties": {
             "event_mass_formula": {
-              "const": "1/2^k"
+              "additionalProperties": false,
+              "properties": {
+                "base": {
+                  "$ref": "#/$defs/rational"
+                },
+                "coefficient": {
+                  "$ref": "#/$defs/rational"
+                },
+                "exponent_coefficient": {
+                  "type": "integer"
+                },
+                "variable": {
+                  "const": "k"
+                }
+              },
+              "required": [
+                "coefficient",
+                "base",
+                "exponent_coefficient",
+                "variable"
+              ],
+              "type": "object"
             },
             "limit": {
               "const": "ZERO"

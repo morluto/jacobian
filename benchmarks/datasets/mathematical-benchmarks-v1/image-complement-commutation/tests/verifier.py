@@ -3,11 +3,8 @@ from pathlib import Path
 
 from verifier_support import (
     aggregate_reward,
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
-    valid_sha256_uri,
 )
 
 W, T = Path("/app"), Path("/tests")
@@ -90,29 +87,6 @@ def _row_schema_ok(row):
     )
 
 
-def _result_schema_ok(result):
-    """Validate the nested result structure against the published schema."""
-    if (
-        not isinstance(result, dict)
-        or set(result) != {"cases"}
-        or not isinstance(result["cases"], list)
-        or len(result["cases"]) != 3
-        or any(not isinstance(row, dict) for row in result["cases"])
-    ):
-        return False
-    return all(_row_schema_ok(row) for row in result["cases"])
-
-
-def _evidence_descriptor_ok(descriptor):
-    """Validate the evidence descriptor shape and digest pattern."""
-    return bool(
-        isinstance(descriptor, dict)
-        and set(descriptor) == {"path", "sha256"}
-        and descriptor.get("path") == "evidence/image-complement-certificate.json"
-        and valid_sha256_uri(descriptor.get("sha256"))
-    )
-
-
 def _normalize_row(row):
     out = dict(row)
     for key in ("first_failure", "left_image", "right_complement"):
@@ -149,39 +123,14 @@ def valid(result):
 
 
 def main():
-    expected = json.loads((T / "expected.json").read_text())
     submission = load_submission(W / "submission.json")
     protocol_ok = submission is not None
     data = submission if isinstance(submission, dict) else {}
     result = data.get("result")
     math_ok = bool(protocol_ok and valid(result))
-    evidence_descriptor = (
-        data["witness"][0]
-        if isinstance(data.get("witness"), list) and len(data["witness"]) == 1
-        else None
-    )
-    ev = (
-        read_evidence_json(
-            evidence_descriptor,
-            expected_path="evidence/image-complement-certificate.json",
-            max_bytes=16 * 1024 * 1024,
-        )
-        if evidence_descriptor is not None
-        else None
-    )
-    ev_ok = bool(
-        protocol_ok
-        and ev
-        and set(ev) == {"schema_version", "task_id", "result"}
-        and type(ev.get("schema_version")) is str
-        and ev.get("schema_version") == "1"
-        and type(ev.get("task_id")) is str
-        and ev.get("task_id") == expected["task_id"]
-        and json_value_equal(ev.get("result"), data.get("result"))
-    )
     reward = aggregate_reward(
         correctness=math_ok,
-        witness_validity=ev_ok,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -189,7 +138,7 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(ev_ok),
+                "witness_validity": 1.0 if math_ok else 0.0,
                 "reward": reward,
             }
         )

@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 LABEL jacobian.task="jacobian/hadamard-order12-construction" \
-      jacobian.checksum="87b496bbca584584d498b67ef26d4d3b9a186b59e5c4213d3b8b402f988be075"
+      jacobian.checksum="35f042ee44fea27db37e92002b85a0b83cdc62f8b5cc45d77e9e65bf2cc0d7fb"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 COPY input.json public_contract.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

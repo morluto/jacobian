@@ -14,12 +14,7 @@ and compute the exact total and average stopping time.
 
 The verifier independently checks every state, transition, layer minimum, and
 average from the structured certificate in `submission.json`.  Merely
-reporting the published average is insufficient.  Submit
-`/app/submission.json` following the schema and a nonempty human-readable
-summary at `/app/evidence/answer.txt`.  The prose file is checked for path and
-digest integrity only; mathematical scoring comes from the structured
-certificate rather than keyword matching.
-
+reporting the published average is insufficient.  Submit `/app/submission.json` following the schema.
 Do not claim proof-assistant verification.  This is an exact finite-state
 certificate for `n=12` only.  The `limitations` array must contain exactly
 this one entry: `This certificate applies only to the frozen 12-coin

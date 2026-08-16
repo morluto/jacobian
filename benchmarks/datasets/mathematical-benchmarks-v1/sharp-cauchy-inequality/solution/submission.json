@@ -496,11 +496,5 @@
       }
     },
     "proof_mode": "AMGM_SQUARES"
-  },
-  "witness": [
-    {
-      "path": "evidence/inequality-certificate.json",
-      "sha256": "sha256:97fd66a269e073aa7f28aac15f9a4faa026260e34ef2ce94cdb0037fb344c570"
-    }
-  ]
+  }
 }

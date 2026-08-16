@@ -129,11 +129,5 @@
       0
     ],
     "valid_labelled_words": 2206
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:9a5967c850f586a241d3ccfbd0fcea0c65e956529701f117a164e6861c1c4049"
-    }
-  ]
+  }
 }

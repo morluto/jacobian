@@ -2,7 +2,7 @@
 
 The frozen validator checks a proper vertex coloring and a proper edge coloring separately, then incorrectly calls their union a total coloring. Audit that contract on the supplied Petersen graph.
 
-Submit `/app/submission.json` and one bound `/app/evidence/answer.json`. Your certificate must contain:
+Submit `/app/submission.json`. Your certificate must contain:
 
 1. a **flawed-pass assignment** using exactly the declared four-color palette whose vertex projection is proper and whose edge projection is proper, but which has at least one vertex–incident-edge color collision;
 2. the complete collision list for that assignment (the order is not significant); and

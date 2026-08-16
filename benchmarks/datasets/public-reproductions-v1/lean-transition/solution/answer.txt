@@ -1,1 +1,0 @@
-After `constructor` on the conjunction goal, two subgoals remain (P and Q) and the proof is not completed.

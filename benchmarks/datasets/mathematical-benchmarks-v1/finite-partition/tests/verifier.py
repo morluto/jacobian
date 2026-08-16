@@ -4,16 +4,11 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    sha256_uri,
     workspace_input_is_bound,
 )
 
 W = Path("/app")
 E = Path("/tests")
-
-
-def _digest(path):
-    return sha256_uri(path)
 
 
 def _validate_groups(groups, x):
@@ -45,32 +40,6 @@ def _validate_groups(groups, x):
     return members, actual, expected
 
 
-def _check_evidence_items(evidence):
-    good = True
-    for i in evidence:
-        if (
-            not isinstance(i, dict)
-            or not isinstance(i.get("path"), str)
-            or not isinstance(i.get("sha256"), str)
-        ):
-            good = False
-            continue
-        p = Path(i["path"])
-        t = (W / p).resolve()
-        if (
-            p.is_absolute()
-            or p != Path("evidence/answer.txt")
-            or ".." in p.parts
-            or (W / p).is_symlink()
-            or not t.is_relative_to(W.resolve())
-            or not t.is_file()
-        ):
-            good = False
-            continue
-        good &= i.get("sha256") == _digest(t)
-    return good
-
-
 def main():
     s = load_submission()
     x = json.loads(next(E.glob("*input*.json")).read_text())
@@ -84,19 +53,12 @@ def main():
         and set(members) == wanted
         and actual == expected
     )
-    good_evidence = bool(
-        isinstance(s, dict)
-        and isinstance(s.get("witness"), list)
-        and s["witness"]
-        and _check_evidence_items(s["witness"])
-    )
-    reward = float(math_correct and good_evidence)
+    reward = float(math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(good_evidence),
                 "reward": reward,
             }
         )

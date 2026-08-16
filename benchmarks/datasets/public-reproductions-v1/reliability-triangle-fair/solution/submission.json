@@ -5,11 +5,5 @@
       "num": 5
     },
     "states": 8
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:f6f94ea9c3f487fc4df414f30786b83798d9479ccaab9e2fe1e0c0370cc46bcc"
-    }
-  ]
+  }
 }

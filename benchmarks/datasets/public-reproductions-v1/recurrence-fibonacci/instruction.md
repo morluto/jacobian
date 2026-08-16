@@ -1,6 +1,6 @@
 # Operation discovery regression
 
-Given the natural-language query in `input.json`, select the single most specific Jacobian operation that should handle it. Return the selected operation identifier. Write `submission.json` to the exact agent-visible `submission_schema.json`, record the selection in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence list. Claim `COMPUTED` assurance; do not claim `VERIFIED`.
+Given the natural-language query in `input.json`, select the single most specific Jacobian operation that should handle it. Return the selected operation identifier. Write `submission.json` to the exact agent-visible `submission_schema.json`. Claim `COMPUTED` assurance; do not claim `VERIFIED`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

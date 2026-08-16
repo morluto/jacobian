@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
@@ -17,15 +16,7 @@ def _case(tmp_path: Path):
 
 
 def _rewrite(app: Path, submission: dict) -> None:
-    evidence = {
-        "schema_version": "1",
-        "task_id": f"jacobian/{TASK}",
-        "result": submission["result"],
-    }
-    raw = json.dumps(evidence, separators=(",", ":")).encode()
-    (app / "evidence" / "permutation-involution-certificate.json").write_bytes(raw)
-    submission["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
-    _fixtures._write_json(app / "submission.json", submission)
+    _fixtures._write_json(app / "submission.json", {"result": submission["result"]})
 
 
 def test_oracle_passes(tmp_path: Path) -> None:
@@ -79,23 +70,7 @@ def test_rejects_corrupted_trace(tmp_path: Path) -> None:
     assert _verifier._run_verifier(task, app, logs).reward == 0.0
 
 
-def test_oversized_evidence_emits_zero_reward(tmp_path: Path) -> None:
-    """An evidence file exceeding MAX_EVIDENCE_BYTES is rejected before hashing
-    or parsing, the verifier emits reward.json, and reward is zero."""
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence_path = app / "evidence" / "permutation-involution-certificate.json"
-    evidence_path.write_bytes(b"x" * (16 * 1024 * 1024 + 1))
-    submission["witness"][0]["sha256"] = _fixtures._digest(evidence_path)
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-
-
 def test_unhashable_permutation_trace_emits_zero_reward(tmp_path: Path) -> None:
-    """A trace whose permutation contains a nested list would crash tuple/set
-    operations without the exact-integer validation; the verifier must reject it
-    and emit reward.json with reward zero."""
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["traces"][0]["permutation"] = [1, 2, 3, 4, 5, 6, [7]]
@@ -106,8 +81,6 @@ def test_unhashable_permutation_trace_emits_zero_reward(tmp_path: Path) -> None:
 
 
 def test_boolean_permutation_entry_is_rejected(tmp_path: Path) -> None:
-    """A boolean entry is equal to an integer under Python equality but must be
-    rejected as a non-exact-integer permutation element."""
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["traces"][0]["permutation"] = [True, 2, 3, 4, 5, 6, 7]
@@ -118,8 +91,6 @@ def test_boolean_permutation_entry_is_rejected(tmp_path: Path) -> None:
 
 
 def test_boolean_result_field_is_rejected(tmp_path: Path) -> None:
-    """A boolean ``False`` equals integer ``0`` under Python equality but must
-    be rejected in the integer result fields."""
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["fixed_point_count"] = False
@@ -129,29 +100,7 @@ def test_boolean_result_field_is_rejected(tmp_path: Path) -> None:
     assert result.reward == 0.0
 
 
-def test_type_sensitive_evidence_comparison(tmp_path: Path) -> None:
-    """An evidence certificate that replaces an integer ``0`` with boolean
-    ``False`` must be rejected even though Python treats them as equal."""
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = {
-        "schema_version": "1",
-        "task_id": f"jacobian/{TASK}",
-        "result": dict(submission["result"]),
-    }
-    evidence["result"]["fixed_point_count"] = False
-    raw = json.dumps(evidence, separators=(",", ":")).encode()
-    (app / "evidence" / "permutation-involution-certificate.json").write_bytes(raw)
-    submission["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0.0
-
-
 def test_boolean_trace_inversions_is_rejected(tmp_path: Path) -> None:
-    """A boolean ``False`` equals integer ``0`` under Python equality but must
-    be rejected in the trace inversion-count fields."""
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["traces"][0]["inversions"] = False
@@ -162,31 +111,10 @@ def test_boolean_trace_inversions_is_rejected(tmp_path: Path) -> None:
 
 
 def test_boolean_trace_transformed_entry_is_rejected(tmp_path: Path) -> None:
-    """A boolean entry in the ``transformed`` list equals an integer under
-    Python equality but must be rejected as a non-exact-integer value."""
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["traces"][0]["transformed"][0] = True
     _rewrite(app, submission)
     result = _verifier._run_verifier(task, app, logs)
     assert result.details["correctness"] == 0.0
-    assert result.reward == 0.0
-
-
-def test_witness_with_extra_limitations_field_is_rejected(tmp_path: Path) -> None:
-    """A witness JSON containing a generic ``limitations`` field is rejected."""
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = {
-        "schema_version": "1",
-        "task_id": f"jacobian/{TASK}",
-        "result": submission["result"],
-        "limitations": ["FINITE_N_EQUALS_7"],
-    }
-    raw = json.dumps(evidence, separators=(",", ":")).encode()
-    (app / "evidence" / "permutation-involution-certificate.json").write_bytes(raw)
-    submission["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.reward == 0.0
     assert result.reward == 0.0

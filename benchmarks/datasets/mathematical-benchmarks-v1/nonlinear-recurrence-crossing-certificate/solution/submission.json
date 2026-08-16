@@ -67,11 +67,5 @@
       "numerator": 4
     },
     "threshold_index_upper": 1791
-  },
-  "witness": [
-    {
-      "path": "evidence/nonlinear-recurrence-certificate.json",
-      "sha256": "sha256:609f0c17084654a4a6fbb92f983bea217c944a4dbebb21f6724df72077f8ee15"
-    }
-  ]
+  }
 }

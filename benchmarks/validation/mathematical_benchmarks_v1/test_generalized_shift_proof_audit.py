@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import hashlib
 import json
-import shutil
 from pathlib import Path
 
 import pytest
@@ -16,21 +14,12 @@ TASK = "generalized-shift-proof-audit"
 
 def load_case(tmp_path: Path):
     task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    shutil.copy2(
-        task / "solution" / "audit-certificate.json",
-        app / "evidence" / "audit-certificate.json",
-    )
     submission_path = app / "submission.json"
     return task, app, logs, submission_path, json.loads(submission_path.read_text())
 
 
-def write_bound(app: Path, submission_path: Path, submission: dict) -> None:
-    evidence = app / "evidence" / "audit-certificate.json"
-    _fixtures._write_json(evidence, submission["result"])
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
-    )
-    _fixtures._write_json(submission_path, submission)
+def write_result(submission_path: Path, submission: dict) -> None:
+    _fixtures._write_json(submission_path, {"result": submission["result"]})
 
 
 def test_canonical_certificate_receives_full_reward(tmp_path: Path) -> None:
@@ -66,7 +55,7 @@ def test_alternative_exact_certificates_are_accepted(tmp_path: Path) -> None:
         },
         "radical_domain": {"m": 17, "radicand": -16, "real_status": "NOT_REAL"},
     }
-    write_bound(app, submission_path, submission)
+    write_result(submission_path, submission)
     result = _verifier._run_verifier(task, app, logs)
     assert result.reward == pytest.approx(1.0)
 
@@ -89,7 +78,7 @@ def test_corrupted_defect_certificates_are_rejected(
 ) -> None:
     task, app, logs, submission_path, submission = load_case(tmp_path)
     submission["result"][section][field] = bad_value
-    write_bound(app, submission_path, submission)
+    write_result(submission_path, submission)
     result = _verifier._run_verifier(task, app, logs)
     assert result.details["correctness"] == 0.0
     assert result.reward == 0.0
@@ -101,25 +90,9 @@ def test_undeclared_nested_certificate_field_is_rejected(
     """An extra field in a nested certificate object must be rejected."""
     task, app, logs, submission_path, submission = load_case(tmp_path)
     submission["result"]["fourier_block"]["extra_field"] = 0
-    write_bound(app, submission_path, submission)
+    write_result(submission_path, submission)
     result = _verifier._run_verifier(task, app, logs)
     assert result.details["correctness"] == 0.0
-    assert result.reward == 0.0
-
-
-def test_deeply_nested_evidence_is_rejected(tmp_path: Path) -> None:
-    """Deeply nested JSON in the evidence file must not crash the verifier."""
-    task, app, logs, submission_path, submission = load_case(tmp_path)
-    evidence_path = app / "evidence" / "audit-certificate.json"
-    nested = "0"
-    for _ in range(10000):
-        nested = f"[{nested}]"
-    evidence_path.write_text(nested)
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
-    )
-    _fixtures._write_json(submission_path, submission)
-    result = _verifier._run_verifier(task, app, logs)
     assert result.reward == 0.0
 
 
@@ -138,7 +111,7 @@ def test_unreduced_rationals_are_accepted(tmp_path: Path) -> None:
         "numerator": 50,
         "denominator": 2,
     }
-    write_bound(app, submission_path, submission)
+    write_result(submission_path, submission)
     result = _verifier._run_verifier(task, app, logs)
     assert result.reward == pytest.approx(1.0)
 
@@ -153,7 +126,7 @@ def test_collision_out_of_bounds_is_rejected(tmp_path: Path) -> None:
         "alpha_first": 1,
         "alpha_second": 0,
     }
-    write_bound(app, submission_path, submission)
+    write_result(submission_path, submission)
     result = _verifier._run_verifier(task, app, logs)
     assert result.details["correctness"] == 0.0
     assert result.reward == 0.0
@@ -174,7 +147,7 @@ def test_oversized_diagonal_entries_is_rejected(tmp_path: Path) -> None:
         "numerator": 9,
         "denominator": 1,
     }
-    write_bound(app, submission_path, submission)
+    write_result(submission_path, submission)
     result = _verifier._run_verifier(task, app, logs)
     assert result.details["correctness"] == 0.0
     assert result.reward == 0.0

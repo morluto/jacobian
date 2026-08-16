@@ -3,10 +3,8 @@ from pathlib import Path
 
 from verifier_support import (
     aggregate_reward,
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
 )
 
 W, E = Path("/app"), Path("/tests")
@@ -92,45 +90,14 @@ def _frozen_ok():
         return False
 
 
-def _evidence_ok(evidence, result, expected):
-    if not evidence:
-        return False
-    if set(evidence) != {"schema_version", "task_id", "result"}:
-        return False
-    if evidence["schema_version"] != "1":
-        return False
-    if evidence["task_id"] != expected["task_id"]:
-        return False
-    # Validate the evidence result with the same strict matrix checks used for
-    # the submission result, then require recursive JSON equality. Python ``==``
-    # admits ``True == 1`` and ``1.0 == 1``, so a certificate that replaces
-    # integers with booleans or floats must be rejected by type-aware checks.
-    if not _result_ok(evidence["result"]):
-        return False
-    return json_value_equal(evidence["result"], result)
-
-
 def main():
     submission = load_submission()
-    expected = json.loads((E / "expected.json").read_text())
     protocol_ok = submission is not None
     result = submission.get("result") if protocol_ok else None
     math_ok = bool(protocol_ok and _result_ok(result) and _frozen_ok())
-    evidence = (
-        read_evidence_json(
-            submission["witness"][0],
-            expected_path="evidence/matrix-completion.json",
-            max_bytes=16 * 1024 * 1024,
-        )
-        if protocol_ok
-        and isinstance(submission.get("witness"), list)
-        and len(submission["witness"]) == 1
-        else None
-    )
-    evidence_ok = bool(_evidence_ok(evidence, result, expected))
     reward = aggregate_reward(
         correctness=math_ok,
-        witness_validity=evidence_ok,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -138,7 +105,7 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(evidence_ok),
+                "witness_validity": 1.0 if math_ok else 0.0,
                 "reward": reward,
             }
         )

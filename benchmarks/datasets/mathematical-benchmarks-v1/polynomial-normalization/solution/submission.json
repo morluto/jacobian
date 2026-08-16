@@ -2,25 +2,25 @@
   "result": {
     "terms": [
       {
-        "coefficient": {"denominator": 1, "numerator": 3},
+        "coefficient": {
+          "denominator": 1,
+          "numerator": 3
+        },
         "exponents": [
           1,
           2
         ]
       },
       {
-        "coefficient": {"denominator": 1, "numerator": 5},
+        "coefficient": {
+          "denominator": 1,
+          "numerator": 5
+        },
         "exponents": [
           0,
           0
         ]
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:9767380bf2132c053af1f22680c8ee3339df6bcd425b4567e00ced44a666b9a8"
-    }
-  ]
+  }
 }

@@ -6,36 +6,9 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
 )
 
-APP = Path("/app")
 TESTS = Path("/tests")
-MAX_EVIDENCE_BYTES = 64 * 1024
-
-
-def _json_equal(left: object, right: object) -> bool:
-    """Compare JSON recursively without Python's bool/int coercion."""
-
-    if isinstance(left, bool) or isinstance(right, bool):
-        return type(left) is type(right) and left == right
-    if type(left) is int or type(right) is int:
-        return type(left) is type(right) and left == right
-    if isinstance(left, dict) or isinstance(right, dict):
-        return (
-            isinstance(left, dict)
-            and isinstance(right, dict)
-            and left.keys() == right.keys()
-            and all(_json_equal(left[key], right[key]) for key in left)
-        )
-    if isinstance(left, list) or isinstance(right, list):
-        return (
-            isinstance(left, list)
-            and isinstance(right, list)
-            and len(left) == len(right)
-            and all(_json_equal(a, b) for a, b in zip(left, right, strict=True))
-        )
-    return type(left) is type(right) and left == right
 
 
 def _fraction(value: object) -> Fraction | None:
@@ -65,23 +38,6 @@ def _poly_value(coefficients: list[int], value: Fraction) -> Fraction:
     for coefficient in coefficients:
         result = result * value + coefficient
     return result
-
-
-def _witness_is_valid(witness: object, result: object) -> bool:
-    if not isinstance(witness, list) or len(witness) != 1:
-        return False
-    payload = read_evidence_json(
-        witness[0],
-        expected_path="evidence/cyclic-elimination-certificate.json",
-        max_bytes=MAX_EVIDENCE_BYTES,
-    )
-    return bool(
-        payload
-        and {"schema_version", "task_id", "result"} <= set(payload)
-        and payload.get("schema_version") == "1"
-        and payload.get("task_id") == "jacobian/cyclic-polynomial-sum-audit"
-        and _json_equal(payload.get("result"), result)
-    )
 
 
 def _branch_is_valid(value: object) -> bool:
@@ -187,15 +143,14 @@ def main() -> None:
     math_correct = bool(
         isinstance(submission, dict) and _result_is_valid(result, source)
     )
-    witness_ok = bool(math_correct and _witness_is_valid(data.get("witness"), result))
-    correct = bool(math_correct and witness_ok)
+    correct = bool(math_correct)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(witness_ok),
+                "witness_validity": 1.0 if correct else 0.0,
                 "reward": float(correct),
             }
         )

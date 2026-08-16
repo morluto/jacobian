@@ -15,8 +15,6 @@ with the exact substituted values. The verifier independently performs the
 symbolic substitution and checks the checkpoints; valid alternative families
 are accepted.
 
-Write one digest-bound task-specific witness object at
-`/app/evidence/precedence-audit.json`. It must contain exactly
 checks an exact countermodel family but does not elaborate Lean or prove the
 informal minimum.
 

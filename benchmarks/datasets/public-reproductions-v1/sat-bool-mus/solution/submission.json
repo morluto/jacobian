@@ -2,11 +2,5 @@
   "result": {
     "assignment": {},
     "status": "UNSATISFIABLE"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:5d34e60fe44ff7dd3ff912fec178582a47219a47779da705bec9281cdbbd874c"
-    }
-  ]
+  }
 }

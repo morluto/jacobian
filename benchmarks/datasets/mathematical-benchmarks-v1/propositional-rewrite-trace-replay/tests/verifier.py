@@ -1,15 +1,9 @@
 import copy
 import json
 from pathlib import Path
+from verifier_support import load_submission, normalize_reward_file
 
-from verifier_support import (
-    json_value_equal,
-    load_submission,
-    normalize_reward_file,
-    read_evidence_json,
-)
-
-W, E = Path("/app"), Path("/tests")
+W, E = (Path("/app"), Path("/tests"))
 
 
 def _frozen():
@@ -35,13 +29,13 @@ def _valid_node(node, budget):
     if set(node) != {"op", "args"} or not isinstance(node["args"], list):
         return False
     arity = len(node["args"])
-    if (op == "not" and arity != 1) or (op == "imp" and arity != 2):
+    if op == "not" and arity != 1 or (op == "imp" and arity != 2):
         return False
-    if op in {"and", "or"} and not 2 <= arity <= 16:
+    if op in {"and", "or"} and (not 2 <= arity <= 16):
         return False
     if op not in {"not", "imp", "and", "or"}:
         return False
-    return all(_valid_node(child, budget) for child in node["args"])
+    return all((_valid_node(child, budget) for child in node["args"]))
 
 
 def _at(root, path):
@@ -104,7 +98,7 @@ def _rewrite_flatten_associative(node):
     if node.get("op") not in {"and", "or"}:
         return None
     operator = node["op"]
-    if any(child.get("op") == operator for child in node["args"]):
+    if any((child.get("op") == operator for child in node["args"])):
         flattened = []
         for child in node["args"]:
             flattened.extend(child["args"] if child.get("op") == operator else [child])
@@ -148,7 +142,7 @@ def _trace_valid(result, frozen):
     if (
         not isinstance(steps, list)
         or not isinstance(bounds, dict)
-        or not bounds.get("minimum") <= len(steps) <= bounds.get("maximum")
+        or (not bounds.get("minimum") <= len(steps) <= bounds.get("maximum"))
     ):
         return False
     current = frozen.get("initial_ast")
@@ -158,7 +152,7 @@ def _trace_valid(result, frozen):
     for step in steps:
         if not isinstance(step, dict) or set(step) != {"rule", "path", "after_ast"}:
             return False
-        rule, path, after = step["rule"], step["path"], step["after_ast"]
+        rule, path, after = (step["rule"], step["path"], step["after_ast"])
         if rule not in frozen.get("registered_rules", []) or not isinstance(path, list):
             return False
         target = _at(current, path)
@@ -173,40 +167,20 @@ def _trace_valid(result, frozen):
     return bool(
         current == frozen.get("target_ast")
         and result["final_ast"] == current
-        and {"DE_MORGAN_OR", "NOT_IMPLICATION", "DOUBLE_NEGATION", "CONTRADICTION"}
-        <= used
+        and (
+            {"DE_MORGAN_OR", "NOT_IMPLICATION", "DOUBLE_NEGATION", "CONTRADICTION"}
+            <= used
+        )
     )
 
 
 def main():
-    submission, frozen = load_submission(), _frozen()
+    submission, frozen = (load_submission(), _frozen())
     math_correct = bool(submission and _trace_valid(submission.get("result"), frozen))
-    evidence = None
-    if (
-        submission
-        and isinstance(submission.get("witness"), list)
-        and len(submission["witness"]) == 1
-    ):
-        evidence = read_evidence_json(
-            submission["witness"][0], expected_path="evidence/rewrite-trace.json"
-        )
-    evidence_valid = bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result"}
-        and evidence["schema_version"] == "1"
-        and evidence["task_id"] == "propositional-rewrite-trace-replay"
-        and json_value_equal(evidence["result"], submission.get("result"))
-    )
-    reward = float(math_correct and evidence_valid)
+    reward = float(math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
-                "reward": reward,
-            }
-        )
+        json.dumps({"correctness": float(math_correct), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

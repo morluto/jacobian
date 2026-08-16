@@ -281,11 +281,5 @@
         0
       ]
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/profile-transfer-certificate.json",
-      "sha256": "sha256:7d6225ba7b8982d1ffa7d4bd58835979e0b8cf1e58c88fe6d26872f4e7b73ee2"
-    }
-  ]
+  }
 }

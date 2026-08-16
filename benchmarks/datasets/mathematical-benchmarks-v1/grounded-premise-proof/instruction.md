@@ -8,9 +8,7 @@ input.
 Every step must name its rule, list already available input facts, and produce
 one declared output fact. The verifier replays the DAG, rejects circular or
 unjustified steps, and rejects unnecessary selected premises. Write
-`submission.json` to the exact agent-visible `submission_schema.json`. Put a
-task-specific witness in `evidence/answer.txt`, and bind that file with its
-SHA-256 digest.
+`submission.json` to the exact agent-visible `submission_schema.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

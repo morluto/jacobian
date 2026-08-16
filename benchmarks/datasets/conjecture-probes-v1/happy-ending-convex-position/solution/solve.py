@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 import itertools
 import json
 import sys
 from pathlib import Path
 
-TASK_ID = "jacobian/happy-ending-convex-position"
 SCOPE = "happy-ending-convex-position:points-v1"
-LIMITATIONS = ["THIRTEEN_FROZEN_POINTS", "NO_GENERAL_ERDOS_SZEKERES_CONCLUSION"]
 
 
 def cross(a: tuple[int, int], b: tuple[int, int], c: tuple[int, int]) -> int:
@@ -63,16 +60,8 @@ def main() -> None:
         "maximum_witness_cyclic": witness,
         "scope_identity": SCOPE,
     }
-    evidence = {"schema_version": "1", "task_id": TASK_ID, "result": result}
-    evidence_path = root / "evidence/answer.txt"
-    evidence_path.parent.mkdir(parents=True, exist_ok=True)
-    evidence_path.write_text(
-        json.dumps(evidence, sort_keys=True, separators=(",", ":")) + "\n"
-    )
-    digest = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
     submission = {
         "result": result,
-        "witness": [{"path": "evidence/answer.txt", "sha256": digest}],
     }
     (root / "submission.json").write_text(
         json.dumps(submission, sort_keys=True, separators=(",", ":")) + "\n"

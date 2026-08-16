@@ -1,1 +1,0 @@
-The radicals are distances from `(a,b)` to `(-sqrt(2)/2,-sqrt(2)/2)` and `(sqrt(2)/2,sqrt(2)/2)`. Their sum is at least the distance 2 between the centers, with equality at `(0,0)`.

@@ -146,11 +146,17 @@
         "n": 11
       }
     ],
-    "maximum_formula": "1+n+floor(n/2)",
+    "maximum_formula": {
+      "constant": 1,
+      "floor_half": 1,
+      "linear": 1
+    },
     "upper_bound_certificate": {
       "element_frequency_cap": 2,
       "nonsingleton_incidence_floor": 2,
-      "singleton_cap": "n"
+      "singleton_cap": {
+        "variable": "n"
+      }
     }
   }
 }

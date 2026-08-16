@@ -4,7 +4,6 @@ Your first basis vector must span the common-coordinate channel and the other tw
 
 Report the three resulting channels in their actual diagonal order, the determinant factorization, and whether the source proof's invertibility assumption is required for this polynomial identity.
 
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 

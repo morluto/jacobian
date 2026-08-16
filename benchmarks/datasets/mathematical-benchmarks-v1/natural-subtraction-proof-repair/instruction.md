@@ -12,8 +12,7 @@ by the recorded `b<=a` side condition.
 
 The verifier independently traverses the expression tree and recomputes the
 linear combination over exact rationals. Write `submission.json` to
-`submission_schema.json`, put a task-specific witness in `evidence/answer.txt`,
-and bind its SHA-256 digest.
+`submission_schema.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

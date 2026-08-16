@@ -13,9 +13,6 @@ positive leading denominator coefficient. The verifier independently replays
 the Möbius cycle and every rational-function equation. A copied final formula
 without the orbit certificate cannot pass.
 
-Write `submission.json` and digest-bind
-`evidence/functional-equation-certificate.json`, which must copy `result`
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 

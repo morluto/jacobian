@@ -70,11 +70,5 @@
         }
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/cyclic-elimination-certificate.json",
-      "sha256": "sha256:f3b8425978fb909e85991fe545ef2ae5ded007d6bbb198c39439ca7f5dffec29"
-    }
-  ]
+  }
 }

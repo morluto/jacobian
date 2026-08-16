@@ -9,10 +9,6 @@ interval certificates may be listed in any order and are checked from their
 rational endpoints rather than from prose labels. Use reduced rational
 numerator/denominator objects; numerical simulation is not accepted.
 
-Write `submission.json` and digest-bind
-`evidence/nonlinear-recurrence-certificate.json`, which must copy `result`
-exactly.
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 

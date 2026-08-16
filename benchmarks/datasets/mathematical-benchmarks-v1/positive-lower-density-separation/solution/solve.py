@@ -25,7 +25,14 @@ for m in range(8):
 result = {
     "base": b,
     "family": "ALTERNATING_GEOMETRIC_BLOCKS",
-    "count_formula": "(b^(2m+2)-1)/(b+1)",
+    "count_formula": {
+        "base_variable": "b",
+        "level_variable": "m",
+        "numerator_exponent_coefficient": 2,
+        "numerator_exponent_offset": 2,
+        "numerator_constant": -1,
+        "denominator_offset": 1,
+    },
     "levels": levels,
     "lower_density": rational(Fraction(1, b + 1)),
     "upper_density": rational(Fraction(b, b + 1)),

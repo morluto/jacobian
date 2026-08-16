@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import hashlib
 import json
 import shutil
@@ -7,7 +6,6 @@ import subprocess
 import sys
 from fractions import Fraction
 from pathlib import Path
-
 from benchmarks.validation._verifier_child import run_verifier_in_child
 
 ROOT = Path(__file__).parents[3]
@@ -27,7 +25,7 @@ def _qs(values: list[object]) -> list[dict[str, int]]:
 
 
 def _case(tmp_path: Path) -> tuple[Path, Path, dict]:
-    app, logs = tmp_path / "app", tmp_path / "logs"
+    app, logs = (tmp_path / "app", tmp_path / "logs")
     app.mkdir(parents=True)
     logs.mkdir(parents=True)
     shutil.copy2(TASK / "environment/input.json", app / "input.json")
@@ -35,22 +33,15 @@ def _case(tmp_path: Path) -> tuple[Path, Path, dict]:
         [sys.executable, str(TASK / "solution/solve.py"), "--root", str(app)],
         check=True,
     )
-    return app, logs, json.loads((app / "submission.json").read_text())
+    return (app, logs, json.loads((app / "submission.json").read_text()))
 
 
 def _write(app: Path, submission: dict) -> None:
-    payload = {
-        "schema_version": "1",
-        "result": submission["result"],
-    }
-    evidence = app / "evidence/answer.txt"
-    evidence.write_text(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+    submission = dict(submission)
+    submission.pop("witness", None)
+    (app / "submission.json").write_text(
+        __import__("json").dumps({"result": submission["result"]}) + "\n"
     )
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(submission) + "\n")
 
 
 def _run(app: Path, logs: Path) -> dict:

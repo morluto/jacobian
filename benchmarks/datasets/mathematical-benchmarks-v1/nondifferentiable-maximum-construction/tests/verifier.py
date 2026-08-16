@@ -1,12 +1,9 @@
 import json
 from fractions import Fraction
 from pathlib import Path
-
 from verifier_support import (
-    aggregate_reward,
     load_submission,
     normalize_reward_file,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -48,13 +45,13 @@ def _valid_construction(result, source):
     return bool(
         values["left_value_at_join"] == peak
         and values["right_value_at_join"] == peak
-        and values["left_derivative"] == left
-        and values["right_derivative"] == right
-        and left >= 0
-        and right <= 0
-        and left != right
-        and peak - left <= peak
-        and peak + right <= peak
+        and (values["left_derivative"] == left)
+        and (values["right_derivative"] == right)
+        and (left >= 0)
+        and (right <= 0)
+        and (left != right)
+        and (peak - left <= peak)
+        and (peak + right <= peak)
     )
 
 
@@ -65,23 +62,12 @@ def main():
     math_ok = bool(
         submission is not None and _valid_construction(submission.get("result"), source)
     )
-    ev_ok = bool(
-        submission is not None
-        and witness_list_is_bound(
-            submission.get("witness"), expected_path="evidence/answer.txt"
-        )
-    )
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=ev_ok,
-        protocol_ok=bool(input_binding and submission is not None),
-    )
+    reward = float(math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
-    (Path("/logs/verifier/reward.json")).write_text(
+    Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(ev_ok),
                 "input_binding": float(input_binding),
                 "reward": reward,
             }

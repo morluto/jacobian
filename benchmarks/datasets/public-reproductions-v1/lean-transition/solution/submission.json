@@ -2,11 +2,5 @@
   "result": {
     "completed": false,
     "goal_count": 2
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:e04548209e6822d57048d17867769bb56de3743affb954ec6c7a63b1ae7d1ad0"
-    }
-  ]
+  }
 }

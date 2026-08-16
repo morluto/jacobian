@@ -15,7 +15,6 @@ The verifier independently composes and checks the following polynomial identiti
 
 To certify the infinite domain structurally, the verifier expands `x`, `y`, and `ratio` in `s=t-2` and requires nonnegative coefficients, a positive constant term for `x` and `y`, and a positive coefficient of positive degree for `ratio`. This proves positive pairs and a strictly increasing ratio for every integer `t>=2`, rather than relying only on selected probes. Include at least three freely chosen distinct integer probes with `2<=t<=50`; the verifier will independently evaluate the polynomials and divisibility.
 
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 

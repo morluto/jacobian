@@ -251,11 +251,5 @@
         1
       ]
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/matrix-completion.json",
-      "sha256": "sha256:62916ce1e287f9942a611d8b1d57fc1b06cd2164249e4c9178a4784701bad54d"
-    }
-  ]
+  }
 }

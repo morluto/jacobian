@@ -1,1 +1,0 @@
-The six-vertex triangulation of RP^2 has unreduced integral homology free ranks [1,0,0] with 2-torsion in degree 1.

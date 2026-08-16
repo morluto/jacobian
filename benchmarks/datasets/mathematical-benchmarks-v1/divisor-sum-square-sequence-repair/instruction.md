@@ -15,17 +15,13 @@ checks each odd-prime branch semantically from the submitted exact probes; no
 decorative formula or threshold-rule string is required.
 
 Use `/app/submission.json` and bind an identical certificate at
-`evidence/sequence-construction.json`. The certificate must be a JSON object
-with exactly the fields `schema_version` (the string `"1"`), `task_id`
 (the task identifier), `result` (an object equal to
-SHA-256 digest of the certificate's exact on-disk bytes, prefixed with
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/sequence-construction.json`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `application/json`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

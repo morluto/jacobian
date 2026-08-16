@@ -10,10 +10,6 @@ does not divide the absolute discriminant. The verifier independently checks
 the curve equation, nonsingularity, divisibility obstruction, and both group
 law computations. Lutz–Nagell itself is a declared trusted theorem.
 
-`evidence/answer.txt` is a JSON object (`application/json`) with exactly
-`schema_version` (the string `"1"`), `task_id`, `result`, and `limitations`,
-matching the submission.
-
 This proves only that one authored elliptic curve has a rational point of
 infinite order. It does not compute an L-function, determine the full rank, or
 prove any case of the Birch–Swinnerton-Dyer conjecture.

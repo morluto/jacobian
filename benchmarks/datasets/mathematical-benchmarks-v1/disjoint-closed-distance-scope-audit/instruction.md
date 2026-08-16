@@ -11,8 +11,6 @@ where `2 <= h <= 20`, `1 <= s <= 20`, and `2 <= c <= 20`. Submit ten distinct sa
 
 Also submit the exact lower bound on squared horizontal separation between distinct indices. This is the certificate that each family has no finite accumulation point and is closed. State the formalized positive-distance conclusion and the corrected conclusion separately.
 
-Write `/app/submission.json` and the digest-bound task-specific witness file required by the schema.
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 

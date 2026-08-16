@@ -1,1 +1,0 @@
-The generic linear-recurrence query selects combinatorics.recurrence.linear.evaluate.

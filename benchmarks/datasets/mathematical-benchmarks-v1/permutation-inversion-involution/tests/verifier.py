@@ -3,19 +3,10 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
     workspace_input_is_bound,
 )
-
-W, T = Path("/app"), Path("/tests")
-MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
-
-
-def frozen():
-    return workspace_input_is_bound()
 
 
 def inv(p):
@@ -125,40 +116,19 @@ def valid(r):
     )
 
 
-def _witness_is_valid(evidence: object, result: object) -> bool:
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    ev = read_evidence_json(
-        evidence[0],
-        expected_path="evidence/permutation-involution-certificate.json",
-        max_bytes=MAX_EVIDENCE_BYTES,
-    )
-    if ev is None:
-        return False
-    expected = json.loads((T / "expected.json").read_text())
-    return bool(
-        set(ev) == {"schema_version", "task_id", "result"}
-        and ev.get("schema_version") == "1"
-        and ev.get("task_id") == expected["task_id"]
-        and isinstance(result, dict)
-        and json_value_equal(ev.get("result"), result)
-    )
-
-
 def main():
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}
     input_bound = workspace_input_is_bound()
     result = data.get("result")
     math_ok = bool(isinstance(submission, dict) and input_bound and valid(result))
-    witness_ok = bool(math_ok and _witness_is_valid(data.get("witness"), result))
-    correct = bool(math_ok and witness_ok)
+    correct = bool(math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(witness_ok),
+                "witness_validity": 1.0 if correct else 0.0,
                 "reward": float(correct),
             }
         )

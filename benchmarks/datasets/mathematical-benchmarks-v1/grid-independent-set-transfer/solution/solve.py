@@ -1,4 +1,3 @@
-import hashlib
 import json
 import sys
 from pathlib import Path
@@ -26,25 +25,13 @@ def derive_case(n):
 
 cases = [derive_case(n) for n in range(2, 6)]
 result = {"cases": cases, "total": sum(case["independent_set_count"] for case in cases)}
-evidence = {
-    "schema_version": "1",
-    "task_id": "jacobian/grid-independent-set-transfer",
-    "result": result,
-}
 root = (
     Path(sys.argv[2])
     if len(sys.argv) == 3 and sys.argv[1] == "--root"
     else Path("/app")
 )
-(root / "evidence").mkdir(parents=True, exist_ok=True)
-evidence_path = (
-    root / "answer.txt" if root != Path("/app") else root / "evidence/answer.txt"
-)
-evidence_path.write_text(json.dumps(evidence, sort_keys=True, separators=(",", ":")))
-digest = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
 submission = {
     "result": result,
-    "witness": [{"path": "evidence/answer.txt", "sha256": digest}],
 }
 (root / "submission.json").write_text(
     json.dumps(submission, sort_keys=True, separators=(",", ":"))

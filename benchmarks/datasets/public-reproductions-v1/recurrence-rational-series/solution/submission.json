@@ -1,11 +1,5 @@
 {
   "result": {
     "selected_operation": "combinatorics.generating_function.coefficients.compute"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:097fb17c25e3f82e977e747a6d74f1e4a722d1977c05508b769aae8458d8a79e"
-    }
-  ]
+  }
 }

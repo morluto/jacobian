@@ -39,11 +39,5 @@
       "radicand": -2,
       "real_status": "NOT_REAL"
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/audit-certificate.json",
-      "sha256": "sha256:62bef6f7efcfad505e61ff0b7615fbe598f4166133406ba77d0838dc74926c2d"
-    }
-  ]
+  }
 }

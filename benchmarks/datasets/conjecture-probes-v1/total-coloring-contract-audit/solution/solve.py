@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
-TASK_ID = "jacobian/total-coloring-contract-audit"
 EDGES = [
     (0, 1),
     (1, 2),
@@ -43,25 +41,7 @@ def main() -> None:
         "incidence_collisions": collisions(vertex_colors, flawed_edges),
         "repair": {"vertex_colors": vertex_colors, "edge_colors": repaired_edges},
     }
-    payload = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": result,
-    }
-    evidence = root / "evidence/answer.json"
-    evidence.parent.mkdir(parents=True, exist_ok=True)
-    evidence.write_text(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
-    )
-    submission = {
-        "result": result,
-        "witness": [
-            {
-                "path": "evidence/answer.json",
-                "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
-            }
-        ],
-    }
+    submission = {"result": result}
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 
 

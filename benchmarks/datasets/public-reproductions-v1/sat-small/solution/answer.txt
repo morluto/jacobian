@@ -1,1 +1,0 @@
-The CNF (a or b) AND (not a or c) AND (not b or c) is satisfiable, e.g. a=false,b=false,c=true.

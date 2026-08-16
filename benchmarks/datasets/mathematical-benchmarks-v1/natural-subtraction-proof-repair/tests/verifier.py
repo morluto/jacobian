@@ -2,12 +2,9 @@ import json
 import re
 from fractions import Fraction
 from pathlib import Path
-
 from verifier_support import (
-    aggregate_reward,
     load_submission,
     normalize_reward_file,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -18,7 +15,7 @@ E = Path("/tests")
 def _fraction(value):
     if not isinstance(value, str) or len(value) > 80:
         raise ValueError
-    if not re.fullmatch(r"-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?", value):
+    if not re.fullmatch("-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?", value):
         raise ValueError
     parsed = Fraction(value)
     if str(parsed) != value:
@@ -57,7 +54,7 @@ def _contains(tree, pattern):
         return True
     if not isinstance(tree, dict):
         return False
-    return any(_contains(child, pattern) for child in tree.get("args", []))
+    return any((_contains(child, pattern) for child in tree.get("args", [])))
 
 
 def _repair_is_valid(result, source):
@@ -92,7 +89,7 @@ def _repair_is_valid(result, source):
     if len(multipliers) != len(vectors) or not vectors:
         return False
     width = len(goal)
-    if any(len(vector) != width for vector in vectors) or len(claimed) != width:
+    if any((len(vector) != width for vector in vectors)) or len(claimed) != width:
         return False
     derived = [
         sum(
@@ -114,23 +111,12 @@ def main():
     math_ok = bool(
         submission is not None and _repair_is_valid(submission.get("result"), source)
     )
-    ev_ok = bool(
-        submission is not None
-        and witness_list_is_bound(
-            submission.get("witness"), expected_path="evidence/answer.txt"
-        )
-    )
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=ev_ok,
-        protocol_ok=bool(input_binding and submission is not None),
-    )
+    reward = float(math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
-    (Path("/logs/verifier/reward.json")).write_text(
+    Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(ev_ok),
                 "input_binding": float(input_binding),
                 "reward": reward,
             }

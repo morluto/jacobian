@@ -1,6 +1,6 @@
 # Polynomial-map collision witness
 
-For the polynomial map and two rational points in `input.json`, verify that the points are distinct but share the same image, witnessing non-invertibility. Write `submission.json` to the exact agent-visible `submission_schema.json`, record the calculation in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence list. Claim `COMPUTED` assurance; do not claim `VERIFIED`.
+For the polynomial map and two rational points in `input.json`, verify that the points are distinct but share the same image, witnessing non-invertibility. Write `submission.json` to the exact agent-visible `submission_schema.json`. Claim `COMPUTED` assurance; do not claim `VERIFIED`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

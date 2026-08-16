@@ -28,11 +28,5 @@
         "d"
       ]
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:8e14efaaf2948d40d7d11d890c04edb9c79c6ae8db744894e02a3381be654e09"
-    }
-  ]
+  }
 }

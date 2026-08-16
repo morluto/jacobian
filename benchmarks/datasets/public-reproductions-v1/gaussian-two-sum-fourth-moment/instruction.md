@@ -1,6 +1,6 @@
 # Gaussian polynomial moment
 
-Compute the exact fixed-order complex Gaussian moment of the polynomial in `input.json` with respect to independent standard complex Gaussian variables. Return the rational real and imaginary parts of the moment. Write `submission.json` to the exact agent-visible `submission_schema.json`, record the calculation in `evidence/answer.txt`, and include that file's SHA-256 digest in the evidence list. A finite list of checked moments is not an all-order identity; claim `COMPUTED` assurance only and do not claim `VERIFIED`.
+Compute the exact fixed-order complex Gaussian moment of the polynomial in `input.json` with respect to independent standard complex Gaussian variables. Return the rational real and imaginary parts of the moment. Write `submission.json` to the exact agent-visible `submission_schema.json`. A finite list of checked moments is not an all-order identity; claim `COMPUTED` assurance only and do not claim `VERIFIED`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

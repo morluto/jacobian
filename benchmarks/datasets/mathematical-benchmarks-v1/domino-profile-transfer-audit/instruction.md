@@ -2,10 +2,7 @@
 
 Audit the proposed remainder for a `3 x 2021` board with one corner removed.
 Use the frozen three-bit profile semantics, but derive the state transitions
-yourself. Submit `/app/submission.json` following the public schema and a
-digest-bound JSON envelope at
-`/app/evidence/profile-transfer-certificate.json`. The envelope must contain
-with the latter three matching the submission.
+yourself.
 
 Your certificate must include the chosen missing corner row, the complete
 `8 x 8` transition matrix modulo 19, the initial profile vector, and the full

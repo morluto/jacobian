@@ -1,4 +1,3 @@
-import hashlib
 import itertools
 import json
 import math
@@ -20,27 +19,13 @@ def derive():
 
 
 result = derive()
-limitations = ["FINITE_PERMUTATIONS_OF_SIZE_8", "NO_GENERAL_ROOK_POLYNOMIAL_PROOF"]
-evidence = {
-    "schema_version": "1",
-    "task_id": "jacobian/even-fixed-point-inclusion",
-    "result": result,
-    "limitations": limitations,
-}
 root = (
     Path(sys.argv[2])
     if len(sys.argv) == 3 and sys.argv[1] == "--root"
     else Path("/app")
 )
-(root / "evidence").mkdir(parents=True, exist_ok=True)
-evidence_path = (
-    root / "answer.txt" if root != Path("/app") else root / "evidence/answer.txt"
-)
-evidence_path.write_text(json.dumps(evidence, sort_keys=True, separators=(",", ":")))
-digest = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
 submission = {
     "result": result,
-    "witness": [{"path": "evidence/answer.txt", "sha256": digest}],
 }
 (root / "submission.json").write_text(
     json.dumps(submission, sort_keys=True, separators=(",", ":"))

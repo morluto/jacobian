@@ -29,11 +29,5 @@
         "name": "residue-2"
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:55cb5f300005dee65243e19137c4ba52749d9619ac60705ce70ca9b67953a615"
-    }
-  ]
+  }
 }

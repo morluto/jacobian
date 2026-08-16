@@ -1,1 +1,0 @@
-The translated polynomial is unbounded below along the submitted exact rational polynomial family.

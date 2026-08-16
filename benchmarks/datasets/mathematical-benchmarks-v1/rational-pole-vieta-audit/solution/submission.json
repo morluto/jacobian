@@ -52,14 +52,8 @@
       }
     ],
     "root_sum": {
-      "numerator": 2,
-      "denominator": 1005
+      "denominator": 1005,
+      "numerator": 2
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/pole-vieta-certificate.json",
-      "sha256": "sha256:4660bc81a9914c5741bc36f95a4494022de5288c085a8bf0883358bec1e0f51e"
-    }
-  ]
+  }
 }

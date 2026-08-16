@@ -1,1 +1,0 @@
-The triangle boundary (S^1) has unreduced integral homology free ranks [1,1] and no torsion in degrees 0 and 1.

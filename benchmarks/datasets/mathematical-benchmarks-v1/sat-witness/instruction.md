@@ -2,9 +2,7 @@
 
 Decide the exact CNF formula in `input.json`. For a satisfiable formula, return
 `SATISFIABLE` and a complete Boolean assignment that satisfies every clause.
-For an unsatisfiable formula, return `UNSATISFIABLE` only with the evidence
-appropriate to that conclusion. Record the clause-by-clause check in
-`evidence/answer.txt`, include its SHA-256 digest, and write `submission.json`
+For an unsatisfiable formula, return `UNSATISFIABLE`. Write `submission.json`
 to the exact agent-visible `submission_schema.json`.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->

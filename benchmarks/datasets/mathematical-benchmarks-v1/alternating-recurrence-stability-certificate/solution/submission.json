@@ -66,11 +66,5 @@
       "denominator": 1,
       "numerator": 9
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/stability-certificate.json",
-      "sha256": "sha256:6fc4f73c035152481e6f0a33eebb55df92d000a08d65f482d73596a74f9c1b00"
-    }
-  ]
+  }
 }

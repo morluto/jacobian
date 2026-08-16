@@ -2,19 +2,13 @@
   "result": {
     "solution": {
       "x": {
-        "numerator": 17,
-        "denominator": 7
+        "denominator": 7,
+        "numerator": 17
       },
       "y": {
-        "numerator": 5,
-        "denominator": 7
+        "denominator": 7,
+        "numerator": 5
       }
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:b3ea5d4e64f801ba9838bf7491cf967fd04c09636437de55b5c0c1ebdb7ed1db"
-    }
-  ]
+  }
 }

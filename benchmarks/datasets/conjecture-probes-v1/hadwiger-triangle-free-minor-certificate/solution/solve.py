@@ -1,16 +1,8 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
-
-TASK_ID = "jacobian/hadwiger-triangle-free-minor-certificate"
-LIMITATIONS = [
-    "ONE_TRIANGLE_FREE_11_VERTEX_GRAPH",
-    "EXHAUSTIVE_THREE_COLOR_REJECTION",
-    "NO_GLOBAL_HADWIGER_CONCLUSION",
-]
 
 
 def main():
@@ -46,18 +38,8 @@ def main():
         "chromatic_number": 4,
         "minor_order": 4,
     }
-    payload = {"schema_version": "1", "task_id": TASK_ID, "result": result}
-    e = root / "evidence/answer.txt"
-    e.parent.mkdir(parents=True, exist_ok=True)
-    e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
     s = {
         "result": result,
-        "witness": [
-            {
-                "path": "evidence/answer.txt",
-                "sha256": "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest(),
-            }
-        ],
     }
     (root / "submission.json").write_text(json.dumps(s, sort_keys=True) + "\n")
 

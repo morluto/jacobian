@@ -11,9 +11,6 @@ an `and` node containing both a subtree and its direct negation by `false`.
 Do not jump between merely equivalent formulas: every submitted transition is
 replayed exactly.
 
-Write `submission.json` and digest-bind `evidence/rewrite-trace.json`, which
-must copy `result` exactly.
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 

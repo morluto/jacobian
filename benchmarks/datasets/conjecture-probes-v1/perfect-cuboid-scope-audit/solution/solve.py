@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import sys
 from collections import Counter
 from math import isqrt
 from pathlib import Path
 
-TASK_ID = "jacobian/perfect-cuboid-scope-audit"
 SCOPE = "perfect-cuboid-scope-audit:case-set-v1"
-LIMITATIONS = ["TWELVE_FROZEN_INTEGER_CUBOIDS", "NO_GLOBAL_PERFECT_CUBOID_CONCLUSION"]
 CLASSES = ["PERFECT_CUBOID", "EULER_BRICK_ONLY", "SPACE_AND_TWO_FACES", "OTHER"]
 
 
@@ -63,16 +60,8 @@ def main() -> None:
         "contains_perfect_cuboid": counts["PERFECT_CUBOID"] > 0,
         "scope_identity": SCOPE,
     }
-    evidence = {"schema_version": "1", "task_id": TASK_ID, "result": result}
-    evidence_path = root / "evidence/answer.txt"
-    evidence_path.parent.mkdir(parents=True, exist_ok=True)
-    evidence_path.write_text(
-        json.dumps(evidence, sort_keys=True, separators=(",", ":")) + "\n"
-    )
-    digest = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
     submission = {
         "result": result,
-        "witness": [{"path": "evidence/answer.txt", "sha256": digest}],
     }
     (root / "submission.json").write_text(
         json.dumps(submission, sort_keys=True, separators=(",", ":")) + "\n"

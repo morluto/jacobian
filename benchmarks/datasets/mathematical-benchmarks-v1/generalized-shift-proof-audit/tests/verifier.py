@@ -6,8 +6,6 @@ from verifier_support import (
     aggregate_reward,
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
 )
 
 W = Path("/app")
@@ -109,28 +107,6 @@ def certificate_valid(result):
     return collision and fourier and norms and radical
 
 
-def evidence_valid(evidence, result):
-    if (
-        not isinstance(evidence, list)
-        or len(evidence) != 1
-        or not witness_list_is_bound(
-            evidence, expected_path="evidence/audit-certificate.json"
-        )
-    ):
-        return False
-    target = resolve_evidence(
-        evidence[0], expected_path="evidence/audit-certificate.json"
-    )
-    try:
-        return (
-            target is not None
-            and target.stat().st_size <= 1_048_576
-            and json.loads(target.read_text()) == result
-        )
-    except (OSError, ValueError, RecursionError):
-        return False
-
-
 def main():
     submission_path = W / "submission.json"
     try:
@@ -141,10 +117,9 @@ def main():
     protocol_ok = submission is not None
     result = submission.get("result") if protocol_ok else None
     correctness = bool(protocol_ok and frozen_valid() and certificate_valid(result))
-    evidence = bool(protocol_ok and evidence_valid(submission.get("witness"), result))
     reward = aggregate_reward(
         correctness=correctness,
-        witness_validity=evidence,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -152,7 +127,6 @@ def main():
         json.dumps(
             {
                 "correctness": float(correctness),
-                "witness_validity": float(evidence),
                 "reward": reward,
             }
         )

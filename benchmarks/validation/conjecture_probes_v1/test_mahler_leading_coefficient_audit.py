@@ -85,10 +85,10 @@ def test_rejects_string_rational_before_fraction_construction(monkeypatch):
         raise AssertionError("string rational was accepted")
 
 
-def test_evidence_comparison_preserves_json_types():
-    module = _module()
-    assert not module._json_equal({"coefficient": 0}, {"coefficient": False})
-    assert not module._json_equal({"coefficient": 1}, {"coefficient": 1.0})
+def test_rejects_boolean_factor_coefficients():
+    result = _result()
+    result["factors"][0][0] = True
+    assert not _module().mathematics(result)
 
 
 def test_rejects_malformed_factor_shapes_without_crashing():
@@ -103,18 +103,3 @@ def test_accepts_schema_valid_integral_json_numbers():
         [float(value) for value in factor] for factor in result["factors"]
     ]
     assert _module().mathematics(result)
-
-
-def test_rejects_boolean_factor_coefficients():
-    result = _result()
-    result["factors"][0][0] = True
-    assert not _module().mathematics(result)
-
-
-def test_evidence_comparison_rejects_excessive_nesting():
-    module = _module()
-    left = right = 0
-    for _ in range(129):
-        left = [left]
-        right = [right]
-    assert not module._json_equal(left, right)

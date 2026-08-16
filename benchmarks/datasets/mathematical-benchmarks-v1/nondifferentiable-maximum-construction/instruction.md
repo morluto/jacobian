@@ -9,8 +9,7 @@ Return exact rational parameters as integer `numerator`/positive integer
 `denominator` objects and the branch values at the join. Equivalent encodings such as `2/8` and `1/4` are accepted after exact `Fraction` normalization. The
 verifier independently checks continuity at zero, monotonicity toward and away
 from the peak, and the unequal one-sided derivatives. Write `submission.json`
-to the exact `submission_schema.json` contract, Write the task-specific witness to
-`evidence/answer.txt`, and bind that file with its SHA-256 digest.
+to the exact `submission_schema.json` contract.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

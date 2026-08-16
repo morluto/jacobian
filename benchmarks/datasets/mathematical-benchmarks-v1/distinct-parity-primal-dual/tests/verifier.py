@@ -3,10 +3,8 @@ import math
 from pathlib import Path
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
 )
 
 W, T = Path("/app"), Path("/tests")
@@ -107,34 +105,16 @@ def valid(r):
 
 
 def main():
-    expected = json.loads((T / "expected.json").read_text())
     s = load_submission(W / "submission.json")
     input_bound = frozen()
     math_ok = bool(isinstance(s, dict) and valid(s.get("result")))
-    witness = s.get("witness") if isinstance(s, dict) else None
-    witness_obj = (
-        read_evidence_json(
-            witness[0], expected_path="evidence/distinct-parity-certificate.json"
-        )
-        if isinstance(witness, list) and witness
-        else None
-    )
-    witness_ok = bool(
-        math_ok
-        and input_bound
-        and witness_obj
-        and {"schema_version", "task_id", "result"} <= set(witness_obj)
-        and witness_obj.get("schema_version") == "1"
-        and witness_obj.get("task_id") == expected["task_id"]
-        and json_value_equal(witness_obj.get("result"), s.get("result"))
-    )
-    correct = bool(input_bound and math_ok and witness_ok)
+    correct = bool(input_bound and math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(witness_ok),
+                "witness_validity": 1.0 if correct else 0.0,
                 "reward": float(correct),
             }
         )

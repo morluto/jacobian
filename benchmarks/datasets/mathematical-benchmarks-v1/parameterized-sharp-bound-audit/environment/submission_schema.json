@@ -1,5 +1,101 @@
 {
   "$defs": {
+    "affine_in_d": {
+      "additionalProperties": false,
+      "properties": {
+        "coefficient": {
+          "$ref": "#/$defs/rational"
+        },
+        "constant": {
+          "$ref": "#/$defs/rational"
+        },
+        "variable": {
+          "const": "d"
+        }
+      },
+      "required": [
+        "constant",
+        "coefficient",
+        "variable"
+      ],
+      "type": "object"
+    },
+    "direction": {
+      "additionalProperties": false,
+      "properties": {
+        "side": {
+          "enum": [
+            "LEFT",
+            "RIGHT"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/rational"
+        },
+        "variable": {
+          "const": "t"
+        }
+      },
+      "required": [
+        "variable",
+        "target",
+        "side"
+      ],
+      "type": "object"
+    },
+    "half_line_d": {
+      "additionalProperties": false,
+      "properties": {
+        "bound": {
+          "$ref": "#/$defs/rational"
+        },
+        "relation": {
+          "enum": [
+            "GE",
+            "GT",
+            "LE",
+            "LT"
+          ]
+        },
+        "variable": {
+          "const": "d"
+        }
+      },
+      "required": [
+        "variable",
+        "relation",
+        "bound"
+      ],
+      "type": "object"
+    },
+    "interval_d": {
+      "additionalProperties": false,
+      "properties": {
+        "left": {
+          "$ref": "#/$defs/rational"
+        },
+        "left_closed": {
+          "type": "boolean"
+        },
+        "right": {
+          "$ref": "#/$defs/rational"
+        },
+        "right_closed": {
+          "type": "boolean"
+        },
+        "variable": {
+          "const": "d"
+        }
+      },
+      "required": [
+        "variable",
+        "left",
+        "left_closed",
+        "right",
+        "right_closed"
+      ],
+      "type": "object"
+    },
     "rational": {
       "additionalProperties": false,
       "properties": {
@@ -17,6 +113,36 @@
       "required": [
         "numerator",
         "denominator"
+      ],
+      "type": "object"
+    },
+    "simplex": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "POSITIVE_SIMPLEX"
+        },
+        "sum": {
+          "$ref": "#/$defs/rational"
+        },
+        "variables": {
+          "items": {
+            "enum": [
+              "a",
+              "b",
+              "c"
+            ]
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "kind",
+        "variables",
+        "sum"
       ],
       "type": "object"
     }
@@ -60,7 +186,7 @@
               "const": false
             },
             "limit": {
-              "const": "1/4"
+              "$ref": "#/$defs/rational"
             },
             "other_variables": {
               "items": {
@@ -76,7 +202,7 @@
               "uniqueItems": true
             },
             "parameter": {
-              "const": "t->0+"
+              "$ref": "#/$defs/direction"
             },
             "vanishing_variable": {
               "enum": [
@@ -99,7 +225,7 @@
           "additionalProperties": false,
           "properties": {
             "identity_scope": {
-              "const": "a+b+c=1; a,b,c>0"
+              "$ref": "#/$defs/simplex"
             },
             "schur_ordering": {
               "items": {
@@ -142,13 +268,13 @@
               "const": "ATTAINED_ONLY_AT_THRESHOLD; INFIMUM_ONLY_ABOVE_THRESHOLD"
             },
             "bound": {
-              "const": "1/4"
+              "$ref": "#/$defs/rational"
             },
             "condition": {
-              "const": "d>=15/4"
+              "$ref": "#/$defs/half_line_d"
             },
             "remainder_coefficient": {
-              "const": "d-15/4"
+              "$ref": "#/$defs/affine_in_d"
             }
           },
           "required": [
@@ -163,19 +289,19 @@
           "additionalProperties": false,
           "properties": {
             "bound": {
-              "const": "1/9+d/27"
+              "$ref": "#/$defs/affine_in_d"
             },
             "condition": {
-              "const": "0<d<=15/4"
+              "$ref": "#/$defs/interval_d"
             },
             "interpolation": {
               "additionalProperties": false,
               "properties": {
                 "schur_weight": {
-                  "const": "4*d/15"
+                  "$ref": "#/$defs/affine_in_d"
                 },
                 "tangent_weight": {
-                  "const": "1-4*d/15"
+                  "$ref": "#/$defs/affine_in_d"
                 }
               },
               "required": [

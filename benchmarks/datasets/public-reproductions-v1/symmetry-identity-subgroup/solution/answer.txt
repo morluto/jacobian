@@ -1,1 +1,0 @@
-With no generators the subgroup is trivial; each vertex and each edge is its own orbit.

@@ -16,11 +16,5 @@
       ]
     },
     "keller_condition_verified": true
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:1983698e0110076e6b17cc5231bc7ce5a872fa6c8916ee04a9463f69d57f05ef"
-    }
-  ]
+  }
 }

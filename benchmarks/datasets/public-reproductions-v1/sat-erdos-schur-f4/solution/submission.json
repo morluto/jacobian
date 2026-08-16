@@ -56,11 +56,5 @@
       ]
     ],
     "upper_bound_method": "INDEPENDENT_EXHAUSTIVE_CSP"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:0ba2f37c99491e8ea652fffd6f286eaee0c79dad67a8e5df8a8adc8baaa4b9ee"
-    }
-  ]
+  }
 }

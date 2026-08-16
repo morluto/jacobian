@@ -15,11 +15,6 @@ local: this slice does not establish positivity of every 31×31 block, the full
 Farkas certificate, the Lean formalization, or the underlying theorem.
 Floating-point eigenvalues and discovery artifacts are not proof evidence.
 
-Write `submission.json` and digest-bind
-`evidence/farkas-slice-certificate.json`.
-
-The digest-bound task-specific witness file must be a JSON object with exactly three keys:
-`schema_version` (the string `"1"`), `task_id` (the task identifier),
 `result` (the same result object placed in `submission.json`).
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->

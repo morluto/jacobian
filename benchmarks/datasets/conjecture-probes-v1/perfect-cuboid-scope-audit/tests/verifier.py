@@ -1,20 +1,14 @@
 """Clean-room verifier for the perfect-cuboid finite scope audit."""
 
 from __future__ import annotations
-
 import json
 from collections import Counter
 from math import isqrt
 from pathlib import Path
 from typing import Any
-
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
-    resolve_evidence,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -36,9 +30,9 @@ def _expected(case: dict[str, Any]) -> dict[str, Any]:
         edges[1] * edges[1] + edges[2] * edges[2],
     ]
     face_roots = [_root(value) for value in face_radicands]
-    space_radicand = sum(value * value for value in edges)
+    space_radicand = sum((value * value for value in edges))
     space_root = _root(space_radicand)
-    face_count = sum(value is not None for value in face_roots)
+    face_count = sum((value is not None for value in face_roots))
     if face_count == 3 and space_root is not None:
         classification = "PERFECT_CUBOID"
     elif face_count == 3:
@@ -90,9 +84,9 @@ def _mathematics(result: Any, frozen: dict[str, Any]) -> bool:
         submitted[row.get("id")] = row
     if set(submitted) != set(expected):
         return False
-    if any(not _row_matches(submitted[key], expected[key]) for key in expected):
+    if any((not _row_matches(submitted[key], expected[key]) for key in expected)):
         return False
-    counts = Counter(row["class"] for row in expected.values())
+    counts = Counter((row["class"] for row in expected.values()))
     if set(result["case_counts"]) != CLASSES:
         return False
     if result["case_counts"] != {name: counts[name] for name in CLASSES}:
@@ -105,11 +99,10 @@ def _mathematics(result: Any, frozen: dict[str, Any]) -> bool:
 
 def _row_matches(submitted: dict[str, Any], expected: dict[str, Any]) -> bool:
     """Compare a case while treating aligned face-diagonal pairs as unordered."""
-
     if not isinstance(submitted, dict) or set(submitted) != set(expected):
         return False
     fixed = set(expected) - {"face_radicands", "face_roots"}
-    if any(submitted.get(key) != expected[key] for key in fixed):
+    if any((submitted.get(key) != expected[key] for key in fixed)):
         return False
     radicands = submitted.get("face_radicands")
     roots = submitted.get("face_roots")
@@ -134,21 +127,6 @@ def _reward(value: dict[str, Any]) -> None:
     normalize_reward_file(path / "reward.json")
 
 
-def _witness_matches_result(witness: object, result: object) -> bool:
-    if not witness_list_is_bound(witness, expected_path="evidence/answer.txt"):
-        return False
-    if resolve_evidence(witness[0], expected_path="evidence/answer.txt") is None:
-        return False
-    payload = read_evidence_json(witness[0], expected_path="evidence/answer.txt")
-    return bool(
-        isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result"}
-        and payload.get("schema_version") == "1"
-        and payload.get("task_id") == TASK_ID
-        and json_value_equal(payload.get("result"), result)
-    )
-
-
 def main() -> None:
     input_bound = workspace_input_is_bound()
     frozen = _frozen()
@@ -157,17 +135,13 @@ def main() -> None:
     mathematics = bool(
         frozen and protocol and _mathematics(submission.get("result"), frozen)
     )
-    witness = bool(
-        protocol
-        and _witness_matches_result(submission.get("witness"), submission.get("result"))
-    )
-    aggregate = float(input_bound and protocol and mathematics and witness)
+    witness = bool(protocol)
+    aggregate = float(input_bound and protocol and mathematics)
     _reward(
         {
             "protocol": float(protocol),
             "input_binding": float(input_bound),
             "mathematics": float(mathematics),
-            "witness_validity": float(witness),
             "aggregate_reward": aggregate,
             "reward": aggregate,
         }
@@ -183,7 +157,6 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

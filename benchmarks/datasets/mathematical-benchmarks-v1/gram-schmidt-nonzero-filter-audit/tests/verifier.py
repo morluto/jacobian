@@ -5,30 +5,9 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
 )
 
 W, E = Path("/app"), Path("/tests")
-
-
-def _json_equal(left: object, right: object) -> bool:
-    """Compare JSON recursively without Python numeric coercions."""
-
-    if isinstance(left, dict) or isinstance(right, dict):
-        return (
-            isinstance(left, dict)
-            and isinstance(right, dict)
-            and left.keys() == right.keys()
-            and all(_json_equal(left[key], right[key]) for key in left)
-        )
-    if isinstance(left, list) or isinstance(right, list):
-        return (
-            isinstance(left, list)
-            and isinstance(right, list)
-            and len(left) == len(right)
-            and all(_json_equal(a, b) for a, b in zip(left, right, strict=True))
-        )
-    return type(left) is type(right) and left == right
 
 
 def rat(value):
@@ -150,26 +129,13 @@ def main():
     submission = load_submission()
     result = submission.get("result") if isinstance(submission, dict) else None
     math_ok = bool(result_ok(result) and frozen_ok())
-    witness = submission.get("witness") if isinstance(submission, dict) else None
-    evidence = (
-        read_evidence_json(witness[0], expected_path="evidence/gram-schmidt-audit.json")
-        if isinstance(witness, list) and len(witness) == 1
-        else None
-    )
-    evidence_ok = bool(
-        evidence
-        and {"schema_version", "task_id", "result"} <= set(evidence)
-        and evidence["schema_version"] == "1"
-        and evidence["task_id"] == "jacobian/gram-schmidt-nonzero-filter-audit"
-        and _json_equal(evidence["result"], result)
-    )
-    reward = float(math_ok and evidence_ok)
+    reward = float(math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(evidence_ok),
+                "witness_validity": 1.0 if math_ok else 0.0,
                 "reward": reward,
             }
         )

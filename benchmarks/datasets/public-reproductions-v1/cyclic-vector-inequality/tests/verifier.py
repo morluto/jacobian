@@ -1,16 +1,8 @@
 from __future__ import annotations
-
 import json
 from fractions import Fraction
 from pathlib import Path
-
-from verifier_support import (
-    aggregate_reward,
-    load_submission,
-    normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
-)
+from verifier_support import load_submission, normalize_reward_file
 
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
@@ -55,12 +47,12 @@ def _vectors(value: object, n: int) -> bool:
             type(index) is not int
             or type(first_variable) is not int
             or type(second_constant) is not int
-            or type(second_variable) is not int
-            or not 1 <= index <= n
-            or index in seen
-            or first_variable != index
-            or second_constant != 1
-            or second_variable != index % n + 1
+            or (type(second_variable) is not int)
+            or (not 1 <= index <= n)
+            or (index in seen)
+            or (first_variable != index)
+            or (second_constant != 1)
+            or (second_variable != index % n + 1)
         ):
             return False
         seen.add(index)
@@ -83,13 +75,13 @@ def _aggregate(value: object, n: int) -> bool:
         type(first_constant) is int
         and first_constant == 0
         and isinstance(first_coefficients, list)
-        and len(first_coefficients) == n
-        and all(type(item) is int and item == 1 for item in first_coefficients)
-        and type(second_constant) is int
-        and second_constant == n
+        and (len(first_coefficients) == n)
+        and all((type(item) is int and item == 1 for item in first_coefficients))
+        and (type(second_constant) is int)
+        and (second_constant == n)
         and isinstance(second_coefficients, list)
-        and len(second_coefficients) == n
-        and all(type(item) is int and item == -1 for item in second_coefficients)
+        and (len(second_coefficients) == n)
+        and all((type(item) is int and item == -1 for item in second_coefficients))
     )
 
 
@@ -103,7 +95,7 @@ def _square(value: object, n: int) -> bool:
     square = value["square_coefficients"]
     if not isinstance(lhs, list) or not isinstance(square, list):
         return False
-    if any(type(item) is not int for item in lhs + square):
+    if any((type(item) is not int for item in lhs + square)):
         return False
     if lhs != [4, -4 * n, n * n] or square != [2, -n]:
         return False
@@ -144,7 +136,7 @@ def _result(value: object) -> bool:
     return bool(
         value["constant_squared"] == "1/2"
         and type(n) is int
-        and 5 <= n <= 12
+        and (5 <= n <= 12)
         and _vectors(value["vectors"], n)
         and _aggregate(value["aggregate"], n)
         and _square(value["completed_square"], n)
@@ -152,50 +144,13 @@ def _result(value: object) -> bool:
     )
 
 
-def _evidence(value: object, result: object) -> bool:
-    if (
-        not isinstance(value, list)
-        or len(value) != 1
-        or not witness_list_is_bound(value)
-    ):
-        return False
-    path = resolve_evidence(value[0], expected_path="evidence/answer.txt")
-    if path is None:
-        return False
-    try:
-        text = path.read_text()
-        markers = [
-            line[12:].strip()
-            for line in text.splitlines()
-            if line.startswith("RESULT_JSON:")
-        ]
-        bound = json.loads(markers[0]) if len(markers) == 1 else None
-    except (OSError, UnicodeError, ValueError, RecursionError):
-        return False
-    folded = text.casefold()
-    return bound == result and all(
-        term in folded for term in ("cyclic", "triangle", "square", "sharp")
-    )
-
-
 def _evaluate(submission: object) -> dict[str, float]:
     protocol_ok = isinstance(submission, dict)
     correct = bool(
-        protocol_ok
-        and _source_is_bound()
-        and _result(submission.get("result"))
-        and _evidence(submission.get("witness"), submission.get("result"))
+        protocol_ok and _source_is_bound() and _result(submission.get("result"))
     )
-    reward = aggregate_reward(
-        correctness=correct,
-        witness_validity=correct,
-        protocol_ok=protocol_ok,
-    )
-    return {
-        "correctness": float(correct),
-        "witness_validity": float(correct),
-        "reward": reward,
-    }
+    reward = float(correct)
+    return {"correctness": float(correct), "reward": reward}
 
 
 def main() -> None:

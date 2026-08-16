@@ -1,1 +1,0 @@
-Assignment a=true, b=false, c=true, d=true satisfies clauses 1 through 5.

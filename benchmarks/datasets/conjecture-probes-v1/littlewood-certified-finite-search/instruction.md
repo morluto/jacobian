@@ -9,7 +9,6 @@ must include `n`, the two floor values, the two nearest integers, and structured
 
 The verifier independently reconstructs all 2000 enclosures and the complete
 record sequence. Evidence is a matching JSON object (`application/json`) with
-exactly `schema_version` (the string `"1"`), `task_id`, `result`, and
 `limitations`.
 
 This certifies only the frozen finite range for `(sqrt(2),sqrt(3))`; it does not

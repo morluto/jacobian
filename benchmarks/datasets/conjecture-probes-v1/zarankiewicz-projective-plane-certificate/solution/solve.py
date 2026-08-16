@@ -1,17 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import itertools
 import json
 from pathlib import Path
-
-TASK_ID = "jacobian/zarankiewicz-projective-plane-certificate"
-LIMITATIONS = [
-    "ONE_FINITE_PG2_F3_INSTANCE",
-    "EXACT_K22_FREE_PAIR_COUNT_REPLAY",
-    "NO_GENERAL_ZARANKIEWICZ_CONCLUSION",
-]
 
 
 def projective_triples() -> list[list[int]]:
@@ -55,25 +47,7 @@ def main() -> None:
         "pair_budget": 78,
         "excluded_edge_count": 53,
     }
-    payload = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": result,
-    }
-    evidence = root / "evidence/answer.json"
-    evidence.parent.mkdir(parents=True, exist_ok=True)
-    evidence.write_text(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
-    )
-    submission = {
-        "result": result,
-        "witness": [
-            {
-                "path": "evidence/answer.json",
-                "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
-            }
-        ],
-    }
+    submission = {"result": result}
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 
 

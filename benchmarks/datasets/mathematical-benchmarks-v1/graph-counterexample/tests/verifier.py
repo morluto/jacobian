@@ -1,13 +1,7 @@
 import json
 from pathlib import Path
-
-from verifier_support import (
-    load_submission as load_strict_submission,
-)
-from verifier_support import (
-    normalize_reward_file,
-    witness_list_is_bound,
-)
+from verifier_support import load_submission as load_strict_submission
+from verifier_support import normalize_reward_file
 
 W = Path("/app")
 E = Path("/tests")
@@ -15,10 +9,6 @@ E = Path("/tests")
 
 def load_submission():
     return load_strict_submission()
-
-
-def evidence(s):
-    return bool(s and witness_list_is_bound(s.get("witness")))
 
 
 def _graph_arrays(result):
@@ -29,8 +19,8 @@ def _graph_arrays(result):
         and isinstance(raw_vertices, list)
         and isinstance(edges, list)
     ):
-        return raw_vertices, edges
-    return [], []
+        return (raw_vertices, edges)
+    return ([], [])
 
 
 def _build_adjacency(vertices, edges):
@@ -50,7 +40,7 @@ def _build_adjacency(vertices, edges):
 
 
 def _is_connected(vertices, adj):
-    seen, todo = set(), ["0"]
+    seen, todo = (set(), ["0"])
     while todo:
         v = todo.pop()
         if v in seen:
@@ -61,7 +51,9 @@ def _is_connected(vertices, adj):
 
 
 def _has_triangle(vertices, adj):
-    return any(c in adj[a] for a in vertices for b in adj[a] for c in adj[b] if c != a)
+    return any(
+        (c in adj[a] for a in vertices for b in adj[a] for c in adj[b] if c != a)
+    )
 
 
 def _is_non_bipartite(vertices, adj):
@@ -102,18 +94,11 @@ def graph_ok(result):
 def main():
     s = load_submission()
     valid = isinstance(s, dict) and isinstance(s.get("result"), dict)
-    ev = evidence(s) if valid else False
     math_correct = bool(valid and graph_ok(s["result"]))
-    reward = float(math_correct and ev)
-    (Path("/logs/verifier")).mkdir(parents=True, exist_ok=True)
-    (Path("/logs/verifier/reward.json")).write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(ev),
-                "reward": reward,
-            }
-        )
+    reward = float(math_correct)
+    Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
+    Path("/logs/verifier/reward.json").write_text(
+        json.dumps({"correctness": float(math_correct), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

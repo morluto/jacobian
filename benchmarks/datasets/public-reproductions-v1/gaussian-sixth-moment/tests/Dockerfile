@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 LABEL jacobian.task="jacobian/gaussian-sixth-moment" \
-      jacobian.checksum="6b6a7aa2f0554927825da885a119d75a5127e0cdf9a7907d0d9d92d6cbd02dee"
+      jacobian.checksum="a65b78c0a92fc5dcf2b96e7976d1b0a09460871622958a8dbc745e14adc79813"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

@@ -64,11 +64,5 @@
         }
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/scope-audit.json",
-      "sha256": "sha256:ea2242c0ab6ddef99f36bd328d509e66deb2d20341f57593b146e2aa11a68b61"
-    }
-  ]
+  }
 }

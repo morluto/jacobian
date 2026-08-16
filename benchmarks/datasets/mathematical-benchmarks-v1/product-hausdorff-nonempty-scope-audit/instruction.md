@@ -4,8 +4,6 @@ The frozen ProofNetVerif prediction omits the source theorem's assumption that e
 
 Use exactly three factors. Factor 0 must have 4–7 points and a submitted topology with at least five open sets; it must be T0 but not Hausdorff. Factor 1 must be empty. Factor 2 must be a nonempty finite set of size 2–5 (its discrete topology is implicit). List every open set of factor 0 in canonical increasing order.
 
-The verifier will independently check the topology axioms, T0 separation, failure of Hausdorff separation, the empty product cardinality, and the missing hypothesis. Submit the digest-bound task-specific witness file and
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 

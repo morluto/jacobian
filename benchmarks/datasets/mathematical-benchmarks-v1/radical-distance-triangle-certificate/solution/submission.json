@@ -33,11 +33,5 @@
         1
       ]
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/radical-distance-certificate.json",
-      "sha256": "sha256:b76ad5bf8a5e28db164a7ad5d555cd88cf01ab0779942e4916491f0a2f0225c2"
-    }
-  ]
+  }
 }

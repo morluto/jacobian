@@ -1,16 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 
-TASK_ID = "jacobian/hodge-blowup-divisor-certificate"
-LIMITATIONS = [
-    "ONE_CUBIC_DIVISOR_ON_ONE_BLOWUP",
-    "LEFSCHETZ_1_1_TRUSTED",
-    "NO_HIGHER_CODIMENSION_HODGE_CONCLUSION",
-]
 EXP = [
     (3, 0, 0),
     (2, 1, 0),
@@ -68,18 +61,8 @@ def main():
         "arithmetic_genus": 1,
         "cycle_classification": "ALGEBRAIC_DIVISOR_HODGE_1_1",
     }
-    payload = {"schema_version": "1", "task_id": TASK_ID, "result": result}
-    e = root / "evidence/answer.txt"
-    e.parent.mkdir(parents=True, exist_ok=True)
-    e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
     s = {
         "result": result,
-        "witness": [
-            {
-                "path": "evidence/answer.txt",
-                "sha256": "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest(),
-            }
-        ],
     }
     (root / "submission.json").write_text(json.dumps(s, sort_keys=True) + "\n")
 

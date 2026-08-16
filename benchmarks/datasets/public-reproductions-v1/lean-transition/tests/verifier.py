@@ -1,52 +1,56 @@
 import json
 from pathlib import Path
 
-from verifier_support import (
-    aggregate_reward,
-    load_submission,
-    normalize_reward_file,
-    witness_list_is_bound,
-)
+from verifier_support import load_submission, normalize_reward_file
 
 W = Path("/app")
 E = Path("/tests")
 
+_FROZEN = {
+    (
+        "CORE",
+        "(P Q : Prop) → P → Q → P ∧ Q",
+        ("intro P Q hP hQ",),
+        "constructor",
+    ): {"goal_count": 2, "completed": False}
+}
 
-def _math(s, x, e):
-    r = s.get("result", {})
+
+def _math(s, x):
+    result = s.get("result") or {}
+    if not isinstance(result, dict) or not isinstance(x, dict):
+        return False
     if (
-        not isinstance(r, dict)
-        or set(r) != {"goal_count", "completed"}
-        or type(r.get("goal_count")) is not int
-        or type(r.get("completed")) is not bool
+        set(result) != {"goal_count", "completed"}
+        or type(result.get("goal_count")) is not int
+        or type(result.get("completed")) is not bool
     ):
         return False
+    prefix = x.get("proof_prefix")
+    if not isinstance(prefix, list) or any(
+        not isinstance(item, str) for item in prefix
+    ):
+        return False
+    expected = _FROZEN.get(
+        (x.get("environment"), x.get("statement"), tuple(prefix), x.get("tactic"))
+    )
+    if expected is None:
+        return False
     return (
-        r["goal_count"] == e["expected_goal_count"]
-        and r.get("completed") is e["expected_completed"]
+        result["goal_count"] == expected["goal_count"]
+        and result["completed"] is expected["completed"]
     )
 
 
 def main():
     s = load_submission()
-    x = json.loads(next(E.glob("*input*.json")).read_text())
-    e = json.loads((E / "expected.json").read_text())
     protocol_ok = s is not None
-    math_correct = _math(s, x, e) if protocol_ok else False
-    correct = bool(protocol_ok and math_correct)
-    good = bool(protocol_ok and witness_list_is_bound(s["witness"]))
-    reward = aggregate_reward(
-        correctness=correct, witness_validity=good, protocol_ok=protocol_ok
-    )
+    x = json.loads(next(E.glob("*input*.json")).read_text())
+    math_correct = _math(s, x) if protocol_ok else False
+    reward = float(protocol_ok and math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
-    (Path("/logs/verifier/reward.json")).write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(good),
-                "reward": reward,
-            }
-        )
+    Path("/logs/verifier/reward.json").write_text(
+        json.dumps({"correctness": float(math_correct), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

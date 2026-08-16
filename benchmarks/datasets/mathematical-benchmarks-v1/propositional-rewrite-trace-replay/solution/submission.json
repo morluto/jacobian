@@ -505,11 +505,5 @@
         "rule": "CONTRADICTION"
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/rewrite-trace.json",
-      "sha256": "sha256:cde5f49ca75beac53b259af793b38b13c22177e4216b14fc9ed6ae353a3468c0"
-    }
-  ]
+  }
 }

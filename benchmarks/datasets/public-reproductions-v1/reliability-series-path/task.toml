@@ -1,5 +1,5 @@
 schema_version = "1.4"
-artifacts = ["/app/submission.json", "/app/evidence"]
+artifacts = ["/app/submission.json"]
 [task]
 name = "jacobian/reliability-series-path"
 version = "1.0.0"

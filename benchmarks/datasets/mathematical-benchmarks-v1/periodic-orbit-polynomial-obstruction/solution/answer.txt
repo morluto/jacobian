@@ -1,1 +1,0 @@
-The machine-readable certificate is stored in periodic-orbit-certificate.json.

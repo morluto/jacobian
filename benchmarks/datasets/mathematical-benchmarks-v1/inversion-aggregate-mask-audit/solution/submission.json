@@ -12,11 +12,5 @@
       2,
       3
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/inversion-audit.json",
-      "sha256": "sha256:c407add9f79263a866a9b07c1d8be74ec612cccbaecf806e1d3462ab1536a0c7"
-    }
-  ]
+  }
 }

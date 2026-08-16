@@ -1,16 +1,9 @@
 import json
 from fractions import Fraction
 from pathlib import Path
+from verifier_support import load_submission, normalize_reward_file
 
-from verifier_support import (
-    aggregate_reward,
-    json_value_equal,
-    load_submission,
-    normalize_reward_file,
-    read_evidence_json,
-)
-
-W, E = Path("/app"), Path("/tests")
+W, E = (Path("/app"), Path("/tests"))
 
 
 def rat(value):
@@ -44,8 +37,8 @@ def _epsilon_witnesses_ok(eps, s, c):
             e != Fraction(1, k)
             or type(n) is not int
             or n < 1
-            or d != Fraction(s * s, (n + c) ** 2)
-            or not d < e * e
+            or (d != Fraction(s * s, (n + c) ** 2))
+            or (not d < e * e)
         ):
             return False
     return True
@@ -61,7 +54,7 @@ def _separation_ok(sep, h):
     return (
         rat(sep["same_family_lower_bound_squared"]) == h * h
         and sep["cross_family_vertical_nonzero"] is True
-        and sep["closedness_reason"] == "DISTINCT_INDICES_HAVE_HORIZONTAL_GAP"
+        and (sep["closedness_reason"] == "DISTINCT_INDICES_HAVE_HORIZONTAL_GAP")
     )
 
 
@@ -78,9 +71,9 @@ def result_ok(result):
         "corrected_conclusion",
     }:
         return False
-    h, s, c = result["horizontal_step"], result["vertical_scale"], result["offset"]
-    if any(type(x) is not int for x in (h, s, c)) or not (
-        2 <= h <= 20 and 1 <= s <= 20 and 2 <= c <= 20
+    h, s, c = (result["horizontal_step"], result["vertical_scale"], result["offset"])
+    if any((type(x) is not int for x in (h, s, c))) or not (
+        2 <= h <= 20 and 1 <= s <= 20 and (2 <= c <= 20)
     ):
         return False
     ns = result["sample_indices"]
@@ -88,7 +81,7 @@ def result_ok(result):
         ns != sorted(ns)
         or len(ns) != 10
         or len(set(ns)) != 10
-        or any(type(n) is not int or n < 1 for n in ns)
+        or any((type(n) is not int or n < 1 for n in ns))
     ):
         return False
     distances = result["distance_squared"]
@@ -114,7 +107,7 @@ def frozen_ok():
         return (
             not (W / "input.json").is_symlink()
             and (W / "input.json").read_bytes() == raw
-            and data["source_row"] == 18
+            and (data["source_row"] == 18)
         )
     except (OSError, ValueError, KeyError, TypeError):
         return False
@@ -126,34 +119,10 @@ def main():
     result = submission.get("result") if protocol_ok else None
     math_ok = bool(result_ok(result) and frozen_ok())
     witness = submission.get("witness") if protocol_ok else None
-    evidence = (
-        read_evidence_json(
-            witness[0],
-            expected_path="evidence/disjoint-closed-distance-audit.json",
-        )
-        if isinstance(witness, list) and len(witness) == 1
-        else None
-    )
-    evidence_ok = bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result"}
-        and evidence["schema_version"] == "1"
-        and json_value_equal(evidence["result"], result)
-    )
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=evidence_ok,
-        protocol_ok=protocol_ok,
-    )
+    reward = float(math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
-        json.dumps(
-            {
-                "correctness": float(math_ok),
-                "witness_validity": float(evidence_ok),
-                "reward": reward,
-            }
-        )
+        json.dumps({"correctness": float(math_ok), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

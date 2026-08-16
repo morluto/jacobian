@@ -5,23 +5,38 @@
       "SUB_RECOVERY"
     ],
     "derived_coefficients": [
-      {"denominator": 1, "numerator": 0},
-      {"denominator": 1, "numerator": 0},
-      {"denominator": 1, "numerator": -1},
-      {"denominator": 1, "numerator": 1},
-      {"denominator": 1, "numerator": 1}
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 1,
+        "numerator": 0
+      },
+      {
+        "denominator": 1,
+        "numerator": -1
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      }
     ],
     "failed_pattern_occurs": false,
     "multipliers": [
-      {"denominator": 1, "numerator": 1},
-      {"denominator": 1, "numerator": 1}
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      }
     ],
     "side_condition_used": "b<=a"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:812e1e38ba6789c0b3e6af8a9d9808326872e8f589412312ed3466ca1c0ee2ef"
-    }
-  ]
+  }
 }

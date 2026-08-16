@@ -1,1 +1,0 @@
-{"schema_version":"1","task_id":"jacobian/superposition-proof-replay","result":{"axioms":[1,2,3,6],"steps":[{"child":5,"parents":[2,6]},{"child":8,"parents":[5,6]},{"child":4,"parents":[3,8]},{"child":7,"parents":[1,4]}],"root":7},"limitations":["FROZEN_RESOLUTION_CALCULUS_ONLY"]}

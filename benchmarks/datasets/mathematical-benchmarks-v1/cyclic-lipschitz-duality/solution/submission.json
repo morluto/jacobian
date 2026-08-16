@@ -1,8 +1,8 @@
 {
   "result": {
     "dual_value": {
-      "numerator": 15,
-      "denominator": 1
+      "denominator": 1,
+      "numerator": 15
     },
     "flow": [
       {
@@ -247,8 +247,8 @@
       }
     ],
     "primal_value": {
-      "numerator": 15,
-      "denominator": 1
+      "denominator": 1,
+      "numerator": 15
     },
     "sequence": [
       {
@@ -492,11 +492,5 @@
         "numerator": 3
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:1587253c04dbbbbaf16d16325a337f3a2edb661fd77e8c0af1283a7eeaaebd6c"
-    }
-  ]
+  }
 }

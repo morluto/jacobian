@@ -26,7 +26,9 @@ SINGLE_EVIDENCE_TASKS = tuple(
     for task_name in VERIFIER_TASKS
     if json.loads(
         (TASKS / task_name / "environment" / "submission_schema.json").read_text()
-    )["properties"]["witness"].get("maxItems")
+    )["properties"]
+    .get("witness", {})
+    .get("maxItems")
     == 1
 )
 
@@ -57,6 +59,8 @@ def _write_json(path: Path, value: object) -> None:
 
 
 def _bind_result_evidence(app: Path, submission: dict) -> None:
+    if not submission.get("witness"):
+        return
     evidence_path = app / "evidence" / "answer.txt"
     lines = evidence_path.read_text().splitlines()
     marker = "RESULT_JSON: " + json.dumps(
@@ -96,7 +100,7 @@ def _prepare_case(
     logs.mkdir(parents=True)
     shutil.copy2(task / "environment" / "input.json", app / "input.json")
     submission = json.loads((task / "solution" / "submission.json").read_text())
-    for descriptor in submission["witness"]:
+    for descriptor in submission.get("witness", []):
         evidence_path = Path(descriptor["path"])
         assert not evidence_path.is_absolute() and ".." not in evidence_path.parts
         destination = app / evidence_path

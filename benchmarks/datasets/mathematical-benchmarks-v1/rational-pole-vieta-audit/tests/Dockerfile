@@ -1,5 +1,5 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
-LABEL jacobian.checksum="bb6bce3cbc52e7d5f52a69e83bc11471b4d8dd2e45e28caec008259a795a690d"
+LABEL jacobian.checksum="aa6724a72662b50c3d8acbae4b9649c5e5fcd98c081b0c08d2b663468d27bfb1"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact rational-function domain and Vieta verifier.
 LABEL jacobian.task="jacobian/rational-pole-vieta-audit"

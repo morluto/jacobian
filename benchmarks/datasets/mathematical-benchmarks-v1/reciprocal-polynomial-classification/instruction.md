@@ -8,10 +8,6 @@ constant relating `S` and `Q`. The verifier will independently recognize the
 family member, check the geometric divisibility identity, and reconstruct the
 cleared Laurent identity. Numerical sampling is not accepted.
 
-Write `submission.json` and digest-bind
-`evidence/classification-certificate.json`, which must copy `result`
-exactly.
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 

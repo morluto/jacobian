@@ -133,11 +133,5 @@
         ]
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/functional-equation-certificate.json",
-      "sha256": "sha256:abf3408db28e17bea52317149cc1f15ec80b7951598ea1232291398d31430aef"
-    }
-  ]
+  }
 }

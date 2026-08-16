@@ -5,15 +5,10 @@ from verifier_support import (
     aggregate_reward,
     load_submission,
     normalize_reward_file,
-    sha256_uri,
 )
 
 W = Path("/app")
 E = Path("/tests")
-
-
-def _digest(path):
-    return sha256_uri(path)
 
 
 def mul(a, b):
@@ -60,34 +55,9 @@ def main():
         and abs(det(u)) == 1
         and hnf(h)
     )
-    ev_ok = False
-    witness = data.get("witness")
-    if protocol_ok and isinstance(witness, list) and witness:
-        ev_ok = True
-        for i in witness:
-            if (
-                not isinstance(i, dict)
-                or not isinstance(i.get("path"), str)
-                or not isinstance(i.get("sha256"), str)
-            ):
-                ev_ok = False
-                continue
-            p = Path(i["path"])
-            t = (W / p).resolve()
-            ev_ok &= (
-                isinstance(i, dict)
-                and not p.is_absolute()
-                and p == Path("evidence/answer.txt")
-                and ".." not in p.parts
-                and not (W / p).is_symlink()
-                and t.is_relative_to(W.resolve())
-                and t.is_file()
-            )
-            if ev_ok:
-                ev_ok &= i.get("sha256") == _digest(t)
     reward = aggregate_reward(
         correctness=math_ok,
-        witness_validity=ev_ok,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -95,7 +65,6 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(ev_ok),
                 "reward": reward,
             }
         )

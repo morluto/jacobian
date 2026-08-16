@@ -1,4 +1,3 @@
-import hashlib
 import json
 from pathlib import Path
 
@@ -11,15 +10,7 @@ TASK = "unit-fraction-classification-repair"
 
 
 def rewrite(app: Path, s: dict):
-    e = {
-        "schema_version": "1",
-        "task_id": f"jacobian/{TASK}",
-        "result": s["result"],
-    }
-    raw = json.dumps(e, separators=(",", ":")).encode()
-    (app / "evidence/unit-fraction-repair.json").write_bytes(raw)
-    s["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
-    _fixtures._write_json(app / "submission.json", s)
+    _fixtures._write_json(app / "submission.json", {"result": s["result"]})
 
 
 def test_accepts_alternative_valid_witnesses(tmp_path: Path):
@@ -60,23 +51,3 @@ def test_rejects_single_bit_coverage_tamper(tmp_path: Path):
     s["result"]["membership_bitmap_hex"] = bitmap.hex()
     rewrite(app, s)
     assert _verifier._run_verifier(task, app, logs).details["correctness"] == 0.0
-
-
-def test_rejects_int_float_witness_mismatch(tmp_path: Path):
-    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = {
-        "schema_version": "1",
-        "task_id": f"jacobian/{TASK}",
-        "result": json.loads(json.dumps(submission["result"])),
-    }
-    evidence["result"]["corrected_count"] = 827.0
-    raw = json.dumps(evidence, separators=(",", ":")).encode()
-    path = app / "evidence" / "unit-fraction-repair.json"
-    path.write_bytes(raw)
-    submission["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(raw).hexdigest()
-    _fixtures._write_json(app / "submission.json", submission)
-    result = _verifier._run_verifier(task, app, logs)
-    assert result.details["correctness"] == 1.0
-    assert result.reward == 0.0
-    assert result.reward == 0.0

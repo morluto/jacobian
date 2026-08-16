@@ -3,88 +3,88 @@
     "basis_change": [
       [
         {
-          "numerator": 1,
-          "denominator": 1
+          "denominator": 1,
+          "numerator": 1
         },
         {
-          "numerator": 1,
-          "denominator": 1
+          "denominator": 1,
+          "numerator": 1
         },
         {
-          "numerator": 1,
-          "denominator": 1
+          "denominator": 1,
+          "numerator": 1
         }
       ],
       [
         {
-          "numerator": 1,
-          "denominator": 1
+          "denominator": 1,
+          "numerator": 1
         },
         {
-          "numerator": -1,
-          "denominator": 1
+          "denominator": 1,
+          "numerator": -1
         },
         {
-          "numerator": 0,
-          "denominator": 1
+          "denominator": 1,
+          "numerator": 0
         }
       ],
       [
         {
-          "numerator": 1,
-          "denominator": 1
+          "denominator": 1,
+          "numerator": 1
         },
         {
-          "numerator": 0,
-          "denominator": 1
+          "denominator": 1,
+          "numerator": 0
         },
         {
-          "numerator": -1,
-          "denominator": 1
+          "denominator": 1,
+          "numerator": -1
         }
       ]
     ],
     "basis_change_inverse": [
       [
         {
-          "numerator": 1,
-          "denominator": 3
+          "denominator": 3,
+          "numerator": 1
         },
         {
-          "numerator": 1,
-          "denominator": 3
+          "denominator": 3,
+          "numerator": 1
         },
         {
-          "numerator": 1,
-          "denominator": 3
+          "denominator": 3,
+          "numerator": 1
         }
       ],
       [
         {
-          "numerator": 1,
-          "denominator": 3
+          "denominator": 3,
+          "numerator": 1
         },
         {
-          "numerator": -2,
-          "denominator": 3
+          "denominator": 3,
+          "numerator": -2
         },
         {
-          "numerator": 1,
-          "denominator": 3
+          "denominator": 3,
+          "numerator": 1
         }
       ],
       [
         {
-          "numerator": 1,
-          "denominator": 3
+          "denominator": 3,
+          "numerator": 1
         },
         {
-          "numerator": 1,
-          "denominator": 3
+          "denominator": 3,
+          "numerator": 1
         },
         {
-          "numerator": -2,
-          "denominator": 3
+          "denominator": 3,
+          "numerator": -2
         }
       ]
     ],
@@ -93,7 +93,18 @@
       "A-B",
       "A-B"
     ],
-    "determinant_identity": "det(C)=det(A-B)^2*det(A+2B)",
+    "determinant_identity": {
+      "factors": [
+        {
+          "exponent": 2,
+          "matrix": "A-B"
+        },
+        {
+          "exponent": 1,
+          "matrix": "A+2B"
+        }
+      ]
+    },
     "invertibility_assumption": "NOT_REQUIRED_FOR_POLYNOMIAL_IDENTITY"
   }
 }

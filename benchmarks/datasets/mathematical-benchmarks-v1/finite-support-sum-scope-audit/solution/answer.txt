@@ -1,1 +1,0 @@
-Every singleton support beyond n contributes one, so the original nonnegative sum is infinite. The truncated sequence has successive ratio at most 3/4 from n=2 onward and tends to zero.

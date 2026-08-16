@@ -2,16 +2,9 @@ import json
 from fractions import Fraction
 from math import isqrt
 from pathlib import Path
+from verifier_support import load_submission, normalize_reward_file
 
-from verifier_support import (
-    aggregate_reward,
-    json_value_equal,
-    load_submission,
-    normalize_reward_file,
-    read_evidence_json,
-)
-
-W, E = Path("/app"), Path("/tests")
+W, E = (Path("/app"), Path("/tests"))
 ZERO = (0, 0, 0, 0, 0, 0)
 
 
@@ -37,13 +30,13 @@ def _poly(terms):
     for term in terms:
         if not isinstance(term, dict) or set(term) != {"exponents", "coefficient"}:
             return None
-        exps, coefficient = term["exponents"], term["coefficient"]
+        exps, coefficient = (term["exponents"], term["coefficient"])
         if (
             not isinstance(exps, list)
             or len(exps) != 6
-            or any(type(e) is not int or e < 0 for e in exps)
-            or type(coefficient) is not int
-            or coefficient == 0
+            or any((type(e) is not int or e < 0 for e in exps))
+            or (type(coefficient) is not int)
+            or (coefficient == 0)
         ):
             return None
         key = tuple(exps)
@@ -67,7 +60,7 @@ def _mul(left, right):
     out = {}
     for lm, lc in left.items():
         for rm, rc in right.items():
-            key = tuple(a + b for a, b in zip(lm, rm, strict=True))
+            key = tuple((a + b for a, b in zip(lm, rm, strict=True)))
             out[key] = out.get(key, 0) + lc * rc
     return {key: value for key, value in out.items() if value}
 
@@ -146,8 +139,8 @@ def _certificate_ok(mode, cert):
         return False
     core_keys = [k for k in keys if k != "sos_factors"]
     parsed = {key: _poly(cert[key]) for key in core_keys}
-    if any(value is None for value in parsed.values()) or any(
-        parsed[key] != expected[key] for key in core_keys
+    if any((value is None for value in parsed.values())) or any(
+        (parsed[key] != expected[key] for key in core_keys)
     ):
         return False
     if mode == "AMGM_SQUARES":
@@ -160,14 +153,14 @@ def _certificate_ok(mode, cert):
         if not isinstance(factors_raw, list) or not factors_raw:
             return False
         factors = [_poly(item) for item in factors_raw]
-        if any(item is None for item in factors):
+        if any((item is None for item in factors)):
             return False
         target = _add((2, parsed["residual"]), (-1, parsed["constraint_residual"]))
         return _add(*((1, _square(f)) for f in factors)) == target
     return (
         parsed["gram_residual"] == parsed["gram_sos"]
         and _add((1, parsed["a2"]), (1, parsed["across"])) == parsed["total_a_square"]
-        and _add((1, parsed["x2"]), (1, parsed["xcross"])) == parsed["total_x_square"]
+        and (_add((1, parsed["x2"]), (1, parsed["xcross"])) == parsed["total_x_square"])
     )
 
 
@@ -176,8 +169,8 @@ def _rat(value):
         not isinstance(value, dict)
         or set(value) != {"numerator", "denominator"}
         or type(value["numerator"]) is not int
-        or type(value["denominator"]) is not int
-        or value["denominator"] <= 0
+        or (type(value["denominator"]) is not int)
+        or (value["denominator"] <= 0)
     ):
         return None
     return Fraction(value["numerator"], value["denominator"])
@@ -186,7 +179,7 @@ def _rat(value):
 def _sqrt_fraction(value):
     if value < 0:
         return None
-    n, d = isqrt(value.numerator), isqrt(value.denominator)
+    n, d = (isqrt(value.numerator), isqrt(value.denominator))
     return (
         Fraction(n, d)
         if n * n == value.numerator and d * d == value.denominator
@@ -198,7 +191,7 @@ def _witness_ok(witness, constant):
     if not isinstance(witness, dict) or set(witness) != {"a", "b", "c", "x", "y", "z"}:
         return False
     values = [_rat(witness[key]) for key in ("a", "b", "c", "x", "y", "z")]
-    if any(value is None or value <= 0 for value in values):
+    if any((value is None or value <= 0 for value in values)):
         return False
     a, b, c, x, y, z = values
     if x + y + z != 1:
@@ -226,38 +219,13 @@ def _result_ok(result, frozen):
 
 
 def main():
-    submission, frozen = load_submission(), _load_frozen()
-    expected = json.loads((E / "expected.json").read_text())
+    submission, frozen = (load_submission(), _load_frozen())
     protocol_ok = submission is not None
     math_correct = bool(protocol_ok and _result_ok(submission.get("result"), frozen))
-    evidence = None
-    witness = submission.get("witness") if protocol_ok else None
-    if isinstance(witness, list) and len(witness) == 1:
-        evidence = read_evidence_json(
-            witness[0],
-            expected_path="evidence/inequality-certificate.json",
-        )
-    evidence_valid = bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result"}
-        and evidence["schema_version"] == "1"
-        and evidence["task_id"] == expected["task_id"]
-        and json_value_equal(evidence["result"], submission.get("result"))
-    )
-    reward = aggregate_reward(
-        correctness=math_correct,
-        witness_validity=evidence_valid,
-        protocol_ok=protocol_ok,
-    )
+    reward = float(math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
-                "reward": reward,
-            }
-        )
+        json.dumps({"correctness": float(math_correct), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

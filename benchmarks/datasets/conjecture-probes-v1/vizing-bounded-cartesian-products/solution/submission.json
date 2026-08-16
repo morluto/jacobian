@@ -634,11 +634,5 @@
       }
     ],
     "scope_identity": "vizing-bounded-cartesian-products:graphs-v1:pairs-v1"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:4c031bc23a876ebfc214f1be872dcdfa0be2eee422f2e10c365fa243f7a190f4"
-    }
-  ]
+  }
 }

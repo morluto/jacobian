@@ -39,11 +39,5 @@
         "numerator": -146
       }
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/farkas-slice-certificate.json",
-      "sha256": "sha256:1ba14d3442f8bd774810a4ce4f8478cd6b0284f8be8e25911f39816a05cf73bc"
-    }
-  ]
+  }
 }

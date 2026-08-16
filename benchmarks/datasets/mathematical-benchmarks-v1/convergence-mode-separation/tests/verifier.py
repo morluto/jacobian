@@ -111,6 +111,39 @@ def _valid_probes(probes, start, end):
     return True
 
 
+def _mass_formula_value(value, level):
+    if not isinstance(value, dict) or set(value) != {
+        "coefficient",
+        "base",
+        "exponent_coefficient",
+        "variable",
+    }:
+        return None
+    if value["variable"] != "k" or type(value["exponent_coefficient"]) is not int:
+        return None
+    coefficient = _fraction(value["coefficient"])
+    base = _fraction(value["base"])
+    if coefficient is None or base is None or base == 0:
+        return None
+    exponent = value["exponent_coefficient"] * level
+    if exponent >= 0:
+        return coefficient * (base**exponent)
+    if exponent < 0 and base == 0:
+        return None
+    return coefficient / (base ** (-exponent))
+
+
+def _valid_probability_argument(value, start, end):
+    if not isinstance(value, dict) or set(value) != {"event_mass_formula", "limit"}:
+        return False
+    if value["limit"] != "ZERO":
+        return False
+    return all(
+        _mass_formula_value(value["event_mass_formula"], level) == Fraction(1, 2**level)
+        for level in range(start, end + 1)
+    )
+
+
 def _valid_result(result, source):
     if not isinstance(result, dict) or set(result) != {
         "relationship",
@@ -127,8 +160,7 @@ def _valid_result(result, source):
         _valid_levels(result["levels"], start, end)
         and _valid_probes(result["probes"], start, end)
         and result["relationship"] == "IN_PROBABILITY_NOT_IMPLY_ALMOST_SURE"
-        and result["probability_argument"]
-        == {"event_mass_formula": "1/2^k", "limit": "ZERO"}
+        and _valid_probability_argument(result["probability_argument"], start, end)
         and result["pointwise_argument"]
         == {"hit_count_per_level": 1, "miss_count_per_level": "AT_LEAST_ONE"}
         and result["research_scope"]

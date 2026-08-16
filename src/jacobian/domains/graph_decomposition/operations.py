@@ -123,6 +123,12 @@ def compute_ear_decomposition(
     if g.number_of_nodes() < 2:
         return EarDecompositionResult(biconnected=True, ears=())
 
+    if g.number_of_nodes() == 2:
+        return EarDecompositionResult(
+            biconnected=g.has_edge(0, 1),
+            ears=(),
+        )
+
     if not nx.is_biconnected(g):
         return EarDecompositionResult(biconnected=False, ears=())
 

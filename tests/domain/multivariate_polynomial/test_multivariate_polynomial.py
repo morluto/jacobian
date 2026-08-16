@@ -356,3 +356,21 @@ class TestMultivariateResultant:
             MultivariateResultantRequest(
                 left=left, right=right, elimination_variable="x"
             )
+
+    def test_resultant_rejects_unbounded_remaining_variable_expansion(self) -> None:
+        """Reject a resultant whose possible monomial support exceeds its output budget."""
+
+        variables = ("x", "y1", "y2", "y3", "y4", "y5", "y6", "y7")
+        zeroes = (0,) * len(variables)
+        left_terms = [("1/1", (2, *zeroes[1:]))]
+        left_terms.extend(
+            ("-1/1", (0, *(1 if index == offset else 0 for index in range(7))))
+            for offset in range(7)
+        )
+        right_terms = [("1/1", (31, *zeroes[1:])), ("-1/1", zeroes)]
+        left = _poly(variables, tuple(left_terms))
+        right = _poly(variables, tuple(right_terms))
+        with pytest.raises(ValueError, match="resultant output"):
+            MultivariateResultantRequest(
+                left=left, right=right, elimination_variable="x"
+            )

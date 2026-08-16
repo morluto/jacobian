@@ -85,8 +85,10 @@ class EarDecompositionResult(ContractModel):
     """Open ear decomposition of a biconnected graph.
 
     Each ear is a tuple of vertices describing a path whose internal vertex
-    is disjoint from all other ears.  The first ear is a cycle.  A graph that
-    is not biconnected is a typed ``biconnected=false`` outcome.
+    is disjoint from all other ears.  The first ear is a cycle.  Graphs with
+    fewer than three vertices use the explicit cycle-free convention
+    ``biconnected=true, ears=()``.  A graph that is not biconnected is a typed
+    ``biconnected=false`` outcome.
     """
 
     biconnected: bool = True

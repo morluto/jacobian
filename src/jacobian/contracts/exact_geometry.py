@@ -73,7 +73,15 @@ class DistanceGraphRequest(ContractModel):
     """Build the graph induced by a selected squared distance."""
 
     configuration: PointConfiguration
-    target_squared_distance: CanonicalRational
+    target_squared_distance: CanonicalRational = Field(
+        description="Nonnegative squared Euclidean distance to select.",
+    )
+
+    @model_validator(mode="after")
+    def require_nonnegative_target(self) -> Self:
+        if self.target_squared_distance.as_fraction() < 0:
+            raise ValueError("squared distance target must be nonnegative")
+        return self
 
 
 class DistanceGraphResult(ContractModel):

@@ -93,6 +93,19 @@ the operation returns a concrete mathematical value or certificate.
   call typed kernels directly, and never invoke `math.run` or expose MCP,
   runtime, installation, or storage objects.
 
+### Mathematical boundedness is a proof obligation
+
+Jacobian is a library of mathematical instruments for agents doing high-level
+mathematics and investigating conjectures. Treat every operation as a
+trust-bearing function: do not paper over an unproved algorithm or backend
+limit with a sentinel, truncation, post-hoc conversion failure, or optimistic
+contract. Separately bound the accepted input, algorithmic work and
+intermediates, and exact result or certificate. Derive budgets from the
+mathematics before backend expansion; use explicit, named, tested conservative
+domains when necessary, and narrow the domain or change the typed result when
+the claim cannot be established. Add known-answer, boundary, adversarial, and
+defining-invariant tests.
+
 ## Types and transport
 
 - Domain values own semantics and live with their domain. `jacobian.contracts`

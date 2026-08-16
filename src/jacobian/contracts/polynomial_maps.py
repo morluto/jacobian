@@ -6,6 +6,7 @@ from typing import Any, Self
 
 import sympy
 from pydantic import Field, model_validator
+from sympy.polys.polyerrors import CoercionFailed
 
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalRational
@@ -18,7 +19,11 @@ class RationalPolynomialExpr(ContractModel):
     Variables are named in the expression string itself.
     """
 
-    expression: str = Field(min_length=1, max_length=2000)
+    expression: str = Field(
+        min_length=1,
+        max_length=2000,
+        description="Polynomial expression with rational coefficients.",
+    )
 
     @model_validator(mode="after")
     def require_polynomial(self) -> Self:
@@ -35,6 +40,12 @@ def _require_polynomial_expression(raw: str) -> Any:
     if symbols:
         if not expression.is_polynomial(*symbols):
             raise ValueError("polynomial expression must be a polynomial")
+        try:
+            sympy.Poly(expression, *symbols, domain=sympy.QQ)
+        except (CoercionFailed, sympy.PolynomialError, TypeError, ValueError) as exc:
+            raise ValueError(
+                "polynomial expression must have rational coefficients"
+            ) from exc
     elif not expression.is_rational:
         raise ValueError("polynomial expression must be a polynomial")
     return expression

@@ -3,6 +3,7 @@
 from jacobian.contracts.formal_power_series import (
     MAX_RATIONAL_DIGITS,
     InputTruncatedSeries,
+    SeriesInverseRequest,
     TruncatedSeries,
 )
 from jacobian.domains.formal_power_series.operations import (
@@ -86,6 +87,23 @@ def test_inverse_rejects_zero_constant() -> None:
             variable="x",
             truncation_order=2,
             coefficients=(_coeff("0"), _coeff("1")),
+        )
+
+
+def test_inverse_rejects_result_coefficient_growth() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    huge = "1" + "0" * (MAX_RATIONAL_DIGITS - 1)
+    with pytest.raises(ValidationError, match="inverse coefficient growth"):
+        SeriesInverseRequest(
+            variable="x",
+            truncation_order=20,
+            coefficients=(
+                _coeff("1"),
+                _coeff("-" + huge),
+                *(_coeff("0") for _ in range(18)),
+            ),
         )
 
 

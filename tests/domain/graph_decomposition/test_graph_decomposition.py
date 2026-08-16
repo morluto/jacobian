@@ -364,6 +364,20 @@ class TestEarDecomposition:
         )
         assert result.ears == ()
 
+    def test_two_vertex_edge_uses_cycle_free_convention(self) -> None:
+        result = _ear_decomposition(
+            {"vertex_count": 2, "edges": [(0, 1)]},
+        )
+        assert result.biconnected is True
+        assert result.ears == ()
+
+    def test_two_isolated_vertices_are_not_biconnected(self) -> None:
+        result = _ear_decomposition(
+            {"vertex_count": 2, "edges": []},
+        )
+        assert result.biconnected is False
+        assert result.ears == ()
+
     def test_first_ear_is_a_cycle(self) -> None:
         result = _ear_decomposition(
             {

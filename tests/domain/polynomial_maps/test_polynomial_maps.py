@@ -53,6 +53,13 @@ class TestEvaluate:
                 ),
             )
 
+    def test_rejects_irrational_coefficient(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="rational coefficients"):
+            RationalPolynomialExpr(expression="pi*x")
+
     def test_rejects_incomplete_substitution(self):
         import pytest
         from pydantic import ValidationError

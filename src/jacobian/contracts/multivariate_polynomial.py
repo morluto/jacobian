@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import comb
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
@@ -18,6 +19,10 @@ _MAX_MULTIVARIATE_TERMS = 512
 _MAX_MULTIVARIATE_EXPONENT = 64
 _MAX_MULTIVARIATE_COEFFICIENT_DIGITS = 256
 _MAX_ELIMINATION_DEGREE_SUM = 64
+# The result converter rejects sparse outputs above this size.  The request
+# validator uses the same bound to reject large possible supports before
+# SymPy expands the Sylvester determinant.
+_MAX_RESULTANT_TERMS = 1_024
 
 MonomialOrder = Literal["lex", "grlex", "grevlex"]
 """Declared monomial order for multivariate polynomial division."""
@@ -35,6 +40,50 @@ def _validate_multivariate_pair(
         raise ValueError("multivariate operations require at least two variables")
     if left.variables != right.variables:
         raise ValueError("both polynomials must use the same ordered variables")
+
+
+def _resultant_support_bound(
+    left: RationalPolynomial,
+    right: RationalPolynomial,
+    elimination_index: int,
+) -> int:
+    """Bound the number of possible monomials in a multivariate resultant.
+
+    If ``f`` and ``g`` have elimination degrees ``m`` and ``n``, and total
+    remaining-variable degrees ``d_f`` and ``d_g``, every resultant monomial
+    has total degree at most ``n*d_f + m*d_g``.  The returned binomial is the
+    number of monomials up to that degree in the remaining variables.
+    """
+
+    remaining_variable_count = len(left.variables) - 1
+    if remaining_variable_count == 0:
+        return 1
+
+    def degree(polynomial: RationalPolynomial, *, in_remaining: bool) -> int:
+        return max(
+            (
+                sum(
+                    exponent
+                    for index, exponent in enumerate(term.exponents)
+                    if (index != elimination_index) == in_remaining
+                )
+                for term in polynomial.polynomial.terms
+            ),
+            default=0,
+        )
+
+    left_elimination_degree = degree(left, in_remaining=False)
+    right_elimination_degree = degree(right, in_remaining=False)
+    left_remaining_degree = degree(left, in_remaining=True)
+    right_remaining_degree = degree(right, in_remaining=True)
+    resultant_degree_bound = (
+        right_elimination_degree * left_remaining_degree
+        + left_elimination_degree * right_remaining_degree
+    )
+    return comb(
+        resultant_degree_bound + remaining_variable_count,
+        remaining_variable_count,
+    )
 
 
 class MultivariateGcdRequest(ContractModel):
@@ -91,11 +140,17 @@ class MultivariateDivisionResult(ContractModel):
 
 
 class MultivariateResultantRequest(ContractModel):
-    """Compute the resultant of two multivariate polynomials w.r.t. one variable."""
+    """Compute a bounded resultant with respect to one variable.
+
+    The request rejects inputs whose degree envelope can produce more terms
+    than the exact sparse result contract can represent.
+    """
 
     left: RationalPolynomial
     right: RationalPolynomial
-    elimination_variable: PolynomialVariable
+    elimination_variable: PolynomialVariable = Field(
+        description="Variable eliminated by the Sylvester resultant.",
+    )
 
     @model_validator(mode="after")
     def require_multivariate_ring(self) -> Self:
@@ -131,6 +186,11 @@ class MultivariateResultantRequest(ContractModel):
         )
         if degree_sum > _MAX_ELIMINATION_DEGREE_SUM:
             raise ValueError("Sylvester degree exceeds the resultant budget")
+        if (
+            _resultant_support_bound(self.left, self.right, variable_index)
+            > _MAX_RESULTANT_TERMS
+        ):
+            raise ValueError("resultant output exceeds the term budget")
         return self
 
 

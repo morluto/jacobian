@@ -178,9 +178,18 @@ class SeriesPowerResult(ContractModel):
 class SeriesInverseRequest(ContractModel):
     """Invert a truncated series that is a unit (nonzero constant term)."""
 
-    variable: Variable
-    truncation_order: StrictInt = Field(ge=1, le=MAX_TRUNCATION_ORDER)
-    coefficients: tuple[CanonicalRational, ...]
+    variable: Variable = Field(description="The single formal variable.")
+    truncation_order: StrictInt = Field(
+        ge=1,
+        le=MAX_TRUNCATION_ORDER,
+        description=(
+            "Truncation order N; the inverse growth budget must fit every "
+            "returned coefficient in the 4096-digit result bound."
+        ),
+    )
+    coefficients: tuple[CanonicalRational, ...] = Field(
+        description="Exactly N rational coefficients with a nonzero constant term.",
+    )
 
     @model_validator(mode="after")
     def require_unit_constant(self) -> Self:
@@ -191,6 +200,21 @@ class SeriesInverseRequest(ContractModel):
         )
         if series.coefficients[0].as_fraction() == 0:
             raise ValueError("inverse requires a nonzero constant term")
+        # In the recurrence b_n = -a_0^-1 * sum(a_i * b_{n-i}), each path
+        # contributes at most one reciprocal and one input coefficient per
+        # degree.  Two input digit widths cover numerator and denominator
+        # growth; one extra digit per degree covers the recurrence sum.
+        maximum_input_digits = max(
+            max(len(coefficient.num.lstrip("-")), len(coefficient.den))
+            for coefficient in series.coefficients
+        )
+        if (2 * maximum_input_digits + 1) * self.truncation_order > (
+            MAX_RESULT_RATIONAL_DIGITS
+        ):
+            raise ValueError(
+                "inverse coefficient growth would exceed the "
+                f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+            )
         return self
 
     def as_series(self) -> InputTruncatedSeries:

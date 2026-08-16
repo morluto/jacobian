@@ -76,3 +76,19 @@ class TestDistanceGraph:
 
         with pytest.raises(ValidationError):
             PointConfiguration(points=(_make_point("a", [("0", "1")]),))
+
+    def test_rejects_negative_squared_distance(self):
+        import pytest
+        from pydantic import ValidationError
+
+        configuration = PointConfiguration(
+            points=(
+                _make_point("a", [("0", "1")]),
+                _make_point("b", [("1", "1")]),
+            )
+        )
+        with pytest.raises(ValidationError, match="nonnegative"):
+            DistanceGraphRequest(
+                configuration=configuration,
+                target_squared_distance=CanonicalRational(num="-1", den="1"),
+            )

@@ -18,42 +18,7 @@ CanonicalInteger = Annotated[
     ),
 ]
 
-# Shared by request validators, search producers, and output Field(le=...) caps:
-# all three use the exact deduplicated cartesian grid size, not a loose upper bound.
-RATIONAL_SEARCH_GRID_LIMIT = 10_000
 MAX_CANONICAL_RATIONAL_DIGITS = 32_768
-
-
-def bounded_rational_scalars(
-    max_abs_numerator: int, max_denominator: int
-) -> tuple[Fraction, ...]:
-    """Return sorted distinct rationals with |n| <= max_abs_numerator and 1 <= d <= max_denominator.
-
-    Deduplication matters: Fraction reduces equivalents (e.g. 1/2 and 2/4), so the
-    distinct count is strictly at most (2 * max_abs_numerator + 1) * max_denominator.
-    Validators, producers, and output models must all use this exact set (or its
-    size) when enforcing RATIONAL_SEARCH_GRID_LIMIT.
-    """
-
-    return tuple(
-        sorted(
-            {
-                Fraction(numerator, denominator)
-                for denominator in range(1, max_denominator + 1)
-                for numerator in range(-max_abs_numerator, max_abs_numerator + 1)
-            }
-        )
-    )
-
-
-def bounded_rational_grid_size(
-    max_abs_numerator: int, max_denominator: int, dimension: int
-) -> int:
-    """Cartesian size of the exact deduplicated rational grid in ``dimension`` variables."""
-
-    scalar_count = len(bounded_rational_scalars(max_abs_numerator, max_denominator))
-    size: int = scalar_count**dimension
-    return size
 
 
 def require_bounded_rational(

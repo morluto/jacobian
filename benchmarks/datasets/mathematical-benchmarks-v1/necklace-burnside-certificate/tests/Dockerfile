@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="66fc6a9df63aecdc6b2897ce7dfcb2597783377b7f6cddcc17e29cca99010a89"
+LABEL jacobian.checksum="52067b0a32beb0f197848900dbfef6e00f8594e483c57639f6e1dddb0373e792"
 COPY verifier.py verifier_support.py input.json expected.json test.sh public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

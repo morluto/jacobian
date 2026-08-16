@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="e9ec0c8a52d09219987bef27d9624778d705bdb565cd2f9e0be0d96cc9e1c2e4"
+LABEL jacobian.checksum="2c63f250be238a249305635c2da034b79e127080bf3e0365a106981a20397fe9"
 # Exact cyclic primal-dual optimization verifier.
-COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
+COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json verifier_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && python -c 'import json; assert json.load(open("/tests/expected.json"))["task_id"] == "jacobian/cyclic-lipschitz-duality"'

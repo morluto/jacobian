@@ -16,6 +16,13 @@ from benchmarks.validation.mathematical_benchmarks_v1 import (
 def test_decoupled_input_binding_contract_metadata_is_preserved() -> None:
     expected = {
         "extremal-subset-sum-semantic-audit",
+        "convergence-mode-separation",
+        "cyclic-lipschitz-duality",
+        "cyclic-polynomial-sum-audit",
+        "edge-pair-ordering-audit",
+        "image-complement-commutation",
+        "multiplicative-grid-extremum",
+        "well-total-domination-counterexample",
     }
     assert expected <= set(_fixtures.VERIFIER_TASKS)
     for task_name in expected:

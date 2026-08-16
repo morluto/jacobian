@@ -159,7 +159,13 @@ def main():
     correct = bool(_input_binding and math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
-        json.dumps({"correctness": float(math_correct), "reward": float(correct)})
+        json.dumps(
+            {
+                "correctness": float(math_correct),
+                "input_binding": float(_input_binding),
+                "reward": float(correct),
+            }
+        )
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

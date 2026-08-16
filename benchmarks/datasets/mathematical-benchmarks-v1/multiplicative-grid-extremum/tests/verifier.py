@@ -258,6 +258,7 @@ def main() -> None:
     _write_reward(
         {
             "correctness": float(math_ok),
+            "input_binding": float(_input_binding),
             "reward": reward,
         }
     )
@@ -270,6 +271,7 @@ if __name__ == "__main__":
         _write_reward(
             {
                 "correctness": 0.0,
+                "input_binding": 0.0,
                 "reward": 0.0,
             }
         )

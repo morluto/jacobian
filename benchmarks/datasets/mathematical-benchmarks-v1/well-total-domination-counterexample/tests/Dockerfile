@@ -1,8 +1,8 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 LABEL jacobian.task="jacobian/well-total-domination-counterexample" \
-      jacobian.checksum="cca3b701e3febab9c1eb4250e89bd15d596ed50414663f3a9efa5384b61b84d5"
-COPY expected.json mathematical-benchmarks-v1-well-total-domination-counterexample-input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
+      jacobian.checksum="a8afddf65815528a66f9a02d784733f7ca4dff2b6efff94499b5c70b1c33692f"
+COPY expected.json mathematical-benchmarks-v1-well-total-domination-counterexample-input.json test.sh verifier.py verifier_support.py public_contract.json verifier_contract.json /tests/
 COPY mathematical-benchmarks-v1-well-total-domination-counterexample-input.json /app/input.json
 RUN chmod +x /tests/test.sh && \
     python -c 'import json; assert json.load(open("/tests/expected.json"))["task_id"] == "jacobian/well-total-domination-counterexample"'

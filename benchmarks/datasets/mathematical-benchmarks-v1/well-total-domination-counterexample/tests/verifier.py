@@ -145,6 +145,7 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_correct),
+                "input_binding": float(_input_binding),
                 "reward": reward,
             }
         )

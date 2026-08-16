@@ -189,6 +189,7 @@ def main():
             {
                 "protocol_compliance": float(protocol),
                 "correctness": float(math_correct),
+                "input_binding": float(_input_binding),
                 "reward": reward,
             }
         )

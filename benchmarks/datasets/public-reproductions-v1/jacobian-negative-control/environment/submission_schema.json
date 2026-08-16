@@ -8,58 +8,15 @@
         "collision": {
           "additionalProperties": false,
           "properties": {
-            "first_point": {
-              "type": "array",
-              "items": {
-                "additionalProperties": false,
-                "properties": {
-                  "num": {
-                    "type": "integer"
-                  },
-                  "den": {
-                    "minimum": 1,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "num",
-                  "den"
-                ],
-                "type": "object"
-              },
-              "minItems": 1
-            },
-            "second_point": {
-              "type": "array",
-              "items": {
-                "additionalProperties": false,
-                "properties": {
-                  "num": {
-                    "type": "integer"
-                  },
-                  "den": {
-                    "minimum": 1,
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "num",
-                  "den"
-                ],
-                "type": "object"
-              },
-              "minItems": 1
-            },
             "first_image": {
-              "type": "array",
               "items": {
                 "additionalProperties": false,
                 "properties": {
-                  "num": {
-                    "type": "integer"
-                  },
                   "den": {
                     "minimum": 1,
+                    "type": "integer"
+                  },
+                  "num": {
                     "type": "integer"
                   }
                 },
@@ -69,18 +26,39 @@
                 ],
                 "type": "object"
               },
-              "minItems": 1
+              "minItems": 1,
+              "type": "array"
+            },
+            "first_point": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "den": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "num": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "num",
+                  "den"
+                ],
+                "type": "object"
+              },
+              "minItems": 1,
+              "type": "array"
             },
             "second_image": {
-              "type": "array",
               "items": {
                 "additionalProperties": false,
                 "properties": {
-                  "num": {
-                    "type": "integer"
-                  },
                   "den": {
                     "minimum": 1,
+                    "type": "integer"
+                  },
+                  "num": {
                     "type": "integer"
                   }
                 },
@@ -90,7 +68,29 @@
                 ],
                 "type": "object"
               },
-              "minItems": 1
+              "minItems": 1,
+              "type": "array"
+            },
+            "second_point": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "den": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "num": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "num",
+                  "den"
+                ],
+                "type": "object"
+              },
+              "minItems": 1,
+              "type": "array"
             }
           },
           "required": [

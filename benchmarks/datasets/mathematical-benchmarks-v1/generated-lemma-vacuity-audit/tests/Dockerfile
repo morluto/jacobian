@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="da90554bbc08eb6a035dc1acf6e98fc34e8745a9e1b47258547ca4600c7f97d6"
+LABEL jacobian.checksum="79f696721d5c550ea83abfb24ecd640abf4b04dabf658743c293bf8ec9028875"
 LABEL jacobian.task="jacobian/generated-lemma-vacuity-audit"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

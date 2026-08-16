@@ -1,1 +1,1 @@
-"""Boundary-tier tests for real persistence, processes, transports, providers."""
+"""Boundary-tier tests for real processes, transports, and providers."""

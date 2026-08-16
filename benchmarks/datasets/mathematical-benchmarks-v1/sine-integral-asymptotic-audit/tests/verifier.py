@@ -1,8 +1,8 @@
-import hashlib
 import json
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     load_submission,
     load_submission_raw,

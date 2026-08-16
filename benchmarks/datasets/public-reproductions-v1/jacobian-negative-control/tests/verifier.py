@@ -1,6 +1,7 @@
 import json
 from fractions import Fraction
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W = Path("/app")
@@ -16,9 +17,9 @@ def _math(s, x):
         return False
     try:
         polynomial_map = x["map"]
-        first = tuple((_fraction(value) for value in x["first_point"]))
-        second = tuple((_fraction(value) for value in x["second_point"]))
-        claimed = tuple((_fraction(value) for value in x["claimed_image"]))
+        first = tuple(_fraction(value) for value in x["first_point"])
+        second = tuple(_fraction(value) for value in x["second_point"])
+        claimed = tuple(_fraction(value) for value in x["claimed_image"])
         if len(first) != len(second) or len(first) != len(polynomial_map["variables"]):
             return False
         first_image = _evaluate_map(polynomial_map, first)
@@ -49,7 +50,7 @@ def _evaluate_map(polynomial_map, point):
         for term in coordinate["terms"]:
             exponents = term["exponents"]
             if len(exponents) != len(point) or any(
-                (type(exponent) is not int or exponent < 0 for exponent in exponents)
+                type(exponent) is not int or exponent < 0 for exponent in exponents
             ):
                 raise ValueError("invalid monomial exponents")
             monomial = _fraction(term["coefficient"])

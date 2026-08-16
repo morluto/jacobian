@@ -2,6 +2,7 @@ import json
 from fractions import Fraction
 from itertools import product
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W = Path("/app")
@@ -64,7 +65,7 @@ def _probabilities_by_edge(probabilities, edges):
         if (
             not isinstance(edge, list)
             or len(edge) != 2
-            or any((not isinstance(vertex, str) for vertex in edge))
+            or any(not isinstance(vertex, str) for vertex in edge)
             or (probability is None)
         ):
             return None

@@ -1,10 +1,12 @@
 """Verifier for a bounded Lutz-Nagell infinite-order certificate."""
 
 from __future__ import annotations
+
 import json
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
     is_regular_bounded_file,
@@ -73,7 +75,7 @@ def _mathematics(result: Any) -> bool:
         or (not (-20 <= a <= 20 and -20 <= b <= 20))
         or (not isinstance(point, list))
         or (len(point) != 2)
-        or any((type(v) is not int or not -100 <= v <= 100 for v in point))
+        or any(type(v) is not int or not -100 <= v <= 100 for v in point)
     ):
         return False
     x, y = point
@@ -128,7 +130,6 @@ def main() -> None:
     submission = load_submission(require_input_binding=False)
     protocol = isinstance(submission, dict)
     mathematics = bool(protocol and _mathematics(submission.get("result")))
-    witness = bool(protocol)
     aggregate = float(input_bound and protocol and mathematics)
     _reward(
         {

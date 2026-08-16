@@ -1,9 +1,11 @@
 from __future__ import annotations
+
 import json
 import math
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
+
 from verifier_support import load_submission, workspace_input_is_bound
 
 
@@ -101,10 +103,8 @@ def mathematics(result):
             return False
         submitted_residuals[submitted] = (er, nr)
     return submitted_residuals == expected_residuals and all(
-        (
-            not residual[0] and (not residual[1])
-            for residual in submitted_residuals.values()
-        )
+        not residual[0] and (not residual[1])
+        for residual in submitted_residuals.values()
     )
 
 

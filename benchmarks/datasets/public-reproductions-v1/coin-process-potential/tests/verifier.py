@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import json
 import math
 from fractions import Fraction
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 WORKSPACE = Path("/app")
@@ -16,7 +18,7 @@ def _popcount(state: int) -> int:
 
 def _potential(state: int, weights: list[int], pair: int) -> int:
     heads = [index for index in range(N) if state & 1 << index]
-    return sum((weights[index] for index in heads)) + pair * math.comb(len(heads), 2)
+    return sum(weights[index] for index in heads) + pair * math.comb(len(heads), 2)
 
 
 def _result(value: object) -> bool:
@@ -35,7 +37,7 @@ def _result(value: object) -> bool:
     if (
         not isinstance(weights, list)
         or len(weights) != N
-        or any((type(item) is not int for item in weights))
+        or any(type(item) is not int for item in weights)
         or (type(pair) is not int)
     ):
         return False
@@ -60,7 +62,7 @@ def _result(value: object) -> bool:
     submitted_average = value["average_stopping_time"]
     if (
         not isinstance(submitted_minima, list)
-        or any((type(item) is not int for item in submitted_minima))
+        or any(type(item) is not int for item in submitted_minima)
         or type(value["nonterminal_delta"]) is not int
         or (type(value["state_count"]) is not int)
         or (type(value["total_stopping_time"]) is not int)

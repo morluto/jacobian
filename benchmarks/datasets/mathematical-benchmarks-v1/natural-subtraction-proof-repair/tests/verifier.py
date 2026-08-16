@@ -2,6 +2,7 @@ import json
 import re
 from fractions import Fraction
 from pathlib import Path
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -54,7 +55,7 @@ def _contains(tree, pattern):
         return True
     if not isinstance(tree, dict):
         return False
-    return any((_contains(child, pattern) for child in tree.get("args", [])))
+    return any(_contains(child, pattern) for child in tree.get("args", []))
 
 
 def _repair_is_valid(result, source):
@@ -89,7 +90,7 @@ def _repair_is_valid(result, source):
     if len(multipliers) != len(vectors) or not vectors:
         return False
     width = len(goal)
-    if any((len(vector) != width for vector in vectors)) or len(claimed) != width:
+    if any(len(vector) != width for vector in vectors) or len(claimed) != width:
         return False
     derived = [
         sum(

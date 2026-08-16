@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W, E = (Path("/app"), Path("/tests"))
@@ -54,7 +55,7 @@ def _is_int(value):
 
 def _int_list(value):
     """Validate a list of exact integers, rejecting booleans and floats."""
-    return isinstance(value, list) and all((_is_int(item) for item in value))
+    return isinstance(value, list) and all(_is_int(item) for item in value)
 
 
 def _reduction(item):

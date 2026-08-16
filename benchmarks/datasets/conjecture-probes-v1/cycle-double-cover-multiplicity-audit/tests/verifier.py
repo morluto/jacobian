@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 import json
 from pathlib import Path
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -31,7 +33,7 @@ EDGE_INDEX = {tuple(sorted(edge)): i for i, edge in enumerate(EDGES)}
 def _canonical(cycle: list[int]) -> tuple[int, ...]:
     variants = []
     for order in (cycle, list(reversed(cycle))):
-        variants.extend((tuple(order[i:] + order[:i]) for i in range(len(order))))
+        variants.extend(tuple(order[i:] + order[:i]) for i in range(len(order)))
     return min(variants)
 
 
@@ -44,7 +46,7 @@ def _multiplicities(value: object) -> list[int] | None:
         if (
             not isinstance(cycle, list)
             or not 5 <= len(cycle) <= 9
-            or (not all((type(v) is int and 0 <= v < 10 for v in cycle)))
+            or (not all(type(v) is int and 0 <= v < 10 for v in cycle))
             or (len(set(cycle)) != len(cycle))
         ):
             return None
@@ -64,7 +66,7 @@ def _exact_integer_list(value: object, expected: list[int]) -> bool:
     return bool(
         isinstance(value, list)
         and len(value) == len(expected)
-        and all((type(item) is int for item in value))
+        and all(type(item) is int for item in value)
         and (value == expected)
     )
 
@@ -84,7 +86,7 @@ def mathematics(result: object) -> bool:
         return False
     bad = [i for i, count in enumerate(flawed) if count != 2]
     return (
-        all((count >= 1 for count in flawed))
+        all(count >= 1 for count in flawed)
         and bool(bad)
         and _exact_integer_list(result["flawed_multiplicities"], flawed)
         and _exact_integer_list(result["non_double_edge_indices"], bad)

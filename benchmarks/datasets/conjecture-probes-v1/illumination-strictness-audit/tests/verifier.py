@@ -1,9 +1,11 @@
 from __future__ import annotations
+
 import json
 import math
 from itertools import product
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
     is_regular_bounded_file,
@@ -28,13 +30,11 @@ def _directions(value, n, zeros):
     if not isinstance(value, list) or len(value) != n:
         return False
     if not all(
-        (
-            isinstance(d, list)
-            and len(d) == 3
-            and all((type(x) is int and x in {-1, 0, 1} for x in d))
-            and (d.count(0) == zeros)
-            for d in value
-        )
+        isinstance(d, list)
+        and len(d) == 3
+        and all(type(x) is int and x in {-1, 0, 1} for x in d)
+        and (d.count(0) == zeros)
+        for d in value
     ):
         return False
     return len({tuple(d) for d in value}) == n
@@ -52,7 +52,7 @@ def mathematics(result):
     repair = result["repair_directions"]
     if not _directions(flawed, 4, 1) or not _directions(repair, 8, 0):
         return False
-    weak_cover = all((any((_weak(v, d) for d in flawed)) for v in VERTICES))
+    weak_cover = all(any(_weak(v, d) for d in flawed) for v in VERTICES)
     expected = [
         {"vertex_index": i, "direction_index": j}
         for i, v in enumerate(VERTICES)
@@ -72,7 +72,7 @@ def mathematics(result):
             )
         )
         and (len(set(mapping)) == 8)
-        and all((sum((_strict(v, d) for d in repair)) == 1 for v in VERTICES))
+        and all(sum(_strict(v, d) for d in repair) == 1 for v in VERTICES)
     )
 
 

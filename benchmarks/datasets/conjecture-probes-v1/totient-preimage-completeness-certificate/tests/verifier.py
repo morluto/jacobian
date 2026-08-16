@@ -1,9 +1,11 @@
 from __future__ import annotations
+
 import itertools
 import json
 import math
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
     _finite_json_float,
@@ -24,7 +26,7 @@ LIMITATIONS = [
 
 
 def _prime(n: int) -> bool:
-    return n >= 2 and all((n % d for d in range(2, math.isqrt(n) + 1)))
+    return n >= 2 and all(n % d for d in range(2, math.isqrt(n) + 1))
 
 
 def _candidate_primes() -> list[int]:
@@ -69,7 +71,7 @@ def _candidate_certificate_valid(
         if (
             not isinstance(candidate_primes, list)
             or len(candidate_primes) != len(primes)
-            or any((type(prime) is not int for prime in candidate_primes))
+            or any(type(prime) is not int for prime in candidate_primes)
             or (set(candidate_primes) != set(primes))
         ):
             return False
@@ -86,7 +88,7 @@ def _candidate_certificate_valid(
                 or set(option) != {"prime", "exponents"}
                 or type(option["prime"]) is not int
                 or (not isinstance(option["exponents"], list))
-                or any((type(exponent) is not int for exponent in option["exponents"]))
+                or any(type(exponent) is not int for exponent in option["exponents"])
                 or (option["prime"] in observed_options)
             ):
                 return False
@@ -122,7 +124,7 @@ def _solutions_valid(
             if (
                 not isinstance(factor, list)
                 or len(factor) != 2
-                or any((type(value) is not int for value in factor))
+                or any(type(value) is not int for value in factor)
                 or (factor[0] in normalized_factors)
                 or (factor[0] < 2)
                 or (factor[1] < 1)
@@ -187,7 +189,7 @@ def main() -> None:
         "mathematics": float(math_ok),
     }
     values["aggregate_reward"] = float(
-        all((values[key] for key in ("input_binding", "protocol", "correctness")))
+        all(values[key] for key in ("input_binding", "protocol", "correctness"))
     )
     values["reward"] = values["aggregate_reward"]
     path = Path("/logs/verifier")

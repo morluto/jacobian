@@ -2,6 +2,7 @@ import json
 import math
 from fractions import Fraction
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W, E = (Path("/app"), Path("/tests"))
@@ -102,7 +103,7 @@ def _potential_coefficients_valid(result):
     return not (
         not isinstance(coefficients, list)
         or len(coefficients) != 3
-        or (not all((_is_int(c) for c in coefficients)))
+        or (not all(_is_int(c) for c in coefficients))
         or (coefficients != [1, -2, 1])
     )
 
@@ -165,7 +166,7 @@ def _terminal_bounds_valid(result):
         output_lower = _extended_bound(item["output_lower"])
         output_upper = _extended_bound(item["output_upper"])
         if any(
-            (b is None for b in (input_lower, input_upper, output_lower, output_upper))
+            b is None for b in (input_lower, input_upper, output_lower, output_upper)
         ):
             return None
         if not isinstance(input_lower, Fraction) or input_lower < 0:

@@ -1,10 +1,12 @@
 """Clean-room checker for the finite Vizing domination probe."""
 
 from __future__ import annotations
+
 import json
 from itertools import combinations
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -44,9 +46,7 @@ def _adjacency(value: object) -> list[list[int]] | None:
     for i, neighbors in enumerate(value):
         if not isinstance(neighbors, list) or len(set(neighbors)) != len(neighbors):
             return None
-        if any(
-            (not _int(v) or v < 0 or v >= len(value) or (v == i) for v in neighbors)
-        ):
+        if any(not _int(v) or v < 0 or v >= len(value) or (v == i) for v in neighbors):
             return None
         result.append(sorted(neighbors))
     if any(
@@ -58,7 +58,7 @@ def _adjacency(value: object) -> list[list[int]] | None:
 
 def _domination(adj: list[list[int]]) -> tuple[int, list[int]] | None:
     n = len(adj)
-    closed = [1 << i | sum((1 << j for j in adj[i])) for i in range(n)]
+    closed = [1 << i | sum(1 << j for j in adj[i]) for i in range(n)]
     full = (1 << n) - 1
     for size in range(1, n + 1):
         for candidate in combinations(range(n), size):
@@ -75,8 +75,8 @@ def _product(left: list[list[int]], right: list[list[int]]) -> list[list[int]]:
     result = [set() for _ in range(n * m)]
     for i in range(n):
         for j in range(m):
-            result[i * m + j].update((k * m + j for k in left[i]))
-            result[i * m + j].update((i * m + k for k in right[j]))
+            result[i * m + j].update(k * m + j for k in left[i])
+            result[i * m + j].update(i * m + k for k in right[j])
     return [sorted(neighbors) for neighbors in result]
 
 
@@ -139,7 +139,7 @@ def _dominates(witness: object, size: int, adjacency: list[list[int]]) -> bool:
         not isinstance(witness, list)
         or len(witness) != size
         or len(set(witness)) != len(witness)
-        or any((not _int(v) or v < 0 or v >= len(adjacency) for v in witness))
+        or any(not _int(v) or v < 0 or v >= len(adjacency) for v in witness)
     ):
         return False
     covered = set(witness)
@@ -158,7 +158,7 @@ def _product_witness(
         if (
             not isinstance(pair, list)
             or len(pair) != 2
-            or any((not _int(v) for v in pair))
+            or any(not _int(v) for v in pair)
         ):
             return False
         i, j = pair
@@ -281,7 +281,7 @@ def _math(result: object, frozen: dict[str, Any]) -> bool:
         return False
     graphs = frozen["graphs"]
     expected = {name: _domination(graphs[name]) for name in GRAPH_IDS}
-    if any((value is None for value in expected.values())):
+    if any(value is None for value in expected.values()):
         return False
     if not _math_graphs(result, graphs, expected):
         return False
@@ -307,8 +307,6 @@ def main() -> None:
     protocol = isinstance(submission, dict)
     result = submission.get("result") if protocol else None
     mathematics = bool(protocol and frozen and _math(result, frozen))
-    witness = submission.get("witness") if protocol else None
-    descriptor = witness[0] if isinstance(witness, list) and len(witness) == 1 else None
     aggregate = float(input_bound and protocol and mathematics)
     _reward(
         {

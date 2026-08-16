@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 import json
 from fractions import Fraction
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 WORKSPACE = Path("/app")
@@ -76,12 +78,12 @@ def _aggregate(value: object, n: int) -> bool:
         and first_constant == 0
         and isinstance(first_coefficients, list)
         and (len(first_coefficients) == n)
-        and all((type(item) is int and item == 1 for item in first_coefficients))
+        and all(type(item) is int and item == 1 for item in first_coefficients)
         and (type(second_constant) is int)
         and (second_constant == n)
         and isinstance(second_coefficients, list)
         and (len(second_coefficients) == n)
-        and all((type(item) is int and item == -1 for item in second_coefficients))
+        and all(type(item) is int and item == -1 for item in second_coefficients)
     )
 
 
@@ -95,7 +97,7 @@ def _square(value: object, n: int) -> bool:
     square = value["square_coefficients"]
     if not isinstance(lhs, list) or not isinstance(square, list):
         return False
-    if any((type(item) is not int for item in lhs + square)):
+    if any(type(item) is not int for item in lhs + square):
         return False
     if lhs != [4, -4 * n, n * n] or square != [2, -n]:
         return False

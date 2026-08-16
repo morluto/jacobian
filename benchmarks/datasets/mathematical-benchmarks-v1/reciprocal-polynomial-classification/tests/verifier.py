@@ -1,6 +1,7 @@
 import json
 import math
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W, E = (Path("/app"), Path("/tests"))

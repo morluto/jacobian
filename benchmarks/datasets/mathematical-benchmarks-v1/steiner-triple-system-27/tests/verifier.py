@@ -1,8 +1,8 @@
-import hashlib
 import json
 from collections import Counter
 from itertools import combinations
 from pathlib import Path
+
 from verifier_support import (
     load_submission_raw,
     normalize_reward_file,
@@ -31,16 +31,14 @@ def _valid_design(result, source):
         if (
             not isinstance(block, list)
             or len(block) != 3
-            or any(
-                (type(point) is not int or not 0 <= point < order for point in block)
-            )
+            or any(type(point) is not int or not 0 <= point < order for point in block)
             or (len(set(block)) != 3)
         ):
             return False
         canonical.append(tuple(sorted(block)))
     if len(set(canonical)) != len(canonical):
         return False
-    pairs = Counter((pair for block in canonical for pair in combinations(block, 2)))
+    pairs = Counter(pair for block in canonical for pair in combinations(block, 2))
     expected_pairs = set(combinations(range(order), 2))
     return bool(set(pairs) == expected_pairs and set(pairs.values()) == {1})
 

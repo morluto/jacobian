@@ -1,6 +1,7 @@
 import json
 from fractions import Fraction
 from pathlib import Path
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -73,7 +74,7 @@ def _result_valid(result: object) -> bool:
         and result["combined_numerator_coefficients"] == numerator
         and (result["cleared_polynomial_coefficients"] == cleared)
         and (result["pole_square_residuals"] == residuals)
-        and all((item["residual"] != 0 for item in residuals))
+        and all(item["residual"] != 0 for item in residuals)
         and (_canonical_fraction(result["root_sum"]) == root_sum)
         and (
             result["diagnosis"]

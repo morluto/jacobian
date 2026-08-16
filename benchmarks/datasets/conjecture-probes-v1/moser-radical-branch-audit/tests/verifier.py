@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import json
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -114,9 +116,9 @@ def _table(
         if (
             not isinstance(pair, list)
             or len(pair) != 2
-            or any((type(x) is not int for x in pair))
+            or any(type(x) is not int for x in pair)
             or (pair[0] == pair[1])
-            or any((not 0 <= endpoint < 7 for endpoint in pair))
+            or any(not 0 <= endpoint < 7 for endpoint in pair)
         ):
             return False
         if (
@@ -125,8 +127,8 @@ def _table(
             or type(unit) is not bool
         ):
             return False
-        parsed = tuple((_q(part) for part in distance))
-        if any((part is None for part in parsed)):
+        parsed = tuple(_q(part) for part in distance)
+        if any(part is None for part in parsed):
             return False
         key = tuple(sorted(pair))
         if key in seen or parsed != expected[key] or unit != (parsed == (1, 0)):
@@ -169,9 +171,9 @@ def _edge_set(value: Any, expected_count: int) -> set[tuple[int, int]] | None:
         if (
             not isinstance(edge, list)
             or len(edge) != 2
-            or any((type(endpoint) is not int for endpoint in edge))
+            or any(type(endpoint) is not int for endpoint in edge)
             or (edge[0] == edge[1])
-            or any((not 0 <= endpoint < 7 for endpoint in edge))
+            or any(not 0 <= endpoint < 7 for endpoint in edge)
         ):
             return None
         normalized.add(tuple(sorted(edge)))
@@ -190,7 +192,6 @@ def main():
     submission = load_submission(require_input_binding=False)
     protocol_ok = submission is not None
     math_ok = bool(protocol_ok and mathematics(submission.get("result")))
-    witness = submission.get("witness") if isinstance(submission, dict) else None
     reward = float(protocol_ok and input_bound and math_ok)
     _write(
         {

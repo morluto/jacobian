@@ -1,11 +1,13 @@
 """Clean-room verifier for the perfect-cuboid finite scope audit."""
 
 from __future__ import annotations
+
 import json
 from collections import Counter
 from math import isqrt
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -30,9 +32,9 @@ def _expected(case: dict[str, Any]) -> dict[str, Any]:
         edges[1] * edges[1] + edges[2] * edges[2],
     ]
     face_roots = [_root(value) for value in face_radicands]
-    space_radicand = sum((value * value for value in edges))
+    space_radicand = sum(value * value for value in edges)
     space_root = _root(space_radicand)
-    face_count = sum((value is not None for value in face_roots))
+    face_count = sum(value is not None for value in face_roots)
     if face_count == 3 and space_root is not None:
         classification = "PERFECT_CUBOID"
     elif face_count == 3:
@@ -84,9 +86,9 @@ def _mathematics(result: Any, frozen: dict[str, Any]) -> bool:
         submitted[row.get("id")] = row
     if set(submitted) != set(expected):
         return False
-    if any((not _row_matches(submitted[key], expected[key]) for key in expected)):
+    if any(not _row_matches(submitted[key], expected[key]) for key in expected):
         return False
-    counts = Counter((row["class"] for row in expected.values()))
+    counts = Counter(row["class"] for row in expected.values())
     if set(result["case_counts"]) != CLASSES:
         return False
     if result["case_counts"] != {name: counts[name] for name in CLASSES}:
@@ -102,7 +104,7 @@ def _row_matches(submitted: dict[str, Any], expected: dict[str, Any]) -> bool:
     if not isinstance(submitted, dict) or set(submitted) != set(expected):
         return False
     fixed = set(expected) - {"face_radicands", "face_roots"}
-    if any((submitted.get(key) != expected[key] for key in fixed)):
+    if any(submitted.get(key) != expected[key] for key in fixed):
         return False
     radicands = submitted.get("face_radicands")
     roots = submitted.get("face_roots")
@@ -135,7 +137,6 @@ def main() -> None:
     mathematics = bool(
         frozen and protocol and _mathematics(submission.get("result"), frozen)
     )
-    witness = bool(protocol)
     aggregate = float(input_bound and protocol and mathematics)
     _reward(
         {

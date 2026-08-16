@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 import json
 from itertools import combinations
 from pathlib import Path
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -34,7 +36,7 @@ def _edge(value):
     if (
         not isinstance(value, list)
         or len(value) != 2
-        or (not all((type(x) is int and 0 <= x < 5 for x in value)))
+        or (not all(type(x) is int and 0 <= x < 5 for x in value))
         or (value[0] >= value[1])
     ):
         raise ValueError
@@ -60,7 +62,7 @@ def mathematics(result):
         {"left": list(e), "right": list(f), "relation": _relation(e, f)}
         for e, f in combinations(selected, 2)
     ]
-    if any((row["relation"] == "DISJOINT" for row in expected_pairs)):
+    if any(row["relation"] == "DISJOINT" for row in expected_pairs):
         return False
     excluded = [e for e in ALL if e not in selected]
     expected = []
@@ -75,7 +77,7 @@ def mathematics(result):
         expected.append(
             {"excluded": list(edge), "disjoint_selected": list(disjoint[0])}
         )
-    return json_value_equal(result["excluded_edge_witnesses"], expected)
+    return result["excluded_edge_witnesses"] == expected
 
 
 def _write(values):
@@ -89,8 +91,6 @@ def main():
     submission = load_submission(require_input_binding=False)
     protocol = isinstance(submission, dict)
     result = submission.get("result") if protocol else None
-    witness = submission.get("witness") if protocol else None
-    descriptor = witness[0] if isinstance(witness, list) and len(witness) == 1 else None
     mathematics_valid = bool(protocol and mathematics(result))
     values = {
         "input_binding": float(workspace_input_is_bound()),

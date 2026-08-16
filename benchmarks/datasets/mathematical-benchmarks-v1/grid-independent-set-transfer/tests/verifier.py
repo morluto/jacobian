@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -12,7 +13,7 @@ REQUIRED_N = (2, 3, 4, 5)
 
 def derive_case(n):
     masks = [mask for mask in range(1 << n) if not mask & mask << 1]
-    compatible = sum((not left & right for left in masks for right in masks))
+    compatible = sum(not left & right for left in masks for right in masks)
     counts = dict.fromkeys(masks, 1)
     layers = [sum(counts.values())]
     for _ in range(1, n):
@@ -34,7 +35,7 @@ def derive():
     cases = [derive_case(n) for n in REQUIRED_N]
     return {
         "cases": cases,
-        "total": sum((case["independent_set_count"] for case in cases)),
+        "total": sum(case["independent_set_count"] for case in cases),
     }
 
 
@@ -43,7 +44,7 @@ def exact_value(actual, expected):
         return (
             isinstance(actual, dict)
             and set(actual) == set(expected)
-            and all((exact_value(actual[key], expected[key]) for key in expected))
+            and all(exact_value(actual[key], expected[key]) for key in expected)
         )
     if isinstance(expected, list):
         return (
@@ -109,13 +110,13 @@ def _case_shape_ok(case: object) -> bool:
     if type(case["n"]) is not int:
         return False
     if not isinstance(case["valid_row_masks"], list) or not all(
-        (type(m) is int for m in case["valid_row_masks"])
+        type(m) is int for m in case["valid_row_masks"]
     ):
         return False
     if type(case["compatible_pair_count"]) is not int:
         return False
     if not isinstance(case["layer_totals"], list) or not all(
-        (type(v) is int for v in case["layer_totals"])
+        type(v) is int for v in case["layer_totals"]
     ):
         return False
     return type(case["independent_set_count"]) is int
@@ -129,7 +130,7 @@ def _result_shape_ok(result: object) -> bool:
     cases = result["cases"]
     if not isinstance(cases, list) or len(cases) != len(REQUIRED_N):
         return False
-    return all((_case_shape_ok(case) for case in cases))
+    return all(_case_shape_ok(case) for case in cases)
 
 
 def main():

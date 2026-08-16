@@ -1,6 +1,7 @@
 import json
 import re
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W = Path("/app")
@@ -46,7 +47,7 @@ def _valid_step_inputs(step, facts):
     inputs = step["inputs"]
     return bool(
         isinstance(inputs, list)
-        and all((type(value) is str for value in inputs))
+        and all(type(value) is str for value in inputs)
         and (len(inputs) == len(set(inputs)))
         and (set(inputs) <= facts)
     )
@@ -74,7 +75,7 @@ def _replay_proof(result, source):
     selected = result["selected_premises"]
     if (
         not isinstance(selected, list)
-        or not all((type(premise) is str for premise in selected))
+        or not all(type(premise) is str for premise in selected)
         or len(selected) != len(REQUIRED_PREMISES)
         or (set(selected) != REQUIRED_PREMISES)
     ):

@@ -1,6 +1,7 @@
 import json
 from math import gcd
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W, E = (Path("/app"), Path("/tests"))
@@ -22,7 +23,7 @@ def _prime(n):
     return (
         type(n) is int
         and 2 <= n <= 97
-        and all((n % d for d in range(2, int(n**0.5) + 1)))
+        and all(n % d for d in range(2, int(n**0.5) + 1))
     )
 
 
@@ -38,7 +39,7 @@ def _rows(value):
             not _prime(p)
             or not isinstance(exps, list)
             or len(exps) != 4
-            or any((type(e) is not int or not 0 <= e <= 6 for e in exps))
+            or any(type(e) is not int or not 0 <= e <= 6 for e in exps)
         ):
             return None
         out.append((p, exps))

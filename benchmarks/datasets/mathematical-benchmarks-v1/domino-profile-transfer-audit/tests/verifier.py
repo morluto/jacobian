@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 TESTS = Path("/tests")
@@ -17,7 +18,7 @@ def _outgoing_masks(incoming: int) -> list[int]:
         if occupied == 7:
             outputs.append(outgoing)
             return
-        row = next((index for index in range(3) if not occupied & 1 << index))
+        row = next(index for index in range(3) if not occupied & 1 << index)
         fill(occupied | 1 << row, outgoing | 1 << row)
         if row < 2 and (not occupied & 1 << row + 1):
             fill(occupied | 1 << row | 1 << row + 1, outgoing)
@@ -37,7 +38,7 @@ def _transition() -> list[list[int]]:
 def _matrix_multiply(left: list[list[int]], right: list[list[int]]) -> list[list[int]]:
     return [
         [
-            sum((left[row][middle] * right[middle][column] for middle in range(SIZE)))
+            sum(left[row][middle] * right[middle][column] for middle in range(SIZE))
             % MODULUS
             for column in range(SIZE)
         ]
@@ -47,8 +48,7 @@ def _matrix_multiply(left: list[list[int]], right: list[list[int]]) -> list[list
 
 def _vector_multiply(vector: list[int], matrix: list[list[int]]) -> list[int]:
     return [
-        sum((vector[middle] * matrix[middle][column] for middle in range(SIZE)))
-        % MODULUS
+        sum(vector[middle] * matrix[middle][column] for middle in range(SIZE)) % MODULUS
         for column in range(SIZE)
     ]
 
@@ -57,7 +57,7 @@ def _valid_vector(value: object) -> bool:
     return (
         isinstance(value, list)
         and len(value) == SIZE
-        and all((type(item) is int and 0 <= item < MODULUS for item in value))
+        and all(type(item) is int and 0 <= item < MODULUS for item in value)
     )
 
 
@@ -115,7 +115,6 @@ def main() -> None:
     submission = load_submission()
     result = submission.get("result") if isinstance(submission, dict) else None
     mathematical = _result_valid(result)
-    evidence = bool(isinstance(submission, dict))
     reward = float(mathematical)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)

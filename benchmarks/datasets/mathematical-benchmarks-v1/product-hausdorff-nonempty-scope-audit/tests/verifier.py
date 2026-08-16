@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W, E = (Path("/app"), Path("/tests"))
@@ -14,7 +15,7 @@ def topology_ok(n, raw):
             not isinstance(item, list)
             or item != sorted(item)
             or len(set(item)) != len(item)
-            or any((type(x) is not int or not 0 <= x < n for x in item))
+            or any(type(x) is not int or not 0 <= x < n for x in item)
         ):
             return None
         opens.append(frozenset(item))
@@ -31,21 +32,17 @@ def topology_ok(n, raw):
 
 def is_t0(n, opens):
     return all(
-        (
-            any(((x in u) != (y in u) for u in opens))
-            for x in range(n)
-            for y in range(x + 1, n)
-        )
+        any((x in u) != (y in u) for u in opens)
+        for x in range(n)
+        for y in range(x + 1, n)
     )
 
 
 def is_t2(n, opens):
     return all(
-        (
-            any((x in u and y in v and (not u & v) for u in opens for v in opens))
-            for x in range(n)
-            for y in range(x + 1, n)
-        )
+        any(x in u and y in v and (not u & v) for u in opens for v in opens)
+        for x in range(n)
+        for y in range(x + 1, n)
     )
 
 
@@ -65,7 +62,7 @@ def result_ok(result):
     if (
         not isinstance(cards, list)
         or len(cards) != 3
-        or any((type(x) is not int for x in cards))
+        or any(type(x) is not int for x in cards)
     ):
         return False
     n, empty, other = cards

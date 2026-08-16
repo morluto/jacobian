@@ -1,11 +1,13 @@
 """Clean-room verifier for the finite Happy Ending convex-position probe."""
 
 from __future__ import annotations
+
 import itertools
 import json
 from collections import deque
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -86,7 +88,7 @@ def _convex_profile(
 ):
     ids = [record["id"] for record in records]
     points = [(record["x"], record["y"]) for record in records]
-    if not all((_cross(*triple) != 0 for triple in itertools.combinations(points, 3))):
+    if not all(_cross(*triple) != 0 for triple in itertools.combinations(points, 3)):
         return None
     counts: dict[int, int] = {}
     maximum = 2
@@ -101,7 +103,7 @@ def _convex_profile(
                     maximum = size
                     maximum_sets.clear()
                 if size == maximum:
-                    maximum_sets.add(frozenset((ids[index] for index in subset)))
+                    maximum_sets.add(frozenset(ids[index] for index in subset))
         counts[size] = count
     return (ids, points, counts, maximum, maximum_sets)
 
@@ -130,7 +132,7 @@ def _witness_coordinates(
         not isinstance(witness, list)
         or len(witness) != maximum
         or len(set(witness)) != maximum
-        or any((name not in ids for name in witness))
+        or any(name not in ids for name in witness)
     ):
         return None
     return [points[ids.index(name)] for name in witness]
@@ -174,7 +176,6 @@ def main() -> None:
     mathematics = bool(
         frozen and protocol and _mathematics(submission.get("result"), frozen)
     )
-    witness = bool(protocol)
     aggregate = float(input_bound and protocol and mathematics)
     _reward(
         {

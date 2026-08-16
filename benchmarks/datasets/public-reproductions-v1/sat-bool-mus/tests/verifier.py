@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W = Path("/app")
@@ -23,7 +24,7 @@ def _brute_unsat(clauses, variables):
     n = len(variables)
     for mask in range(1 << n):
         assign = {variables[i]: bool(mask >> i & 1) for i in range(n)}
-        if all((_satisfied(c, assign, variables) for c in clauses)):
+        if all(_satisfied(c, assign, variables) for c in clauses):
             return False
     return True
 
@@ -37,10 +38,10 @@ def _math(s, x):
         a = r.get("assignment")
         if not isinstance(a, dict) or set(a) != set(variables):
             return False
-        if not all((isinstance(v, bool) for v in a.values())):
+        if not all(isinstance(v, bool) for v in a.values()):
             return False
         return status == "SATISFIABLE" and all(
-            (_satisfied(c, a, variables) for c in clauses)
+            _satisfied(c, a, variables) for c in clauses
         )
     return status == "UNSATISFIABLE" and _brute_unsat(clauses, variables)
 

@@ -1,6 +1,7 @@
 import json
 from fractions import Fraction
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 FROZEN_INPUT = Path(__file__).with_name("input.json")
@@ -29,14 +30,14 @@ def load_instance(path=FROZEN_INPUT):
         or cycle_size <= 0
         or (not isinstance(marked_indices, list))
         or (not marked_indices)
-        or any((type(index) is not int for index in marked_indices))
+        or any(type(index) is not int for index in marked_indices)
         or (len(set(marked_indices)) != len(marked_indices))
-        or any((index < 1 or index > cycle_size for index in marked_indices))
+        or any(index < 1 or index > cycle_size for index in marked_indices)
     ):
         return None
     return {
         "cycle_size": cycle_size,
-        "marked_indices": tuple((index - 1 for index in marked_indices)),
+        "marked_indices": tuple(index - 1 for index in marked_indices),
     }
 
 
@@ -74,7 +75,7 @@ def minimum_cost(instance=None):
         total += value
         cumulative.append(total)
     median = sorted(cumulative)[len(cumulative) // 2]
-    return sum((abs(value - median) for value in cumulative))
+    return sum(abs(value - median) for value in cumulative)
 
 
 def valid(result, instance=None):
@@ -95,7 +96,7 @@ def valid(result, instance=None):
             return False
         sequence = [fraction(value) for value in result["sequence"]]
         flow = [fraction(value) for value in result["flow"]]
-        if any((value is None for value in sequence + flow)):
+        if any(value is None for value in sequence + flow):
             return False
         marked_fraction = Fraction(len(marks), cycle_size)
         weights = [
@@ -107,14 +108,12 @@ def valid(result, instance=None):
             optimum is not None
             and sum(sequence) == 0
             and all(
-                (
-                    abs(sequence[i] - sequence[(i + 1) % cycle_size]) <= 1
-                    for i in range(cycle_size)
-                )
+                abs(sequence[i] - sequence[(i + 1) % cycle_size]) <= 1
+                for i in range(cycle_size)
             )
-            and (sum((sequence[i] for i in marks)) == optimum)
-            and all((flow[i] - flow[i - 1] == weights[i] for i in range(cycle_size)))
-            and (sum((abs(value) for value in flow)) == optimum)
+            and (sum(sequence[i] for i in marks) == optimum)
+            and all(flow[i] - flow[i - 1] == weights[i] for i in range(cycle_size))
+            and (sum(abs(value) for value in flow) == optimum)
             and (
                 fraction(result["primal_value"])
                 == fraction(result["dual_value"])
@@ -134,8 +133,8 @@ def result_contract(result, instance):
         and isinstance(result["flow"], list)
         and (len(result["sequence"]) == cycle_size)
         and (len(result["flow"]) == cycle_size)
-        and all((fraction(value) is not None for value in result["sequence"]))
-        and all((fraction(value) is not None for value in result["flow"]))
+        and all(fraction(value) is not None for value in result["sequence"])
+        and all(fraction(value) is not None for value in result["flow"])
         and (fraction(result["primal_value"]) is not None)
         and (fraction(result["dual_value"]) is not None)
     )

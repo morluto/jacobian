@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W = Path("/app")
@@ -27,7 +28,7 @@ def _vector(value):
         value
         if isinstance(value, list)
         and len(value) == 4
-        and all((type(x) is int for x in value))
+        and all(type(x) is int for x in value)
         else None
     )
 
@@ -38,7 +39,7 @@ def _int_list(value, length):
         value
         if isinstance(value, list)
         and len(value) == length
-        and all((type(x) is int for x in value))
+        and all(type(x) is int for x in value)
         else None
     )
 
@@ -81,10 +82,10 @@ def _result_is_valid(result, frozen):
     if (
         not isinstance(product, list)
         or len(product) != 5
-        or any((_vector(v) is None for v in product))
+        or any(_vector(v) is None for v in product)
     ):
         return False
-    total = [sum((WEIGHTS[p][i] for p in WEIGHTS)) for i in range(4)]
+    total = [sum(WEIGHTS[p][i] for p in WEIGHTS) for i in range(4)]
     weight_sum = _int_list(result["weight_sum"], 4)
     controlled_powers = _int_list(result["controlled_powers"], 4)
     return bool(

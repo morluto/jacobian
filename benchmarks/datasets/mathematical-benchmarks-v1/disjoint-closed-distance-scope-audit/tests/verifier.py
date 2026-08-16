@@ -1,6 +1,7 @@
 import json
 from fractions import Fraction
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W, E = (Path("/app"), Path("/tests"))
@@ -72,7 +73,7 @@ def result_ok(result):
     }:
         return False
     h, s, c = (result["horizontal_step"], result["vertical_scale"], result["offset"])
-    if any((type(x) is not int for x in (h, s, c))) or not (
+    if any(type(x) is not int for x in (h, s, c)) or not (
         2 <= h <= 20 and 1 <= s <= 20 and (2 <= c <= 20)
     ):
         return False
@@ -81,7 +82,7 @@ def result_ok(result):
         ns != sorted(ns)
         or len(ns) != 10
         or len(set(ns)) != 10
-        or any((type(n) is not int or n < 1 for n in ns))
+        or any(type(n) is not int or n < 1 for n in ns)
     ):
         return False
     distances = result["distance_squared"]
@@ -118,7 +119,6 @@ def main():
     protocol_ok = submission is not None
     result = submission.get("result") if protocol_ok else None
     math_ok = bool(result_ok(result) and frozen_ok())
-    witness = submission.get("witness") if protocol_ok else None
     reward = float(math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(

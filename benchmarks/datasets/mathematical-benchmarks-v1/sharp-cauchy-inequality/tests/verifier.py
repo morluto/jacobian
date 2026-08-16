@@ -2,6 +2,7 @@ import json
 from fractions import Fraction
 from math import isqrt
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W, E = (Path("/app"), Path("/tests"))
@@ -34,7 +35,7 @@ def _poly(terms):
         if (
             not isinstance(exps, list)
             or len(exps) != 6
-            or any((type(e) is not int or e < 0 for e in exps))
+            or any(type(e) is not int or e < 0 for e in exps)
             or (type(coefficient) is not int)
             or (coefficient == 0)
         ):
@@ -139,8 +140,8 @@ def _certificate_ok(mode, cert):
         return False
     core_keys = [k for k in keys if k != "sos_factors"]
     parsed = {key: _poly(cert[key]) for key in core_keys}
-    if any((value is None for value in parsed.values())) or any(
-        (parsed[key] != expected[key] for key in core_keys)
+    if any(value is None for value in parsed.values()) or any(
+        parsed[key] != expected[key] for key in core_keys
     ):
         return False
     if mode == "AMGM_SQUARES":
@@ -153,7 +154,7 @@ def _certificate_ok(mode, cert):
         if not isinstance(factors_raw, list) or not factors_raw:
             return False
         factors = [_poly(item) for item in factors_raw]
-        if any((item is None for item in factors)):
+        if any(item is None for item in factors):
             return False
         target = _add((2, parsed["residual"]), (-1, parsed["constraint_residual"]))
         return _add(*((1, _square(f)) for f in factors)) == target
@@ -191,7 +192,7 @@ def _witness_ok(witness, constant):
     if not isinstance(witness, dict) or set(witness) != {"a", "b", "c", "x", "y", "z"}:
         return False
     values = [_rat(witness[key]) for key in ("a", "b", "c", "x", "y", "z")]
-    if any((value is None or value <= 0 for value in values)):
+    if any(value is None or value <= 0 for value in values):
         return False
     a, b, c, x, y, z = values
     if x + y + z != 1:

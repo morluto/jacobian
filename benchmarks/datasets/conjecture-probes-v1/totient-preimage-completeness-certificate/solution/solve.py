@@ -21,9 +21,7 @@ def main() -> None:
     solutions = []
     for exponents in itertools.product(*OPTIONS):
         if (
-            prod(
-                contribution(p, a) for p, a in zip(PRIMES, exponents, strict=True)
-            )
+            prod(contribution(p, a) for p, a in zip(PRIMES, exponents, strict=True))
             != 48
         ):
             continue

@@ -2,6 +2,7 @@ import json
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -36,7 +37,7 @@ def _qs(value: object) -> list[Fraction] | None:
     if not isinstance(value, list) or len(value) != 4:
         return None
     parsed = [_q(item) for item in value]
-    return None if any((item is None for item in parsed)) else parsed
+    return None if any(item is None for item in parsed) else parsed
 
 
 def _result(value: object, frozen: dict[str, Any]) -> bool:
@@ -108,7 +109,7 @@ def _result_values_protocol_valid(value: object) -> bool:
         return False
     scalar_names = fields - {"circle_coefficients", "distance_coefficients"}
     scalars = {name: _q(value[name]) for name in scalar_names}
-    if any((parsed is None for parsed in scalars.values())):
+    if any(parsed is None for parsed in scalars.values()):
         return False
     if not (
         scalars["k"] > 0
@@ -118,12 +119,10 @@ def _result_values_protocol_valid(value: object) -> bool:
     ):
         return False
     return all(
-        (
-            isinstance(value[name], list)
-            and len(value[name]) == 4
-            and all((_q(item) is not None for item in value[name]))
-            for name in ("circle_coefficients", "distance_coefficients")
-        )
+        isinstance(value[name], list)
+        and len(value[name]) == 4
+        and all(_q(item) is not None for item in value[name])
+        for name in ("circle_coefficients", "distance_coefficients")
     )
 
 
@@ -148,7 +147,7 @@ def _result_protocol_valid(value: object) -> bool:
 
 def _encode_certificate_lines(expected: list[str]) -> tuple[bytes, ...] | None:
     try:
-        return tuple((line.encode() for line in expected))
+        return tuple(line.encode() for line in expected)
     except UnicodeError:
         return None
 

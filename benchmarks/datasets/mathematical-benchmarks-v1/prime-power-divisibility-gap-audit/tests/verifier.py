@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import json
 import math
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -35,7 +37,7 @@ def _integer(
 
 def _prime(value: int) -> bool:
     return value >= 2 and all(
-        (value % divisor for divisor in range(2, math.isqrt(value) + 1))
+        value % divisor for divisor in range(2, math.isqrt(value) + 1)
     )
 
 

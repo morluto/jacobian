@@ -1,6 +1,7 @@
 import itertools
 import json
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W, E = (Path("/app"), Path("/tests"))
@@ -97,15 +98,12 @@ def _result_ok(result, frozen):
         and (result["maximum_degree"] == 3)
     )
     audit_ok = all(
-        (
-            isinstance(case, dict)
-            and set(case)
-            == {"coefficients", "degree", "discriminant", "all_roots_real"}
-            and (type(case["degree"]) is int)
-            and (case["discriminant"] is None or type(case["discriminant"]) is int)
-            and (type(case["all_roots_real"]) is bool)
-            for case in submitted_audit
-        )
+        isinstance(case, dict)
+        and set(case) == {"coefficients", "degree", "discriminant", "all_roots_real"}
+        and (type(case["degree"]) is int)
+        and (case["discriminant"] is None or type(case["discriminant"]) is int)
+        and (type(case["all_roots_real"]) is bool)
+        for case in submitted_audit
     )
     return bool(
         scalar_ok

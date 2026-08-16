@@ -1,8 +1,8 @@
-import hashlib
 import json
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     load_submission_raw,
     normalize_reward_file,
@@ -56,13 +56,11 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     ):
         return False
     if any(
-        (
-            not isinstance(item, dict)
-            or not TRACE_FIELDS.issubset(item)
-            or any((type(item[field]) is not int for field in ("n", "x", "y", "floor")))
-            or (_fraction(item["value"]) is None)
-            for item in trace
-        )
+        not isinstance(item, dict)
+        or not TRACE_FIELDS.issubset(item)
+        or any(type(item[field]) is not int for field in ("n", "x", "y", "floor"))
+        or (_fraction(item["value"]) is None)
+        for item in trace
     ):
         return False
     for n in range(length):
@@ -79,17 +77,15 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
             return False
         if abs(x - y) >= band:
             return False
-    return all((item["floor"] == item["n"] for item in trace))
+    return all(item["floor"] == item["n"] for item in trace)
 
 
 def _result_protocol_valid(value: object) -> bool:
     if not isinstance(value, dict) or set(value) != RESULT_FIELDS:
         return False
     if not all(
-        (
-            _fraction(value[name]) is not None
-            for name in ("alpha", "beta", "even_offset", "odd_offset")
-        )
+        _fraction(value[name]) is not None
+        for name in ("alpha", "beta", "even_offset", "odd_offset")
     ):
         return False
     trace = value["trace"]
@@ -97,15 +93,11 @@ def _result_protocol_valid(value: object) -> bool:
         isinstance(trace, list)
         and len(trace) == 16
         and all(
-            (
-                isinstance(item, dict)
-                and set(item) == TRACE_FIELDS
-                and all(
-                    (type(item[field]) is int for field in ("n", "x", "y", "floor"))
-                )
-                and (_fraction(item["value"]) is not None)
-                for item in trace
-            )
+            isinstance(item, dict)
+            and set(item) == TRACE_FIELDS
+            and all(type(item[field]) is int for field in ("n", "x", "y", "floor"))
+            and (_fraction(item["value"]) is not None)
+            for item in trace
         )
     )
 

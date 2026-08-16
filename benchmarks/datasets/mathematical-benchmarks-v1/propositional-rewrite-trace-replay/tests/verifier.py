@@ -1,6 +1,7 @@
 import copy
 import json
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W, E = (Path("/app"), Path("/tests"))
@@ -29,13 +30,13 @@ def _valid_node(node, budget):
     if set(node) != {"op", "args"} or not isinstance(node["args"], list):
         return False
     arity = len(node["args"])
-    if op == "not" and arity != 1 or (op == "imp" and arity != 2):
+    if (op == "not" and arity != 1) or (op == "imp" and arity != 2):
         return False
     if op in {"and", "or"} and (not 2 <= arity <= 16):
         return False
     if op not in {"not", "imp", "and", "or"}:
         return False
-    return all((_valid_node(child, budget) for child in node["args"]))
+    return all(_valid_node(child, budget) for child in node["args"])
 
 
 def _at(root, path):
@@ -98,7 +99,7 @@ def _rewrite_flatten_associative(node):
     if node.get("op") not in {"and", "or"}:
         return None
     operator = node["op"]
-    if any((child.get("op") == operator for child in node["args"])):
+    if any(child.get("op") == operator for child in node["args"]):
         flattened = []
         for child in node["args"]:
             flattened.extend(child["args"] if child.get("op") == operator else [child])

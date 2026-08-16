@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 import json
 from pathlib import Path
+
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
     is_regular_bounded_file,
@@ -38,7 +40,7 @@ def _balances(flow: object) -> list[int] | None:
     if (
         not isinstance(flow, list)
         or len(flow) != 15
-        or (not all((type(v) is int and 0 <= v < 5 for v in flow)))
+        or (not all(type(v) is int and 0 <= v < 5 for v in flow))
     ):
         return None
     result = [0] * 10
@@ -52,7 +54,7 @@ def _exact_integer_list(value: object, expected: list[int]) -> bool:
     return bool(
         isinstance(value, list)
         and len(value) == len(expected)
-        and all((type(item) is int for item in value))
+        and all(type(item) is int for item in value)
         and (value == expected)
     )
 

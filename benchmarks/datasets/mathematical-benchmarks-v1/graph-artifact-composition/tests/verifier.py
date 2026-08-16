@@ -1,6 +1,7 @@
 import json
 from collections import deque
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W = Path("/app")
@@ -23,7 +24,7 @@ def main():
         v[a].add(b)
         v[b].add(a)
     d = max(map(len, v.values()))
-    m = sorted((k for k in v if len(v[k]) == d))
+    m = sorted(k for k in v if len(v[k]) == d)
     ds = dict.fromkeys(m, 0)
     q = deque(m)
     while q:
@@ -44,10 +45,8 @@ def main():
         isinstance(s, dict)
         and isinstance(s.get("result"), dict)
         and all(
-            (
-                isinstance(item, dict) and type(item.get("distance")) is int
-                for item in s["result"].get("distance_to_set", [])
-            )
+            isinstance(item, dict) and type(item.get("distance")) is int
+            for item in s["result"].get("distance_to_set", [])
         )
         and (type(s["result"].get("maximum_distance_to_set")) is int)
     )

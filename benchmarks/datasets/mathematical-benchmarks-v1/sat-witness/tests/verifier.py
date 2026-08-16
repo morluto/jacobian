@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -20,13 +21,11 @@ def main():
         and set(result) == {"status", "assignment"}
         and isinstance(a, dict)
         and (set(a) == set(x["variables"]))
-        and all((isinstance(v, bool) for v in a.values()))
+        and all(isinstance(v, bool) for v in a.values())
     )
     sat = valid and all(
-        (
-            any(((lit > 0) == a[x["variables"][abs(lit) - 1]] for lit in c))
-            for c in x["clauses"]
-        )
+        any((lit > 0) == a[x["variables"][abs(lit) - 1]] for lit in c)
+        for c in x["clauses"]
     )
     math_correct = bool(
         workspace_input_is_bound() and result.get("status") == "SATISFIABLE" and sat

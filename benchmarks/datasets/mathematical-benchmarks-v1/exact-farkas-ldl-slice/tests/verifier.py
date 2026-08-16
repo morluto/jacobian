@@ -2,6 +2,7 @@ import json
 from fractions import Fraction
 from math import gcd
 from pathlib import Path
+
 from verifier_support import (
     is_regular_bounded_file,
     load_submission,
@@ -47,11 +48,11 @@ def _matrix(value):
     if (
         not isinstance(value, list)
         or len(value) != 4
-        or any((not isinstance(row, list) or len(row) != 4 for row in value))
+        or any(not isinstance(row, list) or len(row) != 4 for row in value)
     ):
         return None
     parsed = [[_rat(item) for item in row] for row in value]
-    return None if any((item is None for row in parsed for item in row)) else parsed
+    return None if any(item is None for row in parsed for item in row) else parsed
 
 
 def _mul(left, right):
@@ -96,7 +97,7 @@ def _scalar_ok(value, frozen):
     source = frozen.get("scalar_inputs", {})
     expected = {key: _rat(item) for key, item in source.items()}
     return bool(
-        all((item is not None for item in [*parsed.values(), *expected.values()]))
+        all(item is not None for item in [*parsed.values(), *expected.values()])
         and parsed["y0"] == expected["y0"]
         and (parsed["c00_y"] == expected["c00_y"])
         and (parsed["objective"] == expected["objective"])
@@ -117,10 +118,10 @@ def _positive_definite_ok(mode, certificate, matrix):
         if lower is None or not isinstance(diagonal, list) or len(diagonal) != 4:
             return False
         pivots = [_rat(item) for item in diagonal]
-        if any((item is None or item <= 0 for item in pivots)):
+        if any(item is None or item <= 0 for item in pivots):
             return False
         if any(
-            (lower[i][j] != (1 if i == j else 0) for i in range(4) for j in range(i, 4))
+            lower[i][j] != (1 if i == j else 0) for i in range(4) for j in range(i, 4)
         ):
             return False
         diag_matrix = [
@@ -136,7 +137,7 @@ def _positive_definite_ok(mode, certificate, matrix):
         determinants = [_rat(item) for item in submitted]
         expected = [_det([row[:size] for row in matrix[:size]]) for size in range(1, 5)]
         return (
-            all((item is not None and item > 0 for item in determinants))
+            all(item is not None and item > 0 for item in determinants)
             and determinants == expected
         )
     return False

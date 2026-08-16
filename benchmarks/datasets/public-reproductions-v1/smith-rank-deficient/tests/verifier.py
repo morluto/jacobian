@@ -1,6 +1,7 @@
 import json
 import math
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W = Path("/app")
@@ -16,7 +17,7 @@ def _math(s, x):
     ):
         return False
     ifs = r.get("invariant_factors")
-    if not isinstance(ifs, list) or any((type(value) is not int for value in ifs)):
+    if not isinstance(ifs, list) or any(type(value) is not int for value in ifs):
         return False
     matrix = x.get("matrix")
     try:
@@ -27,7 +28,7 @@ def _math(s, x):
             type(row_count) is not int
             or type(column_count) is not int
             or len(rows) != row_count
-            or any((len(row) != column_count for row in rows))
+            or any(len(row) != column_count for row in rows)
         ):
             return False
         entries = [[int(value) for value in row] for row in rows]

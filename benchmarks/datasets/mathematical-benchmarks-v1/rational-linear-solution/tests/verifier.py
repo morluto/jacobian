@@ -1,6 +1,7 @@
 import json
 from fractions import Fraction
 from pathlib import Path
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -35,20 +36,16 @@ def main():
     math_ok = bool(
         isinstance(s, dict)
         and set(values) == set(x["variables"])
-        and all((v is not None for v in values.values()))
+        and all(v is not None for v in values.values())
         and all(
-            (
-                sum(
-                    (
-                        Fraction(a) * values[var]
-                        for a, var in zip(
-                            row["coefficients"], x["variables"], strict=True
-                        )
-                    )
+            sum(
+                (
+                    Fraction(a) * values[var]
+                    for a, var in zip(row["coefficients"], x["variables"], strict=True)
                 )
-                == row["rhs"]
-                for row in x["equations"]
             )
+            == row["rhs"]
+            for row in x["equations"]
         )
     )
     reward = float(math_ok)

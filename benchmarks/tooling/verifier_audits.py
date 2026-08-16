@@ -183,6 +183,31 @@ def _formula_field_name(path: str) -> str:
     return path.rsplit(".", 1)[-1]
 
 
+def _is_formula_field(name: str) -> bool:
+    if name in _FORMULA_SKIP_FIELDS:
+        return False
+    return name in _FORMULA_FIELD_NAMES or any(
+        marker in name for marker in _FORMULA_NAME_MARKERS
+    )
+
+
+def _enum_values_are_labels(enum: object) -> bool:
+    return (
+        isinstance(enum, list)
+        and bool(enum)
+        and all(_is_enum_label(value) for value in enum)
+    )
+
+
+def _privileged_formula_string(node: dict[str, Any]) -> bool:
+    const = node.get("const")
+    if _is_enum_label(const) or const in _ENUM_CONST:
+        return False
+    if _enum_values_are_labels(node.get("enum")):
+        return False
+    return node.get("type") == "string" or _formula_like_const(const)
+
+
 def formula_string_schema_failures(schema_path: Path) -> list[str]:
     """Return failures when a scored formula field is a privileged string."""
 
@@ -198,25 +223,11 @@ def formula_string_schema_failures(schema_path: Path) -> list[str]:
         return [f"{relative}: cannot parse schema: {exc}"]
     failures: list[str] = []
     for path, node in _schema_paths(payload, relative):
-        if not isinstance(node, dict):
-            continue
-        name = _formula_field_name(path)
-        if name in _FORMULA_SKIP_FIELDS:
-            continue
-        tracked = name in _FORMULA_FIELD_NAMES or any(
-            marker in name for marker in _FORMULA_NAME_MARKERS
-        )
-        if not tracked:
-            continue
-        const = node.get("const")
-        enum = node.get("enum")
-        if _is_enum_label(const) or const in _ENUM_CONST:
-            continue
-        if isinstance(enum, list) and enum and all(
-            _is_enum_label(value) for value in enum
+        if not isinstance(node, dict) or not _is_formula_field(
+            _formula_field_name(path)
         ):
             continue
-        if node.get("type") == "string" or _formula_like_const(const):
+        if _privileged_formula_string(node):
             failures.append(
                 f"{path}: encode mathematical formulas as structured objects, not strings"
             )
@@ -250,11 +261,7 @@ def mirror_witness_failures(verifier_path: Path) -> list[str]:
     failures: list[str] = []
     for node in ast.walk(parsed):
         keys: set[str] = set()
-        if isinstance(node, ast.Set):
-            for elt in node.elts:
-                if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
-                    keys.add(elt.value)
-        elif isinstance(node, ast.List) or isinstance(node, ast.Tuple):
+        if isinstance(node, (ast.Set, ast.List, ast.Tuple)):
             for elt in node.elts:
                 if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
                     keys.add(elt.value)
@@ -301,6 +308,29 @@ def unread_hash_witness_failures(verifier_path: Path) -> list[str]:
     return failures
 
 
+def _function_uses(node: ast.FunctionDef) -> set[str]:
+    return {child.id for child in ast.walk(node) if isinstance(child, ast.Name)}
+
+
+def _math_functions(tree: ast.AST) -> list[ast.FunctionDef]:
+    return [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "_math"
+    ]
+
+
+def _scores_hidden_expected_without_input(tree: ast.AST, verifier_path: Path) -> bool:
+    source = (
+        verifier_path.read_text(encoding="utf-8") if verifier_path.is_file() else ""
+    )
+    if "expected.json" not in source:
+        return False
+    if "e['expected_" not in source.replace('"', "'"):
+        return False
+    return not any("x" in _function_uses(node) for node in _math_functions(tree))
+
+
 def hidden_expected_scoring_failures(verifier_path: Path) -> list[str]:
     """Return failures when correctness is hidden-expected equality without input."""
 
@@ -309,33 +339,19 @@ def hidden_expected_scoring_failures(verifier_path: Path) -> list[str]:
         return parsed
     relative = _relative(verifier_path)
     failures: list[str] = []
-    for node in ast.walk(parsed):
-        if not isinstance(node, ast.FunctionDef) or node.name != "_math":
-            continue
+    for node in _math_functions(parsed):
         arg_names = [arg.arg for arg in node.args.args]
         if "e" not in arg_names or "x" not in arg_names:
             continue
-        used = {child.id for child in ast.walk(node) if isinstance(child, ast.Name)}
+        used = _function_uses(node)
         if "e" in used and "x" not in used:
             failures.append(
                 f"{relative}:{node.lineno}: derive the scored predicate from frozen input, not expected.json"
             )
-    source = (
-        verifier_path.read_text(encoding="utf-8") if verifier_path.is_file() else ""
-    )
-    if "expected.json" in source and "e['expected_" in source.replace('"', "'"):
-        tree_uses_input = False
-        for node in ast.walk(parsed):
-            if isinstance(node, ast.FunctionDef) and node.name == "_math":
-                used = {
-                    child.id for child in ast.walk(node) if isinstance(child, ast.Name)
-                }
-                if "x" in used:
-                    tree_uses_input = True
-        if not tree_uses_input:
-            failures.append(
-                f"{relative}: do not score equality with hidden expected.json while ignoring frozen input"
-            )
+    if _scores_hidden_expected_without_input(parsed, verifier_path):
+        failures.append(
+            f"{relative}: do not score equality with hidden expected.json while ignoring frozen input"
+        )
     return failures
 
 
@@ -365,11 +381,14 @@ def prose_witness_failures(verifier_path: Path) -> list[str]:
         func = node.func
         if isinstance(func, ast.Attribute) and func.attr == "strip":
             parent = func.value
-            if isinstance(parent, ast.Call) and isinstance(parent.func, ast.Attribute):
-                if parent.func.attr == "read_text":
-                    failures.append(
-                        f"{relative}:{node.lineno}: nonempty text is not a mathematical witness"
-                    )
+            if (
+                isinstance(parent, ast.Call)
+                and isinstance(parent.func, ast.Attribute)
+                and parent.func.attr == "read_text"
+            ):
+                failures.append(
+                    f"{relative}:{node.lineno}: nonempty text is not a mathematical witness"
+                )
     return failures
 
 

@@ -2,6 +2,7 @@ import json
 import math
 from fractions import Fraction
 from pathlib import Path
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -74,8 +75,8 @@ def _root_formula_valid(value: object, ns: list[int]) -> bool:
         or (not isinstance(denominator_offsets, list))
         or (len(numerator_offsets) != 2)
         or (len(denominator_offsets) != 2)
-        or (not all((type(offset) is int for offset in numerator_offsets)))
-        or (not all((type(offset) is int for offset in denominator_offsets)))
+        or (not all(type(offset) is int for offset in numerator_offsets))
+        or (not all(type(offset) is int for offset in denominator_offsets))
     ):
         return False
     if (
@@ -85,14 +86,12 @@ def _root_formula_valid(value: object, ns: list[int]) -> bool:
     ):
         return False
     return all(
-        (
-            Fraction(
-                coefficient * math.prod((n + offset for offset in numerator_offsets)),
-                math.prod((n + offset for offset in denominator_offsets)),
-            )
-            == 1 / sum((Fraction(1, k**3 - k) for k in range(2, n + 1)), Fraction())
-            for n in ns
+        Fraction(
+            coefficient * math.prod(n + offset for offset in numerator_offsets),
+            math.prod(n + offset for offset in denominator_offsets),
         )
+        == 1 / sum((Fraction(1, k**3 - k) for k in range(2, n + 1)), Fraction())
+        for n in ns
     )
 
 

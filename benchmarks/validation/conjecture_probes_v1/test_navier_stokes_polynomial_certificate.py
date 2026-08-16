@@ -1,11 +1,12 @@
 from __future__ import annotations
-import hashlib
+
 import json
 import shutil
 import subprocess
 import sys
 from fractions import Fraction
 from pathlib import Path
+
 from benchmarks.validation._verifier_child import run_verifier_in_child
 
 ROOT = Path(__file__).parents[3]

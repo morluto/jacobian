@@ -1,6 +1,7 @@
 import json
 from math import gcd
 from pathlib import Path
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -36,7 +37,7 @@ def _poly(value):
     if (
         not isinstance(value, list)
         or not value
-        or any((type(item) is not int for item in value))
+        or any(type(item) is not int for item in value)
         or (value != _trim(value))
     ):
         return None
@@ -140,30 +141,26 @@ def _result_ok(result, frozen):
     rhs = [_ratfun(item) for item in rhs_raw]
     values = [_ratfun(item) for item in values_raw]
     at_x = _ratfun(result["solution_at_x"])
-    if any((item is None for item in [*orbit, *rhs, *values, at_x])):
+    if any(item is None for item in [*orbit, *rhs, *values, at_x]):
         return False
     x = ([0, 1], [1])
     if not _equal(orbit[0], x):
         return False
-    if any((not _equal(_transform(orbit[i]), orbit[(i + 1) % 3]) for i in range(3))):
+    if any(not _equal(_transform(orbit[i]), orbit[(i + 1) % 3]) for i in range(3)):
         return False
-    if any((not _equal(rhs[i], _one_plus(orbit[i])) for i in range(3))):
+    if any(not _equal(rhs[i], _one_plus(orbit[i])) for i in range(3)):
         return False
-    if any(
-        (not _equal(_add(values[i], values[(i + 1) % 3]), rhs[i]) for i in range(3))
-    ):
+    if any(not _equal(_add(values[i], values[(i + 1) % 3]), rhs[i]) for i in range(3)):
         return False
     matrix = result["coefficient_matrix"]
     if (
         not isinstance(matrix, list)
         or len(matrix) != 3
         or any(
-            (
-                not isinstance(row, list)
-                or len(row) != 3
-                or any((type(entry) is not int for entry in row))
-                for row in matrix
-            )
+            not isinstance(row, list)
+            or len(row) != 3
+            or any(type(entry) is not int for entry in row)
+            for row in matrix
         )
     ):
         return False

@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+
 from verifier_support import load_submission as load_strict_submission
 from verifier_support import normalize_reward_file
 
@@ -51,9 +52,7 @@ def _is_connected(vertices, adj):
 
 
 def _has_triangle(vertices, adj):
-    return any(
-        (c in adj[a] for a in vertices for b in adj[a] for c in adj[b] if c != a)
-    )
+    return any(c in adj[a] for a in vertices for b in adj[a] for c in adj[b] if c != a)
 
 
 def _is_non_bipartite(vertices, adj):

@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+
 from verifier_support import load_submission, normalize_reward_file
 
 W = Path("/app")
@@ -33,18 +34,18 @@ def _partition_is_sum_free(value: object, maximum: int) -> bool:
         if (
             not isinstance(raw_color, list)
             or not raw_color
-            or any((type(number) is not int for number in raw_color))
+            or any(type(number) is not int for number in raw_color)
             or (raw_color != sorted(raw_color))
             or (len(raw_color) != len(set(raw_color)))
         ):
             return False
         color = set(raw_color)
-        if any((a + b in color for a in color for b in color if a <= b)):
+        if any(a + b in color for a in color for b in color if a <= b):
             return False
         colors.append(color)
     return (
         set().union(*colors) == set(range(1, maximum + 1))
-        and sum((len(color) for color in colors)) == maximum
+        and sum(len(color) for color in colors) == maximum
     )
 
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
+
 import itertools
 import json
 import math
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
     is_regular_bounded_file,
@@ -28,12 +30,12 @@ def _triples(value: Any) -> list[tuple[int, int, int]] | None:
     for row in value:
         if not isinstance(row, list) or len(row) != 3:
             return None
-        if any((type(x) is not int or not 0 <= x < 3 for x in row)):
+        if any(type(x) is not int or not 0 <= x < 3 for x in row):
             return None
         triple = tuple(row)
         if triple == (0, 0, 0):
             return None
-        first = next((x for x in triple if x))
+        first = next(x for x in triple if x)
         if first != 1:
             return None
         out.append(triple)
@@ -45,9 +47,9 @@ def _all_projective_classes() -> set[tuple[int, int, int]]:
     for value in itertools.product(range(3), repeat=3):
         if value == (0, 0, 0):
             continue
-        first = next((x for x in value if x))
+        first = next(x for x in value if x)
         inv = 1 if first == 1 else 2
-        out.add(tuple((inv * x % 3 for x in value)))
+        out.add(tuple(inv * x % 3 for x in value))
     return out
 
 
@@ -58,7 +60,7 @@ def _edges(value: Any) -> set[tuple[int, int]] | None:
     for row in value:
         if not isinstance(row, list) or len(row) != 2:
             return None
-        if any((type(x) is not int or not 0 <= x < 13 for x in row)):
+        if any(type(x) is not int or not 0 <= x < 13 for x in row):
             return None
         out.add((row[0], row[1]))
     return out if len(out) == 52 else None
@@ -75,7 +77,7 @@ def _pair_rows(value: Any, neighbors: list[set[int]]) -> bool:
         if (
             not isinstance(pair, list)
             or len(pair) != 2
-            or any((type(x) is not int or not 0 <= x < 13 for x in pair))
+            or any(type(x) is not int or not 0 <= x < 13 for x in pair)
             or (pair[0] >= pair[1])
             or (type(row["common_neighbors"]) is not int)
         ):

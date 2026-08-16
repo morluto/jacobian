@@ -1,6 +1,7 @@
 import json
 import math
 from pathlib import Path
+
 from verifier_support import (
     is_regular_bounded_file,
     load_submission,

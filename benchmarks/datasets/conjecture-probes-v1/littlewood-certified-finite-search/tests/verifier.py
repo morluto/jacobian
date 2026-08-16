@@ -1,11 +1,13 @@
 """Rigorous rational-interval verifier for a finite Littlewood search."""
 
 from __future__ import annotations
+
 import json
 from fractions import Fraction
 from math import isqrt
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -65,7 +67,7 @@ def expected():
             rows.append(current)
             best = current
     assert best is not None and all(
-        (best["upper"] < row(n)["lower"] for n in range(1, 2001) if n != best["n"])
+        best["upper"] < row(n)["lower"] for n in range(1, 2001) if n != best["n"]
     )
     return (rows, best)
 

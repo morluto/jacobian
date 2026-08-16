@@ -1,10 +1,12 @@
 """Exact polynomial and intersection verifier for one blow-up divisor."""
 
 from __future__ import annotations
+
 import json
 from math import gcd
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -66,7 +68,7 @@ def mathematics(r: Any) -> bool:
     if (
         not isinstance(coeffs, list)
         or len(coeffs) != 10
-        or any((type(c) is not int or not -20 <= c <= 20 for c in coeffs))
+        or any(type(c) is not int or not -20 <= c <= 20 for c in coeffs)
         or (not any(coeffs))
         or (gcd(*coeffs) != 1)
         or (not isinstance(checks, list))
@@ -88,11 +90,11 @@ def mathematics(r: Any) -> bool:
             return False
         submitted[check.get("point_index")] = check
     if submitted != expected or any(
-        (row["value"] != 0 or row["gradient"] == [0, 0, 0] for row in expected.values())
+        row["value"] != 0 or row["gradient"] == [0, 0, 0] for row in expected.values()
     ):
         return False
     d = [3, -1, -1, -1, -1, -1, -1]
-    self_i = d[0] ** 2 - sum((x * x for x in d[1:]))
+    self_i = d[0] ** 2 - sum(x * x for x in d[1:])
     canonical = -3 * d[0] - sum(d[1:])
     genus = (self_i + canonical) // 2 + 1
     return (

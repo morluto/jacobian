@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 import json
 from pathlib import Path
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -32,7 +34,7 @@ def _proper_vertices(colors: object) -> bool:
     return (
         isinstance(colors, list)
         and len(colors) == 10
-        and all((type(c) is int and 0 <= c < 4 for c in colors))
+        and all(type(c) is int and 0 <= c < 4 for c in colors)
         and all((colors[u] != colors[v] for u, v in EDGES))
     )
 
@@ -41,7 +43,7 @@ def _proper_edges(colors: object) -> bool:
     if (
         not isinstance(colors, list)
         or len(colors) != 15
-        or (not all((type(c) is int and 0 <= c < 4 for c in colors)))
+        or (not all(type(c) is int and 0 <= c < 4 for c in colors))
     ):
         return False
     return all(

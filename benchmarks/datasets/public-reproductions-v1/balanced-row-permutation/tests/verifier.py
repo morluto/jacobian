@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 import json
 from collections import Counter
 from pathlib import Path
+
 from verifier_support import (
     is_regular_bounded_file,
     load_submission,
@@ -48,11 +50,11 @@ def _row_permutation_matches(
         result_row = output[row]
         if (
             not isinstance(permutation, list)
-            or any((type(position) is not int for position in permutation))
+            or any(type(position) is not int for position in permutation)
             or sorted(permutation) != list(range(6))
             or (not isinstance(result_row, list))
             or (len(result_row) != 6)
-            or any((type(symbol) is not int for symbol in result_row))
+            or any(type(symbol) is not int for symbol in result_row)
             or (result_row != [matrix[row][position] for position in permutation])
         ):
             return False
@@ -120,7 +122,7 @@ def _result(value: object) -> bool:
         )
     ):
         return False
-    global_counts = Counter((item for row in matrix for item in row))
+    global_counts = Counter(item for row in matrix for item in row)
     return global_counts == Counter({1: 12, 2: 12, 3: 12, 4: 12})
 
 

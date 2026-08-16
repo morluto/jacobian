@@ -1,9 +1,11 @@
 """Exact coloring and clique-minor verifier for one Hadwiger instance."""
 
 from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,
@@ -27,7 +29,7 @@ def three_colorable(adj):
         if done == 11:
             return True
         uncolored = [v for v in range(11) if colors[v] < 0]
-        v = max(uncolored, key=lambda x: sum((colors[y] < 0 for y in adj[x])))
+        v = max(uncolored, key=lambda x: sum(colors[y] < 0 for y in adj[x]))
         used = {colors[y] for y in adj[v] if colors[y] >= 0}
         for color in range(3):
             if color not in used:
@@ -75,7 +77,7 @@ def _normalized_edges(edges):
         if (
             not isinstance(e, list)
             or len(e) != 2
-            or any((type(v) is not int or not 0 <= v < 11 for v in e))
+            or any(type(v) is not int or not 0 <= v < 11 for v in e)
         ):
             return None
         normalized.append(tuple(sorted(e)))
@@ -94,12 +96,10 @@ def _adjacency(normalized):
 
 def _has_triangle(adj) -> bool:
     return any(
-        (
-            b in adj[a] and c in adj[a] and (c in adj[b])
-            for a in range(11)
-            for b in range(a + 1, 11)
-            for c in range(b + 1, 11)
-        )
+        b in adj[a] and c in adj[a] and (c in adj[b])
+        for a in range(11)
+        for b in range(a + 1, 11)
+        for c in range(b + 1, 11)
     )
 
 
@@ -113,7 +113,7 @@ def _graph_is_candidate(adj) -> bool:
 
 def _coloring_certifies_four_chromatic(colors, normalized, adj) -> bool:
     return not (
-        any((type(c) is not int or not 0 <= c < 4 for c in colors))
+        any(type(c) is not int or not 0 <= c < 4 for c in colors)
         or any((colors[a] == colors[b] for a, b in normalized))
         or three_colorable(adj)
     )
@@ -125,7 +125,7 @@ def _connected_branch_sets(branches, adj):
         if (
             not isinstance(branch, list)
             or not branch
-            or (not all((type(v) is int and 0 <= v < 11 for v in branch)))
+            or (not all(type(v) is int and 0 <= v < 11 for v in branch))
             or (len(branch) != len(set(branch)))
         ):
             return None
@@ -137,14 +137,12 @@ def _connected_branch_sets(branches, adj):
 
 
 def _branch_sets_form_k4_minor(sets, adj) -> bool:
-    if any((sets[i] & sets[j] for i in range(4) for j in range(i))):
+    if any(sets[i] & sets[j] for i in range(4) for j in range(i)):
         return False
     return all(
-        (
-            any((v in adj[u] for u in sets[i] for v in sets[j]))
-            for i in range(4)
-            for j in range(i)
-        )
+        any(v in adj[u] for u in sets[i] for v in sets[j])
+        for i in range(4)
+        for j in range(i)
     )
 
 

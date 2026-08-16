@@ -1,10 +1,12 @@
 """Exact verifier for one affine steady incompressible flow certificate."""
 
 from __future__ import annotations
+
 import json
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
+
 from verifier_support import (
     load_submission,
     normalize_reward_file,

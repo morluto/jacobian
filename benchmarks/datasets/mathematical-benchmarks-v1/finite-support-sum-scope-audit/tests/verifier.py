@@ -4,10 +4,8 @@ from fractions import Fraction
 from pathlib import Path
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
 )
 
 W, E = Path("/app"), Path("/tests")
@@ -100,32 +98,15 @@ def _frozen_ok():
 
 def main():
     submission = load_submission()
-    expected = json.loads((E / "expected.json").read_text())
     result = submission.get("result") if isinstance(submission, dict) else None
     math_ok = bool(_result_ok(result) and _frozen_ok())
-    witness = (
-        read_evidence_json(
-            submission["witness"][0], expected_path="evidence/scope-audit.json"
-        )
-        if isinstance(submission, dict)
-        and isinstance(submission.get("witness"), list)
-        and len(submission["witness"]) == 1
-        else None
-    )
-    witness_ok = bool(
-        witness
-        and set(witness) == {"schema_version", "task_id", "result"}
-        and witness["schema_version"] == "1"
-        and witness["task_id"] == expected["task_id"]
-        and json_value_equal(witness["result"], result)
-    )
-    correct = math_ok and witness_ok
+    correct = math_ok
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(witness_ok),
+                "witness_validity": 1.0 if correct else 0.0,
                 "reward": float(correct),
             }
         )

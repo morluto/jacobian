@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from fractions import Fraction
 from pathlib import Path
-
-TASK_ID = "jacobian/bsd-infinite-order-certificate"
 
 
 def add(
@@ -19,8 +16,12 @@ def add(
     return x3, slope * (x1 - x3) - y1
 
 
-def pair(point: tuple[Fraction, Fraction]) -> list[str]:
-    return [str(point[0]), str(point[1])]
+def encode(value: Fraction) -> dict[str, int]:
+    return {"numerator": value.numerator, "denominator": value.denominator}
+
+
+def pair(point: tuple[Fraction, Fraction]) -> list[dict[str, int]]:
+    return [encode(point[0]), encode(point[1])]
 
 
 def main() -> None:
@@ -41,25 +42,7 @@ def main() -> None:
         "triple": pair(triple),
         "order_conclusion": "INFINITE_BY_LUTZ_NAGELL",
     }
-    payload = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": result,
-    }
-    evidence = root / "evidence/answer.txt"
-    evidence.parent.mkdir(parents=True, exist_ok=True)
-    evidence.write_text(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
-    )
-    submission = {
-        "result": result,
-        "witness": [
-            {
-                "path": "evidence/answer.txt",
-                "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
-            }
-        ],
-    }
+    submission = {"result": result}
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 
 

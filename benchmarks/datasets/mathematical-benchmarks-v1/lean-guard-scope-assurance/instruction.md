@@ -2,7 +2,7 @@
 
 For every frozen case in `/app/input.json`, determine the exact semantic-trap
 findings that a sound checker should emit.  Preserve the input order and attach
-the controlling reason for each decision.
+the controlling reason code for each decision.
 
 source repository's expected messages.  Your audit must distinguish full proof
 state scope from textual binder order, ordinary numeric types from a custom

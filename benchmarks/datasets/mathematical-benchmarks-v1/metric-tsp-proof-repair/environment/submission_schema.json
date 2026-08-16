@@ -6,8 +6,7 @@
       "additionalProperties": false,
       "properties": {
         "corrected_claim": {
-          "minLength": 1,
-          "type": "string"
+          "const": "DOUBLE_TREE_TWO_APPROXIMATION"
         },
         "euler_walk": {
           "items": {

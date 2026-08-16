@@ -45,13 +45,14 @@ def load_frozen():
 
 
 def canonical(value):
-    if type(value) is not str:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
         raise ValueError
-    number = Fraction(value)
-    expected = str(number.numerator)
-    if number.denominator != 1:
-        expected += f"/{number.denominator}"
-    if value != expected or abs(number.numerator) > 50 or number.denominator > 20:
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        raise ValueError
+    number = Fraction(numerator, denominator)
+    if abs(number.numerator) > 50 or number.denominator > 20:
         raise ValueError
     return number
 

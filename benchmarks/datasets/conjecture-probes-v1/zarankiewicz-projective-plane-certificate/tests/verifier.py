@@ -11,8 +11,6 @@ from verifier_support import (
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -51,7 +49,7 @@ def _all_projective_classes() -> set[tuple[int, int, int]]:
             continue
         first = next(x for x in value if x)
         inv = 1 if first == 1 else 2
-        out.add(tuple((inv * x) % 3 for x in value))
+        out.add(tuple(inv * x % 3 for x in value))
     return out
 
 
@@ -80,8 +78,8 @@ def _pair_rows(value: Any, neighbors: list[set[int]]) -> bool:
             not isinstance(pair, list)
             or len(pair) != 2
             or any(type(x) is not int or not 0 <= x < 13 for x in pair)
-            or pair[0] >= pair[1]
-            or type(row["common_neighbors"]) is not int
+            or (pair[0] >= pair[1])
+            or (type(row["common_neighbors"]) is not int)
         ):
             return False
         key = tuple(pair)
@@ -115,7 +113,7 @@ def _result_components(result: Any):
     edges = _edges(result["edges"])
     if points is None or lines is None or edges is None:
         return None
-    return points, lines, edges
+    return (points, lines, edges)
 
 
 def _incidence_neighbors(
@@ -130,7 +128,7 @@ def _incidence_neighbors(
         (i, j)
         for i, p in enumerate(points)
         for j, line in enumerate(lines)
-        if sum(a * b for a, b in zip(p, line, strict=True)) % 3 == 0
+        if sum((a * b for a, b in zip(p, line, strict=True))) % 3 == 0
     }
     if edges != expected:
         return None
@@ -140,7 +138,7 @@ def _incidence_neighbors(
     right_degrees = [len(x) for x in right]
     if left_degrees != [4] * 13 or right_degrees != [4] * 13:
         return None
-    return left, right, left_degrees, right_degrees
+    return (left, right, left_degrees, right_degrees)
 
 
 def mathematics(result: Any) -> bool:
@@ -157,39 +155,27 @@ def mathematics(result: Any) -> bool:
         or result["right_degrees"] != right_degrees
     ):
         return False
-    if any(len(left[a] & left[b]) > 1 for a, b in itertools.combinations(range(13), 2)):
+    if any(
+        (len(left[a] & left[b]) > 1 for a, b in itertools.combinations(range(13), 2))
+    ):
         return False
     if any(
-        len(right[a] & right[b]) > 1 for a, b in itertools.combinations(range(13), 2)
+        (len(right[a] & right[b]) > 1 for a, b in itertools.combinations(range(13), 2))
     ):
         return False
     if not _pair_rows(result["left_pair_common_counts"], left):
         return False
     if not _pair_rows(result["right_pair_common_counts"], right):
         return False
-    # The pair budget is 78. With 53 edges, convexity minimizes
-    # sum binom(d_i, 2) at degree multiset 12*4 + 1*5, giving 82 > 78.
     return (
         type(result["edge_count"]) is int
         and result["edge_count"] == 52
-        and type(result["pair_budget"]) is int
-        and result["pair_budget"] == math.comb(13, 2)
-        and type(result["excluded_edge_count"]) is int
-        and result["excluded_edge_count"] == 53
-        and 12 * math.comb(4, 2) + math.comb(5, 2) > math.comb(13, 2)
+        and (type(result["pair_budget"]) is int)
+        and (result["pair_budget"] == math.comb(13, 2))
+        and (type(result["excluded_edge_count"]) is int)
+        and (result["excluded_edge_count"] == 53)
+        and (12 * math.comb(4, 2) + math.comb(5, 2) > math.comb(13, 2))
     )
-
-
-def _json_equal(a: Any, b: Any) -> bool:
-    if type(a) is not type(b):
-        return False
-    if isinstance(a, dict):
-        return set(a) == set(b) and all(_json_equal(a[k], b[k]) for k in a)
-    if isinstance(a, list):
-        return len(a) == len(b) and all(
-            _json_equal(x, y) for x, y in zip(a, b, strict=True)
-        )
-    return a == b
 
 
 def _reject_constant(value: str) -> None:
@@ -229,32 +215,13 @@ def main() -> None:
     contract = bool(submission)
     raw = _raw_submission()
     math_ok = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
-    evidence_ok = bool(
-        isinstance(raw, dict)
-        and witness_list_is_bound(raw.get("witness"), max_bytes=None)
-    )
-    payload = (
-        read_evidence_json(
-            raw["witness"][0], expected_path="evidence/answer.json", max_bytes=None
-        )
-        if evidence_ok
-        else None
-    )
-    evidence_ok = bool(
-        isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result"}
-        and payload.get("schema_version") == "1"
-        and payload.get("task_id") == TASK_ID
-        and _json_equal(payload.get("result"), raw.get("result"))
-    )
     protocol_ok = bool(contract)
-    aggregate = float(input_binding and protocol_ok and math_ok and evidence_ok)
+    aggregate = float(input_binding and protocol_ok and math_ok)
     reward(
         {
             "input_binding": float(input_binding),
             "protocol": float(protocol_ok),
             "mathematics": float(math_ok),
-            "witness_validity": float(evidence_ok),
             "aggregate_reward": aggregate,
             "reward": aggregate,
         }
@@ -270,7 +237,6 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

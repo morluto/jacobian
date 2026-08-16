@@ -3,34 +3,10 @@ import math
 from fractions import Fraction
 from pathlib import Path
 
-from verifier_support import (
-    load_submission,
-    normalize_reward_file,
-    read_evidence_json,
-)
+from verifier_support import load_submission, normalize_reward_file
 
-W, E = Path("/app"), Path("/tests")
-NEG_INF, POS_INF = "NEGATIVE_INFINITY", "POSITIVE_INFINITY"
-
-
-def _json_equal(left: object, right: object) -> bool:
-    """Compare JSON recursively without Python numeric coercions."""
-
-    if isinstance(left, dict) or isinstance(right, dict):
-        return (
-            isinstance(left, dict)
-            and isinstance(right, dict)
-            and left.keys() == right.keys()
-            and all(_json_equal(left[key], right[key]) for key in left)
-        )
-    if isinstance(left, list) or isinstance(right, list):
-        return (
-            isinstance(left, list)
-            and isinstance(right, list)
-            and len(left) == len(right)
-            and all(_json_equal(a, b) for a, b in zip(left, right, strict=True))
-        )
-    return type(left) is type(right) and left == right
+W, E = (Path("/app"), Path("/tests"))
+NEG_INF, POS_INF = ("NEGATIVE_INFINITY", "POSITIVE_INFINITY")
 
 
 def _frozen():
@@ -52,7 +28,7 @@ def _rational(value):
     """Parse a reduced rational object, rejecting booleans and floats."""
     if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
         return None
-    numerator, denominator = value["numerator"], value["denominator"]
+    numerator, denominator = (value["numerator"], value["denominator"])
     if not _is_int(numerator) or not _is_int(denominator) or denominator < 1:
         return None
     if math.gcd(numerator, denominator) != 1:
@@ -100,11 +76,11 @@ def _valid_chain(bounds, threshold):
     entry = None
     for bound in bounds:
         lower, upper, out_lower, out_upper = bound
-        if lower == 0 and upper == 1 and out_lower == NEG_INF and out_upper == 0:
+        if lower == 0 and upper == 1 and (out_lower == NEG_INF) and (out_upper == 0):
             terminal = bound
         elif lower == 1 and out_lower == 0:
             bridge = bound
-        elif lower == 0 and out_lower == NEG_INF and upper != 1:
+        elif lower == 0 and out_lower == NEG_INF and (upper != 1):
             entry = bound
     if terminal is None or bridge is None or entry is None:
         return False
@@ -123,19 +99,16 @@ def _valid_chain(bounds, threshold):
 
 
 def _potential_coefficients_valid(result):
-    # Validate potential identity coefficients: d[n+1] = d[n] - 2 + 1/d[n]
-    # in basis [a^2, 1, a^{-2}] = [d, 1, 1/d], so coefficients = [1, -2, 1].
     coefficients = result["potential_identity_coefficients"]
     return not (
         not isinstance(coefficients, list)
         or len(coefficients) != 3
-        or not all(_is_int(c) for c in coefficients)
-        or coefficients != [1, -2, 1]
+        or (not all(_is_int(c) for c in coefficients))
+        or (coefficients != [1, -2, 1])
     )
 
 
 def _initial_potential_valid(result, frozen):
-    # Validate initial_potential = initial_value^2 (derived from frozen input).
     initial_value = frozen.get("initial_value")
     initial_index = frozen.get("initial_index")
     if not _is_int(initial_value) or not _is_int(initial_index):
@@ -143,26 +116,23 @@ def _initial_potential_valid(result, frozen):
     initial_potential = result["initial_potential"]
     if not _is_int(initial_potential) or initial_potential != initial_value**2:
         return None
-    return initial_potential, initial_index
+    return (initial_potential, initial_index)
 
 
 def _threshold_and_decrement_valid(result):
-    # Validate threshold is a positive reduced rational.
     threshold = _rational(result["threshold"])
     if threshold is None or threshold <= 0:
         return None
-    # Validate decrement_lower_bound = 2 - 1/threshold (derived from threshold).
     expected_decrement = 2 - Fraction(1) / threshold
     decrement = _rational(result["decrement_lower_bound"])
     if decrement is None or decrement != expected_decrement:
         return None
-    return threshold, expected_decrement
+    return (threshold, expected_decrement)
 
 
 def _phase_transitions_valid(
     result, initial_potential, initial_index, expected_decrement, threshold
 ):
-    # Validate phase_transitions is the minimal step budget.
     transitions = result["phase_transitions"]
     if not _is_int(transitions) or transitions < 1:
         return False
@@ -172,7 +142,6 @@ def _phase_transitions_valid(
         and potential - (transitions - 1) * expected_decrement >= threshold
     ):
         return False
-    # Validate threshold_index_upper = initial_index + phase_transitions.
     return not (
         not _is_int(result["threshold_index_upper"])
         or result["threshold_index_upper"] != initial_index + transitions
@@ -180,7 +149,6 @@ def _phase_transitions_valid(
 
 
 def _terminal_bounds_valid(result):
-    # Validate terminal bounds: correct images under f(a) = a - 1/a.
     bounds = result["terminal_bounds"]
     if not isinstance(bounds, list) or len(bounds) != 3:
         return None
@@ -243,54 +211,28 @@ def _result_valid(result, frozen):
     parsed_bounds = _terminal_bounds_valid(result)
     if parsed_bounds is None:
         return False
-    # Validate the three bounds form a valid chain to a negative term.
     if not _valid_chain(parsed_bounds, threshold):
         return False
-    # Validate negative_index_upper = threshold_index_upper + 3 (chain length).
     if (
         not _is_int(result["negative_index_upper"])
         or result["negative_index_upper"] != result["threshold_index_upper"] + 3
     ):
         return False
-    # Validate negative_index_upper < target.index_upper_exclusive.
     target = frozen.get("target", {})
     return bool(
         isinstance(target, dict)
         and _is_int(target.get("index_upper_exclusive"))
-        and result["negative_index_upper"] < target["index_upper_exclusive"]
+        and (result["negative_index_upper"] < target["index_upper_exclusive"])
     )
 
 
 def main():
-    submission, frozen = load_submission(), _frozen()
+    submission, frozen = (load_submission(), _frozen())
     math_correct = bool(submission and _result_valid(submission.get("result"), frozen))
-    evidence = None
-    if (
-        submission
-        and isinstance(submission.get("witness"), list)
-        and len(submission["witness"]) == 1
-    ):
-        evidence = read_evidence_json(
-            submission["witness"][0],
-            expected_path="evidence/nonlinear-recurrence-certificate.json",
-        )
-    evidence_valid = bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result"}
-        and evidence["schema_version"] == "1"
-        and evidence["task_id"] == "nonlinear-recurrence-crossing-certificate"
-        and _json_equal(evidence["result"], submission.get("result"))
-    )
-    reward = float(math_correct and evidence_valid)
+    reward = float(math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
-                "reward": reward,
-            }
-        )
+        json.dumps({"correctness": float(math_correct), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

@@ -17,8 +17,7 @@ fields (`boundedness`, `closedness`, `range_identification`, `convergence`, and
 
 A finite-dimensional matrix, a bare theorem citation, or a single approximate
 sequence is insufficient. Submit every exact rational as a
-`{"numerator": integer, "denominator": positive integer}` object in lowest
-terms.
+`{"numerator": integer, "denominator": positive integer}` object. Equivalent encodings such as `2/2` and `1/1` are accepted after exact `Fraction` normalization.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission

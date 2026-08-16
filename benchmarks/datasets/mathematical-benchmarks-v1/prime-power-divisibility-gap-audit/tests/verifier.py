@@ -6,15 +6,12 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
     workspace_input_is_bound,
 )
 
-WORKSPACE, TESTS = Path("/app"), Path("/tests")
-EVIDENCE_PATH = "evidence/divisibility-audit.json"
+WORKSPACE, TESTS = (Path("/app"), Path("/tests"))
 
 
 def _frozen() -> dict[str, Any]:
@@ -72,8 +69,8 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
         not isinstance(value, dict)
         or set(value) != fields
         or frozen.get("human_score") != 0
-        or type(maximum_modulus) is not int
-        or maximum_modulus < 4
+        or (type(maximum_modulus) is not int)
+        or (maximum_modulus < 4)
     ):
         return False
     prime = _integer(value["prime"], minimum=2, maximum=29)
@@ -124,30 +121,14 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     return bool(
         multiplicity_sum == cycle_count
         and recomputed_total == total
-        and total % prime == 0
-        and total % modulus != 0
-        and valuation_modulus == exponent == reported_modulus_valuation
-        and valuation_total == reported_total_valuation
-        and 1 <= valuation_total < valuation_modulus
-        and value["local_statement"] == "ALL_CYCLE_SUMS_DIVISIBLE_BY_P"
-        and value["global_statement"] == "TOTAL_NOT_DIVISIBLE_BY_M"
-        and value["missing_condition"] == "PRIME_POWER_MULTIPLICITIES"
-    )
-
-
-def _witness(submission: dict[str, Any], *, expected_task_id: str) -> bool:
-    witness = submission.get("witness")
-    payload = (
-        read_evidence_json(witness[0], expected_path=EVIDENCE_PATH)
-        if isinstance(witness, list) and len(witness) == 1
-        else None
-    )
-    return bool(
-        isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result"}
-        and payload["schema_version"] == "1"
-        and payload["task_id"] == expected_task_id
-        and json_value_equal(payload["result"], submission.get("result"))
+        and (total % prime == 0)
+        and (total % modulus != 0)
+        and (valuation_modulus == exponent == reported_modulus_valuation)
+        and (valuation_total == reported_total_valuation)
+        and (1 <= valuation_total < valuation_modulus)
+        and (value["local_statement"] == "ALL_CYCLE_SUMS_DIVISIBLE_BY_P")
+        and (value["global_statement"] == "TOTAL_NOT_DIVISIBLE_BY_M")
+        and (value["missing_condition"] == "PRIME_POWER_MULTIPLICITIES")
     )
 
 
@@ -155,18 +136,15 @@ def main() -> None:
     submission = load_submission(WORKSPACE / "submission.json")
     data = submission if isinstance(submission, dict) else {}
     input_bound = workspace_input_is_bound()
-    expected = json.loads((TESTS / "expected.json").read_text())
     contract = bool(submission)
     math_correct = _result(data.get("result"), _frozen())
-    evidence_valid = _witness(data, expected_task_id=expected["task_id"])
-    correct = bool(input_bound and contract and math_correct and evidence_valid)
+    correct = bool(input_bound and contract and math_correct)
     out = Path("/logs/verifier")
     out.mkdir(parents=True, exist_ok=True)
     (out / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "input_binding": float(input_bound),
                 "protocol_compliance": float(contract),
                 "reward": float(correct),

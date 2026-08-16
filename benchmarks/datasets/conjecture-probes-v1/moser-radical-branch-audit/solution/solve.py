@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from fractions import Fraction
 from pathlib import Path
 
-TASK_ID = "jacobian/moser-radical-branch-audit"
 X = [
     (Fraction(1, 2), 0),
     (Fraction(-1, 2), 0),
@@ -81,7 +79,10 @@ def table(corrupted: bool):
             rows.append(
                 {
                     "pair": [i, j],
-                    "distance_squared": [str(a), str(b)],
+                    "distance_squared": [
+                        {"numerator": a.numerator, "denominator": a.denominator},
+                        {"numerator": b.numerator, "denominator": b.denominator},
+                    ],
                     "unit": a == 1 and b == 0,
                 }
             )
@@ -104,25 +105,7 @@ def main() -> None:
         "corrected_pair_table": fixed,
         "corrected_edges": [row["pair"] for row in fixed if row["unit"]],
     }
-    payload = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": result,
-    }
-    evidence = root / "evidence/answer.json"
-    evidence.parent.mkdir(parents=True, exist_ok=True)
-    evidence.write_text(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
-    )
-    submission = {
-        "result": result,
-        "witness": [
-            {
-                "path": "evidence/answer.json",
-                "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
-            }
-        ],
-    }
+    submission = {"result": result}
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 
 

@@ -1,12 +1,30 @@
 {
   "result": {
     "excluded_branch": {
-      "pair_sum": "-69/8",
-      "product": "-223/16",
-      "product_consequence_lhs": "-4343/256",
-      "product_consequence_rhs": "-223/16",
-      "residual": "-775/256",
-      "sum": "3/2"
+      "pair_sum": {
+        "numerator": -69,
+        "denominator": 8
+      },
+      "product": {
+        "numerator": -223,
+        "denominator": 16
+      },
+      "product_consequence_lhs": {
+        "numerator": -4343,
+        "denominator": 256
+      },
+      "product_consequence_rhs": {
+        "numerator": -223,
+        "denominator": 16
+      },
+      "residual": {
+        "numerator": -775,
+        "denominator": 256
+      },
+      "sum": {
+        "numerator": 3,
+        "denominator": 2
+      }
     },
     "necessary_polynomial": [
       2,
@@ -19,26 +37,38 @@
       "FAILS_NECESSARY_CONDITION"
     ],
     "proposed_evaluations": [
-      "0",
-      "39/2"
+      {
+        "numerator": 0,
+        "denominator": 1
+      },
+      {
+        "numerator": 39,
+        "denominator": 2
+      }
     ],
     "remaining_real_roots": [
       {
-        "radical_coefficient": "-1/2",
+        "radical_coefficient": {
+          "numerator": -1,
+          "denominator": 2
+        },
         "radicand": 17,
-        "rational": "-1/2"
+        "rational": {
+          "numerator": -1,
+          "denominator": 2
+        }
       },
       {
-        "radical_coefficient": "1/2",
+        "radical_coefficient": {
+          "numerator": 1,
+          "denominator": 2
+        },
         "radicand": 17,
-        "rational": "-1/2"
+        "rational": {
+          "numerator": -1,
+          "denominator": 2
+        }
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/cyclic-elimination-certificate.json",
-      "sha256": "sha256:6edc5890d9c7daa194263fef372b45490a3c803fd1d3b3be08f916d9800522a9"
-    }
-  ]
+  }
 }

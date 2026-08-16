@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+from fractions import Fraction
 from pathlib import Path
 
-TASK_ID = "jacobian/navier-stokes-polynomial-certificate"
-LIMITATIONS = [
-    "ONE_EXACT_2D_STEADY_POLYNOMIAL_FIELD",
-    "NO_GLOBAL_NAVIER_STOKES_REGULARITY_CONCLUSION",
-]
+
+def rat(value) -> dict[str, int]:
+    parsed = Fraction(value)
+    return {"numerator": parsed.numerator, "denominator": parsed.denominator}
 
 
 def main() -> None:
@@ -17,33 +16,17 @@ def main() -> None:
     parser.add_argument("--root", type=Path, default=Path("/app"))
     root = parser.parse_args().root
     result = {
-        "velocity": [["0", "0", "-1"], ["0", "1", "0"]],
-        "pressure": ["0", "0", "0", "1/2", "0", "1/2"],
-        "divergence": ["0"],
-        "momentum_x": ["0", "0", "0"],
-        "momentum_y": ["0", "0", "0"],
-        "vorticity": "2",
-    }
-    payload = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": result,
-        "limitations": LIMITATIONS,
-    }
-    evidence = root / "evidence/answer.txt"
-    evidence.parent.mkdir(parents=True, exist_ok=True)
-    evidence.write_text(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
-    )
-    submission = {
-        "result": result,
-        "witness": [
-            {
-                "path": "evidence/answer.txt",
-                "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
-            }
+        "velocity": [
+            [rat(0), rat(0), rat(-1)],
+            [rat(0), rat(1), rat(0)],
         ],
+        "pressure": [rat(0), rat(0), rat(0), rat("1/2"), rat(0), rat("1/2")],
+        "divergence": [rat(0)],
+        "momentum_x": [rat(0), rat(0), rat(0)],
+        "momentum_y": [rat(0), rat(0), rat(0)],
+        "vorticity": rat(2),
     }
+    submission = {"result": result}
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 
 

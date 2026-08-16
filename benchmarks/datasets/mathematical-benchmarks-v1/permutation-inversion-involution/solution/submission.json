@@ -141,11 +141,5 @@
     "transformation": "COMPLEMENT_VALUES",
     "value_multiplier": -1,
     "value_offset": 8
-  },
-  "witness": [
-    {
-      "path": "evidence/permutation-involution-certificate.json",
-      "sha256": "sha256:0ae37cd1e9437cc40fed2e3777ffc927ab6b0b58cd91529ca566523bd4576d74"
-    }
-  ]
+  }
 }

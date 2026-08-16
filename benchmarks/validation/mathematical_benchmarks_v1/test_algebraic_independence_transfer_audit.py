@@ -50,7 +50,9 @@ def test_alternative_term_order_is_accepted(tmp_path: Path) -> None:
 def test_corrupted_inverse_coefficient_is_rejected(tmp_path: Path) -> None:
     reward = _mutate(
         tmp_path,
-        lambda s: s["result"]["d2_delta_numerator"][0].__setitem__("coefficient", "12"),
+        lambda s: s["result"]["d2_delta_numerator"][0].__setitem__(
+            "coefficient", {"numerator": 12, "denominator": 1}
+        ),
     )
     assert reward.details["correctness"] == 0.0
     assert reward.reward == 0.0
@@ -70,19 +72,23 @@ def test_duplicate_monomial_is_rejected(tmp_path: Path) -> None:
 def test_corrupted_conjugate_norm_is_rejected(tmp_path: Path) -> None:
     reward = _mutate(
         tmp_path,
-        lambda s: s["result"]["norm_polynomial"][4].__setitem__("coefficient", "2"),
+        lambda s: s["result"]["norm_polynomial"][4].__setitem__(
+            "coefficient", {"numerator": 2, "denominator": 1}
+        ),
     )
     assert reward.details["correctness"] == 0.0
     assert reward.reward == 0.0
 
 
-def test_noncanonical_rational_is_rejected(tmp_path: Path) -> None:
+def test_unreduced_rational_is_accepted(tmp_path: Path) -> None:
     reward = _mutate(
         tmp_path,
-        lambda s: s["result"]["p_numerator"][0].__setitem__("coefficient", "2/2"),
+        lambda s: s["result"]["p_numerator"][0].__setitem__(
+            "coefficient", {"numerator": 2, "denominator": 2}
+        ),
     )
-    assert reward.details["correctness"] == 0.0
-    assert reward.reward == 0.0
+    assert reward.details["correctness"] == 1.0
+    assert reward.reward == 1.0
 
 
 def test_malformed_result_does_not_crash(tmp_path: Path) -> None:

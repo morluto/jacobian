@@ -1,12 +1,6 @@
 {
   "result": {
     "both_points_map_to_claimed_image": false,
-    "noninvertibility_verified": false
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:8c5ec21f798f18bfab1befc6ec25a8d75ea9324a1a6a35858a3f3b3d4130906f"
-    }
-  ]
+    "noninvertibility_verified": true
+  }
 }

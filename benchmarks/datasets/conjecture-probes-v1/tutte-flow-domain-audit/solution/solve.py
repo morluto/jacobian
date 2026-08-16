@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
-TASK_ID = "jacobian/tutte-flow-domain-audit"
 EDGES = [
     (0, 1),
     (1, 2),
@@ -21,11 +19,6 @@ EDGES = [
     (2, 7),
     (3, 8),
     (4, 9),
-]
-LIMITATIONS = [
-    "ONE_PETERSEN_GRAPH_INSTANCE",
-    "MODULAR_FLOW_DOMAIN_AUDIT_ONLY",
-    "TUTTE_FIVE_FLOW_CONJECTURE_NOT_ASSESSED",
 ]
 
 
@@ -48,25 +41,7 @@ def main() -> None:
         "repair_flow": repair,
         "repair_balances": balances(repair),
     }
-    payload = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": result,
-    }
-    evidence = root / "evidence/answer.json"
-    evidence.parent.mkdir(parents=True, exist_ok=True)
-    evidence.write_text(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
-    )
-    submission = {
-        "result": result,
-        "witness": [
-            {
-                "path": "evidence/answer.json",
-                "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
-            }
-        ],
-    }
+    submission = {"result": result}
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 
 

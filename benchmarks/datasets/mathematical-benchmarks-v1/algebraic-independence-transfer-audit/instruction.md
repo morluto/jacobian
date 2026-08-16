@@ -2,7 +2,7 @@
 
 The frozen proof cites an external theorem that `delta,Ddelta,D2delta` are algebraically independent, then compresses the remaining transfer to `P,Q,R` into several “so” statements. Treat the cited theorem as a premise; repair only the exact algebraic transfer.
 
-Represent every polynomial as an unordered list of distinct sparse terms. A term is `{"coefficient":"a/b","exponents":[i,j,k]}` in the variable order named by its field. Coefficients must be canonical rationals; zero terms and duplicate exponent vectors are forbidden.
+Represent every polynomial as an unordered list of distinct sparse terms. A term is `{"coefficient":{"numerator":a,"denominator":b},"exponents":[i,j,k]}` in the variable order named by its field. Equivalent encodings such as `2/2` and `1` are accepted after exact `Fraction` normalization; zero terms and duplicate exponent vectors are forbidden.
 
 Submit the exact rational definitions
 

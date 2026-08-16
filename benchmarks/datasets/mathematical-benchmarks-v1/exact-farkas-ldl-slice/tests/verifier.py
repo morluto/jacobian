@@ -4,40 +4,14 @@ from math import gcd
 from pathlib import Path
 
 from verifier_support import (
-    aggregate_reward,
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
 )
 
-W, E = Path("/app"), Path("/tests")
-MAX_INPUT_BYTES = 1_048_576
-MAX_SUBMISSION_BYTES = 1_048_576
-
-
-def _json_equal(left: object, right: object) -> bool:
-    """Compare JSON recursively without Python's bool/int coercion."""
-
-    if isinstance(left, bool) or isinstance(right, bool):
-        return type(left) is type(right) and left == right
-    if type(left) is int or type(right) is int:
-        return type(left) is type(right) and left == right
-    if isinstance(left, dict) or isinstance(right, dict):
-        return (
-            isinstance(left, dict)
-            and isinstance(right, dict)
-            and left.keys() == right.keys()
-            and all(_json_equal(left[key], right[key]) for key in left)
-        )
-    if isinstance(left, list) or isinstance(right, list):
-        return (
-            isinstance(left, list)
-            and isinstance(right, list)
-            and len(left) == len(right)
-            and all(_json_equal(a, b) for a, b in zip(left, right, strict=True))
-        )
-    return type(left) is type(right) and left == right
+W, E = (Path("/app"), Path("/tests"))
+MAX_INPUT_BYTES = 1048576
+MAX_SUBMISSION_BYTES = 1048576
 
 
 def _load_frozen():
@@ -62,9 +36,9 @@ def _rat(value):
         not isinstance(value, dict)
         or set(value) != {"numerator", "denominator"}
         or type(value["numerator"]) is not int
-        or type(value["denominator"]) is not int
-        or value["denominator"] <= 0
-        or gcd(abs(value["numerator"]), value["denominator"]) != 1
+        or (type(value["denominator"]) is not int)
+        or (value["denominator"] <= 0)
+        or (gcd(abs(value["numerator"]), value["denominator"]) != 1)
     ):
         return None
     return Fraction(value["numerator"], value["denominator"])
@@ -100,13 +74,12 @@ def _det(matrix):
     value = Fraction(1)
     for column in range(len(work)):
         pivot = next(
-            (row for row in range(column, len(work)) if work[row][column]),
-            None,
+            (row for row in range(column, len(work)) if work[row][column]), None
         )
         if pivot is None:
             return Fraction()
         if pivot != column:
-            work[column], work[pivot] = work[pivot], work[column]
+            work[column], work[pivot] = (work[pivot], work[column])
             value = -value
         pivot_value = work[column][column]
         value *= pivot_value
@@ -126,11 +99,11 @@ def _scalar_ok(value, frozen):
     return bool(
         all(item is not None for item in [*parsed.values(), *expected.values()])
         and parsed["y0"] == expected["y0"]
-        and parsed["c00_y"] == expected["c00_y"]
-        and parsed["objective"] == expected["objective"]
-        and parsed["m00"] == parsed["y0"] + parsed["c00_y"]
-        and parsed["m00"] < 0
-        and parsed["objective"] > 0
+        and (parsed["c00_y"] == expected["c00_y"])
+        and (parsed["objective"] == expected["objective"])
+        and (parsed["m00"] == parsed["y0"] + parsed["c00_y"])
+        and (parsed["m00"] < 0)
+        and (parsed["objective"] > 0)
     )
 
 
@@ -183,7 +156,7 @@ def _result_ok(result, frozen):
     return bool(
         matrix
         and _scalar_ok(result["scalar_replay"], frozen)
-        and result["proof_mode"] in frozen.get("proof_modes", [])
+        and (result["proof_mode"] in frozen.get("proof_modes", []))
         and _positive_definite_ok(
             result["proof_mode"], result["positive_definite_certificate"], matrix
         )
@@ -198,40 +171,12 @@ def main():
         else None
     )
     frozen = _load_frozen()
-    expected = json.loads((E / "expected.json").read_text())
     protocol_ok = submission is not None
     math_correct = bool(protocol_ok and _result_ok(submission.get("result"), frozen))
-    evidence = None
-    if (
-        protocol_ok
-        and isinstance(submission.get("witness"), list)
-        and len(submission["witness"]) == 1
-    ):
-        evidence = read_evidence_json(
-            submission["witness"][0],
-            expected_path="evidence/farkas-slice-certificate.json",
-        )
-    evidence_valid = bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result"}
-        and evidence["schema_version"] == "1"
-        and evidence["task_id"] == expected["task_id"]
-        and _json_equal(evidence["result"], submission.get("result"))
-    )
-    reward = aggregate_reward(
-        correctness=math_correct,
-        witness_validity=evidence_valid,
-        protocol_ok=protocol_ok,
-    )
+    reward = float(math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
-                "reward": reward,
-            }
-        )
+        json.dumps({"correctness": float(math_correct), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

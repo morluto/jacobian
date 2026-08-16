@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -19,30 +18,17 @@ def _case(tmp_path: Path):
     app.mkdir(parents=True)
     logs.mkdir(parents=True)
     shutil.copy2(TASK / "environment/input.json", app / "input.json")
-    (app / "evidence").mkdir()
-    evidence = TASK / "solution/evidence/answer.txt"
-    shutil.copy2(evidence, app / "evidence/answer.txt")
     submission = json.loads((TASK / "solution/submission.json").read_text())
     return app, logs, submission
 
 
 def _write(app: Path, submission: dict) -> None:
-    evidence = app / "evidence/answer.txt"
-    payload = {
-        "schema_version": "1",
-        "task_id": "jacobian/vizing-bounded-cartesian-products",
-        "result": submission["result"],
-    }
-    evidence.write_text(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+    (app / "submission.json").write_text(
+        json.dumps({"result": submission["result"]}) + "\n"
     )
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 
 
-def _run(app: Path, logs: Path) -> dict:
+def _run(app: Path, logs: Path):
     return run_verifier_in_child(task=TASK, app=app, logs=logs)
 
 
@@ -89,38 +75,24 @@ def test_wrong_values_omissions_duplicates_and_boolean_integers_fail(
     assert _run(app, logs).details["mathematics"] == 0.0
 
 
-def test_tampered_input_and_bad_evidence_binding_are_separate(tmp_path: Path) -> None:
+def test_tampered_input_is_a_hard_gate(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
     input_data = json.loads((app / "input.json").read_text())
     input_data["graphs"][0]["adjacency"][0].append(1)
     (app / "input.json").write_text(json.dumps(input_data))
     _write(app, submission)
     reward = _run(app, logs)
-    assert (
-        reward.details["input_binding"] == 0.0
-        and reward.details["aggregate_reward"] == 0.0
-    )
-    app, logs, submission = _case(tmp_path / "evidence")
-    submission["witness"][0]["path"] = "evidence/../answer.txt"
-    _write(app, submission)
-    reward = _run(app, logs)
-    assert (
-        reward.details["witness_validity"] == 0.0
-        and reward.details["aggregate_reward"] == 0.0
-    )
+    assert reward.details["input_binding"] == 0.0
+    assert reward.details["aggregate_reward"] == 0.0
 
 
-def test_malformed_bound_evidence_fails_closed(tmp_path: Path) -> None:
+def test_undeclared_witness_key_is_rejected(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
-    _write(app, submission)
-    evidence = app / "evidence/answer.txt"
-    evidence.write_text("{")
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
+    submission["witness"] = [
+        {"path": "evidence/answer.txt", "sha256": "sha256:" + "0" * 64}
+    ]
+    (app / "submission.json").write_text(json.dumps(submission) + "\n")
     reward = _run(app, logs)
-    assert reward.details["witness_validity"] == 0.0
     assert reward.details["aggregate_reward"] == 0.0
 
 

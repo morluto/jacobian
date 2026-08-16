@@ -56,10 +56,18 @@ REQUIRED_METADATA = {
 REQUIRED_ENVIRONMENT = ("Dockerfile", "input.json", "submission_schema.json")
 REQUIRED_TESTS = ("Dockerfile", "test.sh", "verifier.py", "verifier_support.py")
 DATASET_SUPPORT_DIRS = frozenset({"jobs", "members"})
+DATASET_CACHE_DIRS = frozenset(
+    {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
+)
 MEMBER_SCHEMA_VERSION = "2"
 VERIFIER_CONTRACT_VERSION = "1"
 PUBLIC_CONTRACT_DATASETS = frozenset(
-    {"mathematical-benchmarks-v1", "conjecture-probes-v1"}
+    {
+        "mathematical-benchmarks-v1",
+        "conjecture-probes-v1",
+        "public-reproductions-v1",
+        "symbolic-coordination-v1",
+    }
 )
 NETWORK_MODES = frozenset({"public", "no-network", "allowlist"})
 FORBIDDEN_VISIBLE_NAMES = frozenset(
@@ -210,6 +218,8 @@ def _dataset_task_directories(root: Path) -> set[Path]:
         if entry.is_symlink():
             raise HarborSuiteError(f"dataset contains a symlink: {entry}")
         if not entry.is_dir():
+            continue
+        if entry.name in DATASET_CACHE_DIRS:
             continue
         resolved = _validate_task_entry(entry)
         if resolved is not None:
@@ -635,8 +645,6 @@ def suite_digests(suite: Suite) -> tuple[TaskDigest, ...]:
 def _workflow_fixture_digest_failures(
     task_dir: Path, rel: str, metadata: dict[str, Any]
 ) -> list[str]:
-    if metadata.get("evaluation_kind") != "workflow":
-        return []
     fixture = task_dir / "environment" / "input.json"
     if not fixture.is_file():
         return []

@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 from benchmarks.validation.public_reproductions_v1._fixtures import (
-    _digest,
     _prepare_case,
     _write_json,
 )
@@ -13,22 +12,10 @@ from benchmarks.validation.public_reproductions_v1._verifier import _run_verifie
 TASK = "superposition-proof-replay"
 
 
-def _prepare_resolution_replay(tmp_path: Path):
-    task, app, logs = _prepare_case(tmp_path, "superposition-proof-replay", "computed")
-    certificate = task / "solution" / "resolution-proof.json"
-    target = app / "evidence" / "resolution-proof.json"
-    target.write_bytes(certificate.read_bytes())
-    submission_path = app / "submission.json"
-    submission = json.loads(submission_path.read_text())
-    submission["witness"][0]["sha256"] = _digest(target)
-    _write_json(submission_path, submission)
-    return task, app, logs
-
-
 def test_superposition_replay_accepts_independent_topological_order(
     tmp_path: Path,
 ) -> None:
-    task, app, logs = _prepare_resolution_replay(tmp_path)
+    task, app, logs = _prepare_case(tmp_path, TASK, "computed")
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
     # Steps 4 and 5 are independent at this point; this is not answer-string replay.
@@ -38,12 +25,7 @@ def test_superposition_replay_accepts_independent_topological_order(
         {"child": 4, "parents": [8, 3]},
         {"child": 7, "parents": [4, 1]},
     ]
-    evidence_path = app / "evidence" / "resolution-proof.json"
-    payload = json.loads(evidence_path.read_text())
-    payload["result"] = submission["result"]
-    _write_json(evidence_path, payload)
-    submission["witness"][0]["sha256"] = _digest(evidence_path)
-    _write_json(submission_path, submission)
+    _write_json(submission_path, {"result": submission["result"]})
 
     accepted = _run_verifier(task, app, logs)
     assert accepted.details["correctness"] == 1.0
@@ -53,11 +35,11 @@ def test_superposition_replay_accepts_independent_topological_order(
 def test_superposition_replay_rejects_non_resolvent_parent_pair(
     tmp_path: Path,
 ) -> None:
-    task, app, logs = _prepare_resolution_replay(tmp_path)
+    task, app, logs = _prepare_case(tmp_path, TASK, "computed")
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
     submission["result"]["steps"][0]["parents"] = [1, 2]
-    _write_json(submission_path, submission)
+    _write_json(submission_path, {"result": submission["result"]})
 
     rejected = _run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
@@ -65,14 +47,14 @@ def test_superposition_replay_rejects_non_resolvent_parent_pair(
 
 
 def test_superposition_replay_rejects_forward_reference(tmp_path: Path) -> None:
-    task, app, logs = _prepare_resolution_replay(tmp_path)
+    task, app, logs = _prepare_case(tmp_path, TASK, "computed")
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
     submission["result"]["steps"][0], submission["result"]["steps"][1] = (
         submission["result"]["steps"][1],
         submission["result"]["steps"][0],
     )
-    _write_json(submission_path, submission)
+    _write_json(submission_path, {"result": submission["result"]})
 
     rejected = _run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
@@ -83,18 +65,13 @@ def test_superposition_replay_rejects_promoted_intermediate_axioms(
     tmp_path: Path,
 ) -> None:
     """Relabeling intended resolvents as axioms must not bypass the proof."""
-    task, app, logs = _prepare_resolution_replay(tmp_path)
+    task, app, logs = _prepare_case(tmp_path, TASK, "computed")
     submission_path = app / "submission.json"
     submission = json.loads(submission_path.read_text())
     # Attack: treat clauses 4,5,8 as axioms and only derive the target.
     submission["result"]["axioms"] = [1, 2, 3, 4, 5, 6, 8]
     submission["result"]["steps"] = [{"child": 7, "parents": [1, 4]}]
-    evidence_path = app / "evidence" / "resolution-proof.json"
-    payload = json.loads(evidence_path.read_text())
-    payload["result"] = submission["result"]
-    _write_json(evidence_path, payload)
-    submission["witness"][0]["sha256"] = _digest(evidence_path)
-    _write_json(submission_path, submission)
+    _write_json(submission_path, {"result": submission["result"]})
 
     rejected = _run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0

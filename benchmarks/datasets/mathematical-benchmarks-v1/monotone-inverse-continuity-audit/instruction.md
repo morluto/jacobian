@@ -5,9 +5,9 @@ function on a compact interval.  Within the declared two-branch rational family,
 construct a strictly increasing function with a jump at zero and certify that its
 image omits a rational point lying strictly between its endpoint values.
 
-Submit canonical rational parameters as integer `numerator`/positive integer
-`denominator` objects in lowest terms, the four boundary values listed in the
-schema, and any canonical rational gap witness.  The witness must lie strictly
+Submit rational parameters as integer `numerator`/positive integer
+`denominator` objects, the four boundary values listed in the
+schema, and any rational gap witness. Equivalent encodings such as `2/8` and `1/4` are accepted after exact `Fraction` normalization.  The witness must lie strictly
 between the left limit and the right value at zero.  This simultaneously refutes
 the claimed interval-image conclusion and the existence of a two-sided inverse
 on the full endpoint interval.  The verifier independently checks the parameter

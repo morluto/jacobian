@@ -4,22 +4,21 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
     workspace_input_is_bound,
 )
 
-W, T = Path("/app"), Path("/tests")
+W, T = (Path("/app"), Path("/tests"))
 REQUIRED_N = (2, 3, 4, 5)
 
 
 def derive_case(n):
-    masks = [mask for mask in range(1 << n) if not (mask & (mask << 1))]
-    compatible = sum(not (left & right) for left in masks for right in masks)
+    masks = [mask for mask in range(1 << n) if not mask & mask << 1]
+    compatible = sum(not left & right for left in masks for right in masks)
     counts = dict.fromkeys(masks, 1)
     layers = [sum(counts.values())]
     for _ in range(1, n):
         counts = {
-            mask: sum(value for prior, value in counts.items() if not (mask & prior))
+            mask: sum((value for prior, value in counts.items() if not mask & prior))
             for mask in masks
         }
         layers.append(sum(counts.values()))
@@ -52,8 +51,10 @@ def exact_value(actual, expected):
             isinstance(actual, list)
             and len(actual) == len(expected)
             and all(
-                exact_value(value, target)
-                for value, target in zip(actual, expected, strict=True)
+                (
+                    exact_value(value, target)
+                    for value, target in zip(actual, expected, strict=True)
+                )
             )
         )
     return type(actual) is type(expected) and actual == expected
@@ -87,7 +88,7 @@ def result_matches(result):
     if set(by_n) != set(REQUIRED_N):
         return False
     return all(
-        exact_value(by_n[n], derived["cases"][i]) for i, n in enumerate(REQUIRED_N)
+        (exact_value(by_n[n], derived["cases"][i]) for i, n in enumerate(REQUIRED_N))
     )
 
 
@@ -132,54 +133,19 @@ def _result_shape_ok(result: object) -> bool:
     return all(_case_shape_ok(case) for case in cases)
 
 
-def _evidence_descriptor_ok(descriptor: object) -> bool:
-    return (
-        isinstance(descriptor, dict)
-        and set(descriptor) == {"path", "sha256"}
-        and descriptor.get("path") == "evidence/answer.txt"
-        and isinstance(descriptor.get("sha256"), str)
-    )
-
-
 def main():
-    expected = json.loads((T / "expected.json").read_text())
     submission = load_submission(W / "submission.json")
     input_bound = workspace_input_is_bound()
     result = submission.get("result") if isinstance(submission, dict) else None
     math_ok = bool(input_bound and result_matches(result))
-    witness_descriptor = (
-        submission["witness"][0]
-        if isinstance(submission, dict)
-        and isinstance(submission.get("witness"), list)
-        and len(submission["witness"]) == 1
-        else None
-    )
-    evidence = (
-        read_evidence_json(witness_descriptor, expected_path="evidence/answer.txt")
-        if witness_descriptor is not None
-        else None
-    )
-    evidence_ok = bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result"}
-        and type(evidence.get("schema_version")) is str
-        and evidence.get("schema_version") == "1"
-        and type(evidence.get("task_id")) is str
-        and evidence.get("task_id") == expected["task_id"]
-        and result_matches(evidence.get("result"))
-        and exact_value(evidence.get("result"), result)
-    )
-    protocol = bool(
-        _result_shape_ok(result) and _evidence_descriptor_ok(witness_descriptor)
-    )
-    correct = bool(protocol and math_ok and evidence_ok)
+    protocol = bool(_result_shape_ok(result))
+    correct = bool(protocol and math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "protocol_compliance": float(protocol),
                 "correctness": float(math_ok),
-                "witness_validity": float(evidence_ok),
                 "reward": float(correct),
             }
         )

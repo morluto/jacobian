@@ -6,11 +6,5 @@
     "torsion": [
       []
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:cd8a135cb9d80e5016024e095fa788c0576a5afa2b3443feeb9ad290a21fe812"
-    }
-  ]
+  }
 }

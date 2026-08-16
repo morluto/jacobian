@@ -24,11 +24,5 @@
       },
       "three_exponent_maximum": 1
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/local-audit.json",
-      "sha256": "sha256:3dcdea39cb4cf85ba5ee489391e8e740bd099e3812f05dc60a9807b102a6e3e2"
-    }
-  ]
+  }
 }

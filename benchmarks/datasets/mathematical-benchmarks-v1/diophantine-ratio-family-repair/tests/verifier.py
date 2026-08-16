@@ -327,24 +327,6 @@ def _json_exact_equal(left: object, right: object) -> bool:
     return left == right
 
 
-def _evidence_descriptors_ok(evidence: object) -> bool:
-    """Check the evidence descriptor shape, path, and digest syntax.
-
-    File-content binding is left to ``witness_validity``; this predicate only
-    ensures the envelope descriptor matches the public schema so a malformed
-    descriptor such as ``[null]`` is reported as a protocol failure.
-    """
-
-    return bool(
-        isinstance(evidence, list)
-        and len(evidence) == 1
-        and isinstance(evidence[0], dict)
-        and set(evidence[0]) == {"path", "sha256"}
-        and evidence[0].get("path") == "evidence/answer.txt"
-        and isinstance(evidence[0].get("sha256"), str)
-    )
-
-
 def main() -> None:
     submission = load_submission()
     data = submission if isinstance(submission, dict) else {}

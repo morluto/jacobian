@@ -23,11 +23,7 @@ def q(value):
         parsed = Fraction(numerator, denominator)
     except (ValueError, TypeError, ZeroDivisionError):
         return None
-    return (
-        parsed
-        if parsed.numerator == numerator and parsed.denominator == denominator
-        else None
-    )
+    return parsed
 
 
 def main():

@@ -8,22 +8,21 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
-    resolve_evidence,
     workspace_input_is_bound,
 )
 
-TASK_ID = "jacobian/yang-mills-gauge-invariance-certificate"
-
 
 def rat(v: object, *, bounded: bool = False) -> Fraction:
-    if not isinstance(v, str) or len(v) > 32:
+    if not isinstance(v, dict) or set(v) != {"numerator", "denominator"}:
         raise ValueError
-    q = Fraction(v)
-    if str(q) != v or (bounded and (abs(q.numerator) > 20 or q.denominator > 20)):
+    numerator = v["numerator"]
+    denominator = v["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        raise ValueError
+    q = Fraction(numerator, denominator)
+    if bounded and (abs(q.numerator) > 20 or q.denominator > 20):
         raise ValueError
     return q
 
@@ -126,27 +125,12 @@ def main():
     protocol = isinstance(s, dict)
     result = s.get("result") if protocol else None
     m = bool(protocol and mathematics(result))
-    witness = s.get("witness") if protocol else None
-    descriptor = witness[0] if isinstance(witness, list) and len(witness) == 1 else None
-    payload = (
-        read_evidence_json(descriptor, expected_path="evidence/answer.txt")
-        if resolve_evidence(descriptor, expected_path="evidence/answer.txt") is not None
-        else None
-    )
-    witness_valid = bool(
-        isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result"}
-        and payload.get("schema_version") == "1"
-        and payload.get("task_id") == TASK_ID
-        and json_value_equal(payload.get("result"), result)
-    )
-    agg = float(ib and protocol and m and witness_valid)
+    agg = float(ib and protocol and m)
     reward(
         {
             "protocol": float(protocol),
             "input_binding": 1.0 if ib else 0.0,
             "mathematics": 1.0 if m else 0.0,
-            "witness_validity": float(witness_valid),
             "aggregate_reward": agg,
             "reward": agg,
         }
@@ -162,7 +146,6 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

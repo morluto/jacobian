@@ -1,4 +1,3 @@
-import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -25,36 +24,22 @@ def oracle():
         ],
         "formal_status": "UNBOUNDED_BELOW",
     }
-    return {
-        "result": result,
-        "witness": [{"path": "evidence/precedence-audit.json", "sha256": ""}],
-    }
+    return {"result": result}
 
 
 def verify(tmp_path, submission):
     task = Path("benchmarks/datasets/mathematical-benchmarks-v1") / TASK
     app, logs = tmp_path / "app", tmp_path / "logs"
-    (app / "evidence").mkdir(parents=True)
+    app.mkdir(parents=True)
     logs.mkdir()
     shutil.copy2(task / "environment/input.json", app / "input.json")
-    evidence = {
-        "schema_version": "1",
-        "task_id": f"jacobian/{TASK}",
-        "result": submission["result"],
-    }
-    path = app / "evidence/precedence-audit.json"
-    path.write_text(json.dumps(evidence, separators=(",", ":")))
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(submission))
+    (app / "submission.json").write_text(json.dumps({"result": submission["result"]}))
     return _run_verifier(task, app, logs)
 
 
 def test_oracle_and_alternative_family(tmp_path):
     assert verify(tmp_path / "oracle", oracle()).reward == 1.0
     alt = oracle()
-    # x=-t^2/4-7, y=t gives leading coefficient -3/16.
     alt["result"] = {
         "x_coefficients": [r(-7), r(0), r(-1, 4)],
         "y_coefficients": [r(0), r(1)],
@@ -82,7 +67,7 @@ def test_malformed_and_input_tamper_fail_closed(tmp_path):
     assert verify(tmp_path / "malformed", malformed).reward == 0
     task = Path("benchmarks/datasets/mathematical-benchmarks-v1") / TASK
     app, logs = tmp_path / "tamper/app", tmp_path / "tamper/logs"
-    (app / "evidence").mkdir(parents=True)
+    app.mkdir(parents=True)
     logs.mkdir(parents=True)
     (app / "input.json").write_text("{}")
     (app / "submission.json").write_text(json.dumps(oracle()))

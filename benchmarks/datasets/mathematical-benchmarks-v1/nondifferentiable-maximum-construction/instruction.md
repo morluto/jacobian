@@ -6,18 +6,16 @@ declared in the input and choose any rational peak and slopes satisfying the
 requirements.
 
 Return exact rational parameters as integer `numerator`/positive integer
-`denominator` objects in lowest terms and the branch values at the join. The
+`denominator` objects and the branch values at the join. Equivalent encodings such as `2/8` and `1/4` are accepted after exact `Fraction` normalization. The
 verifier independently checks continuity at zero, monotonicity toward and away
 from the peak, and the unequal one-sided derivatives. Write `submission.json`
-to the exact `submission_schema.json` contract, Write the task-specific witness to
-`evidence/answer.txt`, and bind that file with its SHA-256 digest.
+to the exact `submission_schema.json` contract.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

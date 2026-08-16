@@ -1,5 +1,4 @@
 import copy
-import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -22,20 +21,10 @@ def _oracle():
 def _prepare(tmp_path, submission):
     task = Path("benchmarks/datasets/mathematical-benchmarks-v1") / TASK
     app, logs = tmp_path / "app", tmp_path / "logs"
-    (app / "evidence").mkdir(parents=True)
+    app.mkdir(parents=True)
     logs.mkdir(parents=True)
     shutil.copy2(task / "environment/input.json", app / "input.json")
-    evidence = {
-        "schema_version": "1",
-        "task_id": f"jacobian/{TASK}",
-        "result": submission["result"],
-    }
-    evidence_path = app / "evidence/valuation-audit.json"
-    evidence_path.write_text(json.dumps(evidence, separators=(",", ":")))
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(submission))
+    (app / "submission.json").write_text(json.dumps({"result": submission["result"]}))
     return task, app, logs
 
 
@@ -82,17 +71,16 @@ def test_rejects_out_of_bound_prime_without_crashing(tmp_path):
         assert (tmp_path / name / "logs" / "reward.json").is_file()
 
 
-def test_evidence_result_requires_exact_json_types(tmp_path):
+def test_undeclared_witness_key_is_rejected(tmp_path):
     submission = copy.deepcopy(_oracle())
-    task, app, logs = _prepare(tmp_path, submission)
-    evidence_path = app / "evidence/valuation-audit.json"
-    evidence = json.loads(evidence_path.read_text())
-    evidence["result"]["countermodel"][0]["exponents"][0] = True
-    evidence_path.write_text(json.dumps(evidence, separators=(",", ":")))
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
-    )
+    submission["witness"] = [
+        {"path": "evidence/valuation-audit.json", "sha256": "sha256:" + "0" * 64}
+    ]
+    task = Path("benchmarks/datasets/mathematical-benchmarks-v1") / TASK
+    app, logs = tmp_path / "app", tmp_path / "logs"
+    app.mkdir(parents=True)
+    logs.mkdir(parents=True)
+    shutil.copy2(task / "environment/input.json", app / "input.json")
     (app / "submission.json").write_text(json.dumps(submission))
     reward = _run_verifier(task, app, logs)
-    assert reward.details["correctness"] == 1.0
     assert reward.reward == 0

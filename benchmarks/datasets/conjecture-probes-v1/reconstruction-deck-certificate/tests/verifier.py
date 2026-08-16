@@ -10,22 +10,13 @@ from typing import Any
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
     is_regular_bounded_file,
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
 TASK_ID = "jacobian/reconstruction-deck-certificate"
 SCOPE = "nine-card-reconstruction-v1"
-LIMITATIONS = [
-    "ONE_SCRAMBLED_NINE_CARD_DECK",
-    "EXACT_CARD_EMBEDDINGS",
-    "NO_GLOBAL_RECONSTRUCTION_CONCLUSION",
-]
-scoreable_assurances = frozenset({"UNVERIFIED", "COMPUTED"})
 
 
 def frozen():
@@ -162,37 +153,12 @@ def main():
         and isinstance(data, dict)
         and mathematics(raw.get("result"), data)
     )
-    e = bool(
-        isinstance(raw, dict)
-        and witness_list_is_bound(raw.get("witness"), max_bytes=None)
-    )
-    payload = (
-        read_evidence_json(
-            raw["witness"][0],
-            expected_path="evidence/answer.txt",
-            max_bytes=None,
-        )
-        if e
-        else None
-    )
-    e = bool(
-        isinstance(payload, dict)
-        and json_value_equal(
-            payload,
-            {
-                "schema_version": "1",
-                "task_id": TASK_ID,
-                "result": raw.get("result"),
-            },
-        )
-    )
-    agg = float(all((ib, c, m, e)))
+    agg = float(all((ib, c, m)))
     reward(
         {
             "protocol": 1.0 if c else 0.0,
             "input_binding": 1.0 if ib else 0.0,
             "mathematics": 1.0 if m else 0.0,
-            "witness_validity": 1.0 if e else 0.0,
             "aggregate_reward": agg,
             "reward": agg,
         }
@@ -208,7 +174,6 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

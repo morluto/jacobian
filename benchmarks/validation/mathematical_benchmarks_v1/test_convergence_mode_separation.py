@@ -46,21 +46,23 @@ def test_typed_oracle_and_unreduced_event_mass_pass(tmp_path: Path) -> None:
     assert _run_verifier(task, app, logs).reward == pytest.approx(1.0)
 
 
-def test_string_or_noncanonical_probe_is_rejected(tmp_path: Path) -> None:
+def test_string_probe_is_rejected(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path / "string")
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["probes"][0]["point"] = "1/3"
     _write_json(app / "submission.json", submission)
     assert _run_verifier(task, app, logs).reward == pytest.approx(0.0)
 
-    task, app, logs = _case(tmp_path / "noncanonical")
+
+def test_unreduced_probe_is_accepted(tmp_path: Path) -> None:
+    task, app, logs = _case(tmp_path / "unreduced")
     submission = json.loads((app / "submission.json").read_text())
     submission["result"]["probes"][0]["point"] = {
         "numerator": 2,
         "denominator": 6,
     }
     _write_json(app / "submission.json", submission)
-    assert _run_verifier(task, app, logs).reward == pytest.approx(0.0)
+    assert _run_verifier(task, app, logs).reward == pytest.approx(1.0)
 
 
 def test_rejects_unbounded_research_status_fact(tmp_path: Path) -> None:
@@ -88,3 +90,38 @@ def test_result_requires_checked_structural_convergence_arguments(
     rejected = _run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
     assert rejected.reward == pytest.approx(0.0)
+
+
+def test_equivalent_event_mass_formulas_pass_and_near_misses_fail(
+    tmp_path: Path,
+) -> None:
+    task, app, logs = _case(tmp_path / "half")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["probability_argument"]["event_mass_formula"] = {
+        "coefficient": {"numerator": 1, "denominator": 1},
+        "base": {"numerator": 1, "denominator": 2},
+        "exponent_coefficient": 1,
+        "variable": "k",
+    }
+    _write_json(app / "submission.json", submission)
+    assert _run_verifier(task, app, logs).reward == pytest.approx(1.0)
+
+    task, app, logs = _case(tmp_path / "unreduced")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["probability_argument"]["event_mass_formula"] = {
+        "coefficient": {"numerator": 2, "denominator": 2},
+        "base": {"numerator": 2, "denominator": 1},
+        "exponent_coefficient": -1,
+        "variable": "k",
+    }
+    _write_json(app / "submission.json", submission)
+    assert _run_verifier(task, app, logs).reward == pytest.approx(1.0)
+
+    task, app, logs = _case(tmp_path / "wrong-base")
+    submission = json.loads((app / "submission.json").read_text())
+    submission["result"]["probability_argument"]["event_mass_formula"]["base"] = {
+        "numerator": 3,
+        "denominator": 1,
+    }
+    _write_json(app / "submission.json", submission)
+    assert _run_verifier(task, app, logs).reward == pytest.approx(0.0)

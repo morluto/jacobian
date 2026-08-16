@@ -1,4 +1,3 @@
-import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -21,20 +20,10 @@ def oracle():
 def verify(tmp_path, submission):
     task = Path("benchmarks/datasets/mathematical-benchmarks-v1") / TASK
     app, logs = tmp_path / "app", tmp_path / "logs"
-    (app / "evidence").mkdir(parents=True)
+    app.mkdir(parents=True)
     logs.mkdir()
     shutil.copy2(task / "environment/input.json", app / "input.json")
-    evidence = {
-        "schema_version": "1",
-        "task_id": f"jacobian/{TASK}",
-        "result": submission["result"],
-    }
-    p = app / "evidence/product-hausdorff-audit.json"
-    p.write_text(json.dumps(evidence, separators=(",", ":")))
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(submission))
+    (app / "submission.json").write_text(json.dumps({"result": submission["result"]}))
     return _run_verifier(task, app, logs)
 
 
@@ -63,8 +52,8 @@ def test_boolean_and_input_tamper_fail_closed(tmp_path):
     assert verify(tmp_path / "boolean", bad).reward == 0
     task = Path("benchmarks/datasets/mathematical-benchmarks-v1") / TASK
     app, logs = tmp_path / "tamper/app", tmp_path / "tamper/logs"
-    (app / "evidence").mkdir(parents=True)
+    app.mkdir(parents=True)
     logs.mkdir(parents=True)
     (app / "input.json").write_text("{}")
-    (app / "submission.json").write_text(json.dumps(oracle()))
+    (app / "submission.json").write_text(json.dumps({"result": oracle()["result"]}))
     assert _run_verifier(task, app, logs).reward == 0

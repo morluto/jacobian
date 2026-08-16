@@ -6,10 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
     workspace_input_is_bound,
 )
 
@@ -37,21 +35,34 @@ CLAIMED = {
 }
 
 
+def _q(value):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        return None
+    try:
+        return Fraction(numerator, denominator)
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
 def _qadd(x, y):
-    return x[0] + y[0], x[1] + y[1]
+    return (x[0] + y[0], x[1] + y[1])
 
 
 def _qsquare(x):
-    return x[0] ** 2 + 33 * x[1] ** 2, 2 * x[0] * x[1]
+    return (x[0] ** 2 + 33 * x[1] ** 2, 2 * x[0] * x[1])
 
 
 def _vertical_square(left: str, right: str, corrupt: bool):
     left_sign = -1 if corrupt and left == "B5" else 1
     right_sign = -1 if corrupt and right == "B5" else 1
-    left, right = left.removesuffix("5"), right.removesuffix("5")
+    left, right = (left.removesuffix("5"), right.removesuffix("5"))
     if left == right:
         if left_sign == right_sign:
-            return Fraction(0), Fraction(0)
+            return (Fraction(0), Fraction(0))
         return {
             "A": (Fraction(17, 6), Fraction(1, 6)),
             "B": (Fraction(17, 6), Fraction(-1, 6)),
@@ -81,8 +92,8 @@ def _distances(corrupt: bool):
     result = {}
     for i in range(7):
         for j in range(i + 1, 7):
-            dx = X[i][0] - X[j][0], X[i][1] - X[j][1]
-            result[(i, j)] = _qadd(
+            dx = (X[i][0] - X[j][0], X[i][1] - X[j][1])
+            result[i, j] = _qadd(
                 _qsquare(dx), _vertical_square(tags[i], tags[j], corrupt)
             )
     return result
@@ -101,30 +112,26 @@ def _table(
             "unit",
         }:
             return False
-        pair, distance, unit = row["pair"], row["distance_squared"], row["unit"]
+        pair, distance, unit = (row["pair"], row["distance_squared"], row["unit"])
         if (
             not isinstance(pair, list)
             or len(pair) != 2
             or any(type(x) is not int for x in pair)
-            or pair[0] == pair[1]
+            or (pair[0] == pair[1])
             or any(not 0 <= endpoint < 7 for endpoint in pair)
         ):
             return False
         if (
             not isinstance(distance, list)
             or len(distance) != 2
-            or any(not isinstance(x, str) for x in distance)
             or type(unit) is not bool
         ):
             return False
-        try:
-            parsed = Fraction(distance[0]), Fraction(distance[1])
-        except (ValueError, ZeroDivisionError):
+        parsed = tuple(_q(part) for part in distance)
+        if any(part is None for part in parsed):
             return False
         key = tuple(sorted(pair))
         if key in seen or parsed != expected[key] or unit != (parsed == (1, 0)):
-            return False
-        if any(str(part) != raw for part, raw in zip(parsed, distance, strict=True)):
             return False
         seen.add(key)
     return seen == set(expected)
@@ -139,7 +146,7 @@ def mathematics(result: Any) -> bool:
         "corrected_edges",
     }:
         return False
-    corrupt, fixed = _distances(True), _distances(False)
+    corrupt, fixed = (_distances(True), _distances(False))
     if not _table(result["corrupted_pair_table"], corrupt) or not _table(
         result["corrected_pair_table"], fixed
     ):
@@ -151,8 +158,8 @@ def mathematics(result: Any) -> bool:
     return (
         submitted_false == false_edges
         and result["repair"] == "FLIP_VERTEX_5_B_BRANCH_TO_POSITIVE"
-        and submitted_fixed == fixed_edges
-        and len(fixed_edges) == 11
+        and (submitted_fixed == fixed_edges)
+        and (len(fixed_edges) == 11)
     )
 
 
@@ -165,7 +172,7 @@ def _edge_set(value: Any, expected_count: int) -> set[tuple[int, int]] | None:
             not isinstance(edge, list)
             or len(edge) != 2
             or any(type(endpoint) is not int for endpoint in edge)
-            or edge[0] == edge[1]
+            or (edge[0] == edge[1])
             or any(not 0 <= endpoint < 7 for endpoint in edge)
         ):
             return None
@@ -185,30 +192,12 @@ def main():
     submission = load_submission(require_input_binding=False)
     protocol_ok = submission is not None
     math_ok = bool(protocol_ok and mathematics(submission.get("result")))
-    witness = submission.get("witness") if isinstance(submission, dict) else None
-    payload = (
-        read_evidence_json(
-            witness[0],
-            expected_path="evidence/answer.json",
-            max_bytes=None,
-        )
-        if isinstance(witness, list) and len(witness) == 1
-        else None
-    )
-    witness_ok = bool(
-        isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result"}
-        and payload["schema_version"] == "1"
-        and payload["task_id"] == "jacobian/moser-radical-branch-audit"
-        and json_value_equal(payload["result"], submission.get("result"))
-    )
-    reward = float(protocol_ok and input_bound and math_ok and witness_ok)
+    reward = float(protocol_ok and input_bound and math_ok)
     _write(
         {
             "protocol_compliance": float(protocol_ok),
             "input_binding": float(input_bound),
             "correctness": float(math_ok),
-            "witness_validity": float(witness_ok),
             "reward": reward,
         }
     )
@@ -223,7 +212,6 @@ if __name__ == "__main__":
                 "protocol_compliance": 0.0,
                 "input_binding": 0.0,
                 "correctness": 0.0,
-                "witness_validity": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,
             }

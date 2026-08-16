@@ -2,7 +2,7 @@
 
 The frozen validator checks a proper vertex coloring and a proper edge coloring separately, then incorrectly calls their union a total coloring. Audit that contract on the supplied Petersen graph.
 
-Submit `/app/submission.json` and one bound `/app/evidence/answer.json`. Your certificate must contain:
+Submit `/app/submission.json`. Your certificate must contain:
 
 1. a **flawed-pass assignment** using exactly the declared four-color palette whose vertex projection is proper and whose edge projection is proper, but which has at least one vertex–incident-edge color collision;
 2. the complete collision list for that assignment (the order is not significant); and
@@ -15,9 +15,8 @@ The conclusion is limited to this one finite validator defect and its Petersen-g
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.json`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `application/json`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

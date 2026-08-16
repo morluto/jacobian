@@ -6,7 +6,7 @@ Assess one exact polynomial-map claim in the bounded-collision-scope pilot famil
 
 - family: `bounded-collision-scope`
 - case version: `symbolic-coordination-v1/pilot-1`
-- generator: `symbolic-coordination-pilot-generator@1`
+- generator: `symbolic-coordination-pilot-generator@2`
 - fixture digest: `sha256:248b325af590570a1f69b4f5c50b874047be208159bedb6ea5ddf07160338bc9`
 - note: Grid exhaustion licenses only a bounded no-collision claim.
 

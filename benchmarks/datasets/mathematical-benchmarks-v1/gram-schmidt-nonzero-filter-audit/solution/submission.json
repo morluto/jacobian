@@ -197,11 +197,5 @@
       4,
       5
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/gram-schmidt-audit.json",
-      "sha256": "sha256:26b6ff8abac03f8e91c917d68af5015b04ea627e57ab5000891f7a1980c231c4"
-    }
-  ]
+  }
 }

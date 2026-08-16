@@ -8,8 +8,6 @@ from verifier_support import (
     json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
-    resolve_evidence,
     workspace_input_is_bound,
 )
 
@@ -39,8 +37,8 @@ def _edge(value):
     if (
         not isinstance(value, list)
         or len(value) != 2
-        or not all(type(x) is int and 0 <= x < 5 for x in value)
-        or value[0] >= value[1]
+        or (not all(type(x) is int and 0 <= x < 5 for x in value))
+        or (value[0] >= value[1])
     ):
         raise ValueError
     return tuple(value)
@@ -96,35 +94,14 @@ def main():
     submission = load_submission(require_input_binding=False)
     protocol = isinstance(submission, dict)
     result = submission.get("result") if protocol else None
-    witness = submission.get("witness") if protocol else None
-    descriptor = witness[0] if isinstance(witness, list) and len(witness) == 1 else None
-    payload = (
-        read_evidence_json(descriptor, expected_path="evidence/answer.json")
-        if resolve_evidence(descriptor, expected_path="evidence/answer.json")
-        is not None
-        else None
-    )
-    witness_valid = bool(
-        isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result"}
-        and payload.get("schema_version") == "1"
-        and payload.get("task_id") == TASK_ID
-        and json_value_equal(payload.get("result"), result)
-    )
     mathematics_valid = bool(protocol and mathematics(result))
     values = {
         "input_binding": float(workspace_input_is_bound()),
         "protocol": float(protocol),
         "mathematics": float(mathematics_valid),
-        "witness_validity": float(witness_valid),
     }
     reward = float(all(values.values()))
-    values.update(
-        {
-            "aggregate_reward": reward,
-            "reward": reward,
-        }
-    )
+    values.update({"aggregate_reward": reward, "reward": reward})
     _write(values)
 
 
@@ -137,7 +114,6 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

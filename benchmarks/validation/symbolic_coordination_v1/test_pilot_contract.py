@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 import json
+import sys
 from collections import Counter
+from copy import deepcopy
 from fractions import Fraction
 from itertools import product
 from pathlib import Path
@@ -10,6 +13,7 @@ from pathlib import Path
 import pytest
 from benchmarks.tooling.command_runner import ToolCommandStatus, run_operator_command
 from benchmarks.validation.symbolic_coordination_v1 import support
+from jsonschema.validators import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[3]
 DATASET = ROOT / "benchmarks/datasets/symbolic-coordination-v1"
@@ -338,6 +342,7 @@ def test_incomplete_search_cannot_be_promoted_to_grid_exhaustion(
     }
     support.write_json(app / "submission.json", submission)
     result = support.run_verifier(task, app, logs)
+    assert result.details["protocol"] == 0.0
     assert result.details["mathematics"] == 0.0
     assert result.reward == 0.0
 
@@ -485,3 +490,91 @@ def test_result_only_contract_is_documented() -> None:
     ).read_text()
     assert "terminal certificate in the `result`" in instruction
     assert '"witness"' not in instruction
+
+
+def _load_generate():
+    spec = importlib.util.spec_from_file_location(
+        "symbolic_coordination_generate", DATASET / "generate.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec is not None and spec.loader is not None
+    bytecode = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = bytecode
+    return module
+
+
+_CERTIFICATE_REPRESENTATIVES = {
+    "TWO_SIDED_COMPOSITION_REPLAY": "symbolic-coordination-valid-inverse-01",
+    "KELLER_DETERMINANT_REPLAY": "symbolic-coordination-keller-only-01",
+    "COLLISION_WITNESS_REPLAY": "symbolic-coordination-collision-found-01",
+    "BOUNDED_GRID_EXHAUSTION_REPLAY": "symbolic-coordination-grid-exhausted-01",
+    "SEARCH_NONCONCLUSION": "symbolic-coordination-search-timeout-01",
+}
+
+
+def test_generated_schemas_accept_only_family_licensed_certificates() -> None:
+    generate = _load_generate()
+    samples = {
+        kind: json.loads((DATASET / task_id / "solution/submission.json").read_text())[
+            "result"
+        ]
+        for kind, task_id in _CERTIFICATE_REPRESENTATIVES.items()
+    }
+    assert set(samples) == set(generate.ALL_CERTIFICATE_KINDS)
+    for raw in generate.cases():
+        data = generate.bind_case(raw)
+        schema = generate.submission_schema_parts(data)
+        licensed = set(generate.licensed_certificate_kinds(data))
+        oracle = json.loads(
+            (DATASET / str(data["case_id"]) / "solution/submission.json").read_text()
+        )
+        Draft202012Validator(schema).validate(oracle)
+        for kind, sample in samples.items():
+            mutated = deepcopy(oracle)
+            mutated["result"]["certificate"] = deepcopy(sample["certificate"])
+            mutated["result"]["verdict"] = sample["verdict"]
+            if kind == "SEARCH_NONCONCLUSION" and kind in licensed:
+                record = data["search_record"]
+                assert isinstance(record, dict)
+                mutated["result"]["certificate"]["stop_reason"] = record["stop_reason"]
+            errors = list(Draft202012Validator(schema).iter_errors(mutated))
+            if kind in licensed:
+                assert errors == [], (data["case_id"], kind)
+            else:
+                assert errors, (data["case_id"], kind)
+
+
+def test_inverse_schema_rejects_keller_certificate_and_verdict() -> None:
+    generate = _load_generate()
+    data = generate.bind_case(
+        next(
+            case
+            for case in generate.cases()
+            if case["slug"] == "symbolic-coordination-valid-inverse-01"
+        )
+    )
+    schema = generate.submission_schema_parts(data)
+    oracle = json.loads(
+        (
+            DATASET
+            / "symbolic-coordination-valid-inverse-01"
+            / "solution/submission.json"
+        ).read_text()
+    )
+    keller = json.loads(
+        (
+            DATASET
+            / "symbolic-coordination-keller-only-01"
+            / "solution/submission.json"
+        ).read_text()
+    )["result"]
+    mixed = deepcopy(oracle)
+    mixed["result"]["certificate"] = keller["certificate"]
+    assert list(Draft202012Validator(schema).iter_errors(mixed))
+    mixed_verdict = deepcopy(oracle)
+    mixed_verdict["result"]["verdict"] = "KELLER_CONDITION_ONLY"
+    assert list(Draft202012Validator(schema).iter_errors(mixed_verdict))

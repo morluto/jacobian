@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import subprocess
@@ -14,7 +13,6 @@ TASK = (
     ROOT
     / "benchmarks/datasets/conjecture-probes-v1/totient-preimage-completeness-certificate"
 )
-TASK_ID = "jacobian/totient-preimage-completeness-certificate"
 
 
 def case(tmp_path: Path):
@@ -29,24 +27,10 @@ def case(tmp_path: Path):
     return app, logs, json.loads((app / "submission.json").read_text())
 
 
-def _payload(result: object) -> dict[str, object]:
-    return {"schema_version": "1", "task_id": TASK_ID, "result": result}
-
-
-def write(app: Path, submission: dict, *, payload: object | None = None) -> None:
-    evidence = app / "evidence/answer.json"
-    evidence.write_text(
-        json.dumps(
-            _payload(submission["result"]) if payload is None else payload,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        + "\n"
+def write(app: Path, submission: dict) -> None:
+    (app / "submission.json").write_text(
+        json.dumps({"result": submission["result"]}) + "\n"
     )
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(submission) + "\n")
 
 
 def run(app: Path, logs: Path):
@@ -62,7 +46,6 @@ def test_oracle_and_equivalent_representations_pass(tmp_path: Path) -> None:
     submission["result"]["solutions"][0]["factorization"].reverse()
     write(app, submission)
     assert run(app, logs).reward == 1.0
-
     app, logs, submission = case(tmp_path / "minimal")
     for optional in (
         "candidate_primes",
@@ -80,29 +63,18 @@ def test_incomplete_classification_and_wrong_types_fail(tmp_path: Path) -> None:
     write(app, submission)
     assert run(app, logs).details["mathematics"] == 0.0
     assert run(app, logs).reward == 0.0
-
     app, logs, submission = case(tmp_path / "type")
     submission["result"]["solutions"][0]["factorization"][0][1] = 1.0
     write(app, submission)
     assert run(app, logs).reward == 0.0
 
 
-def test_witness_is_digest_bound_and_type_strict(tmp_path: Path) -> None:
-    app, logs, _ = case(tmp_path)
-    (app / "evidence/answer.json").write_text("tampered\n")
+def test_boolean_totient_is_rejected(tmp_path: Path) -> None:
+    app, logs, submission = case(tmp_path)
+    submission["result"]["solutions"][0]["totient"] = True
+    write(app, submission)
     result = run(app, logs)
-    assert result.details["mathematics"] == 1.0
-    assert result.details["witness_validity"] == 0.0
-    assert result.reward == 0.0
-
-    app, logs, submission = case(tmp_path / "typed")
-    payload = _payload(submission["result"])
-    payload["result"] = json.loads(json.dumps(payload["result"]))
-    payload["result"]["solutions"][0]["totient"] = True
-    write(app, submission, payload=payload)
-    result = run(app, logs)
-    assert result.details["mathematics"] == 1.0
-    assert result.details["witness_validity"] == 0.0
+    assert result.details["mathematics"] == 0.0
     assert result.reward == 0.0
 
 
@@ -110,7 +82,6 @@ def test_malformed_submission_and_tampered_input_fail(tmp_path: Path) -> None:
     app, logs, _ = case(tmp_path)
     (app / "submission.json").write_text('{"result":{},"result":{}}\n')
     assert run(app, logs).reward == 0.0
-
     app, logs, _ = case(tmp_path / "input")
     (app / "input.json").write_text("{}\n")
     result = run(app, logs)
@@ -119,17 +90,9 @@ def test_malformed_submission_and_tampered_input_fail(tmp_path: Path) -> None:
     assert result.reward == 0.0
 
 
-def test_witness_accepts_large_legal_whitespace_padding(tmp_path: Path) -> None:
+def test_unused_evidence_file_does_not_affect_reward(tmp_path: Path) -> None:
     app, logs, submission = case(tmp_path)
-    evidence = app / "evidence/answer.json"
-    evidence.write_text(
-        " " * (17 * 1024 * 1024)
-        + json.dumps(
-            _payload(submission["result"]), sort_keys=True, separators=(",", ":")
-        )
-    )
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(submission) + "\n")
+    write(app, submission)
+    (app / "evidence").mkdir(exist_ok=True)
+    (app / "evidence/answer.json").write_text("tampered\n")
     assert run(app, logs).reward == 1.0

@@ -1,6 +1,5 @@
 import json
 import math
-import re
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -14,8 +13,6 @@ from verifier_support import (
 WORKSPACE = Path("/app")
 TESTS = Path("/tests")
 
-_FRACTION_RE = re.compile(r"-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?")
-
 
 def _source() -> dict[str, Any]:
     try:
@@ -27,10 +24,14 @@ def _source() -> dict[str, Any]:
 
 
 def _fraction(value: object) -> Fraction | None:
-    if not isinstance(value, str) or not _FRACTION_RE.fullmatch(value):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        return Fraction(value)
+        return Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
 

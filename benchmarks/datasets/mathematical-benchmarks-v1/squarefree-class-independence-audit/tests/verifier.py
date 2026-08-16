@@ -63,12 +63,15 @@ def certificate_valid(result: object, frozen: dict) -> bool:
         <= bounds.get("maximum_modulus", 0)
         or not isinstance(residues, list)
         or any(type(value) is not int for value in residues)
-        or residues != sorted(set(residues))
+        or len(residues) != len(set(residues))
     ):
         return False
-    expected_residues = sorted({pow(value, 2, modulus) for value in range(modulus)})
+    expected_residues = {pow(value, 2, modulus) for value in range(modulus)}
     target = 2023 % modulus
-    if residues != expected_residues or obstruction.get("target_residue") != target:
+    if (
+        set(residues) != expected_residues
+        or obstruction.get("target_residue") != target
+    ):
         return False
     if obstruction.get("maximum_squares_ruled_out") != 3:
         return False

@@ -7,7 +7,7 @@ Determine their semantic relationship. Supply two finite exact-rational model fa
 1. one where the intended statement is true and the proposed statement is false;
 2. one where the proposed statement is true and the intended statement is false.
 
-For each family, report the truth values of both formulas and identify a witness for the existential or a violating witness for the universal. Values must be canonical rational strings within the frozen bounds. The verifier recomputes every comparison and accepts any valid separating families.
+For each family, report the truth values of both formulas and identify a witness for the existential or a violating witness for the universal. Values must be structured `{numerator, denominator}` objects within the frozen bounds. Equivalent encodings such as `2/8` and `1/4` are accepted after exact `Fraction` normalization. The verifier recomputes every comparison and accepts any valid separating families.
 
 Write `/app/submission.json` using the supplied schema. The structured result
 must describe the existential, universal, and incomparable relationship through

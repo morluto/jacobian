@@ -14,16 +14,14 @@ checks all pairs on both sides, and replays the extremal upper bound. For a
 `sum_i binom(d_i,2) <= binom(13,2)`. Convexity then rules out 53 edges, while
 the submitted 52-edge construction attains the bound.
 
-Evidence is matching JSON with exactly `schema_version`, `task_id`, `result`,
 and `limitations`. This finite certificate establishes only
 `z(13,13;2,2)=52`; it does not settle the general Zarankiewicz problem.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.json`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `application/json`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

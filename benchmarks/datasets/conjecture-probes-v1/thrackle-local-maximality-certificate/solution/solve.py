@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from itertools import combinations
 from pathlib import Path
 
-TASK_ID = "jacobian/thrackle-local-maximality-certificate"
 POINTS = [(0, 0), (4, 0), (5, 3), (2, 5), (-1, 3)]
 ALL = list(combinations(range(5), 2))
 SELECTED = [(0, 2), (0, 3), (1, 3), (1, 4), (2, 4)]
@@ -49,25 +47,7 @@ def main():
         "pair_classifications": pairs,
         "excluded_edge_witnesses": witnesses,
     }
-    payload = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": result,
-    }
-    evidence = root / "evidence/answer.json"
-    evidence.parent.mkdir(parents=True, exist_ok=True)
-    evidence.write_text(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
-    )
-    submission = {
-        "result": result,
-        "witness": [
-            {
-                "path": "evidence/answer.json",
-                "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
-            }
-        ],
-    }
+    submission = {"result": result}
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 
 

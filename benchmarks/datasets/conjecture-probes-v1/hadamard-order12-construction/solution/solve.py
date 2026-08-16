@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import sys
 from pathlib import Path
 
-TASK_ID = "jacobian/hadamard-order12-construction"
 SCOPE = "hadamard-order12-construction:normalized-v1"
-LIMITATIONS = ["ORDER_12_ONLY", "NO_GENERAL_HADAMARD_CONJECTURE_CONCLUSION"]
 
 
 def determinant(matrix: list[list[int]]) -> int:
@@ -66,22 +63,7 @@ def main() -> None:
         "determinant_abs": abs(det),
         "scope_identity": SCOPE,
     }
-    evidence = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": result,
-        "limitations": LIMITATIONS,
-    }
-    evidence_path = root / "evidence/answer.txt"
-    evidence_path.parent.mkdir(parents=True, exist_ok=True)
-    evidence_path.write_text(
-        json.dumps(evidence, sort_keys=True, separators=(",", ":")) + "\n"
-    )
-    digest = "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
-    submission = {
-        "result": result,
-        "witness": [{"path": "evidence/answer.txt", "sha256": digest}],
-    }
+    submission = {"result": result}
     (root / "submission.json").write_text(
         json.dumps(submission, sort_keys=True, separators=(",", ":")) + "\n"
     )

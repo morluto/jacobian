@@ -6,7 +6,7 @@ Assess one exact polynomial-map claim in the bounded-collision-scope pilot famil
 
 - family: `bounded-collision-scope`
 - case version: `symbolic-coordination-v1/pilot-1`
-- generator: `symbolic-coordination-pilot-generator@1`
+- generator: `symbolic-coordination-pilot-generator@2`
 - fixture digest: `sha256:a0d4175f3c0503416fe8fa9f996d6ffb9408da18888156ed350ed6bab2cb276f`
 - note: Timeout without a witness is a non-conclusion.
 

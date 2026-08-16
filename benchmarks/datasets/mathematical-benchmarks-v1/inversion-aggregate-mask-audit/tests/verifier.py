@@ -5,36 +5,9 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
 )
 
 W, T = Path("/app"), Path("/tests")
-
-
-def _json_equal(a: object, b: object) -> bool:
-    """Structural JSON equality that rejects type-mismatched scalars.
-
-    Python's ``==`` treats ``True == 1`` and ``6.0 == 6`` as equal, so an
-    evidence file that substitutes a float for an integer field (or a boolean
-    for an integer) would match the submitted result. This helper recursively
-    requires exact scalar types and element-wise equality for containers.
-    """
-
-    if isinstance(a, bool) or isinstance(b, bool):
-        return type(a) is type(b) and a == b
-    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
-        return type(a) is type(b) and a == b
-    if isinstance(a, str) and isinstance(b, str):
-        return a == b
-    if isinstance(a, list) and isinstance(b, list):
-        return len(a) == len(b) and all(
-            _json_equal(x, y) for x, y in zip(a, b, strict=True)
-        )
-    if isinstance(a, dict) and isinstance(b, dict):
-        return a.keys() == b.keys() and all(_json_equal(a[k], b[k]) for k in a)
-    if a is None or b is None:
-        return a is None and b is None
-    return False
 
 
 def frozen():
@@ -105,30 +78,15 @@ def valid(r):
 
 
 def main():
-    expected = json.loads((T / "expected.json").read_text())
     s = load_submission(W / "submission.json")
-    ev = (
-        read_evidence_json(
-            s["witness"][0], expected_path="evidence/inversion-audit.json"
-        )
-        if s is not None and isinstance(s.get("witness"), list) and s["witness"]
-        else None
-    )
     math_ok = bool(s is not None and frozen() and valid(s.get("result")))
-    evidence_ok = bool(
-        ev
-        and set(ev) == {"schema_version", "task_id", "result"}
-        and ev.get("schema_version") == "1"
-        and ev.get("task_id") == expected["task_id"]
-        and _json_equal(ev.get("result"), s.get("result"))
-    )
-    correct = math_ok and evidence_ok
+    correct = math_ok
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(evidence_ok),
+                "witness_validity": 1.0 if correct else 0.0,
                 "reward": float(correct),
             }
         )

@@ -10,10 +10,11 @@ subspace containing `f`, together with coordinates of `f` and the exact
 polynomial action matrix in that basis.
 
 Columns encode images: if `B=(b_0,...,b_4)`, entry `(i,j)` is the coefficient
-of `b_i` in `alpha_t(b_j)`. All sparse term lists must be canonical: nonzero
-reduced rational coefficients, unique exponent tuples, and ascending exponent
-order. The basis polynomials must be homogeneous of total degree four and
-linearly independent.
+of `b_i` in `alpha_t(b_j)`. All sparse term lists must use nonzero structured
+`{numerator, denominator}` rational coefficients, unique exponent tuples, and
+ascending exponent order. Equivalent encodings such as `2/2` and `1` are
+accepted after exact `Fraction` normalization. The basis polynomials must be
+homogeneous of total degree four and linearly independent.
 
 Your certificate must make it possible to check all of the following without
 trusting a preferred basis:

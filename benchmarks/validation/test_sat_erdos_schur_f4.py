@@ -17,10 +17,9 @@ TASK = (
 def _case(tmp_path: Path) -> tuple[Path, Path, Path]:
     app = tmp_path / "app"
     logs = tmp_path / "logs"
-    (app / "evidence").mkdir(parents=True)
+    app.mkdir()
     logs.mkdir()
     shutil.copy2(TASK / "environment" / "input.json", app / "input.json")
-    shutil.copy2(TASK / "solution" / "answer.txt", app / "evidence" / "answer.txt")
     shutil.copy2(TASK / "solution" / "submission.json", app / "submission.json")
     return TASK, app, logs
 

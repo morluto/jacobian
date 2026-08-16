@@ -32,13 +32,16 @@ def _load_frozen_input() -> dict:
 
 
 def _rational(value: object) -> Fraction | None:
-    if not isinstance(value, str) or len(value) > 80:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        parsed = Fraction(value)
+        return Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    return parsed if str(parsed) == value else None
 
 
 def _parse_matrix(value: object) -> list[list[Fraction]] | None:
@@ -178,6 +181,29 @@ def _classify_channels(
     return channels
 
 
+def _determinant_factors_match(value: object, channels: list[str]) -> bool:
+    if not isinstance(value, dict) or set(value) != {"factors"}:
+        return False
+    factors = value["factors"]
+    if not isinstance(factors, list) or not factors:
+        return False
+    counts: dict[str, int] = {}
+    for factor in factors:
+        if not isinstance(factor, dict) or set(factor) != {"matrix", "exponent"}:
+            return False
+        matrix = factor["matrix"]
+        exponent = factor["exponent"]
+        if matrix not in {"A-B", "A+2B"} or type(exponent) is not int or exponent < 1:
+            return False
+        if matrix in counts:
+            return False
+        counts[matrix] = exponent
+    expected: dict[str, int] = {}
+    for channel in channels:
+        expected[channel] = expected.get(channel, 0) + 1
+    return counts == expected
+
+
 def _symbolic_certificate_valid(result: object, source: dict) -> bool:
     required = {
         "basis_change",
@@ -217,7 +243,7 @@ def _symbolic_certificate_valid(result: object, source: dict) -> bool:
         derived_channels is not None
         and channels == derived_channels
         and channels == ["A+2B", "A-B", "A-B"]
-        and result["determinant_identity"] == "det(C)=det(A-B)^2*det(A+2B)"
+        and _determinant_factors_match(result["determinant_identity"], channels)
         and result["invertibility_assumption"] == "NOT_REQUIRED_FOR_POLYNOMIAL_IDENTITY"
     )
 

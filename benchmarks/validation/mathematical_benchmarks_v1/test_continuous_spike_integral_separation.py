@@ -90,11 +90,11 @@ def test_accepts_permuted_spike_order():
     assert verifier.valid_result(good)
 
 
-def test_rejects_noncanonical_rational_and_string_coercion():
+def test_accepts_unreduced_rational_and_rejects_string_coercion():
     verifier = load_verifier()
-    bad = candidate()
-    bad["alpha"] = {"numerator": 2, "denominator": 8}
-    assert not verifier.valid_result(bad)
+    unreduced = candidate()
+    unreduced["alpha"] = {"numerator": 2, "denominator": 8}
+    assert verifier.valid_result(unreduced)
     bad = candidate()
     bad["alpha"] = "1/4"
     assert not verifier.valid_result(bad)

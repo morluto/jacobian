@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -27,13 +28,18 @@ def load_verifier():
         sys.modules.update(saved_modules)
 
 
+def _q(value) -> dict[str, int]:
+    parsed = Fraction(value)
+    return {"numerator": parsed.numerator, "denominator": parsed.denominator}
+
+
 def result(beta="1", log_exponent="-2", integral="1"):
     return {
-        "beta": beta,
+        "beta": _q(beta),
         "origin_power_coefficient": "-1/2",
         "infinity_power_coefficient": "-1/2",
-        "p2_log_exponent": log_exponent,
-        "p2_integral_each": integral,
+        "p2_log_exponent": _q(log_exponent),
+        "p2_integral_each": _q(integral),
         "critical_p": "2",
         "lower_regime": {
             "p_interval": "0<p<2",
@@ -62,12 +68,15 @@ def test_rejects_wrong_tail_obstruction():
     assert not load_verifier().valid_result(candidate)
 
 
-def test_rational_field_max_length_is_documented():
+def test_structured_rational_fields_are_objects():
     schema = json.loads((TASK / "environment/submission_schema.json").read_text())
     for field in ("beta", "p2_log_exponent", "p2_integral_each"):
-        assert schema["properties"]["result"]["properties"][field]["maxLength"] == 80
+        node = schema["properties"]["result"]["properties"][field]
+        assert node["type"] == "object"
+        assert set(node["required"]) == {"numerator", "denominator"}
     text = (TASK / "instruction.md").read_text().casefold()
-    assert "80 characters" in text
+    assert "numerator" in text
+    assert "80 characters" not in text
 
 
 # --- T3: accept mathematically equivalent rationals ---

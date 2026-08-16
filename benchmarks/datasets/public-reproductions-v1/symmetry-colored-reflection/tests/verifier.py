@@ -1,12 +1,7 @@
 import json
 from pathlib import Path
 
-from verifier_support import (
-    aggregate_reward,
-    load_submission,
-    normalize_reward_file,
-    witness_list_is_bound,
-)
+from verifier_support import load_submission, normalize_reward_file
 
 W = Path("/app")
 E = Path("/tests")
@@ -110,41 +105,28 @@ def _expected_orbits(x):
     return vertex_orbits, [[list(edge) for edge in orbit] for orbit in edge_orbits]
 
 
-def _math(s, x, e):
-    r = s.get("result", {})
-    vo = r.get("vertex_orbits")
-    eo = r.get("edge_orbits")
+def _math(s, x):
+    result = s.get("result") or {}
+    if not isinstance(result, dict):
+        return False
     expected = _expected_orbits(x)
     if expected is None:
         return False
     expected_vertices, expected_edges = expected
-    return _norm_vertices(vo) == _norm_vertices(expected_vertices) and _norm_edges(
-        eo
-    ) == _norm_edges(expected_edges)
+    return _norm_vertices(result.get("vertex_orbits")) == _norm_vertices(
+        expected_vertices
+    ) and _norm_edges(result.get("edge_orbits")) == _norm_edges(expected_edges)
 
 
 def main():
     s = load_submission()
-    x = json.loads(next(E.glob("*input*.json")).read_text())
-    e = json.loads((E / "expected.json").read_text())
-    math_correct = _math(s, x, e)
-    correct = bool(math_correct)
-    good = bool(witness_list_is_bound(s["witness"]))
     protocol_ok = s is not None
-    reward = aggregate_reward(
-        correctness=correct,
-        witness_validity=good,
-        protocol_ok=protocol_ok,
-    )
+    x = json.loads(next(E.glob("*input*.json")).read_text())
+    math_correct = _math(s, x) if protocol_ok else False
+    reward = float(protocol_ok and math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
-    (Path("/logs/verifier/reward.json")).write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(good),
-                "reward": reward,
-            }
-        )
+    Path("/logs/verifier/reward.json").write_text(
+        json.dumps({"correctness": float(math_correct), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

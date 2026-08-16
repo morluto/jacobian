@@ -1,5 +1,4 @@
 import copy
-import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -19,28 +18,13 @@ def _oracle() -> dict[str, object]:
     )
 
 
-def _prepare(
-    tmp_path: Path,
-    submission: dict[str, object],
-    *,
-    evidence_payload: dict[str, object] | None = None,
-):
+def _prepare(tmp_path: Path, submission: dict[str, object]):
     task = Path("benchmarks/datasets/public-reproductions-v1") / TASK
     app, logs = tmp_path / "app", tmp_path / "logs"
-    (app / "evidence").mkdir(parents=True)
+    app.mkdir(parents=True)
     logs.mkdir(parents=True)
     shutil.copy2(task / "environment/input.json", app / "input.json")
-    if evidence_payload is None:
-        evidence_payload = {
-            "schema_version": "1",
-            "result": submission["result"],
-        }
-    evidence_path = app / "evidence/distance-audit.json"
-    evidence_path.write_text(json.dumps(evidence_payload, separators=(",", ":")))
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(submission))
+    (app / "submission.json").write_text(json.dumps({"result": submission["result"]}))
     return task, app, logs
 
 
@@ -98,6 +82,16 @@ def test_rejects_corrupt_geometry_and_nonvanishing_gap(tmp_path: Path) -> None:
         assert _verify(tmp_path / name, submission).reward == 0.0
 
 
+def test_public_instruction_does_not_require_lowest_terms() -> None:
+    instruction = (
+        Path("benchmarks/datasets/public-reproductions-v1") / TASK / "instruction.md"
+    ).read_text()
+    lowered = instruction.lower()
+    assert "lowest terms" not in lowered
+    assert "canonical rational" not in lowered
+    assert "equivalent encodings" in lowered
+
+
 def test_rejects_string_coercion_and_accepts_equivalent_rationals(
     tmp_path: Path,
 ) -> None:
@@ -108,11 +102,6 @@ def test_rejects_string_coercion_and_accepts_equivalent_rationals(
     noncanonical_submission = copy.deepcopy(_oracle())
     noncanonical_submission["result"]["point_pairs"][0]["distance"] = _q(2, 8)
     assert _verify(tmp_path / "noncanonical", noncanonical_submission).reward == 1.0
-
-
-# ---------------------------------------------------------------------------
-# Adversarial regression tests for PR #493 review threads.
-# -----------------------------------------------------------------------
 
 
 def test_accepts_epsilon_witnesses_above_one(tmp_path: Path) -> None:
@@ -139,18 +128,14 @@ def test_rejects_float_point_pair_indices(tmp_path: Path) -> None:
     assert result.details["correctness"] == 0.0
 
 
-def test_rejects_evidence_without_schema_version(tmp_path: Path) -> None:
-    """T5: evidence missing the published schema_version field is rejected."""
+def test_extra_witness_key_is_rejected(tmp_path: Path) -> None:
     submission = copy.deepcopy(_oracle())
-    payload = {
-        "result": submission["result"],
-    }
-    result = _run_verifier(
-        *_prepare(tmp_path / "no-schema-version", submission, evidence_payload=payload)
-    )
-    assert result.details["witness_validity"] == 0.0
+    task, app, logs = _prepare(tmp_path / "extra-witness", submission)
+    payload = json.loads((app / "submission.json").read_text())
+    payload["witness"] = []
+    (app / "submission.json").write_text(json.dumps(payload))
+    result = _run_verifier(task, app, logs)
     assert result.reward == 0.0
-    assert result.details["correctness"] == 1.0
 
 
 def test_tampered_input_preserves_correctness_and_gates_reward(

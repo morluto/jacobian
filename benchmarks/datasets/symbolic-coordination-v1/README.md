@@ -16,19 +16,22 @@ sequence.
 | Bounded collision scope | 6 | Witnesses, grid exhaustion, timeout, and incomplete search |
 | Semantic equivalence | 4 | Renaming, reordering, duplicate terms, and cancellation |
 
-Every task freezes one offline `input.json`, a strict submission schema, a
-hidden Oracle solution, and a task-local clean-room verifier. The verifier uses
-only Python's standard library and independently replays rational polynomial
-normalization, both map compositions, Jacobian determinants, finite grids, and
-collision witnesses. It also binds the exact input, claim, map, subject,
-semantics, scope, checker identity, evidence path, and evidence digest.
+Every task freezes one offline `input.json`, a strict family-specific
+submission schema, a hidden Oracle solution, and a task-local clean-room
+verifier. The public schema admits only the certificate kind licensed by that
+task's claim family and frozen case type: two-sided composition replay for
+inverse families, Keller determinant replay for constant-Jacobian cases, a
+collision witness, complete grid exhaustion, or an honest search
+non-conclusion. The verifier uses only Python's standard library and
+independently replays rational polynomial normalization, both map
+compositions, Jacobian determinants, finite grids, and collision witnesses.
+It also binds the exact input, claim, map, subject, semantics, checker
+identity, and certificate shape.
 
-The pilot caps submissions at `COMPUTED`. No operator-authorized Jacobian
-checker record is part of PR1, so a `VERIFIED` claim is false certification and
-receives zero reward. A constant nonzero Jacobian does not itself license a
-global-invertibility claim. Grid exhaustion licenses only the declared finite
-scope, while timeout, cancellation, incomplete work, and missing witnesses
-remain non-conclusions.
+A constant nonzero Jacobian does not itself license a global-invertibility
+claim. Grid exhaustion licenses only the declared finite scope, while
+timeout, cancellation, incomplete work, and missing witnesses remain
+non-conclusions.
 
 ## Deterministic identity
 
@@ -48,9 +51,9 @@ unchanged.
 ## Validation
 
 ```sh
+make harbor-prepare-task DATASET=symbolic-coordination-v1 TASKS="<task ids>"
+make harbor-validate-task DATASET=symbolic-coordination-v1 TASKS="<task ids>"
 make harbor-plan BASE=origin/main
-make harbor-check-task DATASET=symbolic-coordination-v1 TASKS="<task ids>"
-make harbor-oracle-task DATASET=symbolic-coordination-v1 TASKS="<task ids>"
 make harbor-check
 ```
 

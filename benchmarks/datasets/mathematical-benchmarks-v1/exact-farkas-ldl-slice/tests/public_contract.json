@@ -1,62 +1,26 @@
 {
-  "witness": {
-    "allowed_paths": [
-      "evidence/farkas-slice-certificate.json"
-    ],
-    "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "max_items": 1,
-    "media_types": [
-      "application/json"
-    ],
-    "min_items": 1,
-    "payload_shape": null
-  },
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.",
-  "required_witness_filenames": [
-    "evidence/farkas-slice-certificate.json"
-  ],
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
   "schema_definitions": {
-    "certificate": {
-      "oneOf": [
-        {
-          "additionalProperties": false,
-          "properties": {
-            "d": {
-              "items": {
-                "$ref": "#/$defs/rat"
-              },
-              "maxItems": 4,
-              "minItems": 4,
-              "type": "array"
-            },
-            "l": {
-              "$ref": "#/$defs/matrix4"
-            }
+    "ldl_certificate": {
+      "additionalProperties": false,
+      "properties": {
+        "d": {
+          "items": {
+            "$ref": "#/$defs/rat"
           },
-          "required": [
-            "l",
-            "d"
-          ],
-          "type": "object"
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
         },
-        {
-          "additionalProperties": false,
-          "properties": {
-            "leading_principal_determinants": {
-              "items": {
-                "$ref": "#/$defs/rat"
-              },
-              "maxItems": 4,
-              "minItems": 4,
-              "type": "array"
-            }
-          },
-          "required": [
-            "leading_principal_determinants"
-          ],
-          "type": "object"
+        "l": {
+          "$ref": "#/$defs/matrix4"
         }
-      ]
+      },
+      "required": [
+        "l",
+        "d"
+      ],
+      "type": "object"
     },
     "matrix4": {
       "items": {
@@ -84,27 +48,48 @@
       "type": "object"
     },
     "result": {
-      "additionalProperties": false,
-      "properties": {
-        "positive_definite_certificate": {
-          "$ref": "#/$defs/certificate"
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "positive_definite_certificate": {
+              "$ref": "#/$defs/ldl_certificate"
+            },
+            "proof_mode": {
+              "const": "LDL"
+            },
+            "scalar_replay": {
+              "$ref": "#/$defs/scalar"
+            }
+          },
+          "required": [
+            "proof_mode",
+            "scalar_replay",
+            "positive_definite_certificate"
+          ],
+          "type": "object"
         },
-        "proof_mode": {
-          "enum": [
-            "LDL",
-            "SYLVESTER"
-          ]
-        },
-        "scalar_replay": {
-          "$ref": "#/$defs/scalar"
+        {
+          "additionalProperties": false,
+          "properties": {
+            "positive_definite_certificate": {
+              "$ref": "#/$defs/sylvester_certificate"
+            },
+            "proof_mode": {
+              "const": "SYLVESTER"
+            },
+            "scalar_replay": {
+              "$ref": "#/$defs/scalar"
+            }
+          },
+          "required": [
+            "proof_mode",
+            "scalar_replay",
+            "positive_definite_certificate"
+          ],
+          "type": "object"
         }
-      },
-      "required": [
-        "proof_mode",
-        "scalar_replay",
-        "positive_definite_certificate"
-      ],
-      "type": "object"
+      ]
     },
     "row4": {
       "items": {
@@ -137,6 +122,23 @@
         "objective"
       ],
       "type": "object"
+    },
+    "sylvester_certificate": {
+      "additionalProperties": false,
+      "properties": {
+        "leading_principal_determinants": {
+          "items": {
+            "$ref": "#/$defs/rat"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        }
+      },
+      "required": [
+        "leading_principal_determinants"
+      ],
+      "type": "object"
     }
   },
   "schema_version": "1",
@@ -146,47 +148,26 @@
   },
   "submission_schema": {
     "$defs": {
-      "certificate": {
-        "oneOf": [
-          {
-            "additionalProperties": false,
-            "properties": {
-              "d": {
-                "items": {
-                  "$ref": "#/$defs/rat"
-                },
-                "maxItems": 4,
-                "minItems": 4,
-                "type": "array"
-              },
-              "l": {
-                "$ref": "#/$defs/matrix4"
-              }
+      "ldl_certificate": {
+        "additionalProperties": false,
+        "properties": {
+          "d": {
+            "items": {
+              "$ref": "#/$defs/rat"
             },
-            "required": [
-              "l",
-              "d"
-            ],
-            "type": "object"
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
           },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "leading_principal_determinants": {
-                "items": {
-                  "$ref": "#/$defs/rat"
-                },
-                "maxItems": 4,
-                "minItems": 4,
-                "type": "array"
-              }
-            },
-            "required": [
-              "leading_principal_determinants"
-            ],
-            "type": "object"
+          "l": {
+            "$ref": "#/$defs/matrix4"
           }
-        ]
+        },
+        "required": [
+          "l",
+          "d"
+        ],
+        "type": "object"
       },
       "matrix4": {
         "items": {
@@ -214,27 +195,48 @@
         "type": "object"
       },
       "result": {
-        "additionalProperties": false,
-        "properties": {
-          "positive_definite_certificate": {
-            "$ref": "#/$defs/certificate"
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "positive_definite_certificate": {
+                "$ref": "#/$defs/ldl_certificate"
+              },
+              "proof_mode": {
+                "const": "LDL"
+              },
+              "scalar_replay": {
+                "$ref": "#/$defs/scalar"
+              }
+            },
+            "required": [
+              "proof_mode",
+              "scalar_replay",
+              "positive_definite_certificate"
+            ],
+            "type": "object"
           },
-          "proof_mode": {
-            "enum": [
-              "LDL",
-              "SYLVESTER"
-            ]
-          },
-          "scalar_replay": {
-            "$ref": "#/$defs/scalar"
+          {
+            "additionalProperties": false,
+            "properties": {
+              "positive_definite_certificate": {
+                "$ref": "#/$defs/sylvester_certificate"
+              },
+              "proof_mode": {
+                "const": "SYLVESTER"
+              },
+              "scalar_replay": {
+                "$ref": "#/$defs/scalar"
+              }
+            },
+            "required": [
+              "proof_mode",
+              "scalar_replay",
+              "positive_definite_certificate"
+            ],
+            "type": "object"
           }
-        },
-        "required": [
-          "proof_mode",
-          "scalar_replay",
-          "positive_definite_certificate"
-        ],
-        "type": "object"
+        ]
       },
       "row4": {
         "items": {
@@ -267,6 +269,23 @@
           "objective"
         ],
         "type": "object"
+      },
+      "sylvester_certificate": {
+        "additionalProperties": false,
+        "properties": {
+          "leading_principal_determinants": {
+            "items": {
+              "$ref": "#/$defs/rat"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          }
+        },
+        "required": [
+          "leading_principal_determinants"
+        ],
+        "type": "object"
       }
     },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -274,33 +293,10 @@
     "properties": {
       "result": {
         "$ref": "#/$defs/result"
-      },
-      "witness": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/farkas-slice-certificate.json"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
       }
     },
     "required": [
-      "result",
-      "witness"
+      "result"
     ],
     "type": "object"
   },

@@ -3,15 +3,12 @@ from math import gcd
 from pathlib import Path
 
 from verifier_support import (
-    aggregate_reward,
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
     workspace_input_is_bound,
 )
 
-W, E = Path("/app"), Path("/tests")
+W, E = (Path("/app"), Path("/tests"))
 
 
 def _load_frozen():
@@ -41,7 +38,7 @@ def _poly(value):
         not isinstance(value, list)
         or not value
         or any(type(item) is not int for item in value)
-        or value != _trim(value)
+        or (value != _trim(value))
     ):
         return None
     return value
@@ -80,7 +77,7 @@ def _canonical(num, den):
 def _ratfun(value):
     if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
         return None
-    num, den = _poly(value["numerator"]), _poly(value["denominator"])
+    num, den = (_poly(value["numerator"]), _poly(value["denominator"]))
     return None if num is None or den is None else _canonical(num, den)
 
 
@@ -125,7 +122,7 @@ def _result_ok(result, frozen):
         not isinstance(result, dict)
         or set(result) != required
         or frozen.get("required_orbit_length") != 3
-        or frozen.get("coefficient_domain") != "ZZ"
+        or (frozen.get("coefficient_domain") != "ZZ")
     ):
         return False
     orbit_raw = result["orbit"]
@@ -134,10 +131,10 @@ def _result_ok(result, frozen):
     if (
         not isinstance(orbit_raw, list)
         or len(orbit_raw) != 3
-        or not isinstance(rhs_raw, list)
-        or len(rhs_raw) != 3
-        or not isinstance(values_raw, list)
-        or len(values_raw) != 3
+        or (not isinstance(rhs_raw, list))
+        or (len(rhs_raw) != 3)
+        or (not isinstance(values_raw, list))
+        or (len(values_raw) != 3)
     ):
         return False
     orbit = [_ratfun(item) for item in orbit_raw]
@@ -176,40 +173,17 @@ def _result_ok(result, frozen):
 
 
 def main():
-    submission, frozen = load_submission(), _load_frozen()
+    submission, frozen = (load_submission(), _load_frozen())
     input_binding = workspace_input_is_bound()
-    expected = json.loads((E / "expected.json").read_text())
     math_ok = bool(
         submission is not None and _result_ok(submission.get("result"), frozen)
     )
-    evidence = None
-    if (
-        submission is not None
-        and isinstance(submission.get("witness"), list)
-        and len(submission["witness"]) == 1
-    ):
-        evidence = read_evidence_json(
-            submission["witness"][0],
-            expected_path="evidence/functional-equation-certificate.json",
-        )
-    ev_ok = bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result"}
-        and evidence["schema_version"] == "1"
-        and evidence["task_id"] == expected["task_id"]
-        and json_value_equal(evidence["result"], submission.get("result"))
-    )
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=ev_ok,
-        protocol_ok=bool(input_binding and submission is not None),
-    )
+    reward = float(math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(ev_ok),
                 "input_binding": float(input_binding),
                 "reward": reward,
             }

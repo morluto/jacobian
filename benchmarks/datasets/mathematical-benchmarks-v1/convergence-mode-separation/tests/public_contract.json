@@ -4,10 +4,18 @@
     "rational": {
       "additionalProperties": false,
       "properties": {
-        "denominator": {"minimum": 1, "type": "integer"},
-        "numerator": {"type": "integer"}
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
       },
-      "required": ["numerator", "denominator"],
+      "required": [
+        "numerator",
+        "denominator"
+      ],
       "type": "object"
     }
   },
@@ -69,7 +77,28 @@
         "additionalProperties": false,
         "properties": {
           "event_mass_formula": {
-            "const": "1/2^k"
+            "additionalProperties": false,
+            "properties": {
+              "base": {
+                "$ref": "#/$defs/rational"
+              },
+              "coefficient": {
+                "$ref": "#/$defs/rational"
+              },
+              "exponent_coefficient": {
+                "type": "integer"
+              },
+              "variable": {
+                "const": "k"
+              }
+            },
+            "required": [
+              "coefficient",
+              "base",
+              "exponent_coefficient",
+              "variable"
+            ],
+            "type": "object"
           },
           "limit": {
             "const": "ZERO"
@@ -138,18 +167,26 @@
     "type": "object"
   },
   "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$defs": {
       "rational": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {"minimum": 1, "type": "integer"},
-          "numerator": {"type": "integer"}
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
         },
-        "required": ["numerator", "denominator"],
+        "required": [
+          "numerator",
+          "denominator"
+        ],
         "type": "object"
       }
     },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
       "result": {
@@ -208,7 +245,28 @@
             "additionalProperties": false,
             "properties": {
               "event_mass_formula": {
-                "const": "1/2^k"
+                "additionalProperties": false,
+                "properties": {
+                  "base": {
+                    "$ref": "#/$defs/rational"
+                  },
+                  "coefficient": {
+                    "$ref": "#/$defs/rational"
+                  },
+                  "exponent_coefficient": {
+                    "type": "integer"
+                  },
+                  "variable": {
+                    "const": "k"
+                  }
+                },
+                "required": [
+                  "coefficient",
+                  "base",
+                  "exponent_coefficient",
+                  "variable"
+                ],
+                "type": "object"
               },
               "limit": {
                 "const": "ZERO"

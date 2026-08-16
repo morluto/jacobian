@@ -87,7 +87,18 @@
       "miss_count_per_level": "AT_LEAST_ONE"
     },
     "probability_argument": {
-      "event_mass_formula": "1/2^k",
+      "event_mass_formula": {
+        "base": {
+          "denominator": 1,
+          "numerator": 2
+        },
+        "coefficient": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "exponent_coefficient": -1,
+        "variable": "k"
+      },
       "limit": "ZERO"
     },
     "probes": [

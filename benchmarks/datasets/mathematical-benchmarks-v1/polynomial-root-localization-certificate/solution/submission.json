@@ -128,11 +128,5 @@
       0,
       0
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/root-bound-certificate.json",
-      "sha256": "sha256:789869d0ec6ec81f6031a5a8901f1bc206c72ccbf37b44c2b353a826a193acd2"
-    }
-  ]
+  }
 }

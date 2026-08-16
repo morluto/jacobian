@@ -12,19 +12,13 @@ cubics, include the exact discriminant and the resulting real-rooted decision.
 The verifier independently enumerates the whole finite residue class and
 recomputes every discriminant; a copied final list is insufficient.
 
-Write `submission.json` and digest-bind
-`evidence/classification-certificate.json`.
-
-The digest-bound task-specific witness file must be a JSON object with exactly three keys:
-`schema_version` (the string `"1"`), `task_id` (the task identifier),
 `result` (the same result object placed in `submission.json`).
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/classification-certificate.json`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `application/json`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

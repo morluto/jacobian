@@ -3,23 +3,47 @@
     "closedness_conclusion": "BOTH_SETS_CLOSED_BY_LOCAL_FINITENESS",
     "epsilon_witnesses": [
       {
-        "distance": {"denominator": 4, "numerator": 1},
-        "epsilon": {"denominator": 3, "numerator": 1},
+        "distance": {
+          "denominator": 4,
+          "numerator": 1
+        },
+        "epsilon": {
+          "denominator": 3,
+          "numerator": 1
+        },
         "index": 4
       },
       {
-        "distance": {"denominator": 6, "numerator": 1},
-        "epsilon": {"denominator": 5, "numerator": 1},
+        "distance": {
+          "denominator": 6,
+          "numerator": 1
+        },
+        "epsilon": {
+          "denominator": 5,
+          "numerator": 1
+        },
         "index": 6
       },
       {
-        "distance": {"denominator": 11, "numerator": 1},
-        "epsilon": {"denominator": 10, "numerator": 1},
+        "distance": {
+          "denominator": 11,
+          "numerator": 1
+        },
+        "epsilon": {
+          "denominator": 10,
+          "numerator": 1
+        },
         "index": 11
       },
       {
-        "distance": {"denominator": 21, "numerator": 1},
-        "epsilon": {"denominator": 20, "numerator": 1},
+        "distance": {
+          "denominator": 21,
+          "numerator": 1
+        },
+        "epsilon": {
+          "denominator": 20,
+          "numerator": 1
+        },
         "index": 21
       }
     ],
@@ -29,109 +53,223 @@
     "point_pairs": [
       {
         "a": [
-          {"denominator": 1, "numerator": 4},
-          {"denominator": 1, "numerator": 0}
+          {
+            "denominator": 1,
+            "numerator": 4
+          },
+          {
+            "denominator": 1,
+            "numerator": 0
+          }
         ],
         "b": [
-          {"denominator": 1, "numerator": 4},
-          {"denominator": 4, "numerator": 1}
+          {
+            "denominator": 1,
+            "numerator": 4
+          },
+          {
+            "denominator": 4,
+            "numerator": 1
+          }
         ],
-        "distance": {"denominator": 4, "numerator": 1},
+        "distance": {
+          "denominator": 4,
+          "numerator": 1
+        },
         "index": 4
       },
       {
         "a": [
-          {"denominator": 1, "numerator": 5},
-          {"denominator": 1, "numerator": 0}
+          {
+            "denominator": 1,
+            "numerator": 5
+          },
+          {
+            "denominator": 1,
+            "numerator": 0
+          }
         ],
         "b": [
-          {"denominator": 1, "numerator": 5},
-          {"denominator": 5, "numerator": 1}
+          {
+            "denominator": 1,
+            "numerator": 5
+          },
+          {
+            "denominator": 5,
+            "numerator": 1
+          }
         ],
-        "distance": {"denominator": 5, "numerator": 1},
+        "distance": {
+          "denominator": 5,
+          "numerator": 1
+        },
         "index": 5
       },
       {
         "a": [
-          {"denominator": 1, "numerator": 6},
-          {"denominator": 1, "numerator": 0}
+          {
+            "denominator": 1,
+            "numerator": 6
+          },
+          {
+            "denominator": 1,
+            "numerator": 0
+          }
         ],
         "b": [
-          {"denominator": 1, "numerator": 6},
-          {"denominator": 6, "numerator": 1}
+          {
+            "denominator": 1,
+            "numerator": 6
+          },
+          {
+            "denominator": 6,
+            "numerator": 1
+          }
         ],
-        "distance": {"denominator": 6, "numerator": 1},
+        "distance": {
+          "denominator": 6,
+          "numerator": 1
+        },
         "index": 6
       },
       {
         "a": [
-          {"denominator": 1, "numerator": 7},
-          {"denominator": 1, "numerator": 0}
+          {
+            "denominator": 1,
+            "numerator": 7
+          },
+          {
+            "denominator": 1,
+            "numerator": 0
+          }
         ],
         "b": [
-          {"denominator": 1, "numerator": 7},
-          {"denominator": 7, "numerator": 1}
+          {
+            "denominator": 1,
+            "numerator": 7
+          },
+          {
+            "denominator": 7,
+            "numerator": 1
+          }
         ],
-        "distance": {"denominator": 7, "numerator": 1},
+        "distance": {
+          "denominator": 7,
+          "numerator": 1
+        },
         "index": 7
       },
       {
         "a": [
-          {"denominator": 1, "numerator": 8},
-          {"denominator": 1, "numerator": 0}
+          {
+            "denominator": 1,
+            "numerator": 8
+          },
+          {
+            "denominator": 1,
+            "numerator": 0
+          }
         ],
         "b": [
-          {"denominator": 1, "numerator": 8},
-          {"denominator": 8, "numerator": 1}
+          {
+            "denominator": 1,
+            "numerator": 8
+          },
+          {
+            "denominator": 8,
+            "numerator": 1
+          }
         ],
-        "distance": {"denominator": 8, "numerator": 1},
+        "distance": {
+          "denominator": 8,
+          "numerator": 1
+        },
         "index": 8
       },
       {
         "a": [
-          {"denominator": 1, "numerator": 9},
-          {"denominator": 1, "numerator": 0}
+          {
+            "denominator": 1,
+            "numerator": 9
+          },
+          {
+            "denominator": 1,
+            "numerator": 0
+          }
         ],
         "b": [
-          {"denominator": 1, "numerator": 9},
-          {"denominator": 9, "numerator": 1}
+          {
+            "denominator": 1,
+            "numerator": 9
+          },
+          {
+            "denominator": 9,
+            "numerator": 1
+          }
         ],
-        "distance": {"denominator": 9, "numerator": 1},
+        "distance": {
+          "denominator": 9,
+          "numerator": 1
+        },
         "index": 9
       },
       {
         "a": [
-          {"denominator": 1, "numerator": 10},
-          {"denominator": 1, "numerator": 0}
+          {
+            "denominator": 1,
+            "numerator": 10
+          },
+          {
+            "denominator": 1,
+            "numerator": 0
+          }
         ],
         "b": [
-          {"denominator": 1, "numerator": 10},
-          {"denominator": 10, "numerator": 1}
+          {
+            "denominator": 1,
+            "numerator": 10
+          },
+          {
+            "denominator": 10,
+            "numerator": 1
+          }
         ],
-        "distance": {"denominator": 10, "numerator": 1},
+        "distance": {
+          "denominator": 10,
+          "numerator": 1
+        },
         "index": 10
       },
       {
         "a": [
-          {"denominator": 1, "numerator": 11},
-          {"denominator": 1, "numerator": 0}
+          {
+            "denominator": 1,
+            "numerator": 11
+          },
+          {
+            "denominator": 1,
+            "numerator": 0
+          }
         ],
         "b": [
-          {"denominator": 1, "numerator": 11},
-          {"denominator": 11, "numerator": 1}
+          {
+            "denominator": 1,
+            "numerator": 11
+          },
+          {
+            "denominator": 11,
+            "numerator": 1
+          }
         ],
-        "distance": {"denominator": 11, "numerator": 1},
+        "distance": {
+          "denominator": 11,
+          "numerator": 1
+        },
         "index": 11
       }
     ],
     "predicted_conclusion": "UNIFORM_POSITIVE_DISTANCE",
     "semantic_relation": "PREDICTION_STRICTLY_STRONGER",
     "start_index": 4
-  },
-  "witness": [
-    {
-      "path": "evidence/distance-audit.json",
-      "sha256": "sha256:c7206dcea164f56371cb73e09ffa4db622c7a17e86fb94f02b690ec780b63be5"
-    }
-  ]
+  }
 }

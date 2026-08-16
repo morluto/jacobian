@@ -21,7 +21,7 @@ difficulty = "medium"
 category = "mathematics"
 tags = ["polynomial-map", "coordination", "offline", "clean-room-verifier"]
 case_version = "symbolic-coordination-v1/pilot-1"
-generator_version = "symbolic-coordination-pilot-generator@1"
+generator_version = "symbolic-coordination-pilot-generator@2"
 derivation = "Issue #477 deterministic hand-auditable polynomial-map pilot fixture."
 
 [agent]

@@ -9,24 +9,24 @@ from typing import Any
 from verifier_support import (
     MAX_SUBMISSION_BYTES,
     is_regular_bounded_file,
+    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
-    resolve_evidence,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
+
+_json_equal = json_value_equal
 
 TASK_ID = "jacobian/illumination-strictness-audit"
 VERTICES = list(product((-1, 1), repeat=3))
 
 
 def _weak(v, d):
-    return all(a * b <= 0 for a, b in zip(v, d, strict=True))
+    return all((a * b <= 0 for a, b in zip(v, d, strict=True)))
 
 
 def _strict(v, d):
-    return all(a * b < 0 for a, b in zip(v, d, strict=True))
+    return all((a * b < 0 for a, b in zip(v, d, strict=True)))
 
 
 def _directions(value, n, zeros):
@@ -36,44 +36,11 @@ def _directions(value, n, zeros):
         isinstance(d, list)
         and len(d) == 3
         and all(type(x) is int and x in {-1, 0, 1} for x in d)
-        and d.count(0) == zeros
+        and (d.count(0) == zeros)
         for d in value
     ):
         return False
     return len({tuple(d) for d in value}) == n
-
-
-def _json_equal(left: Any, right: Any) -> bool:
-    """Compare JSON values without equating booleans, integers, and floats."""
-    if type(left) is not type(right):
-        return False
-    if isinstance(left, dict):
-        return set(left) == set(right) and all(
-            _json_equal(left[key], right[key]) for key in left
-        )
-    if isinstance(left, list):
-        return len(left) == len(right) and all(
-            _json_equal(a, b) for a, b in zip(left, right, strict=True)
-        )
-    return left == right
-
-
-def _witness_matches_result(witness: object, result: object) -> bool:
-    if not witness_list_is_bound(witness, expected_path="evidence/answer.json"):
-        return False
-    if resolve_evidence(witness[0], expected_path="evidence/answer.json") is None:
-        return False
-    payload = read_evidence_json(witness[0], expected_path="evidence/answer.json")
-    try:
-        return bool(
-            isinstance(payload, dict)
-            and set(payload) == {"schema_version", "task_id", "result"}
-            and payload.get("schema_version") == "1"
-            and payload.get("task_id") == TASK_ID
-            and _json_equal(payload.get("result"), result)
-        )
-    except RecursionError:
-        return False
 
 
 def mathematics(result):
@@ -93,7 +60,7 @@ def mathematics(result):
         {"vertex_index": i, "direction_index": j}
         for i, v in enumerate(VERTICES)
         for j, d in enumerate(flawed)
-        if _weak(v, d) and not _strict(v, d)
+        if _weak(v, d) and (not _strict(v, d))
     ]
     mapping = result["vertex_to_direction"]
     return (
@@ -101,12 +68,14 @@ def mathematics(result):
         and bool(expected)
         and _json_equal(result["weak_false_positive_pairs"], expected)
         and isinstance(mapping, list)
-        and len(mapping) == 8
+        and (len(mapping) == 8)
         and all(
-            type(j) is int and 0 <= j < 8 and _strict(v, repair[j])
-            for v, j in zip(VERTICES, mapping, strict=True)
+            (
+                type(j) is int and 0 <= j < 8 and _strict(v, repair[j])
+                for v, j in zip(VERTICES, mapping, strict=True)
+            )
         )
-        and len(set(mapping)) == 8
+        and (len(set(mapping)) == 8)
         and all(sum(_strict(v, d) for d in repair) == 1 for v in VERTICES)
     )
 
@@ -152,26 +121,16 @@ def _write(values):
 def main():
     submission = load_submission(require_input_binding=False)
     protocol = isinstance(submission, dict)
-    witness_ok = bool(
-        protocol
-        and _witness_matches_result(submission.get("witness"), submission.get("result"))
-    )
     mathematics_score = float(bool(protocol and mathematics(submission.get("result"))))
     input_bound = workspace_input_is_bound()
-    reward = float(input_bound and protocol and mathematics_score and witness_ok)
+    reward = float(input_bound and protocol and mathematics_score)
     values = {
         "input_binding": float(input_bound),
         "protocol": float(protocol),
         "correctness": mathematics_score,
         "mathematics": mathematics_score,
-        "witness_validity": float(witness_ok),
     }
-    values.update(
-        {
-            "aggregate_reward": reward,
-            "reward": reward,
-        }
-    )
+    values.update({"aggregate_reward": reward, "reward": reward})
     _write(values)
 
 
@@ -185,7 +144,6 @@ if __name__ == "__main__":
                 "input_binding": 0.0,
                 "mathematics": 0.0,
                 "correctness": 0.0,
-                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

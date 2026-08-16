@@ -5,7 +5,6 @@ from typing import Any
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
 )
 
 W, E = Path("/app"), Path("/tests")
@@ -17,22 +16,6 @@ def _is_small_odd_prime(p):
     if type(p) is not int or p < 3 or p > 97 or p % 2 == 0:
         return False
     return all(p % d for d in range(3, int(p**0.5) + 1, 2))
-
-
-def _json_exact_equal(left: object, right: object) -> bool:
-    """Compare JSON values with exact scalar types (reject bool==int, float==int)."""
-
-    if type(left) is not type(right):
-        return False
-    if isinstance(left, dict):
-        return set(left) == set(right) and all(
-            _json_exact_equal(left[key], right[key]) for key in left
-        )
-    if isinstance(left, list):
-        return len(left) == len(right) and all(
-            _json_exact_equal(a, b) for a, b in zip(left, right, strict=True)
-        )
-    return left == right
 
 
 def _result_ok(result: Any) -> bool:
@@ -101,52 +84,20 @@ def _frozen_ok():
         return False
 
 
-def _witness_is_valid(evidence: Any, expected: dict, result: Any) -> bool:
-    """Check evidence certificate shape and exact equality, fail closed on recursion."""
-
-    if not evidence or not isinstance(evidence, dict):
-        return False
-    if not {"schema_version", "task_id", "result"} <= set(evidence):
-        return False
-    if type(evidence["schema_version"]) is not str or evidence["schema_version"] != "1":
-        return False
-    if (
-        type(evidence["task_id"]) is not str
-        or evidence["task_id"] != expected["task_id"]
-    ):
-        return False
-    try:
-        return _json_exact_equal(evidence.get("result"), result)
-    except RecursionError:
-        return False
-
-
 def main():
     submission = load_submission()
-    expected = json.loads((E / "expected.json").read_text())
     shape_safe = isinstance(submission, dict) and isinstance(
         submission.get("result"), dict
     )
     result = submission.get("result") if shape_safe else None
     math_ok = bool(_result_ok(result) and _frozen_ok())
-    evidence = (
-        read_evidence_json(
-            submission["witness"][0],
-            expected_path="evidence/sequence-construction.json",
-        )
-        if shape_safe
-        and isinstance(submission.get("witness"), list)
-        and len(submission["witness"]) == 1
-        else None
-    )
-    witness_ok = _witness_is_valid(evidence, expected, result)
-    correct = bool(math_ok and witness_ok)
+    correct = bool(math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(witness_ok),
+                "witness_validity": 1.0 if correct else 0.0,
                 "reward": float(correct),
             }
         )

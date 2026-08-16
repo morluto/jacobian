@@ -4,12 +4,8 @@ import json
 from pathlib import Path
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
-    resolve_evidence,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -50,8 +46,8 @@ def _multiplicities(value: object) -> list[int] | None:
         if (
             not isinstance(cycle, list)
             or not 5 <= len(cycle) <= 9
-            or not all(type(v) is int and 0 <= v < 10 for v in cycle)
-            or len(set(cycle)) != len(cycle)
+            or (not all(type(v) is int and 0 <= v < 10 for v in cycle))
+            or (len(set(cycle)) != len(cycle))
         ):
             return None
         canonical = _canonical(cycle)
@@ -71,7 +67,7 @@ def _exact_integer_list(value: object, expected: list[int]) -> bool:
         isinstance(value, list)
         and len(value) == len(expected)
         and all(type(item) is int for item in value)
-        and value == expected
+        and (value == expected)
     )
 
 
@@ -95,23 +91,7 @@ def mathematics(result: object) -> bool:
         and _exact_integer_list(result["flawed_multiplicities"], flawed)
         and _exact_integer_list(result["non_double_edge_indices"], bad)
         and _exact_integer_list(result["repair_multiplicities"], repaired)
-        and repaired == [2] * len(EDGES)
-    )
-
-
-def _witness_matches_result(witness: object, result: object) -> bool:
-    if not witness_list_is_bound(witness, expected_path="evidence/answer.json"):
-        return False
-    target = resolve_evidence(witness[0], expected_path="evidence/answer.json")
-    if target is None:
-        return False
-    payload = read_evidence_json(witness[0], expected_path="evidence/answer.json")
-    return bool(
-        isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result"}
-        and payload.get("schema_version") == "1"
-        and payload.get("task_id") == TASK_ID
-        and json_value_equal(payload.get("result"), result)
+        and (repaired == [2] * len(EDGES))
     )
 
 
@@ -127,19 +107,14 @@ def main() -> None:
     submission = load_submission(require_input_binding=False)
     protocol = isinstance(submission, dict)
     mathematics_ok = bool(protocol and mathematics(submission.get("result")))
-    witness_ok = bool(
-        protocol
-        and _witness_matches_result(submission.get("witness"), submission.get("result"))
-    )
     input_bound = workspace_input_is_bound()
-    reward = float(input_bound and protocol and mathematics_ok and witness_ok)
+    reward = float(input_bound and protocol and mathematics_ok)
     _write(
         {
             "protocol": float(protocol),
             "input_binding": float(input_bound),
             "mathematics": float(mathematics_ok),
             "correctness": float(mathematics_ok),
-            "witness_validity": float(witness_ok),
             "aggregate_reward": reward,
             "reward": reward,
         }
@@ -156,7 +131,6 @@ if __name__ == "__main__":
                 "input_binding": 0.0,
                 "mathematics": 0.0,
                 "correctness": 0.0,
-                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

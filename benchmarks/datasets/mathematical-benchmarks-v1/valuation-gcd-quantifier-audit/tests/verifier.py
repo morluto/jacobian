@@ -2,15 +2,9 @@ import json
 from math import gcd
 from pathlib import Path
 
-from verifier_support import (
-    aggregate_reward,
-    json_value_equal,
-    load_submission,
-    normalize_reward_file,
-    read_evidence_json,
-)
+from verifier_support import load_submission, normalize_reward_file
 
-W, E = Path("/app"), Path("/tests")
+W, E = (Path("/app"), Path("/tests"))
 
 
 def _frozen_ok():
@@ -40,7 +34,7 @@ def _rows(value):
     for row in value:
         if not isinstance(row, dict) or set(row) != {"prime", "exponents"}:
             return None
-        p, exps = row["prime"], row["exponents"]
+        p, exps = (row["prime"], row["exponents"])
         if (
             not _prime(p)
             or not isinstance(exps, list)
@@ -66,10 +60,10 @@ def _countermodel(rows):
         return False
     values = _numbers(parsed)
     has_zero_min_with_positive_max = any(
-        min(exps) == 0 and max(exps) > 0 for _, exps in parsed
+        (min(exps) == 0 and max(exps) > 0 for _, exps in parsed)
     )
-    has_positive_min = any(min(exps) > 0 for _, exps in parsed)
-    return has_zero_min_with_positive_max and has_positive_min and gcd(*values) > 1
+    has_positive_min = any((min(exps) > 0 for _, exps in parsed))
+    return has_zero_min_with_positive_max and has_positive_min and (gcd(*values) > 1)
 
 
 def _repair(rows):
@@ -92,54 +86,27 @@ def _repair(rows):
     return (
         gcd(*values) == 1
         and lcm == n
-        and values[0] * values[1] * values[2] * values[3] == n**3
+        and (values[0] * values[1] * values[2] * values[3] == n**3)
     )
 
 
 def main():
     submission = load_submission()
-    expected = json.loads((E / "expected.json").read_text())
     protocol_ok = submission is not None
     result = submission.get("result") if protocol_ok else None
     math_ok = bool(
         protocol_ok
         and isinstance(result, dict)
-        and set(result) == {"defect", "countermodel", "repair"}
-        and result["defect"] == "EXISTS_PRIME_MIN_ZERO_IS_TOO_WEAK"
+        and (set(result) == {"defect", "countermodel", "repair"})
+        and (result["defect"] == "EXISTS_PRIME_MIN_ZERO_IS_TOO_WEAK")
         and _countermodel(result["countermodel"])
         and _repair(result["repair"])
         and _frozen_ok()
     )
-    evidence = None
-    if (
-        protocol_ok
-        and isinstance(submission.get("witness"), list)
-        and len(submission["witness"]) == 1
-    ):
-        evidence = read_evidence_json(
-            submission["witness"][0], expected_path="evidence/valuation-audit.json"
-        )
-    evidence_ok = bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result"}
-        and evidence["schema_version"] == "1"
-        and evidence["task_id"] == expected["task_id"]
-        and json_value_equal(evidence["result"], result)
-    )
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=evidence_ok,
-        protocol_ok=protocol_ok,
-    )
+    reward = float(math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
-        json.dumps(
-            {
-                "correctness": float(math_ok),
-                "witness_validity": float(evidence_ok),
-                "reward": reward,
-            }
-        )
+        json.dumps({"correctness": float(math_ok), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

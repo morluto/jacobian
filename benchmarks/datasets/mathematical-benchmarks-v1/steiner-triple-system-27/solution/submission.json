@@ -588,11 +588,5 @@
       ]
     ],
     "order": 27
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:48b4b2869e84d9d816afcffd613b8d8924487238e5fb658c6a225e88dfe43457"
-    }
-  ]
+  }
 }

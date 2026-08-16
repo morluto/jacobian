@@ -7,11 +7,5 @@
       "d": true
     },
     "status": "SATISFIABLE"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:52b92c52420e60bce1632898a4eccbb578da86a222416833dab27b2b88ba06fa"
-    }
-  ]
+  }
 }

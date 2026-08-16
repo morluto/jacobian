@@ -1,20 +1,11 @@
 import json
 from pathlib import Path
 
-from verifier_support import (
-    load_submission,
-    normalize_reward_file,
-    resolve_evidence,
-)
+from verifier_support import load_submission, normalize_reward_file
 
-W, E = Path("/app"), Path("/tests")
-MAX_SUBMISSION_BYTES = 1_048_576
-MAX_INPUT_BYTES = 1_048_576
-MAX_EVIDENCE_BYTES = 1_048_576
-
-# Acceptable proof-step identifiers.  The schema exposes a finite enum so the
-# agent knows the expected format without seeing the exact answer as a single
-# const; the verifier accepts only the correct one.
+W, E = (Path("/app"), Path("/tests"))
+MAX_SUBMISSION_BYTES = 1048576
+MAX_INPUT_BYTES = 1048576
 _INFINITE_PRIME_STEP = (
     "FOR_EACH_PRIME_q_ALL_OTHER_PRIMES_p_DIVIDE_P(q)-P(1)_SO_P(q)=P(1)"
 )
@@ -67,31 +58,6 @@ def _int_list(value):
     return isinstance(value, list) and all(_is_int(item) for item in value)
 
 
-def _json_equal(left, right):
-    """Compare two JSON values without Python's bool/int coercion."""
-    return json.dumps(left, sort_keys=True, separators=(",", ":")) == json.dumps(
-        right, sort_keys=True, separators=(",", ":")
-    )
-
-
-def _read_bounded_evidence(descriptor, *, expected_path):
-    """Resolve and parse evidence, rejecting oversized files before parsing."""
-    target = resolve_evidence(
-        descriptor,
-        expected_path=expected_path,
-        workspace=W,
-    )
-    if target is None:
-        return None
-    try:
-        if target.stat().st_size > MAX_EVIDENCE_BYTES:
-            return None
-        value = json.loads(target.read_text())
-    except (OSError, ValueError, RecursionError):
-        return None
-    return value if isinstance(value, dict) else None
-
-
 def _reduction(item):
     if not isinstance(item, dict) or set(item) != {
         "modulus",
@@ -101,14 +67,10 @@ def _reduction(item):
     }:
         return None
     modulus = item["modulus"]
-    expected_basis = {
-        "p": ["P(q)", "P(1)"],
-        "q": ["P(p)", "P(1)"],
-    }.get(modulus)
-    expected_conclusion = {
-        "p": "p_DIVIDES_P(q)-P(1)",
-        "q": "q_DIVIDES_P(p)-P(1)",
-    }.get(modulus)
+    expected_basis = {"p": ["P(q)", "P(1)"], "q": ["P(p)", "P(1)"]}.get(modulus)
+    expected_conclusion = {"p": "p_DIVIDES_P(q)-P(1)", "q": "q_DIVIDES_P(p)-P(1)"}.get(
+        modulus
+    )
     if expected_basis is None or expected_conclusion is None:
         return None
     coefficients = item["residue_coefficients"]
@@ -118,8 +80,6 @@ def _reduction(item):
         return None
     if not _int_list(coefficients) or len(coefficients) != 2:
         return None
-    # Accept sign-equivalent coefficient vectors: divisibility is invariant
-    # under multiplication by -1, so [-1, 1] and [1, -1] are both valid.
     if coefficients not in ([-1, 1], [1, -1]):
         return None
     return modulus
@@ -150,48 +110,25 @@ def _result_is_valid(result, frozen):
     return bool(
         frozen.get("orbit_basis") == ["F(pq)", "F(p)", "F(q)", "F(1)"]
         and result["orbit_basis"] == frozen["orbit_basis"]
-        and coefficients == [1, -1, -1, 1]
-        and result["orbit_divisibility"] == "pq_DIVIDES_F(pq)-F(p)-F(q)+F(1)"
-        and len(parsed) == 2
-        and set(parsed) == {"p", "q"}
+        and (coefficients == [1, -1, -1, 1])
+        and (result["orbit_divisibility"] == "pq_DIVIDES_F(pq)-F(p)-F(q)+F(1)")
+        and (len(parsed) == 2)
+        and (set(parsed) == {"p", "q"})
         and isinstance(infinite_step, str)
-        and infinite_step == _INFINITE_PRIME_STEP
+        and (infinite_step == _INFINITE_PRIME_STEP)
         and isinstance(identity_step, str)
-        and identity_step == _POLYNOMIAL_IDENTITY_STEP
+        and (identity_step == _POLYNOMIAL_IDENTITY_STEP)
     )
 
 
 def main():
-    submission, frozen = _load_submission(), _load_frozen_input()
+    submission, frozen = (_load_submission(), _load_frozen_input())
     contract = bool(submission)
     math_correct = bool(contract and _result_is_valid(submission.get("result"), frozen))
-    evidence = None
-    if (
-        contract
-        and isinstance(submission.get("witness"), list)
-        and len(submission["witness"]) == 1
-    ):
-        evidence = _read_bounded_evidence(
-            submission["witness"][0],
-            expected_path="evidence/periodic-orbit-certificate.json",
-        )
-    evidence_valid = bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result"}
-        and evidence["schema_version"] == "1"
-        and evidence["task_id"] == "periodic-orbit-polynomial-obstruction"
-        and _json_equal(evidence["result"], submission.get("result"))
-    )
-    reward = float(math_correct and evidence_valid)
+    reward = float(math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
-                "reward": reward,
-            }
-        )
+        json.dumps({"correctness": float(math_correct), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

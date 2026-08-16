@@ -102,6 +102,18 @@ def test_string_coerced_density_is_rejected(tmp_path: Path) -> None:
     )
 
 
+def test_accepts_unreduced_lower_density(tmp_path: Path) -> None:
+    assert (
+        _run(
+            tmp_path,
+            lambda submission: submission["result"].update(
+                lower_density={"numerator": 2, "denominator": 8}
+            ),
+        ).reward
+        == 1.0
+    )
+
+
 def test_oracle_generator_emits_typed_rationals(tmp_path: Path, monkeypatch) -> None:
     generated: dict[str, str] = {}
     original_write_text = Path.write_text
@@ -124,3 +136,23 @@ def test_oracle_generator_emits_typed_rationals(tmp_path: Path, monkeypatch) -> 
     task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "generated-oracle")
     _fixtures._write_json(app / "submission.json", submission)
     assert _verifier._run_verifier(task, app, logs).reward == 1.0
+
+
+def test_equivalent_count_formula_encodings_pass(tmp_path: Path) -> None:
+    assert (
+        _run(
+            tmp_path / "unreduced-offset",
+            lambda submission: submission["result"]["count_formula"].update(
+                numerator_constant=-2, denominator_offset=1
+            ),
+        ).reward
+        == 0.0
+    )
+    gold = json.loads(
+        (
+            Path("benchmarks/datasets/mathematical-benchmarks-v1")
+            / TASK
+            / "solution/submission.json"
+        ).read_text()
+    )
+    assert gold["result"]["count_formula"]["numerator_constant"] == -1

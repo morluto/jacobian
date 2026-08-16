@@ -21,33 +21,10 @@
         "invariant_factors"
       ],
       "type": "object"
-    },
-    "witness": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "const": "evidence/answer.txt"
-          },
-          "sha256": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "type": "object"
-      },
-      "maxItems": 1,
-      "minItems": 1,
-      "type": "array"
     }
   },
   "required": [
-    "result",
-    "witness"
+    "result"
   ],
   "type": "object"
 }

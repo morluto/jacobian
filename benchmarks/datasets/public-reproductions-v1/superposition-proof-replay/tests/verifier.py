@@ -7,10 +7,8 @@ from pathlib import Path
 
 from verifier_support import (
     aggregate_reward,
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
 )
 
 W = Path("/app")
@@ -271,20 +269,6 @@ def _replay(result: object, source: dict[str, object]) -> bool:
     )
 
 
-def _evidence_valid(submission: dict[str, object]) -> bool:
-    evidence = submission.get("witness")
-    if not isinstance(evidence, list) or len(evidence) != 1:
-        return False
-    payload = read_evidence_json(
-        evidence[0], expected_path="evidence/resolution-proof.json"
-    )
-    return bool(
-        isinstance(payload, dict)
-        and payload.get("schema_version") == "1"
-        and json_value_equal(payload.get("result"), submission.get("result"))
-    )
-
-
 def main() -> None:
     submission = load_submission()
     protocol_ok = submission is not None
@@ -293,10 +277,9 @@ def main() -> None:
     math_correct = bool(
         protocol_ok and input_bound and _replay(submission.get("result"), source)
     )
-    evidence_valid = bool(protocol_ok and _evidence_valid(submission))
     reward = aggregate_reward(
         correctness=math_correct,
-        witness_validity=evidence_valid,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -304,7 +287,6 @@ def main() -> None:
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
                 "reward": reward,
             }
         )

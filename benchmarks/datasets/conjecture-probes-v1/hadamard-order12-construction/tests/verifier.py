@@ -7,12 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    aggregate_reward,
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -108,34 +104,13 @@ def main() -> None:
     input_bound = workspace_input_is_bound()
     submission = load_submission(require_input_binding=False)
     protocol_ok = submission is not None
-    mathematics = bool(
-        protocol_ok and input_bound and _mathematics(submission.get("result"))
-    )
-    evidence = bool(protocol_ok and witness_list_is_bound(submission.get("witness")))
-    payload = (
-        read_evidence_json(
-            submission["witness"][0],
-            expected_path="evidence/answer.txt",
-        )
-        if evidence
-        else None
-    )
-    evidence = bool(
-        isinstance(payload, dict)
-        and payload.get("schema_version") == "1"
-        and json_value_equal(payload.get("result"), submission.get("result"))
-    )
-    reward = aggregate_reward(
-        correctness=mathematics,
-        witness_validity=evidence,
-        protocol_ok=protocol_ok and input_bound,
-    )
+    mathematics = bool(protocol_ok and _mathematics(submission.get("result")))
+    reward = float(protocol_ok and input_bound and mathematics)
     _reward(
         {
             "protocol_compliance": float(protocol_ok),
             "input_binding": float(input_bound),
             "correctness": float(mathematics),
-            "witness_validity": float(evidence),
             "reward": reward,
         }
     )
@@ -150,7 +125,6 @@ if __name__ == "__main__":
                 "protocol_compliance": 0.0,
                 "input_binding": 0.0,
                 "correctness": 0.0,
-                "witness_validity": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,
             }

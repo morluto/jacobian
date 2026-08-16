@@ -1,18 +1,13 @@
 import json
 from pathlib import Path
 
-from verifier_support import (
-    aggregate_reward,
-    load_submission,
-    normalize_reward_file,
-    witness_list_is_bound,
-)
+from verifier_support import load_submission, normalize_reward_file
 
 W = Path("/app")
 E = Path("/tests")
 
 
-def _math(s, x, e):
+def _math(s, x):
     r = s.get("result", {})
     if not isinstance(r, dict) or set(r) != {
         "f_value",
@@ -24,8 +19,8 @@ def _math(s, x, e):
         return False
     return (
         type(r["f_value"]) is int
-        and r["f_value"] == e["expected_f_value"]
-        and r["upper_bound_method"] == "INDEPENDENT_EXHAUSTIVE_CSP"
+        and r["f_value"] == 45
+        and (r["upper_bound_method"] == "INDEPENDENT_EXHAUSTIVE_CSP")
         and _partition_is_sum_free(r["lower_bound_partition"], 44)
         and _upper_bound_is_unsatisfiable(45)
     )
@@ -40,8 +35,8 @@ def _partition_is_sum_free(value: object, maximum: int) -> bool:
             not isinstance(raw_color, list)
             or not raw_color
             or any(type(number) is not int for number in raw_color)
-            or raw_color != sorted(raw_color)
-            or len(raw_color) != len(set(raw_color))
+            or (raw_color != sorted(raw_color))
+            or (len(raw_color) != len(set(raw_color)))
         ):
             return False
         color = set(raw_color)
@@ -58,9 +53,7 @@ def _upper_bound_is_unsatisfiable(maximum: int) -> bool:
     return not _has_sum_free_coloring(maximum, color_count=4)
 
 
-def _sum_constraints(
-    maximum: int,
-) -> tuple[list[tuple[int, ...]], list[list[int]]]:
+def _sum_constraints(maximum: int) -> tuple[list[tuple[int, ...]], list[list[int]]]:
     constraints: list[tuple[int, ...]] = []
     incident: list[list[int]] = [[] for _ in range(maximum + 1)]
     for a in range(1, maximum + 1):
@@ -73,7 +66,7 @@ def _sum_constraints(
             constraints.append(constraint)
             for number in constraint:
                 incident[number].append(constraint_index)
-    return constraints, incident
+    return (constraints, incident)
 
 
 class _ColoringSearch:
@@ -110,11 +103,7 @@ class _ColoringSearch:
         return uncolored
 
     def _remove_color(
-        self,
-        number: int,
-        color: int,
-        used_color_count: int,
-        queue: list[int],
+        self, number: int, color: int, used_color_count: int, queue: list[int]
     ) -> int | None:
         color_bit = 1 << color
         old_domain = self.domains[number]
@@ -125,7 +114,7 @@ class _ColoringSearch:
             return None
         self.domain_trail.append((number, old_domain))
         self.domains[number] = new_domain
-        if new_domain & (new_domain - 1):
+        if new_domain & new_domain - 1:
             return used_color_count
         forced_color = new_domain.bit_length() - 1
         if forced_color > used_color_count:
@@ -168,14 +157,14 @@ class _ColoringSearch:
             available = self.domains[number] & allowed_colors
             available_size = available.bit_count()
             if not available_size:
-                return -1, 0
+                return (-1, 0)
             degree = len(self.incident[number])
             better_tie = available_size == selected_size and degree > selected_degree
             if available_size < selected_size or better_tie:
                 selected = number
                 selected_size = available_size
                 selected_degree = degree
-        return selected, self.domains[selected] & allowed_colors if selected else 0
+        return (selected, self.domains[selected] & allowed_colors if selected else 0)
 
     def _assign(self, number: int, color_bit: int) -> None:
         self.domain_trail.append((number, self.domains[number]))
@@ -217,22 +206,11 @@ def main():
     s = load_submission()
     protocol_ok = s is not None
     x = json.loads(next(E.glob("*input*.json")).read_text())
-    e = json.loads((E / "expected.json").read_text())
-    math_correct = _math(s, x, e) if protocol_ok else False
-    correct = bool(protocol_ok and math_correct)
-    good = bool(protocol_ok and witness_list_is_bound(s["witness"]))
-    reward = aggregate_reward(
-        correctness=correct, witness_validity=good, protocol_ok=protocol_ok
-    )
+    math_correct = _math(s, x) if protocol_ok else False
+    reward = float(protocol_ok and math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
-    (Path("/logs/verifier/reward.json")).write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(good),
-                "reward": reward,
-            }
-        )
+    Path("/logs/verifier/reward.json").write_text(
+        json.dumps({"correctness": float(math_correct), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

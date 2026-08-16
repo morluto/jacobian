@@ -9,12 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
-    resolve_evidence,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -94,7 +90,6 @@ def _convex_profile(
     points = [(record["x"], record["y"]) for record in records]
     if not all(_cross(*triple) != 0 for triple in itertools.combinations(points, 3)):
         return None
-
     counts: dict[int, int] = {}
     maximum = 2
     maximum_sets: set[frozenset[str]] = set()
@@ -110,21 +105,20 @@ def _convex_profile(
                 if size == maximum:
                     maximum_sets.add(frozenset(ids[index] for index in subset))
         counts[size] = count
-    return ids, points, counts, maximum, maximum_sets
+    return (ids, points, counts, maximum, maximum_sets)
 
 
 def _submitted_counts(rows: Any) -> dict[int, int] | None:
     if not isinstance(rows, list) or len(rows) != 11:
         return None
-
     submitted: dict[int, int] = {}
     for row in rows:
         if (
             not isinstance(row, dict)
             or set(row) != {"size", "count"}
             or type(row["size"]) is not int
-            or type(row["count"]) is not int
-            or row["size"] in submitted
+            or (type(row["count"]) is not int)
+            or (row["size"] in submitted)
         ):
             return None
         submitted[row["size"]] = row["count"]
@@ -132,11 +126,7 @@ def _submitted_counts(rows: Any) -> dict[int, int] | None:
 
 
 def _witness_coordinates(
-    witness: Any,
-    *,
-    ids: list[str],
-    points: list[tuple[int, int]],
-    maximum: int,
+    witness: Any, *, ids: list[str], points: list[tuple[int, int]], maximum: int
 ) -> list[tuple[int, int]] | None:
     if (
         not isinstance(witness, list)
@@ -151,29 +141,23 @@ def _witness_coordinates(
 def _mathematics(result: Any, frozen: dict[str, Any]) -> bool:
     if not isinstance(result, dict) or set(result) != RESULT_KEYS:
         return False
-
     profile = _convex_profile(frozen["points"])
     if profile is None or result.get("general_position") is not True:
         return False
-
     ids, points, counts, maximum, maximum_sets = profile
     submitted = _submitted_counts(result.get("convex_subset_counts"))
     coordinates = _witness_coordinates(
-        result.get("maximum_witness_cyclic"),
-        ids=ids,
-        points=points,
-        maximum=maximum,
+        result.get("maximum_witness_cyclic"), ids=ids, points=points, maximum=maximum
     )
     if submitted is None or coordinates is None:
         return False
-
     witness = result["maximum_witness_cyclic"]
     return (
         submitted == counts
         and result.get("maximum_convex_size") == maximum
-        and frozenset(witness) in maximum_sets
+        and (frozenset(witness) in maximum_sets)
         and _cyclic(coordinates)
-        and result.get("scope_identity") == SCOPE
+        and (result.get("scope_identity") == SCOPE)
     )
 
 
@@ -184,21 +168,6 @@ def _reward(value: dict[str, Any]) -> None:
     normalize_reward_file(path / "reward.json")
 
 
-def _witness_matches_result(witness: object, result: object) -> bool:
-    if not witness_list_is_bound(witness, expected_path="evidence/answer.txt"):
-        return False
-    if resolve_evidence(witness[0], expected_path="evidence/answer.txt") is None:
-        return False
-    payload = read_evidence_json(witness[0], expected_path="evidence/answer.txt")
-    return bool(
-        isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result"}
-        and payload.get("schema_version") == "1"
-        and payload.get("task_id") == TASK_ID
-        and json_value_equal(payload.get("result"), result)
-    )
-
-
 def main() -> None:
     input_bound = workspace_input_is_bound()
     frozen = _frozen()
@@ -207,17 +176,12 @@ def main() -> None:
     mathematics = bool(
         frozen and protocol and _mathematics(submission.get("result"), frozen)
     )
-    witness = bool(
-        protocol
-        and _witness_matches_result(submission.get("witness"), submission.get("result"))
-    )
-    aggregate = float(input_bound and protocol and mathematics and witness)
+    aggregate = float(input_bound and protocol and mathematics)
     _reward(
         {
             "protocol": float(protocol),
             "input_binding": float(input_bound),
             "mathematics": float(mathematics),
-            "witness_validity": float(witness),
             "aggregate_reward": aggregate,
             "reward": aggregate,
         }
@@ -233,7 +197,6 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

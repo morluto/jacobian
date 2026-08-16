@@ -3,226 +3,364 @@
     "diagnosis": "MISSING_JOINT_LAW_CONTROL",
     "limit_joint": [
       {
-        "mass": "1/10",
+        "mass": {
+          "numerator": 1,
+          "denominator": 10
+        },
         "x": -3,
         "y": -3
       },
       {
-        "mass": "0",
+        "mass": {
+          "numerator": 0,
+          "denominator": 1
+        },
         "x": -3,
         "y": -1
       },
       {
-        "mass": "0",
+        "mass": {
+          "numerator": 0,
+          "denominator": 1
+        },
         "x": -3,
         "y": 2
       },
       {
-        "mass": "0",
+        "mass": {
+          "numerator": 0,
+          "denominator": 1
+        },
         "x": -3,
         "y": 5
       },
       {
-        "mass": "0",
+        "mass": {
+          "numerator": 0,
+          "denominator": 1
+        },
         "x": -1,
         "y": -3
       },
       {
-        "mass": "1/5",
+        "mass": {
+          "numerator": 1,
+          "denominator": 5
+        },
         "x": -1,
         "y": -1
       },
       {
-        "mass": "0",
+        "mass": {
+          "numerator": 0,
+          "denominator": 1
+        },
         "x": -1,
         "y": 2
       },
       {
-        "mass": "0",
+        "mass": {
+          "numerator": 0,
+          "denominator": 1
+        },
         "x": -1,
         "y": 5
       },
       {
-        "mass": "0",
+        "mass": {
+          "numerator": 0,
+          "denominator": 1
+        },
         "x": 2,
         "y": -3
       },
       {
-        "mass": "0",
+        "mass": {
+          "numerator": 0,
+          "denominator": 1
+        },
         "x": 2,
         "y": -1
       },
       {
-        "mass": "3/10",
+        "mass": {
+          "numerator": 3,
+          "denominator": 10
+        },
         "x": 2,
         "y": 2
       },
       {
-        "mass": "0",
+        "mass": {
+          "numerator": 0,
+          "denominator": 1
+        },
         "x": 2,
         "y": 5
       },
       {
-        "mass": "0",
+        "mass": {
+          "numerator": 0,
+          "denominator": 1
+        },
         "x": 5,
         "y": -3
       },
       {
-        "mass": "0",
+        "mass": {
+          "numerator": 0,
+          "denominator": 1
+        },
         "x": 5,
         "y": -1
       },
       {
-        "mass": "0",
+        "mass": {
+          "numerator": 0,
+          "denominator": 1
+        },
         "x": 5,
         "y": 2
       },
       {
-        "mass": "2/5",
+        "mass": {
+          "numerator": 2,
+          "denominator": 5
+        },
         "x": 5,
         "y": 5
       }
     ],
     "limit_product_distribution": [
       {
-        "mass": "1/5",
+        "mass": {
+          "numerator": 1,
+          "denominator": 5
+        },
         "value": 1
       },
       {
-        "mass": "3/10",
+        "mass": {
+          "numerator": 3,
+          "denominator": 10
+        },
         "value": 4
       },
       {
-        "mass": "1/10",
+        "mass": {
+          "numerator": 1,
+          "denominator": 10
+        },
         "value": 9
       },
       {
-        "mass": "2/5",
+        "mass": {
+          "numerator": 2,
+          "denominator": 5
+        },
         "value": 25
       }
     ],
     "missing_assumption": "JOINT_CONVERGENCE",
     "prelimit_joint": [
       {
-        "mass": "1/100",
+        "mass": {
+          "numerator": 1,
+          "denominator": 100
+        },
         "x": -3,
         "y": -3
       },
       {
-        "mass": "1/50",
+        "mass": {
+          "numerator": 1,
+          "denominator": 50
+        },
         "x": -3,
         "y": -1
       },
       {
-        "mass": "3/100",
+        "mass": {
+          "numerator": 3,
+          "denominator": 100
+        },
         "x": -3,
         "y": 2
       },
       {
-        "mass": "1/25",
+        "mass": {
+          "numerator": 1,
+          "denominator": 25
+        },
         "x": -3,
         "y": 5
       },
       {
-        "mass": "1/50",
+        "mass": {
+          "numerator": 1,
+          "denominator": 50
+        },
         "x": -1,
         "y": -3
       },
       {
-        "mass": "1/25",
+        "mass": {
+          "numerator": 1,
+          "denominator": 25
+        },
         "x": -1,
         "y": -1
       },
       {
-        "mass": "3/50",
+        "mass": {
+          "numerator": 3,
+          "denominator": 50
+        },
         "x": -1,
         "y": 2
       },
       {
-        "mass": "2/25",
+        "mass": {
+          "numerator": 2,
+          "denominator": 25
+        },
         "x": -1,
         "y": 5
       },
       {
-        "mass": "3/100",
+        "mass": {
+          "numerator": 3,
+          "denominator": 100
+        },
         "x": 2,
         "y": -3
       },
       {
-        "mass": "3/50",
+        "mass": {
+          "numerator": 3,
+          "denominator": 50
+        },
         "x": 2,
         "y": -1
       },
       {
-        "mass": "9/100",
+        "mass": {
+          "numerator": 9,
+          "denominator": 100
+        },
         "x": 2,
         "y": 2
       },
       {
-        "mass": "3/25",
+        "mass": {
+          "numerator": 3,
+          "denominator": 25
+        },
         "x": 2,
         "y": 5
       },
       {
-        "mass": "1/25",
+        "mass": {
+          "numerator": 1,
+          "denominator": 25
+        },
         "x": 5,
         "y": -3
       },
       {
-        "mass": "2/25",
+        "mass": {
+          "numerator": 2,
+          "denominator": 25
+        },
         "x": 5,
         "y": -1
       },
       {
-        "mass": "3/25",
+        "mass": {
+          "numerator": 3,
+          "denominator": 25
+        },
         "x": 5,
         "y": 2
       },
       {
-        "mass": "4/25",
+        "mass": {
+          "numerator": 4,
+          "denominator": 25
+        },
         "x": 5,
         "y": 5
       }
     ],
     "prelimit_product_distribution": [
       {
-        "mass": "2/25",
+        "mass": {
+          "numerator": 2,
+          "denominator": 25
+        },
         "value": -15
       },
       {
-        "mass": "3/50",
+        "mass": {
+          "numerator": 3,
+          "denominator": 50
+        },
         "value": -6
       },
       {
-        "mass": "4/25",
+        "mass": {
+          "numerator": 4,
+          "denominator": 25
+        },
         "value": -5
       },
       {
-        "mass": "3/25",
+        "mass": {
+          "numerator": 3,
+          "denominator": 25
+        },
         "value": -2
       },
       {
-        "mass": "1/25",
+        "mass": {
+          "numerator": 1,
+          "denominator": 25
+        },
         "value": 1
       },
       {
-        "mass": "1/25",
+        "mass": {
+          "numerator": 1,
+          "denominator": 25
+        },
         "value": 3
       },
       {
-        "mass": "9/100",
+        "mass": {
+          "numerator": 9,
+          "denominator": 100
+        },
         "value": 4
       },
       {
-        "mass": "1/100",
+        "mass": {
+          "numerator": 1,
+          "denominator": 100
+        },
         "value": 9
       },
       {
-        "mass": "6/25",
+        "mass": {
+          "numerator": 6,
+          "denominator": 25
+        },
         "value": 10
       },
       {
-        "mass": "4/25",
+        "mass": {
+          "numerator": 4,
+          "denominator": 25
+        },
         "value": 25
       }
     ],

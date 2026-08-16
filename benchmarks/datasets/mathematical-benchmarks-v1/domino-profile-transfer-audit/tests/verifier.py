@@ -1,53 +1,27 @@
 import json
 from pathlib import Path
 
-from verifier_support import (
-    load_submission,
-    normalize_reward_file,
-    read_evidence_json,
-)
+from verifier_support import load_submission, normalize_reward_file
 
 TESTS = Path("/tests")
 MODULUS = 19
 WIDTH = 2021
 SIZE = 8
 MAX_EVIDENCE_BYTES = 64 * 1024
-SET_BITS = [bit for bit in range(WIDTH.bit_length()) if WIDTH & (1 << bit)]
-
-
-def _json_equal(left: object, right: object) -> bool:
-    """Compare JSON recursively without Python's bool/int coercion."""
-
-    if isinstance(left, dict) or isinstance(right, dict):
-        return (
-            isinstance(left, dict)
-            and isinstance(right, dict)
-            and left.keys() == right.keys()
-            and all(_json_equal(left[key], right[key]) for key in left)
-        )
-    if isinstance(left, list) or isinstance(right, list):
-        return (
-            isinstance(left, list)
-            and isinstance(right, list)
-            and len(left) == len(right)
-            and all(_json_equal(a, b) for a, b in zip(left, right, strict=True))
-        )
-    return type(left) is type(right) and left == right
+SET_BITS = [bit for bit in range(WIDTH.bit_length()) if WIDTH & 1 << bit]
 
 
 def _outgoing_masks(incoming: int) -> list[int]:
     outputs: list[int] = []
 
     def fill(occupied: int, outgoing: int) -> None:
-        if occupied == 0b111:
+        if occupied == 7:
             outputs.append(outgoing)
             return
-        row = next(index for index in range(3) if not occupied & (1 << index))
-        # A horizontal domino crosses into the next column.
-        fill(occupied | (1 << row), outgoing | (1 << row))
-        # A vertical domino covers adjacent free cells in this column.
-        if row < 2 and not occupied & (1 << (row + 1)):
-            fill(occupied | (1 << row) | (1 << (row + 1)), outgoing)
+        row = next(index for index in range(3) if not occupied & 1 << index)
+        fill(occupied | 1 << row, outgoing | 1 << row)
+        if row < 2 and (not occupied & 1 << row + 1):
+            fill(occupied | 1 << row | 1 << row + 1, outgoing)
 
     fill(incoming, 0)
     return outputs
@@ -87,23 +61,6 @@ def _valid_vector(value: object) -> bool:
     )
 
 
-def _evidence_valid(value: object, result: object) -> bool:
-    if not isinstance(value, list) or len(value) != 1:
-        return False
-    evidence = read_evidence_json(
-        value[0],
-        expected_path="evidence/profile-transfer-certificate.json",
-        max_bytes=MAX_EVIDENCE_BYTES,
-    )
-    return bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result"}
-        and evidence.get("schema_version") == "1"
-        and evidence.get("task_id") == "jacobian/domino-profile-transfer-audit"
-        and _json_equal(evidence.get("result"), result)
-    )
-
-
 def _result_valid(result: object) -> bool:
     if not isinstance(result, dict) or set(result) != {
         "removed_row",
@@ -118,25 +75,24 @@ def _result_valid(result: object) -> bool:
     matrix = result["transition_matrix"]
     initial = result["initial_vector"]
     trace = result["exponentiation_trace"]
-    if row not in {0, 2} or matrix != _transition() or not _valid_vector(initial):
+    if row not in {0, 2} or matrix != _transition() or (not _valid_vector(initial)):
         return False
     expected_initial = [0] * SIZE
     expected_initial[1 << row] = 1
     if initial != expected_initial or not isinstance(trace, list) or len(trace) != 8:
         return False
-
     vector = initial
     power = matrix
     trace_index = 0
     for bit in range(WIDTH.bit_length()):
-        if WIDTH & (1 << bit):
+        if WIDTH & 1 << bit:
             item = trace[trace_index]
             if (
                 not isinstance(item, dict)
                 or set(item) != {"bit", "before", "after"}
                 or item["bit"] != bit
-                or item["before"] != vector
-                or not _valid_vector(item["after"])
+                or (item["before"] != vector)
+                or (not _valid_vector(item["after"]))
             ):
                 return False
             vector = _vector_multiply(vector, power)
@@ -144,13 +100,14 @@ def _result_valid(result: object) -> bool:
                 return False
             trace_index += 1
         power = _matrix_multiply(power, power)
-
     return bool(
         [item["bit"] for item in trace] == SET_BITS
         and result["remainder"] == vector[0] == 1
-        and result["remainder"] != 4
-        and result["diagnosis"]
-        == "PROPOSED_DECOMPOSITION_DOES_NOT_PARTITION_ALL_TILINGS"
+        and (result["remainder"] != 4)
+        and (
+            result["diagnosis"]
+            == "PROPOSED_DECOMPOSITION_DOES_NOT_PARTITION_ALL_TILINGS"
+        )
     )
 
 
@@ -158,21 +115,11 @@ def main() -> None:
     submission = load_submission()
     result = submission.get("result") if isinstance(submission, dict) else None
     mathematical = _result_valid(result)
-    evidence = bool(
-        isinstance(submission, dict)
-        and _evidence_valid(submission.get("witness"), result)
-    )
-    reward = float(mathematical and evidence)
+    reward = float(mathematical)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
-        json.dumps(
-            {
-                "correctness": float(mathematical),
-                "witness_validity": float(evidence),
-                "reward": reward,
-            }
-        )
+        json.dumps({"correctness": float(mathematical), "reward": reward})
     )
     normalize_reward_file(logs / "reward.json")
 

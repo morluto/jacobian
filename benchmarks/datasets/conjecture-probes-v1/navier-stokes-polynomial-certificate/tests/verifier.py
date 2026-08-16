@@ -8,12 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    aggregate_reward,
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -22,14 +18,14 @@ MAX_EVIDENCE_BYTES = None
 
 
 def _rat(value: object, num_bound: int = 50, den_bound: int = 20) -> Fraction:
-    if not isinstance(value, str) or len(value) > 32:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
         raise ValueError
-    parsed = Fraction(value)
-    if (
-        str(parsed) != value
-        or abs(parsed.numerator) > num_bound
-        or parsed.denominator > den_bound
-    ):
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        raise ValueError
+    parsed = Fraction(numerator, denominator)
+    if abs(parsed.numerator) > num_bound or parsed.denominator > den_bound:
         raise ValueError
     return parsed
 
@@ -93,9 +89,9 @@ def _mathematics(result: Any, num_bound: int = 50, den_bound: int = 20) -> bool:
     return (
         submitted == expected
         and divergence == [0]
-        and momentum_x == [0, 0, 0]
-        and momentum_y == [0, 0, 0]
-        and vorticity != 0
+        and (momentum_x == [0, 0, 0])
+        and (momentum_y == [0, 0, 0])
+        and (vorticity != 0)
     )
 
 
@@ -116,37 +112,12 @@ def main() -> None:
     mathematics = bool(
         protocol_ok and _mathematics(submission.get("result"), num_bound, den_bound)
     )
-    evidence = bool(
-        protocol_ok
-        and witness_list_is_bound(
-            submission.get("witness"), max_bytes=MAX_EVIDENCE_BYTES
-        )
-    )
-    payload = (
-        read_evidence_json(
-            submission["witness"][0],
-            expected_path="evidence/answer.txt",
-            max_bytes=MAX_EVIDENCE_BYTES,
-        )
-        if evidence
-        else None
-    )
-    evidence = bool(
-        isinstance(payload, dict)
-        and payload.get("schema_version") == "1"
-        and json_value_equal(payload.get("result"), submission.get("result"))
-    )
-    reward = aggregate_reward(
-        correctness=mathematics,
-        witness_validity=evidence,
-        protocol_ok=protocol_ok and input_bound,
-    )
+    reward = float(protocol_ok and input_bound and mathematics)
     _reward(
         {
             "protocol_compliance": float(protocol_ok),
             "input_binding": float(input_bound),
             "correctness": float(mathematics),
-            "witness_validity": float(evidence),
             "reward": reward,
         }
     )
@@ -161,7 +132,6 @@ if __name__ == "__main__":
                 "protocol_compliance": 0.0,
                 "input_binding": 0.0,
                 "correctness": 0.0,
-                "witness_validity": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,
             }

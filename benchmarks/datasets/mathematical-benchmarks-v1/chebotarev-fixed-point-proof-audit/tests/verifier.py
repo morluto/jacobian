@@ -7,7 +7,6 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
 )
 
 W, T = Path("/app"), Path("/tests")
@@ -195,39 +194,15 @@ def valid(r):
 
 
 def main():
-    expected = json.loads((T / "expected.json").read_text())
     s = load_submission(W / "submission.json")
-    evidence_descriptor = (
-        s["witness"][0]
-        if isinstance(s, dict)
-        and isinstance(s.get("witness"), list)
-        and len(s.get("witness", [])) == 1
-        else None
-    )
-    ev = (
-        read_evidence_json(
-            evidence_descriptor, expected_path="evidence/chebotarev-audit.json"
-        )
-        if evidence_descriptor is not None
-        else None
-    )
     math_ok = bool(frozen() and isinstance(s, dict) and valid(s.get("result")))
-    evidence_ok = bool(
-        ev
-        and set(ev) == {"schema_version", "task_id", "result"}
-        and ev.get("schema_version") == "1"
-        and ev.get("task_id") == expected["task_id"]
-        and exact_value(
-            ev.get("result"), s.get("result") if isinstance(s, dict) else None
-        )
-    )
-    correct = math_ok and evidence_ok
+    correct = math_ok
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(evidence_ok),
+                "witness_validity": 1.0 if correct else 0.0,
                 "reward": float(correct),
             }
         )

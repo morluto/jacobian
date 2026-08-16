@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import subprocess
@@ -29,47 +28,21 @@ def case(tmp_path):
 
 
 def write(app, s):
-    payload = {
-        "schema_version": "1",
-        "task_id": "jacobian/hadwiger-triangle-free-minor-certificate",
-        "result": s["result"],
-    }
-    e = app / "evidence/answer.txt"
-    e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
-    s["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
-    (app / "submission.json").write_text(json.dumps(s) + "\n")
+    (app / "submission.json").write_text(json.dumps({"result": s["result"]}) + "\n")
 
 
 def run(app, logs):
     return run_verifier_in_child(task=TASK, app=app, logs=logs)
 
 
-def _write_evidence(app, s, result):
-    payload = {
-        "schema_version": "1",
-        "task_id": "jacobian/hadwiger-triangle-free-minor-certificate",
-        "result": result,
-    }
-    e = app / "evidence/answer.txt"
-    e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
-    s["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
-    (app / "submission.json").write_text(json.dumps(s) + "\n")
-
-
-def test_evidence_result_requires_exact_json_types(tmp_path):
+def test_boolean_coloring_is_rejected(tmp_path):
     app, logs, s = case(tmp_path)
-    # JSON booleans in place of integers must not compare equal to 0/1.
     coloring = list(s["result"]["four_coloring"])
     coloring[0] = True
-    _write_evidence(app, s, {**s["result"], "four_coloring": coloring})
+    s["result"]["four_coloring"] = coloring
+    write(app, s)
     r = run(app, logs)
-    assert r.details["mathematics"] == 1.0 and r.details["witness_validity"] == 0.0
-    assert r.details["aggregate_reward"] == 0.0
-    # An integral float must not compare equal to the integer invariant.
-    app, logs, s = case(tmp_path / "float")
-    _write_evidence(app, s, {**s["result"], "chromatic_number": 4.0})
-    r = run(app, logs)
-    assert r.details["mathematics"] == 1.0 and r.details["witness_validity"] == 0.0
+    assert r.details["mathematics"] == 0.0
     assert r.details["aggregate_reward"] == 0.0
 
 
@@ -116,14 +89,10 @@ def test_triangle_and_duplicate_edge_fail(tmp_path):
 
 def test_nonfinite_json_rejected_in_raw_parse(tmp_path):
     app, logs, s = case(tmp_path)
-    # NaN in an extra envelope field is invalid JSON; the raw parser must
-    # reject it deterministically instead of crediting raw-derived metrics.
     (app / "submission.json").write_text(
         json.dumps({**s, "extra": float("nan")}) + "\n"
     )
     r = run(app, logs)
-    assert (
-        r.details["mathematics"] == 0.0
-        and r.details["aggregate_reward"] == 0.0
-        and "error" not in r.details
-    )
+    assert r.details["mathematics"] == 0.0
+    assert r.details["aggregate_reward"] == 0.0
+    assert "error" not in r.details

@@ -25,8 +25,13 @@
               "type": "string"
             },
             "reason": {
-              "minLength": 1,
-              "type": "string"
+              "enum": [
+                "FULL_SCOPE_GUARD_BUT_NAT_DIVISION_MAY_TRUNCATE",
+                "LITERAL_ONE_IS_DEFINITIONALLY_ZERO_IN_CUSTOM_TYPE",
+                "ARBITRARY_LT_DOES_NOT_ESTABLISH_NONZERO",
+                "PROOF_TERMS_EXCLUDED_FROM_STATEMENT_ANALYSIS",
+                "ZERO_NUMERATOR_IS_EXACT_BUT_DIVISOR_IS_UNGUARDED"
+              ]
             }
           },
           "required": [
@@ -72,8 +77,13 @@
                   "type": "string"
                 },
                 "reason": {
-                  "minLength": 1,
-                  "type": "string"
+                  "enum": [
+                    "FULL_SCOPE_GUARD_BUT_NAT_DIVISION_MAY_TRUNCATE",
+                    "LITERAL_ONE_IS_DEFINITIONALLY_ZERO_IN_CUSTOM_TYPE",
+                    "ARBITRARY_LT_DOES_NOT_ESTABLISH_NONZERO",
+                    "PROOF_TERMS_EXCLUDED_FROM_STATEMENT_ANALYSIS",
+                    "ZERO_NUMERATOR_IS_EXACT_BUT_DIVISOR_IS_UNGUARDED"
+                  ]
                 }
               },
               "required": [

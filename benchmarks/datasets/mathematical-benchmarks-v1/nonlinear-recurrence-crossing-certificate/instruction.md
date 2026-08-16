@@ -9,16 +9,11 @@ interval certificates may be listed in any order and are checked from their
 rational endpoints rather than from prose labels. Use reduced rational
 numerator/denominator objects; numerical simulation is not accepted.
 
-Write `submission.json` and digest-bind
-`evidence/nonlinear-recurrence-certificate.json`, which must copy `result`
-exactly.
-
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/nonlinear-recurrence-certificate.json`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `application/json`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

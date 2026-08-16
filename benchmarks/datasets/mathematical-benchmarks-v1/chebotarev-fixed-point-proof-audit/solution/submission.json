@@ -52,11 +52,5 @@
       ],
       "multiplicity": 4
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/chebotarev-audit.json",
-      "sha256": "sha256:641d07c31201810d4ecb8f51ad4769d2258641f11681c10ab54e4e7946d5e8f2"
-    }
-  ]
+  }
 }

@@ -7,7 +7,7 @@ Submit two rational formulas for `E` using only `A,B,C,D`:
 1. a generic formula whose denominator is nonzero off the rank-one locus and vanishes when `x=y`;
 2. a singular-branch formula that remains usable when `x=y`.
 
-Each numerator and denominator is a canonical sorted sparse polynomial over variables `[A,B,C,D]` with rational coefficients and total degree at most 4. The verifier accepts any formulas satisfying the symbolic contracts, not only the source proof’s presentation.
+Each numerator and denominator is a sparse polynomial over variables `[A,B,C,D]` with rational coefficients and total degree at most 4; term order is not scored. The verifier accepts any formulas satisfying the symbolic contracts, not only the source proof’s presentation.
 
 Report the branch split and rationality conclusion in the typed result. The checker performs exact symbolic computation.
 

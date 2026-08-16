@@ -28,11 +28,5 @@
         "square_root": 22529
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/sequence-construction.json",
-      "sha256": "sha256:132881fea3cbe22ed5b648895c8f5ce2b54a1912b5909e299fe15c8e0d07fef1"
-    }
-  ]
+  }
 }

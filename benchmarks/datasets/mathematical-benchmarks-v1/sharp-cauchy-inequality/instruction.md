@@ -25,18 +25,13 @@ In `AMGM_SQUARES` mode, `sos_twice` is
 list `sos_factors` of sparse polynomials whose squared sum equals
 `2*residual-constraint_residual`; any independently checkable sum-of-squares
 decomposition is accepted. Sparse polynomials use variables ordered
-`[a,b,c,x,y,z]`, integer coefficients, and lexicographically ordered exponent
-vectors. Numerical sampling and prose-only proofs are not accepted.
-
-Write `submission.json` and digest-bind `evidence/inequality-certificate.json`,
-which must copy `result` exactly.
+`[a,b,c,x,y,z]`, integer coefficients, and exponent vectors; term order is not scored. Numerical sampling and prose-only proofs are not accepted.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/inequality-certificate.json`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `application/json`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

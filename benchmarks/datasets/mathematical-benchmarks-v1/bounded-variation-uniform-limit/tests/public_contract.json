@@ -4,11 +4,11 @@
     "rational": {
       "additionalProperties": false,
       "properties": {
-        "numerator": {
-          "type": "integer"
-        },
         "denominator": {
           "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
           "type": "integer"
         }
       },
@@ -87,7 +87,20 @@
         "type": "array"
       },
       "limit_function": {
-        "const": "0"
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "CONSTANT"
+          },
+          "value": {
+            "$ref": "#/$defs/rational"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "type": "object"
       },
       "scale_q": {
         "maximum": 9,
@@ -97,19 +110,14 @@
       "sequence": {
         "additionalProperties": false,
         "properties": {
-          "function": {
-            "enum": [
-              "SIN"
-            ]
-          },
           "argument_exponents": {
             "additionalProperties": false,
             "properties": {
-              "q": {
+              "n": {
                 "minimum": 0,
                 "type": "integer"
               },
-              "n": {
+              "q": {
                 "minimum": 0,
                 "type": "integer"
               },
@@ -128,11 +136,11 @@
           "denominator_exponents": {
             "additionalProperties": false,
             "properties": {
-              "q": {
+              "n": {
                 "minimum": 0,
                 "type": "integer"
               },
-              "n": {
+              "q": {
                 "minimum": 0,
                 "type": "integer"
               }
@@ -142,6 +150,11 @@
               "n"
             ],
             "type": "object"
+          },
+          "function": {
+            "enum": [
+              "SIN"
+            ]
           }
         },
         "required": [
@@ -186,10 +199,10 @@
           "interior_segment_count": {
             "additionalProperties": false,
             "properties": {
-              "frequency_multiplier": {
+              "constant": {
                 "type": "integer"
               },
-              "constant": {
+              "frequency_multiplier": {
                 "type": "integer"
               }
             },
@@ -225,6 +238,25 @@
     "type": "object"
   },
   "submission_schema": {
+    "$defs": {
+      "rational": {
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
+      }
+    },
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
@@ -294,7 +326,20 @@
             "type": "array"
           },
           "limit_function": {
-            "const": "0"
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "CONSTANT"
+              },
+              "value": {
+                "$ref": "#/$defs/rational"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "type": "object"
           },
           "scale_q": {
             "maximum": 9,
@@ -304,19 +349,14 @@
           "sequence": {
             "additionalProperties": false,
             "properties": {
-              "function": {
-                "enum": [
-                  "SIN"
-                ]
-              },
               "argument_exponents": {
                 "additionalProperties": false,
                 "properties": {
-                  "q": {
+                  "n": {
                     "minimum": 0,
                     "type": "integer"
                   },
-                  "n": {
+                  "q": {
                     "minimum": 0,
                     "type": "integer"
                   },
@@ -335,11 +375,11 @@
               "denominator_exponents": {
                 "additionalProperties": false,
                 "properties": {
-                  "q": {
+                  "n": {
                     "minimum": 0,
                     "type": "integer"
                   },
-                  "n": {
+                  "q": {
                     "minimum": 0,
                     "type": "integer"
                   }
@@ -349,6 +389,11 @@
                   "n"
                 ],
                 "type": "object"
+              },
+              "function": {
+                "enum": [
+                  "SIN"
+                ]
               }
             },
             "required": [
@@ -393,10 +438,10 @@
               "interior_segment_count": {
                 "additionalProperties": false,
                 "properties": {
-                  "frequency_multiplier": {
+                  "constant": {
                     "type": "integer"
                   },
-                  "constant": {
+                  "frequency_multiplier": {
                     "type": "integer"
                   }
                 },
@@ -435,26 +480,7 @@
     "required": [
       "result"
     ],
-    "type": "object",
-    "$defs": {
-      "rational": {
-        "additionalProperties": false,
-        "properties": {
-          "numerator": {
-            "type": "integer"
-          },
-          "denominator": {
-            "minimum": 1,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "numerator",
-          "denominator"
-        ],
-        "type": "object"
-      }
-    }
+    "type": "object"
   },
   "task_id": "jacobian/bounded-variation-uniform-limit"
 }

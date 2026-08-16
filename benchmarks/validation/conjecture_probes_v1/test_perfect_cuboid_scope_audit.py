@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import subprocess
@@ -11,11 +10,6 @@ from benchmarks.validation._verifier_child import run_verifier_in_child
 
 ROOT = Path(__file__).parents[3]
 TASK = ROOT / "benchmarks/datasets/conjecture-probes-v1/perfect-cuboid-scope-audit"
-
-
-def test_public_instruction_specifies_schema_version_as_json_string() -> None:
-    instruction = (TASK / "instruction.md").read_text()
-    assert 'Use schema version `1` (the JSON string\n`"1"`)' in instruction
 
 
 def _case(tmp_path: Path) -> tuple[Path, Path, dict]:
@@ -32,22 +26,12 @@ def _case(tmp_path: Path) -> tuple[Path, Path, dict]:
 
 
 def _write(app: Path, submission: dict) -> None:
-    evidence = app / "evidence/answer.txt"
-    payload = {
-        "schema_version": "1",
-        "task_id": "jacobian/perfect-cuboid-scope-audit",
-        "result": submission["result"],
-    }
-    evidence.write_text(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+    (app / "submission.json").write_text(
+        json.dumps({"result": submission["result"]}) + "\n"
     )
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 
 
-def _run(app: Path, logs: Path) -> dict:
+def _run(app: Path, logs: Path):
     return run_verifier_in_child(task=TASK, app=app, logs=logs)
 
 
@@ -85,19 +69,17 @@ def test_wrong_root_omission_and_duplicate_fail_closed(tmp_path: Path) -> None:
     submission["result"]["cases"][0]["space_root"] = 271
     _write(app, submission)
     assert _run(app, logs).details["mathematics"] == 0.0
-
     app, logs, submission = _case(tmp_path / "missing")
     submission["result"]["cases"].pop()
     _write(app, submission)
     assert _run(app, logs).details["aggregate_reward"] == 0.0
-
     app, logs, submission = _case(tmp_path / "duplicate")
     submission["result"]["cases"][-1] = submission["result"]["cases"][0]
     _write(app, submission)
     assert _run(app, logs).details["aggregate_reward"] == 0.0
 
 
-def test_tampered_input_and_evidence_are_rejected(tmp_path: Path) -> None:
+def test_tampered_input_is_rejected(tmp_path: Path) -> None:
     app, logs, submission = _case(tmp_path)
     frozen = json.loads((app / "input.json").read_text())
     frozen["cases"][0]["edges"][0] += 1
@@ -108,24 +90,11 @@ def test_tampered_input_and_evidence_are_rejected(tmp_path: Path) -> None:
     assert reward.details["mathematics"] == 1.0
     assert reward.details["aggregate_reward"] == 0.0
 
-    app, logs, submission = _case(tmp_path / "evidence")
+
+def test_unused_evidence_file_does_not_affect_reward(tmp_path: Path) -> None:
+    app, logs, submission = _case(tmp_path)
     _write(app, submission)
+    (app / "evidence").mkdir(exist_ok=True)
     (app / "evidence/answer.txt").write_text("{}\n")
     reward = _run(app, logs)
-    assert reward.details["witness_validity"] == 0.0
-    assert reward.details["aggregate_reward"] == 0.0
-
-
-def test_large_declared_witness_remains_valid_without_an_arbitrary_byte_cap(
-    tmp_path: Path,
-) -> None:
-    app, logs, submission = _case(tmp_path)
-    evidence = app / "evidence/answer.txt"
-    evidence.write_bytes(evidence.read_bytes() + (b" \n" * (2 * 1024 * 1024)))
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(submission) + "\n")
-    reward = _run(app, logs)
-    assert reward.details["witness_validity"] == 1.0
     assert reward.details["aggregate_reward"] == 1.0

@@ -31,7 +31,6 @@ def _parse_polynomial(value, maximum_degree):
     if not isinstance(value, list) or len(value) > 70:
         return None
     result = {}
-    order = []
     for term in value:
         if not isinstance(term, dict) or set(term) != {"exponents", "coefficient"}:
             return None
@@ -57,8 +56,7 @@ def _parse_polynomial(value, maximum_degree):
         ):
             return None
         result[exponent] = coefficient
-        order.append(exponent)
-    return result if order == sorted(order) else None
+    return result
 
 
 def _add(left, right):

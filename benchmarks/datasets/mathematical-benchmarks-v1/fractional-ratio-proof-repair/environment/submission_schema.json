@@ -26,9 +26,21 @@
       "additionalProperties": false,
       "properties": {
         "attained_ratio": {
-          "maxLength": 64,
-          "pattern": "^[1-9][0-9]*/[1-9][0-9]*$",
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "denominator": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "numerator": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
         },
         "constant_residual": {
           "type": "integer"

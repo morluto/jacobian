@@ -107,11 +107,5 @@
         "exponent": 14
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/classification-certificate.json",
-      "sha256": "sha256:0dfb97fd26449a5e11e7e1a1435b89578f36bcf44bd92c4f1323aeff3a6e51be"
-    }
-  ]
+  }
 }

@@ -5,8 +5,6 @@ import os
 from pathlib import Path
 
 from benchmarks.validation.public_reproductions_v1._fixtures import (
-    _bind_result_evidence,
-    _digest,
     _prepare_case,
     _write_json,
 )
@@ -20,8 +18,7 @@ def _case(tmp_path: Path):
 
 
 def _rewrite(app: Path, submission: dict) -> None:
-    _bind_result_evidence(app, submission)
-    _write_json(app / "submission.json", submission)
+    _write_json(app / "submission.json", {"result": submission["result"]})
 
 
 def test_reference_passes(tmp_path: Path) -> None:
@@ -87,17 +84,11 @@ def test_symlinked_workspace_input_is_rejected(tmp_path: Path) -> None:
     assert _run_verifier(task, app, logs).reward == 0.0
 
 
-def test_oversized_evidence_is_rejected_without_crashing(tmp_path: Path) -> None:
+def test_unused_evidence_file_does_not_affect_reward(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    (app / "evidence" / "answer.txt").write_text(
-        "column row source position exactly " + "x" * 65536
-    )
-    submission["witness"][0]["sha256"] = _digest(app / "evidence" / "answer.txt")
-    _write_json(app / "submission.json", submission)
-    result = _run_verifier(task, app, logs)
-    assert result.details["witness_validity"] == 0.0
-    assert result.reward == 0.0
+    (app / "evidence").mkdir(exist_ok=True)
+    (app / "evidence" / "answer.txt").write_text("column row source position exactly\n")
+    assert _run_verifier(task, app, logs).reward == 1.0
 
 
 def test_missing_visible_input_fails_closed(tmp_path: Path) -> None:
@@ -109,40 +100,14 @@ def test_missing_visible_input_fails_closed(tmp_path: Path) -> None:
     assert result.reward == 0.0
 
 
-def test_keyword_only_evidence_without_result_binding_is_rejected(
-    tmp_path: Path,
-) -> None:
+def test_undeclared_witness_key_is_rejected(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    evidence.write_text("column row source position exactly\n")
-    submission["witness"][0]["sha256"] = _digest(evidence)
+    submission["witness"] = [
+        {"path": "evidence/answer.txt", "sha256": "sha256:" + "0" * 64}
+    ]
     _write_json(app / "submission.json", submission)
-    result = _run_verifier(task, app, logs)
-    assert result.details["witness_validity"] == 0.0
-    assert result.reward == 0.0
-
-
-def test_boolean_in_result_json_evidence_is_rejected(tmp_path: Path) -> None:
-    """RESULT_JSON must match the submitted result without bool/int coercion."""
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    evidence = app / "evidence" / "answer.txt"
-    coerced = json.loads(json.dumps(submission["result"]))
-    assert coerced["balanced_matrix"][0][0] == 1
-    coerced["balanced_matrix"][0][0] = True
-    assert coerced == submission["result"]
-    evidence.write_text(
-        "column row source position exactly\n"
-        "RESULT_JSON:"
-        + json.dumps(coerced, sort_keys=True, separators=(",", ":"))
-        + "\n"
-    )
-    submission["witness"][0]["sha256"] = _digest(evidence)
-    _write_json(app / "submission.json", submission)
-    result = _run_verifier(task, app, logs)
-    assert result.details["witness_validity"] == 0.0
-    assert result.reward == 0.0
+    assert _run_verifier(task, app, logs).reward == 0.0
 
 
 def test_symlinked_submission_is_rejected(tmp_path: Path) -> None:
@@ -162,19 +127,8 @@ def test_nonregular_input_is_rejected(tmp_path: Path) -> None:
     assert result.reward == 0.0
 
 
-def test_wrong_witness_digest_is_rejected(tmp_path: Path) -> None:
+def test_result_only_submission_is_accepted(tmp_path: Path) -> None:
     task, app, logs = _case(tmp_path)
     submission = json.loads((app / "submission.json").read_text())
-    submission["witness"][0]["sha256"] = "sha256:" + "0" * 64
-    _write_json(app / "submission.json", submission)
-    result = _run_verifier(task, app, logs)
-    assert result.details["witness_validity"] == 0.0
-    assert result.reward == 0.0
-
-
-def test_missing_witness_is_rejected(tmp_path: Path) -> None:
-    task, app, logs = _case(tmp_path)
-    submission = json.loads((app / "submission.json").read_text())
-    del submission["witness"]
-    _write_json(app / "submission.json", submission)
-    assert _run_verifier(task, app, logs).reward == 0.0
+    _rewrite(app, submission)
+    assert _run_verifier(task, app, logs).reward == 1.0

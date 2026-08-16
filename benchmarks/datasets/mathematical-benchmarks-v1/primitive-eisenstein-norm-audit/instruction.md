@@ -11,17 +11,14 @@ Submit two local certificates:
 Then state the repaired prime-factor criterion through the maximum allowed
 exponent of 3 and the modulus/residue class of forbidden inert primes. Write
 `/app/submission.json` following the schema and bind a matching copy of the
-result at `evidence/local-audit.json`. The task-specific witness file must be a
-JSON object with exactly the fields `schema_version` (the string `"1"`),
 `task_id` (the task identifier), and `result` (matching the submission's
 `result`). Do not solve or certify the source's cubic-form counting problem.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/local-audit.json`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `application/json`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

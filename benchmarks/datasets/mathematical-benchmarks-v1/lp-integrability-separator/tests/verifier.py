@@ -1,5 +1,4 @@
 import json
-import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -13,12 +12,13 @@ MAX_EVIDENCE_BYTES = 64 * 1024
 
 
 def fraction(value):
-    """Parse a rational from a string, accepting mathematically equivalent forms."""
-    if not isinstance(value, str) or len(value) > 80:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
         raise ValueError
-    if re.fullmatch(r"-?(?:0|[1-9][0-9]*)(?:/[1-9][0-9]*)?", value) is None:
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         raise ValueError
-    return Fraction(value)
+    return Fraction(numerator, denominator)
 
 
 def valid_result(result):

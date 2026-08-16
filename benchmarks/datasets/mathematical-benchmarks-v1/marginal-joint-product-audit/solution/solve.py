@@ -8,7 +8,7 @@ masses = [Fraction(1, 10), Fraction(1, 5), Fraction(3, 10), Fraction(2, 5)]
 
 
 def text(value):
-    return str(value)
+    return {"numerator": value.numerator, "denominator": value.denominator}
 
 
 prelimit = [
@@ -26,7 +26,9 @@ limit = [
 def pushforward(entries):
     result = defaultdict(Fraction)
     for entry in entries:
-        result[entry["x"] * entry["y"]] += Fraction(entry["mass"])
+        result[entry["x"] * entry["y"]] += Fraction(
+            entry["mass"]["numerator"], entry["mass"]["denominator"]
+        )
     return [
         {"value": value, "mass": text(mass)}
         for value, mass in sorted(result.items())

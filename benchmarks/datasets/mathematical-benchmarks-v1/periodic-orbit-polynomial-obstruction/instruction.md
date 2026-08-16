@@ -11,16 +11,13 @@ and polynomial-identity steps. Use basis `[F(pq),F(p),F(q),F(1)]` for the orbit
 coefficient vector and `[P(q),P(1)]` or `[P(p),P(1)]` for modular residues.
 
 Write `submission.json` to the supplied schema. The declared task-specific
-witness at `evidence/periodic-orbit-certificate.json` contains exactly
-`schema_version`, `task_id`, and `result`, copying the corresponding submission
 values exactly and binding the file by SHA-256.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/periodic-orbit-certificate.json`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `application/json`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

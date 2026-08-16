@@ -2,7 +2,7 @@
 
 The frozen packet gives a three-real-Gaussian template and a formal Lagrange-inversion identity. A prior audit checked twelve moments and then claimed the identities for every exponent. That extrapolation is invalid.
 
-Choose any nonzero rational parameter `a` within the declared bounds. Derive the quadratic `v(z)` and rational inverse branch `zeta(t)` satisfying the identities below; both are determined by `a` and the correction-factor identity rather than freely chosen. Submit canonical rational coefficient lists in ascending degree order as integer `numerator`/positive integer `denominator` objects in lowest terms.
+Choose any nonzero rational parameter `a` within the declared bounds. Derive the quadratic `v(z)` and rational inverse branch `zeta(t)` satisfying the identities below; both are determined by `a` and the correction-factor identity rather than freely chosen. Submit rational coefficient lists in ascending degree order as integer `numerator`/positive integer `denominator` objects. Equivalent encodings such as `2/8` and `1/4` are accepted after exact `Fraction` normalization.
 
 Your certificate must establish, by exact rational-function identities rather than samples, all of the following:
 

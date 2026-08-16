@@ -19,7 +19,20 @@ def test_rejects_corrupted_semantic_finding(tmp_path: Path) -> None:
     task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     path = app / "submission.json"
     submission = json.loads(path.read_text())
-    submission["result"]["cases"][0]["classification"] = "SAFE"
+    submission["result"]["cases"][0]["findings"] = []
+    _fixtures._write_json(path, submission)
+    rejected = _verifier._run_verifier(task, app, logs)
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0
+
+
+def test_rejects_wrong_reason_code(tmp_path: Path) -> None:
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    submission["result"]["cases"][0]["reason"] = (
+        "PROOF_TERMS_EXCLUDED_FROM_STATEMENT_ANALYSIS"
+    )
     _fixtures._write_json(path, submission)
     rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0

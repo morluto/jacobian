@@ -8,11 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
-    resolve_evidence,
     workspace_input_is_bound,
 )
 
@@ -49,17 +46,19 @@ def _adjacency(value: object) -> list[list[int]] | None:
     for i, neighbors in enumerate(value):
         if not isinstance(neighbors, list) or len(set(neighbors)) != len(neighbors):
             return None
-        if any(not _int(v) or v < 0 or v >= len(value) or v == i for v in neighbors):
+        if any(not _int(v) or v < 0 or v >= len(value) or (v == i) for v in neighbors):
             return None
         result.append(sorted(neighbors))
-    if any(i not in result[j] for i, neighbors in enumerate(result) for j in neighbors):
+    if any(
+        (i not in result[j] for i, neighbors in enumerate(result) for j in neighbors)
+    ):
         return None
     return result
 
 
 def _domination(adj: list[list[int]]) -> tuple[int, list[int]] | None:
     n = len(adj)
-    closed = [(1 << i) | sum(1 << j for j in adj[i]) for i in range(n)]
+    closed = [1 << i | sum(1 << j for j in adj[i]) for i in range(n)]
     full = (1 << n) - 1
     for size in range(1, n + 1):
         for candidate in combinations(range(n), size):
@@ -67,12 +66,12 @@ def _domination(adj: list[list[int]]) -> tuple[int, list[int]] | None:
             for vertex in candidate:
                 covered |= closed[vertex]
             if covered == full:
-                return size, list(candidate)
+                return (size, list(candidate))
     return None
 
 
 def _product(left: list[list[int]], right: list[list[int]]) -> list[list[int]]:
-    n, m = len(left), len(right)
+    n, m = (len(left), len(right))
     result = [set() for _ in range(n * m)]
     for i in range(n):
         for j in range(m):
@@ -88,7 +87,7 @@ def _frozen_graphs(graphs: list[object]) -> dict[str, list[list[int]]] | None:
             not isinstance(graph, dict)
             or set(graph) != {"id", "adjacency"}
             or graph.get("id") not in GRAPH_IDS
-            or graph["id"] in by_id
+            or (graph["id"] in by_id)
         ):
             return None
         adjacency = _adjacency(graph["adjacency"])
@@ -109,8 +108,8 @@ def _frozen() -> dict[str, Any] | None:
         not isinstance(value, dict)
         or value.get("task_id") != TASK_ID
         or value.get("scope_identity") != SCOPE
-        or value.get("encoding") != "ADJACENCY_LIST_ZERO_INDEXED"
-        or value.get("product") != "CARTESIAN"
+        or (value.get("encoding") != "ADJACENCY_LIST_ZERO_INDEXED")
+        or (value.get("product") != "CARTESIAN")
     ):
         return None
     graphs = value.get("graphs")
@@ -118,8 +117,8 @@ def _frozen() -> dict[str, Any] | None:
     if (
         not isinstance(graphs, list)
         or len(graphs) != 8
-        or not isinstance(pairs, list)
-        or len(pairs) != 13
+        or (not isinstance(pairs, list))
+        or (len(pairs) != 13)
     ):
         return None
     by_id = _frozen_graphs(graphs)
@@ -163,7 +162,7 @@ def _product_witness(
         ):
             return False
         i, j = pair
-        if i < 0 or i >= len(adjacency) // right_size or j < 0 or j >= right_size:
+        if i < 0 or i >= len(adjacency) // right_size or j < 0 or (j >= right_size):
             return False
         flattened.append(i * right_size + j)
     return len(set(flattened)) == len(flattened) and _dominates(
@@ -172,9 +171,7 @@ def _product_witness(
 
 
 def _math_graphs(
-    result: dict[str, Any],
-    graphs: dict[str, list[list[int]]],
-    expected: dict[str, Any],
+    result: dict[str, Any], graphs: dict[str, list[list[int]]], expected: dict[str, Any]
 ) -> bool:
     rows = result.get("graphs")
     if not isinstance(rows, list) or len(rows) != 8:
@@ -194,21 +191,19 @@ def _math_graphs(
             return False
         seen.add(name)
         adjacency = graphs[name]
-        gamma = expected[name][0]  # type: ignore[index]
+        gamma = expected[name][0]
         if (
             row["vertex_count"] != len(adjacency)
             or row["edge_count"] != sum(map(len, adjacency)) // 2
             or row["domination_number"] != gamma
-            or not _dominates(row["minimum_dominating_set"], gamma, adjacency)
+            or (not _dominates(row["minimum_dominating_set"], gamma, adjacency))
         ):
             return False
     return seen == set(GRAPH_IDS)
 
 
 def _math_pairs(
-    result: dict[str, Any],
-    graphs: dict[str, list[list[int]]],
-    expected: dict[str, Any],
+    result: dict[str, Any], graphs: dict[str, list[list[int]]], expected: dict[str, Any]
 ) -> bool | None:
     rows = result.get("pairs")
     if not isinstance(rows, list) or len(rows) != 13:
@@ -236,9 +231,9 @@ def _math_pairs(
             return None
         seen_pairs.add(pair)
         left, right = pair
-        left_adj, right_adj = graphs[left], graphs[right]
-        left_gamma = expected[left][0]  # type: ignore[index]
-        right_gamma = expected[right][0]  # type: ignore[index]
+        left_adj, right_adj = (graphs[left], graphs[right])
+        left_gamma = expected[left][0]
+        right_gamma = expected[right][0]
         product_adj = _product(left_adj, right_adj)
         product_value = _domination(product_adj)
         if product_value is None:
@@ -248,17 +243,23 @@ def _math_pairs(
             row["gamma_left"] != left_gamma
             or row["gamma_right"] != right_gamma
             or row["gamma_product"] != product_gamma
-            or row["factor_product"] != left_gamma * right_gamma
-            or row["product_vertex_count"] != len(product_adj)
-            or not _dominates(row["left_minimum_dominating_set"], left_gamma, left_adj)
-            or not _dominates(
-                row["right_minimum_dominating_set"], right_gamma, right_adj
+            or (row["factor_product"] != left_gamma * right_gamma)
+            or (row["product_vertex_count"] != len(product_adj))
+            or (
+                not _dominates(row["left_minimum_dominating_set"], left_gamma, left_adj)
             )
-            or not _product_witness(
-                row["product_minimum_dominating_set"],
-                product_gamma,
-                product_adj,
-                len(right_adj),
+            or (
+                not _dominates(
+                    row["right_minimum_dominating_set"], right_gamma, right_adj
+                )
+            )
+            or (
+                not _product_witness(
+                    row["product_minimum_dominating_set"],
+                    product_gamma,
+                    product_adj,
+                    len(right_adj),
+                )
             )
         ):
             return None
@@ -306,27 +307,12 @@ def main() -> None:
     protocol = isinstance(submission, dict)
     result = submission.get("result") if protocol else None
     mathematics = bool(protocol and frozen and _math(result, frozen))
-    witness = submission.get("witness") if protocol else None
-    descriptor = witness[0] if isinstance(witness, list) and len(witness) == 1 else None
-    payload = (
-        read_evidence_json(descriptor, expected_path="evidence/answer.txt")
-        if resolve_evidence(descriptor, expected_path="evidence/answer.txt") is not None
-        else None
-    )
-    witness_valid = bool(
-        isinstance(payload, dict)
-        and set(payload) == {"schema_version", "task_id", "result"}
-        and payload.get("schema_version") == "1"
-        and payload.get("task_id") == TASK_ID
-        and json_value_equal(payload.get("result"), result)
-    )
-    aggregate = float(input_bound and protocol and mathematics and witness_valid)
+    aggregate = float(input_bound and protocol and mathematics)
     _reward(
         {
             "protocol": float(protocol),
             "input_binding": float(input_bound),
             "mathematics": float(mathematics),
-            "witness_validity": float(witness_valid),
             "aggregate_reward": aggregate,
             "reward": aggregate,
         }
@@ -342,7 +328,6 @@ if __name__ == "__main__":
                 "protocol": 0.0,
                 "input_binding": 0.0,
                 "mathematics": 0.0,
-                "witness_validity": 0.0,
                 "aggregate_reward": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,

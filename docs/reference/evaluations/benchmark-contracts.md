@@ -46,20 +46,78 @@ data in `result`, and never require a duplicate result file or natural-language
 explanation. Generic assurance, scope, completeness, limitation, and
 verification-record fields are not part of ordinary mathematical submissions.
 
+### Replay authority
+
+The scored predicate is a task-local replay from the frozen verifier copy of
+`input.json` and the submitted mathematical value. Hidden `tests/expected.json`
+is an Oracle regression fixture, not the implementation of correctness.
+Changing only the expected fixture must not change reward for a fixed
+input/submission pair; a corrupted expected file must fail Oracle validation
+instead of silently rewriting the mathematical truth.
+
+Public notes that say the verifier replays a predicate must be true of the
+verifier. Snapshot-label or registry-selection tasks must say so in the
+instruction and schema; they must not advertise independent mathematical
+replay while comparing a hidden label.
+
+Independent propositions in one result are derived independently. A corrupted
+claimed image, incomplete search, or one-sided certificate does not decide a
+different collision, invertibility, or completeness claim.
+
 ### Mathematical representations
 
 The typed result represents a mathematical object, not a preferred rendering of
-one. Parse and compare the represented value: accept equivalent rationals,
-scaled rational functions, and unordered factors or claims whenever order and
-normal form are not part of the task. A task may require a canonical form only
+one. Parse and compare the represented value:
+
+- structured rationals with integer numerator and positive denominator,
+  compared as `Fraction`, including unreduced encodings such as `2/8`;
+- unordered collections (sets, maps, distributions, sparse polynomials) after
+  parsing into the actual mathematical type, not as privileged list order;
+- formulas as the smallest task-owned type (coefficients, an AST, an enum),
+  not as a scored string literal;
+- conclusions as finite reason/status enums the verifier already derives, not
+  as keyword, length, or negation-regex checks over prose.
+
+Do not encode an exact rational as one undifferentiated `"2/8"` string. Decimal
+strings are allowed only as bounded components of a structured object when
+JSON numbers are not interoperable. A task may require a canonical form only
 when canonicalization is itself a stated mathematical outcome; the public
 instruction and schema must then declare that requirement and its exact rule.
+
+JSON Schema cannot express coprimality. If the instruction demands lowest
+terms while the verifier normalizes `Fraction`, the public protocol is false.
+Keep the equivalence-aware verifier and describe that policy.
+
+Reject booleans as integers, zero or negative denominators under the stated
+sign convention, non-finite numbers, and resource-bound violations. Those
+checks are boundary validation, not rendering rules.
+
+### Public protocol agreement
+
+The instruction, schema, hidden solver, and verifier must accept the same
+objects. A schema-valid, instruction-conforming submission must be able to
+receive full reward. Do not leave `limitations` required in prose and forbidden
+in the verifier, or declare `text/plain` for a JSON object.
+
+Generated task families specialize the public schema to the claim family and
+frozen case type. Certificate kind is public protocol, not a hidden answer.
+Do not publish a universal `oneOf` of inverse, Keller, collision, grid, and
+timeout certificates on every task. Where verdict and certificate kind are
+coupled by the public claim, express the smallest family-specific union.
+
+### Witness artifacts
 
 `answer.txt` is never the authoritative submission interface. A task may retain
 human-readable text as non-authoritative source material, but its hidden gold
 solution and agent submission use the same structured contract. A witness file
 is justified only when the verifier needs an external finite object for replay;
 it must not duplicate the typed result or carry a prose explanation.
+
+Do not require a witness whose only accepted content is a hash of `result`, a
+JSON envelope equal to `result`, selected copied fields, boilerplate keywords,
+or arbitrary nonempty text. Do not score a digest-bound file the verifier never
+opens. The template helper `witness_list_is_bound` has no default
+`evidence/answer.txt` path; pass an explicit path only for a declared artifact.
 
 ## Generated output
 

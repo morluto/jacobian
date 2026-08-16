@@ -4,10 +4,18 @@
     "rational": {
       "additionalProperties": false,
       "properties": {
-        "denominator": {"minimum": 1, "type": "integer"},
-        "numerator": {"type": "integer"}
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
       },
-      "required": ["numerator", "denominator"],
+      "required": [
+        "numerator",
+        "denominator"
+      ],
       "type": "object"
     }
   },
@@ -33,12 +41,38 @@
             "const": "1"
           },
           "A4": {
-            "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$",
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
           },
           "A6": {
-            "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$",
-            "type": "string"
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
           }
         },
         "required": [
@@ -57,11 +91,11 @@
           "dual_multipliers": {
             "additionalProperties": false,
             "properties": {
-          "order_1": {
-            "$ref": "#/$defs/rational"
+              "order_1": {
+                "$ref": "#/$defs/rational"
               },
-          "order_2": {
-            "$ref": "#/$defs/rational"
+              "order_2": {
+                "$ref": "#/$defs/rational"
               }
             },
             "required": [
@@ -119,18 +153,26 @@
     "type": "object"
   },
   "submission_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$defs": {
       "rational": {
         "additionalProperties": false,
         "properties": {
-          "denominator": {"minimum": 1, "type": "integer"},
-          "numerator": {"type": "integer"}
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
         },
-        "required": ["numerator", "denominator"],
+        "required": [
+          "numerator",
+          "denominator"
+        ],
         "type": "object"
       }
     },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "properties": {
       "result": {
@@ -153,12 +195,38 @@
                 "const": "1"
               },
               "A4": {
-                "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$",
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "numerator": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "numerator",
+                  "denominator"
+                ],
+                "type": "object"
               },
               "A6": {
-                "pattern": "^[0-9]+(?:/[1-9][0-9]*)?$",
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "numerator": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "numerator",
+                  "denominator"
+                ],
+                "type": "object"
               }
             },
             "required": [
@@ -177,11 +245,11 @@
               "dual_multipliers": {
                 "additionalProperties": false,
                 "properties": {
-              "order_1": {
-                "$ref": "#/$defs/rational"
+                  "order_1": {
+                    "$ref": "#/$defs/rational"
                   },
-              "order_2": {
-                "$ref": "#/$defs/rational"
+                  "order_2": {
+                    "$ref": "#/$defs/rational"
                   }
                 },
                 "required": [

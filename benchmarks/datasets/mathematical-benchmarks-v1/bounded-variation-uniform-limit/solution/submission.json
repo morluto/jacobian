@@ -91,7 +91,13 @@
         }
       }
     ],
-    "limit_function": "0",
+    "limit_function": {
+      "kind": "CONSTANT",
+      "value": {
+        "denominator": 1,
+        "numerator": 0
+      }
+    },
     "scale_q": 3,
     "sequence": {
       "argument_exponents": {

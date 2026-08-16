@@ -1,5 +1,5 @@
 schema_version = "1.4"
-artifacts = ["/app/submission.json", "/app/evidence"]
+artifacts = ["/app/submission.json"]
 
 [task]
 name = "jacobian/ga-action-local-finiteness-certificate"
@@ -21,7 +21,7 @@ category = "mathematics"
 tags = ["symbolic-construction", "invariant-subspace", "alternative-bases", "offline"]
 case_version = "mathematical-benchmarks-v1"
 contamination_class = "public-theorem-transformed-certificate"
-fixture_digest = "sha256:b2cfc2de71b78e1e4cc4d9ea6296820a480f9fd119cefb8f5fe7c27e85ec0110"
+fixture_digest = "sha256:39385c8d6cfd21b318d93e28ce41a98641223e6d60771c34d8231e4dbda11f52"
 derivation = "Derived from Jiahao004/DeepTheorem train row 10019 at revision f5935720f176cedff4ecd8ebf83d1696e31cfac8."
 
 [agent]

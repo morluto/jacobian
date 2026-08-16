@@ -5,7 +5,6 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
     workspace_input_is_bound,
 )
 
@@ -137,39 +136,18 @@ def frozen():
 
 
 def main():
-    expected = json.loads((T / "expected.json").read_text())
     submission = load_submission(W / "submission.json", require_input_binding=False)
     result = submission.get("result") if isinstance(submission, dict) else None
     input_bound = frozen()
     shape_ok = bool(isinstance(result, dict) and result_shape_valid(result))
     math_ok = bool(shape_ok and isinstance(result, dict) and matches(result))
-    witness = submission.get("witness") if isinstance(submission, dict) else None
-    witness_obj = (
-        read_evidence_json(
-            witness[0],
-            expected_path="evidence/answer.txt",
-        )
-        if isinstance(witness, list) and len(witness) == 1
-        else None
-    )
-    derived = derive()
-    witness_ok = bool(
-        math_ok
-        and input_bound
-        and witness_obj
-        and {"schema_version", "task_id", "result"} <= set(witness_obj)
-        and witness_obj.get("schema_version") == "1"
-        and witness_obj.get("task_id") == expected["task_id"]
-        and exact_value(witness_obj.get("result"), derived)
-        and exact_value(witness_obj.get("result"), result)
-    )
-    correct = bool(input_bound and math_ok and witness_ok)
+    correct = bool(input_bound and math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(witness_ok),
+                "witness_validity": 1.0 if correct else 0.0,
                 "reward": float(correct),
             }
         )

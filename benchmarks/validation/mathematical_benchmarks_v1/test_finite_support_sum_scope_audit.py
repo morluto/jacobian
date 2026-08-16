@@ -1,4 +1,3 @@
-import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -21,20 +20,10 @@ def _oracle():
 def _verify(tmp_path, submission):
     task = Path("benchmarks/datasets/mathematical-benchmarks-v1") / TASK
     app, logs = tmp_path / "app", tmp_path / "logs"
-    (app / "evidence").mkdir(parents=True)
+    app.mkdir(parents=True)
     logs.mkdir(parents=True)
     shutil.copy2(task / "environment/input.json", app / "input.json")
-    evidence = {
-        "schema_version": "1",
-        "task_id": f"jacobian/{TASK}",
-        "result": submission["result"],
-    }
-    path = app / "evidence/scope-audit.json"
-    path.write_text(json.dumps(evidence, separators=(",", ":")))
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(submission))
+    (app / "submission.json").write_text(json.dumps({"result": submission["result"]}))
     return _run_verifier(task, app, logs)
 
 

@@ -51,11 +51,5 @@
         ]
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/image-complement-certificate.json",
-      "sha256": "sha256:7d662c0efacbf65794793422f10311ea1bc6099220e1553ea0ee678e2f58b633"
-    }
-  ]
+  }
 }

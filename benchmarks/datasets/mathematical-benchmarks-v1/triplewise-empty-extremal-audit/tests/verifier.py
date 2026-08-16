@@ -19,12 +19,10 @@ def valid_family(n, raw_family):
         ):
             return False
         family = [tuple(item) for item in raw_family]
-        if len(family) != len(set(family)):
+        family_sets = [frozenset(item) for item in family]
+        if len(family_sets) != len(set(family_sets)):
             return False
-        if any(
-            tuple(sorted(item)) != item or len(item) != len(set(item))
-            for item in family
-        ):
+        if any(len(item) != len(set(item)) for item in family):
             return False
         if any(value < 0 or value >= n for item in family for value in item):
             return False
@@ -73,17 +71,36 @@ def _math_claim_is_correct(result):
     certificate = result["upper_bound_certificate"]
     constructions = result["constructions"]
     construction_map = {item["n"]: item["family"] for item in constructions}
+    formula = result["maximum_formula"]
+    if (
+        not isinstance(formula, dict)
+        or set(formula) != {"constant", "linear", "floor_half"}
+        or any(type(formula[key]) is not int for key in formula)
+    ):
+        return False
+    cap = certificate.get("singleton_cap")
     return bool(
-        result["maximum_formula"] == "1+n+floor(n/2)"
-        and certificate
-        == {
-            "element_frequency_cap": 2,
-            "singleton_cap": "n",
-            "nonsingleton_incidence_floor": 2,
-        }
+        all(
+            formula["constant"]
+            + formula["linear"] * n
+            + formula["floor_half"] * (n // 2)
+            == 1 + n + n // 2
+            for n in (7, 8, 11)
+        )
+        and certificate.get("element_frequency_cap") == 2
+        and certificate.get("nonsingleton_incidence_floor") == 2
+        and isinstance(cap, dict)
+        and cap == {"variable": "n"}
         and set(construction_map) == {7, 8, 11}
         and len(construction_map) == len(constructions)
         and all(valid_family(n, construction_map[n]) for n in construction_map)
+        and all(
+            len(construction_map[n])
+            == formula["constant"]
+            + formula["linear"] * n
+            + formula["floor_half"] * (n // 2)
+            for n in construction_map
+        )
     )
 
 

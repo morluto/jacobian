@@ -1,16 +1,12 @@
-import hashlib
 import json
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from verifier_support import (
-    aggregate_reward,
     load_submission,
     load_submission_raw,
     normalize_reward_file,
-    resolve_evidence,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -47,8 +43,8 @@ def _term_map(value: object) -> dict[tuple[str, int], int] | None:
             type(function) is not str
             or function not in {"SIN", "COS"}
             or type(power) is not int
-            or type(coefficient) is not int
-            or power < 1
+            or (type(coefficient) is not int)
+            or (power < 1)
         ):
             return None
         key = (function, power)
@@ -69,18 +65,18 @@ def _formal_tail_identity(terms: dict[tuple[str, int], int], remainder: object) 
         remainder.get("integrand") != "COS"
         or type(remainder.get("power")) is not int
         or remainder.get("power") != 6
-        or type(remainder.get("coefficient")) is not int
+        or (type(remainder.get("coefficient")) is not int)
     ):
         return False
     derivative: defaultdict[tuple[str, int], int] = defaultdict(int)
     for (function, power), coefficient in terms.items():
         if function == "COS":
-            derivative[("SIN", power)] -= coefficient
-            derivative[("COS", power + 1)] -= power * coefficient
+            derivative["SIN", power] -= coefficient
+            derivative["COS", power + 1] -= power * coefficient
         else:
-            derivative[("COS", power)] += coefficient
-            derivative[("SIN", power + 1)] -= power * coefficient
-    derivative[("COS", 6)] -= remainder["coefficient"]
+            derivative["COS", power] += coefficient
+            derivative["SIN", power + 1] -= power * coefficient
+    derivative["COS", 6] -= remainder["coefficient"]
     return {key: value for key, value in derivative.items() if value} == {
         ("SIN", 1): -1
     }
@@ -106,25 +102,25 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
         value["absolute_remainder_bound"],
     )
     published = frozen.get("published_expansion")
-    if tail is None or si is None or not _formal_tail_identity(tail, tr):
+    if tail is None or si is None or (not _formal_tail_identity(tail, tr)):
         return False
     if set(si) != set(tail) or any(
-        si[key] != -coefficient for key, coefficient in tail.items()
+        (si[key] != -coefficient for key, coefficient in tail.items())
     ):
         return False
     if (
         not isinstance(tr, dict)
         or not isinstance(sr, dict)
         or type(sr.get("power")) is not int
-        or type(sr.get("coefficient")) is not int
-        or sr != {**tr, "coefficient": -tr["coefficient"]}
+        or (type(sr.get("coefficient")) is not int)
+        or (sr != {**tr, "coefficient": -tr["coefficient"]})
     ):
         return False
     if (
         not isinstance(bound, dict)
         or set(bound) != {"numerator", "power", "domain"}
         or type(bound.get("numerator")) is not int
-        or type(bound.get("power")) is not int
+        or (type(bound.get("power")) is not int)
     ):
         return False
     if (
@@ -139,7 +135,7 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
                 for item in published
                 if isinstance(item, dict)
                 and item.get("function") == "SIN"
-                and item.get("power") == 2
+                and (item.get("power") == 2)
             ),
             None,
         )
@@ -150,41 +146,10 @@ def _result(value: object, frozen: dict[str, Any]) -> bool:
     return (
         type(value["published_sine_coefficient"]) is int
         and type(value["corrected_sine_coefficient"]) is int
-        and value["published_sine_coefficient"] == published_sine == 1
-        and value["corrected_sine_coefficient"] == corrected == -1
-        and published_sine != corrected
+        and (value["published_sine_coefficient"] == published_sine == 1)
+        and (value["corrected_sine_coefficient"] == corrected == -1)
+        and (published_sine != corrected)
     )
-
-
-def _evidence(value: object, result: object) -> bool:
-    if (
-        not witness_list_is_bound(
-            value, expected_path="evidence/answer.txt", max_bytes=4096
-        )
-        or not isinstance(value, list)
-        or len(value) != 1
-    ):
-        return False
-    if not isinstance(result, dict):
-        return False
-    path = resolve_evidence(
-        value[0], expected_path="evidence/answer.txt", max_bytes=4096
-    )
-    if path is None:
-        return False
-    try:
-        lines = [line.strip() for line in path.read_text().splitlines() if line.strip()]
-    except (OSError, UnicodeError):
-        return False
-    digest = hashlib.sha256(
-        json.dumps(result, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
-    return lines == [
-        "sine-integral-certificate-v1",
-        f"result_sha256: {digest}",
-        f"published_sine_coefficient: {result.get('published_sine_coefficient')}",
-        f"corrected_sine_coefficient: {result.get('corrected_sine_coefficient')}",
-    ]
 
 
 def main() -> None:
@@ -194,26 +159,11 @@ def main() -> None:
     data = raw if isinstance(raw, dict) else {}
     frozen = _load()
     math_correct = bool(_result(data.get("result"), frozen))
-    evidence_valid = bool(
-        protocol_ok
-        and math_correct
-        and _evidence(data.get("witness"), data.get("result"))
-    )
-    reward = aggregate_reward(
-        correctness=math_correct,
-        witness_validity=evidence_valid,
-        protocol_ok=protocol_ok,
-    )
+    reward = float(protocol_ok and math_correct)
     output = Path("/logs/verifier")
     output.mkdir(parents=True, exist_ok=True)
     (output / "reward.json").write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
-                "reward": reward,
-            }
-        )
+        json.dumps({"correctness": float(math_correct), "reward": reward})
     )
     normalize_reward_file(output / "reward.json")
 

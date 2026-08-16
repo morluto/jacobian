@@ -10,8 +10,6 @@ backtracking, checks the submitted four-coloring, and validates the complete
 minor model. Complete graphs, triangles, isolated padding, and label-only
 chromatic claims are rejected.
 
-Evidence is matching JSON with exactly `schema_version`, `task_id`, `result`,
-and `limitations`: `schema_version` must be the string `"1"`, `task_id` must
 equal the task id, `result` must exactly copy the submitted `result` object
 (including JSON types), and `limitations` must equal the declared limitations.
 This checks one finite graph only and does not prove Hadwiger's conjecture.
@@ -19,9 +17,8 @@ This checks one finite graph only and does not prove Hadwiger's conjecture.
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

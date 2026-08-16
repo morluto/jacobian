@@ -6,20 +6,72 @@
       "additionalProperties": false,
       "properties": {
         "alpha": {
-          "pattern": "^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$",
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "denominator": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "numerator": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
         },
         "beta": {
-          "pattern": "^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$",
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "denominator": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "numerator": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
         },
         "even_offset": {
-          "pattern": "^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$",
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "denominator": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "numerator": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
         },
         "odd_offset": {
-          "pattern": "^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$",
-          "type": "string"
+          "additionalProperties": false,
+          "properties": {
+            "denominator": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "numerator": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
         },
         "trace": {
           "items": {
@@ -32,8 +84,21 @@
                 "type": "integer"
               },
               "value": {
-                "pattern": "^-?(?:0|[1-9][0-9]{0,63})(?:/[1-9][0-9]{0,63})?$",
-                "type": "string"
+                "additionalProperties": false,
+                "properties": {
+                  "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "numerator": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "numerator",
+                  "denominator"
+                ],
+                "type": "object"
               },
               "x": {
                 "type": "integer"
@@ -64,33 +129,10 @@
         "trace"
       ],
       "type": "object"
-    },
-    "witness": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "const": "evidence/answer.txt"
-          },
-          "sha256": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "type": "object"
-      },
-      "maxItems": 1,
-      "minItems": 1,
-      "type": "array"
     }
   },
   "required": [
-    "result",
-    "witness"
+    "result"
   ],
   "type": "object"
 }

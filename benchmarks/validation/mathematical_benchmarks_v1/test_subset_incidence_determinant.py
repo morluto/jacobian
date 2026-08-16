@@ -58,6 +58,30 @@ def test_rejects_boolean_sample_n(tmp_path: Path) -> None:
     assert rejected.reward == 0.0
 
 
+def test_accepts_reversed_same_cardinality_mask_order(tmp_path: Path) -> None:
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "reversed-masks")
+    submission = json.loads((app / "submission.json").read_text())
+    grouped: dict[int, list[tuple[int, int]]] = {}
+    for mask, weight in zip(
+        submission["result"]["mask_order"],
+        submission["result"]["diagonal_weights"],
+        strict=True,
+    ):
+        grouped.setdefault(mask.bit_count(), []).append((mask, weight))
+    order: list[int] = []
+    weights: list[int] = []
+    for cardinality in sorted(grouped):
+        for mask, weight in reversed(grouped[cardinality]):
+            order.append(mask)
+            weights.append(weight)
+    submission["result"]["mask_order"] = order
+    submission["result"]["diagonal_weights"] = weights
+    _fixtures._write_json(app / "submission.json", submission)
+    accepted = _verifier._run_verifier(task, app, logs)
+    assert accepted.details["correctness"] == 1.0
+    assert accepted.reward == 1.0
+
+
 def test_accepts_typed_general_formulas(tmp_path: Path) -> None:
     task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
     accepted = _verifier._run_verifier(task, app, logs)

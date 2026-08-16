@@ -13,8 +13,6 @@ from verifier_support import (
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
-    witness_list_is_bound,
     workspace_input_is_bound,
 )
 
@@ -55,13 +53,13 @@ def _expected_solutions(
     for exponents in itertools.product(*options):
         if (
             math.prod(
-                _contribution(p, a) for p, a in zip(primes, exponents, strict=True)
+                (_contribution(p, a) for p, a in zip(primes, exponents, strict=True))
             )
             != 48
         ):
             continue
         factors = [[p, a] for p, a in zip(primes, exponents, strict=True) if a]
-        result[math.prod(p**a for p, a in factors)] = factors
+        result[math.prod((p**a for p, a in factors))] = factors
     return result
 
 
@@ -74,7 +72,7 @@ def _candidate_certificate_valid(
             not isinstance(candidate_primes, list)
             or len(candidate_primes) != len(primes)
             or any(type(prime) is not int for prime in candidate_primes)
-            or set(candidate_primes) != set(primes)
+            or (set(candidate_primes) != set(primes))
         ):
             return False
     if "prime_power_options" in result:
@@ -89,9 +87,9 @@ def _candidate_certificate_valid(
                 not isinstance(option, dict)
                 or set(option) != {"prime", "exponents"}
                 or type(option["prime"]) is not int
-                or not isinstance(option["exponents"], list)
+                or (not isinstance(option["exponents"], list))
                 or any(type(exponent) is not int for exponent in option["exponents"])
-                or option["prime"] in observed_options
+                or (option["prime"] in observed_options)
             ):
                 return False
             observed_options[option["prime"]] = option["exponents"]
@@ -112,11 +110,11 @@ def _solutions_valid(
     for row in rows:
         if not isinstance(row, dict) or set(row) != {"n", "factorization", "totient"}:
             return None
-        n, factors, totient = row["n"], row["factorization"], row["totient"]
+        n, factors, totient = (row["n"], row["factorization"], row["totient"])
         if (
             type(n) is not int
             or type(totient) is not int
-            or not isinstance(factors, list)
+            or (not isinstance(factors, list))
         ):
             return None
         if n not in expected:
@@ -127,9 +125,9 @@ def _solutions_valid(
                 not isinstance(factor, list)
                 or len(factor) != 2
                 or any(type(value) is not int for value in factor)
-                or factor[0] in normalized_factors
-                or factor[0] < 2
-                or factor[1] < 1
+                or (factor[0] in normalized_factors)
+                or (factor[0] < 2)
+                or (factor[1] < 1)
             ):
                 return None
             normalized_factors[factor[0]] = factor[1]
@@ -137,8 +135,8 @@ def _solutions_valid(
         if (
             n in observed
             or normalized_factors != expected_factors
-            or math.prod(p**a for p, a in normalized_factors.items()) != n
-            or totient != 48
+            or math.prod((p**a for p, a in normalized_factors.items())) != n
+            or (totient != 48)
         ):
             return None
         observed[n] = expected[n]
@@ -158,20 +156,8 @@ def mathematics(result: Any) -> bool:
     return (
         observed == expected
         and type(result["accepted_count"]) is int
-        and result["accepted_count"] == len(expected)
+        and (result["accepted_count"] == len(expected))
     )
-
-
-def _json_equal(a: Any, b: Any) -> bool:
-    if type(a) is not type(b):
-        return False
-    if isinstance(a, dict):
-        return set(a) == set(b) and all(_json_equal(a[k], b[k]) for k in a)
-    if isinstance(a, list):
-        return len(a) == len(b) and all(
-            _json_equal(x, y) for x, y in zip(a, b, strict=True)
-        )
-    return a == b
 
 
 def _raw() -> dict[str, Any] | None:
@@ -196,46 +182,14 @@ def main() -> None:
     contract = bool(submission)
     raw = _raw()
     math_ok = bool(isinstance(raw, dict) and mathematics(raw.get("result")))
-    evidence_ok = bool(
-        isinstance(raw, dict)
-        and witness_list_is_bound(raw.get("witness"), max_bytes=None)
-    )
-    payload = (
-        read_evidence_json(
-            raw["witness"][0],
-            expected_path="evidence/answer.json",
-            max_bytes=None,
-        )
-        if evidence_ok
-        else None
-    )
-    try:
-        evidence_ok = bool(
-            isinstance(payload, dict)
-            and set(payload) == {"schema_version", "task_id", "result"}
-            and payload.get("schema_version") == "1"
-            and payload.get("task_id") == TASK_ID
-            and _json_equal(payload.get("result"), raw.get("result"))
-        )
-    except RecursionError:
-        evidence_ok = False
     values = {
         "input_binding": float(bound),
         "protocol": float(bool(contract)),
         "correctness": float(math_ok),
         "mathematics": float(math_ok),
-        "witness_validity": float(evidence_ok),
     }
     values["aggregate_reward"] = float(
-        all(
-            values[key]
-            for key in (
-                "input_binding",
-                "protocol",
-                "correctness",
-                "witness_validity",
-            )
-        )
+        all(values[key] for key in ("input_binding", "protocol", "correctness"))
     )
     values["reward"] = values["aggregate_reward"]
     path = Path("/logs/verifier")
@@ -259,7 +213,6 @@ if __name__ == "__main__":
                     "input_binding": 0.0,
                     "correctness": 0.0,
                     "mathematics": 0.0,
-                    "witness_validity": 0.0,
                     "aggregate_reward": 0.0,
                     "reward": 0.0,
                     "error": type(exc).__name__,

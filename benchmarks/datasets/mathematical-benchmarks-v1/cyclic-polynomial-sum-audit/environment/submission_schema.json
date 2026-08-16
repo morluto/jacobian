@@ -23,8 +23,21 @@
       "type": "object"
     },
     "rational_string": {
-      "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
-      "type": "string"
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -111,33 +124,10 @@
         "excluded_branch"
       ],
       "type": "object"
-    },
-    "witness": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "const": "evidence/cyclic-elimination-certificate.json"
-          },
-          "sha256": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "type": "object"
-      },
-      "maxItems": 1,
-      "minItems": 1,
-      "type": "array"
     }
   },
   "required": [
-    "result",
-    "witness"
+    "result"
   ],
   "type": "object"
 }

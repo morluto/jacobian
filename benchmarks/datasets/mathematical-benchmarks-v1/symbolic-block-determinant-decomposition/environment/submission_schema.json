@@ -9,8 +9,21 @@
       "type": "array"
     },
     "rational": {
-      "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
-      "type": "string"
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "numerator": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
     },
     "row3": {
       "items": {
@@ -45,7 +58,39 @@
           "type": "array"
         },
         "determinant_identity": {
-          "const": "det(C)=det(A-B)^2*det(A+2B)"
+          "additionalProperties": false,
+          "properties": {
+            "factors": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "exponent": {
+                    "maximum": 8,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "matrix": {
+                    "enum": [
+                      "A-B",
+                      "A+2B"
+                    ]
+                  }
+                },
+                "required": [
+                  "matrix",
+                  "exponent"
+                ],
+                "type": "object"
+              },
+              "maxItems": 8,
+              "minItems": 1,
+              "type": "array"
+            }
+          },
+          "required": [
+            "factors"
+          ],
+          "type": "object"
         },
         "invertibility_assumption": {
           "const": "NOT_REQUIRED_FOR_POLYNOMIAL_IDENTITY"

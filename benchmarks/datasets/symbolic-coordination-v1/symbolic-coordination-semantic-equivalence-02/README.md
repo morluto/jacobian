@@ -6,7 +6,7 @@ Assess one exact polynomial-map claim in the semantic-equivalence pilot family.
 
 - family: `semantic-equivalence`
 - case version: `symbolic-coordination-v1/pilot-1`
-- generator: `symbolic-coordination-pilot-generator@1`
+- generator: `symbolic-coordination-pilot-generator@2`
 - fixture digest: `sha256:08e00dc4d5685f0fb8e2c93e5f5396b79aa00aa8fee2a49964777e36cba96ef6`
 - note: Affine duplicate terms and renamed source/target variables.
 

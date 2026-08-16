@@ -1,29 +1,68 @@
 {
   "result": {
-    "c": "3",
-    "center": "4",
+    "c": {
+      "denominator": 1,
+      "numerator": 3
+    },
+    "center": {
+      "denominator": 1,
+      "numerator": 4
+    },
     "circle_coefficients": [
-      "1",
-      "1",
-      "-8",
-      "12"
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": 1
+      },
+      {
+        "denominator": 1,
+        "numerator": -8
+      },
+      {
+        "denominator": 1,
+        "numerator": 12
+      }
     ],
     "distance_coefficients": [
-      "-3",
-      "-3",
-      "24",
-      "-36"
+      {
+        "denominator": 1,
+        "numerator": -3
+      },
+      {
+        "denominator": 1,
+        "numerator": -3
+      },
+      {
+        "denominator": 1,
+        "numerator": 24
+      },
+      {
+        "denominator": 1,
+        "numerator": -36
+      }
     ],
-    "k": "2",
-    "multiplier": "-3",
-    "p": "2",
-    "q": "6",
-    "radius": "2"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:8d12f081c3635b68270b883f50f46b4a215c26b84961226697a695658514ce05"
+    "k": {
+      "denominator": 1,
+      "numerator": 2
+    },
+    "multiplier": {
+      "denominator": 1,
+      "numerator": -3
+    },
+    "p": {
+      "denominator": 1,
+      "numerator": 2
+    },
+    "q": {
+      "denominator": 1,
+      "numerator": 6
+    },
+    "radius": {
+      "denominator": 1,
+      "numerator": 2
     }
-  ]
+  }
 }

@@ -10,16 +10,37 @@
     },
     "boundary_family": {
       "attained_for_positive_parameter": false,
-      "limit": "1/4",
+      "limit": {
+        "denominator": 4,
+        "numerator": 1
+      },
       "other_variables": [
         "a",
         "b"
       ],
-      "parameter": "t->0+",
+      "parameter": {
+        "side": "RIGHT",
+        "target": {
+          "denominator": 1,
+          "numerator": 0
+        },
+        "variable": "t"
+      },
       "vanishing_variable": "c"
     },
     "certificate": {
-      "identity_scope": "a+b+c=1; a,b,c>0",
+      "identity_scope": {
+        "kind": "POSITIVE_SIMPLEX",
+        "sum": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "variables": [
+          "a",
+          "b",
+          "c"
+        ]
+      },
       "schur_ordering": [
         "a",
         "b",
@@ -33,16 +54,78 @@
     },
     "high_regime": {
       "attainment": "ATTAINED_ONLY_AT_THRESHOLD; INFIMUM_ONLY_ABOVE_THRESHOLD",
-      "bound": "1/4",
-      "condition": "d>=15/4",
-      "remainder_coefficient": "d-15/4"
+      "bound": {
+        "denominator": 4,
+        "numerator": 1
+      },
+      "condition": {
+        "bound": {
+          "denominator": 4,
+          "numerator": 15
+        },
+        "relation": "GE",
+        "variable": "d"
+      },
+      "remainder_coefficient": {
+        "coefficient": {
+          "denominator": 1,
+          "numerator": 1
+        },
+        "constant": {
+          "denominator": 4,
+          "numerator": -15
+        },
+        "variable": "d"
+      }
     },
     "low_regime": {
-      "bound": "1/9+d/27",
-      "condition": "0<d<=15/4",
+      "bound": {
+        "coefficient": {
+          "denominator": 27,
+          "numerator": 1
+        },
+        "constant": {
+          "denominator": 9,
+          "numerator": 1
+        },
+        "variable": "d"
+      },
+      "condition": {
+        "left": {
+          "denominator": 1,
+          "numerator": 0
+        },
+        "left_closed": false,
+        "right": {
+          "denominator": 4,
+          "numerator": 15
+        },
+        "right_closed": true,
+        "variable": "d"
+      },
       "interpolation": {
-        "schur_weight": "4*d/15",
-        "tangent_weight": "1-4*d/15"
+        "schur_weight": {
+          "coefficient": {
+            "denominator": 15,
+            "numerator": 4
+          },
+          "constant": {
+            "denominator": 1,
+            "numerator": 0
+          },
+          "variable": "d"
+        },
+        "tangent_weight": {
+          "coefficient": {
+            "denominator": 15,
+            "numerator": -4
+          },
+          "constant": {
+            "denominator": 1,
+            "numerator": 1
+          },
+          "variable": "d"
+        }
       }
     },
     "symmetric_witness": {

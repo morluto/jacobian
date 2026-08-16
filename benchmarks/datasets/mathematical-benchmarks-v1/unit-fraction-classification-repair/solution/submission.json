@@ -64,11 +64,5 @@
         "n": 42
       }
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/unit-fraction-repair.json",
-      "sha256": "sha256:d02fa8bff34e4a4591a0e6c003aec2ea8f93cb1bb2219bff16ff5132d43356d3"
-    }
-  ]
+  }
 }

@@ -207,11 +207,5 @@
       71,
       79
     ]
-  },
-  "witness": [
-    {
-      "path": "evidence/distinct-parity-certificate.json",
-      "sha256": "sha256:6894e93a55035490fa4d1dd735ae780d0884e57ba114a6cebb76feda8815edba"
-    }
-  ]
+  }
 }

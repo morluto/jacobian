@@ -89,8 +89,6 @@ def canonical_fraction(value: object) -> Fraction:
     if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         raise ValueError("invalid rational components")
     parsed = Fraction(numerator, denominator)
-    if parsed.numerator != numerator or parsed.denominator != denominator:
-        raise ValueError("noncanonical rational")
     return parsed
 
 

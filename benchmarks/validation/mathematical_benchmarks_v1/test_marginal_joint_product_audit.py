@@ -22,12 +22,23 @@ def _run(tmp_path: Path, mutate=None):
     return _verifier._run_verifier(task, app, logs)
 
 
+def _mass(value) -> dict[str, int]:
+    parsed = Fraction(value)
+    return {"numerator": parsed.numerator, "denominator": parsed.denominator}
+
+
+def _as_fraction(value) -> Fraction:
+    if isinstance(value, dict):
+        return Fraction(value["numerator"], value["denominator"])
+    return Fraction(value)
+
+
 def _product(entries):
     masses = defaultdict(Fraction)
     for entry in entries:
-        masses[entry["x"] * entry["y"]] += Fraction(entry["mass"])
+        masses[entry["x"] * entry["y"]] += _as_fraction(entry["mass"])
     return [
-        {"value": value, "mass": str(mass)}
+        {"value": value, "mass": _mass(mass)}
         for value, mass in sorted(masses.items())
         if mass
     ]
@@ -53,7 +64,7 @@ def test_zero_mass_product_entries_are_normalized(tmp_path: Path) -> None:
             left * right for left in (-3, -1, 2, 5) for right in (-3, -1, 2, 5)
         }
         missing = min(attainable - present)
-        entries.append({"value": missing, "mass": "0"})
+        entries.append({"value": missing, "mass": {"numerator": 0, "denominator": 1}})
         entries.sort(key=lambda entry: entry["value"])
 
     assert _run(tmp_path, mutate).reward == 1.0
@@ -64,17 +75,17 @@ def test_accepts_alternative_nonproduct_coupling(tmp_path: Path) -> None:
         entries = json.loads(json.dumps(submission["result"]["prelimit_joint"]))
         submission["result"]["limit_joint"] = entries
         by_pair = {(entry["x"], entry["y"]): entry for entry in entries}
-        by_pair[-3, -3]["mass"] = "3/200"
-        by_pair[-3, -1]["mass"] = "3/200"
-        by_pair[-1, -3]["mass"] = "3/200"
-        by_pair[-1, -1]["mass"] = "9/200"
+        by_pair[-3, -3]["mass"] = _mass("3/200")
+        by_pair[-3, -1]["mass"] = _mass("3/200")
+        by_pair[-1, -3]["mass"] = _mass("3/200")
+        by_pair[-1, -1]["mass"] = _mass("9/200")
         submission["result"]["limit_product_distribution"] = _product(entries)
         pre = {
-            entry["value"]: Fraction(entry["mass"])
+            entry["value"]: _as_fraction(entry["mass"])
             for entry in submission["result"]["prelimit_product_distribution"]
         }
         lim = {
-            entry["value"]: Fraction(entry["mass"])
+            entry["value"]: _as_fraction(entry["mass"])
             for entry in submission["result"]["limit_product_distribution"]
         }
         submission["result"]["witness_product_value"] = next(
@@ -88,36 +99,51 @@ def test_accepts_alternative_nonproduct_coupling(tmp_path: Path) -> None:
 
 def test_rejects_prelimit_dependence(tmp_path: Path) -> None:
     def mutate(submission):
-        submission["result"]["prelimit_joint"][0]["mass"] = "1/50"
+        submission["result"]["prelimit_joint"][0]["mass"] = _mass("1/50")
 
     assert _run(tmp_path, mutate).reward == 0.0
 
 
 def test_rejects_wrong_limit_marginal(tmp_path: Path) -> None:
     def mutate(submission):
-        submission["result"]["limit_joint"][0]["mass"] = "1/5"
+        submission["result"]["limit_joint"][0]["mass"] = _mass("1/5")
 
     assert _run(tmp_path, mutate).reward == 0.0
 
 
 def test_rejects_corrupted_product_pushforward(tmp_path: Path) -> None:
     def mutate(submission):
-        submission["result"]["limit_product_distribution"][0]["mass"] = "1/10"
+        submission["result"]["limit_product_distribution"][0]["mass"] = _mass("1/10")
 
     assert _run(tmp_path, mutate).reward == 0.0
 
 
-def test_rejects_noncanonical_mass(tmp_path: Path) -> None:
+def test_accepts_unreduced_mass(tmp_path: Path) -> None:
     def mutate(submission):
-        submission["result"]["prelimit_joint"][0]["mass"] = "2/200"
+        submission["result"]["prelimit_joint"][0]["mass"] = {
+            "numerator": 2,
+            "denominator": 200,
+        }
 
-    assert _run(tmp_path, mutate).reward == 0.0
+    assert _run(tmp_path, mutate).reward == 1.0
+
+
+def test_accepts_permuted_joint_rows(tmp_path: Path) -> None:
+    def mutate(submission):
+        submission["result"]["prelimit_joint"] = list(
+            reversed(submission["result"]["prelimit_joint"])
+        )
+        submission["result"]["limit_product_distribution"] = list(
+            reversed(submission["result"]["limit_product_distribution"])
+        )
+
+    assert _run(tmp_path, mutate).reward == 1.0
 
 
 def test_unattainable_zero_mass_product_value_is_rejected(tmp_path: Path) -> None:
     def mutate(submission):
         entries = submission["result"]["limit_product_distribution"]
-        entries.append({"value": 26, "mass": "0"})
+        entries.append({"value": 26, "mass": _mass("0")})
         entries.sort(key=lambda entry: entry["value"])
 
     assert _run(tmp_path, mutate).reward == 0.0

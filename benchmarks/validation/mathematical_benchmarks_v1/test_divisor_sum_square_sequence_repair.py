@@ -1,5 +1,3 @@
-import copy
-import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -7,7 +5,6 @@ from pathlib import Path
 from benchmarks.validation.mathematical_benchmarks_v1._verifier import _run_verifier
 
 TASK = "divisor-sum-square-sequence-repair"
-TASK_ID = f"jacobian/{TASK}"
 
 
 def _oracle():
@@ -23,19 +20,9 @@ def _oracle():
 def _verify(tmp_path, submission):
     task = Path("benchmarks/datasets/mathematical-benchmarks-v1") / TASK
     app, logs = tmp_path / "app", tmp_path / "logs"
-    (app / "evidence").mkdir(parents=True)
+    app.mkdir(parents=True)
     logs.mkdir(parents=True)
     shutil.copy2(task / "environment/input.json", app / "input.json")
-    evidence = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": submission["result"],
-    }
-    path = app / "evidence/sequence-construction.json"
-    path.write_text(json.dumps(evidence, separators=(",", ":")))
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-    )
     (app / "submission.json").write_text(json.dumps(submission))
     return _run_verifier(task, app, logs)
 
@@ -109,32 +96,6 @@ def test_probe_not_divisible_by_2p_rejected(tmp_path):
     assert _verify(tmp_path / "bad_threshold", sub).reward == 0
 
 
-def test_evidence_type_coercion_rejected(tmp_path):
-    """Evidence with bool/float values must not match integer submission result."""
-
-    sub = copy.deepcopy(_oracle())
-    task = Path("benchmarks/datasets/mathematical-benchmarks-v1") / TASK
-    app, logs = tmp_path / "app", tmp_path / "logs"
-    (app / "evidence").mkdir(parents=True)
-    logs.mkdir(parents=True)
-    shutil.copy2(task / "environment/input.json", app / "input.json")
-    evidence = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": copy.deepcopy(sub["result"]),
-    }
-    evidence["result"]["a_1"] = True
-    path = app / "evidence/sequence-construction.json"
-    path.write_text(json.dumps(evidence, separators=(",", ":")))
-    sub["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(sub))
-    result = _run_verifier(task, app, logs)
-    assert result.reward == 0.0
-    assert result.reward == 0
-
-
 def test_completeness_partial_rejected(tmp_path):
     """A PARTIAL completeness value must not earn reward."""
 
@@ -160,32 +121,4 @@ def test_legacy_threshold_rule_field_rejected(tmp_path):
     sub["result"]["threshold_rule"] = "n>=max(2,k)_implies_2^k_divides_a_n"
     result = _verify(tmp_path / "garbage_threshold", sub)
     assert result.details["correctness"] == 0.0
-    assert result.reward == 0
-
-
-def test_recursive_evidence_comparison_does_not_crash(tmp_path):
-    """Deeply nested evidence must fail closed without raising RecursionError."""
-
-    sub = copy.deepcopy(_oracle())
-    task = Path("benchmarks/datasets/mathematical-benchmarks-v1") / TASK
-    app, logs = tmp_path / "app", tmp_path / "logs"
-    (app / "evidence").mkdir(parents=True)
-    logs.mkdir(parents=True)
-    shutil.copy2(task / "environment/input.json", app / "input.json")
-    nested: list = []
-    for _ in range(500):
-        nested = [nested]
-    evidence = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": nested,
-    }
-    path = app / "evidence/sequence-construction.json"
-    path.write_text(json.dumps(evidence, separators=(",", ":")))
-    sub["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(sub))
-    result = _run_verifier(task, app, logs)
-    assert result.reward == 0.0
     assert result.reward == 0

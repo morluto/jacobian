@@ -157,11 +157,5 @@
       }
     },
     "vertical_scale": 2
-  },
-  "witness": [
-    {
-      "path": "evidence/disjoint-closed-distance-audit.json",
-      "sha256": "sha256:fc153631987c03b041d421a524255b04a698ce504c763edb23c3c564df1d80c5"
-    }
-  ]
+  }
 }

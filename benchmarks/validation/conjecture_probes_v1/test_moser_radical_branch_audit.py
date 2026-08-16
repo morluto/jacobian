@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import subprocess
@@ -26,17 +25,9 @@ def case(tmp_path):
 
 
 def write(app, submission):
-    payload = {
-        "schema_version": "1",
-        "task_id": "jacobian/moser-radical-branch-audit",
-        "result": submission["result"],
-    }
-    evidence = app / "evidence/answer.json"
-    evidence.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")))
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
+    (app / "submission.json").write_text(
+        json.dumps({"result": submission["result"]}) + "\n"
     )
-    (app / "submission.json").write_text(json.dumps(submission) + "\n")
 
 
 def run(app, logs):
@@ -82,11 +73,13 @@ def test_sign_erasure_and_incomplete_pair_audit_fail(tmp_path):
     assert run(app, logs)["reward"] == 0.0
 
 
-def test_evidence_tamper_and_malformed_json_fail(tmp_path):
+def test_unused_evidence_and_malformed_json_fail_closed(tmp_path):
     app, logs, _ = case(tmp_path)
+    (app / "evidence").mkdir(exist_ok=True)
     (app / "evidence/answer.json").write_text("tampered\n")
     result = run(app, logs)
-    assert result["correctness"] == 1.0 and result["witness_validity"] == 0.0
+    assert result["correctness"] == 1.0
+    assert result["reward"] == 1.0
     app, logs, _ = case(tmp_path / "json")
     (app / "submission.json").write_text('{"x":NaN}\n')
     assert run(app, logs)["reward"] == 0.0

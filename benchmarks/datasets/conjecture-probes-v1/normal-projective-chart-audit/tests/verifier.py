@@ -2,31 +2,21 @@ from __future__ import annotations
 
 import json
 import math
-import re
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verifier_support import (
-    aggregate_reward,
-    json_value_equal,
-    load_submission,
-    read_evidence_json,
-    witness_list_is_bound,
-    workspace_input_is_bound,
-)
-
-Q_PATTERN = re.compile(r"^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$")
-MAX_Q_CHARS = 128
+from verifier_support import load_submission, workspace_input_is_bound
 
 
 def _q(x):
-    if not isinstance(x, str) or len(x) > MAX_Q_CHARS or Q_PATTERN.fullmatch(x) is None:
+    if not isinstance(x, dict) or set(x) != {"numerator", "denominator"}:
         raise ValueError
-    q = Fraction(x)
-    if str(q) != x:
+    numerator = x["numerator"]
+    denominator = x["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         raise ValueError
-    return q
+    return Fraction(numerator, denominator)
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -52,16 +42,16 @@ def _finite_json_float(value: str) -> float:
 def _point(x):
     if not isinstance(x, list) or len(x) != 2:
         raise ValueError
-    return _q(x[0]), _q(x[1])
+    return (_q(x[0]), _q(x[1]))
 
 
 def _param(t):
-    return Fraction(2) * (1 - t * t) / (1 + t * t), Fraction(2) * t / (1 + t * t)
+    return (Fraction(2) * (1 - t * t) / (1 + t * t), Fraction(2) * t / (1 + t * t))
 
 
 def _residuals(point):
     x, y = point
-    return x * x / Fraction(4) + y * y - 1, -3 * x * y
+    return (x * x / Fraction(4) + y * y - 1, -3 * x * y)
 
 
 def mathematics(result):
@@ -81,17 +71,20 @@ def mathematics(result):
     except (ValueError, ZeroDivisionError):
         return False
     if (
-        params != [Fraction(-1), Fraction(0), Fraction(1)]
-        or points != sorted(_param(t) for t in params)
-        or projective != [Fraction(1), Fraction(0)]
-        or missing != (Fraction(-2), Fraction(0))
+        set(params) != {Fraction(-1), Fraction(0), Fraction(1)}
+        or len(params) != 3
+        or set(points) != {_param(t) for t in params}
+        or (len(points) != 3)
+        or (projective != [Fraction(1), Fraction(0)])
+        or (missing != (Fraction(-2), Fraction(0)))
     ):
         return False
-    expected_points = sorted([missing, *points])
+    expected_residuals = {point: _residuals(point) for point in {missing, *points}}
     records = result["footpoint_records"]
-    if not isinstance(records, list) or len(records) != 4:
+    if not isinstance(records, list) or len(records) != len(expected_residuals):
         return False
-    for row, point in zip(records, expected_points, strict=True):
+    submitted_residuals = {}
+    for row in records:
         if not isinstance(row, dict) or set(row) != {
             "point",
             "ellipse_residual",
@@ -104,9 +97,15 @@ def mathematics(result):
             nr = _q(row["normal_residual"])
         except (ValueError, ZeroDivisionError):
             return False
-        if submitted != point or (er, nr) != _residuals(point) or er or nr:
+        if submitted in submitted_residuals or (er, nr) != expected_residuals.get(
+            submitted, (None, None)
+        ):
             return False
-    return True
+        submitted_residuals[submitted] = (er, nr)
+    return submitted_residuals == expected_residuals and all(
+        not residual[0] and (not residual[1])
+        for residual in submitted_residuals.values()
+    )
 
 
 def _write(values):
@@ -120,34 +119,12 @@ def main():
     submission = load_submission(require_input_binding=False)
     protocol_ok = submission is not None
     math_ok = bool(protocol_ok and mathematics(submission.get("result")))
-    evidence_ok = bool(
-        protocol_ok and witness_list_is_bound(submission.get("witness"), max_bytes=None)
-    )
-    payload = (
-        read_evidence_json(
-            submission["witness"][0],
-            expected_path="evidence/answer.json",
-            max_bytes=None,
-        )
-        if evidence_ok
-        else None
-    )
-    evidence_ok = bool(
-        isinstance(payload, dict)
-        and payload.get("schema_version") == "1"
-        and json_value_equal(payload.get("result"), submission.get("result"))
-    )
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=evidence_ok,
-        protocol_ok=protocol_ok and input_bound,
-    )
+    reward = float(protocol_ok and input_bound and math_ok)
     _write(
         {
             "protocol_compliance": float(protocol_ok),
             "input_binding": float(input_bound),
             "correctness": float(math_ok),
-            "witness_validity": float(evidence_ok),
             "reward": reward,
         }
     )
@@ -162,7 +139,6 @@ if __name__ == "__main__":
                 "protocol_compliance": 0.0,
                 "input_binding": 0.0,
                 "correctness": 0.0,
-                "witness_validity": 0.0,
                 "reward": 0.0,
                 "error": type(exc).__name__,
             }

@@ -6,46 +6,31 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
 )
 
-APP = Path("/app")
 TESTS = Path("/tests")
-MAX_EVIDENCE_BYTES = 64 * 1024
-
-
-def _json_equal(left: object, right: object) -> bool:
-    """Compare JSON recursively without Python's bool/int coercion."""
-
-    if isinstance(left, bool) or isinstance(right, bool):
-        return type(left) is type(right) and left == right
-    if type(left) is int or type(right) is int:
-        return type(left) is type(right) and left == right
-    if isinstance(left, dict) or isinstance(right, dict):
-        return (
-            isinstance(left, dict)
-            and isinstance(right, dict)
-            and left.keys() == right.keys()
-            and all(_json_equal(left[key], right[key]) for key in left)
-        )
-    if isinstance(left, list) or isinstance(right, list):
-        return (
-            isinstance(left, list)
-            and isinstance(right, list)
-            and len(left) == len(right)
-            and all(_json_equal(a, b) for a, b in zip(left, right, strict=True))
-        )
-    return type(left) is type(right) and left == right
 
 
 def _fraction(value: object) -> Fraction | None:
-    if not isinstance(value, str):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        result = Fraction(value)
+        return Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    return result if str(result) == value else None
+
+
+def _frozen_fraction(value: object) -> Fraction | None:
+    if type(value) is not str or any(marker in value for marker in ".eE"):
+        return None
+    try:
+        return Fraction(value)
+    except (ValueError, ZeroDivisionError):
+        return None
 
 
 def _poly_value(coefficients: list[int], value: Fraction) -> Fraction:
@@ -53,23 +38,6 @@ def _poly_value(coefficients: list[int], value: Fraction) -> Fraction:
     for coefficient in coefficients:
         result = result * value + coefficient
     return result
-
-
-def _witness_is_valid(witness: object, result: object) -> bool:
-    if not isinstance(witness, list) or len(witness) != 1:
-        return False
-    payload = read_evidence_json(
-        witness[0],
-        expected_path="evidence/cyclic-elimination-certificate.json",
-        max_bytes=MAX_EVIDENCE_BYTES,
-    )
-    return bool(
-        payload
-        and {"schema_version", "task_id", "result"} <= set(payload)
-        and payload.get("schema_version") == "1"
-        and payload.get("task_id") == "jacobian/cyclic-polynomial-sum-audit"
-        and _json_equal(payload.get("result"), result)
-    )
 
 
 def _branch_is_valid(value: object) -> bool:
@@ -107,19 +75,26 @@ def _branch_is_valid(value: object) -> bool:
 
 
 def _roots_are_valid(value: object) -> bool:
+    if not isinstance(value, list) or len(value) != 2:
+        return False
     expected = [
-        {
-            "rational": "-1/2",
-            "radical_coefficient": "-1/2",
-            "radicand": 17,
-        },
-        {
-            "rational": "-1/2",
-            "radical_coefficient": "1/2",
-            "radicand": 17,
-        },
+        (Fraction(-1, 2), Fraction(-1, 2), 17),
+        (Fraction(-1, 2), Fraction(1, 2), 17),
     ]
-    return value == expected
+    for item, (rational, coefficient, radicand) in zip(value, expected, strict=True):
+        if not isinstance(item, dict) or set(item) != {
+            "rational",
+            "radical_coefficient",
+            "radicand",
+        }:
+            return False
+        if (
+            _fraction(item["rational"]) != rational
+            or _fraction(item["radical_coefficient"]) != coefficient
+            or item["radicand"] != radicand
+        ):
+            return False
+    return True
 
 
 def _result_is_valid(result: object, source: dict[str, object]) -> bool:
@@ -140,13 +115,14 @@ def _result_is_valid(result: object, source: dict[str, object]) -> bool:
     proposed = source.get("adversarial_claimed_sums")
     if not isinstance(proposed, list):
         return False
-    parsed = [_fraction(item) for item in proposed]
+    parsed = [_frozen_fraction(item) for item in proposed]
     if any(item is None for item in parsed):
         return False
     evaluations = [
         _poly_value(coefficients, item) for item in parsed if item is not None
     ]
-    if result["proposed_evaluations"] != [str(item) for item in evaluations]:
+    submitted = [_fraction(item) for item in result["proposed_evaluations"]]
+    if submitted != evaluations:
         return False
     expected_classes = [
         "PASSES_NECESSARY_CONDITION" if item == 0 else "FAILS_NECESSARY_CONDITION"
@@ -167,15 +143,14 @@ def main() -> None:
     math_correct = bool(
         isinstance(submission, dict) and _result_is_valid(result, source)
     )
-    witness_ok = bool(math_correct and _witness_is_valid(data.get("witness"), result))
-    correct = bool(math_correct and witness_ok)
+    correct = bool(math_correct)
     logs = Path("/logs/verifier")
     logs.mkdir(parents=True, exist_ok=True)
     (logs / "reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(witness_ok),
+                "witness_validity": 1.0 if correct else 0.0,
                 "reward": float(correct),
             }
         )

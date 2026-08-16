@@ -12,13 +12,16 @@ E = Path("/tests")
 
 
 def _fraction(text):
-    if not isinstance(text, str):
+    if not isinstance(text, dict) or set(text) != {"numerator", "denominator"}:
+        return None
+    numerator = text["numerator"]
+    denominator = text["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return None
     try:
-        value = Fraction(text)
+        return Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    return value if str(value) == text else None
 
 
 def _model(value, *, intended, proposed, bound, lower, upper):

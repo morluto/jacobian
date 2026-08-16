@@ -32,11 +32,5 @@
     "missing_assumption": "ALL_FACTORS_NONEMPTY",
     "product_cardinality": 0,
     "product_is_hausdorff": true
-  },
-  "witness": [
-    {
-      "path": "evidence/product-hausdorff-audit.json",
-      "sha256": "sha256:433c64f677ed868fd9e1f5321dbdcdf02347b3018a86c85f07c2b6679368bc5a"
-    }
-  ]
+  }
 }

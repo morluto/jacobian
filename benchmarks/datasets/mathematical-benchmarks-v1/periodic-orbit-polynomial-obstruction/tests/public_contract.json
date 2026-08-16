@@ -1,20 +1,5 @@
 {
-  "witness": {
-    "allowed_paths": [
-      "evidence/periodic-orbit-certificate.json"
-    ],
-    "digest_pattern": "^sha256:[0-9a-f]{64}$",
-    "max_items": 1,
-    "media_types": [
-      "application/json"
-    ],
-    "min_items": 1,
-    "payload_shape": null
-  },
-  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.",
-  "required_witness_filenames": [
-    "evidence/periodic-orbit-certificate.json"
-  ],
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
   "schema_definitions": {},
   "schema_version": "1",
   "submission_path": "/app/submission.json",
@@ -209,33 +194,10 @@
           "polynomial_identity_step"
         ],
         "type": "object"
-      },
-      "witness": {
-        "items": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "const": "evidence/periodic-orbit-certificate.json"
-            },
-            "sha256": {
-              "pattern": "^sha256:[0-9a-f]{64}$",
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "sha256"
-          ],
-          "type": "object"
-        },
-        "maxItems": 1,
-        "minItems": 1,
-        "type": "array"
       }
     },
     "required": [
-      "result",
-      "witness"
+      "result"
     ],
     "type": "object"
   },

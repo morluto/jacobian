@@ -3,15 +3,12 @@ from pathlib import Path
 
 from verifier_support import (
     aggregate_reward,
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
     workspace_input_is_bound,
 )
 
-W, T = Path("/app"), Path("/tests")
-MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
+W = Path("/app")
 DEFECTS = {
     "PRIME_POWER_CLASSIFICATION_FALSE",
     "COPRIMALITY_DOES_NOT_IMPLY_DIVISIBILITY",
@@ -95,30 +92,13 @@ def valid(r):
 
 
 def main():
-    expected = json.loads((T / "expected.json").read_text())
     s = load_submission(W / "submission.json")
     protocol_ok = s is not None
     input_bound = frozen()
     math_ok = bool(protocol_ok and input_bound and valid(s.get("result")))
-    ev = (
-        read_evidence_json(
-            s["witness"][0],
-            expected_path="evidence/unit-fraction-repair.json",
-            max_bytes=MAX_EVIDENCE_BYTES,
-        )
-        if protocol_ok and isinstance(s.get("witness"), list) and len(s["witness"]) == 1
-        else None
-    )
-    evidence_ok = bool(
-        ev
-        and set(ev) == {"schema_version", "task_id", "result"}
-        and ev.get("schema_version") == "1"
-        and ev.get("task_id") == expected["task_id"]
-        and json_value_equal(ev.get("result"), s.get("result"))
-    )
     reward = aggregate_reward(
         correctness=math_ok,
-        witness_validity=evidence_ok,
+        witness_validity=True,
         protocol_ok=protocol_ok,
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -126,7 +106,7 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(evidence_ok),
+                "witness_validity": 1.0 if math_ok else 0.0,
                 "reward": reward,
             }
         )

@@ -44,6 +44,19 @@ def monomial(exponents, coefficient=1):
     return {tuple(exponents): Fraction(coefficient)}
 
 
+def _q(value):
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        return None
+    try:
+        return Fraction(numerator, denominator)
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
 def parse_polynomial(value):
     if not isinstance(value, list) or not value:
         return None
@@ -51,11 +64,8 @@ def parse_polynomial(value):
     for term in value:
         if not isinstance(term, dict) or set(term) != {"coefficient", "exponents"}:
             return None
-        try:
-            coefficient = Fraction(term["coefficient"])
-        except (ValueError, ZeroDivisionError):
-            return None
-        if str(coefficient) != term["coefficient"] or not coefficient:
+        coefficient = _q(term["coefficient"])
+        if coefficient is None or not coefficient:
             return None
         exponents = term["exponents"]
         if (

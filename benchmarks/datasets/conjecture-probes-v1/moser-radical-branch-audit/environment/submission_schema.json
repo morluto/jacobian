@@ -2,8 +2,21 @@
   "$defs": {
     "distance": {
       "items": {
-        "pattern": "^-?(0|[1-9][0-9]*)(/[1-9][0-9]*)?$",
-        "type": "string"
+        "additionalProperties": false,
+        "properties": {
+          "denominator": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "numerator": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numerator",
+          "denominator"
+        ],
+        "type": "object"
       },
       "maxItems": 2,
       "minItems": 2,
@@ -88,33 +101,10 @@
         "corrected_edges"
       ],
       "type": "object"
-    },
-    "witness": {
-      "items": {
-        "additionalProperties": false,
-        "properties": {
-          "path": {
-            "const": "evidence/answer.json"
-          },
-          "sha256": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "sha256"
-        ],
-        "type": "object"
-      },
-      "maxItems": 1,
-      "minItems": 1,
-      "type": "array"
     }
   },
   "required": [
-    "result",
-    "witness"
+    "result"
   ],
   "type": "object"
 }

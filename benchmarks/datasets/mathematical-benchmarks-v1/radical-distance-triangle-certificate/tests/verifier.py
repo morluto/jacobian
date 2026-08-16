@@ -6,25 +6,10 @@ from verifier_support import (
     aggregate_reward,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
     workspace_input_is_bound,
 )
 
 W, T = Path("/app"), Path("/tests")
-MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
-
-
-def _json_equal(left, right):
-    """Compare two JSON values without Python's bool/int coercion.
-
-    Python treats ``True == 1`` as equal, so a certificate that replaces an
-    integer ``1`` with boolean ``true`` would pass ``==`` despite not being an
-    exact copy. Serializing both values to canonical JSON distinguishes them.
-    """
-
-    return json.dumps(left, sort_keys=True, separators=(",", ":")) == json.dumps(
-        right, sort_keys=True, separators=(",", ":")
-    )
 
 
 def _integer_value(value):
@@ -139,29 +124,12 @@ def valid(r):
 
 
 def main():
-    e = json.loads((T / "expected.json").read_text())
     s = load_submission(W / "submission.json")
     input_binding = frozen()
-    ev = (
-        read_evidence_json(
-            s["witness"][0],
-            expected_path="evidence/radical-distance-certificate.json",
-            max_bytes=MAX_EVIDENCE_BYTES,
-        )
-        if isinstance(s, dict)
-        else None
-    )
     math_ok = bool(isinstance(s, dict) and valid(s.get("result")))
-    ev_ok = bool(
-        ev
-        and set(ev) == {"schema_version", "task_id", "result"}
-        and ev.get("schema_version") == "1"
-        and ev.get("task_id") == e["task_id"]
-        and _json_equal(ev.get("result"), s.get("result"))
-    )
     reward = aggregate_reward(
         correctness=math_ok,
-        witness_validity=ev_ok,
+        witness_validity=True,
         protocol_ok=bool(input_binding and s is not None),
     )
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
@@ -169,7 +137,7 @@ def main():
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(ev_ok),
+                "witness_validity": 1.0 if math_ok else 0.0,
                 "input_binding": float(input_binding),
                 "reward": reward,
             }

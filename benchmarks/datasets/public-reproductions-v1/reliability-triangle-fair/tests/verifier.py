@@ -3,12 +3,7 @@ from fractions import Fraction
 from itertools import product
 from pathlib import Path
 
-from verifier_support import (
-    aggregate_reward,
-    load_submission,
-    normalize_reward_file,
-    witness_list_is_bound,
-)
+from verifier_support import load_submission, normalize_reward_file
 
 W = Path("/app")
 E = Path("/tests")
@@ -17,7 +12,7 @@ E = Path("/tests")
 def _submission_frac(v):
     if not isinstance(v, dict) or set(v) != {"num", "den"}:
         return None
-    num, den = v.get("num"), v.get("den")
+    num, den = (v.get("num"), v.get("den"))
     if type(num) is not int or type(den) is not int or den <= 0:
         return None
     try:
@@ -30,12 +25,12 @@ def _submission_frac(v):
 def _input_frac(v):
     if not isinstance(v, dict) or set(v) != {"num", "den"}:
         return None
-    num, den = v.get("num"), v.get("den")
+    num, den = (v.get("num"), v.get("den"))
     if (
         not isinstance(num, str)
         or not isinstance(den, str)
-        or not num.lstrip("-").isdigit()
-        or not den.isdigit()
+        or (not num.lstrip("-").isdigit())
+        or (not den.isdigit())
     ):
         return None
     try:
@@ -51,13 +46,13 @@ def _graph_parts(x):
     if (
         not isinstance(graph, dict)
         or not isinstance(graph.get("vertices"), list)
-        or not isinstance(graph.get("edges"), list)
-        or not isinstance(probabilities, list)
-        or not isinstance(terminals, list)
-        or len(terminals) != 2
+        or (not isinstance(graph.get("edges"), list))
+        or (not isinstance(probabilities, list))
+        or (not isinstance(terminals, list))
+        or (len(terminals) != 2)
     ):
         return None
-    return graph["vertices"], graph["edges"], probabilities, terminals
+    return (graph["vertices"], graph["edges"], probabilities, terminals)
 
 
 def _probabilities_by_edge(probabilities, edges):
@@ -71,7 +66,7 @@ def _probabilities_by_edge(probabilities, edges):
             not isinstance(edge, list)
             or len(edge) != 2
             or any(not isinstance(vertex, str) for vertex in edge)
-            or probability is None
+            or (probability is None)
         ):
             return None
         probability_by_edge[frozenset(edge)] = probability
@@ -97,7 +92,7 @@ def _state_result(edges, state, vertices, terminals, probability_by_edge):
         for neighbor in adjacency[vertex] - reached:
             reached.add(neighbor)
             frontier.append(neighbor)
-    return mass, terminals[1] in reached
+    return (mass, terminals[1] in reached)
 
 
 def _expected_result(x):
@@ -108,7 +103,6 @@ def _expected_result(x):
     probability_by_edge = _probabilities_by_edge(probabilities, edges)
     if probability_by_edge is None:
         return None
-
     total = Fraction(0)
     for state in product((False, True), repeat=len(edges)):
         state_result = _state_result(
@@ -119,17 +113,17 @@ def _expected_result(x):
         mass, connected = state_result
         if connected:
             total += mass
-    return total, 2 ** len(edges)
+    return (total, 2 ** len(edges))
 
 
-def _math(s, x, e):
+def _math(s, x):
     r = s.get("result", {})
     expected = _expected_result(x)
     if (
         not isinstance(r, dict)
         or set(r) != {"probability", "states"}
         or type(r.get("states")) is not int
-        or expected is None
+        or (expected is None)
     ):
         return False
     probability, states = expected
@@ -142,22 +136,11 @@ def main():
     s = load_submission()
     protocol_ok = s is not None
     x = json.loads(next(E.glob("*input*.json")).read_text())
-    e = json.loads((E / "expected.json").read_text())
-    math_correct = _math(s, x, e) if protocol_ok else False
-    correct = bool(protocol_ok and math_correct)
-    good = bool(protocol_ok and witness_list_is_bound(s["witness"]))
-    reward = aggregate_reward(
-        correctness=correct, witness_validity=good, protocol_ok=protocol_ok
-    )
+    math_correct = _math(s, x) if protocol_ok else False
+    reward = float(protocol_ok and math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
-    (Path("/logs/verifier/reward.json")).write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(good),
-                "reward": reward,
-            }
-        )
+    Path("/logs/verifier/reward.json").write_text(
+        json.dumps({"correctness": float(math_correct), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

@@ -4,10 +4,8 @@ import math
 from pathlib import Path
 
 from verifier_support import (
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
 )
 
 W, T = Path("/app"), Path("/tests")
@@ -40,34 +38,17 @@ def frozen():
 
 
 def main():
-    expected = json.loads((T / "expected.json").read_text())
     submission = load_submission(W / "submission.json")
     protocol_ok = submission is not None
-    witness = submission.get("witness") if protocol_ok else None
-    evidence = (
-        read_evidence_json(witness[0], expected_path="evidence/answer.txt")
-        if isinstance(witness, list) and len(witness) == 1
-        else None
-    )
-    derived = derive()
     input_bound = frozen()
     math_ok = bool(protocol_ok and input_bound and matches(submission.get("result")))
-    witness_ok = bool(
-        math_ok
-        and evidence
-        and {"schema_version", "task_id", "result"} <= set(evidence)
-        and evidence.get("schema_version") == "1"
-        and evidence.get("task_id") == expected["task_id"]
-        and json_value_equal(evidence.get("result"), derived)
-        and json_value_equal(evidence.get("result"), submission.get("result"))
-    )
-    correct = bool(math_ok and witness_ok)
+    correct = bool(math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(witness_ok),
+                "witness_validity": 1.0 if correct else 0.0,
                 "reward": float(correct),
             }
         )

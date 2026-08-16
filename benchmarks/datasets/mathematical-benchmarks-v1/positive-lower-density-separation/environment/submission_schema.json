@@ -64,7 +64,36 @@
           "type": "integer"
         },
         "count_formula": {
-          "const": "(b^(2m+2)-1)/(b+1)"
+          "additionalProperties": false,
+          "properties": {
+            "base_variable": {
+              "const": "b"
+            },
+            "denominator_offset": {
+              "type": "integer"
+            },
+            "level_variable": {
+              "const": "m"
+            },
+            "numerator_constant": {
+              "type": "integer"
+            },
+            "numerator_exponent_coefficient": {
+              "type": "integer"
+            },
+            "numerator_exponent_offset": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "base_variable",
+            "level_variable",
+            "numerator_exponent_coefficient",
+            "numerator_exponent_offset",
+            "numerator_constant",
+            "denominator_offset"
+          ],
+          "type": "object"
         },
         "family": {
           "const": "ALTERNATING_GEOMETRIC_BLOCKS"

@@ -1,7 +1,14 @@
 {
   "result": {
     "base": 3,
-    "count_formula": "(b^(2m+2)-1)/(b+1)",
+    "count_formula": {
+      "base_variable": "b",
+      "denominator_offset": 1,
+      "level_variable": "m",
+      "numerator_constant": -1,
+      "numerator_exponent_coefficient": 2,
+      "numerator_exponent_offset": 2
+    },
     "family": "ALTERNATING_GEOMETRIC_BLOCKS",
     "levels": [
       {

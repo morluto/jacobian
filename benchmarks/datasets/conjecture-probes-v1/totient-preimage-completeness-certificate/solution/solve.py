@@ -1,19 +1,13 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import itertools
 import json
+from math import prod
 from pathlib import Path
 
-TASK_ID = "jacobian/totient-preimage-completeness-certificate"
 PRIMES = [2, 3, 5, 7, 13, 17]
 OPTIONS = [[0, 1, 2, 3, 4, 5], [0, 1, 2], [0, 1], [0, 1], [0, 1], [0, 1]]
-LIMITATIONS = [
-    "ONE_TARGET_TOTIENT_VALUE_48",
-    "EXACT_FINITE_PREIMAGE_CLASSIFICATION",
-    "NO_GLOBAL_CARMICHAEL_CONCLUSION",
-]
 
 
 def contribution(p: int, exponent: int) -> int:
@@ -27,14 +21,12 @@ def main() -> None:
     solutions = []
     for exponents in itertools.product(*OPTIONS):
         if (
-            __import__("math").prod(
-                contribution(p, a) for p, a in zip(PRIMES, exponents, strict=True)
-            )
+            prod(contribution(p, a) for p, a in zip(PRIMES, exponents, strict=True))
             != 48
         ):
             continue
         factors = [[p, a] for p, a in zip(PRIMES, exponents, strict=True) if a]
-        n = __import__("math").prod(p**a for p, a in factors)
+        n = prod(p**a for p, a in factors)
         solutions.append({"n": n, "factorization": factors, "totient": 48})
     result = {
         "candidate_primes": PRIMES,
@@ -46,25 +38,7 @@ def main() -> None:
         "solutions": sorted(solutions, key=lambda row: row["n"]),
         "accepted_count": len(solutions),
     }
-    payload = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": result,
-    }
-    evidence = root / "evidence/answer.json"
-    evidence.parent.mkdir(parents=True, exist_ok=True)
-    evidence.write_text(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
-    )
-    submission = {
-        "result": result,
-        "witness": [
-            {
-                "path": "evidence/answer.json",
-                "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
-            }
-        ],
-    }
+    submission = {"result": result}
     (root / "submission.json").write_text(json.dumps(submission, sort_keys=True) + "\n")
 
 

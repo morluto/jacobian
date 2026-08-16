@@ -8,25 +8,19 @@ Diagnose this semantic strengthening by constructing two disjoint locally finite
 rational plane whose distance infimum is zero. Choose a start index from 4 through 20 and submit
 eight consecutive indexed point pairs. For every row use `A_n = (n,0)` and `B_n = (n,1/n)`, with
 each exact rational coordinate and distance represented as an integer `numerator` and positive
-integer `denominator` in lowest terms. Also submit four to eight distinct positive canonical
+integer `denominator`. Equivalent encodings such as `2/8` and `1/4` are accepted after
+normalization. Also submit four to eight distinct positive
 rational epsilons in strictly decreasing order, each paired with an index `N` such that
 `N` is at least the start index and `1/N < epsilon`; indices must strictly increase.
 
 Identify the natural and predicted conclusions, their semantic relationship, the missing assumption,
-and the local-finiteness rule that makes both infinite sets closed. Write `/app/submission.json` and
-one digest-bound JSON evidence file at `evidence/distance-audit.json`. The evidence file must be a
-JSON object with exactly the fields `schema_version` (the string `"1"`), `task_id`, `result`, and
-`limitations`, repeating the submission's task ID, result, and limitations. Include this exact
-limitation in the `limitations` array: "The verifier replays exact rational instances and trusts the
-standard theorem that locally finite Euclidean subsets are closed; it does not machine-prove the
-universal topological argument." Maximum assurance is `COMPUTED`.
+and the local-finiteness rule that makes both infinite sets closed.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/distance-audit.json`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `application/json`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

@@ -62,11 +62,5 @@
       "coset_product_definition"
     ],
     "target_fact": "XY_EQ_YX"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:ff3ee9fa855d94709bd3f24eee36b3132ee9d50eb7b3f9aa75272cdae391014f"
-    }
-  ]
+  }
 }

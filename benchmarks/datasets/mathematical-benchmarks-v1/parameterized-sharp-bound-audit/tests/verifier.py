@@ -153,6 +153,116 @@ def _certificate_identities_hold(ordering: list[str]) -> bool:
     return not _sub(high_gap, high_decomposition)
 
 
+def _fraction_value(value: object) -> Fraction | None:
+    if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+        return None
+    numerator = value["numerator"]
+    denominator = value["denominator"]
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        return None
+    try:
+        return Fraction(numerator, denominator)
+    except (ValueError, ZeroDivisionError, OverflowError):
+        return None
+
+
+def _affine_in_d(value: object, constant: Fraction, coefficient: Fraction) -> bool:
+    if not isinstance(value, dict) or set(value) != {
+        "constant",
+        "coefficient",
+        "variable",
+    }:
+        return False
+    return (
+        value["variable"] == "d"
+        and _fraction_value(value["constant"]) == constant
+        and _fraction_value(value["coefficient"]) == coefficient
+    )
+
+
+def _simplex_scope(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != {"kind", "variables", "sum"}:
+        return False
+    variables = value["variables"]
+    return (
+        value["kind"] == "POSITIVE_SIMPLEX"
+        and isinstance(variables, list)
+        and set(variables) == {"a", "b", "c"}
+        and len(variables) == 3
+        and _fraction_value(value["sum"]) == Fraction(1)
+    )
+
+
+def _direction(value: object, variable: str, target: Fraction, side: str) -> bool:
+    if not isinstance(value, dict) or set(value) != {"variable", "target", "side"}:
+        return False
+    return (
+        value["variable"] == variable
+        and _fraction_value(value["target"]) == target
+        and value["side"] == side
+    )
+
+
+def _low_regime_is_valid(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != {
+        "condition",
+        "bound",
+        "interpolation",
+    }:
+        return False
+    condition = value["condition"]
+    interpolation = value["interpolation"]
+    if not isinstance(condition, dict) or set(condition) != {
+        "variable",
+        "left",
+        "left_closed",
+        "right",
+        "right_closed",
+    }:
+        return False
+    if not isinstance(interpolation, dict) or set(interpolation) != {
+        "tangent_weight",
+        "schur_weight",
+    }:
+        return False
+    return bool(
+        condition["variable"] == "d"
+        and _fraction_value(condition["left"]) == Fraction(0)
+        and condition["left_closed"] is False
+        and _fraction_value(condition["right"]) == Fraction(15, 4)
+        and condition["right_closed"] is True
+        and _affine_in_d(value["bound"], Fraction(1, 9), Fraction(1, 27))
+        and _affine_in_d(interpolation["tangent_weight"], Fraction(1), Fraction(-4, 15))
+        and _affine_in_d(interpolation["schur_weight"], Fraction(0), Fraction(4, 15))
+    )
+
+
+def _high_regime_is_valid(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != {
+        "condition",
+        "bound",
+        "remainder_coefficient",
+        "attainment",
+    }:
+        return False
+    condition = value["condition"]
+    if not isinstance(condition, dict) or set(condition) != {
+        "variable",
+        "relation",
+        "bound",
+    }:
+        return False
+    return bool(
+        condition["variable"] == "d"
+        and condition["relation"] == "GE"
+        and _fraction_value(condition["bound"]) == Fraction(15, 4)
+        and _fraction_value(value["bound"]) == Fraction(1, 4)
+        and _affine_in_d(value["remainder_coefficient"], Fraction(-15, 4), Fraction(1))
+        and value["attainment"]
+        == "ATTAINED_ONLY_AT_THRESHOLD; INFIMUM_ONLY_ABOVE_THRESHOLD"
+    )
+
+
 def _rational(value: object) -> Fraction | None:
     if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
         return None
@@ -181,7 +291,7 @@ def _certificate_is_valid(value: object) -> bool:
         and isinstance(ordering, list)
         and set(ordering) == {"a", "b", "c"}
         and len(ordering) == 3
-        and value["identity_scope"] == "a+b+c=1; a,b,c>0"
+        and _simplex_scope(value["identity_scope"])
         and _certificate_identities_hold(ordering)
     )
 
@@ -214,8 +324,8 @@ def _boundary_family_is_valid(value: object) -> bool:
         and isinstance(others, list)
         and len(others) == 2
         and set(others) == {"a", "b", "c"} - {vanishing}
-        and value["parameter"] == "t->0+"
-        and value["limit"] == "1/4"
+        and _direction(value["parameter"], "t", Fraction(0), "RIGHT")
+        and _fraction_value(value["limit"]) == Fraction(1, 4)
         and value["attained_for_positive_parameter"] is False
     )
 
@@ -256,23 +366,12 @@ def _result_is_valid(result: object, source: dict[str, Any]) -> bool:
         != "sha256:811d71c04f1be8345f05f1b0076af9189e8851eb2d98d5b4f557492eca0699fb"
     ):
         return False
-    if _rational(result["transition"]) != Fraction(15, 4):
+    if _fraction_value(result["transition"]) != Fraction(15, 4):
         return False
 
-    expected_low = {
-        "condition": "0<d<=15/4",
-        "bound": "1/9+d/27",
-        "interpolation": {"tangent_weight": "1-4*d/15", "schur_weight": "4*d/15"},
-    }
-    expected_high = {
-        "condition": "d>=15/4",
-        "bound": "1/4",
-        "remainder_coefficient": "d-15/4",
-        "attainment": "ATTAINED_ONLY_AT_THRESHOLD; INFIMUM_ONLY_ABOVE_THRESHOLD",
-    }
     return bool(
-        result["low_regime"] == expected_low
-        and result["high_regime"] == expected_high
+        _low_regime_is_valid(result["low_regime"])
+        and _high_regime_is_valid(result["high_regime"])
         and result["threshold_case"]
         == "BOTH_FORMULAS_AGREE_AND_SYMMETRIC_EQUALITY_IS_ATTAINED"
         and _certificate_is_valid(result["certificate"])

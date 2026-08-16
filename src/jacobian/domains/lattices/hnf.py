@@ -54,6 +54,7 @@ HERMITE_NORMAL_FORM_OPERATION: MathTool[
     run=compute_hermite_normal_form,
     tags=(
         "lattice",
+        "matrix",
         "integer",
         "hermite-normal-form",
     ),

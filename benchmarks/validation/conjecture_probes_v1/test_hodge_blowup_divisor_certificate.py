@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import subprocess
@@ -16,7 +15,7 @@ TASK = (
 
 
 def case(tmp_path):
-    app, logs = tmp_path / "app", tmp_path / "logs"
+    app, logs = (tmp_path / "app", tmp_path / "logs")
     app.mkdir(parents=True)
     logs.mkdir(parents=True)
     shutil.copy2(TASK / "environment/input.json", app / "input.json")
@@ -24,19 +23,15 @@ def case(tmp_path):
         [sys.executable, str(TASK / "solution/solve.py"), "--root", str(app)],
         check=True,
     )
-    return app, logs, json.loads((app / "submission.json").read_text())
+    return (app, logs, json.loads((app / "submission.json").read_text()))
 
 
 def write(app, s):
-    payload = {
-        "schema_version": "1",
-        "task_id": "jacobian/hodge-blowup-divisor-certificate",
-        "result": s["result"],
-    }
-    e = app / "evidence/answer.txt"
-    e.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
-    s["witness"][0]["sha256"] = "sha256:" + hashlib.sha256(e.read_bytes()).hexdigest()
-    (app / "submission.json").write_text(json.dumps(s) + "\n")
+    s = dict(s)
+    s.pop("witness", None)
+    (app / "submission.json").write_text(
+        __import__("json").dumps({"result": s["result"]}) + "\n"
+    )
 
 
 def run(app, logs):

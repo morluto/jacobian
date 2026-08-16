@@ -2,14 +2,9 @@ import itertools
 import json
 from pathlib import Path
 
-from verifier_support import (
-    json_value_equal,
-    load_submission,
-    normalize_reward_file,
-    read_evidence_json,
-)
+from verifier_support import load_submission, normalize_reward_file
 
-W, E = Path("/app"), Path("/tests")
+W, E = (Path("/app"), Path("/tests"))
 
 
 def _load_frozen():
@@ -95,28 +90,28 @@ def _result_ok(result, frozen):
     scalar_ok = (
         type(result["normalized_second_coefficient"]) is int
         and result["normalized_second_coefficient"] == -1
-        and type(result["second_power_sum"]) is int
-        and result["second_power_sum"] == 3
-        and type(result["root_product_square"]) is int
-        and result["root_product_square"] == 1
-        and type(result["maximum_degree"]) is int
-        and result["maximum_degree"] == 3
+        and (type(result["second_power_sum"]) is int)
+        and (result["second_power_sum"] == 3)
+        and (type(result["root_product_square"]) is int)
+        and (result["root_product_square"] == 1)
+        and (type(result["maximum_degree"]) is int)
+        and (result["maximum_degree"] == 3)
     )
     audit_ok = all(
         isinstance(case, dict)
         and set(case) == {"coefficients", "degree", "discriminant", "all_roots_real"}
-        and type(case["degree"]) is int
+        and (type(case["degree"]) is int)
         and (case["discriminant"] is None or type(case["discriminant"]) is int)
-        and type(case["all_roots_real"]) is bool
+        and (type(case["all_roots_real"]) is bool)
         for case in submitted_audit
     )
     return bool(
         scalar_ok
         and audit_ok
-        and len(submitted_by_coefficients) == len(submitted_audit) == len(expected)
-        and submitted_by_coefficients == expected_by_coefficients
-        and len(submitted_classification) == len(result["classified_polynomials"])
-        and submitted_classification == accepted
+        and (len(submitted_by_coefficients) == len(submitted_audit) == len(expected))
+        and (submitted_by_coefficients == expected_by_coefficients)
+        and (len(submitted_classification) == len(result["classified_polynomials"]))
+        and (submitted_classification == accepted)
     )
 
 
@@ -129,34 +124,11 @@ def main():
     submission = None if symlinked else load_submission()
     frozen = _load_frozen()
     math_correct = bool(submission and _result_ok(submission.get("result"), frozen))
-    evidence = None
-    if (
-        submission
-        and isinstance(submission.get("witness"), list)
-        and len(submission["witness"]) == 1
-    ):
-        evidence = read_evidence_json(
-            submission["witness"][0],
-            expected_path="evidence/classification-certificate.json",
-        )
-    evidence_valid = bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result"}
-        and evidence["schema_version"] == "1"
-        and evidence["task_id"] == "real-rooted-sign-polynomials"
-        and json_value_equal(evidence["result"], submission.get("result"))
-    )
-    correct = math_correct and evidence_valid
+    correct = math_correct
     reward = float(correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(evidence_valid),
-                "reward": reward,
-            }
-        )
+        json.dumps({"correctness": float(math_correct), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

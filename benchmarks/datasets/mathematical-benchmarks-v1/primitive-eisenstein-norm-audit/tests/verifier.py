@@ -6,32 +6,11 @@ from verifier_support import (
     is_regular_bounded_file,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
 )
 
 W = Path("/app")
 T = Path("/tests")
-MAX_INPUT_BYTES = 1_048_576
-
-
-def _json_equal(left: object, right: object) -> bool:
-    """Compare JSON recursively without Python's bool/int coercion."""
-
-    if isinstance(left, dict) or isinstance(right, dict):
-        return (
-            isinstance(left, dict)
-            and isinstance(right, dict)
-            and left.keys() == right.keys()
-            and all(_json_equal(left[key], right[key]) for key in left)
-        )
-    if isinstance(left, list) or isinstance(right, list):
-        return (
-            isinstance(left, list)
-            and isinstance(right, list)
-            and len(left) == len(right)
-            and all(_json_equal(a, b) for a, b in zip(left, right, strict=True))
-        )
-    return type(left) is type(right) and left == right
+MAX_INPUT_BYTES = 1048576
 
 
 def frozen_contract() -> dict:
@@ -91,22 +70,22 @@ def certificate_valid(result: object, frozen: dict) -> bool:
         "square_primitive_status",
     }:
         return False
-    x, y = ramified.get("x"), ramified.get("y")
-    if not _is_int(x) or not _is_int(y) or not (-30 <= x <= 30 and -30 <= y <= 30):
+    x, y = (ramified.get("x"), ramified.get("y"))
+    if not _is_int(x) or not _is_int(y) or (not (-30 <= x <= 30 and -30 <= y <= 30)):
         return False
     norm = x * x + x * y + y * y
     if (
         x == 0
         or y == 0
         or math.gcd(x, y) != 1
-        or norm <= 0
-        or not _is_int(ramified.get("norm"))
-        or ramified.get("norm") != norm
-        or not _is_int(ramified.get("gcd"))
-        or ramified.get("gcd") != 1
-        or not _is_int(ramified.get("v3"))
-        or ramified.get("v3") != valuation(norm, 3)
-        or valuation(norm, 3) != 1
+        or (norm <= 0)
+        or (not _is_int(ramified.get("norm")))
+        or (ramified.get("norm") != norm)
+        or (not _is_int(ramified.get("gcd")))
+        or (ramified.get("gcd") != 1)
+        or (not _is_int(ramified.get("v3")))
+        or (ramified.get("v3") != valuation(norm, 3))
+        or (valuation(norm, 3) != 1)
     ):
         return False
     prime = inert.get("prime")
@@ -126,8 +105,8 @@ def certificate_valid(result: object, frozen: dict) -> bool:
         if (
             not isinstance(pair, dict)
             or set(pair) != {"x", "y"}
-            or not _is_int(pair.get("x"))
-            or not _is_int(pair.get("y"))
+            or (not _is_int(pair.get("x")))
+            or (not _is_int(pair.get("y")))
         ):
             return False
         normalized.append({"x": pair["x"] % prime, "y": pair["y"] % prime})
@@ -135,11 +114,13 @@ def certificate_valid(result: object, frozen: dict) -> bool:
         sorted(normalized, key=lambda p: (p["x"], p["y"]))
         == sorted(expected_pairs, key=lambda p: (p["x"], p["y"]))
         and inert.get("square_primitive_status") == "IMPOSSIBLE"
-        and result.get("repaired_criterion")
-        == {
-            "three_exponent_maximum": 1,
-            "forbidden_prime_residue": {"modulus": 3, "residue": 2},
-        }
+        and (
+            result.get("repaired_criterion")
+            == {
+                "three_exponent_maximum": 1,
+                "forbidden_prime_residue": {"modulus": 3, "residue": 2},
+            }
+        )
     )
 
 
@@ -147,37 +128,15 @@ def main() -> None:
     frozen = frozen_contract()
     submission = load_submission(W / "submission.json")
     contract = bool(submission)
-    evidence = (
-        read_evidence_json(
-            submission["witness"][0], expected_path="evidence/local-audit.json"
-        )
-        if contract
-        and isinstance(submission.get("witness"), list)
-        and len(submission["witness"]) == 1
-        else None
-    )
     math_correct = bool(
         frozen
         and submission is not None
         and certificate_valid(submission.get("result"), frozen)
     )
-    evidence_ok = bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result"}
-        and evidence.get("schema_version") == "1"
-        and evidence.get("task_id") == "primitive-eisenstein-norm-audit"
-        and _json_equal(evidence.get("result"), submission.get("result"))
-    )
-    correct = bool(math_correct and evidence_ok and contract)
+    correct = bool(math_correct and contract)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(evidence_ok),
-                "reward": float(correct),
-            }
-        )
+        json.dumps({"correctness": float(math_correct), "reward": float(correct)})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

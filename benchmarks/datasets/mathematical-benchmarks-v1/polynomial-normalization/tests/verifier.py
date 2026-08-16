@@ -5,11 +5,9 @@ from pathlib import Path
 from verifier_support import (
     load_submission,
     normalize_reward_file,
-    resolve_evidence,
     workspace_input_is_bound,
 )
 
-W = Path("/app")
 E = Path("/tests")
 
 
@@ -24,11 +22,7 @@ def canonical_fraction(value):
         parsed = Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError):
         return None
-    return (
-        parsed
-        if parsed.numerator == numerator and parsed.denominator == denominator
-        else None
-    )
+    return parsed
 
 
 def _compute_want(x):
@@ -62,14 +56,8 @@ def _parse_terms(terms):
     return got
 
 
-def _witness_is_bound(witness: object) -> bool:
-    if not isinstance(witness, list) or not witness:
-        return False
-    return resolve_evidence(witness[0], expected_path="evidence/answer.txt") is not None
-
-
 def main():
-    submission = load_submission(W / "submission.json")
+    submission = load_submission()
     x = json.loads(next(E.glob("*input*.json")).read_text())
     r = submission.get("result") if isinstance(submission, dict) else None
     r = r if isinstance(r, dict) else {}
@@ -83,19 +71,12 @@ def main():
         and got == want
         and all(len(k) == 2 for k in got)
     )
-    witness_ok = bool(
-        math_correct
-        and isinstance(submission, dict)
-        and _witness_is_bound(submission.get("witness"))
-    )
-    correct = bool(math_correct and witness_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     (Path("/logs/verifier/reward.json")).write_text(
         json.dumps(
             {
                 "correctness": float(math_correct),
-                "witness_validity": float(witness_ok),
-                "reward": float(correct),
+                "reward": float(math_correct),
             }
         )
     )

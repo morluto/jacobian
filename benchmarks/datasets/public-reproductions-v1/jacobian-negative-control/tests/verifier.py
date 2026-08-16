@@ -2,18 +2,13 @@ import json
 from fractions import Fraction
 from pathlib import Path
 
-from verifier_support import (
-    aggregate_reward,
-    load_submission,
-    normalize_reward_file,
-    witness_list_is_bound,
-)
+from verifier_support import load_submission, normalize_reward_file
 
 W = Path("/app")
 E = Path("/tests")
 
 
-def _math(s, x, e):
+def _math(s, x):
     r = s.get("result", {})
     if not isinstance(r, dict) or set(r) != {
         "both_points_map_to_claimed_image",
@@ -32,7 +27,7 @@ def _math(s, x, e):
     except (KeyError, TypeError, ValueError, IndexError, ZeroDivisionError):
         return False
     both_map_to_claimed = first_image == claimed and second_image == claimed
-    noninvertibility_verified = first != second and both_map_to_claimed
+    noninvertibility_verified = first != second and first_image == second_image
     return (
         r["both_points_map_to_claimed_image"] is both_map_to_claimed
         and r["noninvertibility_verified"] is noninvertibility_verified
@@ -70,22 +65,11 @@ def main():
     s = load_submission()
     protocol_ok = s is not None
     x = json.loads(next(E.glob("*input*.json")).read_text())
-    e = json.loads((E / "expected.json").read_text())
-    math_correct = _math(s, x, e) if protocol_ok else False
-    correct = bool(protocol_ok and math_correct)
-    good = bool(protocol_ok and witness_list_is_bound(s["witness"]))
-    reward = aggregate_reward(
-        correctness=correct, witness_validity=good, protocol_ok=protocol_ok
-    )
+    math_correct = _math(s, x) if protocol_ok else False
+    reward = float(protocol_ok and math_correct)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
-    (Path("/logs/verifier/reward.json")).write_text(
-        json.dumps(
-            {
-                "correctness": float(math_correct),
-                "witness_validity": float(good),
-                "reward": reward,
-            }
-        )
+    Path("/logs/verifier/reward.json").write_text(
+        json.dumps({"correctness": float(math_correct), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

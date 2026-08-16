@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import subprocess
@@ -14,7 +13,6 @@ TASK = (
     ROOT
     / "benchmarks/datasets/conjecture-probes-v1/zarankiewicz-projective-plane-certificate"
 )
-TASK_ID = "jacobian/zarankiewicz-projective-plane-certificate"
 
 
 def case(tmp_path: Path):
@@ -29,24 +27,10 @@ def case(tmp_path: Path):
     return app, logs, json.loads((app / "submission.json").read_text())
 
 
-def _payload(result: object) -> dict[str, object]:
-    return {"schema_version": "1", "task_id": TASK_ID, "result": result}
-
-
-def write(app: Path, submission: dict, *, payload: object | None = None) -> None:
-    evidence = app / "evidence/answer.json"
-    evidence.write_text(
-        json.dumps(
-            _payload(submission["result"]) if payload is None else payload,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        + "\n"
+def write(app: Path, submission: dict) -> None:
+    (app / "submission.json").write_text(
+        json.dumps({"result": submission["result"]}) + "\n"
     )
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(submission) + "\n")
 
 
 def run(app: Path, logs: Path):
@@ -71,24 +55,22 @@ def test_missing_edge_and_bad_pair_count_fail(tmp_path: Path) -> None:
     submission["result"]["edges"][-1] = submission["result"]["edges"][0]
     write(app, submission)
     assert run(app, logs).reward == 0.0
-
     app, logs, submission = case(tmp_path / "pair")
     submission["result"]["left_pair_common_counts"][0]["common_neighbors"] = 0
     write(app, submission)
     assert run(app, logs).reward == 0.0
 
 
-def test_witness_and_input_binding_fail_independently(tmp_path: Path) -> None:
+def test_boolean_edge_count_is_rejected(tmp_path: Path) -> None:
     app, logs, submission = case(tmp_path)
-    payload = _payload(submission["result"])
-    payload["result"] = json.loads(json.dumps(payload["result"]))
-    payload["result"]["edge_count"] = True
-    write(app, submission, payload=payload)
+    submission["result"]["edge_count"] = True
+    write(app, submission)
     result = run(app, logs)
-    assert result.details["mathematics"] == 1.0
-    assert result.details["witness_validity"] == 0.0
+    assert result.details["mathematics"] == 0.0
     assert result.reward == 0.0
 
+
+def test_input_binding_fails_independently(tmp_path: Path) -> None:
     app, logs, _ = case(tmp_path / "input")
     (app / "input.json").write_text("{}\n")
     result = run(app, logs)

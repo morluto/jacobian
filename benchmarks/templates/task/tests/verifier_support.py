@@ -289,11 +289,15 @@ def json_value_equal(left: object, right: object) -> bool:
 def witness_list_is_bound(
     evidence: object,
     *,
-    expected_path: str = "evidence/answer.txt",
+    expected_path: str,
     expected_count: int = 1,
     max_bytes: int | None = None,
 ) -> bool:
-    """Require an exact-size list binding the expected evidence file."""
+    """Require an exact-size list binding the declared evidence file.
+
+    There is no default ``evidence/answer.txt`` path. Pass the public witness
+    path only when the task declares a distinct replay artifact.
+    """
 
     return bool(
         isinstance(evidence, list)

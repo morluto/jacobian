@@ -1,11 +1,5 @@
 {
   "result": {
     "selected_operation": "combinatorics.compute.lucas"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:af3bcf611fb139f84c26bace4970ff08d42924443fdc180529b37f299463322a"
-    }
-  ]
+  }
 }

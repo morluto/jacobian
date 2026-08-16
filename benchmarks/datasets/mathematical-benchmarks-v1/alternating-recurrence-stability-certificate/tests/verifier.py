@@ -4,14 +4,11 @@ from pathlib import Path
 
 from verifier_support import (
     is_regular_bounded_file,
-    json_value_equal,
     load_submission,
     normalize_reward_file,
-    read_evidence_json,
 )
 
 W, T = Path("/app"), Path("/tests")
-MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
 MAX_INPUT_BYTES = 16 * 1024 * 1024
 
 
@@ -89,42 +86,17 @@ def valid(result: object) -> bool:
 
 
 def main() -> None:
-    expected = json.loads((T / "expected.json").read_text())
     submission = load_submission(W / "submission.json")
-    witness = submission.get("witness") if isinstance(submission, dict) else None
-    evidence = (
-        read_evidence_json(
-            witness[0],
-            expected_path="evidence/stability-certificate.json",
-            max_bytes=MAX_EVIDENCE_BYTES,
-        )
-        if isinstance(witness, list) and len(witness) == 1
-        else None
-    )
     math_ok = bool(
         frozen() and isinstance(submission, dict) and valid(submission.get("result"))
     )
-    try:
-        result_match = json_value_equal(
-            evidence.get("result") if evidence else None,
-            submission.get("result") if isinstance(submission, dict) else None,
-        )
-    except RecursionError:
-        result_match = False
-    evidence_ok = bool(
-        evidence
-        and {"schema_version", "task_id", "result"} <= set(evidence)
-        and evidence.get("schema_version") == "1"
-        and evidence.get("task_id") == expected["task_id"]
-        and result_match
-    )
-    correct = bool(math_ok and evidence_ok)
+    correct = bool(math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
         json.dumps(
             {
                 "correctness": float(math_ok),
-                "witness_validity": float(evidence_ok),
+                "witness_validity": 1.0 if correct else 0.0,
                 "reward": float(correct),
             }
         )

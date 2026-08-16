@@ -41,11 +41,5 @@
     ],
     "orbit_divisibility": "pq_DIVIDES_F(pq)-F(p)-F(q)+F(1)",
     "polynomial_identity_step": "P_EQUALS_CONSTANT_P(1)_ON_INFINITELY_MANY_PRIMES"
-  },
-  "witness": [
-    {
-      "path": "evidence/periodic-orbit-certificate.json",
-      "sha256": "sha256:75eb859e6be135b07804003b7a9da52463b4ed3aecc8b00f3f2c34c6713d266f"
-    }
-  ]
+  }
 }

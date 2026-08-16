@@ -6,22 +6,21 @@ nonidentity, pairwise-distinct vertex gauge quaternions, within the frozen
 coefficient bounds. Submit the transformed links `g_i U_ij g_j^-1`, the
 original and transformed ordered plaquette products, and `g_0 P g_0^-1`.
 
-The verifier independently checks canonical rational form, unit norms,
-Hamilton products, inverses, every transformed link, plaquette conjugacy, and
-invariance of the plaquette scalar part. Identity-only and commutative-scalar
-shortcuts are rejected.
+Represent each quaternion component as an object with integer `numerator` and
+positive integer `denominator`. Equivalent encodings such as `6/10` and `3/5`
+are accepted after exact `Fraction` normalization. The verifier independently
+checks unit norms, Hamilton products, inverses, every transformed link,
+plaquette conjugacy, and invariance of the plaquette scalar part.
+Identity-only and commutative-scalar shortcuts are rejected.
 
-Evidence is a matching JSON object with exactly `schema_version`, `task_id`,
-`result`, and `limitations`, This is one finite lattice-gauge
-identity. It says nothing about continuum construction or a Yang–Mills mass
-gap.
+This is one finite lattice-gauge identity. It says nothing about continuum
+construction or a Yang–Mills mass gap.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/answer.txt`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `text/plain`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

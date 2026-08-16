@@ -26,3 +26,14 @@ def test_rejects_wrong_mathematical_result(tmp_path: Path) -> None:
     rejected = _verifier._run_verifier(task, app, logs)
     assert rejected.details["correctness"] == 0.0
     assert rejected.reward == 0.0
+
+
+def test_rejects_wrong_corrected_claim(tmp_path: Path) -> None:
+    task, app, logs = _fixtures._prepare_case(tmp_path, TASK, "computed")
+    path = app / "submission.json"
+    submission = json.loads(path.read_text())
+    submission["result"]["corrected_claim"] = "SHORTCUTTING_PRESERVES_EXACT_COST"
+    _fixtures._write_json(path, submission)
+    rejected = _verifier._run_verifier(task, app, logs)
+    assert rejected.details["correctness"] == 0.0
+    assert rejected.reward == 0.0

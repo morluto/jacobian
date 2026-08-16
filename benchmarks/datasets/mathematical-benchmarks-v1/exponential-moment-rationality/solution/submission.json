@@ -7,7 +7,10 @@
     "generic_formula": {
       "denominator": [
         {
-          "coefficient": "-1",
+          "coefficient": {
+            "numerator": -1,
+            "denominator": 1
+          },
           "exponents": [
             0,
             2,
@@ -16,7 +19,10 @@
           ]
         },
         {
-          "coefficient": "1",
+          "coefficient": {
+            "numerator": 1,
+            "denominator": 1
+          },
           "exponents": [
             1,
             0,
@@ -27,7 +33,10 @@
       ],
       "numerator": [
         {
-          "coefficient": "1",
+          "coefficient": {
+            "numerator": 1,
+            "denominator": 1
+          },
           "exponents": [
             0,
             0,
@@ -36,7 +45,10 @@
           ]
         },
         {
-          "coefficient": "-2",
+          "coefficient": {
+            "numerator": -2,
+            "denominator": 1
+          },
           "exponents": [
             0,
             1,
@@ -45,7 +57,10 @@
           ]
         },
         {
-          "coefficient": "1",
+          "coefficient": {
+            "numerator": 1,
+            "denominator": 1
+          },
           "exponents": [
             1,
             0,
@@ -59,7 +74,10 @@
     "singular_formula": {
       "denominator": [
         {
-          "coefficient": "1",
+          "coefficient": {
+            "numerator": 1,
+            "denominator": 1
+          },
           "exponents": [
             3,
             0,
@@ -70,7 +88,10 @@
       ],
       "numerator": [
         {
-          "coefficient": "1",
+          "coefficient": {
+            "numerator": 1,
+            "denominator": 1
+          },
           "exponents": [
             0,
             4,

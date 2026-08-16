@@ -2,15 +2,9 @@ import json
 from fractions import Fraction
 from pathlib import Path
 
-from verifier_support import (
-    aggregate_reward,
-    json_value_equal,
-    load_submission,
-    normalize_reward_file,
-    read_evidence_json,
-)
+from verifier_support import load_submission, normalize_reward_file
 
-W, E = Path("/app"), Path("/tests")
+W, E = (Path("/app"), Path("/tests"))
 
 
 def rat(value):
@@ -49,7 +43,6 @@ def trim(a):
 
 
 def formal_poly(x, y):
-    # x*y^2 + (x+7)^2 + (2*y+7)^2
     return add(
         add(mul(x, mul(y, y)), mul(add(x, [Fraction(7)]), add(x, [Fraction(7)]))),
         mul(
@@ -85,7 +78,7 @@ def result_ok(result):
         claimed != actual
         or len(actual) < 3
         or actual[-1] >= 0
-        or result["formal_status"] != "UNBOUNDED_BELOW"
+        or (result["formal_status"] != "UNBOUNDED_BELOW")
     ):
         return False
     checks = result["checkpoints"]
@@ -113,8 +106,8 @@ def frozen_ok():
         return (
             not (W / "input.json").is_symlink()
             and (W / "input.json").read_bytes() == raw
-            and data["formal_expression"] != data["informal_expression"]
-            and data["claimed_least"] == 45
+            and (data["formal_expression"] != data["informal_expression"])
+            and (data["claimed_least"] == 45)
         )
     except (OSError, ValueError, KeyError, TypeError):
         return False
@@ -125,36 +118,10 @@ def main():
     protocol_ok = submission is not None
     result = submission.get("result") if protocol_ok else None
     math_ok = bool(protocol_ok and result_ok(result) and frozen_ok())
-    evidence = (
-        read_evidence_json(
-            submission["witness"][0], expected_path="evidence/precedence-audit.json"
-        )
-        if protocol_ok
-        and isinstance(submission.get("witness"), list)
-        and len(submission["witness"]) == 1
-        else None
-    )
-    evidence_ok = bool(
-        evidence
-        and set(evidence) == {"schema_version", "task_id", "result"}
-        and evidence["schema_version"] == "1"
-        and evidence["task_id"] == "jacobian/polynomial-precedence-unboundedness-audit"
-        and json_value_equal(evidence["result"], result)
-    )
-    reward = aggregate_reward(
-        correctness=math_ok,
-        witness_validity=evidence_ok,
-        protocol_ok=protocol_ok,
-    )
+    reward = float(math_ok)
     Path("/logs/verifier").mkdir(parents=True, exist_ok=True)
     Path("/logs/verifier/reward.json").write_text(
-        json.dumps(
-            {
-                "correctness": float(math_ok),
-                "witness_validity": float(evidence_ok),
-                "reward": reward,
-            }
-        )
+        json.dumps({"correctness": float(math_ok), "reward": reward})
     )
     normalize_reward_file(Path("/logs/verifier/reward.json"))
 

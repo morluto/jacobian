@@ -1,11 +1,5 @@
 {
   "result": {
     "noninvertibility_verified": true
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:aac1f86c04e76532f1056f2d4865b7e711a3af539f5bd42c24fd36251e7f9868"
-    }
-  ]
+  }
 }

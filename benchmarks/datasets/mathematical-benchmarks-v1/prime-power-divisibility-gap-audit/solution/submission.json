@@ -21,11 +21,5 @@
     "p_valuation_total": 1,
     "prime": 2,
     "total_sum": 10
-  },
-  "witness": [
-    {
-      "path": "evidence/divisibility-audit.json",
-      "sha256": "sha256:a8bfcbac793200bcf99ce635c23b18cf283d1bd9815ffe590b1880f59f86981a"
-    }
-  ]
+  }
 }

@@ -80,6 +80,12 @@ def _uniform_certificate_ok(value: object, q: int) -> bool:
     )
 
 
+def _constant_limit(value: object, expected: Fraction) -> bool:
+    if not isinstance(value, dict) or set(value) != {"kind", "value"}:
+        return False
+    return value["kind"] == "CONSTANT" and _fraction(value["value"]) == expected
+
+
 def _variation_formula_ok(value: object) -> bool:
     return (
         isinstance(value, dict)
@@ -150,7 +156,9 @@ def _result(value: object) -> bool:
     q = value["scale_q"]
     if not _is_int(q) or not 2 <= q <= 9:
         return False
-    if not _valid_sequence(value["sequence"]) or value["limit_function"] != "0":
+    if not _valid_sequence(value["sequence"]) or not _constant_limit(
+        value["limit_function"], Fraction(0)
+    ):
         return False
     if not _argument_ok(value["argument"]):
         return False

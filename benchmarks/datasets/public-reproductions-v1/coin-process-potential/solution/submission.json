@@ -37,11 +37,5 @@
     "pair_coefficient": -2,
     "state_count": 4096,
     "total_stopping_time": 159744
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:2b37181de4dc3d1c3287844a23e304da9b1ed03f1f8899617b3a2d10bc5d3c9b"
-    }
-  ]
+  }
 }

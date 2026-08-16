@@ -105,3 +105,29 @@ def test_search_and_browse_do_not_materialize_descriptors(
 
     assert search.matches
     assert browse.operations
+
+
+def test_search_finds_lattice_hnf_in_matrix_domain() -> None:
+    catalog = ServingCatalog.open()
+
+    result = catalog.search(
+        OperationDiscoveryRequest(
+            query="row Hermite normal form",
+            domain="matrix",
+            limit=10,
+        )
+    )
+
+    assert "lattice.hermite_normal_form.compute" in {
+        match.operation_id for match in result.matches
+    }
+
+
+def test_browse_includes_lattice_hnf_in_matrix_domain() -> None:
+    catalog = ServingCatalog.open()
+
+    result = catalog.browse(domain="matrix", limit=100, cursor=None)
+
+    assert "lattice.hermite_normal_form.compute" in {
+        operation.operation_id for operation in result.operations
+    }

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -55,45 +54,16 @@ def case(tmp_path: Path):
     logs.mkdir(parents=True)
     shutil.copy2(TASK / "environment/input.json", app / "input.json")
     result = _result()
-    evidence = app / "evidence/answer.json"
-    evidence.parent.mkdir()
-    evidence.write_text(
-        json.dumps(
-            {"schema_version": "1", "task_id": TASK_ID, "result": result},
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        + "\n"
-    )
-    submission = {
-        "result": result,
-        "witness": [
-            {
-                "path": "evidence/answer.json",
-                "sha256": "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest(),
-            }
-        ],
-    }
+    submission = {"result": result}
     (app / "submission.json").write_text(json.dumps(submission) + "\n")
     return app, logs, submission
 
 
 def write(app: Path, submission: dict, *, payload: object | None = None) -> None:
-    evidence = app / "evidence/answer.json"
-    evidence.write_text(
-        json.dumps(
-            {"schema_version": "1", "task_id": TASK_ID, "result": submission["result"]}
-            if payload is None
-            else payload,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        + "\n"
+    del payload
+    (app / "submission.json").write_text(
+        json.dumps({"result": submission["result"]}) + "\n"
     )
-    submission["witness"][0]["sha256"] = (
-        "sha256:" + hashlib.sha256(evidence.read_bytes()).hexdigest()
-    )
-    (app / "submission.json").write_text(json.dumps(submission) + "\n")
 
 
 def run(app: Path, logs: Path):
@@ -118,20 +88,12 @@ def test_rejects_zero_repair_and_noninteger_balance(tmp_path: Path) -> None:
     assert run(app, logs).reward == 0.0
 
 
-def test_witness_binding_and_input_binding_are_hard_gates(tmp_path: Path) -> None:
+def test_result_only_submission_and_input_binding_are_hard_gates(
+    tmp_path: Path,
+) -> None:
     app, logs, submission = case(tmp_path)
-    payload = {
-        "schema_version": "1",
-        "task_id": TASK_ID,
-        "result": submission["result"],
-    }
-    payload["result"] = dict(payload["result"])
-    payload["result"]["zero_edge_index"] = True
-    write(app, submission, payload=payload)
-    result = run(app, logs)
-    assert result.details["mathematics"] == 1.0
-    assert result.details["witness_validity"] == 0.0
-    assert result.reward == 0.0
+    assert "witness" not in submission
+    assert run(app, logs).reward == 1.0
 
     app, logs, _ = case(tmp_path / "input")
     (app / "input.json").write_text("{}\n")

@@ -77,6 +77,14 @@ def _make_task_dir(tmp_path: Path, name: str = "task") -> Path:
 def test_task_template_contract_is_current() -> None:
     task = Path("benchmarks/templates/task")
     assert check(task / "tests" / "public_contract.json", task) == []
+    instruction = (task / "instruction.md").read_text()
+    readme = (task / "README.md").read_text()
+    assert "lowest terms" not in instruction.lower()
+    assert "expected.json" not in instruction
+    assert "hidden `tests/expected.json`" in readme
+    assert "universal certificate union" in readme
+    assert "harbor-prepare-task" in readme
+    assert "harbor-validate-task" in readme
 
 
 def test_checked_in_schema_accepts_current_result_and_witness_contracts() -> None:
@@ -146,6 +154,9 @@ class TestModelValidation:
             "Claim COMPUTED assurance.",
             "Include the limitations array.",
             "Write one RESULT_JSON line in digest-bound evidence.",
+            "Represent every rational in lowest terms.",
+            "Score the conclusion with keyword-scored prose.",
+            "Compare the result to tests/expected.json.",
         ),
     )
     def test_legacy_protocol_language_is_rejected_from_public_notes(

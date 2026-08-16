@@ -1,11 +1,5 @@
 {
   "result": {
     "selected_operation": "combinatorics.compute.fibonacci"
-  },
-  "witness": [
-    {
-      "path": "evidence/answer.txt",
-      "sha256": "sha256:361e42f150ab63e51520c1279a990c7a9fc07fda44c9b0d73e02d48d20db374d"
-    }
-  ]
+  }
 }

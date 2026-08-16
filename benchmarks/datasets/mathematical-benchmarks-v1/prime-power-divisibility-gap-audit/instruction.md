@@ -10,18 +10,14 @@ the multiplicities must total `m/p`, every cycle sum must be divisible by `p`, a
 different cycle sums must occur. The resulting total must be divisible by `p` but not by `m`.
 
 Report the exact p-adic valuations of `m` and of the total, the local/global statuses, and the
-missing proof obligation. Write `/app/submission.json` and one digest-bound JSON task-specific witness file at
-`evidence/divisibility-audit.json`. The task-specific witness object must contain exactly
-`schema_version: "1"`, the task ID, and the result, with the result matching
-the submission. This audit invalidates one proof step and does not
+missing proof obligation. This audit invalidates one proof step and does not
 disprove the source theorem.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->
 ## Submission
 
-The verifier replays the task-specific mathematical predicate from the submitted result and validates the declared task-specific witness.
+The verifier replays the task-specific mathematical predicate from the submitted result.
 
-Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result` and the declared `witness`.
+Write `/app/submission.json` to the exact schema in `environment/submission_schema.json`. The submission requires a typed `result`.
 
-- **Witness:** 1-1 item(s); allowed path(s): `evidence/divisibility-audit.json`; digest must match `^sha256:[0-9a-f]{64}$`; media type(s): `application/json`.
 <!-- END PUBLIC CONTRACT SUBMISSION BLOCK -->

@@ -59,11 +59,5 @@
         1
       ]
     }
-  },
-  "witness": [
-    {
-      "path": "evidence/spectral-certificate.json",
-      "sha256": "sha256:da16f396f2a41299c4653f2fd479d02d289c3382ed05ed64eefcac54e23cb904"
-    }
-  ]
+  }
 }

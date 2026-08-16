@@ -1,6 +1,9 @@
 {
   "result": {
-    "attained_ratio": "19/9",
+    "attained_ratio": {
+      "numerator": 19,
+      "denominator": 9
+    },
     "constant_residual": -146,
     "contract_mismatches": [
       "OBJECTIVE_REPLACED",

@@ -6,7 +6,7 @@ Assess one exact polynomial-map claim in the bounded-collision-scope pilot famil
 
 - family: `bounded-collision-scope`
 - case version: `symbolic-coordination-v1/pilot-1`
-- generator: `symbolic-coordination-pilot-generator@1`
+- generator: `symbolic-coordination-pilot-generator@2`
 - fixture digest: `sha256:8ab042f6b0327cf5e9eca8cc45c26b829b5d0efaec29d1c52d5518643695ead2`
 - note: Odd cubic is collision-free on the declared grid.
 

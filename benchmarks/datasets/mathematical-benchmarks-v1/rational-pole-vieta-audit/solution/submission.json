@@ -51,12 +51,9 @@
         "residual": 24
       }
     ],
-    "root_sum": "2/1005"
-  },
-  "witness": [
-    {
-      "path": "evidence/pole-vieta-certificate.json",
-      "sha256": "sha256:27068c8016f14b88201e7e204e2b15e61e7ab7317b0083f8380267610a7e70cd"
+    "root_sum": {
+      "denominator": 1005,
+      "numerator": 2
     }
-  ]
+  }
 }

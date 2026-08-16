@@ -33,7 +33,7 @@ def _load_bounded_submission():
         return None
 
 
-def _fraction(value, *, canonical=True):
+def _fraction(value):
     if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
         return None
     numerator = value["numerator"]
@@ -43,10 +43,6 @@ def _fraction(value, *, canonical=True):
     try:
         parsed = Fraction(numerator, denominator)
     except (ValueError, ZeroDivisionError, OverflowError):
-        return None
-    if canonical and (
-        parsed.numerator != numerator or parsed.denominator != denominator
-    ):
         return None
     return parsed
 
@@ -80,7 +76,7 @@ def _valid_levels(levels, start, end):
             and row["level"] == expected_k
             and _is_int(row["interval_count"])
             and row["interval_count"] == count
-            and _fraction(row["event_mass"], canonical=False) == Fraction(1, count)
+            and _fraction(row["event_mass"]) == Fraction(1, count)
             and _is_int(row["index_start"])
             and row["index_start"] == count
             and _is_int(row["index_end"])
@@ -97,7 +93,7 @@ def _valid_probes(probes, start, end):
     for probe in probes:
         if not isinstance(probe, dict) or set(probe) != {"point", "hit_indices"}:
             return False
-        point = _fraction(probe["point"], canonical=True)
+        point = _fraction(probe["point"])
         # Accept the full frozen space [0,1): zero is a valid probe with the
         # unique hit index 2^k at every level.
         if point is None or not 0 <= point < 1 or point in points:
@@ -113,6 +109,39 @@ def _valid_probes(probes, start, end):
         if any(not _is_int(h) for h in hit_indices) or hit_indices != expected_hits:
             return False
     return True
+
+
+def _mass_formula_value(value, level):
+    if not isinstance(value, dict) or set(value) != {
+        "coefficient",
+        "base",
+        "exponent_coefficient",
+        "variable",
+    }:
+        return None
+    if value["variable"] != "k" or type(value["exponent_coefficient"]) is not int:
+        return None
+    coefficient = _fraction(value["coefficient"])
+    base = _fraction(value["base"])
+    if coefficient is None or base is None or base == 0:
+        return None
+    exponent = value["exponent_coefficient"] * level
+    if exponent >= 0:
+        return coefficient * (base**exponent)
+    if exponent < 0 and base == 0:
+        return None
+    return coefficient / (base ** (-exponent))
+
+
+def _valid_probability_argument(value, start, end):
+    if not isinstance(value, dict) or set(value) != {"event_mass_formula", "limit"}:
+        return False
+    if value["limit"] != "ZERO":
+        return False
+    return all(
+        _mass_formula_value(value["event_mass_formula"], level) == Fraction(1, 2**level)
+        for level in range(start, end + 1)
+    )
 
 
 def _valid_result(result, source):
@@ -131,8 +160,7 @@ def _valid_result(result, source):
         _valid_levels(result["levels"], start, end)
         and _valid_probes(result["probes"], start, end)
         and result["relationship"] == "IN_PROBABILITY_NOT_IMPLY_ALMOST_SURE"
-        and result["probability_argument"]
-        == {"event_mass_formula": "1/2^k", "limit": "ZERO"}
+        and _valid_probability_argument(result["probability_argument"], start, end)
         and result["pointwise_argument"]
         == {"hit_count_per_level": 1, "miss_count_per_level": "AT_LEAST_ONE"}
         and result["research_scope"]

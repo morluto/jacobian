@@ -105,3 +105,25 @@ class TestSubdifferential:
         )
         result = compute_subdifferential(req)
         assert len(result.active_gradients) == 2
+        assert result.active_gradients[0][0].as_fraction() in {1, -1}
+
+    def test_rejects_mismatched_point_dimension(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="point dimension"):
+            MaxAffineSubdifferentialRequest(
+                function=MaxAffineFunction(
+                    pieces=(
+                        AffinePiece(
+                            piece_id="p1",
+                            coefficients=(
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ),
+                            intercept={"num": "0", "den": "1"},
+                        ),
+                    ),
+                ),
+                point=RationalPoint(coordinates=({"num": "1", "den": "1"},)),
+            )

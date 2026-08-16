@@ -16,7 +16,9 @@ from jacobian.contracts.graph_polynomials import (
 )
 
 
-def _build_graph(request: GraphPolynomialRequest | MatchingPolynomialRequest) -> nx.Graph[int]:
+def _build_graph(
+    request: GraphPolynomialRequest | MatchingPolynomialRequest,
+) -> nx.Graph[int]:
     g = nx.Graph()  # type: ignore[var-annotated]
     g.add_nodes_from(range(request.graph.vertex_count))
     for edge in request.graph.edges:
@@ -51,7 +53,9 @@ def compute_tutte_polynomial(request: GraphPolynomialRequest) -> GraphPolynomial
             continue
         x_deg, y_deg = monom
         terms.append(PolynomialTerm(coefficient=int(coeff), degree=x_deg * 100 + y_deg))
-    return GraphPolynomialResult(terms=tuple(sorted(terms, key=lambda term: term.degree)))
+    return GraphPolynomialResult(
+        terms=tuple(sorted(terms, key=lambda term: term.degree))
+    )
 
 
 def compute_chromatic_polynomial(
@@ -71,7 +75,8 @@ def compute_flow_polynomial(request: GraphPolynomialRequest) -> GraphPolynomialR
     """
     g = _build_graph(request)
     tutte = nx.tutte_polynomial(g)
-    sign = (-1) ** g.number_of_nodes()
+    components = nx.number_connected_components(g)
+    sign = (-1) ** (g.number_of_edges() - g.number_of_nodes() + components)
     flow_x = sympy.Symbol("flow_x")
     flow_expr = tutte.subs({sympy.Symbol("x"): 0, sympy.Symbol("y"): 1 - flow_x})
     flow_expr = sign * expand(flow_expr)

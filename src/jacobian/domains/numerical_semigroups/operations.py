@@ -47,7 +47,9 @@ def _compute_summary(gens: list[int]) -> NumericalSemigroupSummaryResult:
             run = 0
 
     gaps = [
-        value for value in range(1, conductor) if value <= limit and not in_semigroup[value]
+        value
+        for value in range(1, conductor)
+        if value <= limit and not in_semigroup[value]
     ]
     frobenius = max(gaps) if gaps else -1
 
@@ -67,7 +69,9 @@ def _compute_summary(gens: list[int]) -> NumericalSemigroupSummaryResult:
             min_gens.append(generator)
 
     return NumericalSemigroupSummaryResult(
-        minimal_generators=tuple(format_canonical_integer(generator) for generator in min_gens),
+        minimal_generators=tuple(
+            format_canonical_integer(generator) for generator in min_gens
+        ),
         multiplicity=format_canonical_integer(multiplicity),
         embedding_dimension=len(min_gens),
         frobenius_number=format_canonical_integer(frobenius),

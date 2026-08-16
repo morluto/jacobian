@@ -33,7 +33,9 @@ def _swap_symmetric(matrix: list[list[Fraction]], left: int, right: int) -> None
         row[left], row[right] = row[right], row[left]
 
 
-def _count_2x2_inertia(aa: Fraction, bb: Fraction, cc: Fraction) -> tuple[int, int, int]:
+def _count_2x2_inertia(
+    aa: Fraction, bb: Fraction, cc: Fraction
+) -> tuple[int, int, int]:
     det = aa * cc - bb * bb
     trace = aa + cc
     if det < 0:
@@ -49,7 +51,7 @@ def _count_2x2_inertia(aa: Fraction, bb: Fraction, cc: Fraction) -> tuple[int, i
     return 0, 0, 2
 
 
-def _symmetric_inertia(matrix: list[list[Fraction]]) -> tuple[int, int, int]:
+def _symmetric_inertia(matrix: list[list[Fraction]]) -> tuple[int, int, int]:  # noqa: C901
     """Reduce a symmetric rational matrix to a congruence-diagonal form."""
     n = len(matrix)
     a = [row[:] for row in matrix]

@@ -47,7 +47,7 @@ def compute_best_response(request: ZeroSumGameRequest) -> BestResponseResult:
     return BestResponseResult(value=_format_rational(best_value), best_row=best_row)
 
 
-def _try_support(
+def _try_support(  # noqa: C901
     matrix: list[list[Fraction]],
     rows: Sequence[int],
     cols: Sequence[int],
@@ -59,9 +59,7 @@ def _try_support(
     rhs = []
     first_row = rows[0]
     for row in rows[1:]:
-        indifference.append(
-            [matrix[row][col] - matrix[first_row][col] for col in cols]
-        )
+        indifference.append([matrix[row][col] - matrix[first_row][col] for col in cols])
         rhs.append(Fraction(0))
     indifference.append([Fraction(1)] * support_size)
     rhs.append(Fraction(1))
@@ -129,8 +127,12 @@ def compute_nash_equilibrium(request: ZeroSumGameRequest) -> NashEquilibriumResu
                     continue
                 row_strategy, col_strategy, value = solved
                 return NashEquilibriumResult(
-                    row_strategy=tuple(_format_rational(weight) for weight in row_strategy),
-                    col_strategy=tuple(_format_rational(weight) for weight in col_strategy),
+                    row_strategy=tuple(
+                        _format_rational(weight) for weight in row_strategy
+                    ),
+                    col_strategy=tuple(
+                        _format_rational(weight) for weight in col_strategy
+                    ),
                     value=_format_rational(value),
                 )
     raise RuntimeError("zero-sum game has no mixed Nash equilibrium")

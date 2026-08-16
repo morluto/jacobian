@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from jacobian.contracts.formal_power_series import (
+    InputTruncatedSeries,
     SeriesArithmeticResult,
     SeriesComposeRequest,
     SeriesComposeResult,
@@ -23,8 +24,6 @@ from jacobian.contracts.formal_power_series import (
     SeriesToPolynomialResult,
     SeriesTruncateRequest,
     SeriesTruncateResult,
-    InputTruncatedSeries,
-    TruncatedSeries,
     _SeriesPairRequest,
 )
 from jacobian.domains._examples import example

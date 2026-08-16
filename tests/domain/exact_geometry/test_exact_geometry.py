@@ -1,12 +1,12 @@
 """Tests for exact geometry operations."""
 
+from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.exact_geometry import (
     DistanceGraphRequest,
     DistanceProfileRequest,
     LabelledRationalPoint,
     PointConfiguration,
 )
-from jacobian.contracts.exact import CanonicalRational
 from jacobian.domains.exact_geometry.operations import (
     compute_distance_graph,
     compute_distance_profile,

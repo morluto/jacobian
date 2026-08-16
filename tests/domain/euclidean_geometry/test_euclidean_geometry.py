@@ -61,6 +61,32 @@ class TestAngleEquality:
         result = compute_angle_equality(req)
         assert result.equal is False
 
+    def test_supplementary_angles_are_not_equal(self):
+        req = AngleEqualityRequest(
+            vertex1=_pt(0, 0),
+            ray1_a=_pt(1, 0),
+            ray1_b=_pt(1, 1),
+            vertex2=_pt(0, 0),
+            ray2_a=_pt(1, 0),
+            ray2_b=_pt(-1, -1),
+        )
+        result = compute_angle_equality(req)
+        assert result.equal is False
+
+    def test_rejects_zero_length_ray(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="nonzero"):
+            AngleEqualityRequest(
+                vertex1=_pt(0, 0),
+                ray1_a=_pt(0, 0),
+                ray1_b=_pt(0, 1),
+                vertex2=_pt(0, 0),
+                ray2_a=_pt(1, 0),
+                ray2_b=_pt(0, 1),
+            )
+
 
 class TestTriangleSimilarity:
     def test_similar(self):

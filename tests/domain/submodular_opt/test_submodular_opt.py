@@ -41,6 +41,22 @@ class TestMonotonicity:
         result = check_monotonicity(req)
         assert result.is_monotone is True
 
+    def test_rejects_incomplete_table(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="exactly one value per subset"):
+            SetFunction(
+                ground_set_size=2,
+                entries=(
+                    SetFunctionEntry(subset=(), value={"num": "0", "den": "1"}),
+                    SetFunctionEntry(
+                        subset=(0, 1),
+                        value={"num": "-1", "den": "1"},
+                    ),
+                ),
+            )
+
 
 class TestSubmodularity:
     def test_modular_is_submodular(self):

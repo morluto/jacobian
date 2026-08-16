@@ -160,3 +160,13 @@ class TestDirectSumPredicate:
         )
         result = decide_direct_sum_predicate(req)
         assert result.holds is True
+
+    def test_empty_sets_in_z12_return_numeric_missing(self):
+        req = DirectSumPredicateRequest(
+            modulus=12,
+            left=FiniteIntegerSet(elements=()),
+            right=FiniteIntegerSet(elements=()),
+        )
+        result = decide_direct_sum_predicate(req)
+        assert result.holds is False
+        assert result.missing == tuple(str(value) for value in range(12))

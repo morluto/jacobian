@@ -47,7 +47,9 @@ class EvalRequest(ContractModel):
         try:
             expression = sympy.sympify(self.polynomial.expression)
         except (sympy.SympifyError, TypeError, SyntaxError) as exc:
-            raise ValueError("polynomial expression must be a rational polynomial") from exc
+            raise ValueError(
+                "polynomial expression must be a rational polynomial"
+            ) from exc
         if expression.free_symbols and not expression.is_rational_function(
             *expression.free_symbols
         ):

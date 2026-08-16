@@ -69,9 +69,8 @@ def compute_angle_equality(request: AngleEqualityRequest) -> AngleEqualityResult
 
     abs_cross1 = abs(cross1)
     abs_cross2 = abs(cross2)
-    equal = (
-        dot1 * abs_cross2 == dot2 * abs_cross1
-        and (dot1 == 0 or dot2 == 0 or (dot1 > 0) == (dot2 > 0))
+    equal = dot1 * abs_cross2 == dot2 * abs_cross1 and (
+        dot1 == 0 or dot2 == 0 or (dot1 > 0) == (dot2 > 0)
     )
     return AngleEqualityResult(equal=equal)
 

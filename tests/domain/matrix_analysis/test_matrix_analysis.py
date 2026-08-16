@@ -53,6 +53,17 @@ class TestInertia:
         assert result.n_negative == 1
         assert result.definiteness == "indefinite"
 
+    def test_off_diagonal_hyperbolic_pair(self):
+        req = SymmetricMatrixRequest(
+            dimension=2,
+            entries=(MatrixEntry(row=0, col=1, value={"num": "1", "den": "1"}),),
+        )
+        result = compute_inertia(req)
+        assert result.n_positive == 1
+        assert result.n_negative == 1
+        assert result.n_zero == 0
+        assert result.definiteness == "indefinite"
+
 
 class TestFarkas:
     def test_valid_certificate(self):
@@ -75,3 +86,23 @@ class TestFarkas:
         )
         result = check_farkas_certificate(req)
         assert result.valid is True
+
+    def test_rejects_nonrectangular_matrix(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="rectangular"):
+            FarkasCertificateRequest(
+                constraint_matrix=[
+                    ({"num": "1", "den": "1"}, {"num": "1", "den": "1"}),
+                    ({"num": "-1", "den": "1"},),
+                ],
+                rhs_vector=(
+                    {"num": "-1", "den": "1"},
+                    {"num": "-1", "den": "1"},
+                ),
+                multipliers=(
+                    {"num": "1", "den": "1"},
+                    {"num": "1", "den": "1"},
+                ),
+            )

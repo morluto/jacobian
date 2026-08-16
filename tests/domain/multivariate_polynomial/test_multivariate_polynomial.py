@@ -155,6 +155,15 @@ class TestMultivariateGcd:
 class TestMultivariateDivision:
     """Tests for ``polynomial.multivariate.divide.compute``."""
 
+    def test_rejects_zero_divisor(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        left = _poly(("x", "y"), (("1/1", (1, 0)),))
+        right = _poly(("x", "y"), ())
+        with pytest.raises(ValidationError, match="nonzero"):
+            MultivariateDivisionRequest(left=left, right=right)
+
     def test_division_exact(self) -> None:
         """x^2*y / (x*y) = x, remainder 0."""
 

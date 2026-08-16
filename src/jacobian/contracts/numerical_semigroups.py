@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Self
 
-from jacobian.canonical import parse_canonical_integer
 from pydantic import Field, model_validator
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalInteger
 

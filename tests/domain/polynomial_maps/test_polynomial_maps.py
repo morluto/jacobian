@@ -40,6 +40,19 @@ class TestEvaluate:
         result = evaluate_polynomial(req)
         assert result.value == "0"
 
+    def test_rejects_partial_substitution(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="every free variable"):
+            EvalRequest(
+                polynomial=RationalPolynomialExpr(expression="x + y"),
+                point=VariablePoint(
+                    variables=("x",),
+                    values=({"num": "1", "den": "1"},),
+                ),
+            )
+
 
 class TestJacobian:
     def test_simple(self):

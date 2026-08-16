@@ -52,5 +52,19 @@ class TestFDP:
         result = compute_fdp(req)
         assert result.fdp == "0"
 
+    def test_rejects_out_of_range_p_value_and_level(self):
+        import pytest
+        from pydantic import ValidationError
 
-print("Written multiple_testing")
+        with pytest.raises(ValidationError, match="p-value"):
+            HypothesisSpec(hypothesis_id="h1", p_value={"num": "-1", "den": "1"})
+        with pytest.raises(ValidationError, match="level"):
+            BHStepUpRequest(
+                hypotheses=(
+                    HypothesisSpec(
+                        hypothesis_id="h1",
+                        p_value={"num": "1", "den": "2"},
+                    ),
+                ),
+                level={"num": "2", "den": "1"},
+            )

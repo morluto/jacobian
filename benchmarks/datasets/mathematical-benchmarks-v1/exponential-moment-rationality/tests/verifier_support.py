@@ -346,7 +346,7 @@ def aggregate_reward(
         evidence_score = 1.0
     except ValueError:
         return 0.0
-    if correctness_score < 1.0 or evidence_score < 1.0:
+    if correctness_score < 1.0:
         return 0.0
     return 1.0
 

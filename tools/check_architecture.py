@@ -5,7 +5,7 @@ runtime.  It enforces nineteen focused invariants:
 
 1. **subprocess-confined**: direct ``subprocess`` usage and ``os.execvpe``/
    ``os.execvp`` are allowed only in ``bounded_process.py``,
-   ``command_runner.py``, and explicit e2e/process-boundary test fixture
+   ``command_runner.py``, and explicit process-boundary test fixture
    files listed by exact path.  Product code and mathematical checkers must
    route through the bounded process gateway.
 
@@ -104,7 +104,6 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         # The tooling command runner.
         PurePosixPath("benchmarks/tooling/command_runner.py"),
         PurePosixPath("tools/setup_lean.py"),
-        PurePosixPath("tools/doctor_external_tools.py"),
         PurePosixPath("tools/process_supervisor.py"),
         PurePosixPath("tools/with_validation_lock.py"),
         # Developer helpers that shell out to git, gh, or Make. They are not
@@ -117,18 +116,14 @@ _SUBPROCESS_ALLOWED_EXACT: frozenset[PurePosixPath] = frozenset(
         PurePosixPath("tests/boundary/process/public_api/test_import_isolation.py"),
         # Tooling boundary tests invoke CI scripts and installers as subprocesses.
         PurePosixPath("tests/boundary/process/tooling/ci.py"),
-        PurePosixPath("tests/boundary/process/tooling/test_deploy_installer.py"),
         PurePosixPath("tests/boundary/process/tooling/test_supervised_make_lanes.py"),
         PurePosixPath("tests/boundary/process/tooling/test_cli_import_surface.py"),
-        PurePosixPath("tests/boundary/process/tooling/test_source_agent_bootstrap.py"),
         PurePosixPath("tests/boundary/process/tooling/test_make_help.py"),
         # MCP transport boundary tests spawn server processes.
         PurePosixPath("tests/boundary/mcp/test_mcp_entrypoint.py"),
         PurePosixPath("tests/boundary/mcp/test_remote_mcp_auth.py"),
         # Matrix provider component tests spawn matrix executables.
-        PurePosixPath("tests/component/providers/matrix/test_matrix_operations.py"),
         # Real analysis domain test uses external analysis executables.
-        PurePosixPath("tests/domain/analysis/test_real_analysis.py"),
         # This checker's own test file uses subprocess in synthetic probes.
         PurePosixPath("tests/unit/tooling/test_architecture_process_policies.py"),
         PurePosixPath("tests/unit/tooling/test_architecture_harbor_contracts.py"),
@@ -211,7 +206,6 @@ _SHUTIL_WHICH_ALLOWED: frozenset[PurePosixPath] = frozenset(
     {
         PurePosixPath("src/jacobian/domains/logic/operations.py"),
         PurePosixPath("benchmarks/tooling/command_runner.py"),
-        PurePosixPath("tools/doctor_external_tools.py"),
         PurePosixPath("tools/setup_lean.py"),
         # Test skip-condition checks for optional operator tools.
         PurePosixPath("tests/boundary/process/test_bounded_process.py"),
@@ -238,6 +232,8 @@ _LEGACY_ADAPTER_MODE_NAMES = frozenset({"TypedInputAdapter", "typed_input"})
 _PUBLIC_CONTRACT_DATASET_PREFIXES = (
     PurePosixPath("benchmarks/datasets/mathematical-benchmarks-v1"),
     PurePosixPath("benchmarks/datasets/conjecture-probes-v1"),
+    PurePosixPath("benchmarks/datasets/public-reproductions-v1"),
+    PurePosixPath("benchmarks/datasets/symbolic-coordination-v1"),
 )
 
 # Unsupported surfaces: scan supported src, tests, schemas, catalog, and docs.
@@ -1156,7 +1152,6 @@ def _native_math_boundary_violations(
                     )
                 )
     return tuple(violations)
-
 
 
 _INLINE_EXECUTOR_PATH = PurePosixPath("src/jacobian/inline_execution.py")

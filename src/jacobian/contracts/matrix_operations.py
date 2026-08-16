@@ -329,7 +329,9 @@ class MatrixKroneckerProductResult(ContractModel):
     @model_validator(mode="after")
     def require_product_shape(self) -> Self:
         if len(self.product.entries) != self.left_rows * self.right_rows:
-            raise ValueError("Kronecker product row count must equal left_rows * right_rows")
+            raise ValueError(
+                "Kronecker product row count must equal left_rows * right_rows"
+            )
         if len(self.product.entries[0]) != self.left_columns * self.right_columns:
             raise ValueError(
                 "Kronecker product column count must equal left_columns * right_columns"
@@ -376,4 +378,3 @@ class MatrixPartialTraceResult(ContractModel):
         if len(self.reduced_matrix.entries[0]) != self.kept_dimension:
             raise ValueError("reduced matrix must be square of order kept_dimension")
         return self
-

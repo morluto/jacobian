@@ -65,9 +65,7 @@ def test_walsh_transform_rejects_empty_truth_table() -> None:
 
 def test_walsh_transform_rejects_non_boolean_entries() -> None:
     with pytest.raises(ValueError, match="0 or 1"):
-        BooleanTruthTableRequest.model_validate(
-            {"truth_table": [0, 1, 1, 2]}
-        )
+        BooleanTruthTableRequest.model_validate({"truth_table": [0, 1, 1, 2]})
 
 
 def test_walsh_transform_kernel_rejects_non_binary_values() -> None:

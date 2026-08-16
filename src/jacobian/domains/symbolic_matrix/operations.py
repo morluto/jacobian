@@ -61,4 +61,3 @@ def compute_symbolic_eigenvalues(
         eigenvalues=tuple(value for value, _ in eigenvalues),
         multiplicities=tuple(mult for _, mult in eigenvalues),
     )
-

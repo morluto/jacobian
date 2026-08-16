@@ -24,7 +24,7 @@ def _parse_matrix(entries: list[list[str]], variables: list[str]) -> Any:
         raise ValueError("symbolic matrix rows must all have the same length")
     if rows > 32 or columns > 32:
         raise ValueError("symbolic matrix dimensions must be between 1 and 32")
-    local = {name: sym for name, sym in zip(variables, symbols)}
+    local = dict(zip(variables, symbols, strict=True))
     matrix_rows = []
     for row in entries:
         matrix_rows.append([sympy.sympify(entry, locals=local) for entry in row])
@@ -50,8 +50,6 @@ def symbolic_rank(
     variables: list[str],
 ) -> tuple[int, tuple[int, ...]]:
     """Return the exact symbolic rank and RREF pivot columns."""
-    import sympy
-
     matrix, _ = _parse_matrix(entries, variables)
     _, pivots = matrix.rref()
     return len(pivots), tuple(int(c) for c in pivots)

@@ -189,7 +189,9 @@ def compute_kronecker_product(
     )
 
 
-def compute_partial_trace(request: MatrixPartialTraceRequest) -> MatrixPartialTraceResult:
+def compute_partial_trace(
+    request: MatrixPartialTraceRequest,
+) -> MatrixPartialTraceResult:
     matrix = conversions.rational_matrix_to_sympy(request.matrix)
     reduced = matrices.partial_trace(
         matrix,
@@ -201,4 +203,3 @@ def compute_partial_trace(request: MatrixPartialTraceRequest) -> MatrixPartialTr
         traced_dimension=request.traced_dimension,
         kept_dimension=request.kept_dimension,
     )
-

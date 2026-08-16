@@ -6,6 +6,7 @@ import pytest
 from tests.support.rationals import rational_payload as q
 
 from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.matrices import RationalMatrix
 from jacobian.contracts.matrix_operations import (
     MatrixKroneckerProductRequest,
     MatrixKroneckerProductResult,
@@ -14,7 +15,6 @@ from jacobian.contracts.matrix_operations import (
     MatrixPermanentResult,
     SquareRationalMatrixRequest,
 )
-from jacobian.contracts.matrices import RationalMatrix
 from jacobian.domains.matrices.operations import (
     compute_kronecker_product,
     compute_partial_trace,
@@ -52,9 +52,7 @@ def test_matrix_permanent_of_all_ones_two_by_two() -> None:
 
 
 def test_matrix_permanent_of_three_by_three_all_ones() -> None:
-    request = _sq_request(
-        [[q(1), q(1), q(1)], [q(1), q(1), q(1)], [q(1), q(1), q(1)]]
-    )
+    request = _sq_request([[q(1), q(1), q(1)], [q(1), q(1), q(1)], [q(1), q(1), q(1)]])
     assert compute_permanent(request).permanent == _cr(6)
 
 
@@ -136,8 +134,9 @@ def test_partial_trace_of_diagonal_kronecker_product() -> None:
 def test_partial_trace_of_full_two_by_two_factors() -> None:
     # A = [[1,2],[3,4]], B = [[0,5],[6,7]]
     # A (x) B is the Kronecker product; partial trace over A gives trace(A)*B
-    from jacobian.math.matrices import kronecker_product
     import sympy
+
+    from jacobian.math.matrices import kronecker_product
 
     a = sympy.Matrix([[1, 2], [3, 4]])
     b = sympy.Matrix([[0, 5], [6, 7]])
@@ -156,10 +155,10 @@ def test_partial_trace_of_full_two_by_two_factors() -> None:
     )
     result = compute_partial_trace(request)
     # trace(A) = 5, so reduced = 5 * B
-    trace_A = 5
+    trace_a = 5
     expected = [
-        [_cr(0 * trace_A), _cr(5 * trace_A)],
-        [_cr(6 * trace_A), _cr(7 * trace_A)],
+        [_cr(0 * trace_a), _cr(5 * trace_a)],
+        [_cr(6 * trace_a), _cr(7 * trace_a)],
     ]
     assert result.reduced_matrix.entries == tuple(tuple(row) for row in expected)
 

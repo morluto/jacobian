@@ -71,7 +71,14 @@ Do not copy these authoring failures into a new or generated task:
 - scoring prose with keywords, length, or negation regexes;
 - publishing a universal certificate `oneOf` for every generated family;
 - requiring a witness that only mirrors, hashes, or paraphrases `result`;
-- leaving instruction, schema, and verifier mutually unsatisfiable.
+- leaving instruction, schema, and verifier mutually unsatisfiable;
+- putting a leaked answer constant or derived conclusion in the public schema
+  (`const` status fields, semantic-relation enums, rationality conclusions,
+  `Claim COMPUTED`, tautological bound certificates);
+- requiring JSON `null` for fields a closed success variant does not declare;
+  omit those fields;
+- excluding Harbor host-verifier tests from unsupported-surface AST or text
+  scans merely because they spawn the verifier subprocess.
 
 The verifier replays the advertised predicate from the frozen input. Keep
 `expected.json` as an Oracle fixture only. Generated families emit the
@@ -80,6 +87,14 @@ instruction and schema are the complete public protocol: required result
 fields, exact types, scope, and any task-specific witness rule. Do not hide a
 validity requirement in a README or task metadata. Keep solution, verifier,
 Oracle, host paths, and caches out of the agent environment.
+
+When a schema shrinks, update the instruction, verifier exact-key set, gold
+submission, public contract, and host tests in the same change. Align a
+mismatch by shrinking the verifier and instruction, never by restoring leaked
+constants. If one submitted object implies a dimension or bound, parse every
+related object at that derived size. After merging `main`, re-read every
+touched `instruction.md`: truncated sentences, leftover contract fragments,
+and `COMPUTED` clauses on result-only schemas are protocol bugs.
 
 Each task is a direct child of its dataset with one authoritative member record:
 
@@ -112,11 +127,15 @@ example, input binding or a witness check); they do not create fractional
 credit. Use non-binary scoring only for an explicitly decomposed task whose
 independent subclaims are each meaningful, replayable mathematical outcomes.
 
-For `input_binding_decoupled` tasks, keep `load_submission()` strict. A bounded
-raw parse may support independent diagnostics, but it never establishes public
-protocol validity or reward eligibility. Store every such exception in that
-task's closed `tests/verifier_contract.json`; never use a global task-name
-registry.
+For `input_binding_decoupled` tasks, keep `load_submission()` the strict
+protocol loader. A bounded raw parse may support independent diagnostics, but
+it never establishes public protocol validity or reward eligibility. Store
+every such exception in that task's closed `tests/verifier_contract.json`;
+never use a global task-name registry. If correctness or witness validity must
+remain observable when `/app/input.json` is replaced, parse with
+`require_input_binding=False`, replay math against the frozen tests input, and
+AND binding only into `reward`. Do not fold binding into `correctness` or
+`witness_validity`.
 
 Bound raw submissions and visible/frozen inputs before parsing. If a task needs
 a witness artifact, publish a finite bound only when its encoding or task
@@ -155,6 +174,11 @@ Treat task-local `tests/verifier_support.py` copies as authoritative because
 Harbor's separate verifier image needs them in its build context. Migrate copies
 explicitly, inspect their diffs, and refresh only their Dockerfile checksum
 labels. Do not silently synchronize all tasks from a global runtime helper.
+`verifier_bundle_checksum()` hashes filenames, NUL separators, and bytes; do
+not concatenate `sha256(verifier.py)` with `sha256(verifier_support.py)`.
+Refresh selected tasks with `make harbor-prepare-task` or scoped
+`tools/sync_harbor_verifier_support.py`. Gold witness descriptors must resolve
+to regular files under a non-symlink `solution/` root.
 
 Create a snapshot only for an intentional evaluation or publication boundary:
 

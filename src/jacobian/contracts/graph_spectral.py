@@ -40,3 +40,29 @@ class GraphSpectrumResult(ContractModel):
     eigenvalues: tuple[str, ...]
     multiplicities: tuple[int, ...]
     convention: Literal["SYMPY_EIGENVALS"] = "SYMPY_EIGENVALS"
+
+
+class GraphCharacteristicPolynomialRequest(ContractModel):
+    """Request the characteristic polynomial of a graph matrix."""
+
+    graph: GraphEdgeList
+    matrix: Literal["ADJACENCY", "LAPLACIAN"] = "ADJACENCY"
+
+
+class GraphCharacteristicPolynomialResult(ContractModel):
+    """Dense monic characteristic polynomial coefficients of a graph matrix."""
+
+    variable: Literal["lambda"] = "lambda"
+    degree: int = Field(ge=0, le=32)
+    coefficients_descending: tuple[str, ...] = Field(min_length=1, max_length=33)
+    monic: Literal[True] = True
+    matrix: Literal["ADJACENCY", "LAPLACIAN"]
+    convention: Literal["DET_LAMBDA_I_MINUS_M"] = "DET_LAMBDA_I_MINUS_M"
+
+    @model_validator(mode="after")
+    def require_dense_monic_coefficients(self) -> Self:
+        if len(self.coefficients_descending) != self.degree + 1:
+            raise ValueError("dense coefficient count must be degree plus one")
+        if self.coefficients_descending[0] != "1":
+            raise ValueError("characteristic polynomial must be monic")
+        return self

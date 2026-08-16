@@ -4,11 +4,17 @@ from collections.abc import Callable
 from typing import Any
 
 from jacobian.contracts.base import ContractModel
-from jacobian.contracts.graph_spectral import GraphSpectrumRequest, GraphSpectrumResult
+from jacobian.contracts.graph_spectral import (
+    GraphCharacteristicPolynomialRequest,
+    GraphCharacteristicPolynomialResult,
+    GraphSpectrumRequest,
+    GraphSpectrumResult,
+)
 from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
 from jacobian.domains.graph_spectral.operations import (
     compute_adjacency_spectrum,
+    compute_characteristic_polynomial,
     compute_laplacian_spectrum,
 )
 from jacobian.math_tools import MathTool
@@ -62,7 +68,7 @@ GRAPH_SPECTRAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     "graph": {
                         "vertex_count": 3,
                         "edges": [[0, 1], [1, 2]],
-                    }
+                    },
                 },
             ),
         ),
@@ -87,7 +93,42 @@ GRAPH_SPECTRAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     "graph": {
                         "vertex_count": 3,
                         "edges": [[0, 1], [1, 2]],
-                    }
+                    },
+                },
+            ),
+        ),
+    ),
+    graph_spectral_operation(
+        "graph.characteristic_polynomial.compute",
+        "Compute the exact characteristic polynomial of a graph matrix",
+        "Compute the dense monic characteristic polynomial det(lambda*I - M) of the adjacency or Laplacian matrix of a simple undirected graph using SymPy.",
+        GraphCharacteristicPolynomialRequest,
+        GraphCharacteristicPolynomialResult,
+        compute_characteristic_polynomial,
+        "graph",
+        "characteristic-polynomial",
+        "exact",
+        examples=(
+            example(
+                "path_adjacency_charpoly",
+                "Compute the adjacency characteristic polynomial of a path graph P3.",
+                {
+                    "graph": {
+                        "vertex_count": 3,
+                        "edges": [[0, 1], [1, 2]],
+                    },
+                    "matrix": "ADJACENCY",
+                },
+            ),
+            example(
+                "path_laplacian_charpoly",
+                "Compute the Laplacian characteristic polynomial of a path graph P3.",
+                {
+                    "graph": {
+                        "vertex_count": 3,
+                        "edges": [[0, 1], [1, 2]],
+                    },
+                    "matrix": "LAPLACIAN",
                 },
             ),
         ),

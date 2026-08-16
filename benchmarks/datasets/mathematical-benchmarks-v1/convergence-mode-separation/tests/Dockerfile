@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact verifier for a dyadic convergence-mode separation certificate.
 LABEL jacobian.task="jacobian/convergence-mode-separation" \
-      jacobian.checksum="feeb5b4584e183551f9ada5cf3ead49ed70606404abbe80de4eb57975621a6ad"
+      jacobian.checksum="7c37a71baa7afdd48ca8fc94d645b03656cab0ab3fd3c90cf42baa5b07bb43a9"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

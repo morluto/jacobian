@@ -134,7 +134,12 @@ def _mass_formula_value(value, level):
 
 
 def _valid_probability_argument(value, start, end):
-    if not isinstance(value, dict) or set(value) != {"event_mass_formula"}:
+    if not isinstance(value, dict) or set(value) != {
+        "event_mass_formula",
+        "limit",
+    }:
+        return False
+    if value["limit"] != "ZERO":
         return False
     return all(
         _mass_formula_value(value["event_mass_formula"], level) == Fraction(1, 2**level)

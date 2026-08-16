@@ -1,123 +1,123 @@
 {
-    "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
-    "schema_definitions": {},
-    "schema_version": "1",
-    "submission_path": "/app/submission.json",
-    "submission_result": {
+  "public_notes": "The verifier replays the task-specific mathematical predicate from the submitted result.",
+  "schema_definitions": {},
+  "schema_version": "1",
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "solution": {
         "additionalProperties": false,
         "properties": {
-            "solution": {
-                "additionalProperties": false,
-                "properties": {
-                    "x": {
-                        "additionalProperties": false,
-                        "properties": {
-                            "denominator": {
-                                "minimum": 1,
-                                "type": "integer"
-                            },
-                            "numerator": {
-                                "type": "integer"
-                            }
-                        },
-                        "required": [
-                            "numerator",
-                            "denominator"
-                        ],
-                        "type": "object"
-                    },
-                    "y": {
-                        "additionalProperties": false,
-                        "properties": {
-                            "denominator": {
-                                "minimum": 1,
-                                "type": "integer"
-                            },
-                            "numerator": {
-                                "type": "integer"
-                            }
-                        },
-                        "required": [
-                            "numerator",
-                            "denominator"
-                        ],
-                        "type": "object"
-                    }
-                },
-                "required": [
-                    "x",
-                    "y"
-                ],
-                "type": "object"
-            }
+          "x": {
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
+          },
+          "y": {
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "numerator": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "type": "object"
+          }
         },
         "required": [
-            "solution"
+          "x",
+          "y"
         ],
         "type": "object"
+      }
     },
-    "submission_schema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
+    "required": [
+      "solution"
+    ],
+    "type": "object"
+  },
+  "submission_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "result": {
         "additionalProperties": false,
-        "required": [
-            "result"
-        ],
         "properties": {
-            "result": {
+          "solution": {
+            "additionalProperties": false,
+            "properties": {
+              "x": {
                 "additionalProperties": false,
                 "properties": {
-                    "solution": {
-                        "additionalProperties": false,
-                        "properties": {
-                            "x": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "denominator": {
-                                        "minimum": 1,
-                                        "type": "integer"
-                                    },
-                                    "numerator": {
-                                        "type": "integer"
-                                    }
-                                },
-                                "required": [
-                                    "numerator",
-                                    "denominator"
-                                ],
-                                "type": "object"
-                            },
-                            "y": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "denominator": {
-                                        "minimum": 1,
-                                        "type": "integer"
-                                    },
-                                    "numerator": {
-                                        "type": "integer"
-                                    }
-                                },
-                                "required": [
-                                    "numerator",
-                                    "denominator"
-                                ],
-                                "type": "object"
-                            }
-                        },
-                        "required": [
-                            "x",
-                            "y"
-                        ],
-                        "type": "object"
-                    }
+                  "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "numerator": {
+                    "type": "integer"
+                  }
                 },
                 "required": [
-                    "solution"
+                  "numerator",
+                  "denominator"
                 ],
                 "type": "object"
-            }
-        }
+              },
+              "y": {
+                "additionalProperties": false,
+                "properties": {
+                  "denominator": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "numerator": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "numerator",
+                  "denominator"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "solution"
+        ],
+        "type": "object"
+      }
     },
-    "task_id": "jacobian/rational-linear-solution"
+    "required": [
+      "result"
+    ],
+    "type": "object"
+  },
+  "task_id": "jacobian/rational-linear-solution"
 }

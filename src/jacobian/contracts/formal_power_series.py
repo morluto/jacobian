@@ -101,6 +101,16 @@ class _SeriesPairRequest(ContractModel):
         return self
 
 
+class SeriesDivideRequest(_SeriesPairRequest):
+    """Divide two series when the denominator is a unit."""
+
+    @model_validator(mode="after")
+    def require_unit_denominator(self) -> Self:
+        if self.right.coefficients[0].as_fraction() == 0:
+            raise ValueError("denominator must have a nonzero constant term")
+        return self
+
+
 # ---------------------------------------------------------------------------
 # Arithmetic: add / subtract / multiply / scalar multiply
 # ---------------------------------------------------------------------------
@@ -140,6 +150,18 @@ class SeriesPowerRequest(ContractModel):
     series: InputTruncatedSeries
     exponent: StrictInt = Field(ge=0, le=MAX_POWER_EXPONENT)
 
+    @model_validator(mode="after")
+    def require_result_digit_budget(self) -> Self:
+        if self.exponent == 0:
+            return self
+        for coefficient in self.series.coefficients:
+            digits = max(len(coefficient.num.lstrip("-")), len(coefficient.den))
+            if digits * self.exponent > MAX_RESULT_RATIONAL_DIGITS:
+                raise ValueError(
+                    "power would exceed the 4096-digit result coefficient bound"
+                )
+        return self
+
 
 class SeriesPowerResult(ContractModel):
     result: TruncatedSeries
@@ -151,6 +173,32 @@ class SeriesPowerResult(ContractModel):
 # ---------------------------------------------------------------------------
 # Inverse
 # ---------------------------------------------------------------------------
+
+
+class SeriesInverseRequest(ContractModel):
+    """Invert a truncated series that is a unit (nonzero constant term)."""
+
+    variable: Variable
+    truncation_order: StrictInt = Field(ge=1, le=MAX_TRUNCATION_ORDER)
+    coefficients: tuple[CanonicalRational, ...]
+
+    @model_validator(mode="after")
+    def require_unit_constant(self) -> Self:
+        series = InputTruncatedSeries(
+            variable=self.variable,
+            truncation_order=self.truncation_order,
+            coefficients=self.coefficients,
+        )
+        if series.coefficients[0].as_fraction() == 0:
+            raise ValueError("inverse requires a nonzero constant term")
+        return self
+
+    def as_series(self) -> InputTruncatedSeries:
+        return InputTruncatedSeries(
+            variable=self.variable,
+            truncation_order=self.truncation_order,
+            coefficients=self.coefficients,
+        )
 
 
 class SeriesInverseResult(ContractModel):

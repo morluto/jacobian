@@ -81,6 +81,16 @@ class TestFlowPolynomial:
         assert d.get(1) == 1
         assert d.get(0) == -1
 
+    def test_rejects_graph_beyond_deletion_budget(self):
+        import pytest
+        from pydantic import ValidationError
+
+        edges = tuple(GraphEdge(u=i, v=j) for i in range(8) for j in range(i))
+        with pytest.raises(ValidationError, match="at most"):
+            GraphPolynomialRequest(
+                graph=GraphSpec(vertex_count=8, edges=edges),
+            )
+
     def test_bridge_is_zero_polynomial(self):
         req = GraphPolynomialRequest(
             graph=GraphSpec(vertex_count=2, edges=(GraphEdge(u=0, v=1),))

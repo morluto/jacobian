@@ -26,6 +26,38 @@ def test_derivative_of_order_one_is_zero() -> None:
     assert result.result.coefficients[0].as_fraction() == 0
 
 
+def test_power_rejects_result_digit_overflow() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    from jacobian.contracts.formal_power_series import SeriesPowerRequest
+
+    huge = "1" + "0" * (MAX_RATIONAL_DIGITS - 1)
+    with pytest.raises(ValidationError, match="4096-digit"):
+        SeriesPowerRequest(
+            series=InputTruncatedSeries(
+                variable="x",
+                truncation_order=1,
+                coefficients=(_coeff(huge),),
+            ),
+            exponent=1000,
+        )
+
+
+def test_inverse_rejects_zero_constant() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    from jacobian.contracts.formal_power_series import SeriesInverseRequest
+
+    with pytest.raises(ValidationError, match="nonzero constant"):
+        SeriesInverseRequest(
+            variable="x",
+            truncation_order=2,
+            coefficients=(_coeff("0"), _coeff("1")),
+        )
+
+
 def test_input_series_rejects_oversized_coefficients() -> None:
     import pytest
     from pydantic import ValidationError

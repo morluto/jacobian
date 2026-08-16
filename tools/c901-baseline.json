@@ -5,7 +5,7 @@
     {
       "path": "src/jacobian/domains/graph_decomposition/operations.py",
       "symbol": "_find_next_ear",
-      "complexity": 14
+      "complexity": 12
     },
     {
       "path": "tests/domain/graph_isomorphism/test_graph_isomorphism.py",

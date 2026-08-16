@@ -56,6 +56,15 @@ class SetFunctionEvalRequest(ContractModel):
     function: SetFunction
     subset: tuple[int, ...] = Field(default=())
 
+    @model_validator(mode="after")
+    def require_valid_subset(self) -> Self:
+        if len(self.subset) != len(set(self.subset)):
+            raise ValueError("subset elements must be unique")
+        for elem in self.subset:
+            if not (0 <= elem < self.function.ground_set_size):
+                raise ValueError("subset elements must be in 0..ground_set_size-1")
+        return self
+
 
 class SetFunctionEvalResult(ContractModel):
     """Value of f(S) or unknown."""

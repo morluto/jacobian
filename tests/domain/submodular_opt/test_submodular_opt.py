@@ -33,6 +33,13 @@ class TestSetFunctionEval:
         assert result.found is True
         assert result.value == "2"
 
+    def test_rejects_duplicate_eval_subset(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="unique"):
+            SetFunctionEvalRequest(function=_make_uniform_function(1), subset=(0, 0))
+
 
 class TestMonotonicity:
     def test_monotone(self):

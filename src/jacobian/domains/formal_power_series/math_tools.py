@@ -8,12 +8,14 @@ from jacobian.contracts.formal_power_series import (
     SeriesComposeRequest,
     SeriesComposeResult,
     SeriesDerivativeResult,
+    SeriesDivideRequest,
     SeriesDivideResult,
     SeriesFromPolynomialRequest,
     SeriesFromPolynomialResult,
     SeriesIdentityCheckResult,
     SeriesIntegralRequest,
     SeriesIntegralResult,
+    SeriesInverseRequest,
     SeriesInverseResult,
     SeriesMultiplyResult,
     SeriesPowerRequest,
@@ -282,9 +284,9 @@ FORMAL_POWER_SERIES_OPERATIONS = (
             "Compute the multiplicative inverse B(x) of A(x) modulo x^N, requiring "
             "a_0 != 0.  Returns the exact product residual A*B - 1."
         ),
-        request_type=InputTruncatedSeries,
+        request_type=SeriesInverseRequest,
         result_type=SeriesInverseResult,
-        run=lambda request: compute_inverse(request),
+        run=lambda request: compute_inverse(request.as_series()),
         tags=(
             "formal-series",
             "power-series",
@@ -319,7 +321,7 @@ FORMAL_POWER_SERIES_OPERATIONS = (
             "Compute the exact quotient Q = A/B modulo x^N, requiring b_0 != 0. "
             "Returns the exact residual B*Q - A."
         ),
-        request_type=_SeriesArithmeticRequest,
+        request_type=SeriesDivideRequest,
         result_type=SeriesDivideResult,
         run=lambda request: compute_divide(request.left, request.right),
         tags=(

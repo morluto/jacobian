@@ -183,43 +183,51 @@ def _find_next_ear(  # noqa: C901
         parent: dict[int, int] = {s: s}
         queue: list[int] = [s]
         found: int | None = None
+        close_from = s
         while queue and found is None:
             current = queue.pop(0)
             for neighbor in g.neighbors(current):
                 edge = (min(current, neighbor), max(current, neighbor))
                 if edge in used_edges:
                     continue
+                if parent.get(current) == neighbor:
+                    continue
                 if neighbor in used_vertices:
-                    # Found a used endpoint.  Accept if it is a genuine ear:
-                    # either a cycle ear (closing back to ``s``) with at least
-                    # one internal vertex, or a path to a different used
-                    # vertex.
-                    if neighbor == s:
-                        if current != s:
-                            found = neighbor
-                            parent[neighbor] = current
-                            break
-                    else:
-                        found = neighbor
+                    found = neighbor
+                    close_from = current
+                    if neighbor != s:
                         parent[neighbor] = current
-                        break
-                elif neighbor not in parent:
+                    break
+                if neighbor not in parent:
                     parent[neighbor] = current
                     queue.append(neighbor)
             if found is not None:
                 break
         if found is not None:
-            # Reconstruct the ear from ``s`` to ``found``.
-            ear: list[int] = []
-            node: int | None = found
-            while node is not None and node != s:
-                ear.append(node)
-                node = parent.get(node)
-            if node == s:
-                ear.append(s)
-            ear.reverse()
-            if len(ear) >= 2:
-                return tuple(ear)
+            ear = _reconstruct_ear(parent, s, found, close_from)
+            if ear is not None:
+                return ear
+    return None
+
+
+def _reconstruct_ear(
+    parent: dict[int, int],
+    start: int,
+    found: int,
+    close_from: int,
+) -> tuple[int, ...] | None:
+    node: int | None = close_from if found == start else found
+    ear: list[int] = []
+    while node is not None and node != start:
+        ear.append(node)
+        node = parent.get(node)
+    if node == start:
+        ear.append(start)
+    ear.reverse()
+    if found == start and ear and ear[-1] != start:
+        ear.append(start)
+    if len(ear) >= 2:
+        return tuple(ear)
     return None
 
 

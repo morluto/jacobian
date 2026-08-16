@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.euclidean_geometry import (
     AngleEqualityRequest,
     AngleEqualityResult,
@@ -26,13 +27,20 @@ def compute_segment_ratio(request: SegmentRatioRequest) -> SegmentRatioResult:
     """Compute the ratio of squared lengths of two segments."""
     d1 = _squared_dist_sq(request.segment1[0], request.segment1[1])
     d2 = _squared_dist_sq(request.segment2[0], request.segment2[1])
-    if d2 == 0:
-        raise ValueError("second segment must be nonzero")
     ratio = d1 / d2
     return SegmentRatioResult(
-        squared_ratio=str(ratio),
-        ratio_numerator=str(d1),
-        ratio_denominator=str(d2),
+        squared_ratio=_format_rational(ratio),
+        ratio_numerator=_format_rational(d1),
+        ratio_denominator=_format_rational(d2),
+    )
+
+
+def _format_rational(value: Fraction) -> str:
+    if value.denominator == 1:
+        return format_canonical_integer(value.numerator)
+    return (
+        f"{format_canonical_integer(value.numerator)}/"
+        f"{format_canonical_integer(value.denominator)}"
     )
 
 

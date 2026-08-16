@@ -50,10 +50,12 @@ class EvalRequest(ContractModel):
             raise ValueError(
                 "polynomial expression must be a rational polynomial"
             ) from exc
-        if expression.free_symbols and not expression.is_rational_function(
-            *expression.free_symbols
-        ):
-            raise ValueError("polynomial expression must be a rational polynomial")
+        symbols = tuple(expression.free_symbols)
+        if symbols:
+            if not expression.is_polynomial(*symbols):
+                raise ValueError("polynomial expression must be a polynomial")
+        elif not expression.is_rational:
+            raise ValueError("polynomial expression must be a polynomial")
         free = {str(symbol) for symbol in expression.free_symbols}
         given = set(self.point.variables)
         if not free <= given:

@@ -35,6 +35,16 @@ class TestSegmentRatio:
         result = compute_segment_ratio(req)
         assert result.squared_ratio == "4"
 
+    def test_rejects_zero_second_segment(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="nonzero"):
+            SegmentRatioRequest(
+                segment1=(_pt(0, 0), _pt(1, 0)),
+                segment2=(_pt(0, 0), _pt(0, 0)),
+            )
+
 
 class TestAngleEquality:
     def test_right_angles(self):

@@ -43,6 +43,16 @@ class SegmentRatioRequest(ContractModel):
     segment1: tuple[RationalPoint2D, RationalPoint2D]
     segment2: tuple[RationalPoint2D, RationalPoint2D]
 
+    @model_validator(mode="after")
+    def require_nonzero_second_segment(self) -> Self:
+        start, end = self.segment2
+        if (
+            start.x.as_fraction() == end.x.as_fraction()
+            and start.y.as_fraction() == end.y.as_fraction()
+        ):
+            raise ValueError("second segment must be nonzero")
+        return self
+
 
 class SegmentRatioResult(ContractModel):
     """Ratio of squared lengths and whether it matches a target."""

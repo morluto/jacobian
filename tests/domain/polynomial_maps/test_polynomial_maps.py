@@ -40,7 +40,20 @@ class TestEvaluate:
         result = evaluate_polynomial(req)
         assert result.value == "0"
 
-    def test_rejects_partial_substitution(self):
+    def test_rejects_rational_function(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="polynomial"):
+            EvalRequest(
+                polynomial=RationalPolynomialExpr(expression="1/x"),
+                point=VariablePoint(
+                    variables=("x",),
+                    values=({"num": "1", "den": "1"},),
+                ),
+            )
+
+    def test_rejects_incomplete_substitution(self):
         import pytest
         from pydantic import ValidationError
 

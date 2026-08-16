@@ -42,10 +42,28 @@ class GraphSpec(ContractModel):
         return self
 
 
+MAX_GRAPH_POLYNOMIAL_VERTICES = 12
+MAX_GRAPH_POLYNOMIAL_EDGES = 24
+
+
 class GraphPolynomialRequest(ContractModel):
-    """Request a graph polynomial computation."""
+    """Request a Tutte, chromatic, or flow polynomial on a tractable graph."""
 
     graph: GraphSpec
+
+    @model_validator(mode="after")
+    def require_deletion_contraction_budget(self) -> Self:
+        if self.graph.vertex_count > MAX_GRAPH_POLYNOMIAL_VERTICES:
+            raise ValueError(
+                "Tutte, chromatic, and flow polynomials may have at most "
+                f"{MAX_GRAPH_POLYNOMIAL_VERTICES} vertices"
+            )
+        if len(self.graph.edges) > MAX_GRAPH_POLYNOMIAL_EDGES:
+            raise ValueError(
+                "Tutte, chromatic, and flow polynomials may have at most "
+                f"{MAX_GRAPH_POLYNOMIAL_EDGES} edges"
+            )
+        return self
 
 
 MAX_MATCHING_VERTICES = 16

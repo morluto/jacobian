@@ -1,0 +1,310 @@
+"""Wire contracts for exact truncated formal power series operations."""
+
+from __future__ import annotations
+
+from typing import Annotated, Literal, Self
+
+from pydantic import Field, StrictInt, StringConstraints, model_validator
+
+from jacobian.contracts.base import ContractModel
+from jacobian.contracts.exact import CanonicalRational
+
+# ---------------------------------------------------------------------------
+# Public bounds
+# ---------------------------------------------------------------------------
+
+MAX_TRUNCATION_ORDER = 512
+MAX_RATIONAL_DIGITS = 256
+MAX_RESULT_RATIONAL_DIGITS = 4_096
+MAX_RESULT_BYTES = 10 * 1024 * 1024
+MAX_POWER_EXPONENT = 1_000
+
+Variable = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^[a-z][a-z0-9]*$",
+        max_length=16,
+        strict=True,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Shared value type
+# ---------------------------------------------------------------------------
+
+
+class TruncatedSeries(ContractModel):
+    """One immutable element of QQ[[x]]/(x^N).
+
+    The coefficient tuple has exactly ``truncation_order`` entries in
+    ascending-power order.  Two series are equal iff they share the same
+    variable, truncation order, and coefficient tuple.
+    """
+
+    variable: Variable = Field(description="The single formal variable.")
+    truncation_order: StrictInt = Field(
+        ge=1,
+        le=MAX_TRUNCATION_ORDER,
+        description="Truncation order N (coefficients a_0..a_{N-1}).",
+    )
+    coefficients: tuple[CanonicalRational, ...] = Field(
+        description="Exactly N rational coefficients in ascending powers.",
+    )
+
+    @model_validator(mode="after")
+    def require_dense_tuple(self) -> Self:
+        if len(self.coefficients) != self.truncation_order:
+            raise ValueError(
+                "coefficient tuple must have exactly truncation_order entries"
+            )
+        for value in self.coefficients:
+            num = value.num
+            den = value.den
+            if len(num.lstrip("-")) > MAX_RATIONAL_DIGITS or len(den) > MAX_RATIONAL_DIGITS:
+                raise ValueError("coefficient exceeds the 256-digit rational bound")
+        return self
+
+
+# ---------------------------------------------------------------------------
+# Pair / single-series request helpers
+# ---------------------------------------------------------------------------
+
+
+class _SeriesPairRequest(ContractModel):
+    """Base request with two series that must share variable and order."""
+
+    left: TruncatedSeries
+    right: TruncatedSeries
+
+    @model_validator(mode="after")
+    def require_matching_context(self) -> Self:
+        if self.left.variable != self.right.variable:
+            raise ValueError("operands must share the same variable")
+        if self.left.truncation_order != self.right.truncation_order:
+            raise ValueError("operands must share the same truncation order")
+        return self
+
+
+# ---------------------------------------------------------------------------
+# Arithmetic: add / subtract / multiply / scalar multiply
+# ---------------------------------------------------------------------------
+
+
+class SeriesArithmeticResult(ContractModel):
+    result: TruncatedSeries
+    residual_congruence: Literal["EXACT_MOD_X_TO_N"] = "EXACT_MOD_X_TO_N"
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+
+class SeriesMultiplyResult(ContractModel):
+    result: TruncatedSeries
+    convolution_ledger: tuple[CanonicalRational, ...] = Field(
+        description="Per-degree Cauchy convolution sums c_n = sum_{i=0}^n a_i b_{n-i}.",
+    )
+    residual_congruence: Literal["EXACT_MOD_X_TO_N"] = "EXACT_MOD_X_TO_N"
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+
+class SeriesScalarMultiplyRequest(ContractModel):
+    series: TruncatedSeries
+    scalar: CanonicalRational
+
+
+class SeriesScalarMultiplyResult(ContractModel):
+    result: TruncatedSeries
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+
+# ---------------------------------------------------------------------------
+# Power
+# ---------------------------------------------------------------------------
+
+
+class SeriesPowerRequest(ContractModel):
+    series: TruncatedSeries
+    exponent: StrictInt = Field(ge=0, le=MAX_POWER_EXPONENT)
+
+
+class SeriesPowerResult(ContractModel):
+    result: TruncatedSeries
+    multiplication_count: StrictInt
+    residual_congruence: Literal["EXACT_MOD_X_TO_N"] = "EXACT_MOD_X_TO_N"
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+
+# ---------------------------------------------------------------------------
+# Inverse
+# ---------------------------------------------------------------------------
+
+
+class SeriesInverseResult(ContractModel):
+    result: TruncatedSeries
+    residual_congruence: Literal[
+        "PRODUCT_IS_ONE_MOD_X_TO_N"
+    ] = "PRODUCT_IS_ONE_MOD_X_TO_N"
+    residual_coefficients: tuple[CanonicalRational, ...] = Field(
+        description="A(x) * B(x) - 1 coefficients (must all be zero).",
+    )
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+
+# ---------------------------------------------------------------------------
+# Divide
+# ---------------------------------------------------------------------------
+
+
+class SeriesDivideResult(ContractModel):
+    quotient: TruncatedSeries
+    residual_congruence: Literal[
+        "DENOMINATOR_TIMES_QUOTIENT_MINUS_NUMERATOR_IS_ZERO_MOD_X_TO_N"
+    ] = "DENOMINATOR_TIMES_QUOTIENT_MINUS_NUMERATOR_IS_ZERO_MOD_X_TO_N"
+    residual_coefficients: tuple[CanonicalRational, ...] = Field(
+        description="B(x) Q(x) - A(x) coefficients (must all be zero).",
+    )
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+
+# ---------------------------------------------------------------------------
+# Compose
+# ---------------------------------------------------------------------------
+
+
+class SeriesComposeRequest(ContractModel):
+    outer: TruncatedSeries
+    inner: TruncatedSeries
+
+    @model_validator(mode="after")
+    def require_matching_variable_and_zero_inner_constant(self) -> Self:
+        if self.outer.variable != self.inner.variable:
+            raise ValueError("outer and inner series must share the same variable")
+        if self.outer.truncation_order != self.inner.truncation_order:
+            raise ValueError("outer and inner series must share the same truncation order")
+        if self.inner.coefficients[0].as_fraction() != 0:
+            raise ValueError(
+                "inner series must have zero constant term for composition with a finite prefix"
+            )
+        return self
+
+
+class SeriesComposeResult(ContractModel):
+    result: TruncatedSeries
+    residual_congruence: Literal["EXACT_MOD_X_TO_N"] = "EXACT_MOD_X_TO_N"
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+
+# ---------------------------------------------------------------------------
+# Reversion
+# ---------------------------------------------------------------------------
+
+
+class SeriesReversionResult(ContractModel):
+    result: TruncatedSeries
+    left_identity: Literal["F_OF_G_IS_X_MOD_X_TO_N"] = "F_OF_G_IS_X_MOD_X_TO_N"
+    right_identity: Literal["G_OF_F_IS_X_MOD_X_TO_N"] = "G_OF_F_IS_X_MOD_X_TO_N"
+    left_residual: tuple[CanonicalRational, ...]
+    right_residual: tuple[CanonicalRational, ...]
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+
+# ---------------------------------------------------------------------------
+# Derivative / integral
+# ---------------------------------------------------------------------------
+
+
+class SeriesDerivativeResult(ContractModel):
+    result: TruncatedSeries
+    output_order_convention: Literal[
+        "MAX_N_MINUS_1_AT_LEAST_1"
+    ] = "MAX_N_MINUS_1_AT_LEAST_1"
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+
+class SeriesIntegralRequest(ContractModel):
+    series: TruncatedSeries
+    output_order: StrictInt = Field(ge=1, le=MAX_TRUNCATION_ORDER)
+
+
+class SeriesIntegralResult(ContractModel):
+    result: TruncatedSeries
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+
+# ---------------------------------------------------------------------------
+# Truncate
+# ---------------------------------------------------------------------------
+
+
+class SeriesTruncateRequest(ContractModel):
+    series: TruncatedSeries
+    target_order: StrictInt = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_target_le_source(self) -> Self:
+        if self.target_order > self.series.truncation_order:
+            raise ValueError("target_order must not exceed source truncation order")
+        if self.target_order > MAX_TRUNCATION_ORDER:
+            raise ValueError("target_order exceeds the public bound")
+        return self
+
+
+class SeriesTruncateResult(ContractModel):
+    result: TruncatedSeries
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+
+# ---------------------------------------------------------------------------
+# Identity check
+# ---------------------------------------------------------------------------
+
+
+class SeriesIdentityCheckResult(ContractModel):
+    status: Literal["EQUAL_MOD_X_TO_N", "NOT_EQUAL"]
+    first_differing_index: StrictInt | None = None
+    exact_difference: CanonicalRational | None = None
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+    @model_validator(mode="after")
+    def require_consistent_diff(self) -> Self:
+        if self.status == "EQUAL_MOD_X_TO_N":
+            if self.first_differing_index is not None or self.exact_difference is not None:
+                raise ValueError("EQUAL must not carry a difference")
+        else:
+            if self.first_differing_index is None or self.exact_difference is None:
+                raise ValueError("NOT_EQUAL must carry a difference")
+        return self
+
+
+# ---------------------------------------------------------------------------
+# Polynomial conversions
+# ---------------------------------------------------------------------------
+
+
+class SeriesFromPolynomialRequest(ContractModel):
+    """Convert a dense rational polynomial coefficient prefix into a series."""
+
+    variable: Variable
+    coefficients: tuple[CanonicalRational, ...] = Field(
+        min_length=1,
+        max_length=MAX_TRUNCATION_ORDER,
+    )
+    truncation_order: StrictInt = Field(ge=1, le=MAX_TRUNCATION_ORDER)
+
+    @model_validator(mode="after")
+    def require_dense_tuple(self) -> Self:
+        if len(self.coefficients) != self.truncation_order:
+            raise ValueError("input coefficients must match truncation_order exactly")
+        return self
+
+
+class SeriesFromPolynomialResult(ContractModel):
+    result: TruncatedSeries
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+
+class SeriesToPolynomialResult(ContractModel):
+    result: TruncatedSeries
+    polynomial_label: Literal["TRUNCATED_POLYNOMIAL_REPRESENTATIVE"] = (
+        "TRUNCATED_POLYNOMIAL_REPRESENTATIVE"
+    )
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"

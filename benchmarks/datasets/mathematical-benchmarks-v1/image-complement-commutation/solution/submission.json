@@ -5,10 +5,7 @@
         "checked_subsets": 32,
         "classification": "BIJECTIVE",
         "commutes": true,
-        "first_failure": null,
-        "id": "permuted_bijection",
-        "left_image": null,
-        "right_complement": null
+        "id": "permuted_bijection"
       },
       {
         "checked_subsets": 16,

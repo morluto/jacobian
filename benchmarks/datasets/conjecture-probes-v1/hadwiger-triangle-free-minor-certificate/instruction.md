@@ -10,8 +10,6 @@ backtracking, checks the submitted four-coloring, and validates the complete
 minor model. Complete graphs, triangles, isolated padding, and label-only
 chromatic claims are rejected.
 
-equal the task id, `result` must exactly copy the submitted `result` object
-(including JSON types), and `limitations` must equal the declared limitations.
 This checks one finite graph only and does not prove Hadwiger's conjecture.
 
 <!-- BEGIN PUBLIC CONTRACT SUBMISSION BLOCK -->

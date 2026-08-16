@@ -1154,7 +1154,6 @@ def _native_math_boundary_violations(
     return tuple(violations)
 
 
-
 _INLINE_EXECUTOR_PATH = PurePosixPath("src/jacobian/inline_execution.py")
 _INLINE_EXECUTOR_FORBIDDEN_IMPORT_PREFIXES = (
     "jacobian.storage",

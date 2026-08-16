@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca9798
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 # Exact verifier for a radical distance-model certificate.
 LABEL jacobian.task="jacobian/radical-distance-triangle-certificate" \
-      jacobian.checksum="4bef72e3e1b5611e8d4d45c47050b48c78ff8574b1afe6255b3986c55c0a0dee"
+      jacobian.checksum="f869510471211d1b1c965ce52f93824c2bd0af2569015595746872ef7b370e26"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

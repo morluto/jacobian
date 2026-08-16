@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 LABEL jacobian.task="jacobian/zarankiewicz-projective-plane-certificate" \
-      jacobian.checksum="42441bde3455e2ef2d9bbee19c2c8cabed9e699965e1455727a5447878051cd0"
+      jacobian.checksum="c8bd5c94b7f864a1c06e5972053b5a54ef00fc6964f6af93ac170c084c4d4e16"
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 COPY input.json public_contract.json test.sh verifier.py verifier_support.py /tests/
 COPY input.json /app/input.json

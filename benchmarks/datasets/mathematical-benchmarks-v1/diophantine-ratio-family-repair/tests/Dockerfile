@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="eb8b0655fdfe68273f141158142f940f107c8569fdac5038c7147127ce675d77"
+LABEL jacobian.checksum="dec09b42f45a3d60613bc59c63e9cd7958cab7d083980d8568e73b5d22431fa2"
 LABEL jacobian.task="jacobian/diophantine-ratio-family-repair"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

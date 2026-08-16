@@ -38,6 +38,7 @@ BUILTIN_OPERATION_MODULES: tuple[BuiltinOperationModule, ...] = (
     ),
     ("jacobian.domains.certified_snf", "certified_snf_operations"),
     ("jacobian.domains.matrices", "matrix_operations"),
+    ("jacobian.domains.symbolic_matrix", "symbolic_matrix_operations"),
     (
         "jacobian.domains.rational_linear",
         "rational_linear_operations",

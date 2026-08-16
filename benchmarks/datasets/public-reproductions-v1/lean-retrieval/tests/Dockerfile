@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.8.4-python3.12-bookworm-slim@sha256:dc7e1d08f8ca979826ec0b68b31c783e0b35b568be6a078d4cbedf38c4cc085e
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 LABEL jacobian.task="jacobian/lean-retrieval" \
-      jacobian.checksum="526d2775c3a709d0a81e799838c42768c0c8b71a9703f29ed56aba25ea0f8f4a"
+      jacobian.checksum="dd35efe389313bf787a56e28ee632563447c746de8006ada484961ce4b6f8860"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh && \

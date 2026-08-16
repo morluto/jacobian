@@ -1,6 +1,6 @@
 FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
-LABEL jacobian.checksum="3c2a7b1bf1674c75160e7cfa25a972577aa2ac4afb200a9a5193b40f8e709141"
+LABEL jacobian.checksum="1a407dd6777a7dadb6bd845f9aa08208d979830c2d6a0fdfd348986deb50b374"
 LABEL jacobian.task="jacobian/apollonius-gap-repair"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json

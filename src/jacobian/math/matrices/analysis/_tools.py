@@ -6,13 +6,13 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.matrix_analysis._models import (
+from jacobian.math.matrices.analysis._models import (
     FarkasCertificateRequest,
     FarkasCertificateResult,
     InertiaResult,
     SymmetricMatrixRequest,
 )
-from jacobian.math.matrix_analysis._operations import (
+from jacobian.math.matrices.analysis._operations import (
     check_farkas_certificate,
     compute_inertia,
 )

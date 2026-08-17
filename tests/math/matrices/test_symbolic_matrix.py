@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.math.symbolic_matrix._models import (
+from jacobian.math.matrices.symbolic._models import (
     SymbolicCharacteristicPolynomialResult,
     SymbolicDeterminantResult,
     SymbolicEigenvaluesResult,
     SymbolicMatrixRequest,
     SymbolicRankResult,
 )
-from jacobian.math.symbolic_matrix._operations import (
+from jacobian.math.matrices.symbolic._operations import (
     compute_symbolic_characteristic_polynomial,
     compute_symbolic_determinant,
     compute_symbolic_eigenvalues,

@@ -15,7 +15,7 @@ from itertools import pairwise
 from typing import Literal
 
 from jacobian.canonical import format_canonical_integer
-from jacobian.math.certified_snf.values import (
+from jacobian.math.matrices.certified_snf.values import (
     CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
 )

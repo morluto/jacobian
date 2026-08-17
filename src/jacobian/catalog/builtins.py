@@ -17,8 +17,6 @@ from jacobian.math.arithmetic_functions._tools import (
 )
 from jacobian.math.boolean._tools import TOOLS as BOOLEAN_TOOLS
 from jacobian.math.boolean_analysis._tools import TOOLS as BOOLEAN_ANALYSIS_TOOLS
-from jacobian.math.canonical_forms._tools import TOOLS as CANONICAL_FORMS_TOOLS
-from jacobian.math.certified_snf._tools import TOOLS as CERTIFIED_SNF_TOOLS
 from jacobian.math.code_theory._tools import TOOLS as CODE_THEORY_TOOLS
 from jacobian.math.combinatorics._tools import TOOLS as COMBINATORICS_TOOLS
 from jacobian.math.convex_analysis._tools import TOOLS as CONVEX_ANALYSIS_TOOLS
@@ -57,7 +55,11 @@ from jacobian.math.lattices._tools import TOOLS as LATTICES_TOOLS
 from jacobian.math.logic._tools import TOOLS as LOGIC_TOOLS
 from jacobian.math.markov_chain._tools import TOOLS as MARKOV_CHAIN_TOOLS
 from jacobian.math.matrices._tools import TOOLS as MATRICES_TOOLS
-from jacobian.math.matrix_analysis._tools import TOOLS as MATRIX_ANALYSIS_TOOLS
+from jacobian.math.matrices.analysis._tools import TOOLS as MATRIX_ANALYSIS_TOOLS
+from jacobian.math.matrices.canonical_forms._tools import TOOLS as CANONICAL_FORMS_TOOLS
+from jacobian.math.matrices.certified_snf._tools import TOOLS as CERTIFIED_SNF_TOOLS
+from jacobian.math.matrices.rational_linear._tools import TOOLS as RATIONAL_LINEAR_TOOLS
+from jacobian.math.matrices.symbolic._tools import TOOLS as SYMBOLIC_MATRIX_TOOLS
 from jacobian.math.multiple_testing._tools import TOOLS as MULTIPLE_TESTING_TOOLS
 from jacobian.math.number_field._tools import TOOLS as NUMBER_FIELD_TOOLS
 from jacobian.math.number_theory._tools import TOOLS as NUMBER_THEORY_TOOLS
@@ -73,13 +75,11 @@ from jacobian.math.polynomials.multivariate._tools import (
 from jacobian.math.polynomials.real_algebra._tools import TOOLS as REAL_ALGEBRA_TOOLS
 from jacobian.math.posets._tools import TOOLS as POSETS_TOOLS
 from jacobian.math.probability._tools import TOOLS as PROBABILITY_TOOLS
-from jacobian.math.rational_linear._tools import TOOLS as RATIONAL_LINEAR_TOOLS
 from jacobian.math.recurrence_solving._tools import TOOLS as RECURRENCE_SOLVING_TOOLS
 from jacobian.math.regular_languages._tools import TOOLS as REGULAR_LANGUAGES_TOOLS
 from jacobian.math.root_isolation._tools import TOOLS as ROOT_ISOLATION_TOOLS
 from jacobian.math.sequences._tools import TOOLS as SEQUENCES_TOOLS
 from jacobian.math.submodular_opt._tools import TOOLS as SUBMODULAR_OPT_TOOLS
-from jacobian.math.symbolic_matrix._tools import TOOLS as SYMBOLIC_MATRIX_TOOLS
 from jacobian.math.topology._tools import TOOLS as TOPOLOGY_TOOLS
 
 BUILTIN_TOOLS: MathTools = (

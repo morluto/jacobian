@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
-from jacobian.math.certified_snf._models import (
+from jacobian.math.matrices.certified_snf._models import (
     CertifiedSmithNormalFormRequest,
     CertifiedSmithNormalFormResult,
 )
-from jacobian.math.certified_snf.operations import (
+from jacobian.math.matrices.certified_snf.operations import (
     certificate_from_reduction,
     smith_reduce,
 )

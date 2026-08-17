@@ -6,13 +6,13 @@ from collections.abc import Sequence
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.canonical_forms import (
+from jacobian.math.matrices.canonical_forms import (
     characteristic_polynomial,
     invariant_factors,
     minimal_polynomial,
     primary_decomposition,
 )
-from jacobian.math.canonical_forms._models import (
+from jacobian.math.matrices.canonical_forms._models import (
     InvariantFactorEntry,
     MinimalPolynomialResult,
     MonicPolynomial,

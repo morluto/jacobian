@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian.canonical import format_canonical_integer
-from jacobian.math.matrix_analysis._models import (
+from jacobian.math.matrices.analysis._models import (
     FarkasCertificateRequest,
     FarkasCertificateResult,
     InertiaResult,

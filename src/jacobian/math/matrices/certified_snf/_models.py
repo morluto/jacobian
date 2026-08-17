@@ -8,7 +8,7 @@ from pydantic import WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._models import StrictModel
-from jacobian.math.certified_snf.values import (
+from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_INPUT_DIGITS,
     MAX_CERTIFIED_SNF_INPUT_DIMENSION,
     CertifiedIntegerMatrix,

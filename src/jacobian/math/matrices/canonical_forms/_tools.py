@@ -5,13 +5,13 @@ from collections.abc import Callable
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
-from jacobian.math.canonical_forms._models import (
+from jacobian.math.matrices.canonical_forms._models import (
     MinimalPolynomialResult,
     PrimaryDecompositionResult,
     RationalCanonicalFormResult,
     SquareMatrixRequest,
 )
-from jacobian.math.canonical_forms._operations import (
+from jacobian.math.matrices.canonical_forms._operations import (
     compute_minimal_polynomial,
     compute_primary_decomposition,
     compute_rational_canonical_form,

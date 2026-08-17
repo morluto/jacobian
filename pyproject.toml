@@ -151,9 +151,9 @@ source_modules = [
     "jacobian.math.algebraic_combinatorics.operations",
     "jacobian.math.arithmetic.operations",
     "jacobian.math.boolean.operations",
-    "jacobian.math.canonical_forms.operations",
-    "jacobian.math.certified_snf.operations",
-    "jacobian.math.certified_snf.values",
+    "jacobian.math.matrices.canonical_forms.operations",
+    "jacobian.math.matrices.certified_snf.operations",
+    "jacobian.math.matrices.certified_snf.values",
     "jacobian.math.code_theory.operations",
     "jacobian.math.combinatorics.recurrence_tables",
     "jacobian.math.finite_abelian_groups",
@@ -182,7 +182,7 @@ source_modules = [
     "jacobian.math.regular_languages.operations",
     "jacobian.math.regular_languages.values",
     "jacobian.math.root_isolation.operations",
-    "jacobian.math.symbolic_matrix.operations",
+    "jacobian.math.matrices.symbolic.operations",
 ]
 forbidden_modules = [
     "jacobian.catalog",

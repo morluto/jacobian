@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
 from jacobian.math import prime_field_linear_algebra as prime_field
-from jacobian.math.certified_snf.operations import (
+from jacobian.math.matrices.certified_snf.operations import (
     certificate_from_reduction,
     inverse_unimodular,
     matrix_columns,
@@ -15,7 +15,7 @@ from jacobian.math.certified_snf.operations import (
     matrix_vector_multiply,
     smith_reduce,
 )
-from jacobian.math.certified_snf.values import CertifiedIntegerMatrix
+from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
 from jacobian.math.topology._models import (
     BoundarySquareLedgerEntry,
     ChainCoefficientRing,

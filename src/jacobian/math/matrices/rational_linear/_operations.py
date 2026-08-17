@@ -9,7 +9,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
-from jacobian.math.rational_linear._models import (
+from jacobian.math.matrices.rational_linear._models import (
     LinearRationalInconsistencyFindRequest,
     LinearRationalInconsistencyResult,
     LinearRationalSolutionFindRequest,

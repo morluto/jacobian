@@ -3,16 +3,16 @@ from __future__ import annotations
 import pytest
 from tests.support.rationals import rational_payload as q
 
-from jacobian.math.optimization._models import RationalLinearProgramRequest
-from jacobian.math.optimization._tools import TOOLS as OPTIMIZATION_TOOLS
-from jacobian.math.rational_linear._models import (
+from jacobian.math.matrices.rational_linear._models import (
     LinearRationalInconsistencyFindRequest,
     LinearRationalSolutionFindRequest,
 )
-from jacobian.math.rational_linear._operations import (
+from jacobian.math.matrices.rational_linear._operations import (
     compute_rational_inconsistency,
     compute_rational_solution,
 )
+from jacobian.math.optimization._models import RationalLinearProgramRequest
+from jacobian.math.optimization._tools import TOOLS as OPTIMIZATION_TOOLS
 
 pytestmark = pytest.mark.requires_provider("flint")
 

@@ -3,11 +3,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.certified_snf._models import (
+from jacobian.math.matrices.certified_snf._models import (
     CertifiedSmithNormalFormRequest,
     CertifiedSmithNormalFormResult,
 )
-from jacobian.math.certified_snf.values import (
+from jacobian.math.matrices.certified_snf.values import (
     CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
 )

@@ -20,7 +20,7 @@ from jacobian._digest import Sha256Digest
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import canonicalize_json
-from jacobian.math.certified_snf.values import (
+from jacobian.math.matrices.certified_snf.values import (
     CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
 )

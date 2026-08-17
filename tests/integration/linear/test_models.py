@@ -4,13 +4,13 @@ import pytest
 from pydantic import ValidationError
 from tests.support.rationals import rational_payload as _q
 
-from jacobian.math.optimization._models import RationalLinearProgramResult
-from jacobian.math.rational_linear._models import (
+from jacobian.math.matrices.rational_linear._models import (
     LinearRationalInconsistencyResult,
     LinearRationalSolutionFindRequest,
     LinearRationalSolutionResult,
     LinearRationalSystem,
 )
+from jacobian.math.optimization._models import RationalLinearProgramResult
 
 
 def _system() -> dict[str, object]:

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from jacobian.math.certified_snf.values import (
+from jacobian.math.combinatorics._models import IntegerListRequest
+from jacobian.math.geometry.projective.values import PrimitiveProjectiveTriple
+from jacobian.math.matrices.certified_snf.values import (
     CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
 )
-from jacobian.math.combinatorics._models import IntegerListRequest
-from jacobian.math.geometry.projective.values import PrimitiveProjectiveTriple
 
 
 def test_nonnegative_integer_list_accepts_canonical_values_beyond_python_limit() -> (

@@ -1,11 +1,11 @@
 """Tests for matrix analysis operations."""
 
-from jacobian.math.matrix_analysis._models import (
+from jacobian.math.matrices.analysis._models import (
     FarkasCertificateRequest,
     MatrixEntry,
     SymmetricMatrixRequest,
 )
-from jacobian.math.matrix_analysis._operations import (
+from jacobian.math.matrices.analysis._operations import (
     check_farkas_certificate,
     compute_inertia,
 )

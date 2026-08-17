@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from jacobian.math.symbolic_matrix import (
+from jacobian.math.matrices.symbolic import (
     symbolic_characteristic_polynomial,
     symbolic_determinant,
     symbolic_eigenvalues,
     symbolic_rank,
 )
-from jacobian.math.symbolic_matrix._models import (
+from jacobian.math.matrices.symbolic._models import (
     SymbolicCharacteristicPolynomialResult,
     SymbolicDeterminantResult,
     SymbolicEigenvaluesResult,

@@ -7,10 +7,14 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian.contracts.base import ContractModel
-from jacobian.contracts.exact import CanonicalRational
+from jacobian.contracts.exact import (
+    CanonicalRational,
+    require_bounded_rational,
+)
 
 MAX_POLYNOMIAL_DEGREE = 32
 MAX_POLYNOMIAL_TERMS = 33
+MAX_COEFFICIENT_DIGITS = 256
 
 
 class PolynomialTerm(ContractModel):
@@ -34,6 +38,12 @@ class UnivariatePolynomial(ContractModel):
             raise ValueError("polynomial exponents must be unique")
         if any(t.coefficient.as_fraction() == 0 for t in self.terms):
             raise ValueError("zero polynomial terms must be omitted")
+        for term in self.terms:
+            require_bounded_rational(
+                term.coefficient,
+                max_digits=MAX_COEFFICIENT_DIGITS,
+                label="polynomial coefficient",
+            )
         return self
 
 
@@ -41,6 +51,12 @@ class SturmChainRequest(ContractModel):
     """Compute the Sturm chain of a univariate polynomial."""
 
     polynomial: UnivariatePolynomial
+
+    @model_validator(mode="after")
+    def require_nonconstant_polynomial(self) -> Self:
+        if max(t.exponent for t in self.polynomial.terms) < 1:
+            raise ValueError("Sturm chain requires a non-constant polynomial")
+        return self
 
 
 class RootCountRequest(ContractModel):

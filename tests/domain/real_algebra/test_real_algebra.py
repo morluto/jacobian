@@ -156,3 +156,24 @@ def test_contract_rejects_zero_coefficient() -> None:
         UnivariatePolynomial(
             terms=(PolynomialTerm(coefficient=R(num="0", den="1"), exponent=2),)
         )
+
+
+def test_contract_rejects_oversized_coefficient_digits() -> None:
+    """A coefficient at the 32,768-digit wire limit is rejected by the
+    operation-specific 256-digit polynomial budget."""
+    big_num = "9" * 257
+    with pytest.raises(ValidationError, match="256-digit bound"):
+        UnivariatePolynomial(
+            terms=(
+                PolynomialTerm(coefficient=R(num=big_num, den="1"), exponent=2),
+                PolynomialTerm(coefficient=R(num="-2", den="1"), exponent=0),
+            )
+        )
+
+
+def test_sturm_rejects_constant_polynomial() -> None:
+    """A degree-0 polynomial is rejected before execution."""
+    with pytest.raises(ValidationError, match="non-constant"):
+        SturmChainRequest(
+            polynomial=_poly(("5", "1", 0)),
+        )

@@ -69,6 +69,7 @@ from jacobian.math.posets._tools import TOOLS as POSETS_TOOLS
 from jacobian.math.probability._tools import TOOLS as PROBABILITY_TOOLS
 from jacobian.math.projective_geometry._tools import TOOLS as PROJECTIVE_GEOMETRY_TOOLS
 from jacobian.math.rational_linear._tools import TOOLS as RATIONAL_LINEAR_TOOLS
+from jacobian.math.real_algebra._tools import TOOLS as REAL_ALGEBRA_TOOLS
 from jacobian.math.recurrence_solving._tools import TOOLS as RECURRENCE_SOLVING_TOOLS
 from jacobian.math.regular_languages._tools import TOOLS as REGULAR_LANGUAGES_TOOLS
 from jacobian.math.root_isolation._tools import TOOLS as ROOT_ISOLATION_TOOLS
@@ -137,6 +138,7 @@ BUILTIN_TOOLS: MathTools = (
     *ELECTRICAL_NETWORKS_TOOLS,
     *REGULAR_LANGUAGES_TOOLS,
     *ALGEBRAIC_COMBINATORICS_TOOLS,
+    *REAL_ALGEBRA_TOOLS,
 )
 
 __all__ = ["BUILTIN_TOOLS"]

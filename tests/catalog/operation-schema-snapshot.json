@@ -1113,9 +1113,17 @@
       "input_schema": "sha256:b38cc7030dd1046da9fc1313b61be395121c6102ab221dfab7f99a7ced97dda8",
       "output_schema": "sha256:725c10c9920836da6168e644b9c15565221678640249f81eef16afb59b91c047"
     },
+    "polynomial.root_count.compute": {
+      "input_schema": "sha256:a6d64ccc1da7ad368136c2381a83eb69b951ba43ad258cb1402606428464e652",
+      "output_schema": "sha256:cb3bdf34db4b813334a21cc07672b4405d82e888d02baecd94ae1fa2fe507209"
+    },
     "polynomial.roots.isolate": {
       "input_schema": "sha256:1bb055763d969d462cd7b989502b816716ba40339663d489f33db34e20d438d5",
       "output_schema": "sha256:ebbabea1bc3985b058f77e9fd3da9b0748b70c8ad42d3fbed6980126a9bce861"
+    },
+    "polynomial.sturm_chain.compute": {
+      "input_schema": "sha256:2b40338042028e9a6e477838b179c012662fcd374322c1b0451039f9fc4b7f6e",
+      "output_schema": "sha256:ca8d93197a2ccaa55fce3e8eab6cb1de174742a4a9463606807c4877054865df"
     },
     "poset.finite.compute": {
       "input_schema": "sha256:73c1738f192a084128ea68cc954c524bed9c6b65898f7a47498b9d5e516b94b2",

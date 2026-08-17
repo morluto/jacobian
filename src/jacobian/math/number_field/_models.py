@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Literal, Self
+from jacobian.canonical import parse_canonical_integer
 
 from pydantic import Field, model_validator
 
@@ -21,7 +22,7 @@ class NumberFieldRequest(StrictModel):
 
         variable = sympy.Symbol(self.variable)
         coefficients = tuple(
-            sympy.Rational(value) for value in self.coefficients_descending
+            sympy.Rational(parse_canonical_integer(value)) for value in self.coefficients_descending
         )
         if any(value.q != 1 for value in coefficients):
             raise ValueError("number-field coefficients must be integers")

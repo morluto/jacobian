@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from jacobian.canonical import parse_canonical_integer
 from typing import Any, cast
 
 __all__ = ["discriminant", "ring_of_integers"]
@@ -16,7 +17,7 @@ def _integral_basis(
 
     x = sympy.Symbol(variable)
     polynomial = sum(
-        sympy.Rational(coefficient) * x ** (len(coefficients_descending) - 1 - index)
+        sympy.Rational(parse_canonical_integer(coefficient)) * x ** (len(coefficients_descending) - 1 - index)
         for index, coefficient in enumerate(coefficients_descending)
     )
     return cast(tuple[Any, Any], round_two(sympy.Poly(polynomial, x)))

@@ -42,11 +42,9 @@ def compute_extended_gcd(request: IntegerPairRequest) -> ExtendedGcdResult:
 
 
 def compute_valuation(request: ValuationRequest) -> IntegerValueResult:
-    from sympy import isprime, multiplicity
+    from sympy import multiplicity
 
     value, prime = int(request.value), int(request.prime)
-    if value == 0 or abs(prime) < 2 or not isprime(abs(prime)):
-        raise ValueError("valuation requires nonzero value and prime absolute base")
     return IntegerValueResult(value=str(multiplicity(abs(prime), abs(value))))
 
 
@@ -74,8 +72,6 @@ def decide_coprime(request: IntegerPairRequest) -> BooleanResult:
 
 def decide_divides(request: DivisibilityRequest) -> BooleanResult:
     divisor, dividend = int(request.divisor), int(request.dividend)
-    if divisor == 0:
-        raise ValueError("divisor must be nonzero")
     return BooleanResult(holds=dividend % divisor == 0)
 
 

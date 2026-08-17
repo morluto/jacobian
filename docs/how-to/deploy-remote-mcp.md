@@ -73,12 +73,12 @@ source control.
 
 ## Health checks and rollout
 
-Run [`deploy/smoke_remote.py`](../../deploy/smoke_remote.py) against the private
-listener and public endpoint before directing traffic to the new artifact.
-Where Lean is intentionally installed, also run
-[`deploy/smoke_lean.py`](../../deploy/smoke_lean.py). A rollback selects the
-previous immutable artifact; there is no application database migration or
-state rollback step.
+Run `uv run python -m deploy.smoke_remote <url>` against the private listener
+and public endpoint before directing traffic to the new artifact. Where Lean is
+intentionally installed, also run `uv run python -m deploy.smoke_lean <url>`.
+The probe implementations live in [`deploy/`](../../deploy/). A rollback
+selects the previous immutable artifact; there is no application database
+migration or state rollback step.
 
 When moving hosts, provision the same pinned artifact, transfer only
 operator-owned configuration and secrets, run the probes, and move traffic.

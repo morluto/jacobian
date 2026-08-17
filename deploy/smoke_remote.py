@@ -14,8 +14,8 @@ from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import Implementation, TextContent, TextResourceContents
 
+from .smoke import exit_for_smoke_failure, raise_for_http_error
 from jacobian import __version__
-from jacobian._deployment_smoke import exit_for_smoke_failure, raise_for_http_error
 from jacobian.canonical import canonicalize_json
 
 REQUIRED_TOOLS = {
@@ -63,7 +63,7 @@ def _headers() -> dict[str, str] | None:
     token = os.environ.get("JACOBIAN_MCP_BEARER_TOKEN")
     token_file = os.environ.get("JACOBIAN_MCP_AUTH_TOKENS_FILE")
     if token is None and token_file:
-        from jacobian.adapters.mcp.remote import load_static_token_file
+        from jacobian.mcp.remote import load_static_token_file
 
         grants = load_static_token_file(token_file)
         token = next(

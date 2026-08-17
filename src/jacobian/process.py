@@ -32,6 +32,7 @@ __all__ = [
     "bounded_process_cancellation",
     "bounded_process_cancelled",
     "run_bounded_process",
+    "worker_environment",
 ]
 
 _CANCELLATION_EVENT: ContextVar[threading.Event | None] = ContextVar(
@@ -39,6 +40,7 @@ _CANCELLATION_EVENT: ContextVar[threading.Event | None] = ContextVar(
     default=None,
 )
 _PIPE_DRAIN_GRACE_SECONDS = 0.5
+_DEFAULT_LOCALE = "C.UTF-8"
 
 
 @dataclass(frozen=True, slots=True)
@@ -449,4 +451,28 @@ def run_bounded_process(
     )
 
 
-# ---------------------------------------------------------------------------
+def worker_environment(
+    *,
+    extra_variables: tuple[str, ...] = (),
+    overrides: dict[str, str] | None = None,
+    path_prefix: str | None = None,
+    locale: str = _DEFAULT_LOCALE,
+) -> dict[str, str]:
+    """Build a deterministic subprocess environment without ambient leakage."""
+
+    environment: dict[str, str] = {
+        "PYTHONHASHSEED": "0",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "TZ": "UTC",
+        "LANG": locale,
+        "LC_ALL": locale,
+    }
+    for name in extra_variables:
+        value = os.environ.get(name)
+        if value is not None:
+            environment[name] = value
+    if path_prefix:
+        environment["PATH"] = path_prefix
+    if overrides:
+        environment.update(overrides)
+    return environment

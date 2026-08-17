@@ -99,7 +99,10 @@ def covering_radius(generator_matrix, field_order):  # type: ignore[no-untyped-d
     Therefore graph distance from the zero syndrome is minimum coset-leader
     weight, and the maximum distance is the covering radius.
     """
-    check_rows = _parity_check_matrix(generator_matrix, field_order)
+    check_rows = _parity_check_matrix(  # type: ignore[no-untyped-call]
+        generator_matrix,
+        field_order,
+    )
     if not check_rows:
         return 0
 

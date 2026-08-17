@@ -117,8 +117,7 @@ def test_covering_radius_contract_rejects_dependent_row_state_space_hole() -> No
 
 def test_covering_radius_contract_rejects_excessive_transition_work() -> None:
     generator_matrix = tuple(
-        tuple(1 if column == row else 0 for column in range(18))
-        for row in range(8)
+        tuple(1 if column == row else 0 for column in range(18)) for row in range(8)
     )
 
     with pytest.raises(ValidationError, match="transition"):

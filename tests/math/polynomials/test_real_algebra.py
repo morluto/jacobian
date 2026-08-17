@@ -6,13 +6,13 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.real_algebra._models import (
+from jacobian.math.polynomials.real_algebra._models import (
     PolynomialTerm,
     RootCountRequest,
     SturmChainRequest,
     UnivariatePolynomial,
 )
-from jacobian.math.real_algebra._operations import (
+from jacobian.math.polynomials.real_algebra._operations import (
     compute_root_count,
     compute_sturm_chain,
 )

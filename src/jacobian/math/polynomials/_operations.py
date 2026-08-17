@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from jacobian.math import polynomials
-from jacobian.math.polynomial._conversions import (
+from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
     symbols_for_variables,
 )
-from jacobian.math.polynomial._models import (
+from jacobian.math.polynomials._models import (
     PolynomialBezoutIdentity,
     PolynomialDiscriminantRequest,
     PolynomialDiscriminantResult,

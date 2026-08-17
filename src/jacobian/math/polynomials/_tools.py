@@ -1,12 +1,12 @@
 """Exact rational polynomial operations."""
 
 from jacobian.catalog.models import MathTools
-from jacobian.math.polynomial._elementary import (
+from jacobian.math.polynomials._elementary import (
     INTEGER_POLYNOMIAL_OPERATIONS,
     RATIONAL_POLYNOMIAL_OPERATIONS,
 )
-from jacobian.math.polynomial._invariants import POLYNOMIAL_INVARIANT_OPERATIONS
-from jacobian.math.polynomial._jacobian_syzygy import (
+from jacobian.math.polynomials._invariants import POLYNOMIAL_INVARIANT_OPERATIONS
+from jacobian.math.polynomials._jacobian_syzygy import (
     GRADED_JACOBIAN_SYZYGY_OPERATION,
     JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION,
 )

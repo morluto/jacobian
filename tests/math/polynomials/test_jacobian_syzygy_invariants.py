@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.math.polynomial._jacobian_syzygy import (
+from jacobian.math.polynomials._jacobian_syzygy import (
     compute_graded_jacobian_syzygy,
 )
-from jacobian.math.polynomial._syzygy_models import GradedJacobianSyzygyRequest
+from jacobian.math.polynomials._syzygy_models import GradedJacobianSyzygyRequest
 
 
 def test_syzygy_kernel_rejects_an_incomplete_linear_factor_request() -> None:

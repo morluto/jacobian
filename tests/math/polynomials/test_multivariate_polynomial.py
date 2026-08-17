@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.math.multivariate_polynomial._models import (
+from jacobian.math.polynomials.multivariate._models import (
     MultivariateDivisionRequest,
     MultivariateGcdRequest,
     MultivariateResultantRequest,
 )
-from jacobian.math.multivariate_polynomial._operations import (
+from jacobian.math.polynomials.multivariate._operations import (
     compute_multivariate_division,
     compute_multivariate_gcd,
     compute_multivariate_resultant,

@@ -6,13 +6,13 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.real_algebra._models import (
+from jacobian.math.polynomials.real_algebra._models import (
     RootCountRequest,
     RootCountResult,
     SturmChainRequest,
     SturmChainResult,
 )
-from jacobian.math.real_algebra._operations import (
+from jacobian.math.polynomials.real_algebra._operations import (
     compute_root_count,
     compute_sturm_chain,
 )

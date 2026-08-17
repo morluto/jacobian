@@ -6,7 +6,7 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.multivariate_polynomial._models import (
+from jacobian.math.polynomials.multivariate._models import (
     MultivariateDivisionRequest,
     MultivariateDivisionResult,
     MultivariateGcdRequest,
@@ -14,7 +14,7 @@ from jacobian.math.multivariate_polynomial._models import (
     MultivariateResultantRequest,
     MultivariateResultantResult,
 )
-from jacobian.math.multivariate_polynomial._operations import (
+from jacobian.math.polynomials.multivariate._operations import (
     compute_multivariate_division,
     compute_multivariate_gcd,
     compute_multivariate_resultant,

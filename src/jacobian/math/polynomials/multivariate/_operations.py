@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from jacobian.math.multivariate_polynomial._models import (
+from jacobian.math.polynomials._conversions import (
+    rational_polynomial_from_sympy,
+    rational_polynomial_to_sympy,
+    symbols_for_variables,
+)
+from jacobian.math.polynomials.multivariate._models import (
     MultivariateDivisionRequest,
     MultivariateDivisionResult,
     MultivariateGcdRequest,
@@ -13,11 +18,6 @@ from jacobian.math.multivariate_polynomial._models import (
     MultivariateResultantRequest,
     MultivariateResultantResult,
     MultivariateScalarValue,
-)
-from jacobian.math.polynomial._conversions import (
-    rational_polynomial_from_sympy,
-    rational_polynomial_to_sympy,
-    symbols_for_variables,
 )
 
 _MAX_OUTPUT_TERMS = 1024
@@ -124,7 +124,7 @@ def compute_multivariate_resultant(
     )
     if not remaining_variables:
         # The resultant is a rational scalar.
-        from jacobian.math.polynomial._conversions import rational_from_sympy
+        from jacobian.math.polynomials._conversions import rational_from_sympy
 
         return MultivariateResultantResult(
             elimination_variable=request.elimination_variable,

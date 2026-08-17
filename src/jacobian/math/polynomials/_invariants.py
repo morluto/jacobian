@@ -1,7 +1,7 @@
 """Exact polynomial invariant operations."""
 
 from jacobian.catalog._examples import example
-from jacobian.math.polynomial._models import (
+from jacobian.math.polynomials._models import (
     PolynomialDiscriminantRequest,
     PolynomialDiscriminantResult,
     PolynomialFactorizationResult,
@@ -13,14 +13,14 @@ from jacobian.math.polynomial._models import (
     PolynomialSquareFreeDecompositionResult,
     PolynomialSquareFreeRequest,
 )
-from jacobian.math.polynomial._operations import (
+from jacobian.math.polynomials._operations import (
     polynomial_discriminant,
     polynomial_factorization,
     polynomial_gcd,
     polynomial_resultant,
     polynomial_square_free_decomposition,
 )
-from jacobian.math.polynomial._support import polynomial_operation
+from jacobian.math.polynomials._support import polynomial_operation
 
 POLYNOMIAL_INVARIANT_OPERATIONS = (
     polynomial_operation(

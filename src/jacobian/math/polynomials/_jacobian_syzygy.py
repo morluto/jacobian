@@ -12,14 +12,14 @@ from jacobian.catalog.models import (
     OperationExample,
 )
 from jacobian.math.arithmetic import primitive_integer_vector
-from jacobian.math.polynomial._conversions import (
+from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
     symbols_for_variables,
 )
-from jacobian.math.polynomial._support import polynomial_operation
-from jacobian.math.polynomial._syzygy_models import (
+from jacobian.math.polynomials._support import polynomial_operation
+from jacobian.math.polynomials._syzygy_models import (
     GradedJacobianCoefficientMap,
     GradedJacobianKernelWitness,
     GradedJacobianMapEntry,

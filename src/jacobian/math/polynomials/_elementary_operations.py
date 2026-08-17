@@ -7,12 +7,12 @@ from typing import Any
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math import polynomials
-from jacobian.math.polynomial._conversions import (
+from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
 )
-from jacobian.math.polynomial._models import (
+from jacobian.math.polynomials._models import (
     IntegerPolynomial,
     IntegerPolynomialCompositionRequest,
     IntegerPolynomialCompositionResult,

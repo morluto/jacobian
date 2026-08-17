@@ -5,7 +5,7 @@ from __future__ import annotations
 import sympy
 from sympy import Symbol, simplify, sympify
 
-from jacobian.math.polynomial_maps._models import (
+from jacobian.math.polynomials.maps._models import (
     CompositionRequest,
     CompositionResult,
     EvalRequest,

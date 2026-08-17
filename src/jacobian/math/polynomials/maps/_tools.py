@@ -6,7 +6,7 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.polynomial_maps._models import (
+from jacobian.math.polynomials.maps._models import (
     CompositionRequest,
     CompositionResult,
     EvalRequest,
@@ -14,7 +14,7 @@ from jacobian.math.polynomial_maps._models import (
     JacobianRequest,
     JacobianResult,
 )
-from jacobian.math.polynomial_maps._operations import (
+from jacobian.math.polynomials.maps._operations import (
     compose_polynomials,
     compute_jacobian,
     evaluate_polynomial,

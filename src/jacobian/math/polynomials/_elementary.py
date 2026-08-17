@@ -1,7 +1,7 @@
 """Domain-owned elementary integer and rational polynomial operations."""
 
 from jacobian.catalog._examples import example
-from jacobian.math.polynomial._elementary_operations import (
+from jacobian.math.polynomials._elementary_operations import (
     integer_polynomial_compose,
     integer_polynomial_content,
     integer_polynomial_evaluate,
@@ -14,7 +14,7 @@ from jacobian.math.polynomial._elementary_operations import (
     rational_polynomial_evaluate,
     rational_polynomial_integral,
 )
-from jacobian.math.polynomial._models import (
+from jacobian.math.polynomials._models import (
     IntegerPolynomialCompositionRequest,
     IntegerPolynomialCompositionResult,
     IntegerPolynomialContentResult,
@@ -36,7 +36,7 @@ from jacobian.math.polynomial._models import (
     RationalPolynomialIntegralResult,
     RationalPolynomialRequest,
 )
-from jacobian.math.polynomial._support import polynomial_operation
+from jacobian.math.polynomials._support import polynomial_operation
 
 INTEGER_POLYNOMIAL_OPERATIONS = (
     polynomial_operation(

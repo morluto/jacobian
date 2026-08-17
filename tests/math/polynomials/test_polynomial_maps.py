@@ -1,13 +1,13 @@
 """Tests for polynomial map operations."""
 
-from jacobian.math.polynomial_maps._models import (
+from jacobian.math.polynomials.maps._models import (
     CompositionRequest,
     EvalRequest,
     JacobianRequest,
     RationalPolynomialExpr,
     VariablePoint,
 )
-from jacobian.math.polynomial_maps._operations import (
+from jacobian.math.polynomials.maps._operations import (
     compose_polynomials,
     compute_jacobian,
     evaluate_polynomial,

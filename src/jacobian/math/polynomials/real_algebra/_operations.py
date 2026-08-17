@@ -5,8 +5,8 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.real_algebra import root_count, sturm_chain
-from jacobian.math.real_algebra._models import (
+from jacobian.math.polynomials.real_algebra import root_count, sturm_chain
+from jacobian.math.polynomials.real_algebra._models import (
     PolynomialTerm,
     RootCountRequest,
     RootCountResult,

@@ -58,22 +58,22 @@ from jacobian.math.markov_chain._tools import TOOLS as MARKOV_CHAIN_TOOLS
 from jacobian.math.matrices._tools import TOOLS as MATRICES_TOOLS
 from jacobian.math.matrix_analysis._tools import TOOLS as MATRIX_ANALYSIS_TOOLS
 from jacobian.math.multiple_testing._tools import TOOLS as MULTIPLE_TESTING_TOOLS
-from jacobian.math.multivariate_polynomial._tools import (
-    TOOLS as MULTIVARIATE_POLYNOMIAL_TOOLS,
-)
 from jacobian.math.number_field._tools import TOOLS as NUMBER_FIELD_TOOLS
 from jacobian.math.number_theory._tools import TOOLS as NUMBER_THEORY_TOOLS
 from jacobian.math.numerical_semigroups._tools import (
     TOOLS as NUMERICAL_SEMIGROUPS_TOOLS,
 )
 from jacobian.math.optimization._tools import TOOLS as OPTIMIZATION_TOOLS
-from jacobian.math.polynomial._tools import TOOLS as POLYNOMIAL_TOOLS
-from jacobian.math.polynomial_maps._tools import TOOLS as POLYNOMIAL_MAPS_TOOLS
+from jacobian.math.polynomials._tools import TOOLS as POLYNOMIAL_TOOLS
+from jacobian.math.polynomials.maps._tools import TOOLS as POLYNOMIAL_MAPS_TOOLS
+from jacobian.math.polynomials.multivariate._tools import (
+    TOOLS as MULTIVARIATE_POLYNOMIAL_TOOLS,
+)
+from jacobian.math.polynomials.real_algebra._tools import TOOLS as REAL_ALGEBRA_TOOLS
 from jacobian.math.posets._tools import TOOLS as POSETS_TOOLS
 from jacobian.math.probability._tools import TOOLS as PROBABILITY_TOOLS
 from jacobian.math.projective_geometry._tools import TOOLS as PROJECTIVE_GEOMETRY_TOOLS
 from jacobian.math.rational_linear._tools import TOOLS as RATIONAL_LINEAR_TOOLS
-from jacobian.math.real_algebra._tools import TOOLS as REAL_ALGEBRA_TOOLS
 from jacobian.math.recurrence_solving._tools import TOOLS as RECURRENCE_SOLVING_TOOLS
 from jacobian.math.regular_languages._tools import TOOLS as REGULAR_LANGUAGES_TOOLS
 from jacobian.math.root_isolation._tools import TOOLS as ROOT_ISOLATION_TOOLS

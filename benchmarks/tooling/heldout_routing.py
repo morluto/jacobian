@@ -232,7 +232,7 @@ def treatment_readiness_preflight(
 
     Performs static digest-binding checks.  When *mcp_url* is non-empty,
     performs a bounded MCP initialize + catalog + describe probe (via
-    *probe_fn* or the default ``deploy/smoke_remote.py`` runner) and
+    *probe_fn* or the default ``deploy.smoke_remote`` module runner) and
     classifies ``infrastructure_status``:
 
     * ``READY`` — probe reachable and every observed digest/version matches.

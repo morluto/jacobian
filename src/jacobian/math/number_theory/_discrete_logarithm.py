@@ -19,13 +19,6 @@ def _compute(request: DiscreteLogarithmRequest) -> DiscreteLogarithmResult:
     modulus = request.modulus
     base = request.base % modulus
     target = request.target % modulus
-    if base == 0 and target != 0:
-        return DiscreteLogarithmResult(
-            status="UNSOLVABLE",
-            base=request.base,
-            target=request.target,
-            modulus=modulus,
-        )
     value = 1 % modulus
     for exponent in range(modulus):
         if value == target:

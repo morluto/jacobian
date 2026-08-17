@@ -150,9 +150,11 @@ class ValuationRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_valuation_domain(self) -> Self:
+        from sympy import isprime
+
         if int(self.value) == 0:
             raise ValueError("valuation requires nonzero value")
-        if int(self.prime) < 2:
+        if int(self.prime) < 2 or not isprime(int(self.prime)):
             raise ValueError("valuation requires a prime absolute base >= 2")
         return self
 

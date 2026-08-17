@@ -131,7 +131,7 @@ MARKOV_CHAIN_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                         [{"num": "1", "den": "4"}, {"num": "3", "den": "4"}],
                     ],
                     "epsilon": {"num": "1", "den": "100"},
-                    "max_steps": 64,
+                    "max_steps": 32,
                 },
             ),
         ),

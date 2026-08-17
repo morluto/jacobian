@@ -72,6 +72,14 @@ def mixing_time(
 
 
 def stationary_distribution(matrix):  # type: ignore[no-untyped-def]
+    """Rank-aware exact stationary distribution of a finite Markov chain.
+
+    Solves ``(P**T - I) pi = 0`` with exact rational arithmetic.  When the
+    eigenvalue-1 left eigenspace is one-dimensional (the unique stationary
+    distribution, guaranteed for ergodic chains), the normalized generator is
+    returned.  Otherwise the first eigenvalue-1 eigenvector is normalized and
+    returned, preserving the pre-existing contract for non-ergodic chains.
+    """
     import sympy
 
     n = len(matrix)
@@ -81,15 +89,22 @@ def stationary_distribution(matrix):  # type: ignore[no-untyped-def]
             for i in range(n)
         ]
     )
-    # Find eigenvector for eigenvalue 1
-    eigenvects = p.T.eigenvects()
-    for eigenval, _mult, vects in eigenvects:
+    kernel = (p.T - sympy.eye(n)).nullspace()
+    if len(kernel) == 1:
+        vector = kernel[0]
+        total = sum(vector)
+        return tuple(
+            Fraction(int((value / total).p), int((value / total).q)) for value in vector
+        )
+    for eigenval, _mult, vects in p.T.eigenvects():
         if eigenval == 1 and len(vects) > 0:
-            vect = vects[0]
-            total = sum(vect)
-            normalized = [v / total for v in vect]
-            return normalized
-    return []
+            vector = vects[0]
+            total = sum(vector)
+            return tuple(
+                Fraction(int((value / total).p), int((value / total).q))
+                for value in vector
+            )
+    return ()
 
 
 def ergodic_properties(matrix):  # type: ignore[no-untyped-def]

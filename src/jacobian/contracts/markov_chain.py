@@ -1,17 +1,33 @@
-"""Typed wire contracts for Markov chain operations."""
+"""Typed wire contracts for Markov chain operations.
+
+The exact mixing-time search is preflight-bounded.  For an ``n``-state chain
+whose reduced rational entries have at most ``d`` decimal digits per
+component and whose denominator lcm has ``l`` digits, every exact intermediate
+(entries of ``P**t``, the stationary distribution, and the reported
+total-variation distance) has at most ``(d + l + 1) * (max_steps + 2 * n)``
+decimal digits per component.  ``MixingTimeRequest`` rejects requests whose
+preflight product exceeds :data:`MAX_MIXING_TOTAL_DIGITS`, keeping every exact
+value below Python's 4,300-digit integer-string conversion limit and the
+canonical 32,768-digit wire limit.  The search performs at most ``max_steps``
+matrix multiplications, i.e. at most
+``MAX_MIXING_STEPS * MAX_MIXING_DIMENSION ** 3`` exact rational operations.
+"""
 
 from __future__ import annotations
 
+from math import lcm
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
 
 MAX_MIXING_DIMENSION = 8
 MAX_MIXING_RATIONAL_DIGITS = 32
-MAX_MIXING_STEPS = 256
+MAX_MIXING_STEPS = 32
+MAX_MIXING_TOTAL_DIGITS = 4096
 
 
 class TransitionMatrixRequest(ContractModel):
@@ -54,14 +70,18 @@ class MixingTimeRequest(TransitionMatrixRequest):
         max_length=MAX_MIXING_DIMENSION,
     )
     epsilon: CanonicalRational = Field(
-        description="Tolerance for the total variation distance; must be a positive rational.",
+        description="Tolerance for the total variation distance; must lie in (0, 1).",
     )
     max_steps: int = Field(
-        default=64,
+        default=16,
         ge=1,
         le=MAX_MIXING_STEPS,
         strict=True,
-        description="Inclusive upper bound for the exact rational-power search.",
+        description=(
+            "Inclusive upper bound for the exact rational-power search; "
+            "larger budgets are rejected when the denominator lcm would push "
+            "exact intermediates past the digit preflight."
+        ),
     )
 
     @model_validator(mode="after")
@@ -78,8 +98,31 @@ class MixingTimeRequest(TransitionMatrixRequest):
             max_digits=MAX_MIXING_RATIONAL_DIGITS,
             label="mixing-time epsilon",
         )
-        if not 0 < self.epsilon.as_fraction() <= 1:
-            raise ValueError("epsilon must lie in (0, 1]")
+        if not 0 < self.epsilon.as_fraction() < 1:
+            raise ValueError("epsilon must lie in (0, 1)")
+        component_digits = 1
+        denominator_lcm = 1
+        for row in self.matrix:
+            for value in row:
+                component_digits = max(
+                    component_digits,
+                    len(value.num.lstrip("-")),
+                    len(value.den.lstrip("-")),
+                )
+                denominator_lcm = lcm(
+                    denominator_lcm, parse_canonical_integer(value.den)
+                )
+        growth_digits = component_digits + len(str(denominator_lcm)) + 1
+        if (
+            growth_digits * (self.max_steps + 2 * len(self.matrix))
+            > MAX_MIXING_TOTAL_DIGITS
+        ):
+            raise ValueError(
+                "the mixing-time preflight bound of "
+                f"{MAX_MIXING_TOTAL_DIGITS} digits would be exceeded "
+                f"(denominator lcm of {len(str(denominator_lcm))} digits); "
+                "reduce max_steps or the denominator sizes"
+            )
         return self
 
 

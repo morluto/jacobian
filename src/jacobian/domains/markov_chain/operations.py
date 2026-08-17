@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
-
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.markov_chain import (
     ErgodicDecisionResult,
@@ -25,9 +23,7 @@ def compute_stationary_distribution(
     matrix = [[{"num": c.num, "den": c.den} for c in row] for row in request.matrix]
     dist = stationary_distribution(matrix)  # type: ignore[no-untyped-call]
     return StationaryDistributionResult(
-        distribution=tuple(
-            CanonicalRational.from_integer_ratio(int(v.p), int(v.q)) for v in dist
-        )
+        distribution=tuple(CanonicalRational.from_fraction(value) for value in dist)
     )
 
 
@@ -52,12 +48,9 @@ def compute_mixing_time(request: MixingTimeRequest) -> MixingTimeResult:
             steps_examined=0,
         )
     stationary = stationary_distribution(matrix)  # type: ignore[no-untyped-call]
-    stationary_fractions = tuple(
-        Fraction(int(value.p), int(value.q)) for value in stationary
-    )
     result = mixing_time(
         tuple(tuple(value.as_fraction() for value in row) for row in request.matrix),
-        stationary_fractions,
+        stationary,
         request.epsilon.as_fraction(),
         request.max_steps,
     )

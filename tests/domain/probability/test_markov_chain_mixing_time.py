@@ -41,7 +41,7 @@ def _request(
     matrix: MatrixPayload = TWO_STATE,
     *,
     epsilon: tuple[str, str] = ("1", "100"),
-    max_steps: int = 64,
+    max_steps: int = 16,
 ) -> MixingTimeRequest:
     return MixingTimeRequest.model_validate(
         {
@@ -55,9 +55,12 @@ def _request(
 @pytest.mark.parametrize(
     ("epsilon", "mixing_step", "distance"),
     [
+        # Worst-case TV distances for P = [[1/2,1/2],[1/4,3/4]] against
+        # pi = [1/3,2/3] are 2/3, 1/6, 1/24, 1/96, 1/384 at t = 0..4; the
+        # first step at or below epsilon is the mixing time.
         (("1", "100"), 4, Fraction(1, 384)),
         (("1", "6"), 1, Fraction(1, 6)),
-        (("1", "1"), 0, Fraction(2, 3)),
+        (("9", "10"), 0, Fraction(2, 3)),
     ],
 )
 def test_two_state_chain_has_exact_known_mixing_time(
@@ -151,9 +154,10 @@ def test_eight_state_uniform_chain_respects_dimension_boundary() -> None:
             "epsilon": _q("1", "100"),
         },
         {"matrix": TWO_STATE, "epsilon": _q("0")},
+        {"matrix": TWO_STATE, "epsilon": _q("1")},
         {"matrix": TWO_STATE, "epsilon": _q("2")},
         {"matrix": TWO_STATE, "epsilon": _q("1", "100"), "max_steps": 0},
-        {"matrix": TWO_STATE, "epsilon": _q("1", "100"), "max_steps": 257},
+        {"matrix": TWO_STATE, "epsilon": _q("1", "100"), "max_steps": 33},
         {"matrix": TWO_STATE, "epsilon": _q("1", "100"), "max_steps": True},
     ],
 )
@@ -178,6 +182,60 @@ def test_request_rejects_oversized_rational_components() -> None:
     )
     with pytest.raises(ValidationError, match="32-digit bound"):
         _request((row, row))
+
+
+_LCM_PRIMES = (
+    1000000007,
+    1000000009,
+    1000000021,
+    1000000033,
+    1000000087,
+    1000000093,
+    1000000097,
+    1000000103,
+    1000000123,
+    1000000181,
+    1000000207,
+    1000000223,
+)
+
+
+def _high_lcm_matrix() -> MatrixPayload:
+    """Four-state chain whose denominator lcm has about 109 digits.
+
+    Each row places unit mass fractions on three pairwise-coprime 10-digit
+    primes and the residual entry on their product; disjoint prime sets per
+    row make the matrix lcm roughly the product of four 30-digit lcms.
+    """
+    rows: list[tuple[RationalPayload, ...]] = []
+    for i in range(4):
+        first, second, third = _LCM_PRIMES[3 * i : 3 * i + 3]
+        product = first * second * third
+        residual = product - product // first - product // second - product // third
+        rows.append(
+            (
+                _q("1", str(first)),
+                _q("1", str(second)),
+                _q("1", str(third)),
+                _q(str(residual), str(product)),
+            )
+        )
+    return tuple(rows)
+
+
+def test_preflight_rejects_denominator_lcm_growth_at_large_step_budget() -> None:
+    matrix = _high_lcm_matrix()
+    with pytest.raises(ValidationError, match="preflight"):
+        _request(matrix, max_steps=32)
+    _request(matrix, max_steps=8)
+
+
+def test_stationary_distribution_solves_unique_linear_system() -> None:
+    from jacobian.math.markov_chain import stationary_distribution
+
+    matrix = [[{"num": "1", "den": "2"}, {"num": "1", "den": "2"}]]
+    matrix.append([{"num": "1", "den": "4"}, {"num": "3", "den": "4"}])
+    assert stationary_distribution(matrix) == (Fraction(1, 3), Fraction(2, 3))
 
 
 @pytest.mark.parametrize(

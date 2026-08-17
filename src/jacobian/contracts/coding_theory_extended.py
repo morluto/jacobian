@@ -81,11 +81,15 @@ class PunctureResult(ContractModel):
 
 
 class ShortenRequest(ContractModel):
-    """Shorten a code by fixing one coordinate and deleting it."""
+    """Shorten a code by fixing one coordinate to zero and deleting it.
+
+    Only the zero value is supported: a nonzero value would select an
+    affine coset rather than a linear subcode, which cannot be represented
+    by a generator matrix.
+    """
 
     code: GeneratorMatrix
     position: int = Field(ge=0, le=MAX_CODE_LENGTH - 1)
-    value: int = Field(ge=0)
 
     @model_validator(mode="after")
     def require_valid_position(self) -> Self:

@@ -99,7 +99,7 @@ CODING_THEORY_EXTENDED_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ct_operation(
         "code.shorten.compute",
         "Shorten a linear code at one coordinate",
-        "Shorten a linear code by fixing one coordinate to a value and "
+        "Shorten a linear code by fixing one coordinate to zero and "
         "then deleting that coordinate from the generator matrix.",
         ShortenRequest,
         ShortenResult,
@@ -110,14 +110,13 @@ CODING_THEORY_EXTENDED_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "repetition_code",
-                "Shorten the binary repetition code at position 0, value 0.",
+                "Shorten the binary repetition code at position 0.",
                 {
                     "code": {
                         "field_order": 2,
                         "generator_matrix": [[1, 1, 1]],
                     },
                     "position": 0,
-                    "value": 0,
                 },
             ),
         ),

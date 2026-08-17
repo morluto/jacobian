@@ -1,0 +1,78 @@
+"""Typed wire contracts for exact algebraic combinatorics operations."""
+
+from __future__ import annotations
+
+from typing import Literal, Self
+
+from pydantic import Field, model_validator
+
+from jacobian.contracts.base import ContractModel
+
+MAX_PARTITION_SIZE = 50
+MAX_PARTS = 50
+
+
+class Partition(ContractModel):
+    """One decreasing sequence of positive integers (a Young diagram shape)."""
+
+    parts: tuple[int, ...] = Field(min_length=1, max_length=MAX_PARTS)
+
+    @model_validator(mode="after")
+    def require_decreasing_positive(self) -> Self:
+        if any(p <= 0 for p in self.parts):
+            raise ValueError("partition parts must be positive")
+        if any(self.parts[i] < self.parts[i + 1] for i in range(len(self.parts) - 1)):
+            raise ValueError("partition parts must be non-increasing")
+        return self
+
+
+class HookLengthRequest(ContractModel):
+    """Compute the hook lengths of a partition."""
+
+    partition: Partition
+
+
+class StandardYoungTableauCountRequest(ContractModel):
+    """Count standard Young tableaux of a given shape."""
+
+    partition: Partition
+
+
+class ConjugatePartitionRequest(ContractModel):
+    """Compute the conjugate (transpose) partition."""
+
+    partition: Partition
+
+
+class HookLengthResult(ContractModel):
+    """Hook lengths as a flat list of row-indexed values."""
+
+    hooks: tuple[tuple[int, ...], ...] = Field(min_length=1)
+    total_product: int = Field(ge=1)
+    method: Literal["HOOK_FORMULA"] = "HOOK_FORMULA"
+
+
+class StandardYoungTableauCountResult(ContractModel):
+    """The number of standard Young tableaux of a given shape."""
+
+    count: int = Field(ge=1)
+    n: int = Field(ge=1, le=MAX_PARTITION_SIZE)
+    method: Literal["HOOK_LENGTH_FORMULA"] = "HOOK_LENGTH_FORMULA"
+
+
+class ConjugatePartitionResult(ContractModel):
+    """The conjugate (transpose) partition."""
+
+    conjugate: tuple[int, ...] = Field(min_length=1)
+    method: Literal["FERRERS_TRANSPOSE"] = "FERRERS_TRANSPOSE"
+
+
+__all__ = [
+    "ConjugatePartitionRequest",
+    "ConjugatePartitionResult",
+    "HookLengthRequest",
+    "HookLengthResult",
+    "Partition",
+    "StandardYoungTableauCountRequest",
+    "StandardYoungTableauCountResult",
+]

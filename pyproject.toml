@@ -127,7 +127,7 @@ module = ["sympy", "sympy.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["jacobian.math.graph_decomposition._operations"]
+module = ["jacobian.math.graphs.decomposition._operations"]
 disable_error_code = ["type-arg", "arg-type", "misc", "comparison-overlap", "unused-ignore", "var-annotated"]
 
 [tool.deptry]
@@ -159,7 +159,7 @@ source_modules = [
     "jacobian.math.finite_abelian_groups",
     "jacobian.math.finite_fields.operations",
     "jacobian.math.finite_fields.values",
-    "jacobian.math.graph_spectral.operations",
+    "jacobian.math.graphs.spectral.operations",
     "jacobian.math.graphs.graph6",
     "jacobian.math.graphs.independence",
     "jacobian.math.graphs.operations",

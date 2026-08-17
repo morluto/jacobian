@@ -23,7 +23,6 @@ from jacobian.math.convex_analysis._tools import TOOLS as CONVEX_ANALYSIS_TOOLS
 from jacobian.math.diophantine_approximation._tools import (
     TOOLS as DIOPHANTINE_APPROXIMATION_TOOLS,
 )
-from jacobian.math.directed_graph._tools import TOOLS as DIRECTED_GRAPH_TOOLS
 from jacobian.math.discrepancy_theory._tools import TOOLS as DISCREPANCY_THEORY_TOOLS
 from jacobian.math.electrical_networks._tools import (
     TOOLS as ELECTRICAL_NETWORKS_TOOLS,
@@ -39,17 +38,18 @@ from jacobian.math.geometry._tools import TOOLS as GEOMETRY_TOOLS
 from jacobian.math.geometry.euclidean._tools import TOOLS as EUCLIDEAN_GEOMETRY_TOOLS
 from jacobian.math.geometry.exact._tools import TOOLS as EXACT_GEOMETRY_TOOLS
 from jacobian.math.geometry.projective._tools import TOOLS as PROJECTIVE_GEOMETRY_TOOLS
-from jacobian.math.graph_coloring_ops._tools import TOOLS as GRAPH_COLORING_OPS_TOOLS
-from jacobian.math.graph_decomposition._tools import TOOLS as GRAPH_DECOMPOSITION_TOOLS
-from jacobian.math.graph_flow._tools import TOOLS as GRAPH_FLOW_TOOLS
-from jacobian.math.graph_isomorphism._tools import TOOLS as GRAPH_ISOMORPHISM_TOOLS
-from jacobian.math.graph_optimization._tools import TOOLS as GRAPH_OPTIMIZATION_TOOLS
-from jacobian.math.graph_polynomials._tools import TOOLS as GRAPH_POLYNOMIALS_TOOLS
-from jacobian.math.graph_realization._tools import TOOLS as GRAPH_REALIZATION_TOOLS
-from jacobian.math.graph_spectral._tools import TOOLS as GRAPH_SPECTRAL_TOOLS
-from jacobian.math.graph_symmetry._tools import TOOLS as GRAPH_SYMMETRY_TOOLS
-from jacobian.math.graph_transforms._tools import TOOLS as GRAPH_TRANSFORMS_TOOLS
 from jacobian.math.graphs._tools import TOOLS as GRAPHS_TOOLS
+from jacobian.math.graphs.coloring._tools import TOOLS as GRAPH_COLORING_OPS_TOOLS
+from jacobian.math.graphs.decomposition._tools import TOOLS as GRAPH_DECOMPOSITION_TOOLS
+from jacobian.math.graphs.directed._tools import TOOLS as DIRECTED_GRAPH_TOOLS
+from jacobian.math.graphs.flow._tools import TOOLS as GRAPH_FLOW_TOOLS
+from jacobian.math.graphs.isomorphism._tools import TOOLS as GRAPH_ISOMORPHISM_TOOLS
+from jacobian.math.graphs.optimization._tools import TOOLS as GRAPH_OPTIMIZATION_TOOLS
+from jacobian.math.graphs.polynomials._tools import TOOLS as GRAPH_POLYNOMIALS_TOOLS
+from jacobian.math.graphs.realization._tools import TOOLS as GRAPH_REALIZATION_TOOLS
+from jacobian.math.graphs.spectral._tools import TOOLS as GRAPH_SPECTRAL_TOOLS
+from jacobian.math.graphs.symmetry._tools import TOOLS as GRAPH_SYMMETRY_TOOLS
+from jacobian.math.graphs.transforms._tools import TOOLS as GRAPH_TRANSFORMS_TOOLS
 from jacobian.math.group._tools import TOOLS as GROUP_TOOLS
 from jacobian.math.lattices._tools import TOOLS as LATTICES_TOOLS
 from jacobian.math.logic._tools import TOOLS as LOGIC_TOOLS

@@ -3,12 +3,12 @@
   "max_complexity": 10,
   "violations": [
     {
-      "path": "src/jacobian/math/graph_decomposition/_operations.py",
+      "path": "src/jacobian/math/graphs/decomposition/_operations.py",
       "symbol": "_find_next_ear",
       "complexity": 12
     },
     {
-      "path": "tests/math/graph_isomorphism/test_graph_isomorphism.py",
+      "path": "tests/math/graphs/test_graph_isomorphism.py",
       "symbol": "_is_mapping_valid_isomorphism",
       "complexity": 13
     }

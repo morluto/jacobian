@@ -3,18 +3,18 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.graph_coloring_ops._models import (
+from jacobian.math.graphs.coloring._models import (
     KColorabilityRequest,
     MaximumIndependentSetRequest,
 )
-from jacobian.math.graph_coloring_ops._operations import (
+from jacobian.math.graphs.coloring._operations import (
     compute_k_colorability,
     compute_maximum_independent_set,
 )
-from jacobian.math.graph_flow._models import MaxFlowRequest
-from jacobian.math.graph_flow._operations import compute_max_flow
-from jacobian.math.graph_spectral._models import GraphSpectrumRequest
-from jacobian.math.graph_spectral._operations import compute_laplacian_spectrum
+from jacobian.math.graphs.flow._models import MaxFlowRequest
+from jacobian.math.graphs.flow._operations import compute_max_flow
+from jacobian.math.graphs.spectral._models import GraphSpectrumRequest
+from jacobian.math.graphs.spectral._operations import compute_laplacian_spectrum
 
 
 def test_k_colorability_uses_an_exact_decision_procedure() -> None:

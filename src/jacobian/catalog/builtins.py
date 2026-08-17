@@ -6,6 +6,9 @@ from jacobian.catalog.models import MathTools
 from jacobian.math.additive_combinatorics._tools import (
     TOOLS as ADDITIVE_COMBINATORICS_TOOLS,
 )
+from jacobian.math.algebraic_combinatorics._tools import (
+    TOOLS as ALGEBRAIC_COMBINATORICS_TOOLS,
+)
 from jacobian.math.analysis._tools import TOOLS as ANALYSIS_TOOLS
 from jacobian.math.arithmetic._tools import TOOLS as ARITHMETIC_TOOLS
 from jacobian.math.arithmetic_counting._tools import TOOLS as ARITHMETIC_COUNTING_TOOLS
@@ -133,6 +136,7 @@ BUILTIN_TOOLS: MathTools = (
     *FINITE_GAME_THEORY_TOOLS,
     *ELECTRICAL_NETWORKS_TOOLS,
     *REGULAR_LANGUAGES_TOOLS,
+    *ALGEBRAIC_COMBINATORICS_TOOLS,
 )
 
 __all__ = ["BUILTIN_TOOLS"]

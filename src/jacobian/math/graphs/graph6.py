@@ -7,12 +7,12 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, StrictStr, model_validator
 
+from jacobian._digest import Sha256Digest
+from jacobian._models import StrictModel
 from jacobian.canonical import canonicalize_json
-from jacobian.contracts.base import ContractModel
-from jacobian.contracts.common import Sha256Digest
 
 
-class Graph6Edge(ContractModel):
+class Graph6Edge(StrictModel):
     first: StrictInt = Field(ge=0, le=62)
     second: StrictInt = Field(ge=0, le=62)
 
@@ -23,7 +23,7 @@ class Graph6Edge(ContractModel):
         return self
 
 
-class Graph6DecodeValue(ContractModel):
+class Graph6DecodeValue(StrictModel):
     graph6: StrictStr = Field(min_length=1, max_length=352)
     order: StrictInt = Field(ge=0, le=62)
     edges: tuple[Graph6Edge, ...] = Field(max_length=1891)

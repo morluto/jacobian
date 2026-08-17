@@ -7,8 +7,8 @@ from typing import Any, Literal, Self
 import rfc8785
 from pydantic import ConfigDict, Field, model_validator
 
+from jacobian._models import StrictModel
 from jacobian.canonical import sha256_digest
-from jacobian.contracts.base import ContractModel
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix, rank
 
 _MAX_FIELD_ORDER = 4096
@@ -57,7 +57,7 @@ def _validate_presentation_shape(
         raise ValueError("unsupported finite-field element encoding")
 
 
-class FiniteFieldPresentation(ContractModel):
+class FiniteFieldPresentation(StrictModel):
     """An exact polynomial presentation with a fixed power-basis encoding."""
 
     model_config = ConfigDict(
@@ -151,7 +151,7 @@ class FiniteFieldPresentation(ContractModel):
         )
 
 
-class FiniteFieldElement(ContractModel):
+class FiniteFieldElement(StrictModel):
     """Power-basis coordinates bound to one exact field presentation."""
 
     presentation: FiniteFieldPresentation
@@ -187,7 +187,7 @@ class FiniteFieldElement(ContractModel):
         )
 
 
-class Axis(ContractModel):
+class Axis(StrictModel):
     """An ordered semantic axis."""
 
     name: str
@@ -216,7 +216,7 @@ class Axis(ContractModel):
         )
 
 
-class AxisBoundMatrix(ContractModel):
+class AxisBoundMatrix(StrictModel):
     """An immutable matrix bound to a field presentation and ordered axes."""
 
     presentation: FiniteFieldPresentation
@@ -254,7 +254,7 @@ class AxisBoundMatrix(ContractModel):
         )
 
 
-class FiniteDimensionalSubspace(ContractModel):
+class FiniteDimensionalSubspace(StrictModel):
     """An ordered independent matrix basis over the presentation's prime field."""
 
     presentation: FiniteFieldPresentation
@@ -321,7 +321,7 @@ class FiniteDimensionalSubspace(ContractModel):
         )
 
 
-class ProjectivePoint(ContractModel):
+class ProjectivePoint(StrictModel):
     """A normalized projective point over one field and coordinate axis."""
 
     presentation: FiniteFieldPresentation
@@ -359,7 +359,7 @@ class ProjectivePoint(ContractModel):
         )
 
 
-class ProjectiveLine(ContractModel):
+class ProjectiveLine(StrictModel):
     """The complete ordered projective line for one presentation and axis."""
 
     presentation: FiniteFieldPresentation
@@ -396,7 +396,7 @@ class ProjectiveLine(ContractModel):
         )
 
 
-class FiniteLinearMap(ContractModel):
+class FiniteLinearMap(StrictModel):
     """A matrix-defined linear map with exact source and target axes."""
 
     source_axis: Axis
@@ -424,7 +424,7 @@ class FiniteLinearMap(ContractModel):
         )
 
 
-class RankResult(ContractModel):
+class RankResult(StrictModel):
     """The exact rank of a direction-bound finite linear map."""
 
     direction: ProjectivePoint
@@ -455,7 +455,7 @@ class RankResult(ContractModel):
         )
 
 
-class DirectionRankLedger(ContractModel):
+class DirectionRankLedger(StrictModel):
     """An ordered, exact binding from projective directions to rank results."""
 
     subspace: FiniteDimensionalSubspace
@@ -496,7 +496,7 @@ class DirectionRankLedger(ContractModel):
         )
 
 
-class OrbitDistribution(ContractModel):
+class OrbitDistribution(StrictModel):
     """Orbit-size counts derived from one exact direction-rank ledger."""
 
     ledger: DirectionRankLedger
@@ -523,7 +523,7 @@ class OrbitDistribution(ContractModel):
         )
 
 
-class FinitePolynomial(ContractModel):
+class FinitePolynomial(StrictModel):
     """A canonical univariate polynomial over one exact field presentation."""
 
     presentation: FiniteFieldPresentation
@@ -563,7 +563,7 @@ class FinitePolynomial(ContractModel):
         )
 
 
-class FinitePolynomialMap(ContractModel):
+class FinitePolynomialMap(StrictModel):
     """A polynomial self-map of one exactly presented finite field."""
 
     domain: FiniteFieldPresentation
@@ -590,7 +590,7 @@ class FinitePolynomialMap(ContractModel):
         )
 
 
-class FiniteMapTable(ContractModel):
+class FiniteMapTable(StrictModel):
     """A complete ordered evaluation table for one exact finite map."""
 
     map: FinitePolynomialMap
@@ -638,7 +638,7 @@ def _fibers_for_table(
     return tuple((target, tuple(sources)) for target, sources in grouped.values())
 
 
-class FiberPartition(ContractModel):
+class FiberPartition(StrictModel):
     """The nonempty fibers of one complete finite map table."""
 
     table: FiniteMapTable
@@ -670,7 +670,7 @@ class FiberPartition(ContractModel):
         )
 
 
-class CollisionResult(ContractModel):
+class CollisionResult(StrictModel):
     """Whether a complete finite map table has a collision."""
 
     table: FiniteMapTable
@@ -711,7 +711,7 @@ class CollisionResult(ContractModel):
         )
 
 
-class PermutationResult(ContractModel):
+class PermutationResult(StrictModel):
     """Whether a complete finite map table is a permutation."""
 
     table: FiniteMapTable

@@ -14,7 +14,7 @@ from pydantic import (
     model_validator,
 )
 
-from jacobian.contracts.base import ContractModel
+from jacobian._models import StrictModel
 
 _MAX_INTEGER_DIGITS = 256
 _MAX_MODULUS = 1_000_000
@@ -25,7 +25,7 @@ _VARIABLE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 _INTEGER = re.compile(r"^(?:0|-?[1-9][0-9]*)$")
 
 
-class ModularPolynomialTerm(ContractModel):
+class ModularPolynomialTerm(StrictModel):
     coefficient: StrictStr = Field(min_length=1, max_length=_MAX_INTEGER_DIGITS + 1)
     exponents: tuple[StrictInt, ...] = Field(min_length=1, max_length=_MAX_VARIABLES)
 
@@ -43,7 +43,7 @@ class ModularPolynomialTerm(ContractModel):
         return self
 
 
-class ModularPolynomialIdentityRequest(ContractModel):
+class ModularPolynomialIdentityRequest(StrictModel):
     modulus: StrictInt = Field(ge=2, le=_MAX_MODULUS)
     variables: tuple[StrictStr, ...] = Field(min_length=1, max_length=_MAX_VARIABLES)
     left: tuple[ModularPolynomialTerm, ...] = Field(default=(), max_length=_MAX_TERMS)
@@ -63,12 +63,12 @@ class ModularPolynomialIdentityRequest(ContractModel):
         return self
 
 
-class NormalizedModularPolynomialTerm(ContractModel):
+class NormalizedModularPolynomialTerm(StrictModel):
     coefficient: StrictInt = Field(ge=1, lt=_MAX_MODULUS)
     exponents: tuple[StrictInt, ...] = Field(min_length=1, max_length=_MAX_VARIABLES)
 
 
-class ModularPolynomialIdentityValue(ContractModel):
+class ModularPolynomialIdentityValue(StrictModel):
     modulus: StrictInt = Field(ge=2, le=_MAX_MODULUS)
     variable_order: tuple[StrictStr, ...] = Field(
         min_length=1, max_length=_MAX_VARIABLES

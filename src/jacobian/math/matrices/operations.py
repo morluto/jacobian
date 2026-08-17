@@ -1,8 +1,8 @@
 """Exact matrix operations on canonical SymPy matrix inputs.
 
-This is the supported public API for ``jacobian.math.matrices``.  Domain
-adapters convert contract types to SymPy matrices, call these functions, and
-convert results back.  The SymPy backend is private to this module and loaded
+This is the supported public API for ``jacobian.math.matrices``. Private tool
+declarations convert wire models to SymPy matrices, call these functions, and
+convert results back. The SymPy backend is private to this module and loaded
 lazily so importing ``jacobian.math`` does not eagerly load packaged backends.
 """
 

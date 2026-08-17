@@ -1,0 +1,81 @@
+"""Segment-owned exact geometry operations."""
+
+from jacobian.catalog._examples import example
+from jacobian.math.geometry._models import (
+    GeometryPointResult,
+    PointPairRequest,
+    SegmentIntersectionRequest,
+    SegmentIntersectionResult,
+)
+from jacobian.math.geometry._operations import midpoint, segment_intersection
+from jacobian.math.geometry._support import geometry_operation
+
+SEGMENT_OPERATIONS = (
+    geometry_operation(
+        "geometry.segment.compute.midpoint",
+        "Construct segment midpoint",
+        "Construct the exact midpoint of two rational endpoints.",
+        PointPairRequest,
+        GeometryPointResult,
+        midpoint,
+        "geometry",
+        "construction",
+        examples=(
+            example(
+                "segment_midpoint",
+                "Construct the midpoint of a unit segment.",
+                {
+                    "first": {
+                        "x": {"num": "0", "den": "1"},
+                        "y": {"num": "0", "den": "1"},
+                    },
+                    "second": {
+                        "x": {"num": "1", "den": "1"},
+                        "y": {"num": "0", "den": "1"},
+                    },
+                },
+            ),
+        ),
+    ),
+    geometry_operation(
+        "geometry.segments.intersection.compute",
+        "Intersect two closed rational segments",
+        (
+            "Classify the exact intersection of two closed rational segments "
+            "as disjoint, one typed contact point, or one maximal overlap."
+        ),
+        SegmentIntersectionRequest,
+        SegmentIntersectionResult,
+        segment_intersection,
+        "geometry",
+        "intersection",
+        examples=(
+            example(
+                "crossing_segments",
+                "Intersect two closed rational segments at one proper crossing.",
+                {
+                    "first": {
+                        "start": {
+                            "x": {"num": "0", "den": "1"},
+                            "y": {"num": "0", "den": "1"},
+                        },
+                        "end": {
+                            "x": {"num": "2", "den": "1"},
+                            "y": {"num": "2", "den": "1"},
+                        },
+                    },
+                    "second": {
+                        "start": {
+                            "x": {"num": "0", "den": "1"},
+                            "y": {"num": "2", "den": "1"},
+                        },
+                        "end": {
+                            "x": {"num": "2", "den": "1"},
+                            "y": {"num": "0", "den": "1"},
+                        },
+                    },
+                },
+            ),
+        ),
+    ),
+)

@@ -9,7 +9,7 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
 
-from jacobian.contracts.base import ContractModel
+from jacobian._models import StrictModel
 
 MAX_FINITE_GROUP_ORDER = 4_096
 MAX_FINITE_GROUP_RANK = 6
@@ -20,7 +20,7 @@ MAX_FINITE_GROUP_COORDINATE = 1_000_000
 GroupElement = tuple[StrictInt, ...]
 
 
-class FiniteAbelianGroupFactorizationRequest(ContractModel):
+class FiniteAbelianGroupFactorizationRequest(StrictModel):
     """Two bounded integer-vector factors in a product of cyclic groups."""
 
     moduli: tuple[StrictInt, ...] = Field(
@@ -72,14 +72,14 @@ class FiniteAbelianGroupFactorizationRequest(ContractModel):
         return self
 
 
-class FiniteAbelianRepresentationCount(ContractModel):
+class FiniteAbelianRepresentationCount(StrictModel):
     """Number of group elements having one representation count."""
 
     representation_count: StrictInt = Field(ge=0, le=MAX_FINITE_GROUP_ORDER)
     element_count: StrictInt = Field(ge=1, le=MAX_FINITE_GROUP_ORDER)
 
 
-class FiniteAbelianRepresentationWitness(ContractModel):
+class FiniteAbelianRepresentationWitness(StrictModel):
     """The first element with two distinct displayed representations."""
 
     element: GroupElement = Field(min_length=1, max_length=MAX_FINITE_GROUP_RANK)
@@ -89,7 +89,7 @@ class FiniteAbelianRepresentationWitness(ContractModel):
     other_right: GroupElement = Field(min_length=1, max_length=MAX_FINITE_GROUP_RANK)
 
 
-class FiniteAbelianGroupFactorizationResult(ContractModel):
+class FiniteAbelianGroupFactorizationResult(StrictModel):
     """Complete unique-representation summary for ``G = left + right``."""
 
     moduli: tuple[StrictInt, ...] = Field(

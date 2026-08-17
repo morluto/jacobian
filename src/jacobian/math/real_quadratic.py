@@ -8,8 +8,8 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian.contracts.base import ContractModel
-from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._models import StrictModel
 
 _MAX_RADICAND = 1_000_000
 _MAX_DIGITS = 256
@@ -44,7 +44,7 @@ def _sign(a: Fraction, b: Fraction, d: int) -> int:
     return (dominant > 0) - (dominant < 0)
 
 
-class RealQuadraticValue(ContractModel):
+class RealQuadraticValue(StrictModel):
     rational_part: CanonicalRational
     radical_coefficient: CanonicalRational
     radicand: StrictInt = Field(ge=2, le=_MAX_RADICAND)
@@ -64,7 +64,7 @@ class RealQuadraticValue(ContractModel):
         return self
 
 
-class RealQuadraticOrderRequest(ContractModel):
+class RealQuadraticOrderRequest(StrictModel):
     left: RealQuadraticValue
     right: RealQuadraticValue
 
@@ -75,13 +75,13 @@ class RealQuadraticOrderRequest(ContractModel):
         return self
 
 
-class RealQuadraticSignCertificate(ContractModel):
+class RealQuadraticSignCertificate(StrictModel):
     rational_part_squared: CanonicalRational
     radical_part_squared: CanonicalRational
     magnitude_order: Literal["LT", "EQ", "GT"]
 
 
-class RealQuadraticOrderValue(ContractModel):
+class RealQuadraticOrderValue(StrictModel):
     left: RealQuadraticValue
     right: RealQuadraticValue
     difference: RealQuadraticValue

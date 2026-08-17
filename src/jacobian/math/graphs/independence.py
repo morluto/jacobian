@@ -6,7 +6,7 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian.contracts.base import ContractModel
+from jacobian._models import StrictModel
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 IndependenceSearchStatus = Literal["EXACT", "UNKNOWN"]
@@ -19,7 +19,7 @@ IndependenceTermination = Literal[
 ]
 
 
-class IndependenceNumberBudget(ContractModel):
+class IndependenceNumberBudget(StrictModel):
     """Explicit public limits for one bounded independence-number search."""
 
     wall_seconds: StrictInt = Field(default=5, ge=1, le=120)
@@ -35,7 +35,7 @@ class IndependenceNumberBudget(ContractModel):
     max_order: StrictInt = Field(default=128, ge=0, le=128)
 
 
-class IndependenceNumberRequest(ContractModel):
+class IndependenceNumberRequest(StrictModel):
     """One finite simple graph and its operation-owned search budget."""
 
     graph: SimpleUndirectedGraph
@@ -53,7 +53,7 @@ class IndependenceNumberRequest(ContractModel):
         return self
 
 
-class IndependenceNumberResult(ContractModel):
+class IndependenceNumberResult(StrictModel):
     """Exact optimum or bounded incumbent and bounds for one supplied graph."""
 
     result_schema_version: Literal["1"] = "1"

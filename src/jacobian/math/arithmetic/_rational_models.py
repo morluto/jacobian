@@ -1,0 +1,60 @@
+"""Pydantic contracts for exact rational arithmetic."""
+
+from __future__ import annotations
+
+from pydantic import Field
+
+from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian._models import StrictModel
+
+_MAX_CONTINUED_FRACTION_TERMS = 1_024
+
+
+# ---------------------------------------------------------------------------
+# Requests
+# ---------------------------------------------------------------------------
+
+
+class RationalValueRequest(StrictModel):
+    """One canonical rational supplied to a unary rational operation."""
+
+    value: CanonicalRational
+
+
+class RationalPairRequest(StrictModel):
+    """Two canonical rationals supplied to a binary rational operation."""
+
+    left: CanonicalRational
+    right: CanonicalRational
+
+
+# ---------------------------------------------------------------------------
+# Structured results
+# ---------------------------------------------------------------------------
+
+
+class RationalValueResult(StrictModel):
+    """One canonical rational produced by a rational operation."""
+
+    value: CanonicalRational
+
+
+class RationalIntegerResult(StrictModel):
+    """One canonical integer produced by rounding a rational."""
+
+    value: CanonicalInteger
+
+
+class RationalComparisonResult(StrictModel):
+    """Truth value of a rational predicate."""
+
+    holds: bool
+
+
+class RationalContinuedFractionResult(StrictModel):
+    """The finite simple continued fraction expansion of one rational."""
+
+    terms: tuple[CanonicalInteger, ...] = Field(
+        min_length=1,
+        max_length=_MAX_CONTINUED_FRACTION_TERMS,
+    )

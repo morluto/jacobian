@@ -7,23 +7,23 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
 
-from jacobian.contracts.base import ContractModel
-from jacobian.contracts.combinatorics import (
+from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._models import StrictModel
+from jacobian.math.combinatorics._models import (
     MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
     MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
     MAX_LINEAR_RECURRENCE_INDEX,
     MAX_LINEAR_RECURRENCE_ORDER,
     MAX_P_RECURSIVE_POLYNOMIAL_DEGREE,
 )
-from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
 
 
-class IndexedRecurrenceResidual(ContractModel):
+class IndexedRecurrenceResidual(StrictModel):
     index: StrictInt = Field(ge=1, le=MAX_LINEAR_RECURRENCE_INDEX)
     value: CanonicalRational
 
 
-class PolynomialCoefficientRecurrenceTableRequest(ContractModel):
+class PolynomialCoefficientRecurrenceTableRequest(StrictModel):
     """One complete finite table and one polynomial-coefficient recurrence."""
 
     coefficient_polynomials: tuple[tuple[CanonicalRational, ...], ...] = Field(
@@ -68,7 +68,7 @@ class PolynomialCoefficientRecurrenceTableRequest(ContractModel):
         return self
 
 
-class PolynomialCoefficientRecurrenceTableResult(ContractModel):
+class PolynomialCoefficientRecurrenceTableResult(StrictModel):
     """Complete exact residual ledger for the supplied finite table."""
 
     coefficient_convention: Literal[

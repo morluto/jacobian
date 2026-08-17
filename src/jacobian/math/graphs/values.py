@@ -7,7 +7,7 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian.contracts.base import ContractModel
+from jacobian._models import StrictModel
 
 GraphCompositionOperation = Literal[
     "DISJOINT_UNION",
@@ -17,7 +17,7 @@ GraphCompositionOperation = Literal[
 ]
 
 
-class SimpleUndirectedGraph(ContractModel):
+class SimpleUndirectedGraph(StrictModel):
     """Immutable canonical value for a finite simple undirected graph."""
 
     graph_schema_version: Literal["1"] = "1"
@@ -42,7 +42,7 @@ class SimpleUndirectedGraph(ContractModel):
         return self
 
 
-class GraphCompositionInput(ContractModel):
+class GraphCompositionInput(StrictModel):
     """Two exact graphs and one explicit graph composition operation."""
 
     operation: GraphCompositionOperation

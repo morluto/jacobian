@@ -6,8 +6,8 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
-from jacobian.contracts.base import ContractModel
-from jacobian.contracts.exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._models import StrictModel
 
 PolynomialVariable = Annotated[
     str,
@@ -18,7 +18,7 @@ MAX_POLYNOMIAL_TERMS = 4_096
 MAX_POLYNOMIAL_EXPONENT = 32_768
 
 
-class RationalPolynomialTerm(ContractModel):
+class RationalPolynomialTerm(StrictModel):
     coefficient: CanonicalRational
     exponents: tuple[int, ...] = Field(
         min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
@@ -38,7 +38,7 @@ class RationalPolynomialTerm(ContractModel):
         return self
 
 
-class SparseRationalPolynomial(ContractModel):
+class SparseRationalPolynomial(StrictModel):
     terms: tuple[RationalPolynomialTerm, ...] = Field(
         default=(),
         max_length=MAX_POLYNOMIAL_TERMS,
@@ -71,7 +71,7 @@ class SparseRationalPolynomial(ContractModel):
         return self
 
 
-class RationalPolynomial(ContractModel):
+class RationalPolynomial(StrictModel):
     """One sparse polynomial together with its exact coefficient ring."""
 
     polynomial_schema_version: Literal["1"] = "1"

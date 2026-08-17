@@ -1225,6 +1225,18 @@
       "input_schema": "sha256:ba6423e4cce44197eb98f3a6ae2839cce5c89d8f3c67938f8702b682e19c0985",
       "output_schema": "sha256:460d45024087160fd1cc757f952e363d3fd18b48dd0dec9d4a7b0bf104c7bf8c"
     },
+    "regular_language.complement.compute": {
+      "input_schema": "sha256:bf36e2409b31e359054b83d9b0fe28fddb1e1105b4c82e0fbb219cf1751e240e",
+      "output_schema": "sha256:bc6fdc4fb8bf39d7d8fcf7f0d65e32cd232b8efb06265929a031b508c46d1141"
+    },
+    "regular_language.count_words.compute": {
+      "input_schema": "sha256:c84d11d1becee2c0672dc97dbaa1659e3a540ee77cae7651e70eabf6c65c042e",
+      "output_schema": "sha256:32f5f0ff90051b9e5d438dd1815e8fdadbcaf33ec7582fff2422beb9d484d433"
+    },
+    "regular_language.run.check": {
+      "input_schema": "sha256:3366f388ed26f9f15a00fad35a14332b418f1752db02507c15404c59ec41ad55",
+      "output_schema": "sha256:77e39238312939b8450b419e53fb4dbaef1ee4c238e939c683dfb3f92f77f475"
+    },
     "sat.assignment.check": {
       "input_schema": "sha256:043d67beebbde52080df34632b3c9f5cef0deeee54aa868cf9475d970251a8b0",
       "output_schema": "sha256:dcba46f01160ac35cc05556235610b8e4a47300ff329b29b69c5efb629bdad3a"

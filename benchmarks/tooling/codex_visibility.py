@@ -19,11 +19,11 @@ from typing import Any, Literal
 from urllib.parse import urlsplit
 
 import httpx2
-from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import TextResourceContents
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from benchmarks.tooling.codex_telemetry import parse_agent_transcript
 from benchmarks.tooling.command_runner import (
     ToolCommandStatus,
     git_head_sha,
@@ -31,7 +31,7 @@ from benchmarks.tooling.command_runner import (
     run_operator_command,
 )
 from jacobian.canonical import canonicalize_json
-from jacobian.eval.telemetry import parse_agent_transcript
+from mcp import Client
 
 _ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_CASES = _ROOT / "benchmarks/config/codex-visibility-v2.json"
@@ -902,7 +902,7 @@ def main() -> None:
             "evaluator": {
                 "runner_sha256": _sha256_bytes(Path(__file__).read_bytes()),
                 "telemetry_parser_sha256": _sha256_bytes(
-                    (_ROOT / "src/jacobian/eval/telemetry.py").read_bytes()
+                    (_ROOT / "benchmarks/tooling/codex_telemetry.py").read_bytes()
                 ),
                 "isolation": isolation,
                 "skill_surface": skill_surface,

@@ -75,7 +75,7 @@ make harbor-check
 make harbor-check-all  # explicit full host-verifier reproduction
 make harbor-oracle DATASET=mathematical-benchmarks-v1 FULL=1
 make harbor-oracle-all
-uv run pytest tests/boundary/process/providers
+uv run pytest tests/process/providers
 make codex-visibility
 ```
 

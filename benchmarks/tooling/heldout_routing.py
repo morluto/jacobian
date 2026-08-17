@@ -22,7 +22,6 @@ from benchmarks.tooling.heldout_manifest import (
 )
 
 _REQUIRED_MCP_TOOLS = {"math.find", "math.run"}
-_PROBE_SCRIPT = ROOT / "deploy" / "smoke_remote.py"
 _ZERO_DIGEST = "sha256:" + "0" * 64
 
 
@@ -45,7 +44,7 @@ def _run_mcp_probe(
 ) -> dict[str, Any]:
     """Bounded MCP initialize + catalog + describe probe via command_runner.
 
-    Runs ``deploy/smoke_remote.py`` under the locked environment.  Returns a
+    Runs ``deploy.smoke_remote`` under the locked environment.  Returns a
     dict with ``reachable`` and either the probe report or a safe diagnostic.
     """
 
@@ -53,7 +52,8 @@ def _run_mcp_probe(
         "run",
         "--locked",
         "python",
-        str(_PROBE_SCRIPT),
+        "-m",
+        "deploy.smoke_remote",
         mcp_url,
         "--expect-version",
         expected_version,

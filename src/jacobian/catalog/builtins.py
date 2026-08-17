@@ -34,6 +34,9 @@ from jacobian.math.euclidean_geometry._tools import TOOLS as EUCLIDEAN_GEOMETRY_
 from jacobian.math.exact_geometry._tools import TOOLS as EXACT_GEOMETRY_TOOLS
 from jacobian.math.finite_fields._tools import TOOLS as FINITE_FIELDS_TOOLS
 from jacobian.math.finite_game_theory._tools import TOOLS as FINITE_GAME_THEORY_TOOLS
+from jacobian.math.finite_metric_spaces._tools import (
+    TOOLS as FINITE_METRIC_SPACES_TOOLS,
+)
 from jacobian.math.finite_sets._tools import TOOLS as FINITE_SETS_TOOLS
 from jacobian.math.formal_power_series._tools import TOOLS as FORMAL_POWER_SERIES_TOOLS
 from jacobian.math.geometry._tools import TOOLS as GEOMETRY_TOOLS
@@ -139,6 +142,7 @@ BUILTIN_TOOLS: MathTools = (
     *REGULAR_LANGUAGES_TOOLS,
     *ALGEBRAIC_COMBINATORICS_TOOLS,
     *REAL_ALGEBRA_TOOLS,
+    *FINITE_METRIC_SPACES_TOOLS,
 )
 
 __all__ = ["BUILTIN_TOOLS"]

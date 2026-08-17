@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
-from jacobian.builtin_operation_modules import load_builtin_operation_modules
-from jacobian.contracts.operations import (
+from jacobian.catalog.builtins import BUILTIN_TOOLS
+from jacobian.catalog.models import (
+    MathTool,
     OperationBrowseResult,
     OperationCatalogSnapshot,
     OperationDescriptor,
@@ -13,25 +15,18 @@ from jacobian.contracts.operations import (
     OperationDiscoveryResult,
     OperationExample,
 )
-from jacobian.math_tools import MathTool
-from jacobian.operation_discovery import browse_operations, discover_operations
+from jacobian.catalog.search import browse_operations, discover_operations
 
 
-class ServingCatalog:
+class Catalog:
     """Direct declaration view with no overlay or state directory."""
 
-    def __init__(self, operations: dict[str, MathTool[Any, Any]]) -> None:
-        self._operations = operations
+    def __init__(self, operations: Iterable[MathTool[Any, Any]]) -> None:
+        self._operations = _index_operations(operations)
 
     @classmethod
-    def open(cls) -> ServingCatalog:
-        operations = {
-            operation.operation_id: operation
-            for _module, declared in load_builtin_operation_modules()
-            for operation in declared
-            if isinstance(operation, MathTool)
-        }
-        return cls(operations)
+    def open(cls) -> Catalog:
+        return cls(BUILTIN_TOOLS)
 
     def operation(self, operation_id: str) -> MathTool[Any, Any] | None:
         """Return the mathematical function selected by a known operation ID."""
@@ -72,6 +67,19 @@ class ServingCatalog:
         )
 
 
+def _index_operations(
+    operations: Iterable[MathTool[Any, Any]],
+) -> dict[str, MathTool[Any, Any]]:
+    indexed: dict[str, MathTool[Any, Any]] = {}
+    for operation in operations:
+        if operation.operation_id in indexed:
+            raise ValueError(
+                f"duplicate built-in operation ID: {operation.operation_id}"
+            )
+        indexed[operation.operation_id] = operation
+    return indexed
+
+
 def _descriptor(operation: MathTool[Any, Any]) -> OperationDescriptor:
     """Describe one direct mathematical function for discovery."""
 
@@ -95,4 +103,4 @@ def _descriptor(operation: MathTool[Any, Any]) -> OperationDescriptor:
     )
 
 
-__all__ = ["ServingCatalog"]
+__all__ = ["Catalog"]

@@ -11,7 +11,6 @@ from typer import _click
 from typer.core import TyperGroup
 
 from jacobian.canonical import loads_strict_json
-from jacobian.serving_catalog import ServingCatalog
 
 
 class JacobianGroup(TyperGroup):
@@ -45,14 +44,18 @@ class JacobianGroup(TyperGroup):
 def catalog() -> None:
     """Print the complete installed operation catalog."""
 
-    value = ServingCatalog.open().snapshot()
+    from jacobian.catalog.catalog import Catalog
+
+    value = Catalog.open().snapshot()
     _emit(value.model_dump(mode="json"))
 
 
 def inspect_operation(operation_id: str) -> None:
     """Print one exact installed operation declaration."""
 
-    descriptor = ServingCatalog.open().inspect(operation_id)
+    from jacobian.catalog.catalog import Catalog
+
+    descriptor = Catalog.open().inspect(operation_id)
     if descriptor is None:
         raise ValueError(f"operation {operation_id!r} is not installed")
     _emit(descriptor.model_dump(mode="json"))
@@ -82,12 +85,13 @@ def run_operation(
     payload = loads_strict_json(source)
     if not isinstance(payload, dict):
         raise ValueError("operation payload must be a JSON object")
-    from jacobian.operation_dispatcher import invoke_operation
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.dispatch import invoke_operation
 
     result = invoke_operation(
         operation_id,
         payload,
-        ServingCatalog.open(),
+        Catalog.open(),
     )
     _emit(result.model_dump(mode="json"))
 

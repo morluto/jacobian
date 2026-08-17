@@ -6,7 +6,7 @@ import re
 from collections.abc import Sequence
 from typing import Protocol
 
-from jacobian.contracts.operations import (
+from jacobian.catalog.models import (
     OperationBrowseCard,
     OperationBrowseResult,
     OperationDiscoveryMatch,

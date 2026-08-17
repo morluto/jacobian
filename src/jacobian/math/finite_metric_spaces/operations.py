@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Any
 
 __all__ = ["ball", "gromov_hyperbolicity", "metric_profile"]
@@ -32,16 +33,19 @@ def ball(distances: list[list[int]], center: int, radius: int) -> list[int]:
     return [i for i in range(n) if distances[center][i] <= radius]
 
 
-def gromov_hyperbolicity(distances: list[list[int]]) -> int:
+def gromov_hyperbolicity(distances: list[list[int]]) -> Fraction:
     """Compute the four-point Gromov hyperbolicity (max over all quadruples).
 
     For four points i, j, k, l, define:
-    delta(i,j,k,l) = max(0, (d(i,j)+d(k,l) - max(d(i,k)+d(j,l), d(i,l)+d(j,k))) / 2)
+    delta(i,j,k,l) = max(0, (largest - second_largest) / 2)
+    where largest and second_largest are the two biggest of the three sums
+    s1 = d(i,j)+d(k,l), s2 = d(i,k)+d(j,l), s3 = d(i,l)+d(j,k).
     The hyperbolicity is the maximum over all quadruples.
-    Since distances are integers, we use integer arithmetic.
+    Since the gap between the two largest sums can be odd, the delta
+    can be a half-integer, so we return an exact Fraction.
     """
     n = len(distances)
-    max_delta = 0
+    max_delta = Fraction(0)
     for i in range(n):
         for j in range(i + 1, n):
             for k in range(j + 1, n):
@@ -55,8 +59,8 @@ def gromov_hyperbolicity(distances: list[list[int]]) -> int:
                     s1 = d_ij + d_kl
                     s2 = d_ik + d_jl
                     s3 = d_il + d_jk
-                    max_pair = max(s1, s2, s3)
-                    delta = (s1 + s2 + s3 - 2 * max_pair) // 2
+                    second, largest = sorted([s1, s2, s3])[1:]
+                    delta = Fraction(largest - second, 2)
                     if delta > max_delta:
                         max_delta = delta
     return max_delta

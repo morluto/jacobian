@@ -72,17 +72,38 @@ def test_ball_radius_1_at_endpoint() -> None:
 
 
 def test_gromov_hyperbolicity_path_graph() -> None:
-    """Path graph 0-1-2-3: computed Gromov hyperbolicity is positive."""
+    """Path graph 0-1-2-3: Gromov hyperbolicity is 0 (tree)."""
+    from fractions import Fraction
+
     ms = _ms([[0, 1, 2, 3], [1, 0, 1, 2], [2, 1, 0, 1], [3, 2, 1, 0]])
     result = compute_gromov_hyperbolicity(GromovHyperbolicityRequest(metric_space=ms))
-    assert result.hyperbolicity >= 0
+    assert result.hyperbolicity.as_fraction() == Fraction(0, 1)
 
 
 def test_gromov_hyperbolicity_cycle_c4() -> None:
-    """C4 (cycle on 4 points): Gromov hyperbolicity is computed exactly."""
+    """C4 (cycle on 4 points): Gromov hyperbolicity is 1 (integer)."""
+    from fractions import Fraction
+
     ms = _ms([[0, 1, 2, 1], [1, 0, 1, 2], [2, 1, 0, 1], [1, 2, 1, 0]])
     result = compute_gromov_hyperbolicity(GromovHyperbolicityRequest(metric_space=ms))
-    assert result.hyperbolicity >= 0
+    assert result.hyperbolicity.as_fraction() == Fraction(1, 1)
+
+
+def test_gromov_hyperbolicity_cycle_c5_half_integer() -> None:
+    """C5 (cycle on 5 points): Gromov hyperbolicity is 1/2 (half-integer)."""
+    from fractions import Fraction
+
+    ms = _ms(
+        [
+            [0, 1, 2, 2, 1],
+            [1, 0, 1, 2, 2],
+            [2, 1, 0, 1, 2],
+            [2, 2, 1, 0, 1],
+            [1, 2, 2, 1, 0],
+        ]
+    )
+    result = compute_gromov_hyperbolicity(GromovHyperbolicityRequest(metric_space=ms))
+    assert result.hyperbolicity.as_fraction() == Fraction(1, 2)
 
 
 def test_contract_rejects_nonsymmetric() -> None:
@@ -99,3 +120,25 @@ def test_contract_rejects_nonzero_diagonal() -> None:
             point_count=2,
             distances=((1, 1), (1, 0)),
         )
+
+
+def test_contract_rejects_triangle_inequality() -> None:
+    with pytest.raises(ValidationError, match="triangle inequality"):
+        FiniteMetricSpace(
+            point_count=3,
+            distances=((0, 1, 3), (1, 0, 1), (3, 1, 0)),
+        )
+
+
+def test_contract_rejects_zero_distance() -> None:
+    with pytest.raises(ValidationError, match="positive distance"):
+        FiniteMetricSpace(
+            point_count=3,
+            distances=((0, 0, 1), (0, 0, 1), (1, 1, 0)),
+        )
+
+
+def test_ball_rejects_center_out_of_range() -> None:
+    ms = _ms([[0, 1, 2], [1, 0, 1], [2, 1, 0]])
+    with pytest.raises(ValidationError, match="within the metric space"):
+        BallRequest(metric_space=ms, center=3, radius=1)

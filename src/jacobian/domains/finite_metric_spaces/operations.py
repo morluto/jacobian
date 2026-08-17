@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.finite_metric_spaces import (
     BallRequest,
     BallResult,
@@ -58,4 +59,6 @@ def compute_gromov_hyperbolicity(
 ) -> GromovHyperbolicityResult:
     distances = _distance_matrix(request)
     result = gromov_hyperbolicity(distances)
-    return GromovHyperbolicityResult(hyperbolicity=result)
+    return GromovHyperbolicityResult(
+        hyperbolicity=CanonicalRational.from_fraction(result)
+    )

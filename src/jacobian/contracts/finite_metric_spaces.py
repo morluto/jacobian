@@ -7,6 +7,7 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian.contracts.base import ContractModel
+from jacobian.contracts.exact import CanonicalRational
 
 MAX_POINTS = 64
 
@@ -37,6 +38,11 @@ class FiniteMetricSpace(ContractModel):
                 raise ValueError("distance matrix must be square")
 
     def _require_metric_properties(self) -> None:
+        self._require_symmetry_and_diagonal()
+        self._require_positive_separation()
+        self._require_triangle_inequality()
+
+    def _require_symmetry_and_diagonal(self) -> None:
         for i in range(self.point_count):
             if self.distances[i][i] != 0:
                 raise ValueError("diagonal distances must be zero")
@@ -45,6 +51,19 @@ class FiniteMetricSpace(ContractModel):
                     raise ValueError("distance matrix must be symmetric")
                 if self.distances[i][j] < 0:
                     raise ValueError("distances must be nonnegative")
+
+    def _require_positive_separation(self) -> None:
+        for i in range(self.point_count):
+            for j in range(self.point_count):
+                if i != j and self.distances[i][j] <= 0:
+                    raise ValueError("distinct points must have positive distance")
+
+    def _require_triangle_inequality(self) -> None:
+        for i in range(self.point_count):
+            for j in range(self.point_count):
+                for k in range(self.point_count):
+                    if self.distances[i][j] > self.distances[i][k] + self.distances[k][j]:
+                        raise ValueError("distances must satisfy the triangle inequality")
 
 
 class MetricProfileRequest(ContractModel):
@@ -78,6 +97,12 @@ class BallRequest(ContractModel):
     center: int = Field(ge=0, le=MAX_POINTS - 1)
     radius: int = Field(ge=0, le=10000)
 
+    @model_validator(mode="after")
+    def require_center_in_range(self) -> Self:
+        if self.center >= self.metric_space.point_count:
+            raise ValueError("ball center index must be within the metric space")
+        return self
+
 
 class BallResult(ContractModel):
     """The ball (set of points within radius of center)."""
@@ -97,7 +122,7 @@ class GromovHyperbolicityRequest(ContractModel):
 class GromovHyperbolicityResult(ContractModel):
     """The four-point Gromov hyperbolicity (max delta over all quadruples)."""
 
-    hyperbolicity: int = Field(ge=0)
+    hyperbolicity: CanonicalRational
     method: Literal["FOUR_POINT_BRUTE_FORCE"] = "FOUR_POINT_BRUTE_FORCE"
 
 

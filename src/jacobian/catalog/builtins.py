@@ -49,6 +49,7 @@ from jacobian.math.graph_polynomials._tools import TOOLS as GRAPH_POLYNOMIALS_TO
 from jacobian.math.graph_realization._tools import TOOLS as GRAPH_REALIZATION_TOOLS
 from jacobian.math.graph_spectral._tools import TOOLS as GRAPH_SPECTRAL_TOOLS
 from jacobian.math.graph_symmetry._tools import TOOLS as GRAPH_SYMMETRY_TOOLS
+from jacobian.math.graph_transforms._tools import TOOLS as GRAPH_TRANSFORMS_TOOLS
 from jacobian.math.graphs._tools import TOOLS as GRAPHS_TOOLS
 from jacobian.math.group._tools import TOOLS as GROUP_TOOLS
 from jacobian.math.lattices._tools import TOOLS as LATTICES_TOOLS
@@ -107,6 +108,7 @@ BUILTIN_TOOLS: MathTools = (
     *GRAPH_OPTIMIZATION_TOOLS,
     *GRAPHS_TOOLS,
     *GRAPH_SYMMETRY_TOOLS,
+    *GRAPH_TRANSFORMS_TOOLS,
     *CERTIFIED_SNF_TOOLS,
     *MATRICES_TOOLS,
     *CANONICAL_FORMS_TOOLS,

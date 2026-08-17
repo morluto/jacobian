@@ -493,6 +493,10 @@
       "input_schema": "sha256:0046a0d3920b79f0849d444d74edcb68e73b4a3efee3f679372e22e5abd0f2c9",
       "output_schema": "sha256:818097102f36a887171bb0bc850a12e894f8b46df20f559777ee721f19a929eb"
     },
+    "graph.complement.compute": {
+      "input_schema": "sha256:f5e22b2b4e7927018cce90aaf9763f6ff6bda2cb8d7871cc5e2b46478a78d516",
+      "output_schema": "sha256:34cca77e162ad804dd5eb93f56bfbb5fda4e5fe088078d24ef987ea72b8cf1f2"
+    },
     "graph.cut.minimum_st.compute": {
       "input_schema": "sha256:dd40f3a37c1098d8caeb05b125bb7f7684b44e5e3b5a8dffc1d9a09119196261",
       "output_schema": "sha256:137a06454af2fdfb0bed4d877d654c7f595872855a29b28c96ad88e3f7ffbb41"
@@ -565,6 +569,10 @@
       "input_schema": "sha256:c5325fe91eaf07a82ed42666b0691144b4db1d369a1dfca9a42b73f190c88919",
       "output_schema": "sha256:1fac8ffd2e1fc4fbc22e312eb3074cb50fb7c5c997b9e2bf53c7f6334083084c"
     },
+    "graph.induced_subgraph.compute": {
+      "input_schema": "sha256:e6c76fafeb1389bd5e31bae10167461767b8e075272429168712ad551918d8e7",
+      "output_schema": "sha256:34cca77e162ad804dd5eb93f56bfbb5fda4e5fe088078d24ef987ea72b8cf1f2"
+    },
     "graph.induced_tree.maximum.compute": {
       "input_schema": "sha256:c5325fe91eaf07a82ed42666b0691144b4db1d369a1dfca9a42b73f190c88919",
       "output_schema": "sha256:587db12c617a12f32d9dcdb6dfe121ebc757d17d087d90f33e57e6564826ab16"
@@ -625,6 +633,10 @@
       "input_schema": "sha256:0b54d65dec3be9d6e6e5793895ed1809de84d2163d6acacad775f86b5d64da12",
       "output_schema": "sha256:438e31ef5edc071cdade852520ebb140e8ede3d08626a50750fe7d586109a433"
     },
+    "graph.line_graph.compute": {
+      "input_schema": "sha256:f5e22b2b4e7927018cce90aaf9763f6ff6bda2cb8d7871cc5e2b46478a78d516",
+      "output_schema": "sha256:34cca77e162ad804dd5eb93f56bfbb5fda4e5fe088078d24ef987ea72b8cf1f2"
+    },
     "graph.matching.maximal.minimum.compute": {
       "input_schema": "sha256:c5325fe91eaf07a82ed42666b0691144b4db1d369a1dfca9a42b73f190c88919",
       "output_schema": "sha256:ddec0da6730145fbe5c0071fa9a253d479968ffe23490cab069a6561dbe513ff"
@@ -648,6 +660,10 @@
     "graph.polynomial.tutte.compute": {
       "input_schema": "sha256:49a6e8ab1943a47b36ac70014d3bbbe27a7a8e644b512d866a49b01a426523f3",
       "output_schema": "sha256:20679c5cc5d1aade8396de44af8767150e012aab464b7a5e9ca7dc921e3f9fe6"
+    },
+    "graph.power.compute": {
+      "input_schema": "sha256:f5e22b2b4e7927018cce90aaf9763f6ff6bda2cb8d7871cc5e2b46478a78d516",
+      "output_schema": "sha256:34cca77e162ad804dd5eb93f56bfbb5fda4e5fe088078d24ef987ea72b8cf1f2"
     },
     "graph.realization.check.compute": {
       "input_schema": "sha256:3766ae7e6a99e94254cdf1067f85bd971e5927f976f789a5aaae9f9d429b2026",

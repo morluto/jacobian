@@ -2,54 +2,72 @@
 
 from __future__ import annotations
 
-__all__ = ["ergodic_properties", "mixing_time", "stationary_distribution"]
+from dataclasses import dataclass
+from fractions import Fraction
 
 
-def mixing_time(matrix, epsilon, max_steps):  # type: ignore[no-untyped-def]
-    """Exact mixing time of a finite Markov chain.
+@dataclass(frozen=True, slots=True)
+class MixingTimeSearchResult:
+    """The first satisfactory step, or the distance at the search bound."""
 
-    Returns the smallest ``t >= 0`` such that ``max_x ||P^t(x,·) - π||_TV <= ε``,
-    where ``π`` is the stationary distribution and ``||·||_TV`` is the total
-    variation distance.  All arithmetic is exact (SymPy rationals).
-    """
-    import sympy
+    mixing_time: int | None
+    steps_examined: int
+    max_total_variation_distance: Fraction
 
-    n = len(matrix)
-    p = sympy.Matrix(
+
+def mixing_time(
+    matrix: tuple[tuple[Fraction, ...], ...],
+    stationary_distribution: tuple[Fraction, ...],
+    epsilon: Fraction,
+    max_steps: int,
+) -> MixingTimeSearchResult:
+    """Search exact rational powers for the first epsilon-mixing step."""
+    from sympy import Matrix, Rational, eye
+
+    dimension = len(matrix)
+    transition = Matrix(
         [
-            [sympy.Rational(matrix[i][j]["num"], matrix[i][j]["den"]) for j in range(n)]
-            for i in range(n)
+            [Rational(value.numerator, value.denominator) for value in row]
+            for row in matrix
         ]
     )
-
-    # Stationary distribution: left eigenvector of P for eigenvalue 1.
-    pi = None
-    for eigenval, _mult, vects in p.T.eigenvects():
-        if eigenval == 1 and vects:
-            vec = vects[0]
-            total = sum(vec)
-            pi = sympy.Matrix([v / total for v in vec])
-            break
-    if pi is None:
-        raise ValueError("matrix has no stationary distribution (no eigenvalue 1)")
-
-    eps = sympy.Rational(epsilon["num"], epsilon["den"])
-
-    power = sympy.eye(n)
-    for t in range(max_steps + 1):
-        max_tv = sympy.S.Zero
-        for x in range(n):
-            tv = sympy.S.Zero
-            for j in range(n):
-                tv += sympy.Abs(power[x, j] - pi[j])
-            tv = tv / 2
-            if tv > max_tv:
-                max_tv = tv
-        if max_tv <= eps:
-            return t
-        power = power * p
-    raise ValueError(
-        f"mixing time exceeds the declared max_steps budget of {max_steps}"
+    stationary = Matrix(
+        [
+            Rational(value.numerator, value.denominator)
+            for value in stationary_distribution
+        ]
+    )
+    epsilon_value = Rational(epsilon.numerator, epsilon.denominator)
+    power = eye(dimension)
+    terminal_distance = Rational(1)
+    for step in range(max_steps + 1):
+        distances = [
+            sum(
+                abs(power[state, target] - stationary[target])
+                for target in range(dimension)
+            )
+            / 2
+            for state in range(dimension)
+        ]
+        terminal_distance = max(distances)
+        exact_distance = Fraction(
+            int(terminal_distance.p),
+            int(terminal_distance.q),
+        )
+        if terminal_distance <= epsilon_value:
+            return MixingTimeSearchResult(
+                mixing_time=step,
+                steps_examined=step,
+                max_total_variation_distance=exact_distance,
+            )
+        power *= transition
+    return MixingTimeSearchResult(
+        mixing_time=None,
+        steps_examined=max_steps,
+        max_total_variation_distance=Fraction(
+            int(terminal_distance.p),
+            int(terminal_distance.q),
+        ),
     )
 
 
@@ -91,3 +109,11 @@ def ergodic_properties(matrix):  # type: ignore[no-untyped-def]
         for component in nx.strongly_connected_components(graph)
     )
     return irreducible, aperiodic
+
+
+__all__ = [
+    "MixingTimeSearchResult",
+    "ergodic_properties",
+    "mixing_time",
+    "stationary_distribution",
+]

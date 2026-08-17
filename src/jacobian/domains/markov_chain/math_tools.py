@@ -109,8 +109,11 @@ MARKOV_CHAIN_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     mc_operation(
         "probability.markov_chain.mixing_time.compute",
-        "Compute the exact mixing time of a Markov chain",
-        "Compute the exact mixing time of a finite Markov chain: the smallest t such that the total variation distance from every row to the stationary distribution is at most epsilon, using SymPy exact rational arithmetic.",
+        "Search for the exact mixing time of a finite Markov chain",
+        "For an ergodic bounded rational chain, return the first step whose "
+        "worst-case total variation distance is at most epsilon. SymPy performs "
+        "the exact matrix arithmetic; non-ergodic and exhausted searches are "
+        "typed outcomes.",
         MixingTimeRequest,
         MixingTimeResult,
         compute_mixing_time,
@@ -128,7 +131,7 @@ MARKOV_CHAIN_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                         [{"num": "1", "den": "4"}, {"num": "3", "den": "4"}],
                     ],
                     "epsilon": {"num": "1", "den": "100"},
-                    "max_steps": 100,
+                    "max_steps": 64,
                 },
             ),
         ),

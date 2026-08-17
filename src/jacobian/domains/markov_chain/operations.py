@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 from jacobian.contracts.exact import CanonicalRational
 from jacobian.contracts.markov_chain import (
     ErgodicDecisionResult,
@@ -41,6 +43,31 @@ def compute_ergodic_decision(request: TransitionMatrixRequest) -> ErgodicDecisio
 
 def compute_mixing_time(request: MixingTimeRequest) -> MixingTimeResult:
     matrix = [[{"num": c.num, "den": c.den} for c in row] for row in request.matrix]
-    epsilon = {"num": request.epsilon.num, "den": request.epsilon.den}
-    result = mixing_time(matrix, epsilon, request.max_steps)  # type: ignore[no-untyped-call]
-    return MixingTimeResult(mixing_time=result)
+    irreducible, aperiodic = ergodic_properties(matrix)  # type: ignore[no-untyped-call]
+    if not (irreducible and aperiodic):
+        return MixingTimeResult(
+            status="NOT_ERGODIC",
+            epsilon=request.epsilon,
+            max_steps=request.max_steps,
+            steps_examined=0,
+        )
+    stationary = stationary_distribution(matrix)  # type: ignore[no-untyped-call]
+    stationary_fractions = tuple(
+        Fraction(int(value.p), int(value.q)) for value in stationary
+    )
+    result = mixing_time(
+        tuple(tuple(value.as_fraction() for value in row) for row in request.matrix),
+        stationary_fractions,
+        request.epsilon.as_fraction(),
+        request.max_steps,
+    )
+    return MixingTimeResult(
+        status="FOUND" if result.mixing_time is not None else "BOUND_EXCEEDED",
+        epsilon=request.epsilon,
+        max_steps=request.max_steps,
+        steps_examined=result.steps_examined,
+        mixing_time=result.mixing_time,
+        max_total_variation_distance=CanonicalRational.from_fraction(
+            result.max_total_variation_distance
+        ),
+    )

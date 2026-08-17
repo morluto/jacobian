@@ -14,7 +14,7 @@ from pydantic import Field, StringConstraints, model_validator
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 
 # ---------------------------------------------------------------------------
 # Shared bounds
@@ -93,7 +93,7 @@ class IntegerNthRootRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_root_domain(self) -> Self:
-        if int(self.value) < 0 and self.degree % 2 == 0:
+        if parse_canonical_integer(self.value) < 0 and self.degree % 2 == 0:
             raise ValueError("even root of a negative integer is not integral-real")
         return self
 

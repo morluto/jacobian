@@ -61,7 +61,9 @@ test-integration: ## Cross-owner mathematical seams (2 workers, 120s).
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-fast: ## Lean-free owner tests except cross-owner integration.
-	$(UV_RUN) pytest -n 4 --dist worksteal --timeout=120 -m "not exhaustive" \
+	# Full catalog construction imports every maintained math backend; keep
+	# the fast lane within hosted-runner memory instead of crashing workers.
+	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=120 -m "not exhaustive" \
 		$(if $(TESTS),$(TESTS),tests/math tests/catalog tests/dispatch tests/cli tests/tooling) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 

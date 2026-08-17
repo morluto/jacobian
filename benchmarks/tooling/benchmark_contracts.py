@@ -22,6 +22,7 @@ from benchmarks.tooling.harbor_suite import (
     Suite,
     load_registry,
 )
+from benchmarks.tooling.public_contract import check as check_public_contract_drift
 from benchmarks.tooling.strict_boundaries import (
     HarborJobSelection,
     strict_model_failures,
@@ -254,6 +255,7 @@ def _validate_task(suite: Suite, task_dir: Path) -> list[str]:
                 contract_path,
             )
         )
+        failures.extend(check_public_contract_drift(contract_path, task_dir))
     failures.extend(fraction_coprimality_failures(task_dir / "tests" / "verifier.py"))
     failures.extend(canonical_string_rational_schema_failures(schema_path))
     failures.extend(mirror_witness_failures(task_dir / "tests" / "verifier.py"))

@@ -6,7 +6,7 @@ on:
       pytest-selector:
         description: One Lean pytest file or node ID to run
         required: true
-        default: tests/math/logic/test_tools.py
+        default: tests/process/logic/test_lean.py
         type: string
       keyword:
         description: Optional pytest -k expression

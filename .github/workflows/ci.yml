@@ -56,14 +56,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - lane: unit
-            timeout-minutes: 10
-          - lane: component
-            timeout-minutes: 15
-          - lane: domain
-            timeout-minutes: 15
-          - lane: composition
+          - lane: math
             timeout-minutes: 25
+          - lane: catalog
+            timeout-minutes: 10
+          - lane: dispatch
+            timeout-minutes: 10
+          - lane: cli
+            timeout-minutes: 10
+          - lane: tooling
+            timeout-minutes: 15
+          - lane: integration
+            timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

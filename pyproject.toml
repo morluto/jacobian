@@ -28,8 +28,8 @@ dependencies = [
 
 [project.scripts]
 jacobian = "jacobian.cli:app"
-jacobian-mcp = "jacobian.adapters.mcp.cli:main"
-jacobian-remote-mcp = "jacobian.adapters.mcp.remote_cli:main"
+jacobian-mcp = "jacobian.mcp.stdio_cli:main"
+jacobian-remote-mcp = "jacobian.mcp.remote_cli:main"
 
 [dependency-groups]
 dev-core = [
@@ -68,20 +68,24 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-ra --strict-config --strict-markers"
+addopts = "-ra --strict-config --strict-markers --import-mode=importlib"
+pythonpath = ["."]
 # Default collection is Lean-free and xdist-safe. Process, MCP, and optional
 # Lean checks stay on explicit paths / Make targets.
 testpaths = [
-    "tests/unit",
-    "tests/component",
-    "tests/domain",
-    "tests/composition",
+    "tests/math",
+    "tests/catalog",
+    "tests/dispatch",
+    "tests/cli",
+    "tests/tooling",
+    "tests/integration",
 ]
 # Per-invocation --timeout lives on Make/CI commands, not here: a global
 # deadline would interrupt native solvers that process/Lean isolate instead.
 timeout_method = "thread"
 markers = [
     "requires_provider(name): test requires a production provider readiness probe",
+    "requires_lean: test requires the fixed external Lean toolchain",
     "property: property-based invariant tests",
     "exhaustive: broad finite reference sweeps run by scheduled validation",
 ]
@@ -123,7 +127,7 @@ module = ["sympy", "sympy.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["jacobian.domains.graph_decomposition.operations"]
+module = ["jacobian.math.graph_decomposition._operations"]
 disable_error_code = ["type-arg", "arg-type", "misc", "comparison-overlap", "unused-ignore", "var-annotated"]
 
 [tool.deptry]
@@ -141,32 +145,60 @@ per_rule_ignores = { "DEP001" = ["harbor"], "DEP002" = ["python-flint"], "DEP003
 root_package = "jacobian"
 
 [[tool.importlinter.contracts]]
-name = "Passive contracts do not depend on product layers"
+name = "The public math library does not depend on product layers"
 type = "forbidden"
-source_modules = ["jacobian.contracts"]
+source_modules = [
+    "jacobian.math.arithmetic.operations",
+    "jacobian.math.boolean.operations",
+    "jacobian.math.certified_snf.operations",
+    "jacobian.math.certified_snf.values",
+    "jacobian.math.code_theory.operations",
+    "jacobian.math.combinatorics.recurrence_tables",
+    "jacobian.math.finite_abelian_groups",
+    "jacobian.math.finite_fields.operations",
+    "jacobian.math.finite_fields.values",
+    "jacobian.math.graph_spectral.operations",
+    "jacobian.math.graphs.graph6",
+    "jacobian.math.graphs.independence",
+    "jacobian.math.graphs.operations",
+    "jacobian.math.graphs.values",
+    "jacobian.math.group.operations",
+    "jacobian.math.lattices.operations",
+    "jacobian.math.markov_chain.operations",
+    "jacobian.math.matrices.operations",
+    "jacobian.math.matrices.values",
+    "jacobian.math.modular_polynomials",
+    "jacobian.math.number_field.operations",
+    "jacobian.math.polynomials.operations",
+    "jacobian.math.polynomials.values",
+    "jacobian.math.prime_field_linear_algebra",
+    "jacobian.math.probability.mutual_information",
+    "jacobian.math.probability.values",
+    "jacobian.math.projective_geometry.values",
+    "jacobian.math.real_quadratic",
+    "jacobian.math.recurrence_solving.operations",
+    "jacobian.math.root_isolation.operations",
+    "jacobian.math.symbolic_matrix.operations",
+]
 forbidden_modules = [
-    "jacobian.adapters",
-    "jacobian.operation_adapters",
-    "jacobian.domains",
-    "jacobian.math_tools",
-    "jacobian.operation_dispatcher",
-    "jacobian.operation_discovery",
-    "jacobian.serving_catalog",
+    "jacobian.catalog",
+    "jacobian.cli",
+    "jacobian.dispatch",
+    "jacobian.mcp",
+    "jacobian.process",
 ]
 
 [[tool.importlinter.contracts]]
-name = "The public math library does not depend on product layers"
+name = "Catalog does not depend on dispatch or delivery boundaries"
 type = "forbidden"
-source_modules = ["jacobian.math"]
-forbidden_modules = [
-    "jacobian.adapters",
-    "jacobian.operation_adapters",
-    "jacobian.domains",
-    "jacobian.math_tools",
-    "jacobian.operation_dispatcher",
-    "jacobian.operation_discovery",
-    "jacobian.serving_catalog",
-]
+source_modules = ["jacobian.catalog"]
+forbidden_modules = ["jacobian.cli", "jacobian.dispatch", "jacobian.mcp"]
+
+[[tool.importlinter.contracts]]
+name = "Dispatch does not depend on delivery boundaries"
+type = "forbidden"
+source_modules = ["jacobian.dispatch"]
+forbidden_modules = ["jacobian.cli", "jacobian.mcp"]
 
 [[tool.importlinter.contracts]]
 name = "Finite-field values do not import private backends"

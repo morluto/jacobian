@@ -39,7 +39,7 @@ jobs:
       fail-fast: false
       matrix:
         seed: [17, 20260727]
-        lane: [unit, component, domain, composition, process, mcp]
+        lane: [math, catalog, dispatch, cli, tooling, integration, process, mcp]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

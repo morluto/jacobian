@@ -6,7 +6,7 @@ on:
       pytest-selector:
         description: One pytest file or node ID to run
         required: true
-        default: tests/boundary/mcp/test_mcp_adapter.py
+        default: tests/mcp/test_mcp_invocation_journey.py
         type: string
       keyword:
         description: Optional pytest -k expression

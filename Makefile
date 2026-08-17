@@ -10,9 +10,9 @@ PYTEST_DIAGNOSTIC_ARGS ?= --durations=10
 RUFF_PATHS := src tests benchmarks
 PYTEST_RUNNER := $(UV_RUN) python tools/pytest_lifecycle.py
 VALIDATION_LOCK := $(UV_RUN) python tools/with_validation_lock.py
-# Fixed semantic lanes covering the Lean-free ordinary testpaths. CI runs these
-# independently; `make check-all` reproduces them locally in this order.
-ORDINARY_TEST_LANES := unit component domain composition
+# Owner lanes cover every Lean-free ordinary test root exactly once. CI runs
+# them independently; `make check-all` reproduces them locally in this order.
+ORDINARY_TEST_LANES := math catalog dispatch cli tooling integration
 PUBLIC_COMMANDS := setup quick check check-all check-external fix
 
 include make/development.mk
@@ -30,44 +30,58 @@ help: ## Show the primary developer workflow.
 help-all: ## Show every low-level and lifecycle developer command.
 	@awk 'BEGIN {FS = ":.*## "; printf "All Jacobian developer commands:\n\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-26s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-test-unit: ## Pure contracts and models (2 workers, 10s).
-	# Full catalog construction imports every maintained math backend; keep its
-	# covered unit lane within hosted-runner memory instead of crashing workers.
-	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=10 \
-		$(if $(TESTS),$(TESTS),tests/unit) \
-		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
-
-test-component: ## One-service component tests (4 workers, 30s).
-	$(UV_RUN) pytest -n 4 --dist loadscope --timeout=30 -m "not exhaustive" \
-		$(if $(TESTS),$(TESTS),tests/component) \
-		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
-
-test-domain: ## Explicit mathematical domains (4 workers, 120s).
+test-math: ## Domain-owned mathematical behavior (4 workers, 120s).
 	$(UV_RUN) pytest -n 4 --dist worksteal --timeout=120 \
-		$(if $(TESTS),$(TESTS),tests/domain) \
+		-m "not exhaustive" $(if $(TESTS),$(TESTS),tests/math) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-composition: ## Cross-domain composition (2 workers, 120s).
+test-catalog: ## Immutable catalog and discovery behavior (2 workers, 30s).
+	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=30 \
+		$(if $(TESTS),$(TESTS),tests/catalog) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+
+test-dispatch: ## Strict parsing and direct dispatch behavior (2 workers, 30s).
+	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=30 \
+		$(if $(TESTS),$(TESTS),tests/dispatch) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+
+test-cli: ## Command-line boundary behavior (2 workers, 30s).
+	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=30 \
+		$(if $(TESTS),$(TESTS),tests/cli) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+
+test-tooling: ## Repository tooling and static contracts (2 workers, 30s).
+	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=30 \
+		$(if $(TESTS),$(TESTS),tests/tooling) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+
+test-integration: ## Cross-owner mathematical seams (2 workers, 120s).
 	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=120 \
-		$(if $(TESTS),$(TESTS),tests/composition) \
+		$(if $(TESTS),$(TESTS),tests/integration) \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+
+test-fast: ## Lean-free owner tests except cross-owner integration.
+	$(UV_RUN) pytest -n 4 --dist worksteal --timeout=120 -m "not exhaustive" \
+		$(if $(TESTS),$(TESTS),tests/math tests/catalog tests/dispatch tests/cli tests/tooling) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-process: ## Killable child-process boundaries (2 workers, 120s).
 	$(PYTEST_RUNNER) --name process --timeout-seconds 4800 -- \
 		-n 2 --dist worksteal --timeout=120 --timeout-method=signal \
-		$(if $(TESTS),$(TESTS),tests/boundary/process) \
+		-m "not requires_lean" \
+		$(if $(TESTS),$(TESTS),tests/process) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-mcp: ## MCP transport boundaries (2 workers, 120s).
 	$(PYTEST_RUNNER) --name mcp --timeout-seconds 4800 -- \
 		-n 2 --dist worksteal --timeout=120 --timeout-method=signal \
-		$(if $(TESTS),$(TESTS),tests/boundary/mcp) \
+		$(if $(TESTS),$(TESTS),tests/mcp) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-lean: ## Pinned Lean/Mathlib boundary (serial, 300s, kill-safe).
 	$(PYTEST_RUNNER) --name lean --timeout-seconds 12000 -- \
 		--timeout=300 --timeout-method=signal \
-		$(if $(TESTS),$(TESTS),tests/unit/domains/test_logic_operations.py) \
+		-m requires_lean $(if $(TESTS),$(TESTS),tests/process/logic) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test: test-ordinary ## All ordinary Python tests.
@@ -79,18 +93,20 @@ test-ordinary: ## Lean-free ordinary suite in the fixed CI group order.
 
 test-compatibility: ## Supported-version import/API compatibility smoke.
 	$(UV_RUN) pytest -n 0 --timeout=30 --timeout-method=thread \
-		tests/unit/tooling/test_ci_compatibility.py \
+		tests/tooling/test_ci_compatibility.py \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-full: ## Every local semantic pytest/Lean lane; not hosted CI, coverage, or docs.
 	$(VALIDATION_LOCK) run --target test-full -- $(MAKE) _test-full
 
 _test-full:
-	$(MAKE) test-unit
-	$(MAKE) test-component
+	$(MAKE) test-math
 	$(MAKE) _test-exhaustive
-	$(MAKE) test-domain
-	$(MAKE) test-composition
+	$(MAKE) test-catalog
+	$(MAKE) test-dispatch
+	$(MAKE) test-cli
+	$(MAKE) test-tooling
+	$(MAKE) test-integration
 	$(MAKE) test-process
 	$(MAKE) test-mcp
 	$(MAKE) test-lean
@@ -135,10 +151,11 @@ coverage: ## Combine coverage data files and enforce the repository threshold.
 
 build: ## Build Python source and wheel distributions.
 	uv build
+	$(UV_RUN) python tools/check_wheel_contents.py
 
-quick: lint test-unit ## Cheap iteration: lint and unit tests.
+quick: lint test-fast ## Cheap iteration: lint and Lean-free owner tests.
 
-check: lint typecheck test-unit ## Routine local handoff: lint, types, and unit tests.
+check: lint typecheck test-fast ## Routine local handoff: lint, types, and Lean-free owner tests.
 
 check-all: lint typecheck test-ordinary ## Reproduce the ordinary Python CI lanes locally.
 

@@ -86,7 +86,7 @@ harbor-contracts: ## Check Harbor sync, task topology, schemas, and generated re
 	$(HARBOR_PYTHON) tools/check_benchmark_contracts.py
 
 harbor-execution-check: harbor-contracts ## Check Harbor jobs, MCP config, Compose, and execution helpers.
-	$(PYTEST_RUNNER) --name harbor-execution -- -n 0 tests/unit/tooling/test_harbor*.py \
+	$(PYTEST_RUNNER) --name harbor-execution -- -n 0 tests/tooling/test_harbor*.py \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 harbor-adapter-checks: ## Check every repository-owned Harbor adapter.

@@ -7,6 +7,8 @@ from jacobian.contracts.base import ContractModel
 from jacobian.contracts.graph_coloring_ops import (
     KColorabilityRequest,
     KColorabilityResult,
+    MaximalIndependentSetRequest,
+    MaximalIndependentSetResult,
     MaximumIndependentSetRequest,
     MaximumIndependentSetResult,
 )
@@ -14,6 +16,7 @@ from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
 from jacobian.domains.graph_coloring_ops.operations import (
     compute_k_colorability,
+    compute_maximal_independent_set_decision,
     compute_maximum_independent_set,
 )
 from jacobian.math_tools import MathTool
@@ -50,7 +53,7 @@ GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     graph_coloring_operation(
         "graph.coloring.k_colorability.decide",
         "Decide k-colorability of a graph",
-        "Decide whether a simple undirected graph admits a proper k-coloring and return a coloring if one exists, using NetworkX greedy coloring.",
+        "Decide whether a simple undirected graph admits a proper k-coloring and return a coloring if one exists, using a Z3 SAT encoding.",
         KColorabilityRequest,
         KColorabilityResult,
         compute_k_colorability,
@@ -75,7 +78,7 @@ GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     graph_coloring_operation(
         "graph.independent_set.maximum.compute",
         "Compute the maximum independent set of a graph",
-        "Compute the maximum independent set of a simple undirected graph using NetworkX approximation.",
+        "Compute the maximum independent set of a simple undirected graph using a Z3 optimization encoding.",
         MaximumIndependentSetRequest,
         MaximumIndependentSetResult,
         compute_maximum_independent_set,
@@ -91,6 +94,31 @@ GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                         "vertex_count": 4,
                         "edges": [[0, 1], [1, 2], [2, 3]],
                     },
+                },
+            ),
+        ),
+    ),
+    graph_coloring_operation(
+        "graph.independent_set.maximal.decide",
+        "Decide whether a candidate set is a maximal independent set",
+        "Decide maximal independence in a bounded simple graph and return a blocking edge or addable vertex when the candidate fails.",
+        MaximalIndependentSetRequest,
+        MaximalIndependentSetResult,
+        compute_maximal_independent_set_decision,
+        "graph",
+        "independent-set",
+        "maximal",
+        "exact",
+        examples=(
+            example(
+                "path_maximal_independent_set",
+                "Decide whether {0, 2} is a maximal independent set of P4.",
+                {
+                    "graph": {
+                        "vertex_count": 4,
+                        "edges": [[0, 1], [1, 2], [2, 3]],
+                    },
+                    "candidate_set": [0, 2],
                 },
             ),
         ),

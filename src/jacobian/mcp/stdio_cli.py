@@ -23,7 +23,7 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> None:
     _parser().parse_args()
 
-    from jacobian.adapters.mcp.server import create_server
+    from jacobian.mcp.server import create_server
 
     create_server().run("stdio")
 

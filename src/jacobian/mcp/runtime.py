@@ -1,19 +1,20 @@
-"""MCP request context: AppState and catalog/index access helpers."""
+"""Request-scoped state for local and remote MCP hosts."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from mcp.server.mcpserver import Context
 
-from jacobian.serving_catalog import ServingCatalog
+from jacobian.catalog.catalog import Catalog
 
 
 @dataclass(frozen=True, slots=True)
 class AppState:
-    operation_catalog: ServingCatalog
-    authorize: Any = None
+    operation_catalog: Catalog
+    authorize: Callable[[], None] | None = None
 
 
 class AuthenticationError(PermissionError):
@@ -32,7 +33,7 @@ def _state(ctx: Context[Any, Any]) -> AppState:
     return state
 
 
-def _catalog(ctx: Context[Any, Any]) -> ServingCatalog:
+def _catalog(ctx: Context[Any, Any]) -> Catalog:
     """Return the serving catalog for discovery and inspection."""
 
     return _state(ctx).operation_catalog
@@ -46,7 +47,4 @@ def _authorize(ctx: Context[Any, Any]) -> None:
         callback()
 
 
-if __name__ == "__main__":
-    from jacobian.adapters.mcp.cli import main
-
-    main()
+__all__ = ["AppState", "AuthenticationError"]

@@ -1,3 +1,0 @@
-"""Shared MCP adapter constants."""
-
-OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT = 16_384

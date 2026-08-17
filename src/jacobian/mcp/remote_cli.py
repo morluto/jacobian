@@ -64,7 +64,7 @@ def main() -> None:
         parser.error("remote host requires --auth-tokens-file or --allow-anonymous")
     path = args.path if args.path.startswith("/") else f"/{args.path}"
 
-    from jacobian.adapters.mcp.remote import (
+    from jacobian.mcp.remote import (
         StaticTokenVerifier,
         create_remote_server,
         load_static_token_file,

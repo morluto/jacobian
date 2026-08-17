@@ -6,30 +6,24 @@ from typing import Any
 
 from mcp.server.mcpserver import Context
 
-from jacobian.adapters.mcp.context import (
-    AppState,
-    _authorize,
-    _catalog,
-)
-from jacobian.adapters.mcp.projections import (
-    _operation_browse_response,
-    _operation_discovery_response,
-)
-from jacobian.contracts.operation_find import (
+from jacobian.catalog.models import OperationId, OperationResult
+from jacobian.dispatch import invoke_operation
+from jacobian.mcp.models import (
     OperationBrowseRequest,
     OperationFindRequest,
     OperationFindResponse,
     OperationInspectionResult,
     OperationSearchRequest,
 )
-from jacobian.contracts.operations import OperationId, OperationResult
-from jacobian.operation_dispatcher import invoke_operation
-
-
-def _find_result(response: dict[str, Any]) -> OperationFindResponse:
-    if "error" in response and response.get("kind") != "error":
-        response = {"kind": "error", **response}
-    return OperationFindResponse.model_validate(response)
+from jacobian.mcp.projections import (
+    _operation_browse_response,
+    _operation_discovery_response,
+)
+from jacobian.mcp.runtime import (
+    AppState,
+    _authorize,
+    _catalog,
+)
 
 
 def math_find(
@@ -46,7 +40,7 @@ def math_find(
             limit=request.limit,
             cursor=request.cursor,
         )
-        return _find_result(discovery_response)
+        return OperationFindResponse.model_validate(discovery_response)
     if isinstance(request, OperationBrowseRequest):
         browse_response = _operation_browse_response(
             active_catalog,
@@ -54,7 +48,7 @@ def math_find(
             limit=request.limit,
             cursor=request.cursor,
         )
-        return _find_result(browse_response)
+        return OperationFindResponse.model_validate(browse_response)
     operation_id = request.operation_id
     descriptor = active_catalog.inspect(operation_id)
     if descriptor is None:
@@ -62,14 +56,15 @@ def math_find(
             "Call math.find with a mathematical query to search installed operations."
         )
         error_response = {
+            "kind": "error",
             "error": {
                 "code": "UNKNOWN_OPERATION",
                 "stage": "operation_resolution",
                 "message": f"Unknown operation: {operation_id}",
                 "hint": hint,
-            }
+            },
         }
-        return _find_result(error_response)
+        return OperationFindResponse.model_validate(error_response)
     return OperationFindResponse(
         OperationInspectionResult(kind="operation", operation=descriptor)
     )

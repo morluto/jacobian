@@ -13,12 +13,12 @@ from typing import Any
 from mcp.server import MCPServer
 from mcp.server.auth.provider import AccessToken
 
-from jacobian.adapters.mcp.context import (
+from jacobian.catalog.catalog import Catalog
+from jacobian.mcp.runtime import (
     AppState,
     AuthenticationError,
 )
-from jacobian.adapters.mcp.server import _build_server
-from jacobian.serving_catalog import ServingCatalog
+from jacobian.mcp.server import _build_server
 
 _TENANT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
@@ -169,7 +169,7 @@ def create_remote_server(
             "letters, digits, '.', '_', or '-', and be at most 128 characters"
         )
 
-    catalog = ServingCatalog.open()
+    catalog = Catalog.open()
 
     def authorize() -> None:
         access_token = get_access_token()
@@ -187,11 +187,6 @@ def create_remote_server(
 
     return _build_server(
         state=state,
-        close_owner=_noop,
         token_verifier=token_verifier,
         auth=auth,
     )
-
-
-def _noop() -> None:
-    pass

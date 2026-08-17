@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any, cast
 
-from jacobian.adapters.mcp.constants import (
-    OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT,
-)
-from jacobian.contracts.operations import OperationDiscoveryRequest
-from jacobian.operation_discovery import OperationDiscoveryCursorError
+from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import OperationDiscoveryRequest
+from jacobian.catalog.search import OperationDiscoveryCursorError
 
-_LOGGER = logging.getLogger(__name__)
+_DISCOVERY_RESPONSE_BYTE_LIMIT = 16_384
 
 
 def _mcp_text_json_bytes(value: object) -> bytes:
@@ -21,7 +18,7 @@ def _mcp_text_json_bytes(value: object) -> bytes:
 
 
 def _operation_discovery_response(
-    runtime: Any,
+    catalog: Catalog,
     *,
     query: str,
     domain: str | None,
@@ -35,10 +32,10 @@ def _operation_discovery_response(
         cursor=cursor,
     )
     try:
-        operations = getattr(getattr(runtime, "core", None), "operations", runtime)
-        discovered = operations.search(discovery_request)
+        discovered = catalog.search(discovery_request)
     except OperationDiscoveryCursorError:
         return {
+            "kind": "error",
             "error": {
                 "code": "INVALID_CURSOR",
                 "stage": "operation_discovery",
@@ -48,14 +45,14 @@ def _operation_discovery_response(
                     "domain and limit that produced "
                     "next_cursor."
                 ),
-            }
+            },
         }
     response = _compact_operation_cards_response(
         {
             "kind": "discovery",
             **discovered.model_dump(mode="json"),
             "catalog_resource": "operation://catalog",
-            "response_byte_limit": OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT,
+            "response_byte_limit": _DISCOVERY_RESPONSE_BYTE_LIMIT,
             "truncation_reason": None,
             "match_metadata_truncated": False,
         },
@@ -66,21 +63,21 @@ def _operation_discovery_response(
 
 
 def _operation_browse_response(
-    runtime: Any,
+    catalog: Catalog,
     *,
     domain: str | None,
     limit: int | None,
     cursor: str | None,
 ) -> dict[str, Any]:
     try:
-        operations = getattr(getattr(runtime, "core", None), "operations", runtime)
-        browsed = operations.browse(
+        browsed = catalog.browse(
             domain=domain,
             limit=limit if limit is not None else 20,
             cursor=cursor,
         )
     except OperationDiscoveryCursorError:
         return {
+            "kind": "error",
             "error": {
                 "code": "INVALID_CURSOR",
                 "stage": "operation_discovery",
@@ -89,14 +86,14 @@ def _operation_browse_response(
                     "Restart browsing without a cursor, or reuse the same domain "
                     "and limit that produced next_cursor."
                 ),
-            }
+            },
         }
     return _compact_operation_cards_response(
         {
             "kind": "browse",
             **browsed.model_dump(mode="json"),
             "catalog_resource": "operation://catalog",
-            "response_byte_limit": OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT,
+            "response_byte_limit": _DISCOVERY_RESPONSE_BYTE_LIMIT,
             "truncation_reason": None,
             "operation_metadata_truncated": False,
         },
@@ -115,7 +112,7 @@ def _compact_operation_cards_response(
 
     cards = cast(list[dict[str, Any]], response[cards_key])
     while (
-        len(_mcp_text_json_bytes(response)) > OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT
+        len(_mcp_text_json_bytes(response)) > _DISCOVERY_RESPONSE_BYTE_LIMIT
         and len(cards) > 1
     ):
         cards.pop()
@@ -123,7 +120,7 @@ def _compact_operation_cards_response(
         response["next_cursor"] = cards[-1]["operation_id"]
         response["truncation_reason"] = "BYTE_LIMIT"
     compact_fields = ("tags",)
-    while len(_mcp_text_json_bytes(response)) > OPERATION_DISCOVERY_RESPONSE_BYTE_LIMIT:
+    while len(_mcp_text_json_bytes(response)) > _DISCOVERY_RESPONSE_BYTE_LIMIT:
         removed = False
         for card in cards:
             for field in compact_fields:

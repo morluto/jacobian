@@ -6,10 +6,10 @@ from mcp.server import MCPServer
 from mcp.server.mcpserver.resources import FunctionResource
 from mcp.types import ToolAnnotations
 
-from jacobian.adapters.mcp.context import AppState
-from jacobian.adapters.mcp.guidance import MATH_FIND_DESCRIPTION, MATH_RUN_DESCRIPTION
-from jacobian.adapters.mcp.tools import math_find, math_run
-from jacobian.contracts.operations import OperationCatalogSnapshot
+from jacobian.catalog.models import OperationCatalogSnapshot
+from jacobian.mcp.guidance import MATH_FIND_DESCRIPTION, MATH_RUN_DESCRIPTION
+from jacobian.mcp.runtime import AppState
+from jacobian.mcp.tools import math_find, math_run
 
 
 def register_core_projection(
@@ -54,7 +54,7 @@ def register_core_projection(
             uri="operation://catalog",
             name="operation-catalog",
             description=(
-                "Installed model-facing operations, supported lanes, and compact schemas."
+                "Installed model-facing operations and their compact schemas."
             ),
             mime_type="application/json",
         )

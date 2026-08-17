@@ -5,16 +5,16 @@ from typing import Any
 
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.operations import OperationExample
-from jacobian.contracts.polynomial_interpolation import (
-    MultipointEvaluationRequest,
-    MultipointEvaluationResult,
-    NewtonInterpolationRequest,
-    NewtonInterpolationResult,
-)
 from jacobian.domains._examples import example
 from jacobian.domains.polynomial_interpolation.operations import (
     compute_multipoint_evaluate,
     compute_newton_interpolation,
+)
+from jacobian.math.polynomial_interpolation import (
+    MultipointEvaluationRequest,
+    MultipointEvaluationResult,
+    NewtonInterpolationRequest,
+    NewtonInterpolationResult,
 )
 from jacobian.math_tools import MathTool
 

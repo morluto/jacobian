@@ -5,15 +5,16 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.contracts.exact import CanonicalRational
-from jacobian.contracts.polynomial_interpolation import (
-    MultipointEvaluationRequest,
-    NewtonInterpolationRequest,
-    RationalPoint,
-)
 from jacobian.domains.polynomial_interpolation.operations import (
     compute_multipoint_evaluate,
     compute_newton_interpolation,
+)
+from jacobian.math.polynomial_interpolation import (
+    MultipointEvaluationRequest,
+    NewtonInterpolationRequest,
+    RationalPoint,
 )
 
 R = CanonicalRational
@@ -145,3 +146,65 @@ def test_contract_rejects_duplicate_x() -> None:
                 _pt(("1", "1"), ("3", "1")),
             )
         )
+
+
+def test_newton_rejects_unbounded_divided_difference() -> None:
+    """Inputs whose divided differences would overflow the canonical bound are rejected.
+
+    With A a 16,385-digit canonical integer, the otherwise-valid points
+    (0, 0) and (1/A, A) pass the field validators but their first divided
+    difference is A^2, which exceeds the shared 32,768-digit canonical integer
+    limit.  The request validator must reject the input before computation.
+    """
+    a = "9" * 16385
+    with pytest.raises(ValidationError, match="divided-difference bound"):
+        NewtonInterpolationRequest(
+            points=(
+                _pt(("0", "1"), ("0", "1")),
+                _pt(("1", a), (a, "1")),
+            )
+        )
+
+
+def test_newton_accepts_bounded_large_input() -> None:
+    """Inputs just below the bound produce results that fit within the canonical limit."""
+    a = "9" * 16384
+    result = compute_newton_interpolation(
+        NewtonInterpolationRequest(
+            points=(
+                _pt(("0", "1"), ("0", "1")),
+                _pt(("1", "1"), (a, "1")),
+            )
+        )
+    )
+    assert result.divided_differences[1].as_fraction() == Fraction(
+        parse_canonical_integer(a)
+    )
+
+
+def test_multipoint_evaluate_rejects_unbounded_result() -> None:
+    """Inputs whose Horner results would overflow the canonical bound are rejected.
+
+    With A a 16,385-digit canonical integer, coefficients (0, A) and evaluation
+    point A are accepted by the field validators, but Horner evaluation returns
+    A^2, which exceeds the shared 32,768-digit canonical integer limit.  The
+    request validator must reject the input before computation.
+    """
+    a = "9" * 16385
+    with pytest.raises(ValidationError, match="Horner-result bound"):
+        MultipointEvaluationRequest(
+            coefficients=(R(num="0", den="1"), R(num=a, den="1")),
+            evaluation_points=(R(num=a, den="1"),),
+        )
+
+
+def test_multipoint_evaluate_accepts_bounded_large_input() -> None:
+    """Evaluation inputs just below the bound produce values that fit within the canonical limit."""
+    a = "9" * 16384
+    result = compute_multipoint_evaluate(
+        MultipointEvaluationRequest(
+            coefficients=(R(num="0", den="1"), R(num=a, den="1")),
+            evaluation_points=(R(num="1", den="1"),),
+        )
+    )
+    assert result.values[0].as_fraction() == Fraction(parse_canonical_integer(a))

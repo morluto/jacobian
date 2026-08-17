@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 from jacobian.contracts.exact import CanonicalRational
-from jacobian.contracts.polynomial_interpolation import (
+from jacobian.math.polynomial_interpolation import (
     MultipointEvaluationRequest,
     MultipointEvaluationResult,
     NewtonInterpolationRequest,
     NewtonInterpolationResult,
-)
-from jacobian.math.polynomial_interpolation import (
     multipoint_evaluate,
     newton_interpolation,
 )

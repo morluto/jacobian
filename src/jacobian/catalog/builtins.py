@@ -19,6 +19,9 @@ from jacobian.math.certified_snf._tools import TOOLS as CERTIFIED_SNF_TOOLS
 from jacobian.math.code_theory._tools import TOOLS as CODE_THEORY_TOOLS
 from jacobian.math.combinatorics._tools import TOOLS as COMBINATORICS_TOOLS
 from jacobian.math.convex_analysis._tools import TOOLS as CONVEX_ANALYSIS_TOOLS
+from jacobian.math.diophantine_approximation._tools import (
+    TOOLS as DIOPHANTINE_APPROXIMATION_TOOLS,
+)
 from jacobian.math.directed_graph._tools import TOOLS as DIRECTED_GRAPH_TOOLS
 from jacobian.math.discrepancy_theory._tools import TOOLS as DISCREPANCY_THEORY_TOOLS
 from jacobian.math.electrical_networks._tools import (
@@ -85,6 +88,7 @@ BUILTIN_TOOLS: MathTools = (
     *MARKOV_CHAIN_TOOLS,
     *ARITHMETIC_TOOLS,
     *NUMBER_THEORY_TOOLS,
+    *DIOPHANTINE_APPROXIMATION_TOOLS,
     *COMBINATORICS_TOOLS,
     *FINITE_SETS_TOOLS,
     *FINITE_FIELDS_TOOLS,

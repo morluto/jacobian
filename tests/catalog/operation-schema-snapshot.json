@@ -1440,6 +1440,46 @@
     "topology.simplicial_homology.integral.compute": {
       "input_schema": "sha256:ae5513f34822ee0e5602f3a67701a3de98a4f3595422d2ae8d8d53e45b3cf60b",
       "output_schema": "sha256:0b9ca74c0cd26174705d7dff455d0513a03c8f9bd5d62148fefd675632b3f5dc"
+    },
+    "word.conjugates.compute": {
+      "input_schema": "sha256:871654e043c85c66b5d65d7d4db613de920123ae0617ec4778fcefffc039b0ef",
+      "output_schema": "sha256:2fb001bb75d84aa3f24a110ab309a2ccfa667717e35ed148da96d89726f3a7c6"
+    },
+    "word.factor_occurrences.compute": {
+      "input_schema": "sha256:2aafe676e3ffeacbea9c5fca477ddd8c72b074cf92a8fbd055b9dee327338afd",
+      "output_schema": "sha256:dc21ab13a707014386b9766afdf2075561b7f32d56012a774cc8ab2b3a9d5cf6"
+    },
+    "word.factors.length.compute": {
+      "input_schema": "sha256:7c1c18edcb99e356d3747d57b4a656e663b81f08416f2c532d5bda4ecee3e1ab",
+      "output_schema": "sha256:0d23f526d2e9bba68c67ce6c4ecf7b14e05eecaccb32b54c7ade369095769c30"
+    },
+    "word.parikh_vector.compute": {
+      "input_schema": "sha256:4abfc623eb2477a27472a802783289272a707421d384f742887cd86a9bdca008",
+      "output_schema": "sha256:5f061c511a98edd8b1e17ee7f35837813169c9b12b8ae6c11550cbc6975ba5a6"
+    },
+    "word.periods.compute": {
+      "input_schema": "sha256:5f0ab3ab6620cb9615733ffcdc72cd76232cb49d58b4813eed3ec94ac3afca62",
+      "output_schema": "sha256:935f95187d8d5a32ed1cc30eb10dda976b47b3e58b1fdb76a7af43df662e29aa"
+    },
+    "word.prefix_function.compute": {
+      "input_schema": "sha256:de4953b3eef799b9f21d8afd1508af148580f1b05f6086c70d0adfebe272fdd7",
+      "output_schema": "sha256:224cf7288c1494113c142e764bf583a0090b08131f8e790e202d7415a4d3b724"
+    },
+    "word.primitive_root.compute": {
+      "input_schema": "sha256:e193679a050055671e2e9d22bb13227efc34cfed4c313df39b6dd67dcd3bb3da",
+      "output_schema": "sha256:2aded2347cba3d65a516c1ba11f711e1f5063e7d2cc5a2b01c8d6e622c26e685"
+    },
+    "word_morphism.apply.compute": {
+      "input_schema": "sha256:6538ac101f6f0b83a45cfa4f1d5789ba14b15f42adc1ee331470ec40e89a8618",
+      "output_schema": "sha256:3dff23e1b0058e6decce66b89461dc9f4e9cf3ccee1df8de646eae1bdc39ef2d"
+    },
+    "word_morphism.compose.compute": {
+      "input_schema": "sha256:f028afb757995f99c195c2d058f1ece5235c22cbdab50c34be79029fc3747ddc",
+      "output_schema": "sha256:815cdb6679e28872d6719253bddfe7abb800a559f917161c113b5ebd5559fd9a"
+    },
+    "word_morphism.incidence_matrix.compute": {
+      "input_schema": "sha256:0ae17c6be1d58ea82406bd0674a66fdd3c71a9a10523ad2d0e58fceb6efa02eb",
+      "output_schema": "sha256:e2e499e578731fbdd6e82d97b852d1fcf7e735830b6d00a9d5b1cc466d3c1071"
     }
   }
 }

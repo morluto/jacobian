@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from jacobian.canonical import parse_canonical_integer
 from typing import Any, Literal
 
 __all__ = ["compare_algebraic", "isolate_real_roots"]
@@ -13,7 +14,7 @@ def _polynomial(coeffs_desc: Sequence[dict[str, str]]) -> Any:
 
     x = sympy.Symbol("x")
     expression = sum(
-        sympy.Rational(c["num"], c["den"]) * sympy.Symbol("x") ** i
+        sympy.Rational(parse_canonical_integer(c["num"]), parse_canonical_integer(c["den"])) * sympy.Symbol("x") ** i
         for i, c in enumerate(reversed(coeffs_desc))
     )
     return sympy.Poly(expression, x, domain=sympy.QQ)
@@ -42,10 +43,10 @@ def compare_algebraic(
             raise ValueError("isolating interval must contain exactly one real root")
         return roots.pop()
 
-    left_lower = sympy.Rational(left_lower.num, left_lower.den)
-    left_upper = sympy.Rational(left_upper.num, left_upper.den)
-    right_lower = sympy.Rational(right_lower.num, right_lower.den)
-    right_upper = sympy.Rational(right_upper.num, right_upper.den)
+    left_lower = sympy.Rational(parse_canonical_integer(left_lower.num), parse_canonical_integer(left_lower.den))
+    left_upper = sympy.Rational(parse_canonical_integer(left_upper.num), parse_canonical_integer(left_upper.den))
+    right_lower = sympy.Rational(parse_canonical_integer(right_lower.num), parse_canonical_integer(right_lower.den))
+    right_upper = sympy.Rational(parse_canonical_integer(right_upper.num), parse_canonical_integer(right_upper.den))
     lr = selected_real_root(_polynomial(left_poly), left_lower, left_upper)
     rr = selected_real_root(_polynomial(right_poly), right_lower, right_upper)
     cmp = sympy.sign(lr - rr)

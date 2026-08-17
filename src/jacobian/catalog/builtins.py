@@ -14,6 +14,7 @@ from jacobian.math.arithmetic_functions._tools import (
 )
 from jacobian.math.boolean._tools import TOOLS as BOOLEAN_TOOLS
 from jacobian.math.boolean_analysis._tools import TOOLS as BOOLEAN_ANALYSIS_TOOLS
+from jacobian.math.canonical_forms._tools import TOOLS as CANONICAL_FORMS_TOOLS
 from jacobian.math.certified_snf._tools import TOOLS as CERTIFIED_SNF_TOOLS
 from jacobian.math.code_theory._tools import TOOLS as CODE_THEORY_TOOLS
 from jacobian.math.combinatorics._tools import TOOLS as COMBINATORICS_TOOLS
@@ -93,6 +94,7 @@ BUILTIN_TOOLS: MathTools = (
     *GRAPH_SYMMETRY_TOOLS,
     *CERTIFIED_SNF_TOOLS,
     *MATRICES_TOOLS,
+    *CANONICAL_FORMS_TOOLS,
     *SYMBOLIC_MATRIX_TOOLS,
     *RATIONAL_LINEAR_TOOLS,
     *LATTICES_TOOLS,

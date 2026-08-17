@@ -853,6 +853,10 @@
       "input_schema": "sha256:b93588a14714787066232fc9d5c38d8b74dab2777d8c2ffb33782552fe48d818",
       "output_schema": "sha256:a8f803f08d5bec3577b0f1c438d3c95e7d50712c72a69bc664a3d1ec7ab37d20"
     },
+    "matrix.minimal_polynomial.compute": {
+      "input_schema": "sha256:cdba93aafda683f36484b99b9112445a6642b23f7afec202f77323c27f5cee63",
+      "output_schema": "sha256:50f14eefd5fedc087ce384f60d17fc09ee234d96e13def06603528bf2f4f5194"
+    },
     "matrix.multiply.compute": {
       "input_schema": "sha256:6d367846847b9fee425918a14d69384ef2b4dbae2407450b9cfa0ec21319bf3d",
       "output_schema": "sha256:f4e32cbfca35bf4b487db039ee6d46e9f34d7681f5339461eb3be7a7bac24d13"
@@ -881,9 +885,17 @@
       "input_schema": "sha256:04eaecca92f61d8a6abfab1f2274ef8e062bf0f6a50aef0ea8c3e9ed0971d62c",
       "output_schema": "sha256:4cd93ed5352ea6c517bafe03ecb7329a5783969e3d7c5f10eeb750e180ec2411"
     },
+    "matrix.primary_decomposition.compute": {
+      "input_schema": "sha256:cdba93aafda683f36484b99b9112445a6642b23f7afec202f77323c27f5cee63",
+      "output_schema": "sha256:aea76bdefd8866a4590d4080b551bdf38d71aec24628928161c55bb90d892635"
+    },
     "matrix.rank.compute": {
       "input_schema": "sha256:9399c1bb101d7546b140f4c47ed4d1c1ca4b3c6ed441f902cf2c127e50e6f4f8",
       "output_schema": "sha256:203e83a904c2bc4fa5e46b8326763fedd0609c08c7f60bc3c8e25088a0019063"
+    },
+    "matrix.rational_canonical_form.compute": {
+      "input_schema": "sha256:cdba93aafda683f36484b99b9112445a6642b23f7afec202f77323c27f5cee63",
+      "output_schema": "sha256:38e8dfeb665530af389e56988258c5efcf7089e55e476d6b5c277fe6c08957a8"
     },
     "matrix.rational_linear_system.solve": {
       "input_schema": "sha256:9b80937cd45ba3845521f275a762565ccdf701954d9ff8e5ec0c1e8122b5f270",

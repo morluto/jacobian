@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian.contracts.base import ContractModel
+from jacobian.contracts.exact import CanonicalInteger
 
 MAX_PARTITION_SIZE = 50
 MAX_PARTS = 50
@@ -15,7 +16,7 @@ MAX_PARTS = 50
 class Partition(ContractModel):
     """One decreasing sequence of positive integers (a Young diagram shape)."""
 
-    parts: tuple[int, ...] = Field(min_length=1, max_length=MAX_PARTS)
+    parts: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_PARTS)
 
     @model_validator(mode="after")
     def require_decreasing_positive(self) -> Self:
@@ -23,6 +24,8 @@ class Partition(ContractModel):
             raise ValueError("partition parts must be positive")
         if any(self.parts[i] < self.parts[i + 1] for i in range(len(self.parts) - 1)):
             raise ValueError("partition parts must be non-increasing")
+        if sum(self.parts) > MAX_PARTITION_SIZE:
+            raise ValueError(f"partition size must not exceed {MAX_PARTITION_SIZE}")
         return self
 
 
@@ -48,14 +51,14 @@ class HookLengthResult(ContractModel):
     """Hook lengths as a flat list of row-indexed values."""
 
     hooks: tuple[tuple[int, ...], ...] = Field(min_length=1)
-    total_product: int = Field(ge=1)
+    total_product: CanonicalInteger = Field(description="Product of all hook lengths.")
     method: Literal["HOOK_FORMULA"] = "HOOK_FORMULA"
 
 
 class StandardYoungTableauCountResult(ContractModel):
     """The number of standard Young tableaux of a given shape."""
 
-    count: int = Field(ge=1)
+    count: CanonicalInteger = Field(description="Number of standard Young tableaux.")
     n: int = Field(ge=1, le=MAX_PARTITION_SIZE)
     method: Literal["HOOK_LENGTH_FORMULA"] = "HOOK_LENGTH_FORMULA"
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.contracts.algebraic_combinatorics import (
     ConjugatePartitionRequest,
     ConjugatePartitionResult,
@@ -26,7 +27,7 @@ def compute_hook_lengths(request: HookLengthRequest) -> HookLengthResult:
             total_product *= h
     return HookLengthResult(
         hooks=tuple(tuple(row) for row in hooks),
-        total_product=total_product,
+        total_product=format_canonical_integer(total_product),
     )
 
 
@@ -36,7 +37,7 @@ def compute_syt_count(
     parts = list(request.partition.parts)
     count = standard_young_tableaux_count(parts)
     n = sum(parts)
-    return StandardYoungTableauCountResult(count=count, n=n)
+    return StandardYoungTableauCountResult(count=format_canonical_integer(count), n=n)
 
 
 def compute_conjugate_partition(

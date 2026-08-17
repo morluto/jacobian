@@ -909,6 +909,18 @@
       "input_schema": "sha256:cd706bed75accaf880ade826fee22200b3bdfdc6011333364641abee165b65a2",
       "output_schema": "sha256:525174a77eb2639f36effd36e7c71216bdd13f22d415fb4da730f36e899aa9c8"
     },
+    "metric_space.ball.compute": {
+      "input_schema": "sha256:f4365e2d9efae53503147e142219bb82890a47f425200854f5ec5d5da27b0dfd",
+      "output_schema": "sha256:7b53aff04dba2c5e6ab51b066824af6a98a6c7c628086833cd4b55035eaf311a"
+    },
+    "metric_space.gromov_hyperbolicity.compute": {
+      "input_schema": "sha256:26c721a71a36d00553baeb7168b75922b8df8d71088b3e39e2ea9a74b1147215",
+      "output_schema": "sha256:ffb220874a13afb2ad00b366af830306289ae98cc86ca4070cb75fa04461844c"
+    },
+    "metric_space.profile.compute": {
+      "input_schema": "sha256:93b80ed8bfdb1cace84bf2eb7ac60c5ce7d58be373eae0273c39a56f81bec0f3",
+      "output_schema": "sha256:d9c6f9576cedc747e9af8789359b371a2ac5fac2b83101c354ead3c119cf8452"
+    },
     "modular.compute.discrete_logarithm": {
       "input_schema": "sha256:83b89e6c101376613c6ecbc2552572b1f42397ddffd4c6eab2700ba362be9469",
       "output_schema": "sha256:3d7e704bad1ccec1910bc0f650c3a41e9266d897a97d13790325a8c8d88aa995"

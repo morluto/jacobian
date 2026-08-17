@@ -29,6 +29,7 @@ from jacobian.math.electrical_networks._tools import (
 )
 from jacobian.math.finite_fields._tools import TOOLS as FINITE_FIELDS_TOOLS
 from jacobian.math.finite_game_theory._tools import TOOLS as FINITE_GAME_THEORY_TOOLS
+from jacobian.math.impartial_games._tools import TOOLS as IMPARTIAL_GAMES_TOOLS
 from jacobian.math.finite_metric_spaces._tools import (
     TOOLS as FINITE_METRIC_SPACES_TOOLS,
 )
@@ -140,6 +141,7 @@ BUILTIN_TOOLS: MathTools = (
     *POLYNOMIAL_MAPS_TOOLS,
     *EUCLIDEAN_GEOMETRY_TOOLS,
     *FINITE_GAME_THEORY_TOOLS,
+    *IMPARTIAL_GAMES_TOOLS,
     *ELECTRICAL_NETWORKS_TOOLS,
     *REGULAR_LANGUAGES_TOOLS,
     *ALGEBRAIC_COMBINATORICS_TOOLS,

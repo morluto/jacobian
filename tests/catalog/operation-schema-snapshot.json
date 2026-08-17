@@ -177,6 +177,10 @@
       "input_schema": "sha256:892525fd272560090e34f7babb2cd9b5fd477acd714dd3cecfbc4212a88ac225",
       "output_schema": "sha256:03dd1f3fd2c5d21d50ec9d815d3f5f254066a92111d864bc88ef5646e0222a14"
     },
+    "combinatorics.mex.compute": {
+      "input_schema": "sha256:a7dfb9fdc7e0f31651503ab0c7e1cb3278481f0bb324db08b0d120826acc2c6c",
+      "output_schema": "sha256:df0b9035d273c2d3f2b0cd226f5dcf66906d2402500f2d2be5e93c9a1e3055c3"
+    },
     "combinatorics.recurrence.linear.evaluate": {
       "input_schema": "sha256:aa0c112bc3c99aecd7881933223352b4969d99ad3b3bfd71cc8c773509405e3c",
       "output_schema": "sha256:043a742a3be82ac62dee396df8ba508653025bd700b3c2bbca3eaf41b3586305"
@@ -388,6 +392,46 @@
     "formal_series.rational.truncate.compute": {
       "input_schema": "sha256:bc7dcfe7176d471f8517297a8b4668a9aa1da2b878734baeb582b416ae8d9bff",
       "output_schema": "sha256:f4e431dd60ee3d88d100f0e178b4f638955403da360bc104261319b6e0aeb302"
+    },
+    "game.impartial.birthday.compute": {
+      "input_schema": "sha256:a2a1cc9fab4ae0a39f4e6e9f143570b7e269d48b1c95adde1bae81c28bff8cda",
+      "output_schema": "sha256:0a1b514435cdcf91de65645f3b626660ee56d5df0c313fb21cd5d07812e810e8"
+    },
+    "game.impartial.grundy_classes.compute": {
+      "input_schema": "sha256:c21c4f85cbc43f92e7dccc59d13542817e8610cf4bd94f8fbee9b7a05659d0c6",
+      "output_schema": "sha256:a7344181c78c3f25abbd8d290d78b8fa7c44c1e1873780b106421eea39a30765"
+    },
+    "game.impartial.grundy_table.compute": {
+      "input_schema": "sha256:e1a7a2f5010f80a2288c1c06d26a19f1bce29b96b8bd41701f6625bbd9647d87",
+      "output_schema": "sha256:9e587083e10d40c364f6a916c3309d47b33bcc4af0051648557a55331789eb40"
+    },
+    "game.impartial.nim_equivalent.compute": {
+      "input_schema": "sha256:fdaa162f9f5186fd01a7daa39516ad7329f5e358924dc3fc06a62518ac7db00b",
+      "output_schema": "sha256:40b40ade8b16cc6f97bd935031542e2359b3d77e6fe8bc251699c45c1291e925"
+    },
+    "game.impartial.outcome_profile.compute": {
+      "input_schema": "sha256:ab158b6dfb067f8e793f91b719fc8454b83e9a43db386f57683d8271cd49f97a",
+      "output_schema": "sha256:4d1233b07420e17042dd78e4e9bfdb5b5ee40c4d41a612debbd89f5943b70123"
+    },
+    "game.impartial.position.grundy.compute": {
+      "input_schema": "sha256:f2144fadcdccc40d258bdcf61a6ca1658bd38661758579a42520009a2b8deb5e",
+      "output_schema": "sha256:eec4f65d90a377fc230a2216afa24e3f8f7f4b34f51d656ade427e1be78308e4"
+    },
+    "game.nim.nim_sum.compute": {
+      "input_schema": "sha256:ddfe39ff030ad61ed9554ff4739aa7351e908eeca5a2facf4abedbf436231955",
+      "output_schema": "sha256:c4055c055d0863a4d31c1118688f6d539a8addb56b2c5a99bfd4f5af27d070bb"
+    },
+    "game.nim.options.compute": {
+      "input_schema": "sha256:44bbdcd380fb3151d4df9cf495e4b50e03aff0569d4d0565662b33a7ffb52c92",
+      "output_schema": "sha256:0901e2fb932c278728c3365a9fcdb5d74d72241ea275e4fe182585bea95b4912"
+    },
+    "game.subtraction.dag.compute": {
+      "input_schema": "sha256:284aebd95d4e634381eb7d6038691547aa8c99f7b3fcc70833e5cdc90c6f0cf8",
+      "output_schema": "sha256:4d6f616c346b0c1e0257e0bcef4ae10d69e527b5ac06f7c86c5db6c5365686ba"
+    },
+    "game.subtraction.grundy_prefix.compute": {
+      "input_schema": "sha256:0ef1be8c3ad5cf636af16c4782e40a2624161a9770166491be9f540204c93897",
+      "output_schema": "sha256:4ae654a0b0f5ed425baa77abed3d8c4de8151cd29e6d6a03348f4f188a5d2a92"
     },
     "game_theory.best_response.compute": {
       "input_schema": "sha256:fd3bbd5d7284ea00acb0389777e444d5b79922dcd6ca059c21c857431896a543",

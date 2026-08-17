@@ -36,6 +36,37 @@ owns strict invocation; `jacobian.mcp` and the CLI are delivery boundaries.
 The private root model and exact-scalar helpers contain only behavior genuinely
 shared by unrelated owners.
 
+## Package organization and family folding
+
+A domain is a top-level `jacobian.math.<family>` package when it owns a
+distinct canonical value type and imports no other family's `values`. A domain
+that consumes a family's canonical value type is a subpackage of that family,
+not a top-level package. This keeps the top level free of ticket-shaped feature
+packages while each capability keeps its own values, models, backends, and
+tests.
+
+Decide by evidence, in this order:
+
+1. Shared value type. A domain that imports a family's `values` module (for
+   example `matrices.values.RationalMatrix`) belongs to that family.
+2. Operation-ID domain prefix. The first segment of an operation ID
+   (`graph.*`, `matrix.*`, `polynomial.*`, `formal_series.*`) names the
+   mathematical family even when the package name does not. The prefix is a
+   discovery value: never rename operation IDs to follow a package move.
+3. Self-containment. A domain with its own value type and no import of another
+   family's `values` remains top-level (for example `formal_power_series`,
+   `root_isolation`, `electrical_networks`).
+
+Nest into a subpackage when the capability has its own
+values/models/operations/tools/tests, and into a module when it is a lone
+native capability. Drop a now-redundant family prefix when nesting
+(`matrix_analysis` -> `matrices/analysis`, `graph_coloring_ops` ->
+`graphs/coloring`), and keep descriptive names otherwise.
+
+A fold preserves operation IDs and request/result schemas, keeps one math
+owner per tool (request, result, and run share the first path segment), deletes
+the old path in the same change, and lands as one family per change.
+
 Logic follows the same rule. CNF canonicalization and assignment checks are
 pure direct operations. SAT and bounded QF SMT-LIB solving call the maintained
 Z3 Python binding in process. `lean.check` is a one-shot external boundary: it

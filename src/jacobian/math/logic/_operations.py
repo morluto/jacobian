@@ -29,6 +29,9 @@ _MAX_LITERALS = 32_768
 _MAX_SMTLIB_BYTES = 128_000
 _MAX_MODEL_BYTES = 64_000
 _LEAN_TOOLCHAIN = "leanprover/lean4:v4.31.0"
+_SUPPORTED_SMTLIB_COMMANDS = frozenset(
+    {"set-logic", "declare-const", "declare-fun", "assert", "check-sat"}
+)
 
 
 class CanonicalCnf(StrictModel):
@@ -278,18 +281,9 @@ class SmtSolveRequest(StrictModel):
             raise ValueError("SMT-LIB input must contain exactly one check-sat command")
         if commands[-1:] != (("check-sat",),):
             raise ValueError("SMT-LIB input must end with its check-sat command")
-        _SUPPORTED_SMTLIB_COMMANDS = {
-            "set-logic",
-            "declare-const",
-            "declare-fun",
-            "assert",
-            "check-sat",
-        }
         for command in commands:
             if command and command[0] not in _SUPPORTED_SMTLIB_COMMANDS:
-                raise ValueError(
-                    f"unsupported SMT-LIB command: {command[0]}"
-                )
+                raise ValueError(f"unsupported SMT-LIB command: {command[0]}")
         return self
 
 

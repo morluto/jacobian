@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Self
+
 from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
@@ -29,7 +30,7 @@ class NonzeroRationalValueRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_nonzero(self) -> Self:
-        if int(self.value.num) == 0:
+        if self.value.as_fraction() == 0:
             raise ValueError("reciprocal requires a nonzero rational")
         return self
 
@@ -49,7 +50,7 @@ class RationalDivisionRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_nonzero_divisor(self) -> Self:
-        if int(self.right.num) == 0:
+        if self.right.as_fraction() == 0:
             raise ValueError("quotient requires a nonzero divisor")
         return self
 

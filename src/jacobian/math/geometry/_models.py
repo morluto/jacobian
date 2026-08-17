@@ -149,17 +149,16 @@ class CircumcircleRequest(PointTripleRequest):
 
     @model_validator(mode="after")
     def require_noncollinear_distinct(self) -> Self:
-        from fractions import Fraction
-
         points = [self.first, self.second, self.third]
-        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in points)
+        keys = tuple(_point_key(point) for point in points)
         if len(set(keys)) != len(keys):
             raise ValueError("circumcircle requires three distinct points")
         p0, p1, p2 = points
-        dx1 = Fraction(int(p1.x.num), int(p1.x.den)) - Fraction(int(p0.x.num), int(p0.x.den))
-        dy1 = Fraction(int(p1.y.num), int(p1.y.den)) - Fraction(int(p0.y.num), int(p0.y.den))
-        dx2 = Fraction(int(p2.x.num), int(p2.x.den)) - Fraction(int(p0.x.num), int(p0.x.den))
-        dy2 = Fraction(int(p2.y.num), int(p2.y.den)) - Fraction(int(p0.y.num), int(p0.y.den))
+        x0, y0 = _point_key(p0)
+        dx1 = p1.x.as_fraction() - x0
+        dy1 = p1.y.as_fraction() - y0
+        dx2 = p2.x.as_fraction() - x0
+        dy2 = p2.y.as_fraction() - y0
         if dx1 * dy2 - dy1 * dx2 == 0:
             raise ValueError("circumcircle requires three noncollinear points")
         return self

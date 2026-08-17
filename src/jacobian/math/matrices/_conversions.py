@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import parse_canonical_integer, format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.matrices._operation_models import DeterminantRationalMatrix
 from jacobian.math.matrices.values import IntegerMatrix, RationalMatrix, SmithNormalForm
 
@@ -39,7 +39,13 @@ def rational_matrix_to_sympy(
 
     return sympy.Matrix(
         [
-            [sympy.Rational(parse_canonical_integer(value.num), parse_canonical_integer(value.den)) for value in row]
+            [
+                sympy.Rational(
+                    parse_canonical_integer(value.num),
+                    parse_canonical_integer(value.den),
+                )
+                for value in row
+            ]
             for row in matrix.entries
         ]
     )

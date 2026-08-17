@@ -9,6 +9,7 @@ from typing import Any, cast
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry._models import (
+    CircumcircleRequest,
     ClosedSegment2D,
     GeometryBooleanResult,
     GeometryCircleResult,
@@ -23,8 +24,7 @@ from jacobian.math.geometry._models import (
     PointPairRequest,
     PointQuadrupleRequest,
     PointSetRequest,
-    CircumcircleRequest,
-PointTripleRequest,
+    PointTripleRequest,
     PolygonIntersectionWitness,
     PolygonPointClassificationResult,
     PolygonRequest,

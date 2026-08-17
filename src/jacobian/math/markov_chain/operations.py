@@ -1,6 +1,7 @@
 """Markov chain operations backed by SymPy."""
 
 from __future__ import annotations
+
 from jacobian.canonical import parse_canonical_integer
 
 __all__ = ["ergodic_properties", "stationary_distribution"]
@@ -12,7 +13,13 @@ def stationary_distribution(matrix):  # type: ignore[no-untyped-def]
     n = len(matrix)
     p = sympy.Matrix(
         [
-            [sympy.Rational(parse_canonical_integer(matrix[i][j]["num"]), parse_canonical_integer(matrix[i][j]["den"])) for j in range(n)]
+            [
+                sympy.Rational(
+                    parse_canonical_integer(matrix[i][j]["num"]),
+                    parse_canonical_integer(matrix[i][j]["den"]),
+                )
+                for j in range(n)
+            ]
             for i in range(n)
         ]
     )

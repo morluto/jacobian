@@ -17,7 +17,7 @@ from jacobian.math.number_theory._models import (
     ModularPolynomialResidueImageResult,
     ModularPolynomialResidueTableRow,
     ModularPolynomialResidueWitness,
-    ModularValueRequest,
+    ModularUnitRequest,
     ModulusRequest,
     NormalizedModularPolynomialTerm,
     QuadraticResiduesResult,
@@ -34,11 +34,11 @@ def compute_jacobi_symbol(request: JacobiSymbolRequest) -> JacobiSymbolResult:
     )
 
 
-def compute_modular_inverse(request: ModularValueRequest) -> IntegerValueResult:
+def compute_modular_inverse(request: ModularUnitRequest) -> IntegerValueResult:
     return IntegerValueResult(value=str(pow(int(request.value), -1, request.modulus)))
 
 
-def compute_multiplicative_order(request: ModularValueRequest) -> IntegerValueResult:
+def compute_multiplicative_order(request: ModularUnitRequest) -> IntegerValueResult:
     from sympy import n_order
 
     value, modulus = int(request.value), request.modulus

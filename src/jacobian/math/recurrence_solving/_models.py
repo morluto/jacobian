@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from jacobian.canonical import parse_canonical_integer
-
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 
 
 class RecurrenceFindRequest(StrictModel):
@@ -70,9 +69,13 @@ class ClosedFormRequest(StrictModel):
             raise ValueError("initial value count must match the recurrence order")
         try:
             coefficients = tuple(
-                Rational(parse_canonical_integer(value)) for value in self.characteristic_coefficients
+                Rational(parse_canonical_integer(value))
+                for value in self.characteristic_coefficients
             )
-            tuple(Rational(parse_canonical_integer(value)) for value in self.initial_values)
+            tuple(
+                Rational(parse_canonical_integer(value))
+                for value in self.initial_values
+            )
         except (TypeError, ValueError) as exc:
             raise ValueError(
                 "recurrence coefficients and initial values must be rational"

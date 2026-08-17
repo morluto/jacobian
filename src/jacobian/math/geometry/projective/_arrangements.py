@@ -10,14 +10,14 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
 from jacobian.math.arithmetic import primitive_integer_vector
-from jacobian.math.projective_geometry._models import (
+from jacobian.math.geometry.projective._models import (
     NormalizedProjectiveLine,
     ProjectiveArrangementFlat,
     ProjectiveLineArrangementRequest,
     ProjectiveLineArrangementResult,
     ProjectiveMultiplicityCount,
 )
-from jacobian.math.projective_geometry.values import PrimitiveProjectiveTriple
+from jacobian.math.geometry.projective.values import PrimitiveProjectiveTriple
 
 
 def _primitive(values: tuple[Fraction, Fraction, Fraction]) -> tuple[int, int, int]:

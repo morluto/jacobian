@@ -1,9 +1,9 @@
 """Contract coverage for inline projective line-arrangement operations."""
 
-from jacobian.math.projective_geometry._arrangements import (
+from jacobian.math.geometry.projective._arrangements import (
     compute_projective_line_flats,
 )
-from jacobian.math.projective_geometry._models import ProjectiveLineArrangementRequest
+from jacobian.math.geometry.projective._models import ProjectiveLineArrangementRequest
 
 
 def test_projective_arrangement_result_has_no_removed_verification_route() -> None:

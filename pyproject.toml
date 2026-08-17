@@ -176,7 +176,7 @@ source_modules = [
     "jacobian.math.prime_field_linear_algebra",
     "jacobian.math.probability.mutual_information",
     "jacobian.math.probability.values",
-    "jacobian.math.projective_geometry.values",
+    "jacobian.math.geometry.projective.values",
     "jacobian.math.real_quadratic",
     "jacobian.math.recurrence_solving.operations",
     "jacobian.math.regular_languages.operations",

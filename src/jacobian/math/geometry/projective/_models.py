@@ -8,7 +8,7 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.math.projective_geometry.values import (
+from jacobian.math.geometry.projective.values import (
     PrimitiveProjectiveTriple,
     ProjectiveLabel,
     RationalProjectiveLine,

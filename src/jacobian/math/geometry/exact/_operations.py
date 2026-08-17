@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.exact_geometry._models import (
+from jacobian.math.geometry.exact._models import (
     DistanceGraphRequest,
     DistanceGraphResult,
     DistanceMultiplicityEntry,

@@ -1,13 +1,13 @@
 """Tests for Euclidean geometry operations."""
 
-from jacobian.math.euclidean_geometry._models import (
+from jacobian.math.geometry.euclidean._models import (
     AngleEqualityRequest,
     RationalPoint2D,
     SegmentRatioRequest,
     Triangle,
     TriangleSimilarityRequest,
 )
-from jacobian.math.euclidean_geometry._operations import (
+from jacobian.math.geometry.euclidean._operations import (
     compute_angle_equality,
     compute_segment_ratio,
     compute_triangle_similarity,

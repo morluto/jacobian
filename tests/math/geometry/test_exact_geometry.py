@@ -1,13 +1,13 @@
 """Tests for exact geometry operations."""
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.exact_geometry._models import (
+from jacobian.math.geometry.exact._models import (
     DistanceGraphRequest,
     DistanceProfileRequest,
     LabelledRationalPoint,
     PointConfiguration,
 )
-from jacobian.math.exact_geometry._operations import (
+from jacobian.math.geometry.exact._operations import (
     compute_distance_graph,
     compute_distance_profile,
 )

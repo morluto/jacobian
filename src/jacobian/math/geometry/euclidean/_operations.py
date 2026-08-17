@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian.canonical import format_canonical_integer
-from jacobian.math.euclidean_geometry._models import (
+from jacobian.math.geometry.euclidean._models import (
     AngleEqualityRequest,
     AngleEqualityResult,
     RationalPoint2D,

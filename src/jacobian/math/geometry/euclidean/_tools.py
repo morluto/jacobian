@@ -6,7 +6,7 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.euclidean_geometry._models import (
+from jacobian.math.geometry.euclidean._models import (
     AngleEqualityRequest,
     AngleEqualityResult,
     SegmentRatioRequest,
@@ -14,7 +14,7 @@ from jacobian.math.euclidean_geometry._models import (
     TriangleSimilarityRequest,
     TriangleSimilarityResult,
 )
-from jacobian.math.euclidean_geometry._operations import (
+from jacobian.math.geometry.euclidean._operations import (
     compute_angle_equality,
     compute_segment_ratio,
     compute_triangle_similarity,

@@ -1,7 +1,7 @@
 """Exact rational projective-geometry operations."""
 
 from jacobian.catalog.models import MathTools
-from jacobian.math.projective_geometry._arrangements import (
+from jacobian.math.geometry.projective._arrangements import (
     PROJECTIVE_LINE_ARRANGEMENT_OPERATION,
 )
 

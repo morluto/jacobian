@@ -6,13 +6,13 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.exact_geometry._models import (
+from jacobian.math.geometry.exact._models import (
     DistanceGraphRequest,
     DistanceGraphResult,
     DistanceProfileRequest,
     DistanceProfileResult,
 )
-from jacobian.math.exact_geometry._operations import (
+from jacobian.math.geometry.exact._operations import (
     compute_distance_graph,
     compute_distance_profile,
 )

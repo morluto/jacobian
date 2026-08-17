@@ -5,7 +5,7 @@ from jacobian.math.certified_snf.values import (
     SmithNormalFormCertificate,
 )
 from jacobian.math.combinatorics._models import IntegerListRequest
-from jacobian.math.projective_geometry.values import PrimitiveProjectiveTriple
+from jacobian.math.geometry.projective.values import PrimitiveProjectiveTriple
 
 
 def test_nonnegative_integer_list_accepts_canonical_values_beyond_python_limit() -> (

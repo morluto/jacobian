@@ -30,8 +30,6 @@ from jacobian.math.discrepancy_theory._tools import TOOLS as DISCREPANCY_THEORY_
 from jacobian.math.electrical_networks._tools import (
     TOOLS as ELECTRICAL_NETWORKS_TOOLS,
 )
-from jacobian.math.euclidean_geometry._tools import TOOLS as EUCLIDEAN_GEOMETRY_TOOLS
-from jacobian.math.exact_geometry._tools import TOOLS as EXACT_GEOMETRY_TOOLS
 from jacobian.math.finite_fields._tools import TOOLS as FINITE_FIELDS_TOOLS
 from jacobian.math.finite_game_theory._tools import TOOLS as FINITE_GAME_THEORY_TOOLS
 from jacobian.math.finite_metric_spaces._tools import (
@@ -40,6 +38,9 @@ from jacobian.math.finite_metric_spaces._tools import (
 from jacobian.math.finite_sets._tools import TOOLS as FINITE_SETS_TOOLS
 from jacobian.math.formal_power_series._tools import TOOLS as FORMAL_POWER_SERIES_TOOLS
 from jacobian.math.geometry._tools import TOOLS as GEOMETRY_TOOLS
+from jacobian.math.geometry.euclidean._tools import TOOLS as EUCLIDEAN_GEOMETRY_TOOLS
+from jacobian.math.geometry.exact._tools import TOOLS as EXACT_GEOMETRY_TOOLS
+from jacobian.math.geometry.projective._tools import TOOLS as PROJECTIVE_GEOMETRY_TOOLS
 from jacobian.math.graph_coloring_ops._tools import TOOLS as GRAPH_COLORING_OPS_TOOLS
 from jacobian.math.graph_decomposition._tools import TOOLS as GRAPH_DECOMPOSITION_TOOLS
 from jacobian.math.graph_flow._tools import TOOLS as GRAPH_FLOW_TOOLS
@@ -72,7 +73,6 @@ from jacobian.math.polynomials.multivariate._tools import (
 from jacobian.math.polynomials.real_algebra._tools import TOOLS as REAL_ALGEBRA_TOOLS
 from jacobian.math.posets._tools import TOOLS as POSETS_TOOLS
 from jacobian.math.probability._tools import TOOLS as PROBABILITY_TOOLS
-from jacobian.math.projective_geometry._tools import TOOLS as PROJECTIVE_GEOMETRY_TOOLS
 from jacobian.math.rational_linear._tools import TOOLS as RATIONAL_LINEAR_TOOLS
 from jacobian.math.recurrence_solving._tools import TOOLS as RECURRENCE_SOLVING_TOOLS
 from jacobian.math.regular_languages._tools import TOOLS as REGULAR_LANGUAGES_TOOLS

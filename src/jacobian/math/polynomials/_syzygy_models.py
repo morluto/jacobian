@@ -10,8 +10,8 @@ from pydantic import Field, StrictInt, model_validator
 from jacobian._digest import Sha256Digest
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.geometry.projective.values import RationalProjectiveLine
 from jacobian.math.polynomials.values import PolynomialVariable, RationalPolynomial
-from jacobian.math.projective_geometry.values import RationalProjectiveLine
 
 ExponentTriple = tuple[int, int, int]
 

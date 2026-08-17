@@ -148,6 +148,7 @@ root_package = "jacobian"
 name = "The public math library does not depend on product layers"
 type = "forbidden"
 source_modules = [
+    "jacobian.math.algebraic_combinatorics.operations",
     "jacobian.math.arithmetic.operations",
     "jacobian.math.boolean.operations",
     "jacobian.math.certified_snf.operations",

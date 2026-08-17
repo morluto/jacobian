@@ -149,6 +149,10 @@
       "input_schema": "sha256:3e7574bec1081f0ce6c524384915d281cfc6b455296c89216896ed091fb6e5fb",
       "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
     },
+    "combinatorics.conjugate_partition.compute": {
+      "input_schema": "sha256:309b1f18edaa3657ee05f8281d694c692ce522fe4052fdebba599034d2b49b3d",
+      "output_schema": "sha256:975a46d7ce1443a9d1de10a28c4814019acc7a8a8b83931385244a72ab18103b"
+    },
     "combinatorics.cyclic_difference_set.extension.decide": {
       "input_schema": "sha256:8124611617ad72bfc7cc562342e6d53710204c37578a72961b581cf21371ba42",
       "output_schema": "sha256:ee605a9c59dab292119148b78e032c235cae224ebc3591a2215acc2ab222928e"
@@ -164,6 +168,10 @@
     "combinatorics.generating_function.coefficients.compute": {
       "input_schema": "sha256:8772b24c32bedea9a382758e2538de463362830a494b9bbefba6dab64f1ed34f",
       "output_schema": "sha256:8c7fcd8984beb56307a91bb9e7068b34856f097280b8a2d9d51f3c79f859dc9d"
+    },
+    "combinatorics.hook_length.compute": {
+      "input_schema": "sha256:5383bea70824c336b88da0f0270507bc73ecf08689861690781dc3c73fb3a1e0",
+      "output_schema": "sha256:90e01a73b40c2527d276be011200fe052fd3e2bf1aecb76aec4cd18b4efb2f36"
     },
     "combinatorics.integer_set.sidon.decide": {
       "input_schema": "sha256:892525fd272560090e34f7babb2cd9b5fd477acd714dd3cecfbc4212a88ac225",
@@ -192,6 +200,10 @@
     "combinatorics.set_function.submodularity": {
       "input_schema": "sha256:22754dbe168296d6e6e0d5dd6359079873209a397de4d3bd6e51db14f265f806",
       "output_schema": "sha256:89e59456f49d01b61d8629fde714f6818db8e0eeb338e7a762ed638e30950272"
+    },
+    "combinatorics.standard_young_tableaux.count": {
+      "input_schema": "sha256:dbc5bbccc227278f0c3a90a252cd673ab54a2e4b40989e9242a9f694630079b0",
+      "output_schema": "sha256:f409575292c996f2bea47897510f606f7c947742c3ecea1e89c01a248686607c"
     },
     "convex.max_affine.evaluate": {
       "input_schema": "sha256:f23a9850b08779f60b74d9b30b5bc07840ae2dae95b95fce130df4f4af06d306",

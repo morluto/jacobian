@@ -20,6 +20,9 @@ from jacobian.math.combinatorics._tools import TOOLS as COMBINATORICS_TOOLS
 from jacobian.math.convex_analysis._tools import TOOLS as CONVEX_ANALYSIS_TOOLS
 from jacobian.math.directed_graph._tools import TOOLS as DIRECTED_GRAPH_TOOLS
 from jacobian.math.discrepancy_theory._tools import TOOLS as DISCREPANCY_THEORY_TOOLS
+from jacobian.math.electrical_networks._tools import (
+    TOOLS as ELECTRICAL_NETWORKS_TOOLS,
+)
 from jacobian.math.euclidean_geometry._tools import TOOLS as EUCLIDEAN_GEOMETRY_TOOLS
 from jacobian.math.exact_geometry._tools import TOOLS as EXACT_GEOMETRY_TOOLS
 from jacobian.math.finite_fields._tools import TOOLS as FINITE_FIELDS_TOOLS
@@ -121,6 +124,7 @@ BUILTIN_TOOLS: MathTools = (
     *POLYNOMIAL_MAPS_TOOLS,
     *EUCLIDEAN_GEOMETRY_TOOLS,
     *FINITE_GAME_THEORY_TOOLS,
+    *ELECTRICAL_NETWORKS_TOOLS,
 )
 
 __all__ = ["BUILTIN_TOOLS"]

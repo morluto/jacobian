@@ -41,7 +41,7 @@ def test_operation_ids_and_request_result_schemas_match_snapshot() -> None:
     }
 
     assert snapshot.catalog_version == expected["catalog_version"]
-    assert len(actual) == 336
+    assert len(actual) == 339
     assert actual == expected["operations"]
 
 
@@ -94,13 +94,13 @@ def test_representative_search_browse_and_inspect_results_are_stable() -> None:
         "finite_field.direction_rank_ledger.compute",
     ]
     assert [operation.operation_id for operation in browse.operations] == [
+        "electrical_network.effective_resistance.compute",
+        "electrical_network.laplacian.compute",
+        "electrical_network.node_potentials.compute",
         "graph.coloring.k_colorability.decide",
         "graph.cut.minimum_st.compute",
-        "graph.decomposition.biconnected_components.compute",
-        "graph.decomposition.block_cut_tree.compute",
-        "graph.decomposition.bridge_block_tree.compute",
     ]
-    assert browse.total_operations == 48
+    assert browse.total_operations == 51
     assert inspected is not None
     assert inspected.operation_id == "integer.compute.gcd"
     assert inspected.version == "2"

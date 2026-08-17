@@ -117,3 +117,35 @@ def test_contract_rejects_out_of_range_vertices() -> None:
             vertex_count=2,
             edges=(GraphEdge(source=0, target=5),),
         )
+
+
+def test_complement_of_edgeless_graph_within_output_bounds() -> None:
+    """Complement of a 64-vertex edgeless graph produces 2016 edges (within MAX_RESULT_EDGES)."""
+    g = _graph(64, [])
+    result = compute_complement(GraphTransformRequest(graph=g))
+    assert result.vertex_count == 64
+    assert len(result.edges) == 2016  # C(64, 2)
+
+
+def test_line_graph_of_edgeless_graph_is_empty() -> None:
+    """Line graph of an edgeless graph has zero vertices (empty result allowed)."""
+    g = _graph(3, [])
+    result = compute_line_graph(GraphTransformRequest(graph=g))
+    assert result.vertex_count == 0
+    assert len(result.edges) == 0
+
+
+def test_induced_subgraph_empty_vertex_set() -> None:
+    """Induced subgraph on empty vertex set has zero vertices (empty result allowed)."""
+    g = _graph(3, [(0, 1), (1, 2)])
+    result = compute_induced_subgraph(SubgraphRequest(graph=g, vertices=()))
+    assert result.vertex_count == 0
+    assert len(result.edges) == 0
+
+
+def test_contract_rejects_duplicate_subgraph_vertices() -> None:
+    with pytest.raises(ValidationError, match="unique"):
+        SubgraphRequest(
+            graph=_graph(3, [(0, 1)]),
+            vertices=(0, 0),
+        )

@@ -10,6 +10,7 @@ from jacobian.contracts.base import ContractModel
 
 MAX_VERTICES = 64
 MAX_EDGES = 1024
+MAX_RESULT_EDGES = 65536
 
 
 class GraphEdge(ContractModel):
@@ -60,8 +61,8 @@ class GraphTransformRequest(ContractModel):
 class GraphResult(ContractModel):
     """The result graph of a transform."""
 
-    vertex_count: int = Field(ge=1, le=MAX_VERTICES * MAX_VERTICES)
-    edges: tuple[GraphEdge, ...] = Field(default=(), max_length=MAX_EDGES)
+    vertex_count: int = Field(ge=0, le=MAX_VERTICES * MAX_VERTICES)
+    edges: tuple[GraphEdge, ...] = Field(default=(), max_length=MAX_RESULT_EDGES)
     method: Literal["NETWORKX"] = "NETWORKX"
 
 
@@ -73,6 +74,8 @@ class SubgraphRequest(ContractModel):
 
     @model_validator(mode="after")
     def require_valid_vertices(self) -> Self:
+        if len(set(self.vertices)) != len(self.vertices):
+            raise ValueError("vertices must be unique")
         for v in self.vertices:
             if not (0 <= v < self.graph.vertex_count):
                 raise ValueError("vertices must be in 0..vertex_count-1")

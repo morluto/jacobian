@@ -5,6 +5,8 @@ from typing import Any
 
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.code_theory import (
+    CoveringRadiusRequest,
+    CoveringRadiusResult,
     LinearCodeRequest,
     MinimumDistanceResult,
     WeightDistributionResult,
@@ -12,6 +14,7 @@ from jacobian.contracts.code_theory import (
 from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
 from jacobian.domains.code_theory.operations import (
+    compute_covering_radius,
     compute_min_distance,
     compute_weight_dist,
 )
@@ -76,6 +79,24 @@ CODE_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "binary_repetition_code",
                 "Weight distribution of the binary repetition code of length two.",
                 {"field_order": 2, "generator_matrix": [[1, 1]]},
+            ),
+        ),
+    ),
+    ct_operation(
+        "code.covering_radius.compute",
+        "Compute the covering radius of a linear code",
+        "Compute the exact covering radius over a bounded prime field by breadth-first search on the syndrome graph.",
+        CoveringRadiusRequest,
+        CoveringRadiusResult,
+        compute_covering_radius,
+        "code",
+        "covering-radius",
+        "exact",
+        examples=(
+            example(
+                "binary_repetition_code",
+                "Covering radius of the binary repetition code of length four.",
+                {"field_order": 2, "generator_matrix": [[1, 1, 1, 1]]},
             ),
         ),
     ),

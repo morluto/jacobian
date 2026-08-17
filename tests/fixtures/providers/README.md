@@ -9,7 +9,7 @@ and its reproducible container definition. The corresponding boundary tests
 exercise the spike's parser, pin binding, and typed unavailable outcomes:
 
 ```sh
-uv run pytest tests/boundary/process/providers
+uv run pytest tests/process/providers
 ```
 
 To build a single pinned environment for manual investigation, use its Compose

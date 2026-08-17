@@ -1,0 +1,1349 @@
+{
+  "catalog_version": "1",
+  "operations": {
+    "additive.direct_sum_predicate.compute": {
+      "input_schema": "sha256:4c4ec359b4c9329df175f04d43ab47779b13081407dba34d68692bb2db501232",
+      "output_schema": "sha256:c8e62e69886158fbea4e0dc1edd7a1bd18e53442c96b3589285272f4b625a19d"
+    },
+    "additive.energy.compute": {
+      "input_schema": "sha256:fcc2285963c87f8ee09001fdc661f38fdcc5af80dc08dbf6ea76bf46e55ced06",
+      "output_schema": "sha256:b7510ad837c4813372a226644590679212792bfe6f7d66f5a725d5001622a5e5"
+    },
+    "additive.representation_profile.compute": {
+      "input_schema": "sha256:88fb31b12e3daf163473139a5e44fc7525a1132a282311c9dd6904f03b175ed1",
+      "output_schema": "sha256:a5a0ca971e84fe5a9fadb946057b3c85cd0c35dced952ec9e1f0d2b025068014"
+    },
+    "additive.sumset_cardinality.compute": {
+      "input_schema": "sha256:4bbd8f020cb56f54208f235d510ae5fefe6868dfd281c21945772cc718fa5608",
+      "output_schema": "sha256:571a7cab673754084560d029796b34176412b4291a1def1bad2f49717ed3c94b"
+    },
+    "algebraic_number.compare": {
+      "input_schema": "sha256:de211f328a6cd6e67206cf081189a582c09467b667daa757c1bd0b64bce0ad16",
+      "output_schema": "sha256:ef890107f73c78e1c119204e4251966cf2b3490192ac86d67b6f24c29902c231"
+    },
+    "analysis.real_function.point_enclosure.compute": {
+      "input_schema": "sha256:03cdc2f995da8340bfdd0d67ac79cd15aa881aec2d606d9be6ea970c8cc43d94",
+      "output_schema": "sha256:249702364339f3a57c3426c7360e4655f3ff60feb827c0b3601206dc98f543db"
+    },
+    "arithmetic.dirichlet_convolution.compute": {
+      "input_schema": "sha256:7a6ec48904b8a173add5790173251fb3d5b62def2db077705477a913d6a5c2e9",
+      "output_schema": "sha256:5b5881074e7a379617b3b90dc827ee0999fd169e7a7ac26bfe613800b31315a4"
+    },
+    "arithmetic.dirichlet_inverse.compute": {
+      "input_schema": "sha256:81afdf060ae5b8e4d298f55eb43df33b28691b262afcaff364afbd34ff88204d",
+      "output_schema": "sha256:236a796a025b6f39de8b7c13757489f255622b600a3262f52d37e35e978a6943"
+    },
+    "arithmetic.mobius_transform.compute": {
+      "input_schema": "sha256:c6a702c1aab7f470bad47cfdb802044ba894a636d85df1ffadb71cbaac443199",
+      "output_schema": "sha256:7b6f54c44898edb8506ed58bb16f2fdbaa7232a67c70e3f4182b3e3186d3395b"
+    },
+    "arithmetic.real_quadratic.order.compute": {
+      "input_schema": "sha256:20b4c230ebb07f71a42ca556fe06af50c7291fc7eb38900b4bbf97b91b444069",
+      "output_schema": "sha256:c04f28adf8e19ec9e91a974e70b06f35a2cf6d5ada333611957f474fc72e2b02"
+    },
+    "arithmetic.summatory_function.compute": {
+      "input_schema": "sha256:f74564b49ea64569e7baa76f0357aff07a522381e5a5712fc1d53aca37aa16f8",
+      "output_schema": "sha256:fff33a3156f4c93700116cad342aebc45cefc21ec19e058a2bb82e4ff3dfbe7c"
+    },
+    "boolean.erasure_noise.compute": {
+      "input_schema": "sha256:5d30c772c330454e3fc49026c61ae8ca0e71eb2dab87420292e0c67a59473e2d",
+      "output_schema": "sha256:107269b473b6bcd7c1a8129669b2fb4b5890ca71706258bb0c8bec08488a1c27"
+    },
+    "boolean.fourier.walsh_transform.compute": {
+      "input_schema": "sha256:2b1e7fe3c1ce60a4448da5c9eb17e52d949a7b22fbf28104469d4db6e73e36fc",
+      "output_schema": "sha256:cae7fb935b5fcba4498b6f13fc5a4dedab1fa4611df552b00c36b91bed559632"
+    },
+    "boolean.fourier_spectrum.compute": {
+      "input_schema": "sha256:bb7519d4a581a63eb087c220bddc7102869abc0fbeadc72a2fdb0c57b70723a5",
+      "output_schema": "sha256:6508ca04a17ac8e6a70759c1f63e59407d6d8c1e6f976647086a64f8e6f7fdf5"
+    },
+    "boolean.multilinear_extension.compute": {
+      "input_schema": "sha256:2757131974ce4fb274080e3ebbe76a2563028b256027ef2fd5f97e30a72ad3d2",
+      "output_schema": "sha256:233ae48ce94dc5964bfe45e1270c080c8973de140a703c24ea8e6a2b287aa3e0"
+    },
+    "boolean.truth_table.compute": {
+      "input_schema": "sha256:73cb324fa00063b175b6176a9d11b54061293af562aa6a79c5575b26ffae6111",
+      "output_schema": "sha256:b9e101d9a7c81f2e42d85a5b2386e40cdd6aeeab0a903518bf36463a9b839ea7"
+    },
+    "code.covering_radius.compute": {
+      "input_schema": "sha256:9e533b134e5eb5811e8d8ec5dac191d471be05be818fb4aa8c566d2b889a8063",
+      "output_schema": "sha256:f8613705759bf28c2f022ce5fae00c230dce5a002a9d8539553eb0b3442b4aa4"
+    },
+    "code.minimum_distance.compute": {
+      "input_schema": "sha256:fa50e6e300b9d68003f291057aee5e36dbd44d3f99372e52b8f82db34ba93a45",
+      "output_schema": "sha256:6276aa53796076a23a9e497c2f329a5f04383bcc4a056aa70ec100d2e50b568b"
+    },
+    "code.weight_distribution.compute": {
+      "input_schema": "sha256:fa50e6e300b9d68003f291057aee5e36dbd44d3f99372e52b8f82db34ba93a45",
+      "output_schema": "sha256:7ea8455e470ebb43fb2bf03b209082c139737397b54c72ff7825fee7ef0b0874"
+    },
+    "combinatorics.compute.bell": {
+      "input_schema": "sha256:6f7bb64aebf06976f5047b222d0ebd9a8f9f795c1cc4a5b2d8f948be6bc51562",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.compute.bernoulli": {
+      "input_schema": "sha256:6f7bb64aebf06976f5047b222d0ebd9a8f9f795c1cc4a5b2d8f948be6bc51562",
+      "output_schema": "sha256:18f7322cb9c5bf36a3b94677db1873aceda9ba1e322c8c4dbe09bb6ecea43ac6"
+    },
+    "combinatorics.compute.binomial": {
+      "input_schema": "sha256:da505f27e58395d6a3471cccaa8d9c4cb0aaf36c1ae94d00a121f1bce7188948",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.compute.catalan": {
+      "input_schema": "sha256:6f7bb64aebf06976f5047b222d0ebd9a8f9f795c1cc4a5b2d8f948be6bc51562",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.compute.central_binomial": {
+      "input_schema": "sha256:6f7bb64aebf06976f5047b222d0ebd9a8f9f795c1cc4a5b2d8f948be6bc51562",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.compute.compositions": {
+      "input_schema": "sha256:3e7574bec1081f0ce6c524384915d281cfc6b455296c89216896ed091fb6e5fb",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.compute.derangements": {
+      "input_schema": "sha256:6f7bb64aebf06976f5047b222d0ebd9a8f9f795c1cc4a5b2d8f948be6bc51562",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.compute.double_factorial": {
+      "input_schema": "sha256:6f7bb64aebf06976f5047b222d0ebd9a8f9f795c1cc4a5b2d8f948be6bc51562",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.compute.factorial": {
+      "input_schema": "sha256:6f7bb64aebf06976f5047b222d0ebd9a8f9f795c1cc4a5b2d8f948be6bc51562",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.compute.fibonacci": {
+      "input_schema": "sha256:6f7bb64aebf06976f5047b222d0ebd9a8f9f795c1cc4a5b2d8f948be6bc51562",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.compute.fibonacci_pair": {
+      "input_schema": "sha256:ad0f464abdcb6df46e6e7ad39f0ff17390948354186963fa31941a6d6e71aecb",
+      "output_schema": "sha256:6fd46f39b61cc701d7849c9b6a9b9f752e7594bbc1ee8ab4c182cceb00859a95"
+    },
+    "combinatorics.compute.lucas": {
+      "input_schema": "sha256:6f7bb64aebf06976f5047b222d0ebd9a8f9f795c1cc4a5b2d8f948be6bc51562",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.compute.motzkin": {
+      "input_schema": "sha256:6f7bb64aebf06976f5047b222d0ebd9a8f9f795c1cc4a5b2d8f948be6bc51562",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.compute.multinomial": {
+      "input_schema": "sha256:ae2b24c196cc47d5aeab9d7efad883f775b10a15b783b85db29c9ffdadc9cb84",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.compute.partition_number": {
+      "input_schema": "sha256:6f7bb64aebf06976f5047b222d0ebd9a8f9f795c1cc4a5b2d8f948be6bc51562",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.compute.permutations": {
+      "input_schema": "sha256:3e7574bec1081f0ce6c524384915d281cfc6b455296c89216896ed091fb6e5fb",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.compute.stirling_first": {
+      "input_schema": "sha256:3e7574bec1081f0ce6c524384915d281cfc6b455296c89216896ed091fb6e5fb",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.compute.stirling_second": {
+      "input_schema": "sha256:3e7574bec1081f0ce6c524384915d281cfc6b455296c89216896ed091fb6e5fb",
+      "output_schema": "sha256:8fc351368b45bfb6d2fc5d710a52d94c114df1270c6de4a4d777244558e6bf43"
+    },
+    "combinatorics.cyclic_difference_set.extension.decide": {
+      "input_schema": "sha256:8124611617ad72bfc7cc562342e6d53710204c37578a72961b581cf21371ba42",
+      "output_schema": "sha256:ee605a9c59dab292119148b78e032c235cae224ebc3591a2215acc2ab222928e"
+    },
+    "combinatorics.cyclic_difference_set.perfect.decide": {
+      "input_schema": "sha256:497816c928b42d07ef474319478c4c88c2a88218dbfe2724e30eadf6a8943324",
+      "output_schema": "sha256:e518e28a28450367564ff079c8009a11873c4d64a2586c531a6e11c4e22961fd"
+    },
+    "combinatorics.enumerate.integer_partitions": {
+      "input_schema": "sha256:3fc722c560db4f494d799b10d17a43a15a3e5170c92554009c0d69b8bf961c66",
+      "output_schema": "sha256:80d6c16a8e67ab6a63e4ba434d6980f4a56f7c787bac53a8751159dd8d88df82"
+    },
+    "combinatorics.generating_function.coefficients.compute": {
+      "input_schema": "sha256:8772b24c32bedea9a382758e2538de463362830a494b9bbefba6dab64f1ed34f",
+      "output_schema": "sha256:8c7fcd8984beb56307a91bb9e7068b34856f097280b8a2d9d51f3c79f859dc9d"
+    },
+    "combinatorics.integer_set.sidon.decide": {
+      "input_schema": "sha256:892525fd272560090e34f7babb2cd9b5fd477acd714dd3cecfbc4212a88ac225",
+      "output_schema": "sha256:03dd1f3fd2c5d21d50ec9d815d3f5f254066a92111d864bc88ef5646e0222a14"
+    },
+    "combinatorics.recurrence.linear.evaluate": {
+      "input_schema": "sha256:aa0c112bc3c99aecd7881933223352b4969d99ad3b3bfd71cc8c773509405e3c",
+      "output_schema": "sha256:043a742a3be82ac62dee396df8ba508653025bd700b3c2bbca3eaf41b3586305"
+    },
+    "combinatorics.recurrence.p_recursive.evaluate": {
+      "input_schema": "sha256:684751e31bc508190f1598668a2b846e991251b1897629b110194516b5188cf6",
+      "output_schema": "sha256:c07e78f3b82bb85d7b85a4f2efaefb61e097a4d2092b385bf0a6685898105b27"
+    },
+    "combinatorics.recurrence.p_recursive.table_residuals.compute": {
+      "input_schema": "sha256:b6b9e07b511abd2b9713e716048ad0b19036e12e1eb8b9946f70b3b8d248e1d0",
+      "output_schema": "sha256:49b096a5536634ff98c1544aea60dd748d4d186374274cf90e9e917e2f602624"
+    },
+    "combinatorics.set_function.evaluate": {
+      "input_schema": "sha256:ad93f357dfd7b186236b81610ee81da7658a2c1115d0340d9f0535bffb3f7c43",
+      "output_schema": "sha256:88b6339715fe561de02ace2369948a1e3af2fe9b2930bb987b758b9175e9789a"
+    },
+    "combinatorics.set_function.monotonicity": {
+      "input_schema": "sha256:3cd7f30f3b0c1473d059140d7f848afb8ca14fe748d70859094d17df8d63a822",
+      "output_schema": "sha256:2141e109c90d749b93f70f3f552119b22f068d08190207a20b8b35fd48a22f19"
+    },
+    "combinatorics.set_function.submodularity": {
+      "input_schema": "sha256:22754dbe168296d6e6e0d5dd6359079873209a397de4d3bd6e51db14f265f806",
+      "output_schema": "sha256:89e59456f49d01b61d8629fde714f6818db8e0eeb338e7a762ed638e30950272"
+    },
+    "convex.max_affine.evaluate": {
+      "input_schema": "sha256:f23a9850b08779f60b74d9b30b5bc07840ae2dae95b95fce130df4f4af06d306",
+      "output_schema": "sha256:8e32ca72319da537adcc669e039783895734f1343f72a1c8edfce7ae3ae0a658"
+    },
+    "convex.max_affine.subdifferential": {
+      "input_schema": "sha256:93e2f363ed4f25f0483b99ee796101f5a8545fdbeaae764d1da9bac739c95675",
+      "output_schema": "sha256:c03266ff0970b09dc6368730fedab88f02cd33f762b2b1d9ac35a4026d5a0256"
+    },
+    "discrepancy.theory.eval.compute": {
+      "input_schema": "sha256:e47d0ef803e121163a71578e0b3033921d572bf86f45f644e30573c3b920fab6",
+      "output_schema": "sha256:d1dcd725fd5d5db850ead660a13140d3dc6da6635210e76c30068f9e9929619b"
+    },
+    "discrepancy.theory.optimum.compute": {
+      "input_schema": "sha256:8ae7dad21581c69dc3c14a0e890365a00579b11c0cee1d08b255ada0201e7bbd",
+      "output_schema": "sha256:2aa9830a8fcb7554a1242bbe80a70320d93998ad56eab19698a7e03815e1368f"
+    },
+    "finite_abelian_group.exact_factorization.compute": {
+      "input_schema": "sha256:1c1af27397f6e871b042146827f184be128cfe6c824877fa796ad191826ffed9",
+      "output_schema": "sha256:b5fedde2179445bed43a1bd76b1a295befe124648fbeab54e3fe79dab77a8042"
+    },
+    "finite_field.direction_rank_ledger.compute": {
+      "input_schema": "sha256:6eb4f83793ead764f6f5bdd364974cdaec9eea76840f21b62bdd0559c57bcccd",
+      "output_schema": "sha256:01889f88e81e9f5d32fa52345e2acbca438f54e1c8a28f67f550876ae5edc31e"
+    },
+    "finite_field.linear_map.rank.compute": {
+      "input_schema": "sha256:f39a508f1e0d3d3a0a85fb84dbed84ab48c1284f474522412be3aa38bf4ff7a8",
+      "output_schema": "sha256:e333d3f24b2308e00ad9a849795ea40c790ccacad1775af07925af6c9752bad7"
+    },
+    "finite_field.orbit_distribution.compute": {
+      "input_schema": "sha256:ca08c47d92383cd6579d2c6bd07571089c9e110c53d573eef6b8ceb08cfcc122",
+      "output_schema": "sha256:4e92e82d08ce90817f1e0196754c70aa6b5d501d08c2e22c39dbf3ab960678d3"
+    },
+    "finite_field.polynomial_map.collision.analyze": {
+      "input_schema": "sha256:2f858ef26417b7f02fd18ee488fa7c1cae7703d50ae7e906b28cad8d7fb94737",
+      "output_schema": "sha256:8ad30b8d57b80a897edaa401a7b225cb2db1a26943b87486f45c334a24b21640"
+    },
+    "finite_field.polynomial_map.fibers.compute": {
+      "input_schema": "sha256:033efe4512d7178569ecb0bab27ab948befc66d2a19372f685bddfc80b5bd9a8",
+      "output_schema": "sha256:4a12a8bb02b76f05162d230c6cc95d0f38794cdf584a0dfdb7e9a81614585370"
+    },
+    "finite_field.polynomial_map.permutation.analyze": {
+      "input_schema": "sha256:0615809d32c57d5bfc5832658f65b548c1428672e6bfb67ed61c75024900d122",
+      "output_schema": "sha256:86e5cd15e96187ff8159158198a91ff995d4754865215b79ba2e7a2b4fab830a"
+    },
+    "finite_field.polynomial_map.table.compute": {
+      "input_schema": "sha256:882cce56683bddea0385405f3613aa7c5e62df57db51a8cdb148db9c75453e8b",
+      "output_schema": "sha256:1e1a374994bb271f568c5cd5217d517466a1aef5886c842150c07e204b12fabf"
+    },
+    "finite_field.projective_line.enumerate": {
+      "input_schema": "sha256:3f31431b53b4d9f92467f04af1e655cf49ed0cbff9b8ddc1e1607ff07f555c8b",
+      "output_schema": "sha256:997f08ad5bc222859c14971395991edce6b7a65cdf52a92d2577b8624a09cb0e"
+    },
+    "finite_field.restrict_scalars.compute": {
+      "input_schema": "sha256:2dbad77efb7ee53d2cf98806e189a39d86856991da80b4ea8ca41b3fa6f211d9",
+      "output_schema": "sha256:18523da86fff458448324235fe835b7923b5ef26c322f75e6c622591c4fcd27c"
+    },
+    "finite_set.compute.difference": {
+      "input_schema": "sha256:9745c3bffa8689d764670ceaade96864be89130c244c8ef1b8a43f662359f119",
+      "output_schema": "sha256:41a60ca687916b4ab94b622fdfb3d34e1986b41d0f59babbb2e591baa7603b6c"
+    },
+    "finite_set.compute.intersection": {
+      "input_schema": "sha256:9745c3bffa8689d764670ceaade96864be89130c244c8ef1b8a43f662359f119",
+      "output_schema": "sha256:41a60ca687916b4ab94b622fdfb3d34e1986b41d0f59babbb2e591baa7603b6c"
+    },
+    "finite_set.compute.intersection_cardinality": {
+      "input_schema": "sha256:9745c3bffa8689d764670ceaade96864be89130c244c8ef1b8a43f662359f119",
+      "output_schema": "sha256:f268bd791362701ef9d288ae99e0e189428a8cd05a6637e3a6645bd8e9efd4d9"
+    },
+    "finite_set.compute.left_cardinality": {
+      "input_schema": "sha256:9745c3bffa8689d764670ceaade96864be89130c244c8ef1b8a43f662359f119",
+      "output_schema": "sha256:f268bd791362701ef9d288ae99e0e189428a8cd05a6637e3a6645bd8e9efd4d9"
+    },
+    "finite_set.compute.symmetric_difference": {
+      "input_schema": "sha256:9745c3bffa8689d764670ceaade96864be89130c244c8ef1b8a43f662359f119",
+      "output_schema": "sha256:41a60ca687916b4ab94b622fdfb3d34e1986b41d0f59babbb2e591baa7603b6c"
+    },
+    "finite_set.compute.union": {
+      "input_schema": "sha256:9745c3bffa8689d764670ceaade96864be89130c244c8ef1b8a43f662359f119",
+      "output_schema": "sha256:41a60ca687916b4ab94b622fdfb3d34e1986b41d0f59babbb2e591baa7603b6c"
+    },
+    "finite_set.compute.union_cardinality": {
+      "input_schema": "sha256:9745c3bffa8689d764670ceaade96864be89130c244c8ef1b8a43f662359f119",
+      "output_schema": "sha256:f268bd791362701ef9d288ae99e0e189428a8cd05a6637e3a6645bd8e9efd4d9"
+    },
+    "finite_set.decide.disjoint": {
+      "input_schema": "sha256:9745c3bffa8689d764670ceaade96864be89130c244c8ef1b8a43f662359f119",
+      "output_schema": "sha256:d836790634dd9212fe789505b184a675096c30a651778e8efd237bf4aaabdb6d"
+    },
+    "finite_set.decide.exact_cover": {
+      "input_schema": "sha256:0772a4cc00f2517a33cc8efa32d1687b571852b6b28fc19e98571cbb1b92cfb7",
+      "output_schema": "sha256:1ec25ae8cf79a2bdb8b1f06eadc559ca90eac6471a406bfd85a53e0bb33b0860"
+    },
+    "finite_set.decide.proper_subset": {
+      "input_schema": "sha256:9745c3bffa8689d764670ceaade96864be89130c244c8ef1b8a43f662359f119",
+      "output_schema": "sha256:d836790634dd9212fe789505b184a675096c30a651778e8efd237bf4aaabdb6d"
+    },
+    "finite_set.decide.subset": {
+      "input_schema": "sha256:9745c3bffa8689d764670ceaade96864be89130c244c8ef1b8a43f662359f119",
+      "output_schema": "sha256:d836790634dd9212fe789505b184a675096c30a651778e8efd237bf4aaabdb6d"
+    },
+    "formal_series.rational.add.compute": {
+      "input_schema": "sha256:c041b2c46a2add291bfe84999791a242a5f8e77f89c315712edc981d4ff02125",
+      "output_schema": "sha256:ec75fc96932ca677d21e77c3ff3d19afe9d96060cfb95d034cff0964c7e114bd"
+    },
+    "formal_series.rational.compose.compute": {
+      "input_schema": "sha256:abab285ba2faa3d23d117cca4df49af062295bec07727b71a77d5b3616113b5b",
+      "output_schema": "sha256:255e5149493dd93a0c308e03ddffaa4e57a3bc76159f90f49ec338210a2d813a"
+    },
+    "formal_series.rational.derivative.compute": {
+      "input_schema": "sha256:1b80c04fc65eb310ad88f6c1f44ff3e202181716632eea8f62ca4aa3f3162b23",
+      "output_schema": "sha256:92525f5a37918f2976925b84f86f86040ad77fc9fcaa2b17bce3c97206b46d80"
+    },
+    "formal_series.rational.divide.compute": {
+      "input_schema": "sha256:f9aaa8ffb18d5fa02fb93d1f5f829edf894aca37b95dd115e98f0e7933f5641f",
+      "output_schema": "sha256:b334c73d0d44d9fd94ab4f1c94410becbe0c842447b7dd3343a5dac987aa1abd"
+    },
+    "formal_series.rational.from_polynomial.compute": {
+      "input_schema": "sha256:0bbd7f1dfb4b57fe3cf43bb2890f96babf1f747db291f9353705da8de2833dd7",
+      "output_schema": "sha256:be303a71f9e0d616fbb5e7d7e4d93a81216ea3ae45a933c2e2bb713b3de642ca"
+    },
+    "formal_series.rational.identity.check": {
+      "input_schema": "sha256:b98fc9a4a08d21e34faeff550be4b4a7ce77d03402469d0d7d4a7455f72a343f",
+      "output_schema": "sha256:e1dc3dbe1810cb43a8a803d6b99e2707ba2f57e9d38b80836dc13459a83a679b"
+    },
+    "formal_series.rational.integral_zero_constant.compute": {
+      "input_schema": "sha256:dfbca98a3fcac644668de6da770aa823b1ebf522840656d3bdd8154030f80716",
+      "output_schema": "sha256:7616c0f30e6c4443bb78e203392699ef3afa1b41384bcf6a3608550f6dc436b0"
+    },
+    "formal_series.rational.inverse.compute": {
+      "input_schema": "sha256:031ca29392e9567a541d70b14759ec736d575bbd0d8c73c538120bc065c666a7",
+      "output_schema": "sha256:976dd408dddc0503cebb1b97ef2b33ec4c9ab38781e32b1a85fcc91b4d8beaf9"
+    },
+    "formal_series.rational.multiply.compute": {
+      "input_schema": "sha256:c041b2c46a2add291bfe84999791a242a5f8e77f89c315712edc981d4ff02125",
+      "output_schema": "sha256:db5562cad7a9fba1c54b08f9465e89e125a667c5f6e46891d36409e62d88e9e0"
+    },
+    "formal_series.rational.power.compute": {
+      "input_schema": "sha256:70fa02290d5643e839ed18cd698906f5bdb0c53fd55e9f1b8313ff56edbf6e73",
+      "output_schema": "sha256:371fb21417f20b8127defa6090654254264243b964b84a9460cf426c7b26ca3b"
+    },
+    "formal_series.rational.reversion.compute": {
+      "input_schema": "sha256:202657e86345b3d795db45c9fffe94c46b9906bb366324624b8226bde095efd3",
+      "output_schema": "sha256:aee79d380ed29b04d5a56ec0d02842a03bf904f3593e0523cebc0c62b096e7b8"
+    },
+    "formal_series.rational.scalar_multiply.compute": {
+      "input_schema": "sha256:e13f57589ba86cb5aafa847e97eb1e4b25a5a92cab2cb063fdbe875f67062499",
+      "output_schema": "sha256:ad5a11cdca6a064ebbf8fff6dd68ec7c044a7eb837b1d4ffff213cc7285b01f1"
+    },
+    "formal_series.rational.subtract.compute": {
+      "input_schema": "sha256:c041b2c46a2add291bfe84999791a242a5f8e77f89c315712edc981d4ff02125",
+      "output_schema": "sha256:ec75fc96932ca677d21e77c3ff3d19afe9d96060cfb95d034cff0964c7e114bd"
+    },
+    "formal_series.rational.to_polynomial.compute": {
+      "input_schema": "sha256:1b80c04fc65eb310ad88f6c1f44ff3e202181716632eea8f62ca4aa3f3162b23",
+      "output_schema": "sha256:084dd380fc18d365e9c57e01f1357407957e3ecbdf379ef9de1089cda84d9ba3"
+    },
+    "formal_series.rational.truncate.compute": {
+      "input_schema": "sha256:bc7dcfe7176d471f8517297a8b4668a9aa1da2b878734baeb582b416ae8d9bff",
+      "output_schema": "sha256:f4e431dd60ee3d88d100f0e178b4f638955403da360bc104261319b6e0aeb302"
+    },
+    "game_theory.best_response.compute": {
+      "input_schema": "sha256:fd3bbd5d7284ea00acb0389777e444d5b79922dcd6ca059c21c857431896a543",
+      "output_schema": "sha256:371091e4c2b3a8957198261b5f765a91152b90d60aee678d211f5d5a1af7b225"
+    },
+    "game_theory.nash_equilibrium.compute": {
+      "input_schema": "sha256:fd3bbd5d7284ea00acb0389777e444d5b79922dcd6ca059c21c857431896a543",
+      "output_schema": "sha256:264894a7ff1a21d6c14adcf41f2b343966abef50baf694098701c18fd13f3964"
+    },
+    "geometry.euclidean.angle_equality.compute": {
+      "input_schema": "sha256:f705b684ce3c2891516f33503c54bfce7356ea2a2b949e7d493aa1f9b9cd9fcd",
+      "output_schema": "sha256:b41bea8d1e4730b0c9dda08a9c32d44502c1da9d704fda55cb35b4a3c4df5de3"
+    },
+    "geometry.euclidean.segment_ratio.compute": {
+      "input_schema": "sha256:ba372f03811652b7e0a24e5d81c6206c278ddd24ae212d80552f3878197cee2a",
+      "output_schema": "sha256:b39f21c72751f0034c92fe256d13cf8b87fd4a8dd0762d0a7cc08ff477207663"
+    },
+    "geometry.euclidean.triangle_similarity.compute": {
+      "input_schema": "sha256:1a38b95d9850c90039acec50d76957a375a9e0cd4c92931d7ea1c316dd0b51bc",
+      "output_schema": "sha256:5240835db1ff8663ee31ae419618c68568b72d38d673480f3675ac8c001fa207"
+    },
+    "geometry.line.compute.projection": {
+      "input_schema": "sha256:70d1480f80c09d282e464d7a25c543dd95cb19630357c45a27060e109354aeb0",
+      "output_schema": "sha256:9a15f3317003100317c0b30297f52154cf6f7ece5f462505dee1030622a160ed"
+    },
+    "geometry.lines.compute.intersection": {
+      "input_schema": "sha256:e179192327e972ee7047e763ed3bc0124ff8c1927c7ac6feb3d17d308a3761ec",
+      "output_schema": "sha256:028340656334aeb696d35a69846d5f4ea6bb8b7a6c85e768bc885e577b799ef7"
+    },
+    "geometry.lines.decide.parallel": {
+      "input_schema": "sha256:e179192327e972ee7047e763ed3bc0124ff8c1927c7ac6feb3d17d308a3761ec",
+      "output_schema": "sha256:f776f55ff7544b6ff967c88d80020117a1b82a6b43f3c9d6192b3906e8e88563"
+    },
+    "geometry.lines.decide.perpendicular": {
+      "input_schema": "sha256:e179192327e972ee7047e763ed3bc0124ff8c1927c7ac6feb3d17d308a3761ec",
+      "output_schema": "sha256:f776f55ff7544b6ff967c88d80020117a1b82a6b43f3c9d6192b3906e8e88563"
+    },
+    "geometry.points.compute.convex_hull": {
+      "input_schema": "sha256:2572637f3e87de323cdc8a65a88a220e39d32288cf8746d785fb70c02efa798e",
+      "output_schema": "sha256:ec885e964dc93a92bdcfd0ef848f376dbe5de5828bb485f70eac7c02bd1738eb"
+    },
+    "geometry.points.compute.squared_distance": {
+      "input_schema": "sha256:1a9e4bce10b64c189c609e8b8836d8b2a966a53cb195e60c5f69ee269dc49161",
+      "output_schema": "sha256:8969fa8dfb7d682eb74b2560add54d38a8099a9c8c50d6e1dde6311ffc32dafe"
+    },
+    "geometry.points.decide.collinear": {
+      "input_schema": "sha256:86c2117c4f80a1b01fd344bb2734c92a84e350094a30128fd77bba5eeb066a35",
+      "output_schema": "sha256:f776f55ff7544b6ff967c88d80020117a1b82a6b43f3c9d6192b3906e8e88563"
+    },
+    "geometry.points.decide.concyclic": {
+      "input_schema": "sha256:64ebc199233c72a885b4622c9f3ebdcf0645cc6f4514abd9066ce9e9433f3de2",
+      "output_schema": "sha256:f776f55ff7544b6ff967c88d80020117a1b82a6b43f3c9d6192b3906e8e88563"
+    },
+    "geometry.points.distance_graph.compute": {
+      "input_schema": "sha256:2ffb22f2af5980b0259a10e822231dd2197bdf3bc0e49909be85367956697ddd",
+      "output_schema": "sha256:535dc67256af46a10df20fd0bda7cb05a8e94a28c3b8dfda67ae2d95920ea4bc"
+    },
+    "geometry.points.distance_profile.compute": {
+      "input_schema": "sha256:117bcbc0e4f71f9de2b9aea56663a39e12768989c06de0787fa62595ed509bd1",
+      "output_schema": "sha256:d8a4df6a9568602f7a2d9cf6bc37d214f7275d5ede79aeb5e2039fad119f6d92"
+    },
+    "geometry.polygon.compute.signed_area": {
+      "input_schema": "sha256:1ab9aa20c920f053d7e6eadfb3ec046c68b6c219b445a85fdeb52c6177d45914",
+      "output_schema": "sha256:8969fa8dfb7d682eb74b2560add54d38a8099a9c8c50d6e1dde6311ffc32dafe"
+    },
+    "geometry.polygon.point.classify": {
+      "input_schema": "sha256:07944f2474a7a67fef25466c1ef09bc0c403d6f0e4619cfd697289fd758a115c",
+      "output_schema": "sha256:021f8a5e68c62b28450de8cc98eac573cb06efdc8ce10058059e8412dda21277"
+    },
+    "geometry.polygon.simple.decide": {
+      "input_schema": "sha256:1ab9aa20c920f053d7e6eadfb3ec046c68b6c219b445a85fdeb52c6177d45914",
+      "output_schema": "sha256:2f080ec6283549befe3e6c72e6d4d8c093942b1b870bade3e29f52f2557e82ff"
+    },
+    "geometry.polygon.triangulation.minimum_weight.compute": {
+      "input_schema": "sha256:d37c7c6bbc7429212b78543e687ada81efe3e2496fea900f09e38fdc67a1d830",
+      "output_schema": "sha256:62c97ee8215df614e9fee5ea15efa3eef2d85582f5287ce25867755f8773680a"
+    },
+    "geometry.projective_line_arrangement.flats.compute": {
+      "input_schema": "sha256:cf2ec0f2421332928278558e4856a6db56baff84f36636c78ef193f7d2608c40",
+      "output_schema": "sha256:6bcf920842a872618a1d1741c0fb8fb7c224d1b4ef6a32b7acb553ebd8663cd5"
+    },
+    "geometry.segment.compute.midpoint": {
+      "input_schema": "sha256:1a9e4bce10b64c189c609e8b8836d8b2a966a53cb195e60c5f69ee269dc49161",
+      "output_schema": "sha256:9a15f3317003100317c0b30297f52154cf6f7ece5f462505dee1030622a160ed"
+    },
+    "geometry.segments.intersection.compute": {
+      "input_schema": "sha256:aaf77f3aa871f1c0ef3dfe2fbd675b847fa2e7f4cecca06fe8a56052a45dfced",
+      "output_schema": "sha256:f40d55397dd95d1e5f7a2294d659197564c7a635c4c576c780143c9912d2ae9e"
+    },
+    "geometry.triangle.compute.centroid": {
+      "input_schema": "sha256:86c2117c4f80a1b01fd344bb2734c92a84e350094a30128fd77bba5eeb066a35",
+      "output_schema": "sha256:9a15f3317003100317c0b30297f52154cf6f7ece5f462505dee1030622a160ed"
+    },
+    "geometry.triangle.compute.circumcircle": {
+      "input_schema": "sha256:86c2117c4f80a1b01fd344bb2734c92a84e350094a30128fd77bba5eeb066a35",
+      "output_schema": "sha256:551047239e4820a438b341c5f5b19777508e6486b139c6e93e83b0fa8322e5c0"
+    },
+    "geometry.triangle.compute.orientation": {
+      "input_schema": "sha256:86c2117c4f80a1b01fd344bb2734c92a84e350094a30128fd77bba5eeb066a35",
+      "output_schema": "sha256:510c4332c0924c548e8fa0e60c64b9258bb66e47121a5a78473144750f4f2854"
+    },
+    "graph.coloring.k_colorability.decide": {
+      "input_schema": "sha256:0046a0d3920b79f0849d444d74edcb68e73b4a3efee3f679372e22e5abd0f2c9",
+      "output_schema": "sha256:818097102f36a887171bb0bc850a12e894f8b46df20f559777ee721f19a929eb"
+    },
+    "graph.cut.minimum_st.compute": {
+      "input_schema": "sha256:dd40f3a37c1098d8caeb05b125bb7f7684b44e5e3b5a8dffc1d9a09119196261",
+      "output_schema": "sha256:137a06454af2fdfb0bed4d877d654c7f595872855a29b28c96ad88e3f7ffbb41"
+    },
+    "graph.decomposition.biconnected_components.compute": {
+      "input_schema": "sha256:a7c5175887ce4edd92937d761687ef0e05f9dcc462c2d620446935b21da8e381",
+      "output_schema": "sha256:d1d506af23bb5d0bb71e3c1071bccb91dd7f2d70cbce7759d5aaa5b4bad3b316"
+    },
+    "graph.decomposition.block_cut_tree.compute": {
+      "input_schema": "sha256:27a7335ae9ac8782622965224ac0aabc686133cc7f8e05a59b29bab053402117",
+      "output_schema": "sha256:6e5a8669c8a64ada958aa2d61c6d24db6923785d3decfc795996dff8d166e880"
+    },
+    "graph.decomposition.bridge_block_tree.compute": {
+      "input_schema": "sha256:96055b7cdfde6fcc447a165910997ac0de60b4fb77f9165918dc721aded7355b",
+      "output_schema": "sha256:4eee3eb025494663101e327847de92a66c12e101861e6be94297ca6e9d24d6bc"
+    },
+    "graph.decomposition.ear.compute": {
+      "input_schema": "sha256:b425e4e73b44bd3f707d8db0bd182f753fa32a43880e4db1ac28c4407fc307c9",
+      "output_schema": "sha256:dc68cb84ee3236c64690518d1c510ecf7b3ed9706a87cd7feb061b7ba436c082"
+    },
+    "graph.directed.acyclic_order.compute": {
+      "input_schema": "sha256:ece85da59c8888721f935e5f32fca966479fdc4f078c4a10315ae0e75a6cf3db",
+      "output_schema": "sha256:f46effff784865e70d3ac60996f1ac3f698527be574cb434a06e9021e0fe8130"
+    },
+    "graph.directed.condensation.compute": {
+      "input_schema": "sha256:67e8039597e79f8b4396b35999840ea09fe041f9938394eba1a26474b76d44d0",
+      "output_schema": "sha256:9f381f4327cc8b3f1814ac2a2ba9773ce77a80c38b10e7f9b514b495d3f346da"
+    },
+    "graph.directed.reachability.compute": {
+      "input_schema": "sha256:ab7adbcf4e197c893eb6221547376ba3b9bc29dd3383418d397e23d7ce2d3dfd",
+      "output_schema": "sha256:75a7f85ff5ed281316282d1238f8810aae8f08980a883e1dee4d79e290d3ab45"
+    },
+    "graph.directed.scc.compute": {
+      "input_schema": "sha256:7aea4a75001b1066e59ec39bbf5f6f149bdb2c96032af9f80a752cf945df7dc3",
+      "output_schema": "sha256:c0682679440a1da0d381710c94041b9d700bf136af95d2bf356de62b897ea9eb"
+    },
+    "graph.distance_matrix.compute": {
+      "input_schema": "sha256:9e0287b0e71d3c1894e4231f80122cb09cd2b47de2b22f2709d3046dcc5d1882",
+      "output_schema": "sha256:6546ad7d98bc8d60eaeede9886ace10320cc32ffb1e1bc55d946844544cafe5f"
+    },
+    "graph.domination.minimum.compute": {
+      "input_schema": "sha256:c5325fe91eaf07a82ed42666b0691144b4db1d369a1dfca9a42b73f190c88919",
+      "output_schema": "sha256:385c7ddbd66fa05639e2d3bbf1ba8889da094f4f5fbb731492a94ae5a58d8520"
+    },
+    "graph.encoding.graph6.decode.compute": {
+      "input_schema": "sha256:6dff0bbecc2a02144028da6347e4fe5fab1b59e0c232453d0a261ce90270812b",
+      "output_schema": "sha256:94e63b655b1ec052314e6814f5b13a68a00090232cebd73c3c3ae1d47910c92d"
+    },
+    "graph.flow.maximum.compute": {
+      "input_schema": "sha256:4a6128efd404e096a691ce3c1af7a9adf0c3475625747efa7ba478121c6d1ebf",
+      "output_schema": "sha256:def7df849164a3ce343ff596cb7265c2a69c9b123bc239ea6bed3e84bf51bc0f"
+    },
+    "graph.hamiltonian_path.decide": {
+      "input_schema": "sha256:52d0fca020b4be0046bed814ae30c49d4ca3b0168f254c41d376be5b5fd9b15e",
+      "output_schema": "sha256:cb028323cbeeb97f15a293d1046aaca35a1fa063cd22c20e0f7383740ca5262f"
+    },
+    "graph.independent_set.maximal.decide": {
+      "input_schema": "sha256:e088f79bec7582eeb573f90a4871bff9717be34f173e067590bd4b9c459dd8b4",
+      "output_schema": "sha256:ad2765313367b7aa708e2f34b2ea97206c01343af416696fa94852479917f9eb"
+    },
+    "graph.independent_set.maximum.compute": {
+      "input_schema": "sha256:7ec4e127468e32f18976f395d7fd14b3ede3fdc2a84917d3df3a467f7bd5b6eb",
+      "output_schema": "sha256:6535485bc70338ab9281a115fcbdd1de99fb489ef0953c5f36d24b37ab14dde4"
+    },
+    "graph.induced_bipartite.maximum.compute": {
+      "input_schema": "sha256:c5325fe91eaf07a82ed42666b0691144b4db1d369a1dfca9a42b73f190c88919",
+      "output_schema": "sha256:11c828c2b39eb3753fc9833b44a70a627a56b5dd9f340e2fd81ece853ff98dd6"
+    },
+    "graph.induced_forest.maximum.compute": {
+      "input_schema": "sha256:c5325fe91eaf07a82ed42666b0691144b4db1d369a1dfca9a42b73f190c88919",
+      "output_schema": "sha256:1fac8ffd2e1fc4fbc22e312eb3074cb50fb7c5c997b9e2bf53c7f6334083084c"
+    },
+    "graph.induced_tree.maximum.compute": {
+      "input_schema": "sha256:c5325fe91eaf07a82ed42666b0691144b4db1d369a1dfca9a42b73f190c88919",
+      "output_schema": "sha256:587db12c617a12f32d9dcdb6dfe121ebc757d17d087d90f33e57e6564826ab16"
+    },
+    "graph.invariant.chromatic_number.compute": {
+      "input_schema": "sha256:6998ca5050da48745589a1c7287589b7e3602dbc16ea58f2d675b5d47a5f03ba",
+      "output_schema": "sha256:fc53208b4b1c06c90b893c8b86aa2f41aa10796330ea62c8d5d1369845f705b8"
+    },
+    "graph.invariant.clique_number.compute": {
+      "input_schema": "sha256:c5325fe91eaf07a82ed42666b0691144b4db1d369a1dfca9a42b73f190c88919",
+      "output_schema": "sha256:556e7e127df9bd1b83a104d2b1cc12752f70adb1b833ea0e33caf8ba0d46b3b8"
+    },
+    "graph.invariant.diameter.compute": {
+      "input_schema": "sha256:d5de5011056f52711aa6f2c174e754be9419815b7d714f762153223351cd0839",
+      "output_schema": "sha256:8551834c54aa880b067159f95cecf684654061028209039707619b84eceb5e0d"
+    },
+    "graph.invariant.edge_connectivity.compute": {
+      "input_schema": "sha256:d5de5011056f52711aa6f2c174e754be9419815b7d714f762153223351cd0839",
+      "output_schema": "sha256:7df524d362e55608becff619c3ef5b9e9a938d4acdfd6de2968f6afb419696e8"
+    },
+    "graph.invariant.girth.compute": {
+      "input_schema": "sha256:d5de5011056f52711aa6f2c174e754be9419815b7d714f762153223351cd0839",
+      "output_schema": "sha256:3c0d7f14bf10ef29ec1d63a4848180b27303e0e6bc363b2cc836d7655ef8fb36"
+    },
+    "graph.invariant.independence_number.compute": {
+      "input_schema": "sha256:603172aabce24fffcbd5ebcb736e236404037d245e8bc842f07fc201536bb5fe",
+      "output_schema": "sha256:f11b0e7bd83d8c62d487cd62c5b0713b42d15a71ab3d0b6e442256659e295bd5"
+    },
+    "graph.invariant.is_eulerian.compute": {
+      "input_schema": "sha256:d5de5011056f52711aa6f2c174e754be9419815b7d714f762153223351cd0839",
+      "output_schema": "sha256:9ebf8dbac3e5893086fc8cae6889716499148a798ccb13976894c39c37651b58"
+    },
+    "graph.invariant.maximum_matching.compute": {
+      "input_schema": "sha256:d561156e5ec32f386b4c98f0ac278850677d2937109328d6d5c6b342e6cb79da",
+      "output_schema": "sha256:5cc06dba0ef5aaf632e260c05db0fc6bbb8b56653c77b2e4ebc1ff3eb13640cc"
+    },
+    "graph.invariant.radius.compute": {
+      "input_schema": "sha256:d5de5011056f52711aa6f2c174e754be9419815b7d714f762153223351cd0839",
+      "output_schema": "sha256:f33eec2d3bd64c29f47d51d4eb6ccdb4080600589ce5ad70867489874c284cb3"
+    },
+    "graph.invariant.spanning_tree_count.compute": {
+      "input_schema": "sha256:d5de5011056f52711aa6f2c174e754be9419815b7d714f762153223351cd0839",
+      "output_schema": "sha256:cd1ff03b14a97063c258221dc8852a59b03b1327c9fdbe535993afe620e08c84"
+    },
+    "graph.invariant.triangle_count.compute": {
+      "input_schema": "sha256:d5de5011056f52711aa6f2c174e754be9419815b7d714f762153223351cd0839",
+      "output_schema": "sha256:1d18b32eb0c6895ea35158c839178c16e8ea0fe61f2dafd86a832223b0364ba4"
+    },
+    "graph.invariant.vertex_connectivity.compute": {
+      "input_schema": "sha256:d5de5011056f52711aa6f2c174e754be9419815b7d714f762153223351cd0839",
+      "output_schema": "sha256:77208093998e3dc52016aacb03d1beffe180054553acb5c5b2531a48f81ba49a"
+    },
+    "graph.isomorphism.decide.compute": {
+      "input_schema": "sha256:313d3a64c5cd6e7238201224e5a0ae1ac1ff9c82ede3133a6c6b5fb89e8fd40c",
+      "output_schema": "sha256:1504471176c0d658519f7a43f465be0ba929fc40f9c19ebd53ed119dbf2e8b66"
+    },
+    "graph.k_core.compute": {
+      "input_schema": "sha256:0b54d65dec3be9d6e6e5793895ed1809de84d2163d6acacad775f86b5d64da12",
+      "output_schema": "sha256:438e31ef5edc071cdade852520ebb140e8ede3d08626a50750fe7d586109a433"
+    },
+    "graph.matching.maximal.minimum.compute": {
+      "input_schema": "sha256:c5325fe91eaf07a82ed42666b0691144b4db1d369a1dfca9a42b73f190c88919",
+      "output_schema": "sha256:ddec0da6730145fbe5c0071fa9a253d479968ffe23490cab069a6561dbe513ff"
+    },
+    "graph.menger.edge_disjoint.compute": {
+      "input_schema": "sha256:77fa35c569fe4c919977e206c7ee844e9bb6e750d5bd0f7e9e1131538bee6b33",
+      "output_schema": "sha256:19e79c156e2d9e817707751bf1d62345bb1ea5fb24b2a20af2e346dfb6b17cff"
+    },
+    "graph.polynomial.chromatic.compute": {
+      "input_schema": "sha256:49a6e8ab1943a47b36ac70014d3bbbe27a7a8e644b512d866a49b01a426523f3",
+      "output_schema": "sha256:20679c5cc5d1aade8396de44af8767150e012aab464b7a5e9ca7dc921e3f9fe6"
+    },
+    "graph.polynomial.flow.compute": {
+      "input_schema": "sha256:49a6e8ab1943a47b36ac70014d3bbbe27a7a8e644b512d866a49b01a426523f3",
+      "output_schema": "sha256:20679c5cc5d1aade8396de44af8767150e012aab464b7a5e9ca7dc921e3f9fe6"
+    },
+    "graph.polynomial.matching.compute": {
+      "input_schema": "sha256:f7364f1ecccdab405daf030037da9883f110872d1c0773ded74112a02254e08c",
+      "output_schema": "sha256:20679c5cc5d1aade8396de44af8767150e012aab464b7a5e9ca7dc921e3f9fe6"
+    },
+    "graph.polynomial.tutte.compute": {
+      "input_schema": "sha256:49a6e8ab1943a47b36ac70014d3bbbe27a7a8e644b512d866a49b01a426523f3",
+      "output_schema": "sha256:20679c5cc5d1aade8396de44af8767150e012aab464b7a5e9ca7dc921e3f9fe6"
+    },
+    "graph.realization.check.compute": {
+      "input_schema": "sha256:3766ae7e6a99e94254cdf1067f85bd971e5927f976f789a5aaae9f9d429b2026",
+      "output_schema": "sha256:1b6de8cf2d8284426726a9a0ac5c538fc82e5ddc00091cc59dedd0bff84c17ac"
+    },
+    "graph.realization.construct.compute": {
+      "input_schema": "sha256:6780b4c89db880feeb962908185f221bdf35d52b4865b80a1f436e0a452af5c7",
+      "output_schema": "sha256:6ba8a9c51dc83db20ab72ee2a1bdb9b10dddc98b81f21994f3b9737f0f4badb8"
+    },
+    "graph.realization.is_graphical.compute": {
+      "input_schema": "sha256:11e7d5e882b5fb06b920aa6e1c50cb93bb67c35105d118330c31de56f7c7abb1",
+      "output_schema": "sha256:d6bf6961ac612e71cbd851b6aa529e79f82e665bf56b199b16b4a211aca74e62"
+    },
+    "graph.spanning_tree.minimum.compute": {
+      "input_schema": "sha256:3116e8ef1855a1d335284a7a9ec593bd72e809b321e9b7b16a8f93e64971b9d0",
+      "output_schema": "sha256:c353081da500337c7ef25f6288fe25e0ac8a4c9c8f997d191ef239a37e5c0f02"
+    },
+    "graph.spectrum.adjacency.compute": {
+      "input_schema": "sha256:9c6739bf35a3bdb397b21a51e8f7b12310628617bb0372402961d8f85d9aed1b",
+      "output_schema": "sha256:2d4f1cc87a4af9434f5c2f4d4733cd3bd2c453aed62c487f4c3829e3c7d09f10"
+    },
+    "graph.spectrum.laplacian.compute": {
+      "input_schema": "sha256:9c6739bf35a3bdb397b21a51e8f7b12310628617bb0372402961d8f85d9aed1b",
+      "output_schema": "sha256:2d4f1cc87a4af9434f5c2f4d4733cd3bd2c453aed62c487f4c3829e3c7d09f10"
+    },
+    "graph.symmetry.generator_orbits.compute": {
+      "input_schema": "sha256:bd2cceea682c8950634db91dc40c9c61a68faab498f5136ca4bfb6d79582f37a",
+      "output_schema": "sha256:2cdd532a4b56ad6ddfa8a877d2ce569ae0b45a1ba42ca8b8632361a190cbee69"
+    },
+    "group.element_order.compute": {
+      "input_schema": "sha256:e286318c67b90da67d141f6d89e3be60ffa325fee0f23d660b5b1486e09ccdac",
+      "output_schema": "sha256:3ce90e0edcb3ef366263e987af7e16337613818f6337166fca2c4fa9d677c93d"
+    },
+    "group.orbit.compute": {
+      "input_schema": "sha256:95a0cda8191f01d855c44826d0ad6391fe47db04528fd42b92b688b98ec706bf",
+      "output_schema": "sha256:76df0f1b6826fc8c23dd12636bf31aa2c47b7f72e95cab32687c01002f9ff505"
+    },
+    "group.order.compute": {
+      "input_schema": "sha256:dc2d4a2f140cbc0b94121a3a3b3a216abf4df086127bcbf8e6f8249634da8b9e",
+      "output_schema": "sha256:c0fe71c5571de6157ec2d50536d184e7f26cdb9bfbb58770750959aa85c3bc15"
+    },
+    "integer.compute.absolute_value": {
+      "input_schema": "sha256:b729d2dec386fabe5d87e5d70ff66f0abc040950acdcb476add641c48fb5df1e",
+      "output_schema": "sha256:d7060cf7b38a8cbf8cb69370cd46c235d1f9bf6222b3c7387e65ab0fee12d60d"
+    },
+    "integer.compute.aliquot_sum": {
+      "input_schema": "sha256:3d81837ffb8fe813ac90b00aef903c25914397e8a893904d2bb04271f6b84d0f",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.decimal_digit_count": {
+      "input_schema": "sha256:b729d2dec386fabe5d87e5d70ff66f0abc040950acdcb476add641c48fb5df1e",
+      "output_schema": "sha256:d7060cf7b38a8cbf8cb69370cd46c235d1f9bf6222b3c7387e65ab0fee12d60d"
+    },
+    "integer.compute.decimal_digit_sum": {
+      "input_schema": "sha256:b729d2dec386fabe5d87e5d70ff66f0abc040950acdcb476add641c48fb5df1e",
+      "output_schema": "sha256:d7060cf7b38a8cbf8cb69370cd46c235d1f9bf6222b3c7387e65ab0fee12d60d"
+    },
+    "integer.compute.divisor_count": {
+      "input_schema": "sha256:3d81837ffb8fe813ac90b00aef903c25914397e8a893904d2bb04271f6b84d0f",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.divisor_sum": {
+      "input_schema": "sha256:3d81837ffb8fe813ac90b00aef903c25914397e8a893904d2bb04271f6b84d0f",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.divisors": {
+      "input_schema": "sha256:b08022e7c3545e7def0990e53976706a71d100094eeb70018b2bd5665bf32c7b",
+      "output_schema": "sha256:9f3a903eb2fc5e6b458d190e2286cfd8a26a30058ff293551c24db0f0a377b8f"
+    },
+    "integer.compute.euler_totient": {
+      "input_schema": "sha256:3d81837ffb8fe813ac90b00aef903c25914397e8a893904d2bb04271f6b84d0f",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.extended_gcd": {
+      "input_schema": "sha256:4e96577501e2d29822681c210829237d61554875624900bba13b8093396a9e99",
+      "output_schema": "sha256:dc1c6aaef1b6ea2612c6ec1da9bbc3e655f2cc802672e02e980f4492798e1928"
+    },
+    "integer.compute.floor_square_root": {
+      "input_schema": "sha256:2a43111bc293cff5cc432de6dec0ce618f2a4b46daecb84349f84fe32c27e7c5",
+      "output_schema": "sha256:bebc0769d61500056154cb8450d5c34d91ed94d9dfc6adf0313ed299d40b4006"
+    },
+    "integer.compute.gcd": {
+      "input_schema": "sha256:4e96577501e2d29822681c210829237d61554875624900bba13b8093396a9e99",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.lcm": {
+      "input_schema": "sha256:4e96577501e2d29822681c210829237d61554875624900bba13b8093396a9e99",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.mobius": {
+      "input_schema": "sha256:3d81837ffb8fe813ac90b00aef903c25914397e8a893904d2bb04271f6b84d0f",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.next_prime": {
+      "input_schema": "sha256:e992c9a80dae91cb1a36e409be6df39e8c03a6a1f4651ab8bd5aa58ba43fc833",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.nth_prime": {
+      "input_schema": "sha256:3d81837ffb8fe813ac90b00aef903c25914397e8a893904d2bb04271f6b84d0f",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.nth_root": {
+      "input_schema": "sha256:127c1c785134107bc30fe9e9cdf350bc9d45e8a1c50d6c8dc5ad7cb81401bba5",
+      "output_schema": "sha256:571bcc3795f95eb446cfbe234b9a278ce159bb7df3d3bc30fc69002b604e45ad"
+    },
+    "integer.compute.previous_prime": {
+      "input_schema": "sha256:e992c9a80dae91cb1a36e409be6df39e8c03a6a1f4651ab8bd5aa58ba43fc833",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.prime_count": {
+      "input_schema": "sha256:e992c9a80dae91cb1a36e409be6df39e8c03a6a1f4651ab8bd5aa58ba43fc833",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.prime_factorization": {
+      "input_schema": "sha256:b08022e7c3545e7def0990e53976706a71d100094eeb70018b2bd5665bf32c7b",
+      "output_schema": "sha256:3197aed52e510240706c373fea582130a220d9ed538009e1d90c5a5f237cb890"
+    },
+    "integer.compute.primorial": {
+      "input_schema": "sha256:e992c9a80dae91cb1a36e409be6df39e8c03a6a1f4651ab8bd5aa58ba43fc833",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.proper_divisors": {
+      "input_schema": "sha256:b08022e7c3545e7def0990e53976706a71d100094eeb70018b2bd5665bf32c7b",
+      "output_schema": "sha256:9f3a903eb2fc5e6b458d190e2286cfd8a26a30058ff293551c24db0f0a377b8f"
+    },
+    "integer.compute.radical": {
+      "input_schema": "sha256:ecc78e35e9417d3c3f5cb6da04718b15293d2757d72c90b06739c6a8ba159dfc",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.sign": {
+      "input_schema": "sha256:b729d2dec386fabe5d87e5d70ff66f0abc040950acdcb476add641c48fb5df1e",
+      "output_schema": "sha256:9dd34b57b1e1313dc1bf3651883b2042512980b0a05237954781ef8a6a117944"
+    },
+    "integer.compute.valuation": {
+      "input_schema": "sha256:e0af1b4376762713cfbb237d7c4952ba5b96dfd7ce62aad41095cccd3256a5f3",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.counting.congruence_box.compute": {
+      "input_schema": "sha256:00e7037695fe8cb927953a2a8cf3c701f784b48b79ca548a667bacac145d0053",
+      "output_schema": "sha256:35a8bf8ae0992a729db69c13fd7111cdd7da2c99780b07a592b993ded09df955"
+    },
+    "integer.counting.floor_sum.compute": {
+      "input_schema": "sha256:a98b77356e527e9fd22ffa805c8b28163a80fbe1a49783106564f5aac7a44034",
+      "output_schema": "sha256:c979f860c755ea728254653a8e594fc4ea2aea3f429bdab6bb11a9fb1d7e3a12"
+    },
+    "integer.decide.abundant": {
+      "input_schema": "sha256:e992c9a80dae91cb1a36e409be6df39e8c03a6a1f4651ab8bd5aa58ba43fc833",
+      "output_schema": "sha256:9b2f62d9e5533084179069efaad8c986439414356c414b24a6431aaa42c7fc69"
+    },
+    "integer.decide.coprime": {
+      "input_schema": "sha256:4e96577501e2d29822681c210829237d61554875624900bba13b8093396a9e99",
+      "output_schema": "sha256:9b2f62d9e5533084179069efaad8c986439414356c414b24a6431aaa42c7fc69"
+    },
+    "integer.decide.deficient": {
+      "input_schema": "sha256:e992c9a80dae91cb1a36e409be6df39e8c03a6a1f4651ab8bd5aa58ba43fc833",
+      "output_schema": "sha256:9b2f62d9e5533084179069efaad8c986439414356c414b24a6431aaa42c7fc69"
+    },
+    "integer.decide.divides": {
+      "input_schema": "sha256:be395e17f21a961b6eb07253a3630208875721388a5583784a3562cbb5c071ad",
+      "output_schema": "sha256:9b2f62d9e5533084179069efaad8c986439414356c414b24a6431aaa42c7fc69"
+    },
+    "integer.decide.even": {
+      "input_schema": "sha256:e4b721c8eff43f8b9b0c0e2bbc8cfaa4e3107f612f6f2e8a83780a8b1d7d2701",
+      "output_schema": "sha256:9b2f62d9e5533084179069efaad8c986439414356c414b24a6431aaa42c7fc69"
+    },
+    "integer.decide.odd": {
+      "input_schema": "sha256:e4b721c8eff43f8b9b0c0e2bbc8cfaa4e3107f612f6f2e8a83780a8b1d7d2701",
+      "output_schema": "sha256:9b2f62d9e5533084179069efaad8c986439414356c414b24a6431aaa42c7fc69"
+    },
+    "integer.decide.perfect": {
+      "input_schema": "sha256:e992c9a80dae91cb1a36e409be6df39e8c03a6a1f4651ab8bd5aa58ba43fc833",
+      "output_schema": "sha256:9b2f62d9e5533084179069efaad8c986439414356c414b24a6431aaa42c7fc69"
+    },
+    "integer.decide.powerful": {
+      "input_schema": "sha256:8e7a1e98b1f44adaa06c3b6fc7d4375631355b6b160022a8595151495b41e9ee",
+      "output_schema": "sha256:482c02def2208f97a5f3a527d45e847de04f24277e0ffde02741bd43f5be200b"
+    },
+    "integer.decide.prime": {
+      "input_schema": "sha256:e4b721c8eff43f8b9b0c0e2bbc8cfaa4e3107f612f6f2e8a83780a8b1d7d2701",
+      "output_schema": "sha256:9b2f62d9e5533084179069efaad8c986439414356c414b24a6431aaa42c7fc69"
+    },
+    "integer.decide.square": {
+      "input_schema": "sha256:e992c9a80dae91cb1a36e409be6df39e8c03a6a1f4651ab8bd5aa58ba43fc833",
+      "output_schema": "sha256:9b2f62d9e5533084179069efaad8c986439414356c414b24a6431aaa42c7fc69"
+    },
+    "integer.decide.squarefree": {
+      "input_schema": "sha256:ecc78e35e9417d3c3f5cb6da04718b15293d2757d72c90b06739c6a8ba159dfc",
+      "output_schema": "sha256:9b2f62d9e5533084179069efaad8c986439414356c414b24a6431aaa42c7fc69"
+    },
+    "integer.transform.base_digits": {
+      "input_schema": "sha256:dc118ac9cd016159f93e1469797ce9a6a682479af570b56ff5ee2439b09593c8",
+      "output_schema": "sha256:4a766096052a0ad702085558a8d3af83903802ad0b27996715e05e668d929013"
+    },
+    "lattice.basis.reduce": {
+      "input_schema": "sha256:5465c0d49a0555a141719602f64efad50cccad45db2098cddbe8113da0c3058e",
+      "output_schema": "sha256:c127b46718695a7fb2a65c3705b4d30d975f3cd2d28126cfb53ab6e1ab47b6cf"
+    },
+    "lattice.hermite_normal_form.compute": {
+      "input_schema": "sha256:4b6d9c08a5bc9285788ece2895dc7e016896f1d581e32e375642aee5f1bed2af",
+      "output_schema": "sha256:e5427e091f1985d4c533b055a5288014279eff13d07b0427991f5e8f1000fa5e"
+    },
+    "lean.check": {
+      "input_schema": "sha256:333bb2d4dfe96331cf44cbdb3b766efda8afed8fd71844da495febd3df0e6ee3",
+      "output_schema": "sha256:e94aa4128401a83f0afc02816060578aea4adb3bd6aa8d802fde396622daed9e"
+    },
+    "linear.rational_inconsistency.compute": {
+      "input_schema": "sha256:0c9d879967627c146bdf332019723c06a5edce62ebda0c80fd90bddc152be954",
+      "output_schema": "sha256:981e5ffce6525210141a43b9b97f9ce5f6ebfca5b9aba9e8726c1545ac8db4c5"
+    },
+    "linear.rational_solution.compute": {
+      "input_schema": "sha256:6c62a5a2a9f362008502a9f74721d121b0e4416e7c2a80cee3bd660c1c700841",
+      "output_schema": "sha256:0c98d556d31f5ffc6878aa17616236b1c0aff4dd60f65a80a2f31ac44b581d7e"
+    },
+    "matrix.adjugate.compute": {
+      "input_schema": "sha256:cd706bed75accaf880ade826fee22200b3bdfdc6011333364641abee165b65a2",
+      "output_schema": "sha256:80e8b5409118ec8ff1daa43734d956a50694b8dd88062446e11247b89654c062"
+    },
+    "matrix.characteristic_polynomial.compute": {
+      "input_schema": "sha256:04eaecca92f61d8a6abfab1f2274ef8e062bf0f6a50aef0ea8c3e9ed0971d62c",
+      "output_schema": "sha256:9cb6a5383110cc125b7dd8c9860af50a01a01a82d0d012a0ccc2efaac085c20b"
+    },
+    "matrix.determinant.compute": {
+      "input_schema": "sha256:659ad64d9a4470df9138dc252d5f1c5e9cdfe4006f2320a579a0853a378523b0",
+      "output_schema": "sha256:0b5b07d374c10db0425206cf0eee63de8fc4cdad242efbaa270347bd039d8637"
+    },
+    "matrix.farkas_certificate.check": {
+      "input_schema": "sha256:ea5ba11c5707144025f754423158a2684898eb08178ff05d33e7d686e97097c4",
+      "output_schema": "sha256:9f0a287f4d89a0746f12ce49552a7d6acaea83a38401751747e3b28756c5f621"
+    },
+    "matrix.inertia.compute": {
+      "input_schema": "sha256:b330eaa6a3184c362f7fa2adcd08386039021c3e11bc47193b398621e0466ea1",
+      "output_schema": "sha256:d4b7a0f06df5712578100d1df02c66a594211ecc688dd2dbe546773c9ee88a22"
+    },
+    "matrix.inverse.compute": {
+      "input_schema": "sha256:cd706bed75accaf880ade826fee22200b3bdfdc6011333364641abee165b65a2",
+      "output_schema": "sha256:4200b45befa524c3b4b7ce13d9f150a63b9a355a0784597ab1441ac63fc8b918"
+    },
+    "matrix.kronecker_product.compute": {
+      "input_schema": "sha256:b93588a14714787066232fc9d5c38d8b74dab2777d8c2ffb33782552fe48d818",
+      "output_schema": "sha256:a8f803f08d5bec3577b0f1c438d3c95e7d50712c72a69bc664a3d1ec7ab37d20"
+    },
+    "matrix.multiply.compute": {
+      "input_schema": "sha256:6d367846847b9fee425918a14d69384ef2b4dbae2407450b9cfa0ec21319bf3d",
+      "output_schema": "sha256:f4e32cbfca35bf4b487db039ee6d46e9f34d7681f5339461eb3be7a7bac24d13"
+    },
+    "matrix.normal_form.rref.compute": {
+      "input_schema": "sha256:271cce3efaecf8bd5cc7694477044a22d853e4581ff9157163e22add559cff71",
+      "output_schema": "sha256:ff2717861c21342ab97a244bf4d319b5084d0b6f7126977daa842b84467bbcbd"
+    },
+    "matrix.normal_form.smith.certified.compute": {
+      "input_schema": "sha256:9d574ad47adc5770ea60f51c794fe57370496c11544bd87347767ef015f8006d",
+      "output_schema": "sha256:6a53536866b24d74249407ecf639a89c82a8be7ad205646344a62ccdd2ad4694"
+    },
+    "matrix.normal_form.smith.compute": {
+      "input_schema": "sha256:914ca191b807cf79d3779472d0269cda65090051635ab7986cef9d90ad12ef67",
+      "output_schema": "sha256:dfdde907a60342aef02daf78d3052f72f9128c1f0f0846460a74c79b70c0d934"
+    },
+    "matrix.nullspace.compute": {
+      "input_schema": "sha256:271cce3efaecf8bd5cc7694477044a22d853e4581ff9157163e22add559cff71",
+      "output_schema": "sha256:769d33dcbaa50ec13fbc00fb4232216f600c24fcc4055cd366a14b1b1579175f"
+    },
+    "matrix.partial_trace.compute": {
+      "input_schema": "sha256:4719c09c765432a67fc667b2a57c2dbe69a0075ea7d7800e45209a0e2cd24b83",
+      "output_schema": "sha256:b67ba62f79f033bfd01cb55c3da67e44a82b059d0cc0fc43e5418fd9ef497d5a"
+    },
+    "matrix.permanent.compute": {
+      "input_schema": "sha256:04eaecca92f61d8a6abfab1f2274ef8e062bf0f6a50aef0ea8c3e9ed0971d62c",
+      "output_schema": "sha256:4cd93ed5352ea6c517bafe03ecb7329a5783969e3d7c5f10eeb750e180ec2411"
+    },
+    "matrix.rank.compute": {
+      "input_schema": "sha256:9399c1bb101d7546b140f4c47ed4d1c1ca4b3c6ed441f902cf2c127e50e6f4f8",
+      "output_schema": "sha256:203e83a904c2bc4fa5e46b8326763fedd0609c08c7f60bc3c8e25088a0019063"
+    },
+    "matrix.rational_linear_system.solve": {
+      "input_schema": "sha256:9b80937cd45ba3845521f275a762565ccdf701954d9ff8e5ec0c1e8122b5f270",
+      "output_schema": "sha256:b0064eded4a3a9d3e9dfc573396b1abe8c7a04c87a6237d2da825d36fb94eee5"
+    },
+    "matrix.symbolic.characteristic_polynomial.compute": {
+      "input_schema": "sha256:ac00e4bb995206d5fe1f385a9a267b08b5d9359f5a5e8583f6225cb9ea8ccef1",
+      "output_schema": "sha256:36d24371e51445f087a19651d03ccfad4f66c43d77770e63e5cc3e21709b051f"
+    },
+    "matrix.symbolic.determinant.compute": {
+      "input_schema": "sha256:ac00e4bb995206d5fe1f385a9a267b08b5d9359f5a5e8583f6225cb9ea8ccef1",
+      "output_schema": "sha256:7d0111fe4517f22e4b88b076e56c1f34cadf73c85d41e9bfeb3af88f461de7ec"
+    },
+    "matrix.symbolic.eigenvalues.compute": {
+      "input_schema": "sha256:ac00e4bb995206d5fe1f385a9a267b08b5d9359f5a5e8583f6225cb9ea8ccef1",
+      "output_schema": "sha256:e74363168b36c1d637f1d33b58b0d20aa78e611212e13ceeb92b0152a4094859"
+    },
+    "matrix.symbolic.rank.compute": {
+      "input_schema": "sha256:ac00e4bb995206d5fe1f385a9a267b08b5d9359f5a5e8583f6225cb9ea8ccef1",
+      "output_schema": "sha256:66090ef2361c5ffd54b84e5a430898c0f5b0ddebc9fff361fb26fbcd5e7ea31c"
+    },
+    "matrix.trace.compute": {
+      "input_schema": "sha256:cd706bed75accaf880ade826fee22200b3bdfdc6011333364641abee165b65a2",
+      "output_schema": "sha256:525174a77eb2639f36effd36e7c71216bdd13f22d415fb4da730f36e899aa9c8"
+    },
+    "modular.compute.discrete_logarithm": {
+      "input_schema": "sha256:83b89e6c101376613c6ecbc2552572b1f42397ddffd4c6eab2700ba362be9469",
+      "output_schema": "sha256:3d7e704bad1ccec1910bc0f650c3a41e9266d897a97d13790325a8c8d88aa995"
+    },
+    "modular.compute.inverse": {
+      "input_schema": "sha256:f03f7ecf9fe6d38e430f7ecf66020d77c054b9e2beb93d59cb24987059b09df8",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "modular.compute.multiplicative_order": {
+      "input_schema": "sha256:f03f7ecf9fe6d38e430f7ecf66020d77c054b9e2beb93d59cb24987059b09df8",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "modular.enumerate.quadratic_residues": {
+      "input_schema": "sha256:cf6782b5e779ab781d49deb012b38fcc206fee983e07b08d5f73467e392c8017",
+      "output_schema": "sha256:eb60731cf004f967b0d2f9e054ccf670420f6af4cc7f7e4f9a5df2b6bdb49c47"
+    },
+    "modular.polynomial_identity.compute": {
+      "input_schema": "sha256:be2b33f30b804323d1c6e727cab2f059f571fc403b400ee7740381e5357e7404",
+      "output_schema": "sha256:1ddd5792407afc4b2eaeeb6875c402a9c4aeab32e0783dc375fe8b25e57a011d"
+    },
+    "modular.polynomial_residue_image.assignments.compute": {
+      "input_schema": "sha256:e22f8ca6850b9a525d803887d4270264ff36efc179fe931b18d3bc581ab217b2",
+      "output_schema": "sha256:ef5fb54d3fdb4d7c17759d891854788de1264b8a5374392b542c7ebdc5d78127"
+    },
+    "modular.polynomial_residue_image.compute": {
+      "input_schema": "sha256:e22f8ca6850b9a525d803887d4270264ff36efc179fe931b18d3bc581ab217b2",
+      "output_schema": "sha256:ef5fb54d3fdb4d7c17759d891854788de1264b8a5374392b542c7ebdc5d78127"
+    },
+    "modular.solve.chinese_remainder": {
+      "input_schema": "sha256:ee1dd4f2d60360c668d3ded3c6a54e35c0ffc4d865f52087ae6f912409db3c66",
+      "output_schema": "sha256:acf2a27c9d7db7668cfbada2b5d16711c53512ff491692d340255c6dd9df0b6e"
+    },
+    "number_field.discriminant.compute": {
+      "input_schema": "sha256:8a9546bf6850b79235e7af6e110b645d258e604f1c5bf4388624bab566f54400",
+      "output_schema": "sha256:15eb98b68b5ac7b1d2901a87a204d8f172ad6a2cb1262fe2eb24a2a26ab253f2"
+    },
+    "number_theory.compute.factorial_valuation": {
+      "input_schema": "sha256:4abbf9d9da2f079f6a536fa0c3948798c88c07d4b3a0297225e648c99249563b",
+      "output_schema": "sha256:e879358bc8e46b0a30c78ad0cefa8106a94072a608960a9fd2fc27fbccfafc6f"
+    },
+    "number_theory.compute.jacobi_symbol": {
+      "input_schema": "sha256:79cfe86ad786180b4a0061eefa7869c06f47d65e76151518e2f134b43123b508",
+      "output_schema": "sha256:23f07db6eb0ab6a3e93a0c2dffa6d453934535184c9b393ed47add5320d88faa"
+    },
+    "number_theory.compute.legendre_symbol": {
+      "input_schema": "sha256:eca1fbc54c3d5c72d4711197aae16587172e4c4686055e9ca64222481fa5275a",
+      "output_schema": "sha256:7297a74c4f3c5ac3de2f6c77dd3d44fa8690f14affdc3745a09e52dd49bcda60"
+    },
+    "number_theory.numerical_semigroup.membership.compute": {
+      "input_schema": "sha256:994409947c1647431e8aaac86516c11d1b17f31f5aaf635b14094f4130591ccc",
+      "output_schema": "sha256:ea2ccebf9418464b7974ab4af6d63b82a8217ab7c1fe34658cfa0b27e868e5b5"
+    },
+    "number_theory.numerical_semigroup.summary.compute": {
+      "input_schema": "sha256:a96330f2cbf2fa44aa4ee06fa965ca37fa86281b96ab336eae54554a779888ea",
+      "output_schema": "sha256:a40ea675830f371c440883c18ae4004efb4fc4a88805309c18020a23a018a73f"
+    },
+    "optimization.linear.rational_optimum.compute": {
+      "input_schema": "sha256:d880bc90d2c4886d904e1228ec305b546d7bb963973fa1bf9a557eff4cc6122c",
+      "output_schema": "sha256:e53c4d5fc2cea6398960c8346f73f945cbb4a04201832d8e1d1714de105d3bac"
+    },
+    "polynomial.compute.discriminant": {
+      "input_schema": "sha256:9af3f974bfb7cbebc9412d544839dff3e281ac89c44209486243ab81bdd58dd4",
+      "output_schema": "sha256:3fe0008a4b72ad57f047883b4189716deb13ee0aeace6768387468ddbb80ff5f"
+    },
+    "polynomial.compute.gcd": {
+      "input_schema": "sha256:ddbcc02851fe4901a94d5b9b7cb1f4ff0892c9ae275148ca6e6c6f6f48c1dc47",
+      "output_schema": "sha256:2bbfa04b6576969d6e77d04efa8fe2a2ba9243165c2f7a6ce91ca8b701200422"
+    },
+    "polynomial.compute.resultant": {
+      "input_schema": "sha256:c6b202eb2c496b00de21038999cf4986957e5bc49b1eea862e4c869aee425142",
+      "output_schema": "sha256:f64dfcc7f452e4d8a268fd22f70951fe32a83d69479a44fb132ce0b0e8001fee"
+    },
+    "polynomial.compute.square_free_decomposition": {
+      "input_schema": "sha256:f935c26505b91cdf38e1875e7ad33e2b349cea21ff08345114f98423c87d9873",
+      "output_schema": "sha256:9e7cb9d60eda692774300d94d62e347680c41f5a58f2a0764efbf95814645e4b"
+    },
+    "polynomial.factor.compute": {
+      "input_schema": "sha256:2e0af0ff23017294af8cc9f8f0aa61d09bf8173ade9bb83d171987d305cb2466",
+      "output_schema": "sha256:1eddaab9465c0b5a87abad118acade6839ace5071d5125a14f763b0fc82d5786"
+    },
+    "polynomial.integer.compute.compose": {
+      "input_schema": "sha256:8d08638d0749fee6f532512d6f0bf656f59545a0a3cb322adc36ae1010e5ddb2",
+      "output_schema": "sha256:2d74a4bec8d45d1f21f18e556ad3a1a95a3f23be45be59fb7d40684af5609096"
+    },
+    "polynomial.integer.compute.content": {
+      "input_schema": "sha256:052d035a09f0aa80844daf04b0eee08b6e9561e67f22eac8ee1160a7e15e2135",
+      "output_schema": "sha256:4fdc2aeec9d631234f54bc0ff0c3d90cf3a240a692ccd45fbda132cdf43f4aa0"
+    },
+    "polynomial.integer.compute.evaluate": {
+      "input_schema": "sha256:a433d981f52466c0c62e7a7a77423ec6e75e313cac423bc4a3897400dafb3dd5",
+      "output_schema": "sha256:e37ee48815a2b7177d98ef41a31df1175ce958ae95ee6039947dec820483313c"
+    },
+    "polynomial.integer.compute.gcd": {
+      "input_schema": "sha256:e70847f8dbbbd08c40d60760c41483697aaf7a68b455d86267613b0d99f48a13",
+      "output_schema": "sha256:46a1bf01959487da38a63ea2e46269dc086dbfbef8c6f451ec807ea27c2379ad"
+    },
+    "polynomial.integer.compute.primitive_part": {
+      "input_schema": "sha256:052d035a09f0aa80844daf04b0eee08b6e9561e67f22eac8ee1160a7e15e2135",
+      "output_schema": "sha256:e47b7bacab33365bd3f47506fdd24659e9e09df6c314b498be2b33f003caf1cc"
+    },
+    "polynomial.integer.compute.shift": {
+      "input_schema": "sha256:0776764b510e4f3e9f4b41445ed74e57334caaa4e530822d65f083b21b14c409",
+      "output_schema": "sha256:2fffee665c91df089fb62a03c77aad7c84788bb30d13412e0e340db272d60364"
+    },
+    "polynomial.jacobian_syzygy.coefficients.compute": {
+      "input_schema": "sha256:48a0a0e1cb6ee4cfebfd95eea48eede525b3ad3edb9690dd28ce2ade71980df6",
+      "output_schema": "sha256:098f1b71a8fea11dac7a842c9a70584fd820a32263b643046c87f0c678be175b"
+    },
+    "polynomial.jacobian_syzygy.minimum_degree.compute": {
+      "input_schema": "sha256:48a0a0e1cb6ee4cfebfd95eea48eede525b3ad3edb9690dd28ce2ade71980df6",
+      "output_schema": "sha256:098f1b71a8fea11dac7a842c9a70584fd820a32263b643046c87f0c678be175b"
+    },
+    "polynomial.map.compose": {
+      "input_schema": "sha256:8b0ef8020a80da58a9d403a5de4f28aeab8663c4d5c3b0d2bc23fa3bf79a9d53",
+      "output_schema": "sha256:823cfdc3bc89f6beed1f59648ca5836a445b21d7fb32f1584f1246aae209a3b5"
+    },
+    "polynomial.map.evaluate": {
+      "input_schema": "sha256:20a80fc49829fa856b2ccf1773f55e560156d584c6456f5b7a2ca4185cd80ea7",
+      "output_schema": "sha256:1fc741576fbada62d25c1a63f2290b3a444604573cf9c7a5c2eb3d4441cbe169"
+    },
+    "polynomial.map.jacobian": {
+      "input_schema": "sha256:9f0eea801612f0d7ffaf81624dfd703f81a61bbee7246572168eb0b0a74d83f0",
+      "output_schema": "sha256:1f51d94b33b4bb048265dc948018237840358682a2564548be3ddba964423615"
+    },
+    "polynomial.multivariate.divide.compute": {
+      "input_schema": "sha256:01f899267968b2a7bc14481f72ca207f6248df85a96f3f7845b806e4a31ce4ce",
+      "output_schema": "sha256:b3a4f24a418d367ffbd9417d4a7db2e9a104b9259c835f6d82c32cf268e12f62"
+    },
+    "polynomial.multivariate.gcd.compute": {
+      "input_schema": "sha256:ea39faae59a7c620fb7565cf020f1dec16059eb26973ff2a000f2a7ef25c68d5",
+      "output_schema": "sha256:7d51ed69e1f8313a07be71ecd098731e4f6372a468b87597dea4be0aca4efde5"
+    },
+    "polynomial.multivariate.resultant.compute": {
+      "input_schema": "sha256:c4ef43c3db8c1448b185b72f933f769f52bf919e1bd11f96fa980c0b08aefea2",
+      "output_schema": "sha256:47369f7742d9b4e1eec1538467454ea73bad886d995f17108ed893d274d91c89"
+    },
+    "polynomial.rational.compute.derivative": {
+      "input_schema": "sha256:0a764c9be693302dbd3e24fced00ab5206437653fcf0a8123cdb52702bbbd255",
+      "output_schema": "sha256:4fd5fe8e4ea9aa49917f77e521a70f7b713e0d40dffb8b95529ca2e56971f464"
+    },
+    "polynomial.rational.compute.evaluate": {
+      "input_schema": "sha256:33203b5a777e4fb8c00d9afa2ee33a70d206bc046dee4e6d3ef41eff3c2c0b37",
+      "output_schema": "sha256:6b8a2b277f53f651c2cb214dd9b0cc8f8ac35f590ed0bd24ae6dfc3d3a1713dc"
+    },
+    "polynomial.rational.compute.integral": {
+      "input_schema": "sha256:0a764c9be693302dbd3e24fced00ab5206437653fcf0a8123cdb52702bbbd255",
+      "output_schema": "sha256:62bf9e1ce77589c418883d425cc0e76bcbaf3fad21b3d4e56daa8d3ad1a6d14e"
+    },
+    "polynomial.rational.compute.partial_fraction_decomposition": {
+      "input_schema": "sha256:f6b146822017c9fd77895a0166e1fb44243ea552ed3d8ca28b27559f876b6f09",
+      "output_schema": "sha256:ba36a0ab01f243d55f079dc98731352cbe95ebdda74f6484477d35e23675a9f6"
+    },
+    "polynomial.rational.compute.quotient_remainder": {
+      "input_schema": "sha256:b38cc7030dd1046da9fc1313b61be395121c6102ab221dfab7f99a7ced97dda8",
+      "output_schema": "sha256:725c10c9920836da6168e644b9c15565221678640249f81eef16afb59b91c047"
+    },
+    "polynomial.roots.isolate": {
+      "input_schema": "sha256:1bb055763d969d462cd7b989502b816716ba40339663d489f33db34e20d438d5",
+      "output_schema": "sha256:ebbabea1bc3985b058f77e9fd3da9b0748b70c8ad42d3fbed6980126a9bce861"
+    },
+    "poset.finite.compute": {
+      "input_schema": "sha256:73c1738f192a084128ea68cc954c524bed9c6b65898f7a47498b9d5e516b94b2",
+      "output_schema": "sha256:d5021ca8f1a5bfc3ab3612f4e80db9c447089aa82f7845d8dda8594bc39753f1"
+    },
+    "poset.linear_extensions.count": {
+      "input_schema": "sha256:e1db5dfa1a85945ba8d8da52ad863146f51d1146f20bc295e2a27419ff89d713",
+      "output_schema": "sha256:48db8a0fa457af6105dda2509e2c4861a4b726aee78f0f4a44101bc3d4c9179e"
+    },
+    "poset.mobius_function.compute": {
+      "input_schema": "sha256:905e675c068c821eac74ef11e374e25ec98cac945c8078d2c4da7c38e5f63c76",
+      "output_schema": "sha256:019a0e78159a3fd4fd4fba64a83d4095432ce963df0a18b963728696a227a3da"
+    },
+    "poset.width.compute": {
+      "input_schema": "sha256:ff2a448f4335d1fac63825191d2d16991a33f31bfa7f7175c49b69495984ff0d",
+      "output_schema": "sha256:58722ae468c6000b997cf340f9b7cc29f5aa8b466cee2242227d40d75208f8e1"
+    },
+    "probability.bh_step_up.compute": {
+      "input_schema": "sha256:b51f86a304afd50af235612492073289c041418e8d45c4f517acf774df308fa9",
+      "output_schema": "sha256:feadd4c2867d97df7ea48a1810d199e670d4e2adc1f74bcc241bb375a9722daa"
+    },
+    "probability.fdp.compute": {
+      "input_schema": "sha256:2d0d4e06a48e62ca0643d2736ad2aee76eadc2aa8f0c14f104f0f47fb04007ee",
+      "output_schema": "sha256:957b997b10c097b07ed1d602238058b13cf59ae1c41d72eb01a337d45eadfedb"
+    },
+    "probability.finite_distribution.condition.compute": {
+      "input_schema": "sha256:477b298849733e4b993de24ed62033b2e0f24814fdc29dde27a6f299b7891b9a",
+      "output_schema": "sha256:8ceaa95ddcd19527215280bf0063f413c0b495d1f90c8e2e6d3a055063d2d9c4"
+    },
+    "probability.finite_distribution.convolution.compute": {
+      "input_schema": "sha256:f3ca463515c83359331e1e58540a92a0c8f0e0d3af4def9a9d1fa28d0361cedb",
+      "output_schema": "sha256:ecfb53cef38d0a4a9af22d56e873fc28922ac36fb030c5504151cf0986ad669b"
+    },
+    "probability.finite_distribution.event_probability.compute": {
+      "input_schema": "sha256:10ea7f7d56513b251ba3a13ce86205b06eff0762ebbc2600b9037422fcf97065",
+      "output_schema": "sha256:69640c9d5fbbf272b0f1d97849dda050a92ff3967b480b988814d381d09d410d"
+    },
+    "probability.finite_distribution.pushforward.compute": {
+      "input_schema": "sha256:871b9f8fe21c0ef2c6922ca042e3e8d374e68f54b61552ffb682c95860ae4e2b",
+      "output_schema": "sha256:9699a1c9b712c12f311d0dbf887a47ae39318b9b4b96e6b60afc84cc35001dfb"
+    },
+    "probability.finite_distribution.raw_moment.compute": {
+      "input_schema": "sha256:6eeda78b98a7d251acd99f095b4fbb3e60f768a7147ab7984d497a9c05d0345f",
+      "output_schema": "sha256:137acdc01432835f9f0b598198722a819b72547b55a11a2b72da79d79da1f541"
+    },
+    "probability.gaussian_polynomial.moment.compute": {
+      "input_schema": "sha256:4480fbdd53093c595582b5f8549aba5d24e0a2bd6b08ff3b595020743c1f2053",
+      "output_schema": "sha256:135c6a5ee5fd1c9393811c3d00c0b9d7cefdf01216b3c4d13c7330903c9429ff"
+    },
+    "probability.graph_reliability.connection_probability.compute": {
+      "input_schema": "sha256:d2c0859c8920bf789a18e5603d2751a9c1550e61faebb97da19cb0bdd00d60d6",
+      "output_schema": "sha256:fbe57fbd982931b1f221ca686196449949a527eae65313309ff68c5e01833e0d"
+    },
+    "probability.joint.mutual_information.compute": {
+      "input_schema": "sha256:8f68b044ce72e14435f2fbf563b8d98b05f5068826df1b7208005bb362fd5b69",
+      "output_schema": "sha256:23eabb18a6b149de4d2b74ef8322bf96859cb508c8114890210bf1a9d0c0e11e"
+    },
+    "probability.markov_chain.ergodic.decide": {
+      "input_schema": "sha256:bc38c02dcaa12f00e83f64df96893b191910c349d8b88dc21b22c7d20c7d3a93",
+      "output_schema": "sha256:48c86cea4e400eabe99bb0bbbdbc9f29893f07ee3022bc1ce9008848a2491726"
+    },
+    "probability.markov_chain.stationary_distribution.compute": {
+      "input_schema": "sha256:bc38c02dcaa12f00e83f64df96893b191910c349d8b88dc21b22c7d20c7d3a93",
+      "output_schema": "sha256:a1ad2eb2f6d4fa92ed3c1175c545f426301f55cc85c8644f690fa74b93ec5280"
+    },
+    "rational.compute.absolute_value": {
+      "input_schema": "sha256:fa269c0370b68da3d26803424794e5256b28cff17a7134c433a4d70df5207665",
+      "output_schema": "sha256:19cc979e34f7e43bb0675a43351b146ffb251a1ccdf900cb19ab9b023f3d8bf0"
+    },
+    "rational.compute.ceiling": {
+      "input_schema": "sha256:fa269c0370b68da3d26803424794e5256b28cff17a7134c433a4d70df5207665",
+      "output_schema": "sha256:d6ed449905cbbef804ad7636b06a5dda8f606de4131b9895a306edf72847a9ad"
+    },
+    "rational.compute.continued_fraction": {
+      "input_schema": "sha256:fa269c0370b68da3d26803424794e5256b28cff17a7134c433a4d70df5207665",
+      "output_schema": "sha256:72739c8c08bfacbd5eccb1c38aeb67bf82abf114288a92aabad07bb1243e2907"
+    },
+    "rational.compute.difference": {
+      "input_schema": "sha256:ba6423e4cce44197eb98f3a6ae2839cce5c89d8f3c67938f8702b682e19c0985",
+      "output_schema": "sha256:19cc979e34f7e43bb0675a43351b146ffb251a1ccdf900cb19ab9b023f3d8bf0"
+    },
+    "rational.compute.floor": {
+      "input_schema": "sha256:fa269c0370b68da3d26803424794e5256b28cff17a7134c433a4d70df5207665",
+      "output_schema": "sha256:d6ed449905cbbef804ad7636b06a5dda8f606de4131b9895a306edf72847a9ad"
+    },
+    "rational.compute.maximum": {
+      "input_schema": "sha256:ba6423e4cce44197eb98f3a6ae2839cce5c89d8f3c67938f8702b682e19c0985",
+      "output_schema": "sha256:19cc979e34f7e43bb0675a43351b146ffb251a1ccdf900cb19ab9b023f3d8bf0"
+    },
+    "rational.compute.minimum": {
+      "input_schema": "sha256:ba6423e4cce44197eb98f3a6ae2839cce5c89d8f3c67938f8702b682e19c0985",
+      "output_schema": "sha256:19cc979e34f7e43bb0675a43351b146ffb251a1ccdf900cb19ab9b023f3d8bf0"
+    },
+    "rational.compute.negation": {
+      "input_schema": "sha256:fa269c0370b68da3d26803424794e5256b28cff17a7134c433a4d70df5207665",
+      "output_schema": "sha256:19cc979e34f7e43bb0675a43351b146ffb251a1ccdf900cb19ab9b023f3d8bf0"
+    },
+    "rational.compute.product": {
+      "input_schema": "sha256:ba6423e4cce44197eb98f3a6ae2839cce5c89d8f3c67938f8702b682e19c0985",
+      "output_schema": "sha256:19cc979e34f7e43bb0675a43351b146ffb251a1ccdf900cb19ab9b023f3d8bf0"
+    },
+    "rational.compute.quotient": {
+      "input_schema": "sha256:ba6423e4cce44197eb98f3a6ae2839cce5c89d8f3c67938f8702b682e19c0985",
+      "output_schema": "sha256:19cc979e34f7e43bb0675a43351b146ffb251a1ccdf900cb19ab9b023f3d8bf0"
+    },
+    "rational.compute.reciprocal": {
+      "input_schema": "sha256:fa269c0370b68da3d26803424794e5256b28cff17a7134c433a4d70df5207665",
+      "output_schema": "sha256:19cc979e34f7e43bb0675a43351b146ffb251a1ccdf900cb19ab9b023f3d8bf0"
+    },
+    "rational.compute.sum": {
+      "input_schema": "sha256:ba6423e4cce44197eb98f3a6ae2839cce5c89d8f3c67938f8702b682e19c0985",
+      "output_schema": "sha256:19cc979e34f7e43bb0675a43351b146ffb251a1ccdf900cb19ab9b023f3d8bf0"
+    },
+    "rational.decide.equal": {
+      "input_schema": "sha256:ba6423e4cce44197eb98f3a6ae2839cce5c89d8f3c67938f8702b682e19c0985",
+      "output_schema": "sha256:460d45024087160fd1cc757f952e363d3fd18b48dd0dec9d4a7b0bf104c7bf8c"
+    },
+    "rational.decide.less_than": {
+      "input_schema": "sha256:ba6423e4cce44197eb98f3a6ae2839cce5c89d8f3c67938f8702b682e19c0985",
+      "output_schema": "sha256:460d45024087160fd1cc757f952e363d3fd18b48dd0dec9d4a7b0bf104c7bf8c"
+    },
+    "sat.assignment.check": {
+      "input_schema": "sha256:043d67beebbde52080df34632b3c9f5cef0deeee54aa868cf9475d970251a8b0",
+      "output_schema": "sha256:dcba46f01160ac35cc05556235610b8e4a47300ff329b29b69c5efb629bdad3a"
+    },
+    "sat.cnf.canonicalize": {
+      "input_schema": "sha256:81d3b062ea1a13caf870f6b4082f691dddead5171dc1063f67294ecf02a09729",
+      "output_schema": "sha256:1b4a38718c41a09b211554b50323c8a4996d33b033f5726b5c3e0c463fcdbf64"
+    },
+    "sat.solve": {
+      "input_schema": "sha256:7e441f4859ddda5ff384fd01ca4e1d9d5ba53d172e7b0053afafc58160116b0e",
+      "output_schema": "sha256:708a946eff86b7e50d233307b7ea815c0bf7c20eaf30b693210b4d19bae33f65"
+    },
+    "sequence.compute.distinct_count": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:a04e0239d7de20274236233ee039311a5e39bf91a729d424c4b0660a9b687931"
+    },
+    "sequence.compute.first_differences": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:6a49d6d91a74c9fef9e29fecef201aa7cf72b9a96473c1eea8d496fa0897586b"
+    },
+    "sequence.compute.frequencies": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:bc044887314db372af98eee452103da393723f26ce162a8697612d156421931f"
+    },
+    "sequence.compute.gcd": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:a04e0239d7de20274236233ee039311a5e39bf91a729d424c4b0660a9b687931"
+    },
+    "sequence.compute.lcm": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:a04e0239d7de20274236233ee039311a5e39bf91a729d424c4b0660a9b687931"
+    },
+    "sequence.compute.maximum": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:a04e0239d7de20274236233ee039311a5e39bf91a729d424c4b0660a9b687931"
+    },
+    "sequence.compute.mean": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:5fc36b0395b7a5adcd58b315d7af7e5e601caadf93d30c1446f4adb928d77e7b"
+    },
+    "sequence.compute.median": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:5fc36b0395b7a5adcd58b315d7af7e5e601caadf93d30c1446f4adb928d77e7b"
+    },
+    "sequence.compute.minimum": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:a04e0239d7de20274236233ee039311a5e39bf91a729d424c4b0660a9b687931"
+    },
+    "sequence.compute.prefix_gcds": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:6a49d6d91a74c9fef9e29fecef201aa7cf72b9a96473c1eea8d496fa0897586b"
+    },
+    "sequence.compute.prefix_lcms": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:6a49d6d91a74c9fef9e29fecef201aa7cf72b9a96473c1eea8d496fa0897586b"
+    },
+    "sequence.compute.prefix_maxima": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:6a49d6d91a74c9fef9e29fecef201aa7cf72b9a96473c1eea8d496fa0897586b"
+    },
+    "sequence.compute.prefix_minima": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:6a49d6d91a74c9fef9e29fecef201aa7cf72b9a96473c1eea8d496fa0897586b"
+    },
+    "sequence.compute.prefix_products": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:6a49d6d91a74c9fef9e29fecef201aa7cf72b9a96473c1eea8d496fa0897586b"
+    },
+    "sequence.compute.prefix_sums": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:6a49d6d91a74c9fef9e29fecef201aa7cf72b9a96473c1eea8d496fa0897586b"
+    },
+    "sequence.compute.product": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:a04e0239d7de20274236233ee039311a5e39bf91a729d424c4b0660a9b687931"
+    },
+    "sequence.compute.range": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:a04e0239d7de20274236233ee039311a5e39bf91a729d424c4b0660a9b687931"
+    },
+    "sequence.compute.second_differences": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:6a49d6d91a74c9fef9e29fecef201aa7cf72b9a96473c1eea8d496fa0897586b"
+    },
+    "sequence.compute.sum": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:a04e0239d7de20274236233ee039311a5e39bf91a729d424c4b0660a9b687931"
+    },
+    "sequence.compute.zero_indices": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:e224c0ea2d340621720d2fa683d3470efe0a19cc2531476acf60e64eb0511d2f"
+    },
+    "sequence.decide.arithmetic": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:c9ee343b3c78a35b33149c6d7d846de7d5500f56e9c97a4578e3c85ae0b84fa6"
+    },
+    "sequence.decide.geometric": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:c9ee343b3c78a35b33149c6d7d846de7d5500f56e9c97a4578e3c85ae0b84fa6"
+    },
+    "sequence.decide.nondecreasing": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:c9ee343b3c78a35b33149c6d7d846de7d5500f56e9c97a4578e3c85ae0b84fa6"
+    },
+    "sequence.decide.strictly_increasing": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:c9ee343b3c78a35b33149c6d7d846de7d5500f56e9c97a4578e3c85ae0b84fa6"
+    },
+    "sequence.recurrence.closed_form.compute": {
+      "input_schema": "sha256:4202241894fbd32cecb0509f8f7bbbd9ec8cc18af4e50b005421705cb6558929",
+      "output_schema": "sha256:adcfb7381110cb63025fa29b612fd9f3ed5f341b78e91ccb8d261ee6146628e6"
+    },
+    "sequence.recurrence.find": {
+      "input_schema": "sha256:3959a7f34727404e7074dfc9457ca3ce6b85d22d65469829cd9251f945882704",
+      "output_schema": "sha256:90b09fe6e31df06135ca9d95012c2b483db69c518d18149b5d5923f8fd6546b8"
+    },
+    "sequence.transform.parities": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:6a49d6d91a74c9fef9e29fecef201aa7cf72b9a96473c1eea8d496fa0897586b"
+    },
+    "sequence.transform.reverse": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:6a49d6d91a74c9fef9e29fecef201aa7cf72b9a96473c1eea8d496fa0897586b"
+    },
+    "sequence.transform.signs": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:6a49d6d91a74c9fef9e29fecef201aa7cf72b9a96473c1eea8d496fa0897586b"
+    },
+    "sequence.transform.sort": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:6a49d6d91a74c9fef9e29fecef201aa7cf72b9a96473c1eea8d496fa0897586b"
+    },
+    "sequence.transform.sorted_unique": {
+      "input_schema": "sha256:0e3524236d76b44a00e64f2581c0b012666c58c2f267f06f30d4730e1da8f320",
+      "output_schema": "sha256:6a49d6d91a74c9fef9e29fecef201aa7cf72b9a96473c1eea8d496fa0897586b"
+    },
+    "smt.solve": {
+      "input_schema": "sha256:7b72b4b078d5fd79204326017e9f7e540cb2db2674d5ee2d9528d0a6b8026ca2",
+      "output_schema": "sha256:92e1adfe39049966ea27b5d3e2d7993feb5b87dc8732f42b5f49ca9531f1f4bc"
+    },
+    "topology.simplicial_complex.canonicalize": {
+      "input_schema": "sha256:0231994adad255d263488096fd5792b8a3cf90fd8e478e3e189536874bdb53b5",
+      "output_schema": "sha256:8a552aeb19d458d766bcfab00a59087018214ac376e021c2236ab1aa380972f1"
+    },
+    "topology.simplicial_complex.chain_complex.compute": {
+      "input_schema": "sha256:5696974624ef54213bd7f17dedfd0b85bca3c218eb03f32dfa2c425f6b141b1a",
+      "output_schema": "sha256:c737a222d0d9965766a9a58c4477784f6876a0696b4950b919b448f1fd6d950a"
+    },
+    "topology.simplicial_homology.compute": {
+      "input_schema": "sha256:fb63f528a8a29fc0764b550ac7a631896c7736f706ab2a73d7c7621da4ee4a58",
+      "output_schema": "sha256:37e3af857a4f953425c5ff1755dc2aa29ab238bb8bca27fbec5484f40ff45441"
+    },
+    "topology.simplicial_homology.integral.compute": {
+      "input_schema": "sha256:ae5513f34822ee0e5602f3a67701a3de98a4f3595422d2ae8d8d53e45b3cf60b",
+      "output_schema": "sha256:0b9ca74c0cd26174705d7dff455d0513a03c8f9bd5d62148fefd675632b3f5dc"
+    }
+  }
+}

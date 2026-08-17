@@ -26,11 +26,7 @@ def _validate_prime_field_matrix(
         raise ValueError("generator rows must have between one and 256 entries")
     if any(len(row) != width for row in generator_matrix):
         raise ValueError("generator matrix rows must have equal length")
-    if any(
-        not 0 <= entry < field_order
-        for row in generator_matrix
-        for entry in row
-    ):
+    if any(not 0 <= entry < field_order for row in generator_matrix for entry in row):
         raise ValueError("generator entries must be canonical field residues")
     return width
 
@@ -56,9 +52,7 @@ def _matrix_rank_mod_prime(
             continue
         rows[pivot_row], rows[pivot] = rows[pivot], rows[pivot_row]
         inverse = pow(rows[pivot_row][column] % field_order, -1, field_order)
-        rows[pivot_row] = [
-            value * inverse % field_order for value in rows[pivot_row]
-        ]
+        rows[pivot_row] = [value * inverse % field_order for value in rows[pivot_row]]
         for index, row in enumerate(rows):
             if index == pivot_row:
                 continue

@@ -28,9 +28,12 @@ Every built-in `MathTool` declaration must publish at least one small valid
 invocation example. An example is part of the public contract: it must validate
 against the declaration's request model, use canonical values where required,
 and be executable in Jacobian's supported local environment. Keep it close to
-the operation and adapt it when a request contract changes. The catalog test
-checks every published example at the request boundary; the operation's owning
-tests should exercise any nontrivial example behavior.
+the operation and adapt it when a request contract changes. The composition
+catalog test executes every published example: the payload must validate, the
+domain function must return a typed result, and that result must re-validate.
+The operation's owning tests still own nontrivial example behavior and the
+adversarial and request-boundary cases in the preflight below. Those two cases
+are written with the operation; they are not a separate CI program.
 
 Write an invocation example's description in two parts: first state the
 computation the operation performs on the supplied values, then state the
@@ -96,8 +99,41 @@ Before declaring the operation, provide tests for:
 - a public-operation assertion that the returned value satisfies its defining
   mathematical invariant or witness, rather than merely parsing or reaching a
   backend; and
-- request validation proving schema-valid inputs reach the backend without a
-  representation or shape failure.
+- request validation proving a schema-valid input either returns a typed
+  result or is rejected by the request model—never a host exception.
+
+### Boundedness proof
+
+Jacobian's operations are reusable mathematical instruments for agents doing
+high-level mathematics and investigating conjectures. Treat boundedness as
+part of the mathematical contract, not as a property of the transport or a
+final serializer. For each operation, write down three
+different obligations:
+
+1. **Input domain:** which mathematical objects and degenerate cases are
+   accepted, and which are excluded as inapplicable?
+2. **Computation:** what bounds the algorithm's work and intermediate values
+   before the backend expands, enumerates, or solves anything?
+3. **Output:** what bounds the exact returned value, witness, residual, or
+   certificate, and how is that bound related to the accepted input domain?
+
+The request contract must enforce the first obligation and the preconditions
+needed for the second and third. A backend or result conversion may still
+validate an invariant, but it must not be the first place an accepted request
+discovers that its exact answer is too large. If a bound is conservative, name
+the quantity it bounds, state why it is safe for the algorithm, and test both
+the rejected adversarial case and a useful case near the boundary. Do not use a
+post-hoc output-term cap, truncation, sentinel, or host exception as a hidden
+computational budget.
+
+When an operation has a genuine incomplete or unknown outcome, expose that
+state in its domain result with the evidence and bounds needed to interpret it.
+Do not turn an inability to finish or represent the exact answer into a
+mathematical conclusion. When no such result is defined, narrow the request
+domain until every accepted request returns the declared typed value.
+
+CI executes every advertised invocation example. The adversarial case and the
+schema-valid request-boundary case belong in the owning domain tests.
 
 If no bounded implementation can support the public claim, do not expose the
 operation yet. A backend import or native function is not evidence that its

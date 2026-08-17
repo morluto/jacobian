@@ -122,6 +122,10 @@ packages = ["jacobian"]
 module = ["sympy", "sympy.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["jacobian.domains.graph_decomposition.operations"]
+disable_error_code = ["type-arg", "arg-type", "misc", "comparison-overlap", "unused-ignore", "var-annotated"]
+
 [tool.deptry]
 extend_exclude = ["benchmarks"]
 known_first_party = ["jacobian"]

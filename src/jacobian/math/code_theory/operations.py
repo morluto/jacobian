@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections import deque
 from itertools import product
 
-__all__ = ["minimum_distance", "weight_distribution"]
+__all__ = ["covering_radius", "minimum_distance", "weight_distribution"]
 
 
 def _codewords(generator_matrix, field_order):  # type: ignore[no-untyped-def]
@@ -40,3 +41,103 @@ def weight_distribution(generator_matrix, field_order):  # type: ignore[no-untyp
         weight = sum(1 for c in codeword if c != 0)
         weights[weight] += 1
     return sorted(weights.items())
+
+
+def _parity_check_matrix(generator_matrix, field_order):  # type: ignore[no-untyped-def]
+    """Return a basis of the generator matrix's right nullspace."""
+    rows = [list(row) for row in generator_matrix]
+    row_count = len(rows)
+    column_count = len(rows[0])
+    pivot_columns: list[int] = []
+    pivot_row = 0
+    for column in range(column_count):
+        pivot = next(
+            (
+                index
+                for index in range(pivot_row, row_count)
+                if rows[index][column] % field_order != 0
+            ),
+            None,
+        )
+        if pivot is None:
+            continue
+        rows[pivot_row], rows[pivot] = rows[pivot], rows[pivot_row]
+        inverse = pow(rows[pivot_row][column] % field_order, -1, field_order)
+        rows[pivot_row] = [value * inverse % field_order for value in rows[pivot_row]]
+        for index, row in enumerate(rows):
+            if index == pivot_row:
+                continue
+            factor = row[column] % field_order
+            if factor == 0:
+                continue
+            rows[index] = [
+                (left - factor * right) % field_order
+                for left, right in zip(row, rows[pivot_row], strict=True)
+            ]
+        pivot_columns.append(column)
+        pivot_row += 1
+        if pivot_row == row_count:
+            break
+
+    pivot_set = set(pivot_columns)
+    free_columns = [column for column in range(column_count) if column not in pivot_set]
+    check_rows: list[list[int]] = []
+    for free_column in free_columns:
+        vector = [0] * column_count
+        vector[free_column] = 1
+        for index, pivot_column in enumerate(pivot_columns):
+            vector[pivot_column] = (-rows[index][free_column]) % field_order
+        check_rows.append(vector)
+    return check_rows
+
+
+def covering_radius(generator_matrix, field_order):  # type: ignore[no-untyped-def]
+    """Compute a linear code's covering radius by syndrome-space BFS.
+
+    One graph step adds a nonzero scalar multiple of one parity-check column,
+    exactly corresponding to changing one coordinate of an error vector.
+    Therefore graph distance from the zero syndrome is minimum coset-leader
+    weight, and the maximum distance is the covering radius.
+    """
+    check_rows = _parity_check_matrix(  # type: ignore[no-untyped-call]
+        generator_matrix,
+        field_order,
+    )
+    if not check_rows:
+        return 0
+
+    syndrome_dimension = len(check_rows)
+    column_count = len(check_rows[0])
+    zero = (0,) * syndrome_dimension
+    move_set = {
+        tuple(
+            scalar * check_rows[row][column] % field_order
+            for row in range(syndrome_dimension)
+        )
+        for column in range(column_count)
+        for scalar in range(1, field_order)
+    }
+    move_set.discard(zero)
+    moves = tuple(sorted(move_set))
+
+    distances = {zero: 0}
+    queue = deque([zero])
+    radius = 0
+    while queue:
+        syndrome = queue.popleft()
+        next_distance = distances[syndrome] + 1
+        for move in moves:
+            neighbor = tuple(
+                (left + right) % field_order
+                for left, right in zip(syndrome, move, strict=True)
+            )
+            if neighbor in distances:
+                continue
+            distances[neighbor] = next_distance
+            radius = max(radius, next_distance)
+            queue.append(neighbor)
+
+    expected_states = field_order**syndrome_dimension
+    if len(distances) != expected_states:
+        raise ArithmeticError("parity-check columns did not span the syndrome space")
+    return radius

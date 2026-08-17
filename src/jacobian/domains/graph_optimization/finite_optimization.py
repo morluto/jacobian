@@ -16,6 +16,8 @@ from jacobian.contracts.graph_optimization import (
     GraphOptimizationBudget,
     GraphOptimizationRequest,
 )
+from jacobian.contracts.operations import OperationExample
+from jacobian.domains._examples import example
 from jacobian.domains.graph_optimization.exact_search import (
     solve_domination,
     solve_induced_bipartite,
@@ -121,6 +123,7 @@ def _operation[ResultT: ContractModel](
     result_type: type[ResultT],
     solve: Callable[[Any, ChromaticGraph, GraphOptimizationBudget], ResultT],
     *tags: str,
+    examples: tuple[OperationExample, ...] = (),
 ) -> MathTool[GraphOptimizationRequest, ResultT]:
     return MathTool(
         operation_id=operation_id,
@@ -131,6 +134,7 @@ def _operation[ResultT: ContractModel](
         result_type=result_type,
         run=lambda request: _execute(request, solve),
         tags=("graph", *tags, "bounded", "z3"),
+        examples=examples,
     )
 
 
@@ -142,6 +146,19 @@ DOMINATION_MINIMUM_OPERATION = _operation(
     lambda graph, contract, budget: solve_domination(graph, contract, budget),
     "domination",
     "minimum",
+    examples=(
+        example(
+            "path_3",
+            "Path graph on 3 vertices.",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                },
+                "resource_budget": {"max_solver_calls": 33},
+            },
+        ),
+    ),
 )
 
 MINIMUM_MAXIMAL_MATCHING_OPERATION = _operation(
@@ -155,6 +172,19 @@ MINIMUM_MAXIMAL_MATCHING_OPERATION = _operation(
     "matching",
     "saturation_number",
     "minimum",
+    examples=(
+        example(
+            "path_3_matching",
+            "Minimum maximal matching of path graph P3.",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                },
+                "resource_budget": {"max_solver_calls": 33},
+            },
+        ),
+    ),
 )
 
 INDUCED_FOREST_MAXIMUM_OPERATION = _operation(
@@ -165,6 +195,19 @@ INDUCED_FOREST_MAXIMUM_OPERATION = _operation(
     lambda graph, contract, budget: solve_induced_forest(graph, contract, budget),
     "induced_forest",
     "maximum",
+    examples=(
+        example(
+            "path_3",
+            "Path graph P3.",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                },
+                "resource_budget": {"max_solver_calls": 33},
+            },
+        ),
+    ),
 )
 
 INDUCED_TREE_MAXIMUM_OPERATION = _operation(
@@ -175,6 +218,19 @@ INDUCED_TREE_MAXIMUM_OPERATION = _operation(
     lambda graph, contract, budget: solve_induced_tree(graph, contract, budget),
     "induced_tree",
     "maximum",
+    examples=(
+        example(
+            "path_3",
+            "Path graph P3.",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                },
+                "resource_budget": {"max_solver_calls": 33},
+            },
+        ),
+    ),
 )
 
 INDUCED_BIPARTITE_MAXIMUM_OPERATION = _operation(
@@ -185,6 +241,19 @@ INDUCED_BIPARTITE_MAXIMUM_OPERATION = _operation(
     lambda graph, contract, budget: solve_induced_bipartite(graph, contract, budget),
     "induced_bipartite",
     "maximum",
+    examples=(
+        example(
+            "path_3",
+            "Path graph P3.",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                },
+                "resource_budget": {"max_solver_calls": 33},
+            },
+        ),
+    ),
 )
 
 FINITE_GRAPH_OPTIMIZATION_OPERATIONS = (

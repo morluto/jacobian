@@ -371,6 +371,18 @@ CLIQUE_NUMBER_OPERATION = MathTool(
     result_type=GraphCliqueNumberResult,
     run=_clique_execute,
     tags=("graph", "invariant", "clique", "maximum", "bounded", "z3"),
+    examples=(
+        example(
+            "path_graph_3",
+            "Clique number of the path graph P3.",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                },
+            },
+        ),
+    ),
 )
 
 EXACT_GRAPH_INVARIANT_OPERATIONS = (

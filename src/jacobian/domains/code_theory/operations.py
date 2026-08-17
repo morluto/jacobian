@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 from jacobian.contracts.code_theory import (
+    CoveringRadiusRequest,
+    CoveringRadiusResult,
     LinearCodeRequest,
     MinimumDistanceResult,
     WeightDistributionResult,
 )
-from jacobian.math.code_theory import minimum_distance, weight_distribution
+from jacobian.math.code_theory import (
+    covering_radius,
+    minimum_distance,
+    weight_distribution,
+)
 
 
 def compute_min_distance(request: LinearCodeRequest) -> MinimumDistanceResult:
@@ -18,3 +24,8 @@ def compute_min_distance(request: LinearCodeRequest) -> MinimumDistanceResult:
 def compute_weight_dist(request: LinearCodeRequest) -> WeightDistributionResult:
     weights = weight_distribution(request.generator_matrix, request.field_order)  # type: ignore[no-untyped-call]
     return WeightDistributionResult(weights=tuple((w, c) for w, c in weights))
+
+
+def compute_covering_radius(request: CoveringRadiusRequest) -> CoveringRadiusResult:
+    radius = covering_radius(request.generator_matrix, request.field_order)  # type: ignore[no-untyped-call]
+    return CoveringRadiusResult(covering_radius=radius)

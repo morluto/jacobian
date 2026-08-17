@@ -5,6 +5,8 @@ from __future__ import annotations
 from jacobian.contracts.graph_coloring_ops import (
     KColorabilityRequest,
     KColorabilityResult,
+    MaximalIndependentSetRequest,
+    MaximalIndependentSetResult,
     MaximumIndependentSetRequest,
     MaximumIndependentSetResult,
 )
@@ -56,3 +58,29 @@ def compute_maximum_independent_set(
         independent_set=iset,
         cardinality=len(iset),
     )
+
+
+def compute_maximal_independent_set_decision(
+    request: MaximalIndependentSetRequest,
+) -> MaximalIndependentSetResult:
+    """Decide maximal independence and return the first canonical obstruction."""
+    candidate = frozenset(request.candidate_set)
+    edges = tuple(sorted((min(u, v), max(u, v)) for u, v in request.graph.edges))
+    for edge in edges:
+        if edge[0] in candidate and edge[1] in candidate:
+            return MaximalIndependentSetResult(
+                decision="NOT_INDEPENDENT",
+                blocking_edge=edge,
+            )
+
+    adjacency: list[set[int]] = [set() for _ in range(request.graph.vertex_count)]
+    for u, v in edges:
+        adjacency[u].add(v)
+        adjacency[v].add(u)
+    for vertex in range(request.graph.vertex_count):
+        if vertex not in candidate and adjacency[vertex].isdisjoint(candidate):
+            return MaximalIndependentSetResult(
+                decision="INDEPENDENT_NOT_MAXIMAL",
+                addable_vertex=vertex,
+            )
+    return MaximalIndependentSetResult(decision="MAXIMAL")

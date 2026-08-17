@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -53,3 +53,54 @@ class MaximumIndependentSetRequest(ContractModel):
 class MaximumIndependentSetResult(ContractModel):
     independent_set: tuple[int, ...]
     cardinality: int = Field(ge=0, le=20)
+
+
+class MaximalIndependentSetRequest(ContractModel):
+    """One canonical candidate set in a bounded simple graph."""
+
+    graph: GraphEdgeList
+    candidate_set: tuple[int, ...] = Field(max_length=20)
+
+    @model_validator(mode="after")
+    def require_canonical_candidate_set(self) -> Self:
+        if tuple(sorted(self.candidate_set)) != self.candidate_set:
+            raise ValueError("candidate_set must be strictly increasing")
+        if len(set(self.candidate_set)) != len(self.candidate_set):
+            raise ValueError("candidate_set must not contain duplicate vertices")
+        if any(
+            vertex < 0 or vertex >= self.graph.vertex_count
+            for vertex in self.candidate_set
+        ):
+            raise ValueError("candidate vertices must lie in 0..vertex_count-1")
+        return self
+
+
+class MaximalIndependentSetResult(ContractModel):
+    """A closed decision with a concrete rejection witness when applicable."""
+
+    decision: Literal["MAXIMAL", "NOT_INDEPENDENT", "INDEPENDENT_NOT_MAXIMAL"]
+    blocking_edge: tuple[int, int] | None = None
+    addable_vertex: int | None = None
+
+    @model_validator(mode="after")
+    def bind_witness_to_decision(self) -> Self:
+        if self.decision == "MAXIMAL":
+            if self.blocking_edge is not None or self.addable_vertex is not None:
+                raise ValueError("a maximal result must not carry a rejection witness")
+            return self
+        if self.decision == "NOT_INDEPENDENT":
+            if self.blocking_edge is None or self.addable_vertex is not None:
+                raise ValueError(
+                    "a non-independent result requires exactly one blocking edge"
+                )
+            u, v = self.blocking_edge
+            if u < 0 or v < 0 or u >= v:
+                raise ValueError("blocking_edge must be a canonical pair u < v")
+            return self
+        if self.blocking_edge is not None or self.addable_vertex is None:
+            raise ValueError(
+                "an independent non-maximal result requires exactly one addable vertex"
+            )
+        if self.addable_vertex < 0:
+            raise ValueError("addable_vertex must be nonnegative")
+        return self

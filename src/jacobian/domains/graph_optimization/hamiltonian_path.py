@@ -8,6 +8,7 @@ from jacobian.contracts.graph_optimization import (
     GraphHamiltonianPathRequest,
     GraphHamiltonianPathResult,
 )
+from jacobian.domains._examples import example
 from jacobian.domains.graph_optimization.operations import build_simple_graph
 from jacobian.math_tools import MathTool
 
@@ -94,6 +95,18 @@ HAMILTONIAN_PATH_OPERATION: MathTool[
         "decision",
         "exact",
         "bounded",
+    ),
+    examples=(
+        example(
+            "path_graph_3",
+            "Hamiltonian path of the path graph P3.",
+            {
+                "graph": {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [["a", "b"], ["b", "c"]],
+                },
+            },
+        ),
     ),
 )
 

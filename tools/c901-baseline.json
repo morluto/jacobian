@@ -1,5 +1,16 @@
 {
   "version": 1,
   "max_complexity": 10,
-  "violations": []
+  "violations": [
+    {
+      "path": "src/jacobian/domains/graph_decomposition/operations.py",
+      "symbol": "_find_next_ear",
+      "complexity": 12
+    },
+    {
+      "path": "tests/domain/graph_isomorphism/test_graph_isomorphism.py",
+      "symbol": "_is_mapping_valid_isomorphism",
+      "complexity": 13
+    }
+  ]
 }

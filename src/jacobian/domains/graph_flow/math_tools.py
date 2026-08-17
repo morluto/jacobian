@@ -5,6 +5,8 @@ from typing import Any
 
 from jacobian.contracts.base import ContractModel
 from jacobian.contracts.graph_flow import (
+    EdgeDisjointPathsRequest,
+    EdgeDisjointPathsResult,
     MaxFlowRequest,
     MaxFlowResult,
     MinCutRequest,
@@ -12,7 +14,11 @@ from jacobian.contracts.graph_flow import (
 )
 from jacobian.contracts.operations import OperationExample
 from jacobian.domains._examples import example
-from jacobian.domains.graph_flow.operations import compute_max_flow, compute_min_cut
+from jacobian.domains.graph_flow.operations import (
+    compute_edge_disjoint_paths,
+    compute_max_flow,
+    compute_min_cut,
+)
 from jacobian.math_tools import MathTool
 
 
@@ -47,7 +53,7 @@ GRAPH_FLOW_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     graph_flow_operation(
         "graph.flow.maximum.compute",
         "Compute the maximum flow in a capacitated graph",
-        "Compute the maximum flow value between source and sink in a directed capacitated graph using NetworkX.",
+        "Compute the maximum flow value between source and sink in a directed capacitated graph using NetworkX. Returns the flow value and a per-edge flow decomposition so the caller can independently verify conservation and capacity constraints.",
         MaxFlowRequest,
         MaxFlowResult,
         compute_max_flow,
@@ -166,6 +172,37 @@ GRAPH_FLOW_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                                 "target": 3,
                                 "capacity": {"num": "4", "den": "1"},
                             },
+                        ],
+                    },
+                    "source": 0,
+                    "sink": 3,
+                },
+            ),
+        ),
+    ),
+    graph_flow_operation(
+        "graph.menger.edge_disjoint.compute",
+        "Compute the maximum number of edge-disjoint paths (Menger theorem)",
+        "Compute the maximum number of edge-disjoint directed paths between source and sink in a simple directed graph using NetworkX, along with the explicit paths.",
+        EdgeDisjointPathsRequest,
+        EdgeDisjointPathsResult,
+        compute_edge_disjoint_paths,
+        "graph",
+        "menger",
+        "edge-disjoint",
+        "exact",
+        examples=(
+            example(
+                "two_edge_disjoint_paths",
+                "Compute the maximum number of edge-disjoint paths in a diamond graph.",
+                {
+                    "graph": {
+                        "vertex_count": 4,
+                        "edges": [
+                            [0, 1],
+                            [0, 2],
+                            [1, 3],
+                            [2, 3],
                         ],
                     },
                     "source": 0,

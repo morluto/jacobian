@@ -62,6 +62,11 @@ runtime, worker, or second operation surface.
   callbacks, or declaration bundles.
 - Keep operations composable and domain-owned. Discovery must not prescribe a
   proof strategy, next step, or stopping rule.
+- Jacobian is pre-stable. Do not preserve a false request, result, or identity
+  for compatibility. When a contract is broader than the implementation, reports
+  a wrong mathematical value, or turns an accepted request into a host
+  exception, change the contract. Do not add shims, aliases, dual fields, or
+  deprecated-but-accepted shapes to keep the old behavior working.
 
 ## Implement mathematics directly
 
@@ -73,7 +78,11 @@ the operation returns a concrete mathematical value or certificate.
 
 - Prefer a thin typed adapter to maintained backends such as SymPy, FLINT,
   NetworkX or Z3. They are private implementation details, not
-  operation-specific providers. Do not reimplement their kernels.
+  operation-specific providers. Do not reimplement their kernels. A public
+  claim may be no broader than the implementation can establish: if the
+  algorithm cannot exhaust the advertised request, shrink the request or do
+  not expose the operation. A fallback, sentinel, or omitted comparison is
+  not an exact invariant.
 - Use a direct Python binding whenever it can perform the bounded computation.
   A subprocess needs a concrete isolation, killability, or fixed-toolchain
   reason. `lean.check` is the example: one bounded source request, temporary
@@ -84,6 +93,19 @@ the operation returns a concrete mathematical value or certificate.
   call typed kernels directly, and never invoke `math.run` or expose MCP,
   runtime, installation, or storage objects.
 
+### Mathematical boundedness is a proof obligation
+
+Jacobian is a library of mathematical instruments for agents doing high-level
+mathematics and investigating conjectures. Treat every operation as a
+trust-bearing function: do not paper over an unproved algorithm or backend
+limit with a sentinel, truncation, post-hoc conversion failure, or optimistic
+contract. Separately bound the accepted input, algorithmic work and
+intermediates, and exact result or certificate. Derive budgets from the
+mathematics before backend expansion; use explicit, named, tested conservative
+domains when necessary, and narrow the domain or change the typed result when
+the claim cannot be established. Add known-answer, boundary, adversarial, and
+defining-invariant tests.
+
 ## Types and transport
 
 - Domain values own semantics and live with their domain. `jacobian.contracts`
@@ -91,7 +113,11 @@ the operation returns a concrete mathematical value or certificate.
   round trips, or a universal conversion layer to compose operations.
 - Pydantic request/result models are authoritative at operation and wire
   boundaries. Validate the complete strict request before a backend call; keep
-  cross-field invariants with the owning domain model.
+  cross-field invariants with the owning domain model. The request must encode
+  the advertised mathematical domain—bounds, positivity, completeness,
+  non-degeneracy—not only the JSON shape. A request the model accepts must
+  return a typed domain result; mathematical inapplicability belongs in the
+  request validator or the result, not in a raised backend exception.
 - Canonical decimal strings are wire values, not computation values. Use the
   canonical parse/format helpers—never direct `int()` or `str()`—and test above
   4,300 digits whenever the contract permits it.

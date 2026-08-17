@@ -34,7 +34,10 @@ def diameter(graph: nx.Graph[Any]) -> int:
 
 
 def is_eulerian(graph: nx.Graph[Any]) -> bool:
-    return bool(nx.is_eulerian(simple_graph(graph)))
+    g = simple_graph(graph)
+    if len(g) == 0:
+        return False
+    return bool(nx.is_eulerian(g))
 
 
 def compose_graphs(value: GraphCompositionInput) -> SimpleUndirectedGraph:

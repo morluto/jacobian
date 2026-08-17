@@ -1,5 +1,9 @@
 """Code theory operations."""
 
-from jacobian.math.code_theory.operations import minimum_distance, weight_distribution
+from jacobian.math.code_theory.operations import (
+    covering_radius,
+    minimum_distance,
+    weight_distribution,
+)
 
-__all__ = ["minimum_distance", "weight_distribution"]
+__all__ = ["covering_radius", "minimum_distance", "weight_distribution"]

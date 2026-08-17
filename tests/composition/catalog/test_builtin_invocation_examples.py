@@ -1,34 +1,30 @@
-"""Executable contracts for examples advertised by the core domain catalog."""
+"""Executable contracts for examples advertised by the builtin catalog."""
 
 from __future__ import annotations
 
 import pytest
 
-from jacobian.domains.arithmetic import arithmetic_operations
-from jacobian.domains.combinatorics import combinatorics_operations
-from jacobian.domains.finite_sets import finite_set_operations
-from jacobian.domains.number_theory import number_theory_operations
-from jacobian.domains.sequences import sequence_operations
+from jacobian.math_tools import MathTool
+from jacobian.serving_catalog import ServingCatalog
 
-_CORE_OPERATIONS = tuple(
-    operation
-    for declarations in (
-        arithmetic_operations(),
-        combinatorics_operations(),
-        finite_set_operations(),
-        number_theory_operations(),
-        sequence_operations(),
+
+def _builtin_operations() -> tuple[MathTool, ...]:
+    catalog = ServingCatalog.open()
+    return tuple(
+        operation
+        for descriptor in catalog.snapshot().operations
+        if (operation := catalog.operation(descriptor.operation_id)) is not None
     )
-    for operation in declarations
-)
 
 
 @pytest.mark.parametrize(
     "operation",
-    _CORE_OPERATIONS,
+    _builtin_operations(),
     ids=lambda operation: operation.operation_id,
 )
-def test_advertised_invocation_example_executes_successfully(operation) -> None:
+def test_advertised_invocation_example_executes_successfully(
+    operation: MathTool,
+) -> None:
     operation_id = operation.operation_id
     examples = operation.examples
     assert examples, f"{operation_id} must advertise one executable example"
@@ -38,4 +34,9 @@ def test_advertised_invocation_example_executes_successfully(operation) -> None:
         assert isinstance(outcome, operation.result_type), (operation_id, outcome)
         serialized = outcome.model_dump(mode="json")
         assert serialized, f"{operation_id} example produced an empty result"
-        assert operation.result_type.model_validate(serialized) == outcome
+        validated = operation.result_type.model_validate(serialized)
+        assert validated.model_dump(mode="json") == serialized, (
+            operation_id,
+            serialized,
+            validated.model_dump(mode="json"),
+        )

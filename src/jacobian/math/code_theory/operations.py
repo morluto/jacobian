@@ -63,9 +63,7 @@ def _parity_check_matrix(generator_matrix, field_order):  # type: ignore[no-unty
             continue
         rows[pivot_row], rows[pivot] = rows[pivot], rows[pivot_row]
         inverse = pow(rows[pivot_row][column] % field_order, -1, field_order)
-        rows[pivot_row] = [
-            value * inverse % field_order for value in rows[pivot_row]
-        ]
+        rows[pivot_row] = [value * inverse % field_order for value in rows[pivot_row]]
         for index, row in enumerate(rows):
             if index == pivot_row:
                 continue
@@ -82,9 +80,7 @@ def _parity_check_matrix(generator_matrix, field_order):  # type: ignore[no-unty
             break
 
     pivot_set = set(pivot_columns)
-    free_columns = [
-        column for column in range(column_count) if column not in pivot_set
-    ]
+    free_columns = [column for column in range(column_count) if column not in pivot_set]
     check_rows: list[list[int]] = []
     for free_column in free_columns:
         vector = [0] * column_count

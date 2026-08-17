@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from fractions import Fraction
 from itertools import combinations
 
-from sympy import Matrix
+from sympy import Matrix, Rational
 
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.finite_game_theory._models import (
@@ -47,65 +47,116 @@ def compute_best_response(request: ZeroSumGameRequest) -> BestResponseResult:
     return BestResponseResult(value=_format_rational(best_value), best_row=best_row)
 
 
-def _solve_positive_weights(
-    equations: list[list[Fraction]],
-    rhs: list[Fraction],
-) -> list[Fraction] | None:
+def _solve_column_mix(
+    matrix: list[list[Fraction]],
+    rows: Sequence[int],
+    cols: Sequence[int],
+) -> tuple[list[Fraction], Fraction] | None:
+    """Find column mix q (over cols) and game value v.
+
+    Constraints: A[row, ·] · q = v for each row in rows, and sum(q) = 1.
+    The unknowns are q[0..len(cols)-1] and v.
+    """
+    n_cols = len(cols)
+    equations: list[list[Fraction]] = []
+    rhs: list[Fraction] = []
+    for row in rows:
+        equations.append(
+            [Fraction(matrix[row][col]) for col in cols] + [Fraction(-1)]
+        )
+        rhs.append(Fraction(0))
+    equations.append([Fraction(1)] * n_cols + [Fraction(0)])
+    rhs.append(Fraction(1))
+
+    A = Matrix(equations)
+    b = Matrix(rhs)
+
     try:
-        solved = Matrix(equations).solve(Matrix(rhs))
+        solved = A.solve(b)
+    except Exception:
+        try:
+            solved, params = A.gauss_jordan_solve(b)
+        except Exception:
+            return None
+        if not params:
+            return None
+        free_syms = solved.free_symbols
+        if not free_syms:
+            return None
+        for d in (2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16):
+            for num in range(1, d):
+                candidate = Fraction(num, d)
+                subs = {s: Rational(candidate.numerator, candidate.denominator) for s in free_syms}
+                try:
+                    expr = solved.subs(subs)
+                    vals = [Fraction(expr[i]) for i in range(n_cols + 1)]
+                except Exception:
+                    continue
+                if all(v > 0 for v in vals[:n_cols]):
+                    return vals[:n_cols], vals[n_cols]
+        return None
+
+    try:
+        q = [Fraction(solved[i]) for i in range(n_cols)]
+        v = Fraction(solved[n_cols])
     except Exception:
         return None
-    weights = [Fraction(solved[index]) for index in range(len(rhs))]
-    if any(weight <= 0 for weight in weights):
+    if any(weight <= 0 for weight in q):
         return None
-    return weights
+    return q, v
 
 
-def _embed_weights(
-    support: Sequence[int],
-    weights: Sequence[Fraction],
-    size: int,
-) -> list[Fraction]:
-    embedded = [Fraction(0)] * size
-    for index, position in enumerate(support):
-        embedded[position] = weights[index]
-    return embedded
-
-
-def _column_mix_from_rows(
+def _solve_row_mix(
     matrix: list[list[Fraction]],
     rows: Sequence[int],
     cols: Sequence[int],
+    v: Fraction,
 ) -> list[Fraction] | None:
-    first_row = rows[0]
-    equations = [
-        [matrix[row][col] - matrix[first_row][col] for col in cols] for row in rows[1:]
-    ]
-    rhs = [Fraction(0)] * (len(rows) - 1)
-    equations.append([Fraction(1)] * len(cols))
+    """Find row mix p (over rows) s.t. p·A[·,col] = v for all col in cols, sum(p)=1."""
+    n_rows = len(rows)
+    equations: list[list[Fraction]] = []
+    rhs: list[Fraction] = []
+    for col in cols:
+        equations.append([Fraction(matrix[row][col]) for row in rows])
+        rhs.append(v)
+    equations.append([Fraction(1)] * n_rows)
     rhs.append(Fraction(1))
-    weights = _solve_positive_weights(equations, rhs)
-    if weights is None:
-        return None
-    return _embed_weights(cols, weights, len(matrix[0]))
 
+    A = Matrix(equations)
+    b = Matrix(rhs)
 
-def _row_mix_from_cols(
-    matrix: list[list[Fraction]],
-    rows: Sequence[int],
-    cols: Sequence[int],
-) -> list[Fraction] | None:
-    first_col = cols[0]
-    equations = [
-        [matrix[row][col] - matrix[row][first_col] for row in rows] for col in cols[1:]
-    ]
-    rhs = [Fraction(0)] * (len(cols) - 1)
-    equations.append([Fraction(1)] * len(rows))
-    rhs.append(Fraction(1))
-    weights = _solve_positive_weights(equations, rhs)
-    if weights is None:
+    try:
+        solved = A.solve(b)
+    except Exception:
+        try:
+            solved, params = A.gauss_jordan_solve(b)
+        except Exception:
+            return None
+        if not params:
+            return None
+        free_syms = solved.free_symbols
+        if not free_syms:
+            return None
+        for d in (2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16):
+            for num in range(1, d):
+                candidate = Fraction(num, d)
+                subs = {s: Rational(candidate.numerator, candidate.denominator) for s in free_syms}
+                try:
+                    expr = solved.subs(subs)
+                    vals = [Fraction(expr[i]) for i in range(n_rows)]
+                except Exception:
+                    continue
+                if all(v > 0 for v in vals):
+                    return vals
         return None
-    return _embed_weights(rows, weights, len(matrix))
+
+    try:
+        p = [Fraction(solved[i]) for i in range(n_rows)]
+    except Exception:
+        return None
+    if any(weight <= 0 for weight in p):
+        return None
+    return p
 
 
 def _try_support(
@@ -113,32 +164,45 @@ def _try_support(
     rows: Sequence[int],
     cols: Sequence[int],
 ) -> tuple[list[Fraction], list[Fraction], Fraction] | None:
-    q = _column_mix_from_rows(matrix, rows, cols)
-    if q is None:
+    n_rows = len(matrix)
+    n_cols = len(matrix[0])
+
+    col_result = _solve_column_mix(matrix, rows, cols)
+    if col_result is None:
         return None
+    q, v = col_result
+
+    q_full = [Fraction(0)] * n_cols
+    for i, col in enumerate(cols):
+        q_full[col] = q[i]
+
     row_payoffs = [
-        sum(matrix[row][col] * q[col] for col in range(len(q)))
-        for row in range(len(matrix))
+        sum(matrix[row][col] * q_full[col] for col in range(n_cols))
+        for row in range(n_rows)
     ]
-    value = Fraction(row_payoffs[rows[0]])
-    if any(row_payoffs[row] != value for row in rows):
+    if any(row_payoffs[row] != v for row in rows):
         return None
-    if any(row_payoffs[row] > value for row in range(len(matrix)) if row not in rows):
+    if any(row_payoffs[row] > v for row in range(n_rows) if row not in rows):
         return None
-    p = _row_mix_from_cols(matrix, rows, cols)
+
+    p = _solve_row_mix(matrix, rows, cols, v)
     if p is None:
         return None
+
+    p_full = [Fraction(0)] * n_rows
+    for i, row in enumerate(rows):
+        p_full[row] = p[i]
+
     col_payoffs = [
-        sum(p[row] * matrix[row][col] for row in range(len(p)))
-        for col in range(len(matrix[0]))
+        sum(p_full[row] * matrix[row][col] for row in range(n_rows))
+        for col in range(n_cols)
     ]
-    if any(col_payoffs[col] != value for col in cols):
+    if any(col_payoffs[col] != v for col in cols):
         return None
-    if any(
-        col_payoffs[col] < value for col in range(len(matrix[0])) if col not in cols
-    ):
+    if any(col_payoffs[col] < v for col in range(n_cols) if col not in cols):
         return None
-    return p, q, value
+
+    return p_full, q_full, v
 
 
 def compute_nash_equilibrium(request: ZeroSumGameRequest) -> NashEquilibriumResult:
@@ -146,22 +210,26 @@ def compute_nash_equilibrium(request: ZeroSumGameRequest) -> NashEquilibriumResu
     matrix = _payoff_matrix(request)
     n_rows = len(matrix)
     n_cols = len(matrix[0])
-    for support_size in range(1, min(n_rows, n_cols) + 1):
-        for rows in combinations(range(n_rows), support_size):
-            for cols in combinations(range(n_cols), support_size):
-                solved = _try_support(matrix, rows, cols)
-                if solved is None:
-                    continue
-                row_strategy, col_strategy, value = solved
-                return NashEquilibriumResult(
-                    row_strategy=tuple(
-                        _format_rational(weight) for weight in row_strategy
-                    ),
-                    col_strategy=tuple(
-                        _format_rational(weight) for weight in col_strategy
-                    ),
-                    value=_format_rational(value),
-                )
+    for total_support in range(2, n_rows + n_cols + 1):
+        seen_min = max(1, total_support - n_cols)
+        seen_max = min(n_rows, total_support - 1)
+        for row_support_size in range(seen_min, seen_max + 1):
+            col_support_size = total_support - row_support_size
+            for rows in combinations(range(n_rows), row_support_size):
+                for cols in combinations(range(n_cols), col_support_size):
+                    solved = _try_support(matrix, rows, cols)
+                    if solved is None:
+                        continue
+                    row_strategy, col_strategy, value = solved
+                    return NashEquilibriumResult(
+                        row_strategy=tuple(
+                            _format_rational(weight) for weight in row_strategy
+                        ),
+                        col_strategy=tuple(
+                            _format_rational(weight) for weight in col_strategy
+                        ),
+                        value=_format_rational(value),
+                    )
     raise RuntimeError("zero-sum game has no mixed Nash equilibrium")
 
 

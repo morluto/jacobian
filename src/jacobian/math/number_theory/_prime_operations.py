@@ -23,11 +23,9 @@ def compute_next_prime(request: NonnegativeIntegerRequest) -> IntegerValueResult
     return IntegerValueResult(value=str(int(nextprime(request.n))))
 
 
-def compute_previous_prime(request: NonnegativeIntegerRequest) -> IntegerValueResult:
+def compute_previous_prime(request: PreviousPrimeRequest) -> IntegerValueResult:
     from sympy import prevprime
 
-    if request.n <= 2:
-        raise ValueError("previous prime requires n greater than 2")
     return IntegerValueResult(value=str(int(prevprime(request.n))))
 
 
@@ -43,7 +41,7 @@ def compute_nth_prime(request: PositiveIntegerRequest) -> IntegerValueResult:
     return IntegerValueResult(value=str(int(prime(request.n))))
 
 
-def compute_primorial(request: NonnegativeIntegerRequest) -> IntegerValueResult:
+def compute_primorial(request: PositiveIntegerRequest) -> IntegerValueResult:
     from sympy import primorial
 
     return IntegerValueResult(value=str(int(primorial(request.n))))

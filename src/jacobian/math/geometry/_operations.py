@@ -23,7 +23,8 @@ from jacobian.math.geometry._models import (
     PointPairRequest,
     PointQuadrupleRequest,
     PointSetRequest,
-    PointTripleRequest,
+    CircumcircleRequest,
+PointTripleRequest,
     PolygonIntersectionWitness,
     PolygonPointClassificationResult,
     PolygonRequest,
@@ -305,13 +306,11 @@ def centroid(request: PointTripleRequest) -> GeometryPointResult:
     )
 
 
-def circumcircle(request: PointTripleRequest) -> GeometryCircleResult:
-    from sympy.geometry import Circle, Point2D
+def circumcircle(request: CircumcircleRequest) -> GeometryCircleResult:
+    from sympy.geometry import Circle
 
     triple = request
     points = [_point(triple.first), _point(triple.second), _point(triple.third)]
-    if Point2D.is_collinear(*points):
-        raise ValueError("a circumcircle requires three noncollinear points")
     circle = Circle(*points)
     return GeometryCircleResult(
         center=_wire_point(circle.center),
@@ -320,11 +319,16 @@ def circumcircle(request: PointTripleRequest) -> GeometryCircleResult:
 
 
 def signed_area(request: PolygonRequest) -> GeometryRationalResult:
-    from sympy.geometry import Polygon
+    from fractions import Fraction
 
     polygon = request
-    value = Polygon(*(_point(point) for point in polygon.points)).area
-    return GeometryRationalResult(value=_wire_rational(value))
+    points = [_point(point) for point in polygon.points]
+    # Shoelace formula: works for any polygon including degenerate/collinear ones.
+    total = Fraction(0)
+    for index, current in enumerate(points):
+        following = points[(index + 1) % len(points)]
+        total += Fraction(current.x * following.y - current.y * following.x)
+    return GeometryRationalResult(value=_wire_rational(total / 2))
 
 
 def simple_polygon(request: PolygonRequest) -> SimplePolygonDecisionResult:

@@ -45,7 +45,7 @@ def sequence_product(request: IntegerSequenceRequest) -> IntegerSequenceValueRes
 
 
 def sequence_gcd(request: IntegerSequenceRequest) -> IntegerSequenceValueResult:
-    return _value_result(reduce(math.gcd, _values(request)))
+    return _value_result(reduce(math.gcd, _values(request), 0))
 
 
 def sequence_lcm(request: IntegerSequenceRequest) -> IntegerSequenceValueResult:
@@ -144,7 +144,7 @@ def prefix_maxima(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
 
 def prefix_gcds(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
     values = _values(request)
-    result = [values[0]]
+    result = [abs(values[0])]
     for value in values[1:]:
         result.append(math.gcd(result[-1], value))
     return _list_result(result)
@@ -152,7 +152,7 @@ def prefix_gcds(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
 
 def prefix_lcms(request: IntegerSequenceRequest) -> IntegerSequenceListResult:
     values = _values(request)
-    result = [values[0]]
+    result = [abs(values[0])]
     for value in values[1:]:
         result.append(math.lcm(result[-1], value))
     return _list_result(result)

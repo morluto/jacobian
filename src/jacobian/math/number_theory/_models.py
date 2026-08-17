@@ -160,6 +160,12 @@ class PositiveIntegerRequest(StrictModel):
     n: StrictInt = Field(ge=1, le=_MAX_N_SMALL)
 
 
+class PreviousPrimeRequest(StrictModel):
+    """One bounded integer n >= 3 for previous-prime queries."""
+
+    n: StrictInt = Field(ge=3, le=_MAX_N_SMALL)
+
+
 class FloorSquareRootRequest(StrictModel):
     n: StrictInt = Field(ge=0, le=1_000_000_000_000)
 

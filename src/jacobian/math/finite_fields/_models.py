@@ -40,6 +40,12 @@ class ProjectiveLineRequest(StrictModel):
     presentation: FiniteFieldPresentation
     axis: Axis
 
+    @model_validator(mode="after")
+    def require_two_coordinate_axis(self) -> Self:
+        if len(self.axis.labels) != 2:
+            raise ValueError("projective-line enumeration requires a two-coordinate axis")
+        return self
+
 
 class DirectionRankLedgerRequest(StrictModel):
     subspace: FiniteDimensionalSubspace

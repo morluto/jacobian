@@ -26,12 +26,14 @@ make check
 
 Then open a pull request. `make setup` installs the locked development
 environment with the complete maintained Python backend stack. `make check`
-runs Ruff, mypy, and the unit lane. Add the named `make test-*` lane for the
-behavior or boundary changed; CI runs the complete fixed semantic matrix.
+runs Ruff, mypy, and the Lean-free math, catalog, dispatch, CLI, and tooling
+owners. Add the named `make test-*` lane for the behavior or boundary changed;
+CI runs the complete fixed semantic matrix.
 Open the PR once it is green, and add any explicitly relevant specialist
 validation called out below.
 
-`make quick` is the cheaper loop: lint and `tests/unit` only. The
+`make quick` is the cheaper loop: it omits mypy but runs the same Lean-free
+owner tests. The
 pre-push hook stays `make lint typecheck`. Focused debugging uses
 `uv run pytest path/to/test.py`. Default `uv run pytest` collects the ordinary
 Lean-free `testpaths`; it does not run storage, process, MCP, or Lean trees.
@@ -43,8 +45,7 @@ enabled on `main`; without a queue, Lean only runs after a push to `main`. You
 do not need to reproduce Lean locally for a routine change unless you edited
 the fixed Lean check or its toolchain configuration.
 
-Specialist lanes (`make test-lean`, `make test-process`, `make test-mcp`,
-`make test-domain`, and `make test-composition`) are
+Specialist lanes (`make test-lean`, `make test-process`, and `make test-mcp`) are
 troubleshooting and boundary work, not a routine
 confidence gate. Run one only when your change crosses that boundary or you are
 reproducing an environment-specific failure. The
@@ -66,8 +67,8 @@ operation.
 - **Lean:** `make check-external` when the fixed Lean check or its toolchain
   configuration changes. That target is the pinned Lean specialist lane only
   (`test-lean`).
-- **Maintained Python libraries:** run the owning domain or unit test when a
-  direct mathematical adapter changes. Hosted CI runs full Lean on merge-group
+- **Maintained Python libraries:** run the owning `tests/math` test when a
+  direct mathematical backend changes. Hosted CI runs full Lean on merge-group
   candidates and `main` (and after a push to `main` if merge queue is not
   enabled); pull requests skip that specialist job.
 - **Exhaustive local reproduction:** `make test-full` is an explicit exception
@@ -87,8 +88,8 @@ Jacobian uses Python 3.12 and the uv release pinned in [`.uv-version`](.uv-versi
 make setup          # locked dev environment and Python backends
 ```
 
-`make check` is the bounded lint, type, and unit handoff; `make quick` omits
-typechecking for a shorter edit loop.
+`make check` is the bounded lint, type, and Lean-free owner handoff;
+`make quick` omits typechecking for a shorter edit loop.
 `make check-all` explicitly reproduces every ordinary Python CI lane. The
 pre-push hook intentionally runs only
 `make lint typecheck` so it stays below the interactive feedback budget.
@@ -130,7 +131,7 @@ evidence was invalidated by that change; do not describe results from an
 earlier tree as final-tree validation. `make check-all` is an explicit broad
 reproduction, not a routine closeout requirement. CI owns the complete matrix.
 Use `make check-external` when the fixed Lean check changes, and run the owning
-domain or unit test when a maintained Python adapter changes.
+mathematical test when a maintained Python backend changes.
 
 ## Harbor and Oracle validation
 
@@ -243,16 +244,17 @@ success criteria are concrete.
 
 ## Test ownership and selection
 
-Test directories define semantic ownership: `tests/unit`, `tests/component`,
-`tests/domain`, `tests/composition`, and `tests/boundary`. Use the
-matching `make test-*` target as the canonical entry point. Markers are retained
+Test directories mirror their semantic owners: `tests/math`, `tests/catalog`,
+`tests/dispatch`, `tests/cli`, `tests/tooling`, and `tests/integration`, with
+separate `tests/process` and `tests/mcp` boundary owners. Use the matching
+`make test-*` target as the canonical entry point. Markers are retained
 only when they alter execution: `requires_provider(name)`,
-`property`, and `exhaustive`. They do not replace
+`requires_lean`, `property`, and `exhaustive`. They do not replace
 directory ownership. Scheduled validation owns `make test-exhaustive`; keep a
 representative behavioral case in the ordinary owning lane.
 
-Lane execution follows the test directory layout. MCP and Lean stay on named
-Make targets because they exercise transport and kill-safe process boundaries.
+Lane execution follows those owners. MCP, process, and Lean stay on named Make
+targets because they exercise transport and kill-safe process boundaries.
 Prefer a direct domain test, then a focused MCP test only when the public
 projection changes.
 

@@ -99,7 +99,7 @@ Jacobian 使用 Python 3.12、`uv` 和一个精简的 `Makefile`：
 
 ```sh
 make setup
-make test-unit
+make test-math
 make check
 ```
 

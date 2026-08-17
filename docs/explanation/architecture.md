@@ -27,6 +27,15 @@ are private implementation details. HNF, LLL, and Smith-related direct
 computations call maintained backends in process; a subprocess is retained only
 where actual external isolation is required.
 
+Each mathematical owner keeps its public values and functions in ordinary
+semantic modules, private Pydantic wire models in `_models.py` where needed,
+and its immutable `TOOLS` tuple in `_tools.py`. There is no parallel
+`contracts/` or `domains/` package. `jacobian.catalog` owns declaration models,
+explicit built-in imports, search, and immutable lookup; `jacobian.dispatch`
+owns strict invocation; `jacobian.mcp` and the CLI are delivery boundaries.
+The private root model and exact-scalar helpers contain only behavior genuinely
+shared by unrelated owners.
+
 Logic follows the same rule. CNF canonicalization and assignment checks are
 pure direct operations. SAT and bounded QF SMT-LIB solving call the maintained
 Z3 Python binding in process. `lean.check` is a one-shot external boundary: it

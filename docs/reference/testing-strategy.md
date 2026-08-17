@@ -15,13 +15,16 @@ make setup
 make check
 ```
 
-`make check` runs Ruff, mypy, and the unit suite. Add the narrowest named lane
-when a change crosses its real boundary:
+`make check` runs Ruff, mypy, and the Lean-free math, catalog, dispatch, CLI,
+and tooling owners. Add the narrowest named lane when a change crosses its
+real boundary:
 
 | Change | Additional check |
 | --- | --- |
 | MCP tool schema or transport | `make test-mcp` |
-| One mathematical domain | `make test-unit TESTS=tests/unit/domains/test_logic_operations.py` |
+| One mathematical domain | `make test-math TESTS=tests/math/logic/test_tools.py` |
+| Cross-owner behavior | `make test-integration` |
+| Child-process behavior | `make test-process` |
 | Documentation | `make docs-linkcheck` |
 
 `make check-all` is an intentional broad reproduction. Do not use a full suite
@@ -30,7 +33,7 @@ as a substitute for a focused regression test.
 ## What to test
 
 For an operation, test the typed request boundary, the domain result, and a
-real caller-visible invocation when the MCP projection changed. The composition
+real caller-visible invocation when the MCP projection changed. The integration
 catalog test executes every advertised invocation example. A result that
 feeds another operation should be passed as the next typed payload; do not add
 tests for producer IDs, stored references, serialization round trips inside the

@@ -108,9 +108,11 @@ defining-invariant tests.
 
 ## Types and transport
 
-- Domain values own semantics and live with their domain. `jacobian.contracts`
-  is only for passive cross-domain primitives. Do not use backend objects, JSON
-  round trips, or a universal conversion layer to compose operations.
+- Domain values, request/result models, and declarations live with their owner
+  under `jacobian.math`. The private root model helpers are limited to strict
+  parsing and canonical scalar primitives shared by unrelated owners. Do not
+  restore a global contract tree, use backend objects or JSON round trips to
+  compose operations, or introduce a universal conversion layer.
 - Pydantic request/result models are authoritative at operation and wire
   boundaries. Validate the complete strict request before a backend call; keep
   cross-field invariants with the owning domain model. The request must encode

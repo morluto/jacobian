@@ -30,8 +30,10 @@ from jacobian.math.arithmetic._models import (
     IntegerValueResult,
 )
 from jacobian.math.arithmetic._rational_models import (
+    NonzeroRationalValueRequest,
     RationalComparisonResult,
     RationalContinuedFractionResult,
+    RationalDivisionRequest,
     RationalIntegerResult,
     RationalPairRequest,
     RationalValueRequest,
@@ -75,7 +77,6 @@ def decimal_digit_count(request: IntegerValueRequest) -> IntegerValueResult:
 
 
 def base_digits(request: IntegerBaseDigitsRequest) -> IntegerBaseDigitsResult:
-    _require_bounded_base_expansion(request.value, request.base)
     from sympy.ntheory import digits as sympy_digits
 
     value = _int(request.value)
@@ -94,25 +95,10 @@ def base_digits(request: IntegerBaseDigitsRequest) -> IntegerBaseDigitsResult:
     )
 
 
-def _require_bounded_base_expansion(value: str, base: int) -> None:
-    """Reject inputs that necessarily exceed the bounded positional output."""
-
-    magnitude = value.lstrip("-")
-    maximum_value = format_canonical_integer(base**MAX_BASE_DIGITS)
-    if len(magnitude) > len(maximum_value) or (
-        len(magnitude) == len(maximum_value) and magnitude >= maximum_value
-    ):
-        raise ValueError(
-            f"base expansion exceeds the {MAX_BASE_DIGITS}-digit result bound"
-        )
-
-
 def nth_root(request: IntegerNthRootRequest) -> IntegerNthRootResult:
     from sympy import integer_nthroot
 
     value = _int(request.value)
-    if value < 0 and request.degree % 2 == 0:
-        raise ValueError("even root of a negative integer is not integral-real")
     root, exact = integer_nthroot(abs(value), request.degree)
     if value < 0 and not exact:
         root += 1
@@ -133,11 +119,8 @@ def _wire(value: Fraction) -> CanonicalRational:
     )
 
 
-def reciprocal(request: RationalValueRequest) -> RationalValueResult:
-    try:
-        value = native_arithmetic.reciprocal(_fraction(request.value))
-    except ZeroDivisionError as exc:
-        raise ValueError(str(exc)) from exc
+def reciprocal(request: NonzeroRationalValueRequest) -> RationalValueResult:
+    value = native_arithmetic.reciprocal(_fraction(request.value))
     return RationalValueResult(value=_wire(value))
 
 
@@ -171,13 +154,10 @@ def product(request: RationalPairRequest) -> RationalValueResult:
     )
 
 
-def quotient(request: RationalPairRequest) -> RationalValueResult:
-    try:
-        value = native_arithmetic.quotient(
-            _fraction(request.left), _fraction(request.right)
-        )
-    except ZeroDivisionError as exc:
-        raise ValueError(str(exc)) from exc
+def quotient(request: RationalDivisionRequest) -> RationalValueResult:
+    value = native_arithmetic.quotient(
+        _fraction(request.left), _fraction(request.right)
+    )
     return RationalValueResult(value=_wire(value))
 
 

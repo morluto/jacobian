@@ -14,6 +14,7 @@ from pydantic import Field, StringConstraints, model_validator
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 
 # ---------------------------------------------------------------------------
 # Shared bounds
@@ -61,6 +62,19 @@ class IntegerBaseDigitsRequest(StrictModel):
     value: CanonicalInteger
     base: int = Field(ge=2, le=_MAX_BASE)
 
+    @model_validator(mode="after")
+    def require_bounded_output(self) -> Self:
+        """Reject inputs that necessarily exceed the bounded positional output."""
+        magnitude = self.value.lstrip("-")
+        maximum_value = format_canonical_integer(self.base**MAX_BASE_DIGITS)
+        if len(magnitude) > len(maximum_value) or (
+            len(magnitude) == len(maximum_value) and magnitude >= maximum_value
+        ):
+            raise ValueError(
+                f"base expansion exceeds the {MAX_BASE_DIGITS}-digit result bound"
+            )
+        return self
+
 
 # ---------------------------------------------------------------------------
 # Requests — nth root
@@ -68,10 +82,20 @@ class IntegerBaseDigitsRequest(StrictModel):
 
 
 class IntegerNthRootRequest(StrictModel):
-    """One canonical integer and a positive root degree."""
+    """One canonical integer and a positive root degree.
+
+    A negative value requires an odd degree; an even root of a negative integer
+    is not integral-real.
+    """
 
     value: CanonicalInteger
     degree: int = Field(ge=1, le=_MAX_NONNEGATIVE)
+
+    @model_validator(mode="after")
+    def require_valid_root_domain(self) -> Self:
+        if int(self.value) < 0 and self.degree % 2 == 0:
+            raise ValueError("even root of a negative integer is not integral-real")
+        return self
 
 
 # ---------------------------------------------------------------------------

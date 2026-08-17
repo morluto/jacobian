@@ -28,6 +28,7 @@ from jacobian.math.matrices._operation_models import (
     RationalMatrixProductRequest,
     RationalMatrixRequest,
     RrefResult,
+    NonsingularIntegerMatrixRequest,
     SquareIntegerMatrixRequest,
     SquareRationalMatrixRequest,
 )
@@ -120,7 +121,7 @@ def compute_smith_normal_form(
     return conversions.smith_normal_form_from_sympy(raw)
 
 
-def compute_inverse(request: SquareIntegerMatrixRequest) -> MatrixInverseResult:
+def compute_inverse(request: NonsingularIntegerMatrixRequest) -> MatrixInverseResult:
     inverse = matrices.inverse(conversions.integer_matrix_to_sympy(request.matrix))
     return MatrixInverseResult(inverse=conversions.rational_matrix_from_sympy(inverse))
 

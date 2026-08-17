@@ -135,12 +135,26 @@ class DivisibilityRequest(StrictModel):
     divisor: BoundedInteger
     dividend: BoundedInteger
 
+    @model_validator(mode="after")
+    def require_nonzero_divisor(self) -> Self:
+        if int(self.divisor) == 0:
+            raise ValueError("divisor must be nonzero")
+        return self
+
 
 class ValuationRequest(StrictModel):
     """One integer and a prime base supplied to a p-adic valuation."""
 
     value: BoundedInteger
     prime: BoundedInteger
+
+    @model_validator(mode="after")
+    def require_valid_valuation_domain(self) -> Self:
+        if int(self.value) == 0:
+            raise ValueError("valuation requires nonzero value")
+        if int(self.prime) < 2:
+            raise ValueError("valuation requires a prime absolute base >= 2")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -183,9 +197,11 @@ class LegendreSymbolRequest(StrictModel):
     prime: StrictInt = Field(ge=3, le=10_000_000)
 
     @model_validator(mode="after")
-    def require_odd_denominator(self) -> Self:
-        if self.prime % 2 == 0:
-            raise ValueError("Legendre denominator must be odd")
+    def require_prime_denominator(self) -> Self:
+        from sympy import isprime
+
+        if not isprime(self.prime):
+            raise ValueError("Legendre denominator must be prime")
         return self
 
 
@@ -218,6 +234,21 @@ class ModularValueRequest(StrictModel):
 
     value: BoundedInteger
     modulus: StrictInt = Field(ge=2, le=_MAX_MODULUS)
+
+
+class ModularUnitRequest(StrictModel):
+    """One canonical integer and a bounded modulus where the value must be a unit."""
+
+    value: BoundedInteger
+    modulus: StrictInt = Field(ge=2, le=_MAX_MODULUS)
+
+    @model_validator(mode="after")
+    def require_coprime(self) -> Self:
+        from math import gcd
+
+        if gcd(int(self.value), self.modulus) != 1:
+            raise ValueError("value must be coprime to the modulus")
+        return self
 
 
 class ModulusRequest(StrictModel):
@@ -324,6 +355,14 @@ class ChineseRemainderRequest(StrictModel):
             for residue, modulus in zip(self.residues, self.moduli, strict=True)
         ):
             raise ValueError("every residue must be canonical for its modulus")
+        # Check pairwise consistency: residues must agree modulo gcd(moduli).
+        from math import gcd
+
+        for i in range(len(self.moduli)):
+            for j in range(i + 1, len(self.moduli)):
+                g = gcd(self.moduli[i], self.moduli[j])
+                if (self.residues[i] - self.residues[j]) % g != 0:
+                    raise ValueError("congruence system is inconsistent")
         return self
 
 

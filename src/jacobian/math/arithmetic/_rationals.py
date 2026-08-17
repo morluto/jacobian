@@ -25,8 +25,10 @@ from jacobian.math.arithmetic._operations import (
     sum_rationals,
 )
 from jacobian.math.arithmetic._rational_models import (
+    NonzeroRationalValueRequest,
     RationalComparisonResult,
     RationalContinuedFractionResult,
+    RationalDivisionRequest,
     RationalIntegerResult,
     RationalPairRequest,
     RationalValueRequest,
@@ -39,7 +41,7 @@ RATIONAL_OPERATIONS = (
         "rational.compute.reciprocal",
         "Compute rational reciprocal",
         "Compute the reduced reciprocal of one nonzero rational.",
-        RationalValueRequest,
+        NonzeroRationalValueRequest,
         RationalValueResult,
         reciprocal,
         "rational",
@@ -141,7 +143,7 @@ RATIONAL_OPERATIONS = (
         "rational.compute.quotient",
         "Divide rationals",
         "Compute the reduced quotient of two rationals.",
-        RationalPairRequest,
+        RationalDivisionRequest,
         RationalValueResult,
         quotient,
         "rational",

@@ -142,6 +142,27 @@ class IntegerMatrixRequest(StrictModel):
         return self
 
 
+class NonsingularIntegerMatrixRequest(StrictModel):
+    """A square integer matrix that must be nonsingular (invertible)."""
+
+    matrix: IntegerMatrix
+
+    @model_validator(mode="after")
+    def require_square_and_nonsingular(self) -> Self:
+        rows = len(self.matrix.entries)
+        if rows == 0 or rows != len(self.matrix.entries[0]):
+            raise ValueError("operation requires a square integer matrix")
+        require_matrix_scalar_digits(
+            self.matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
+        )
+        from sympy import Matrix
+
+        raw = Matrix([[int(str(v)) for v in row] for row in self.matrix.entries])
+        if raw.det() == 0:
+            raise ValueError("matrix is singular; inverse does not exist")
+        return self
+
+
 class SquareIntegerMatrixRequest(StrictModel):
     matrix: IntegerMatrix
 

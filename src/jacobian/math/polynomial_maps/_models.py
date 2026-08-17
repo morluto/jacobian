@@ -96,6 +96,23 @@ class JacobianRequest(StrictModel):
         min_length=1, max_length=20
     )
 
+    @model_validator(mode="after")
+    def require_unique_and_complete_variables(self) -> Self:
+        if len(set(self.input_variables)) != len(self.input_variables):
+            raise ValueError("input variables must be unique")
+        declared = set(self.input_variables)
+        import sympy
+
+        for poly in self.output_polynomials:
+            expression = sympy.sympify(poly.expression)
+            free = {str(s) for s in expression.free_symbols}
+            undeclared = free - declared
+            if undeclared:
+                raise ValueError(
+                    f"output polynomial references undeclared variables: {undeclared}"
+                )
+        return self
+
 
 class JacobianResult(StrictModel):
     """The Jacobian matrix as a flat list of entries (row-major order)."""
@@ -112,6 +129,26 @@ class CompositionRequest(StrictModel):
     inner: RationalPolynomialExpr
     inner_variable: str
     outer_variable: str
+
+    @model_validator(mode="after")
+    def require_valid_composition(self) -> Self:
+        import sympy
+
+        outer_expr = sympy.sympify(self.outer.expression)
+        outer_free = {str(s) for s in outer_expr.free_symbols}
+        if self.outer_variable not in outer_free:
+            raise ValueError(
+                f"outer variable '{self.outer_variable}' must appear in the outer polynomial"
+            )
+
+        inner_expr = sympy.sympify(self.inner.expression)
+        inner_free = {str(s) for s in inner_expr.free_symbols}
+        if self.inner_variable not in inner_free:
+            raise ValueError(
+                f"inner variable '{self.inner_variable}' must appear in the inner polynomial"
+            )
+
+        return self
 
 
 class CompositionResult(StrictModel):

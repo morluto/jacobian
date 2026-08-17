@@ -152,7 +152,12 @@ def test_contract_rejects_invalid_accepting_states() -> None:
         DFA(
             state_count=2,
             alphabet_size=2,
-            transitions=(),
+            transitions=(
+                DFATransition(source=0, symbol=0, target=0),
+                DFATransition(source=0, symbol=1, target=0),
+                DFATransition(source=1, symbol=0, target=0),
+                DFATransition(source=1, symbol=1, target=0),
+            ),
             initial_state=0,
             accepting_states=(5,),  # out of range
         )
@@ -162,3 +167,20 @@ def test_contract_rejects_out_of_range_word_symbol() -> None:
     dfa = _dfa_ends_in_1()
     with pytest.raises(ValidationError, match="word symbols"):
         RunRequest(dfa=dfa, word=(5,))  # symbol 5 is out of range for alphabet_size=2
+
+
+def test_contract_rejects_non_total_dfa() -> None:
+    """A DFA missing a transition for some (state, symbol) pair must be rejected."""
+    with pytest.raises(ValidationError, match="total"):
+        DFA(
+            state_count=2,
+            alphabet_size=2,
+            transitions=(
+                DFATransition(source=0, symbol=0, target=0),
+                DFATransition(source=0, symbol=1, target=1),
+                DFATransition(source=1, symbol=0, target=0),
+                # missing (1, symbol=1)
+            ),
+            initial_state=0,
+            accepting_states=(1,),
+        )

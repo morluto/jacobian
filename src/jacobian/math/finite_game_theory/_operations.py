@@ -47,6 +47,43 @@ def compute_best_response(request: ZeroSumGameRequest) -> BestResponseResult:
     return BestResponseResult(value=_format_rational(best_value), best_row=best_row)
 
 
+def _solve_underdetermined_mix(
+    equations: list[list[Fraction]],
+    rhs: list[Fraction],
+    n_positive: int,
+) -> tuple[list[Fraction], Fraction] | None:
+    """Find a strictly positive rational solution of an underdetermined system.
+
+    The leading ``n_positive`` unknowns must be positive; a trailing value
+    (the game value) is returned unconstrained. Searches a small rational grid
+    over the free parameters.
+    """
+    try:
+        solved, params = Matrix(equations).gauss_jordan_solve(Matrix(rhs))
+    except Exception:
+        return None
+    if not params:
+        return None
+    free_syms = solved.free_symbols
+    if not free_syms:
+        return None
+    for d in (2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16):
+        for num in range(1, d):
+            candidate = Fraction(num, d)
+            subs = {
+                s: Rational(candidate.numerator, candidate.denominator)
+                for s in free_syms
+            }
+            try:
+                expr = solved.subs(subs)
+                vals = [Fraction(expr[i]) for i in range(n_positive + 1)]
+            except Exception:
+                continue
+            if all(v > 0 for v in vals[:n_positive]):
+                return vals[:n_positive], vals[n_positive]
+    return None
+
+
 def _solve_column_mix(
     matrix: list[list[Fraction]],
     rows: Sequence[int],
@@ -61,46 +98,20 @@ def _solve_column_mix(
     equations: list[list[Fraction]] = []
     rhs: list[Fraction] = []
     for row in rows:
-        equations.append(
-            [Fraction(matrix[row][col]) for col in cols] + [Fraction(-1)]
-        )
+        equations.append([Fraction(matrix[row][col]) for col in cols] + [Fraction(-1)])
         rhs.append(Fraction(0))
     equations.append([Fraction(1)] * n_cols + [Fraction(0)])
     rhs.append(Fraction(1))
 
-    A = Matrix(equations)
-    b = Matrix(rhs)
-
     try:
-        solved = A.solve(b)
-    except Exception:
-        try:
-            solved, params = A.gauss_jordan_solve(b)
-        except Exception:
-            return None
-        if not params:
-            return None
-        free_syms = solved.free_symbols
-        if not free_syms:
-            return None
-        for d in (2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16):
-            for num in range(1, d):
-                candidate = Fraction(num, d)
-                subs = {s: Rational(candidate.numerator, candidate.denominator) for s in free_syms}
-                try:
-                    expr = solved.subs(subs)
-                    vals = [Fraction(expr[i]) for i in range(n_cols + 1)]
-                except Exception:
-                    continue
-                if all(v > 0 for v in vals[:n_cols]):
-                    return vals[:n_cols], vals[n_cols]
-        return None
-
-    try:
+        solved = Matrix(equations).solve(Matrix(rhs))
         q = [Fraction(solved[i]) for i in range(n_cols)]
         v = Fraction(solved[n_cols])
     except Exception:
-        return None
+        fallback = _solve_underdetermined_mix(equations, rhs, n_cols)
+        if fallback is None:
+            return None
+        q, v = fallback
     if any(weight <= 0 for weight in q):
         return None
     return q, v
@@ -122,38 +133,14 @@ def _solve_row_mix(
     equations.append([Fraction(1)] * n_rows)
     rhs.append(Fraction(1))
 
-    A = Matrix(equations)
-    b = Matrix(rhs)
-
     try:
-        solved = A.solve(b)
-    except Exception:
-        try:
-            solved, params = A.gauss_jordan_solve(b)
-        except Exception:
-            return None
-        if not params:
-            return None
-        free_syms = solved.free_symbols
-        if not free_syms:
-            return None
-        for d in (2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16):
-            for num in range(1, d):
-                candidate = Fraction(num, d)
-                subs = {s: Rational(candidate.numerator, candidate.denominator) for s in free_syms}
-                try:
-                    expr = solved.subs(subs)
-                    vals = [Fraction(expr[i]) for i in range(n_rows)]
-                except Exception:
-                    continue
-                if all(v > 0 for v in vals):
-                    return vals
-        return None
-
-    try:
+        solved = Matrix(equations).solve(Matrix(rhs))
         p = [Fraction(solved[i]) for i in range(n_rows)]
     except Exception:
-        return None
+        fallback = _solve_underdetermined_mix(equations, rhs, n_rows)
+        if fallback is None:
+            return None
+        p, _ = fallback
     if any(weight <= 0 for weight in p):
         return None
     return p

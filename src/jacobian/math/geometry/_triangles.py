@@ -2,10 +2,10 @@
 
 from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import (
+    CircumcircleRequest,
     GeometryCircleResult,
     GeometryOrientationResult,
     GeometryPointResult,
-    CircumcircleRequest,
     PointTripleRequest,
 )
 from jacobian.math.geometry._operations import centroid, circumcircle, orientation

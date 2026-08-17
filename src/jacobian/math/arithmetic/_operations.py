@@ -20,7 +20,6 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math import arithmetic as native_arithmetic
 from jacobian.math.arithmetic._models import (
-    MAX_BASE_DIGITS,
     IntegerBaseDigitsRequest,
     IntegerBaseDigitsResult,
     IntegerNthRootRequest,

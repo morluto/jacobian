@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Self
+
 from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalInteger, CanonicalRational

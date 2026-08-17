@@ -48,3 +48,5 @@ benchmarks/results/
 .test_durations
 .jacobian-validation.lock
 tmp/
+# Local agent worktrees
+.trees/

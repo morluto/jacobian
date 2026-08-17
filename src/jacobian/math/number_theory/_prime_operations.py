@@ -8,6 +8,7 @@ from jacobian.math.number_theory._models import (
     IntegerValueResult,
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,
+    PreviousPrimeRequest,
 )
 
 

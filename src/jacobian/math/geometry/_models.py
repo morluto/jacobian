@@ -156,10 +156,18 @@ class CircumcircleRequest(PointTripleRequest):
         if len(set(keys)) != len(keys):
             raise ValueError("circumcircle requires three distinct points")
         p0, p1, p2 = points
-        dx1 = Fraction(int(p1.x.num), int(p1.x.den)) - Fraction(int(p0.x.num), int(p0.x.den))
-        dy1 = Fraction(int(p1.y.num), int(p1.y.den)) - Fraction(int(p0.y.num), int(p0.y.den))
-        dx2 = Fraction(int(p2.x.num), int(p2.x.den)) - Fraction(int(p0.x.num), int(p0.x.den))
-        dy2 = Fraction(int(p2.y.num), int(p2.y.den)) - Fraction(int(p0.y.num), int(p0.y.den))
+        dx1 = Fraction(int(p1.x.num), int(p1.x.den)) - Fraction(
+            int(p0.x.num), int(p0.x.den)
+        )
+        dy1 = Fraction(int(p1.y.num), int(p1.y.den)) - Fraction(
+            int(p0.y.num), int(p0.y.den)
+        )
+        dx2 = Fraction(int(p2.x.num), int(p2.x.den)) - Fraction(
+            int(p0.x.num), int(p0.x.den)
+        )
+        dy2 = Fraction(int(p2.y.num), int(p2.y.den)) - Fraction(
+            int(p0.y.num), int(p0.y.den)
+        )
         if dx1 * dy2 - dy1 * dx2 == 0:
             raise ValueError("circumcircle requires three noncollinear points")
         return self

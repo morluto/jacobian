@@ -13,7 +13,6 @@ from jacobian.math.number_theory._models import (
     ModularPolynomialResidueImageRequest,
     ModularPolynomialResidueImageResult,
     ModularUnitRequest,
-    ModularValueRequest,
     ModulusRequest,
     QuadraticResiduesResult,
 )

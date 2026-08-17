@@ -65,9 +65,7 @@ def compute_maximal_independent_set_decision(
 ) -> MaximalIndependentSetResult:
     """Decide maximal independence and return the first canonical obstruction."""
     candidate = frozenset(request.candidate_set)
-    edges = tuple(
-        sorted((min(u, v), max(u, v)) for u, v in request.graph.edges)
-    )
+    edges = tuple(sorted((min(u, v), max(u, v)) for u, v in request.graph.edges))
     for edge in edges:
         if edge[0] in candidate and edge[1] in candidate:
             return MaximalIndependentSetResult(
@@ -75,9 +73,7 @@ def compute_maximal_independent_set_decision(
                 blocking_edge=edge,
             )
 
-    adjacency: list[set[int]] = [
-        set() for _ in range(request.graph.vertex_count)
-    ]
+    adjacency: list[set[int]] = [set() for _ in range(request.graph.vertex_count)]
     for u, v in edges:
         adjacency[u].add(v)
         adjacency[v].add(u)

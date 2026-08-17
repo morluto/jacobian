@@ -150,6 +150,7 @@ type = "forbidden"
 source_modules = [
     "jacobian.math.arithmetic.operations",
     "jacobian.math.boolean.operations",
+    "jacobian.math.canonical_forms.operations",
     "jacobian.math.certified_snf.operations",
     "jacobian.math.certified_snf.values",
     "jacobian.math.code_theory.operations",

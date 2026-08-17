@@ -71,17 +71,14 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
 
 
 def test_projective_enumeration_refuses_large_output_before_allocation() -> None:
-    operation = TOOLS[0]
-    request = ProjectiveLineRequest(
-        presentation=FiniteFieldPresentation(
-            characteristic=2,
-            modulus_coefficients=(1, 1, 1),
-        ),
-        axis=Axis(name="large", labels=tuple(f"x{index}" for index in range(7))),
-    )
-
-    with pytest.raises(ValueError, match="directions; limit"):
-        operation.run(request)
+    with pytest.raises(ValidationError, match="two-coordinate axis"):
+        ProjectiveLineRequest(
+            presentation=FiniteFieldPresentation(
+                characteristic=2,
+                modulus_coefficients=(1, 1, 1),
+            ),
+            axis=Axis(name="large", labels=tuple(f"x{index}" for index in range(7))),
+        )
 
 
 def test_finite_map_table_refuses_excessive_polynomial_work() -> None:

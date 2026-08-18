@@ -236,6 +236,12 @@ from jacobian.math.polynomials.real_algebra._admission import (
 from jacobian.math.polynomials.real_algebra._tools import TOOLS as REAL_ALGEBRA_TOOLS
 from jacobian.math.posets._admission import ADMISSIONS as POSETS_ADMISSIONS
 from jacobian.math.posets._tools import TOOLS as POSETS_TOOLS
+from jacobian.math.projective_coords_ops._admission import (
+    ADMISSIONS as PROJECTIVE_COORDS_OPS_ADMISSIONS,
+)
+from jacobian.math.projective_coords_ops._tools import (
+    TOOLS as PROJECTIVE_COORDS_OPS_TOOLS,
+)
 from jacobian.math.probability._admission import ADMISSIONS as PROBABILITY_ADMISSIONS
 from jacobian.math.probability._tools import TOOLS as PROBABILITY_TOOLS
 from jacobian.math.recurrence_solving._admission import (
@@ -312,6 +318,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *MULTIVARIATE_POLYNOMIAL_TOOLS,
     *ANALYSIS_TOOLS,
     *PROBABILITY_TOOLS,
+    *PROJECTIVE_COORDS_OPS_TOOLS,
     *OPTIMIZATION_TOOLS,
     *TOPOLOGY_TOOLS,
     *POSETS_TOOLS,
@@ -411,6 +418,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *POLYNOMIALS_REAL_ALGEBRA_ADMISSIONS,
     *POSETS_ADMISSIONS,
     *PROBABILITY_ADMISSIONS,
+    *PROJECTIVE_COORDS_OPS_ADMISSIONS,
     *RECURRENCE_SOLVING_ADMISSIONS,
     *REGULAR_LANGUAGES_ADMISSIONS,
     *ROOT_ISOLATION_ADMISSIONS,

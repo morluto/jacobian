@@ -9,12 +9,17 @@ from pathlib import Path
 import pytest
 
 from jacobian.catalog.admission import (
-    OPERATION_ADMISSIONS,
     REVIEWED_BASE_REVISION,
     AdmissionDecision,
     curate_public_tools,
 )
-from jacobian.catalog.builtins import _BUILTIN_CANDIDATES, BUILTIN_TOOLS
+from jacobian.catalog.builtins import (
+    _ALL_ADMISSIONS,
+    _BUILTIN_CANDIDATES,
+    BUILTIN_TOOLS,
+)
+
+OPERATION_ADMISSIONS = _ALL_ADMISSIONS
 
 
 def test_every_frozen_candidate_has_exactly_one_admission_decision() -> None:
@@ -48,7 +53,7 @@ def test_catalog_construction_fails_closed_on_duplicate_candidates() -> None:
     duplicate_candidates = (*_BUILTIN_CANDIDATES, _BUILTIN_CANDIDATES[0])
 
     with pytest.raises(ValueError, match="candidate operation IDs must be unique"):
-        curate_public_tools(duplicate_candidates)
+        curate_public_tools(duplicate_candidates, _ALL_ADMISSIONS)
 
 
 def test_native_only_decisions_resolve_to_supported_public_symbols() -> None:

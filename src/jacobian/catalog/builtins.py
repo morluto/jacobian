@@ -270,6 +270,10 @@ from jacobian.math.tree_automata._admission import (
     ADMISSIONS as TREE_AUTOMATA_ADMISSIONS,
 )
 from jacobian.math.tree_automata._tools import TOOLS as TREE_AUTOMATA_TOOLS
+from jacobian.math.universal_algebra._admission import (
+    ADMISSIONS as UNIVERSAL_ALGEBRA_ADMISSIONS,
+)
+from jacobian.math.universal_algebra._tools import TOOLS as UNIVERSAL_ALGEBRA_TOOLS
 from jacobian.math.words._admission import ADMISSIONS as WORDS_ADMISSIONS
 from jacobian.math.words._tools import TOOLS as WORDS_TOOLS
 
@@ -344,6 +348,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *PETRI_NET_TOOLS,
     *TERM_REWRITING_TOOLS,
     *TREE_AUTOMATA_TOOLS,
+    *UNIVERSAL_ALGEBRA_TOOLS,
     *GRAPHICAL_MODEL_TOOLS,
     *FINITE_STATE_TRANSDUCER_TOOLS,
 )
@@ -420,6 +425,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *TERM_REWRITING_ADMISSIONS,
     *TOPOLOGY_ADMISSIONS,
     *TREE_AUTOMATA_ADMISSIONS,
+    *UNIVERSAL_ALGEBRA_ADMISSIONS,
     *WORDS_ADMISSIONS,
 )
 _ALL_ADMISSIONS: tuple[OperationAdmission, ...] = tuple(

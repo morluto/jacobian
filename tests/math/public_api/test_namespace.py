@@ -40,6 +40,7 @@ ROOT_MATH_DOMAINS = (
     "symbolic_dynamics",
     "term_rewriting",
     "tree_automata",
+    "universal_algebra",
     "words",
 )
 

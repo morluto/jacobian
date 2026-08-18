@@ -1,0 +1,26 @@
+{
+  "catalog_version": "1",
+  "domain": "universal_algebra",
+  "operations": {
+    "universal_algebra.congruence.check.compute": {
+      "input_schema": "sha256:904496f7f16bddff3412ed23de48e875c604b1abd093dcc5d1147f04fb1a92dd",
+      "output_schema": "sha256:b7a679ad21bd8deb662a545a174c8961a5e0e07017cbb79b7dfd8d40d349a2f7"
+    },
+    "universal_algebra.equation.profile.compute": {
+      "input_schema": "sha256:b14ebf1361397997f769c704d89c393c5a777be8d3d734ee7889cae6b10214c3",
+      "output_schema": "sha256:da39578177aa1906a828506a62dd355aea218dbd87af060b79c68ee52a43a3b0"
+    },
+    "universal_algebra.quotient.compute": {
+      "input_schema": "sha256:a68110992a85f27d1ea5ff7121e1f8cea3014fea7bda47c8e7c0fa5358e46647",
+      "output_schema": "sha256:a3f65eca9aad9cfbc20847809b305b4c758c676e72fa28a69c072c73516c7df4"
+    },
+    "universal_algebra.subalgebra.generated.compute": {
+      "input_schema": "sha256:853845a74f3b274533a82c333d663f4868984811d4791bc7c4b0faf42a5f06c9",
+      "output_schema": "sha256:d8d51f5e38bfa964312ff53cbaa01b099c481574f6a0c0b30b97115e452bb6e0"
+    },
+    "universal_algebra.term.evaluate.compute": {
+      "input_schema": "sha256:0414b0edb901f2878b249b8cff5ce21102ca19c353f0425318d1d9f4c0e52c6a",
+      "output_schema": "sha256:819f0cbedd4a298b9e376e1436fdb15186738d300f0176e61bd3ecf428ae5e3c"
+    }
+  }
+}

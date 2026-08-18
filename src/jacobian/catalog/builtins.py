@@ -54,6 +54,10 @@ from jacobian.math.convex_analysis._admission import (
     ADMISSIONS as CONVEX_ANALYSIS_ADMISSIONS,
 )
 from jacobian.math.convex_analysis._tools import TOOLS as CONVEX_ANALYSIS_TOOLS
+from jacobian.math.cubical_complexes._admission import (
+    ADMISSIONS as CUBICAL_COMPLEXES_ADMISSIONS,
+)
+from jacobian.math.cubical_complexes._tools import TOOLS as CUBICAL_COMPLEXES_TOOLS
 from jacobian.math.diophantine_approximation._admission import (
     ADMISSIONS as DIOPHANTINE_APPROXIMATION_ADMISSIONS,
 )
@@ -274,6 +278,7 @@ from jacobian.math.words._admission import ADMISSIONS as WORDS_ADMISSIONS
 from jacobian.math.words._tools import TOOLS as WORDS_TOOLS
 
 _BUILTIN_CANDIDATES: MathTools = (
+    *CUBICAL_COMPLEXES_TOOLS,
     *BOOLEAN_TOOLS,
     *GROUP_TOOLS,
     *GRAPH_COLORING_OPS_TOOLS,
@@ -358,6 +363,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *ARITHMETIC_FUNCTIONS_ADMISSIONS,
     *BOOLEAN_ADMISSIONS,
     *BOOLEAN_ANALYSIS_ADMISSIONS,
+    *CUBICAL_COMPLEXES_ADMISSIONS,
     *CODE_THEORY_ADMISSIONS,
     *COMBINATORICS_ADMISSIONS,
     *CONVEX_ANALYSIS_ADMISSIONS,

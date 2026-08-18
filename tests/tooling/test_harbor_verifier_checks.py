@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_check_verifier_support_allows_task_owned_contents(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     suite, task = _make_suite_with_task(tmp_path)
     (task / "tests" / "verifier_support.py").write_text("# task support\n")
@@ -22,7 +22,7 @@ def test_check_verifier_support_allows_task_owned_contents(
 
 
 def test_check_verifier_support_reports_syntax_errors(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     suite, task = _make_suite_with_task(tmp_path)
     (task / "tests" / "verifier_support.py").write_text("def broken(:\n")
@@ -31,7 +31,7 @@ def test_check_verifier_support_reports_syntax_errors(
 
 
 def test_check_verifier_support_rejects_support_symlink(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     suite, task = _make_suite_with_task(tmp_path)
     support = task / "tests" / "verifier_support.py"

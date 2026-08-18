@@ -112,3 +112,22 @@ def test_regular_file_inside_rejects_symlinked_root(tmp_path: Path) -> None:
     root = tmp_path / "solution"
     root.symlink_to(outside)
     assert benchmark_contracts._regular_file_inside(root, "evidence/ok.bin") is None
+
+
+def test_registry_reordering_does_not_change_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reordering [[datasets]] entries must not change which suite owns fixed jobs."""
+    original = load_registry()
+
+    # Reversed order simulates an unrelated dataset being inserted first
+    reversed_suites = tuple(reversed(original))
+    monkeypatch.setattr(benchmark_contracts, "load_registry", lambda: reversed_suites)
+
+    # validate_all should still find the mathematical suite by identity,
+    # not by position zero.
+    failures = benchmark_contracts.validate_all()
+    assert all(
+        "mathematical-benchmarks-v1" not in f or "not found" not in f for f in failures
+    )
+    assert failures == []

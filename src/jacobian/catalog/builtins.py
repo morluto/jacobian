@@ -94,6 +94,12 @@ from jacobian.math.finite_metric_spaces._admission import (
 from jacobian.math.finite_metric_spaces._tools import (
     TOOLS as FINITE_METRIC_SPACES_TOOLS,
 )
+from jacobian.math.finite_semigroups._admission import (
+    ADMISSIONS as FINITE_SEMIGROUPS_ADMISSIONS,
+)
+from jacobian.math.finite_semigroups._tools import (
+    TOOLS as FINITE_SEMIGROUPS_TOOLS,
+)
 from jacobian.math.finite_sets._admission import ADMISSIONS as FINITE_SETS_ADMISSIONS
 from jacobian.math.finite_sets._tools import TOOLS as FINITE_SETS_TOOLS
 from jacobian.math.finite_state_transducers._admission import (
@@ -337,6 +343,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *GRAPH_REALIZATION_TOOLS,
     *BOOLEAN_ANALYSIS_TOOLS,
     *ARITHMETIC_FUNCTIONS_TOOLS,
+    *FINITE_SEMIGROUPS_TOOLS,
     *ADDITIVE_COMBINATORICS_TOOLS,
     *MATRIX_ANALYSIS_TOOLS,
     *CONVEX_ANALYSIS_TOOLS,
@@ -361,6 +368,7 @@ _BUILTIN_CANDIDATES: MathTools = (
 )
 
 _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
+    *FINITE_SEMIGROUPS_ADMISSIONS,
     *ADDITIVE_COMBINATORICS_ADMISSIONS,
     *ALGEBRAIC_COMBINATORICS_ADMISSIONS,
     *ANALYSIS_ADMISSIONS,

@@ -9,6 +9,26 @@
     "integer.compute.nth_root": {
       "input_schema": "sha256:925acbcedb809b7a498c6c2982cd5ccd5013862f266afb830970c19e0356d533",
       "output_schema": "sha256:571bcc3795f95eb446cfbe234b9a278ce159bb7df3d3bc30fc69002b604e45ad"
+    },
+    "integer.k_free_decomposition.compute": {
+      "input_schema": "sha256:8772b18ec2778032d4a008419d0926cd7940fc259327cd1b5d3c7ae7f481d2c6",
+      "output_schema": "sha256:b81e9bbe3db2b6768d7830b28561a5360ed19b62a5a611aaa10de05ac6edd100"
+    },
+    "integer.perfect_power.profile.compute": {
+      "input_schema": "sha256:b960f22f4544ba9c68fa0a8785f911b1263fd91aeaa980b5b49eb0f2750ca3a7",
+      "output_schema": "sha256:a16211f18ed438d20250b6cd133d923eaa8dd6b49dc9bd863283cffed2dc173b"
+    },
+    "integer.squarefree_decomposition.compute": {
+      "input_schema": "sha256:b960f22f4544ba9c68fa0a8785f911b1263fd91aeaa980b5b49eb0f2750ca3a7",
+      "output_schema": "sha256:d0b81eec9bb47dd5dd2686a5b9be4d3859888fda6ef0132d32066f477ea77ed4"
+    },
+    "integer.squarefree_part.compute": {
+      "input_schema": "sha256:b960f22f4544ba9c68fa0a8785f911b1263fd91aeaa980b5b49eb0f2750ca3a7",
+      "output_schema": "sha256:d0b81eec9bb47dd5dd2686a5b9be4d3859888fda6ef0132d32066f477ea77ed4"
+    },
+    "quadratic_radical.positive_integer.normalize.compute": {
+      "input_schema": "sha256:7015435b09ee64de62c8eab28a6d73e94ec669a5c12bbfcfa0a8bd4f5827a738",
+      "output_schema": "sha256:1b83fe015fe9237e3e204030fb5e2863e69052831f96a9e59f787517f1f87959"
     }
   }
 }

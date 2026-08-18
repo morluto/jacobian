@@ -1,12 +1,10 @@
 # Internalcot visible-reasoning intervention
 
+[Benchmark home](../README.md)
+
 Status: **historical, research-only**.
 
-This document records an external paired evaluation of an Internalcot
-intervention. Its task configuration and evidence belong to the benchmark
-repository material, not to the Jacobian server contract.
-
-The study may inform future research about tool use, but it does not add a
-reasoning protocol, observer, retention path, workspace, checker authority, or
-MCP operation to Jacobian. Any future product proposal requires a separate
-architecture decision and fresh evidence against the current two-tool surface.
+This records an external paired evaluation of an Internalcot intervention. It
+is benchmark evidence, not part of Jacobian's server contract. Any product
+change motivated by the study requires a separate current architecture decision
+and fresh evaluation.

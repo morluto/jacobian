@@ -7,13 +7,52 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.numerical_semigroups._models import (
+    BettiElementsRequest,
+    BettiElementsResult,
+    CatenaryDegreeRequest,
+    CatenaryDegreeResult,
+    DeltaSetRequest,
+    DeltaSetResult,
+    ElasticityRequest,
+    ElasticityResult,
+    ElementCatenaryDegreeRequest,
+    ElementCatenaryDegreeResult,
+    ElementDeltaSetRequest,
+    ElementDeltaSetResult,
+    ElementElasticityRequest,
+    ElementElasticityResult,
+    FactorizationComputeRequest,
+    FactorizationComputeResult,
+    FactorizationDistanceRequest,
+    FactorizationDistanceResult,
+    FactorizationGraphComputeRequest,
+    FactorizationGraphComputeResult,
+    FactorizationLengthsComputeRequest,
+    FactorizationLengthsComputeResult,
+    MinimalPresentationRequest,
+    MinimalPresentationResult,
     NumericalSemigroupSummaryRequest,
     NumericalSemigroupSummaryResult,
+    PresentationBinomialsRequest,
+    PresentationBinomialsResult,
     SemigroupMembershipRequest,
     SemigroupMembershipResult,
 )
 from jacobian.math.numerical_semigroups._operations import (
+    compute_betti_elements,
+    compute_catenary_degree,
+    compute_delta_set,
+    compute_element_catenary_degree,
+    compute_element_delta_set,
+    compute_element_elasticity,
+    compute_elasticity,
+    compute_factorization_distance,
+    compute_factorization_graph,
+    compute_factorization_lengths,
+    compute_factorizations,
     compute_membership,
+    compute_minimal_presentation,
+    compute_presentation_binomials,
     compute_summary,
 )
 
@@ -82,6 +121,274 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "membership_8_in_3_5",
                 "Check if 8 is in <3,5>.",
                 {"generators": ["3", "5"], "value": "8"},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.factorizations.compute",
+        "Compute complete factorization family Z(s)",
+        "Given a numerical semigroup and an element, compute the complete "
+        "factorization family Z(s) - all factorizations expressed as tuples "
+        "of minimal-generator multiplicities.",
+        FactorizationComputeRequest,
+        FactorizationComputeResult,
+        compute_factorizations,
+        "number-theory",
+        "numerical-semigroup",
+        "factorization",
+        "exact",
+        examples=(
+            example(
+                "factorizations_15_in_3_5",
+                "Factorizations of 15 in <3,5>.",
+                {"generators": ["3", "5"], "value": "15"},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.factorization_lengths.compute",
+        "Compute sorted factorization length set",
+        "Given a numerical semigroup and an element, compute the complete "
+        "sorted set of factorization lengths.",
+        FactorizationLengthsComputeRequest,
+        FactorizationLengthsComputeResult,
+        compute_factorization_lengths,
+        "number-theory",
+        "numerical-semigroup",
+        "factorization",
+        "exact",
+        examples=(
+            example(
+                "lengths_15_in_3_5",
+                "Lengths of 15 in <3,5>.",
+                {"generators": ["3", "5"], "value": "15"},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.factorization_distance.compute",
+        "Compute distance between two factorizations",
+        "Compute the standard distance d(z,z') = max(|z-gcd|,|z'-gcd|) "
+        "between two factorizations of the same element, where gcd is "
+        "the coordinatewise minimum.",
+        FactorizationDistanceRequest,
+        FactorizationDistanceResult,
+        compute_factorization_distance,
+        "number-theory",
+        "numerical-semigroup",
+        "factorization",
+        "exact",
+        examples=(
+            example(
+                "distance_15_in_3_5",
+                "Distance between (5,0) and (0,3) for 15 in <3,5>.",
+                {
+                    "generators": ["3", "5"],
+                    "value": "15",
+                    "first": [5, 0],
+                    "second": [0, 3],
+                },
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.factorization_graph.compute",
+        "Compute factorization graph with connected components",
+        "Build the standard factorization graph where two factorizations "
+        "are connected if they share a common atom (coordinatewise gcd is "
+        "nonzero). Returns edges and connected components.",
+        FactorizationGraphComputeRequest,
+        FactorizationGraphComputeResult,
+        compute_factorization_graph,
+        "number-theory",
+        "numerical-semigroup",
+        "factorization",
+        "exact",
+        examples=(
+            example(
+                "graph_15_in_3_5",
+                "Factorization graph of 15 in <3,5>.",
+                {"generators": ["3", "5"], "value": "15"},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.element.delta_set.compute",
+        "Compute delta set of one element",
+        "Compute the delta set (set of successive length differences) of "
+        "one element in a numerical semigroup.",
+        ElementDeltaSetRequest,
+        ElementDeltaSetResult,
+        compute_element_delta_set,
+        "number-theory",
+        "numerical-semigroup",
+        "exact",
+        examples=(
+            example(
+                "delta_15_in_3_5",
+                "Delta set of 15 in <3,5>.",
+                {"generators": ["3", "5"], "value": "15"},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.element.elasticity.compute",
+        "Compute elasticity of one element",
+        "Compute the elasticity (ratio of maximum to minimum factorization "
+        "length) of one element in a numerical semigroup.",
+        ElementElasticityRequest,
+        ElementElasticityResult,
+        compute_element_elasticity,
+        "number-theory",
+        "numerical-semigroup",
+        "exact",
+        examples=(
+            example(
+                "elasticity_15_in_3_5",
+                "Elasticity of 15 in <3,5>.",
+                {"generators": ["3", "5"], "value": "15"},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.element.catenary_degree.compute",
+        "Compute catenary degree of one element",
+        "Compute the catenary degree of one element in a numerical "
+        "semigroup, defined as the minimum chain-max distance over all "
+        "pairs of factorizations.",
+        ElementCatenaryDegreeRequest,
+        ElementCatenaryDegreeResult,
+        compute_element_catenary_degree,
+        "number-theory",
+        "numerical-semigroup",
+        "exact",
+        examples=(
+            example(
+                "catenary_15_in_3_5",
+                "Catenary degree of 15 in <3,5>.",
+                {"generators": ["3", "5"], "value": "15"},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.betti_elements.compute",
+        "Compute Betti elements of a numerical semigroup",
+        "Compute the Betti elements of a numerical semigroup - elements "
+        "whose factorization graph is disconnected.",
+        BettiElementsRequest,
+        BettiElementsResult,
+        compute_betti_elements,
+        "number-theory",
+        "numerical-semigroup",
+        "exact",
+        examples=(
+            example(
+                "betti_3_5",
+                "Betti elements of <3,5>.",
+                {"generators": ["3", "5"]},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.minimal_presentation.compute",
+        "Compute a minimal presentation",
+        "Compute one minimal presentation of a numerical semigroup, "
+        "returning one relation per pair of connected components of the "
+        "factorization graph at each Betti element.",
+        MinimalPresentationRequest,
+        MinimalPresentationResult,
+        compute_minimal_presentation,
+        "number-theory",
+        "numerical-semigroup",
+        "exact",
+        examples=(
+            example(
+                "presentation_3_5",
+                "Minimal presentation of <3,5>.",
+                {"generators": ["3", "5"]},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.presentation_binomials.compute",
+        "Convert presentation to sparse binomials",
+        "Convert a minimal presentation into sparse binomial form, where "
+        "each relation becomes a binomial with coefficient and exponent "
+        "vectors.",
+        PresentationBinomialsRequest,
+        PresentationBinomialsResult,
+        compute_presentation_binomials,
+        "number-theory",
+        "numerical-semigroup",
+        "exact",
+        examples=(
+            example(
+                "binomials_3_5",
+                "Sparse binomials of <3,5>.",
+                {
+                    "generators": ["3", "5"],
+                    "relations": [
+                        {"first": [5, 0], "second": [0, 3]},
+                    ],
+                },
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.delta_set.compute",
+        "Compute global delta set",
+        "Compute the global delta set of a numerical semigroup - the "
+        "union of delta set over all Betti elements (finite theorem).",
+        DeltaSetRequest,
+        DeltaSetResult,
+        compute_delta_set,
+        "number-theory",
+        "numerical-semigroup",
+        "exact",
+        examples=(
+            example(
+                "global_delta_3_5",
+                "Global delta set of <3,5>.",
+                {"generators": ["3", "5"]},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.elasticity.compute",
+        "Compute global elasticity",
+        "Compute the global elasticity of a numerical semigroup, defined "
+        "as the ratio of the largest to the smallest minimal generator.",
+        ElasticityRequest,
+        ElasticityResult,
+        compute_elasticity,
+        "number-theory",
+        "numerical-semigroup",
+        "exact",
+        examples=(
+            example(
+                "global_elasticity_3_5",
+                "Global elasticity of <3,5>.",
+                {"generators": ["3", "5"]},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.catenary_degree.compute",
+        "Compute global catenary degree",
+        "Compute the global catenary degree of a numerical semigroup - "
+        "the maximum catenary degree over all Betti elements (finite "
+        "theorem).",
+        CatenaryDegreeRequest,
+        CatenaryDegreeResult,
+        compute_catenary_degree,
+        "number-theory",
+        "numerical-semigroup",
+        "exact",
+        examples=(
+            example(
+                "global_catenary_3_5",
+                "Global catenary degree of <3,5>.",
+                {"generators": ["3", "5"]},
             ),
         ),
     ),

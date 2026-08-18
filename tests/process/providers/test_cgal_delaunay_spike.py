@@ -3,20 +3,15 @@ from __future__ import annotations
 import hashlib
 import json
 import lzma
-import runpy
 import tarfile
-from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
-from typing import Any, cast
 
 from benchmarks.tooling.command_runner import ToolCommandResult
+from tests.fixtures.providers.cgal.spike import run_spike
 from tests.process.providers._spike_support import _result, _runner
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-SPIKE = runpy.run_path(
-    str(PROJECT_ROOT / "tests" / "fixtures" / "providers" / "cgal" / "spike.py")
-)
 BASE_PIN = json.loads(
     (
         PROJECT_ROOT
@@ -27,10 +22,11 @@ BASE_PIN = json.loads(
         / "cgal_delaunay_pin.json"
     ).read_text(encoding="utf-8")
 )
-RunSpike = Callable[..., dict[str, Any]]
-RUN_SPIKE = cast(RunSpike, SPIKE["run_spike"])
 
 
+
+
+RUN_SPIKE = run_spike
 def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
     executable = tmp_path / "cgal-spike"
     adapter = tmp_path / "cgal-spike.cpp"

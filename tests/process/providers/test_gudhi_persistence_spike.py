@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import json
-import runpy
 import tarfile
 import zipfile
-from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
+from tests.fixtures.providers.gudhi.spike import run_spike
 from tests.process.providers._spike_support import (
     _canonical,
     _result,
@@ -17,18 +16,16 @@ from tests.process.providers._spike_support import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-SPIKE = runpy.run_path(
-    str(PROJECT_ROOT / "tests" / "fixtures" / "providers" / "gudhi" / "spike.py")
-)
 BASE_PIN = json.loads(
     (
         PROJECT_ROOT / "tests" / "fixtures" / "providers" / "gudhi" / "pin.json"
     ).read_text(encoding="utf-8")
 )
-RunSpike = Callable[..., dict[str, Any]]
-RUN_SPIKE = cast(RunSpike, SPIKE["run_spike"])
 
 
+
+
+RUN_SPIKE = run_spike
 def _provider_output(
     mathematical: dict[str, Any] | None = None,
     *,

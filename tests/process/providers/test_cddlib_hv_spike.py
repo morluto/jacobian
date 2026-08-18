@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import json
-import runpy
 import tarfile
-from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from benchmarks.tooling.command_runner import ToolCommandResult
+from tests.fixtures.providers.cddlib.spike import _expected_mathematical, run_spike
 from tests.process.providers._spike_support import (
     _canonical,
     _result,
@@ -17,19 +16,17 @@ from tests.process.providers._spike_support import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-SPIKE = runpy.run_path(
-    str(PROJECT_ROOT / "tests" / "fixtures" / "providers" / "cddlib" / "spike.py")
-)
 BASE_PIN = json.loads(
     (
         PROJECT_ROOT / "tests" / "fixtures" / "providers" / "cddlib" / "pin.json"
     ).read_text(encoding="utf-8")
 )
-RunSpike = Callable[..., dict[str, Any]]
-RUN_SPIKE = cast(RunSpike, SPIKE["run_spike"])
-EXPECTED_MATHEMATICAL = SPIKE["_expected_mathematical"](BASE_PIN)
+
+EXPECTED_MATHEMATICAL = _expected_mathematical(BASE_PIN)
 
 
+
+RUN_SPIKE = run_spike
 def _provider_output(
     mathematical: dict[str, Any] | None = None,
     *,
@@ -247,7 +244,7 @@ def test_independent_replay_rejects_self_consistent_unsound_output(
         "homogeneous_rows": [["1", "0", "0"], ["0", "1", "0"]],
         "linearity_rows": [],
     }
-    forged = SPIKE["_expected_mathematical"](pin)
+    forged = _expected_mathematical(pin)
     pin["reproduction"]["expected_mathematical_output_sha256"] = _sha256(
         _canonical(forged)
     )

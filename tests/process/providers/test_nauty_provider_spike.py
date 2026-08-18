@@ -3,22 +3,19 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import runpy
 import tarfile
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pytest
 from benchmarks.tooling.command_runner import ToolCommandResult
+from tests.fixtures.providers.nauty.spike import run_spike
 from tests.process.providers._spike_support import _result, _runner
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-SPIKE = runpy.run_path(
-    str(PROJECT_ROOT / "tests" / "fixtures" / "providers" / "nauty" / "spike.py")
-)
 PIN = json.loads(
     (
         PROJECT_ROOT
@@ -29,8 +26,7 @@ PIN = json.loads(
         / "nauty_provider_pin.json"
     ).read_text(encoding="utf-8")
 )
-RunSpike = Callable[..., dict[str, Any]]
-RUN_SPIKE = cast(RunSpike, SPIKE["run_spike"])
+
 
 GENG_HELP = (
     b"Usage: geng \n"
@@ -48,6 +44,8 @@ LABELG_OUTPUT = (
 ).encode()
 
 
+
+RUN_SPIKE = run_spike
 def _source_archive(tmp_path: Path, *, pin_digest: bool = True) -> Path:
     archive_path = tmp_path / "nauty2_9_3.tar.gz"
     copyright_notice = b"Licensed under the Apache License, Version 2.0 (the License)\n"

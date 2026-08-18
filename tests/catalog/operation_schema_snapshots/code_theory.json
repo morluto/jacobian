@@ -6,9 +6,17 @@
       "input_schema": "sha256:9e533b134e5eb5811e8d8ec5dac191d471be05be818fb4aa8c566d2b889a8063",
       "output_schema": "sha256:f8613705759bf28c2f022ce5fae00c230dce5a002a9d8539553eb0b3442b4aa4"
     },
+    "code.dual_code.compute": {
+      "input_schema": "sha256:dbaecd7fa1f57a37cc77d3daf15f72436455c6093a6e8340e1fa1713c5d9dfcb",
+      "output_schema": "sha256:fc853ac42627d09b1c002407e57eb561b0352912eb3e7975f940b820a1886239"
+    },
     "code.minimum_distance.compute": {
       "input_schema": "sha256:fa50e6e300b9d68003f291057aee5e36dbd44d3f99372e52b8f82db34ba93a45",
       "output_schema": "sha256:6276aa53796076a23a9e497c2f329a5f04383bcc4a056aa70ec100d2e50b568b"
+    },
+    "code.syndrome.compute": {
+      "input_schema": "sha256:8352edab16c1f6b419b1d9cedb0066d8b7d1f3fa3d83e8b5520fb6686b3f7748",
+      "output_schema": "sha256:b1e180cc1c0fb6040b61a3735a0ba0e040fa199e12d6dfb0b50e96c547f7ffd7"
     },
     "code.weight_distribution.compute": {
       "input_schema": "sha256:fa50e6e300b9d68003f291057aee5e36dbd44d3f99372e52b8f82db34ba93a45",

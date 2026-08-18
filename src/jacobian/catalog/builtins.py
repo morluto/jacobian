@@ -250,6 +250,12 @@ from jacobian.math.root_isolation._admission import (
     ADMISSIONS as ROOT_ISOLATION_ADMISSIONS,
 )
 from jacobian.math.root_isolation._tools import TOOLS as ROOT_ISOLATION_TOOLS
+from jacobian.math.root_systems._admission import (
+    ADMISSIONS as ROOT_SYSTEMS_ADMISSIONS,
+)
+from jacobian.math.root_systems._tools import (
+    TOOLS as ROOT_SYSTEMS_TOOLS,
+)
 from jacobian.math.sequences._admission import ADMISSIONS as SEQUENCES_ADMISSIONS
 from jacobian.math.sequences._tools import TOOLS as SEQUENCES_TOOLS
 from jacobian.math.submodular_opt._admission import (
@@ -274,6 +280,7 @@ from jacobian.math.words._admission import ADMISSIONS as WORDS_ADMISSIONS
 from jacobian.math.words._tools import TOOLS as WORDS_TOOLS
 
 _BUILTIN_CANDIDATES: MathTools = (
+    *ROOT_SYSTEMS_TOOLS,
     *BOOLEAN_TOOLS,
     *GROUP_TOOLS,
     *GRAPH_COLORING_OPS_TOOLS,
@@ -415,6 +422,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *REGULAR_LANGUAGES_ADMISSIONS,
     *ROOT_ISOLATION_ADMISSIONS,
     *SEQUENCES_ADMISSIONS,
+    *ROOT_SYSTEMS_ADMISSIONS,
     *SUBMODULAR_OPT_ADMISSIONS,
     *SYMBOLIC_DYNAMICS_ADMISSIONS,
     *TERM_REWRITING_ADMISSIONS,

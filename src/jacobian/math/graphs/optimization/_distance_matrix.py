@@ -9,6 +9,7 @@ from jacobian.catalog.models import MathTool
 from jacobian.math.graphs.optimization._distance_models import (
     GraphDistanceMatrixRequest,
     GraphDistanceMatrixResult,
+    GraphDistanceRow,
 )
 from jacobian.math.graphs.optimization._operations import build_simple_graph
 
@@ -16,7 +17,11 @@ from jacobian.math.graphs.optimization._operations import build_simple_graph
 def compute_distance_matrix(
     request: GraphDistanceMatrixRequest,
 ) -> GraphDistanceMatrixResult:
-    """Compute every exact unweighted distance in canonical vertex order."""
+    """Compute every exact unweighted distance in canonical vertex order.
+
+    Rows are labelled with their source vertex so the dense positional
+    matrix stays bound to the authoritative lexicographic vertex axis.
+    """
 
     import networkx as nx
 
@@ -26,20 +31,23 @@ def compute_distance_matrix(
         source: nx.single_source_shortest_path_length(graph, source)
         for source in vertices
     }
-    distances = tuple(
-        tuple(shortest_paths[source].get(target) for target in vertices)
+    rows = tuple(
+        GraphDistanceRow(
+            source=source,
+            distances=tuple(shortest_paths[source].get(target) for target in vertices),
+        )
         for source in vertices
     )
     connected = bool(vertices) and all(
-        distance is not None for row in distances for distance in row
+        distance is not None for row in rows for distance in row.distances
     )
     return GraphDistanceMatrixResult(
-        semantics_version="unweighted-shortest-path-distance-matrix.v1",
+        semantics_version="unweighted-shortest-path-distance-matrix.v2",
         vertex_ordering="LEXICOGRAPHIC_ASCENDING",
         pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
         unreachable_representation="JSON_NULL",
         vertices=vertices,
-        distances=distances,
+        rows=rows,
         connected=connected,
     )
 

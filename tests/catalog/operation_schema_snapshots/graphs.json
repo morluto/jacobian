@@ -36,7 +36,7 @@
     },
     "graph.distance_matrix.compute": {
       "input_schema": "sha256:9e0287b0e71d3c1894e4231f80122cb09cd2b47de2b22f2709d3046dcc5d1882",
-      "output_schema": "sha256:6546ad7d98bc8d60eaeede9886ace10320cc32ffb1e1bc55d946844544cafe5f"
+      "output_schema": "sha256:de0bd3bc61798f76b0343f457b650d63ed3ea390310e614ce0374a5c7d158a4a"
     },
     "graph.domination.minimum.compute": {
       "input_schema": "sha256:c5325fe91eaf07a82ed42666b0691144b4db1d369a1dfca9a42b73f190c88919",

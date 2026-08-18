@@ -2003,6 +2003,21 @@ OPERATION_ADMISSIONS: tuple[OperationAdmission, ...] = (
         "most general unifier certificate for a bounded first-order unification problem",
     ),
     OperationAdmission(
+        "topology.beat_points.compute",
+        AdmissionDecision.KEEP,
+        "complete beat-point witness family for a bounded finite topology",
+    ),
+    OperationAdmission(
+        "topology.connected_components.compute",
+        AdmissionDecision.KEEP,
+        "complete connected component partition of a bounded finite topology",
+    ),
+    OperationAdmission(
+        "topology.is_continuous.compute",
+        AdmissionDecision.KEEP,
+        "exact continuity verdict between bounded finite topologies",
+    ),
+    OperationAdmission(
         "topology.simplicial_complex.canonicalize",
         AdmissionDecision.KEEP,
         "reusable typed mathematical construction or transformation with a distinct discovery intent",
@@ -2021,6 +2036,11 @@ OPERATION_ADMISSIONS: tuple[OperationAdmission, ...] = (
         "topology.simplicial_homology.integral.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
+    OperationAdmission(
+        "topology.specialization_preorder.compute",
+        AdmissionDecision.KEEP,
+        "complete specialization preorder of a bounded finite topology",
     ),
     OperationAdmission(
         "transducer.relation.path.replay.compute",

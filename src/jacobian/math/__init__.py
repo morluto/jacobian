@@ -38,7 +38,6 @@ __all__ = [
     "finite_fields",
     "finite_metric_spaces",
     "finite_state_transducers",
-    "finite_state_transducers",
     "finite_topology",
     "formal_power_series",
     "graphical_models",

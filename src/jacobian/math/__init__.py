@@ -22,8 +22,8 @@ from jacobian.math import (
     prime_field_linear_algebra,
     probability,
     regular_languages,
-    term_rewriting,
     symbolic_dynamics,
+    term_rewriting,
     tree_automata,
     words,
 )
@@ -50,8 +50,8 @@ __all__ = [
     "prime_field_linear_algebra",
     "probability",
     "regular_languages",
-    "term_rewriting",
     "symbolic_dynamics",
+    "term_rewriting",
     "tree_automata",
     "words",
 ]

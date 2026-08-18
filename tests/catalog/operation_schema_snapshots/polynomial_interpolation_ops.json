@@ -1,0 +1,18 @@
+{
+    "catalog_version": "1",
+    "domain": "polynomial_interpolation_ops",
+    "operations": {
+        "polynomial.interpolation.divided_differences.compute": {
+            "input_schema": "sha256:674a176a751f894ecd37b57de1a2a7af91f2b9aaaa08a936f3a1e3b67e10769a",
+            "output_schema": "sha256:0ccfa0d3a42eefeb27550eb59fd6070fab913a8f433c502a8c52c06e1e818932"
+        },
+        "polynomial.interpolation.newton_evaluate.compute": {
+            "input_schema": "sha256:742a6d04ce8cd0372541a36d32a879f988a5653317139cf88dd67f17c9598f2b",
+            "output_schema": "sha256:1320aab49edbbfe7c2fc72eb11b1cc7fdacceb9666992df864ecf998e9d13d56"
+        },
+        "polynomial.interpolation.newton_form.compute": {
+            "input_schema": "sha256:4b0ac28552a579e2e66e520ce9bcc2bd355d8b1990c1614def4c06bea6db8003",
+            "output_schema": "sha256:ac216ac3bc80c5e13bca292248184c4a6fea7b4ea9de7a1698a862f33c8556cc"
+        }
+    }
+}

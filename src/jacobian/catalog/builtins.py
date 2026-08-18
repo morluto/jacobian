@@ -170,6 +170,12 @@ from jacobian.math.impartial_games._admission import (
     ADMISSIONS as IMPARTIAL_GAMES_ADMISSIONS,
 )
 from jacobian.math.impartial_games._tools import TOOLS as IMPARTIAL_GAMES_TOOLS
+from jacobian.math.latin_squares_ops._admission import (
+    ADMISSIONS as LATIN_SQUARES_OPS_ADMISSIONS,
+)
+from jacobian.math.latin_squares_ops._tools import (
+    TOOLS as LATIN_SQUARES_OPS_TOOLS,
+)
 from jacobian.math.lattices._admission import ADMISSIONS as LATTICES_ADMISSIONS
 from jacobian.math.lattices._tools import TOOLS as LATTICES_TOOLS
 from jacobian.math.logic._admission import ADMISSIONS as LOGIC_ADMISSIONS
@@ -307,6 +313,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *SYMBOLIC_MATRIX_TOOLS,
     *RATIONAL_LINEAR_TOOLS,
     *LATTICES_TOOLS,
+    *LATIN_SQUARES_OPS_TOOLS,
     *FORMAL_POWER_SERIES_TOOLS,
     *POLYNOMIAL_TOOLS,
     *MULTIVARIATE_POLYNOMIAL_TOOLS,
@@ -391,6 +398,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *GROUP_ADMISSIONS,
     *IMPARTIAL_GAMES_ADMISSIONS,
     *LATTICES_ADMISSIONS,
+    *LATIN_SQUARES_OPS_ADMISSIONS,
     *LOGIC_ADMISSIONS,
     *MARKOV_CHAIN_ADMISSIONS,
     *MATRICES_ADMISSIONS,

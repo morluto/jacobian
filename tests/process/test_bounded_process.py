@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 import os
 import shutil
+import signal
 import sys
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -15,6 +18,7 @@ from jacobian.process import (
     ProcessResourceLimits,
     bounded_process_cancellation,
     run_bounded_process,
+    worker_environment,
 )
 
 
@@ -85,7 +89,7 @@ def test_cancellation_stops_worker_before_its_wall_time_budget() -> None:
                 [sys.executable, "-c", "import time; time.sleep(30)"],
                 input_bytes=b"",
                 timeout_seconds=20,
-                environment=dict(os.environ),
+                environment=worker_environment(path_prefix=os.environ.get("PATH", "")),
                 stdout_limit=4096,
                 stderr_limit=4096,
             )
@@ -116,7 +120,7 @@ def test_clean_worker_exit_drains_pipes_inherited_by_descendants() -> None:
         ],
         input_bytes=b"",
         timeout_seconds=0.5,
-        environment=dict(os.environ),
+        environment=worker_environment(path_prefix=os.environ.get("PATH", "")),
         stdout_limit=4096,
         stderr_limit=4096,
     )
@@ -131,25 +135,52 @@ def test_clean_worker_exit_drains_pipes_inherited_by_descendants() -> None:
     os.name != "posix",
     reason="detached process groups are exercised on POSIX",
 )
-def test_detached_descendant_with_inherited_pipe_fails_closed() -> None:
+def test_detached_descendant_with_inherited_pipe_fails_closed(
+    tmp_path: Path,
+) -> None:
+    pid_marker = tmp_path / "escaped.pid"
     completed = run_bounded_process(
         [
             sys.executable,
             "-c",
             (
-                "import subprocess, sys; "
-                "subprocess.Popen("
-                "[sys.executable, '-c', 'import time; time.sleep(5)'], "
+                "import subprocess, sys, os; "
+                "p = subprocess.Popen("
+                "[sys.executable, '-c', 'import time; time.sleep(30)'], "
                 "stdout=sys.stdout, stderr=sys.stderr, start_new_session=True); "
+                f"open({str(pid_marker)!r}, 'w').write(str(p.pid)); "
                 "print('worker complete', flush=True)"
             ),
         ],
         input_bytes=b"",
         timeout_seconds=2,
-        environment=dict(os.environ),
+        environment=worker_environment(path_prefix=os.environ.get("PATH", "")),
         stdout_limit=4096,
         stderr_limit=4096,
     )
 
     assert completed.returncode == 0
     assert completed.timed_out
+
+    # Forcibly clean up the escaped descendant
+    escaped_pid: int | None = None
+    try:
+        if pid_marker.exists():
+            escaped_pid = int(pid_marker.read_text().strip())
+    except (ValueError, OSError):
+        pass
+
+    if escaped_pid is not None:
+        with contextlib.suppress(OSError):
+            os.kill(escaped_pid, signal.SIGKILL)
+
+    # Verify cleanup
+    if escaped_pid is not None:
+        time.sleep(0.1)
+        try:
+            os.kill(escaped_pid, 0)
+            raise AssertionError("escaped descendant still alive after cleanup")
+        except AssertionError:
+            raise
+        except OSError:
+            pass  # expected: process is gone

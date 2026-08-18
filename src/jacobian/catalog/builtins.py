@@ -93,6 +93,7 @@ from jacobian.math.root_isolation._tools import TOOLS as ROOT_ISOLATION_TOOLS
 from jacobian.math.sequences._tools import TOOLS as SEQUENCES_TOOLS
 from jacobian.math.submodular_opt._tools import TOOLS as SUBMODULAR_OPT_TOOLS
 from jacobian.math.term_rewriting._tools import TOOLS as TERM_REWRITING_TOOLS
+from jacobian.math.symbolic_dynamics._tools import TOOLS as SYMBOLIC_DYNAMICS_TOOLS
 from jacobian.math.topology._tools import TOOLS as TOPOLOGY_TOOLS
 from jacobian.math.tree_automata._tools import TOOLS as TREE_AUTOMATA_TOOLS
 from jacobian.math.words._tools import TOOLS as WORDS_TOOLS
@@ -158,6 +159,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *FINITE_GAME_THEORY_TOOLS,
     *IMPARTIAL_GAMES_TOOLS,
     *WORDS_TOOLS,
+    *SYMBOLIC_DYNAMICS_TOOLS,
     *ELECTRICAL_NETWORKS_TOOLS,
     *REGULAR_LANGUAGES_TOOLS,
     *ALGEBRAIC_COMBINATORICS_TOOLS,

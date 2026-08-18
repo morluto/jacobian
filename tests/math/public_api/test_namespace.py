@@ -29,6 +29,7 @@ PUBLIC_API = {
         "probability",
         "regular_languages",
         "term_rewriting",
+        "symbolic_dynamics",
         "tree_automata",
         "words",
     ),
@@ -306,6 +307,18 @@ PUBLIC_API = {
         "periods",
         "prefix_function",
         "primitive_root",
+    ),
+    "jacobian.math.symbolic_dynamics": (
+        "AdjacencyShift",
+        "BlockPresentation",
+        "ForbiddenBlockShift",
+        "LabeledTransition",
+        "adjacency_shift",
+        "block_language",
+        "finite_type_presentation",
+        "higher_block_presentation",
+        "normalize_forbidden_blocks",
+        "periodic_point_profile",
     ),
 }
 

@@ -1,0 +1,18 @@
+{
+  "catalog_version": "1",
+  "domain": "term_rewriting",
+  "operations": {
+    "term_rewriting.matching.compute": {
+      "input_schema": "sha256:c96eac4da31e2b63291f171b62af3b184cbca9f8470a0208d05257829da4149a",
+      "output_schema": "sha256:069c8c20fdf9176965a2fd13d5707ebc83b721bc49c678eae9276ba67435a805"
+    },
+    "term_rewriting.rewrite_step.compute": {
+      "input_schema": "sha256:8633ded7906c0bf15142abc8eb1dc0ba300c8ed95bfda4e50591ef4e20bba856",
+      "output_schema": "sha256:524ab1b0dad03f372fc4fc421c3edf1ad5ee2db2c6d994c7eae0899e37bbd030"
+    },
+    "term_rewriting.unification.compute": {
+      "input_schema": "sha256:91fae06f015576650d539360812fe6b5fb83d0d1daef2c638ec1ecf89c61fdc8",
+      "output_schema": "sha256:952e8e6b11226618a720eade04823a988ca16353c390af347718a95eb005f352"
+    }
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "catalog_version": "1",
+  "domain": "number_theory",
+  "operations": {
+    "finite_abelian_group.exact_factorization.compute": {
+      "input_schema": "sha256:1c1af27397f6e871b042146827f184be128cfe6c824877fa796ad191826ffed9",
+      "output_schema": "sha256:b5fedde2179445bed43a1bd76b1a295befe124648fbeab54e3fe79dab77a8042"
+    },
+    "integer.compute.divisor_count": {
+      "input_schema": "sha256:3d81837ffb8fe813ac90b00aef903c25914397e8a893904d2bb04271f6b84d0f",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.divisor_sum": {
+      "input_schema": "sha256:3d81837ffb8fe813ac90b00aef903c25914397e8a893904d2bb04271f6b84d0f",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.divisors": {
+      "input_schema": "sha256:b08022e7c3545e7def0990e53976706a71d100094eeb70018b2bd5665bf32c7b",
+      "output_schema": "sha256:9f3a903eb2fc5e6b458d190e2286cfd8a26a30058ff293551c24db0f0a377b8f"
+    },
+    "integer.compute.euler_totient": {
+      "input_schema": "sha256:3d81837ffb8fe813ac90b00aef903c25914397e8a893904d2bb04271f6b84d0f",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.extended_gcd": {
+      "input_schema": "sha256:4e96577501e2d29822681c210829237d61554875624900bba13b8093396a9e99",
+      "output_schema": "sha256:dc1c6aaef1b6ea2612c6ec1da9bbc3e655f2cc802672e02e980f4492798e1928"
+    },
+    "integer.compute.floor_square_root": {
+      "input_schema": "sha256:2a43111bc293cff5cc432de6dec0ce618f2a4b46daecb84349f84fe32c27e7c5",
+      "output_schema": "sha256:bebc0769d61500056154cb8450d5c34d91ed94d9dfc6adf0313ed299d40b4006"
+    },
+    "integer.compute.mobius": {
+      "input_schema": "sha256:3d81837ffb8fe813ac90b00aef903c25914397e8a893904d2bb04271f6b84d0f",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.next_prime": {
+      "input_schema": "sha256:e992c9a80dae91cb1a36e409be6df39e8c03a6a1f4651ab8bd5aa58ba43fc833",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.nth_prime": {
+      "input_schema": "sha256:3d81837ffb8fe813ac90b00aef903c25914397e8a893904d2bb04271f6b84d0f",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.previous_prime": {
+      "input_schema": "sha256:ca19c970e29f967cfe5f67eb5e7768d385cb1ebcd0ff39628fbbf884288bb38d",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.prime_count": {
+      "input_schema": "sha256:e992c9a80dae91cb1a36e409be6df39e8c03a6a1f4651ab8bd5aa58ba43fc833",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.prime_factorization": {
+      "input_schema": "sha256:b08022e7c3545e7def0990e53976706a71d100094eeb70018b2bd5665bf32c7b",
+      "output_schema": "sha256:3197aed52e510240706c373fea582130a220d9ed538009e1d90c5a5f237cb890"
+    },
+    "integer.compute.primorial": {
+      "input_schema": "sha256:3d81837ffb8fe813ac90b00aef903c25914397e8a893904d2bb04271f6b84d0f",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.compute.valuation": {
+      "input_schema": "sha256:e0af1b4376762713cfbb237d7c4952ba5b96dfd7ce62aad41095cccd3256a5f3",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "integer.decide.prime": {
+      "input_schema": "sha256:e4b721c8eff43f8b9b0c0e2bbc8cfaa4e3107f612f6f2e8a83780a8b1d7d2701",
+      "output_schema": "sha256:9b2f62d9e5533084179069efaad8c986439414356c414b24a6431aaa42c7fc69"
+    },
+    "modular.compute.discrete_logarithm": {
+      "input_schema": "sha256:83b89e6c101376613c6ecbc2552572b1f42397ddffd4c6eab2700ba362be9469",
+      "output_schema": "sha256:3d7e704bad1ccec1910bc0f650c3a41e9266d897a97d13790325a8c8d88aa995"
+    },
+    "modular.compute.inverse": {
+      "input_schema": "sha256:db2c627e1f0c9357161ef168b5193ca15bea5d18e1ea53ef6822bf1a67b21724",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "modular.compute.multiplicative_order": {
+      "input_schema": "sha256:db2c627e1f0c9357161ef168b5193ca15bea5d18e1ea53ef6822bf1a67b21724",
+      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+    },
+    "modular.enumerate.quadratic_residues": {
+      "input_schema": "sha256:cf6782b5e779ab781d49deb012b38fcc206fee983e07b08d5f73467e392c8017",
+      "output_schema": "sha256:eb60731cf004f967b0d2f9e054ccf670420f6af4cc7f7e4f9a5df2b6bdb49c47"
+    },
+    "modular.polynomial_identity.compute": {
+      "input_schema": "sha256:be2b33f30b804323d1c6e727cab2f059f571fc403b400ee7740381e5357e7404",
+      "output_schema": "sha256:1ddd5792407afc4b2eaeeb6875c402a9c4aeab32e0783dc375fe8b25e57a011d"
+    },
+    "modular.polynomial_residue_image.assignments.compute": {
+      "input_schema": "sha256:e22f8ca6850b9a525d803887d4270264ff36efc179fe931b18d3bc581ab217b2",
+      "output_schema": "sha256:ef5fb54d3fdb4d7c17759d891854788de1264b8a5374392b542c7ebdc5d78127"
+    },
+    "modular.polynomial_residue_image.compute": {
+      "input_schema": "sha256:e22f8ca6850b9a525d803887d4270264ff36efc179fe931b18d3bc581ab217b2",
+      "output_schema": "sha256:ef5fb54d3fdb4d7c17759d891854788de1264b8a5374392b542c7ebdc5d78127"
+    },
+    "modular.solve.chinese_remainder": {
+      "input_schema": "sha256:ee1dd4f2d60360c668d3ded3c6a54e35c0ffc4d865f52087ae6f912409db3c66",
+      "output_schema": "sha256:acf2a27c9d7db7668cfbada2b5d16711c53512ff491692d340255c6dd9df0b6e"
+    },
+    "number_theory.compute.factorial_valuation": {
+      "input_schema": "sha256:4abbf9d9da2f079f6a536fa0c3948798c88c07d4b3a0297225e648c99249563b",
+      "output_schema": "sha256:e879358bc8e46b0a30c78ad0cefa8106a94072a608960a9fd2fc27fbccfafc6f"
+    },
+    "number_theory.compute.jacobi_symbol": {
+      "input_schema": "sha256:79cfe86ad786180b4a0061eefa7869c06f47d65e76151518e2f134b43123b508",
+      "output_schema": "sha256:23f07db6eb0ab6a3e93a0c2dffa6d453934535184c9b393ed47add5320d88faa"
+    },
+    "number_theory.compute.legendre_symbol": {
+      "input_schema": "sha256:eca1fbc54c3d5c72d4711197aae16587172e4c4686055e9ca64222481fa5275a",
+      "output_schema": "sha256:7297a74c4f3c5ac3de2f6c77dd3d44fa8690f14affdc3745a09e52dd49bcda60"
+    }
+  }
+}

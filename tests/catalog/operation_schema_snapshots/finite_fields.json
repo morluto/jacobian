@@ -1,0 +1,22 @@
+{
+  "catalog_version": "1",
+  "domain": "finite_fields",
+  "operations": {
+    "finite_field.linear_map.rank.compute": {
+      "input_schema": "sha256:f39a508f1e0d3d3a0a85fb84dbed84ab48c1284f474522412be3aa38bf4ff7a8",
+      "output_schema": "sha256:e333d3f24b2308e00ad9a849795ea40c790ccacad1775af07925af6c9752bad7"
+    },
+    "finite_field.polynomial_map.table.compute": {
+      "input_schema": "sha256:882cce56683bddea0385405f3613aa7c5e62df57db51a8cdb148db9c75453e8b",
+      "output_schema": "sha256:1e1a374994bb271f568c5cd5217d517466a1aef5886c842150c07e204b12fabf"
+    },
+    "finite_field.projective_line.enumerate": {
+      "input_schema": "sha256:3f31431b53b4d9f92467f04af1e655cf49ed0cbff9b8ddc1e1607ff07f555c8b",
+      "output_schema": "sha256:997f08ad5bc222859c14971395991edce6b7a65cdf52a92d2577b8624a09cb0e"
+    },
+    "finite_field.restrict_scalars.compute": {
+      "input_schema": "sha256:2dbad77efb7ee53d2cf98806e189a39d86856991da80b4ea8ca41b3fa6f211d9",
+      "output_schema": "sha256:18523da86fff458448324235fe835b7923b5ef26c322f75e6c622591c4fcd27c"
+    }
+  }
+}

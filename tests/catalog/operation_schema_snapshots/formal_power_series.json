@@ -1,0 +1,30 @@
+{
+  "catalog_version": "1",
+  "domain": "formal_power_series",
+  "operations": {
+    "formal_series.rational.compose.compute": {
+      "input_schema": "sha256:abab285ba2faa3d23d117cca4df49af062295bec07727b71a77d5b3616113b5b",
+      "output_schema": "sha256:255e5149493dd93a0c308e03ddffaa4e57a3bc76159f90f49ec338210a2d813a"
+    },
+    "formal_series.rational.divide.compute": {
+      "input_schema": "sha256:f9aaa8ffb18d5fa02fb93d1f5f829edf894aca37b95dd115e98f0e7933f5641f",
+      "output_schema": "sha256:b334c73d0d44d9fd94ab4f1c94410becbe0c842447b7dd3343a5dac987aa1abd"
+    },
+    "formal_series.rational.inverse.compute": {
+      "input_schema": "sha256:031ca29392e9567a541d70b14759ec736d575bbd0d8c73c538120bc065c666a7",
+      "output_schema": "sha256:976dd408dddc0503cebb1b97ef2b33ec4c9ab38781e32b1a85fcc91b4d8beaf9"
+    },
+    "formal_series.rational.multiply.compute": {
+      "input_schema": "sha256:c041b2c46a2add291bfe84999791a242a5f8e77f89c315712edc981d4ff02125",
+      "output_schema": "sha256:db5562cad7a9fba1c54b08f9465e89e125a667c5f6e46891d36409e62d88e9e0"
+    },
+    "formal_series.rational.power.compute": {
+      "input_schema": "sha256:70fa02290d5643e839ed18cd698906f5bdb0c53fd55e9f1b8313ff56edbf6e73",
+      "output_schema": "sha256:371fb21417f20b8127defa6090654254264243b964b84a9460cf426c7b26ca3b"
+    },
+    "formal_series.rational.reversion.compute": {
+      "input_schema": "sha256:202657e86345b3d795db45c9fffe94c46b9906bb366324624b8226bde095efd3",
+      "output_schema": "sha256:aee79d380ed29b04d5a56ec0d02842a03bf904f3593e0523cebc0c62b096e7b8"
+    }
+  }
+}

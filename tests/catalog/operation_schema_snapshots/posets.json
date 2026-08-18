@@ -1,0 +1,22 @@
+{
+  "catalog_version": "1",
+  "domain": "posets",
+  "operations": {
+    "poset.finite.compute": {
+      "input_schema": "sha256:73c1738f192a084128ea68cc954c524bed9c6b65898f7a47498b9d5e516b94b2",
+      "output_schema": "sha256:d5021ca8f1a5bfc3ab3612f4e80db9c447089aa82f7845d8dda8594bc39753f1"
+    },
+    "poset.linear_extensions.count": {
+      "input_schema": "sha256:e1db5dfa1a85945ba8d8da52ad863146f51d1146f20bc295e2a27419ff89d713",
+      "output_schema": "sha256:48db8a0fa457af6105dda2509e2c4861a4b726aee78f0f4a44101bc3d4c9179e"
+    },
+    "poset.mobius_function.compute": {
+      "input_schema": "sha256:905e675c068c821eac74ef11e374e25ec98cac945c8078d2c4da7c38e5f63c76",
+      "output_schema": "sha256:019a0e78159a3fd4fd4fba64a83d4095432ce963df0a18b963728696a227a3da"
+    },
+    "poset.width.compute": {
+      "input_schema": "sha256:ff2a448f4335d1fac63825191d2d16991a33f31bfa7f7175c49b69495984ff0d",
+      "output_schema": "sha256:58722ae468c6000b997cf340f9b7cc29f5aa8b466cee2242227d40d75208f8e1"
+    }
+  }
+}

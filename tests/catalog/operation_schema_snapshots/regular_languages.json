@@ -1,0 +1,14 @@
+{
+  "catalog_version": "1",
+  "domain": "regular_languages",
+  "operations": {
+    "regular_language.count_words.compute": {
+      "input_schema": "sha256:c84d11d1becee2c0672dc97dbaa1659e3a540ee77cae7651e70eabf6c65c042e",
+      "output_schema": "sha256:32f5f0ff90051b9e5d438dd1815e8fdadbcaf33ec7582fff2422beb9d484d433"
+    },
+    "regular_language.run.check": {
+      "input_schema": "sha256:3366f388ed26f9f15a00fad35a14332b418f1752db02507c15404c59ec41ad55",
+      "output_schema": "sha256:77e39238312939b8450b419e53fb4dbaef1ee4c238e939c683dfb3f92f77f475"
+    }
+  }
+}

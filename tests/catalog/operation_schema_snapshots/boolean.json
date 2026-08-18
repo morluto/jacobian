@@ -1,0 +1,10 @@
+{
+  "catalog_version": "1",
+  "domain": "boolean",
+  "operations": {
+    "boolean.fourier.walsh_transform.compute": {
+      "input_schema": "sha256:2b1e7fe3c1ce60a4448da5c9eb17e52d949a7b22fbf28104469d4db6e73e36fc",
+      "output_schema": "sha256:cae7fb935b5fcba4498b6f13fc5a4dedab1fa4611df552b00c36b91bed559632"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "catalog_version": "1",
+  "domain": "words",
+  "operations": {
+    "word.factors.length.compute": {
+      "input_schema": "sha256:83a5e15f179ea6db06c71db515052fa0ba1989c236774d02dd66c93b2fb6f499",
+      "output_schema": "sha256:35a29bd2500aca39630759902ee22dea83c9e0fe292b7bbf971d17dc9cc6b025"
+    },
+    "word.periods.compute": {
+      "input_schema": "sha256:fd433607162771e58a57f2f7945c766408d40b2a2836938f30c26aa87044a4bb",
+      "output_schema": "sha256:f907920fe270f4c1e163a28875e68e081ee58f1f3348879dce1c764b306b838f"
+    },
+    "word_morphism.incidence_matrix.compute": {
+      "input_schema": "sha256:697d1e446d014e9d9c94a9df525f32d9570c340e108e8c3f16262dc7e37cccb5",
+      "output_schema": "sha256:c48bd3fca2c875b8419489adf84e2bb67f323d035c3f78906e0350b064511dcc"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "catalog_version": "1",
+  "domain": "optimization",
+  "operations": {
+    "optimization.linear.rational_optimum.compute": {
+      "input_schema": "sha256:d880bc90d2c4886d904e1228ec305b546d7bb963973fa1bf9a557eff4cc6122c",
+      "output_schema": "sha256:e53c4d5fc2cea6398960c8346f73f945cbb4a04201832d8e1d1714de105d3bac"
+    }
+  }
+}

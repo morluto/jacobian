@@ -1,0 +1,34 @@
+{
+  "catalog_version": "1",
+  "domain": "combinatorics",
+  "operations": {
+    "combinatorics.cyclic_difference_set.extension.decide": {
+      "input_schema": "sha256:8124611617ad72bfc7cc562342e6d53710204c37578a72961b581cf21371ba42",
+      "output_schema": "sha256:ee605a9c59dab292119148b78e032c235cae224ebc3591a2215acc2ab222928e"
+    },
+    "combinatorics.cyclic_difference_set.perfect.decide": {
+      "input_schema": "sha256:497816c928b42d07ef474319478c4c88c2a88218dbfe2724e30eadf6a8943324",
+      "output_schema": "sha256:e518e28a28450367564ff079c8009a11873c4d64a2586c531a6e11c4e22961fd"
+    },
+    "combinatorics.generating_function.coefficients.compute": {
+      "input_schema": "sha256:8772b24c32bedea9a382758e2538de463362830a494b9bbefba6dab64f1ed34f",
+      "output_schema": "sha256:8c7fcd8984beb56307a91bb9e7068b34856f097280b8a2d9d51f3c79f859dc9d"
+    },
+    "combinatorics.integer_set.sidon.decide": {
+      "input_schema": "sha256:892525fd272560090e34f7babb2cd9b5fd477acd714dd3cecfbc4212a88ac225",
+      "output_schema": "sha256:03dd1f3fd2c5d21d50ec9d815d3f5f254066a92111d864bc88ef5646e0222a14"
+    },
+    "combinatorics.recurrence.linear.evaluate": {
+      "input_schema": "sha256:aa0c112bc3c99aecd7881933223352b4969d99ad3b3bfd71cc8c773509405e3c",
+      "output_schema": "sha256:043a742a3be82ac62dee396df8ba508653025bd700b3c2bbca3eaf41b3586305"
+    },
+    "combinatorics.recurrence.p_recursive.evaluate": {
+      "input_schema": "sha256:684751e31bc508190f1598668a2b846e991251b1897629b110194516b5188cf6",
+      "output_schema": "sha256:c07e78f3b82bb85d7b85a4f2efaefb61e097a4d2092b385bf0a6685898105b27"
+    },
+    "combinatorics.recurrence.p_recursive.table_residuals.compute": {
+      "input_schema": "sha256:b6b9e07b511abd2b9713e716048ad0b19036e12e1eb8b9946f70b3b8d248e1d0",
+      "output_schema": "sha256:49b096a5536634ff98c1544aea60dd748d4d186374274cf90e9e917e2f602624"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "catalog_version": "1",
+  "domain": "finite_topology",
+  "operations": {
+    "topology.beat_points.compute": {
+      "input_schema": "sha256:a00d2102d50d76b5f6fdf4b25820d1c398b1dc7bb6834f3461be21a6d23d205c",
+      "output_schema": "sha256:9f057dc8e926a14438a3e8a3292b4a1bf3d1a3438f81dda00f7ae4761a07775d"
+    },
+    "topology.connected_components.compute": {
+      "input_schema": "sha256:0d6868e161f26e4a12a2b13f97cfc1983587a83ce641350b6fa619fba8472c2e",
+      "output_schema": "sha256:c7d036c91ed7fc7a756f3c2a785d3332c42bdb467b1a853b9b7cfde755a5c423"
+    },
+    "topology.is_continuous.compute": {
+      "input_schema": "sha256:5d1d3f06fc0a5cb203a0cdb07fa4b363de819afc9efdf8f1c2c5045dfdd2c8b9",
+      "output_schema": "sha256:e6a33a03a415383b36cdd84dd7c4b83adda8bd1568945c26663186d762209857"
+    },
+    "topology.specialization_preorder.compute": {
+      "input_schema": "sha256:95484f2ac51b9c006fbd114e84696fa988c0af644a4f0cdb4f8ecc54779d83ad",
+      "output_schema": "sha256:78bef8b229f7faba03658833811b676ebb5abe445ae4f445b512bba96f777f6a"
+    }
+  }
+}

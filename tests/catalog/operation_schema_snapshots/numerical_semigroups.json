@@ -1,0 +1,42 @@
+{
+  "catalog_version": "1",
+  "domain": "numerical_semigroups",
+  "operations": {
+    "number_theory.numerical_semigroup.betti_elements.compute": {
+      "input_schema": "sha256:be456ffbca1d5991b1f6d71da7d9f95af266bf0d6b7353fa31b269683ddd296b",
+      "output_schema": "sha256:447d13297a29ab144e8227fab8dce79bd2bbd7892c93d8baf86095a441b7b7be"
+    },
+    "number_theory.numerical_semigroup.catenary_degree.compute": {
+      "input_schema": "sha256:856d4fe5bc8ca0d87e72f5c11d7ba428e0718fa57326681ba07d00683c5e6af5",
+      "output_schema": "sha256:57501586cad5abdab52fb06cf1e1a1298371265480ad87027a66c2e23dad55e1"
+    },
+    "number_theory.numerical_semigroup.delta_set.compute": {
+      "input_schema": "sha256:6c06ade9881834813f6206e6cccb9964fdd5d453f508126271ad3882223027a4",
+      "output_schema": "sha256:c639da2f4d746cf248ead0eb3612809b71ce29eb6e7dc60461cd7bf3688cdfd2"
+    },
+    "number_theory.numerical_semigroup.factorization_graph.compute": {
+      "input_schema": "sha256:05bbb230aeda5586efcd8f16ca080b649049435ea4071addd571fb7a73061333",
+      "output_schema": "sha256:b5b11505b6ac493eebab59400767006da27903cee99e119afa94664ec945708f"
+    },
+    "number_theory.numerical_semigroup.factorizations.compute": {
+      "input_schema": "sha256:c8e61f5287124813f89c50444fce3308c4d682e8235a5f9e8dc0d4657ebc880e",
+      "output_schema": "sha256:be1675a3c0b957485b643458156b256c00af6038600350b5034cba2ffa6e2339"
+    },
+    "number_theory.numerical_semigroup.membership.compute": {
+      "input_schema": "sha256:994409947c1647431e8aaac86516c11d1b17f31f5aaf635b14094f4130591ccc",
+      "output_schema": "sha256:ea2ccebf9418464b7974ab4af6d63b82a8217ab7c1fe34658cfa0b27e868e5b5"
+    },
+    "number_theory.numerical_semigroup.minimal_presentation.compute": {
+      "input_schema": "sha256:7250a5e807ac6735e054ab4a0269a4843fa0f21886be4dca00d75faa9a3c2d90",
+      "output_schema": "sha256:00f0c9060d793c839c1d65f20670d2305e30cacfca67fa368bcb7f4fc5030184"
+    },
+    "number_theory.numerical_semigroup.presentation_binomials.compute": {
+      "input_schema": "sha256:1617ffcc889add1183d14d2cb29b9d09b9727502f1a3b20edd65330d74c1d231",
+      "output_schema": "sha256:8e0a845d3897fde9c3f1077fee7628467a0c8acf204f6bfd9b48de5c31dd2905"
+    },
+    "number_theory.numerical_semigroup.summary.compute": {
+      "input_schema": "sha256:a96330f2cbf2fa44aa4ee06fa965ca37fa86281b96ab336eae54554a779888ea",
+      "output_schema": "sha256:a40ea675830f371c440883c18ae4004efb4fc4a88805309c18020a23a018a73f"
+    }
+  }
+}

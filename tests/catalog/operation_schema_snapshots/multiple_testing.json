@@ -1,0 +1,10 @@
+{
+  "catalog_version": "1",
+  "domain": "multiple_testing",
+  "operations": {
+    "probability.bh_step_up.compute": {
+      "input_schema": "sha256:b51f86a304afd50af235612492073289c041418e8d45c4f517acf774df308fa9",
+      "output_schema": "sha256:feadd4c2867d97df7ea48a1810d199e670d4e2adc1f74bcc241bb375a9722daa"
+    }
+  }
+}

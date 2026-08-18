@@ -1,4 +1,8 @@
-"""Observable catalog inventory frozen across ownership-only refactors."""
+"""Observable catalog inventory frozen across ownership-only refactors.
+
+Schema compatibility snapshots are sharded by semantic owner so that a
+domain-local change updates only that domain's fragment.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +18,8 @@ from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDiscoveryRequest
 from jacobian.catalog.search import matches_domain
 
+_SNAPSHOTS_DIR = Path(__file__).with_name("operation_schema_snapshots")
+
 
 def _digest(value: Any) -> str:
     encoded = json.dumps(
@@ -25,12 +31,17 @@ def _digest(value: Any) -> str:
     return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
+def _load_fragments() -> dict[str, dict[str, Any]]:
+    """Load and aggregate all owner-scoped snapshot fragments."""
+    fragments: dict[str, dict[str, Any]] = {}
+    for path in sorted(_SNAPSHOTS_DIR.glob("*.json")):
+        fragment = json.loads(path.read_text(encoding="utf-8"))
+        fragments[path.stem] = fragment
+    return fragments
+
+
 def test_operation_ids_and_request_result_schemas_match_snapshot() -> None:
-    expected = json.loads(
-        Path(__file__)
-        .with_name("operation-schema-snapshot.json")
-        .read_text(encoding="utf-8")
-    )
+    fragments = _load_fragments()
     catalog = Catalog.open()
     snapshot = catalog.snapshot()
     actual = {
@@ -41,9 +52,36 @@ def test_operation_ids_and_request_result_schemas_match_snapshot() -> None:
         for descriptor in snapshot.operations
     }
 
-    assert snapshot.catalog_version == expected["catalog_version"]
-    assert len(actual) == len(expected["operations"])
-    assert actual == expected["operations"]
+    # Aggregate all fragments and compare
+    expected: dict[str, Any] = {}
+    catalog_version = None
+    for fragment in fragments.values():
+        assert fragment["catalog_version"] is not None
+        if catalog_version is None:
+            catalog_version = fragment["catalog_version"]
+        assert fragment["catalog_version"] == catalog_version
+        expected.update(fragment["operations"])
+
+    assert snapshot.catalog_version == catalog_version
+    assert len(actual) == len(expected)
+    assert actual == expected
+
+
+def test_snapshot_fragments_are_owner_scoped() -> None:
+    """Every operation appears in exactly one fragment."""
+    fragments = _load_fragments()
+    all_ids: list[str] = []
+    for fragment in fragments.values():
+        all_ids.extend(fragment["operations"].keys())
+    assert len(all_ids) == len(set(all_ids)), "duplicate operation IDs across fragments"
+
+
+def test_snapshot_fragments_have_correct_domains() -> None:
+    """Each fragment contains only operations from its declared domain."""
+    fragments = _load_fragments()
+    for fragment_name, fragment in fragments.items():
+        domain = fragment.get("domain", fragment_name)
+        assert domain == fragment_name, f"fragment {fragment_name} has domain {domain}"
 
 
 def test_catalog_rejects_duplicate_tool_ids() -> None:

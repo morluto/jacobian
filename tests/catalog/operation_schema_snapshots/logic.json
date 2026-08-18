@@ -1,0 +1,26 @@
+{
+  "catalog_version": "1",
+  "domain": "logic",
+  "operations": {
+    "lean.check": {
+      "input_schema": "sha256:333bb2d4dfe96331cf44cbdb3b766efda8afed8fd71844da495febd3df0e6ee3",
+      "output_schema": "sha256:e94aa4128401a83f0afc02816060578aea4adb3bd6aa8d802fde396622daed9e"
+    },
+    "sat.assignment.check": {
+      "input_schema": "sha256:043d67beebbde52080df34632b3c9f5cef0deeee54aa868cf9475d970251a8b0",
+      "output_schema": "sha256:dcba46f01160ac35cc05556235610b8e4a47300ff329b29b69c5efb629bdad3a"
+    },
+    "sat.cnf.canonicalize": {
+      "input_schema": "sha256:81d3b062ea1a13caf870f6b4082f691dddead5171dc1063f67294ecf02a09729",
+      "output_schema": "sha256:1b4a38718c41a09b211554b50323c8a4996d33b033f5726b5c3e0c463fcdbf64"
+    },
+    "sat.solve": {
+      "input_schema": "sha256:7e441f4859ddda5ff384fd01ca4e1d9d5ba53d172e7b0053afafc58160116b0e",
+      "output_schema": "sha256:708a946eff86b7e50d233307b7ea815c0bf7c20eaf30b693210b4d19bae33f65"
+    },
+    "smt.solve": {
+      "input_schema": "sha256:7b72b4b078d5fd79204326017e9f7e540cb2db2674d5ee2d9528d0a6b8026ca2",
+      "output_schema": "sha256:92e1adfe39049966ea27b5d3e2d7993feb5b87dc8732f42b5f49ca9531f1f4bc"
+    }
+  }
+}

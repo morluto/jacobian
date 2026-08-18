@@ -1,0 +1,54 @@
+{
+  "catalog_version": "1",
+  "domain": "geometry",
+  "operations": {
+    "geometry.line.compute.projection": {
+      "input_schema": "sha256:70d1480f80c09d282e464d7a25c543dd95cb19630357c45a27060e109354aeb0",
+      "output_schema": "sha256:9a15f3317003100317c0b30297f52154cf6f7ece5f462505dee1030622a160ed"
+    },
+    "geometry.lines.compute.intersection": {
+      "input_schema": "sha256:e179192327e972ee7047e763ed3bc0124ff8c1927c7ac6feb3d17d308a3761ec",
+      "output_schema": "sha256:028340656334aeb696d35a69846d5f4ea6bb8b7a6c85e768bc885e577b799ef7"
+    },
+    "geometry.points.compute.convex_hull": {
+      "input_schema": "sha256:2572637f3e87de323cdc8a65a88a220e39d32288cf8746d785fb70c02efa798e",
+      "output_schema": "sha256:ec885e964dc93a92bdcfd0ef848f376dbe5de5828bb485f70eac7c02bd1738eb"
+    },
+    "geometry.points.decide.concyclic": {
+      "input_schema": "sha256:64ebc199233c72a885b4622c9f3ebdcf0645cc6f4514abd9066ce9e9433f3de2",
+      "output_schema": "sha256:f776f55ff7544b6ff967c88d80020117a1b82a6b43f3c9d6192b3906e8e88563"
+    },
+    "geometry.points.distance_graph.compute": {
+      "input_schema": "sha256:2ffb22f2af5980b0259a10e822231dd2197bdf3bc0e49909be85367956697ddd",
+      "output_schema": "sha256:535dc67256af46a10df20fd0bda7cb05a8e94a28c3b8dfda67ae2d95920ea4bc"
+    },
+    "geometry.points.distance_profile.compute": {
+      "input_schema": "sha256:117bcbc0e4f71f9de2b9aea56663a39e12768989c06de0787fa62595ed509bd1",
+      "output_schema": "sha256:d8a4df6a9568602f7a2d9cf6bc37d214f7275d5ede79aeb5e2039fad119f6d92"
+    },
+    "geometry.polygon.point.classify": {
+      "input_schema": "sha256:07944f2474a7a67fef25466c1ef09bc0c403d6f0e4619cfd697289fd758a115c",
+      "output_schema": "sha256:021f8a5e68c62b28450de8cc98eac573cb06efdc8ce10058059e8412dda21277"
+    },
+    "geometry.polygon.simple.decide": {
+      "input_schema": "sha256:1ab9aa20c920f053d7e6eadfb3ec046c68b6c219b445a85fdeb52c6177d45914",
+      "output_schema": "sha256:2f080ec6283549befe3e6c72e6d4d8c093942b1b870bade3e29f52f2557e82ff"
+    },
+    "geometry.polygon.triangulation.minimum_weight.compute": {
+      "input_schema": "sha256:d37c7c6bbc7429212b78543e687ada81efe3e2496fea900f09e38fdc67a1d830",
+      "output_schema": "sha256:62c97ee8215df614e9fee5ea15efa3eef2d85582f5287ce25867755f8773680a"
+    },
+    "geometry.projective_line_arrangement.flats.compute": {
+      "input_schema": "sha256:cf2ec0f2421332928278558e4856a6db56baff84f36636c78ef193f7d2608c40",
+      "output_schema": "sha256:6bcf920842a872618a1d1741c0fb8fb7c224d1b4ef6a32b7acb553ebd8663cd5"
+    },
+    "geometry.segments.intersection.compute": {
+      "input_schema": "sha256:aaf77f3aa871f1c0ef3dfe2fbd675b847fa2e7f4cecca06fe8a56052a45dfced",
+      "output_schema": "sha256:f40d55397dd95d1e5f7a2294d659197564c7a635c4c576c780143c9912d2ae9e"
+    },
+    "geometry.triangle.compute.circumcircle": {
+      "input_schema": "sha256:cf5687414f47c74a96aeada7c7341077731b4bebab17fb8affa99902adbbcf46",
+      "output_schema": "sha256:551047239e4820a438b341c5f5b19777508e6486b139c6e93e83b0fa8322e5c0"
+    }
+  }
+}

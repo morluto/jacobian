@@ -1,0 +1,14 @@
+{
+  "catalog_version": "1",
+  "domain": "petri_nets",
+  "operations": {
+    "petri_net.fire_transition.compute": {
+      "input_schema": "sha256:94d2ac5f44d2c91cdb382a029abf9861b1b084eb8341715c0cb372ca54c560dd",
+      "output_schema": "sha256:8efc16c31ff354161694ecc2583a9ca798c61d898e150388d745ac71e4cee4ef"
+    },
+    "petri_net.reachability_graph.compute": {
+      "input_schema": "sha256:b6b01d34a22460c831f5f9ba4a9aa793229b29977ea2f004eed4bd0e7781641b",
+      "output_schema": "sha256:04cc9f3583373b6889e817e0b53a3e498521f9b5f8b27360bb6f6e5df8df5c46"
+    }
+  }
+}

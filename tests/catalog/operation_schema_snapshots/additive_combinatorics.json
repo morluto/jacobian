@@ -1,0 +1,14 @@
+{
+  "catalog_version": "1",
+  "domain": "additive_combinatorics",
+  "operations": {
+    "additive.direct_sum_predicate.compute": {
+      "input_schema": "sha256:4c4ec359b4c9329df175f04d43ab47779b13081407dba34d68692bb2db501232",
+      "output_schema": "sha256:c8e62e69886158fbea4e0dc1edd7a1bd18e53442c96b3589285272f4b625a19d"
+    },
+    "additive.representation_profile.compute": {
+      "input_schema": "sha256:88fb31b12e3daf163473139a5e44fc7525a1132a282311c9dd6904f03b175ed1",
+      "output_schema": "sha256:a5a0ca971e84fe5a9fadb946057b3c85cd0c35dced952ec9e1f0d2b025068014"
+    }
+  }
+}

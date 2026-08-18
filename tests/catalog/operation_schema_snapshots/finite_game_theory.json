@@ -1,0 +1,10 @@
+{
+  "catalog_version": "1",
+  "domain": "finite_game_theory",
+  "operations": {
+    "game_theory.nash_equilibrium.compute": {
+      "input_schema": "sha256:fd3bbd5d7284ea00acb0389777e444d5b79922dcd6ca059c21c857431896a543",
+      "output_schema": "sha256:264894a7ff1a21d6c14adcf41f2b343966abef50baf694098701c18fd13f3964"
+    }
+  }
+}

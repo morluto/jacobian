@@ -1,0 +1,14 @@
+{
+  "catalog_version": "1",
+  "domain": "boolean_analysis",
+  "operations": {
+    "boolean.erasure_noise.compute": {
+      "input_schema": "sha256:5d30c772c330454e3fc49026c61ae8ca0e71eb2dab87420292e0c67a59473e2d",
+      "output_schema": "sha256:107269b473b6bcd7c1a8129669b2fb4b5890ca71706258bb0c8bec08488a1c27"
+    },
+    "boolean.multilinear_extension.compute": {
+      "input_schema": "sha256:2757131974ce4fb274080e3ebbe76a2563028b256027ef2fd5f97e30a72ad3d2",
+      "output_schema": "sha256:233ae48ce94dc5964bfe45e1270c080c8973de140a703c24ea8e6a2b287aa3e0"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "catalog_version": "1",
+  "domain": "convex_analysis",
+  "operations": {
+    "convex.max_affine.evaluate": {
+      "input_schema": "sha256:f23a9850b08779f60b74d9b30b5bc07840ae2dae95b95fce130df4f4af06d306",
+      "output_schema": "sha256:8e32ca72319da537adcc669e039783895734f1343f72a1c8edfce7ae3ae0a658"
+    },
+    "convex.max_affine.subdifferential": {
+      "input_schema": "sha256:93e2f363ed4f25f0483b99ee796101f5a8545fdbeaae764d1da9bac739c95675",
+      "output_schema": "sha256:c03266ff0970b09dc6368730fedab88f02cd33f762b2b1d9ac35a4026d5a0256"
+    }
+  }
+}

@@ -100,6 +100,12 @@ from jacobian.math.formal_power_series._admission import (
     ADMISSIONS as FORMAL_POWER_SERIES_ADMISSIONS,
 )
 from jacobian.math.formal_power_series._tools import TOOLS as FORMAL_POWER_SERIES_TOOLS
+from jacobian.math.galois_theory._admission import (
+    ADMISSIONS as GALOIS_THEORY_ADMISSIONS,
+)
+from jacobian.math.galois_theory._tools import (
+    TOOLS as GALOIS_THEORY_TOOLS,
+)
 from jacobian.math.geometry._admission import ADMISSIONS as GEOMETRY_ADMISSIONS
 from jacobian.math.geometry._tools import TOOLS as GEOMETRY_TOOLS
 from jacobian.math.geometry.euclidean._admission import (
@@ -296,6 +302,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *LOGIC_TOOLS,
     *SEQUENCES_TOOLS,
     *GEOMETRY_TOOLS,
+    *GALOIS_THEORY_TOOLS,
     *PROJECTIVE_GEOMETRY_TOOLS,
     *GRAPH_OPTIMIZATION_TOOLS,
     *GRAPHS_TOOLS,
@@ -372,6 +379,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *FINITE_TOPOLOGY_ADMISSIONS,
     *FORMAL_POWER_SERIES_ADMISSIONS,
     *GEOMETRY_ADMISSIONS,
+    *GALOIS_THEORY_ADMISSIONS,
     *GEOMETRY_EUCLIDEAN_ADMISSIONS,
     *GEOMETRY_EXACT_ADMISSIONS,
     *GEOMETRY_PROJECTIVE_ADMISSIONS,

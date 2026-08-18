@@ -238,6 +238,10 @@ from jacobian.math.posets._admission import ADMISSIONS as POSETS_ADMISSIONS
 from jacobian.math.posets._tools import TOOLS as POSETS_TOOLS
 from jacobian.math.probability._admission import ADMISSIONS as PROBABILITY_ADMISSIONS
 from jacobian.math.probability._tools import TOOLS as PROBABILITY_TOOLS
+from jacobian.math.quadratic_forms._admission import (
+    ADMISSIONS as QUADRATIC_FORMS_ADMISSIONS,
+)
+from jacobian.math.quadratic_forms._tools import TOOLS as QUADRATIC_FORMS_TOOLS
 from jacobian.math.recurrence_solving._admission import (
     ADMISSIONS as RECURRENCE_SOLVING_ADMISSIONS,
 )
@@ -274,6 +278,7 @@ from jacobian.math.words._admission import ADMISSIONS as WORDS_ADMISSIONS
 from jacobian.math.words._tools import TOOLS as WORDS_TOOLS
 
 _BUILTIN_CANDIDATES: MathTools = (
+    *QUADRATIC_FORMS_TOOLS,
     *BOOLEAN_TOOLS,
     *GROUP_TOOLS,
     *GRAPH_COLORING_OPS_TOOLS,
@@ -411,6 +416,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *POLYNOMIALS_REAL_ALGEBRA_ADMISSIONS,
     *POSETS_ADMISSIONS,
     *PROBABILITY_ADMISSIONS,
+    *QUADRATIC_FORMS_ADMISSIONS,
     *RECURRENCE_SOLVING_ADMISSIONS,
     *REGULAR_LANGUAGES_ADMISSIONS,
     *ROOT_ISOLATION_ADMISSIONS,

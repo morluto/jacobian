@@ -148,11 +148,8 @@ _BUILTIN_CANDIDATES: MathTools = (
     *ALGEBRAIC_COMBINATORICS_TOOLS,
     *REAL_ALGEBRA_TOOLS,
     *FINITE_METRIC_SPACES_TOOLS,
-<<<<<<< HEAD
     *PETRI_NET_TOOLS,
-=======
     *TERM_REWRITING_TOOLS,
->>>>>>> e5f117b6e (Add first-order term rewriting operations (#1921))
 )
 
 BUILTIN_TOOLS: MathTools = curate_public_tools(_BUILTIN_CANDIDATES)

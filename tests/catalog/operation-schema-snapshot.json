@@ -825,17 +825,9 @@
       "input_schema": "sha256:c96eac4da31e2b63291f171b62af3b184cbca9f8470a0208d05257829da4149a",
       "output_schema": "sha256:069c8c20fdf9176965a2fd13d5707ebc83b721bc49c678eae9276ba67435a805"
     },
-    "term_rewriting.normal_form.compute": {
-      "input_schema": "sha256:c4dd14afcf4c7c86dc4bb0ffc199243e9d842f50bfa7de538481fde7935c5853",
-      "output_schema": "sha256:88c249852647a6629ba3b32cb2206cdf0ac7265b4bf25075fe6d138cbc3522e9"
-    },
     "term_rewriting.rewrite_step.compute": {
       "input_schema": "sha256:8633ded7906c0bf15142abc8eb1dc0ba300c8ed95bfda4e50591ef4e20bba856",
       "output_schema": "sha256:524ab1b0dad03f372fc4fc421c3edf1ad5ee2db2c6d994c7eae0899e37bbd030"
-    },
-    "term_rewriting.substitution.compute": {
-      "input_schema": "sha256:6ef32066a105978f692a68ac12fb0029e67a3b7a5e5a6aa9fe8a1d4e480d5d86",
-      "output_schema": "sha256:24aa2a9150005c694e36f1a53231c546b9439f44e3f3b574b3fa15e098b53d18"
     },
     "term_rewriting.unification.compute": {
       "input_schema": "sha256:91fae06f015576650d539360812fe6b5fb83d0d1daef2c638ec1ecf89c61fdc8",

@@ -16,7 +16,11 @@ from jacobian.math import (
     polynomials,
     prime_field_linear_algebra,
     probability,
+<<<<<<< HEAD
     regular_languages,
+=======
+    term_rewriting,
+>>>>>>> 344b98e66 (fix term rewriting public capability boundary)
 )
 
 __all__ = [
@@ -35,5 +39,9 @@ __all__ = [
     "polynomials",
     "prime_field_linear_algebra",
     "probability",
+<<<<<<< HEAD
     "regular_languages",
+=======
+    "term_rewriting",
+>>>>>>> 344b98e66 (fix term rewriting public capability boundary)
 ]

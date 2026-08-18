@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.math import term_rewriting
 from jacobian.math.term_rewriting._models import (
     NormalFormRequest,
     RewriteStepRequest,
@@ -13,6 +14,7 @@ from jacobian.math.term_rewriting._operations import (
     compute_rewrite_step,
     compute_unification,
 )
+from jacobian.math.term_rewriting._tools import TOOLS
 from jacobian.math.term_rewriting.operations import (
     apply_substitution,
     match,
@@ -31,6 +33,38 @@ def _var(symbol: int) -> Term:
 
 def _app(symbol: int, *children: Term) -> Term:
     return Term(is_variable=False, symbol=symbol, children=tuple(children))
+
+
+def test_catalog_contains_only_audited_agent_outcomes() -> None:
+    assert {tool.operation_id for tool in TOOLS} == {
+        "term_rewriting.matching.compute",
+        "term_rewriting.unification.compute",
+        "term_rewriting.rewrite_step.compute",
+    }
+
+
+def test_substitution_and_normalization_remain_native() -> None:
+    variable = term_rewriting.Term(is_variable=True, symbol=0)
+    constant = term_rewriting.Term(symbol=1)
+    assert term_rewriting.apply_substitution(variable, {0: constant}) == constant
+    rule = term_rewriting.RewriteRule(lhs=_app(0, variable), rhs=variable)
+    result, status, steps, next_step = term_rewriting.normal_form(
+        _app(0, constant), (rule,), max_steps=1
+    )
+    assert (result, status, steps, next_step) == (
+        constant,
+        "NORMAL_FORM",
+        1,
+        None,
+    )
+
+
+def test_native_choice_and_bound_validation_is_explicit() -> None:
+    rule = RewriteRule(lhs=_app(0), rhs=_app(1))
+    with pytest.raises(ValueError, match="rule_index"):
+        selected_rewrite_step(_app(0), (rule,), (), 1)
+    with pytest.raises(ValueError, match="max_steps"):
+        normal_form(_app(0), (rule,), max_steps=-1)
 
 
 class TestSubstitution:

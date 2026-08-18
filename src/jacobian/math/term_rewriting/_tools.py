@@ -9,20 +9,14 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.term_rewriting._models import (
     MatchingRequest,
     MatchingResult,
-    NormalFormRequest,
-    NormalFormResult,
     RewriteStepRequest,
     RewriteStepResult,
-    SubstitutionRequest,
-    SubstitutionResult,
     UnificationRequest,
     UnificationResult,
 )
 from jacobian.math.term_rewriting._operations import (
     compute_matching,
-    compute_normal_form,
     compute_rewrite_step,
-    compute_substitution,
     compute_unification,
 )
 
@@ -53,26 +47,6 @@ def _op[
         examples=examples,
     )
 
-
-_SUBST_EXAMPLE = {
-    "term": {
-        "is_variable": False,
-        "symbol": 0,
-        "children": [
-            {"is_variable": True, "symbol": 0, "children": []},
-            {"is_variable": False, "symbol": 1, "children": []},
-        ],
-    },
-    "substitution": {
-        "mapping": {
-            "0": {
-                "is_variable": False,
-                "symbol": 2,
-                "children": [],
-            },
-        },
-    },
-}
 
 _MATCH_EXAMPLE = {
     "pattern": {
@@ -113,25 +87,6 @@ _UNIFY_EXAMPLE = {
 }
 
 _TERM_REWRITING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "term_rewriting.substitution.compute",
-        "Apply a substitution to a term",
-        "Apply a variable-to-term substitution to a first-order term, "
-        "replacing each variable with its binding.",
-        SubstitutionRequest,
-        SubstitutionResult,
-        compute_substitution,
-        "term-rewriting",
-        "substitution",
-        "exact",
-        examples=(
-            example(
-                "simple_substitution",
-                "Substitute a function symbol for a variable.",
-                _SUBST_EXAMPLE,
-            ),
-        ),
-    ),
     _op(
         "term_rewriting.matching.compute",
         "Match a pattern against a subject term",
@@ -211,58 +166,6 @@ _TERM_REWRITING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                             },
                         }
                     ],
-                },
-            ),
-        ),
-    ),
-    _op(
-        "term_rewriting.normal_form.compute",
-        "Run an explicit bounded term-normalization strategy",
-        "Apply the explicitly declared leftmost-outermost, rule-order strategy. "
-        "Return NORMAL_FORM only when no rewrite applies; otherwise return "
-        "STEP_LIMIT with the exact next-step witness.",
-        NormalFormRequest,
-        NormalFormResult,
-        compute_normal_form,
-        "term-rewriting",
-        "normal-form",
-        "exact",
-        examples=(
-            example(
-                "strip_f_layers",
-                "Strip f layers from f(f(a)) using rule f(x) -> x.",
-                {
-                    "term": {
-                        "is_variable": False,
-                        "symbol": 0,
-                        "children": [
-                            {
-                                "is_variable": False,
-                                "symbol": 0,
-                                "children": [
-                                    {"is_variable": False, "symbol": 1, "children": []},
-                                ],
-                            },
-                        ],
-                    },
-                    "rules": [
-                        {
-                            "lhs": {
-                                "is_variable": False,
-                                "symbol": 0,
-                                "children": [
-                                    {"is_variable": True, "symbol": 0, "children": []},
-                                ],
-                            },
-                            "rhs": {
-                                "is_variable": True,
-                                "symbol": 0,
-                                "children": [],
-                            },
-                        }
-                    ],
-                    "strategy": "LEFTMOST_OUTERMOST_RULE_ORDER",
-                    "max_steps": 100,
                 },
             ),
         ),

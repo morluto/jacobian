@@ -147,6 +147,8 @@ def selected_rewrite_step(
     rule_index: int,
 ) -> RewriteApplication | None:
     """Apply exactly the declared rule at exactly the declared position."""
+    if not 0 <= rule_index < len(rules):
+        raise ValueError("rule_index is out of range")
     redex = term_at_position(term, position)
     substitution = match(rules[rule_index].lhs, redex)
     if substitution is None:
@@ -186,6 +188,8 @@ def normal_form(
     Returns (term, status, steps, next_step). ``next_step`` is the open
     obligation when the declared step bound is exhausted.
     """
+    if max_steps < 0:
+        raise ValueError("max_steps must be nonnegative")
     steps = 0
     current = term
     while steps < max_steps:

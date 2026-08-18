@@ -1,0 +1,26 @@
+{
+  "catalog_version": "1",
+  "domain": "finite_topology_spaces",
+  "operations": {
+    "topology.finite.boundary.compute": {
+      "input_schema": "sha256:e2ed27059b03a62e0b1a87d0d5da88ffd9920e43767f4b52f1116aa7353c2033",
+      "output_schema": "sha256:40670dd79e03dff53be4a8acb86c2b86a2e54446eef6f8e4a2b246ac743d3fc6"
+    },
+    "topology.finite.closure.compute": {
+      "input_schema": "sha256:e2ed27059b03a62e0b1a87d0d5da88ffd9920e43767f4b52f1116aa7353c2033",
+      "output_schema": "sha256:f2e6b424bdd6024f5b7e6d1b11fdbd0241d9fe51529b0fa50f498c1c2785a7be"
+    },
+    "topology.finite.continuity_check.compute": {
+      "input_schema": "sha256:d8496e445dc0a6ac2f93d70c13ca33cb079aff0546a12ffaab5f1cbc3e05ffdd",
+      "output_schema": "sha256:853944cb0976afbdb0d651acd61cfa231d5605ca941679615803f142f924d0fd"
+    },
+    "topology.finite.interior.compute": {
+      "input_schema": "sha256:e2ed27059b03a62e0b1a87d0d5da88ffd9920e43767f4b52f1116aa7353c2033",
+      "output_schema": "sha256:2dae4930845aec1ebd37305e6a30d9238e0c2ef9abe8975777b2177bb69348a1"
+    },
+    "topology.finite.kolmogorov_quotient.compute": {
+      "input_schema": "sha256:9f90b5135c187a1af7f9ae00269ef6c597776ced5317fe6a1f94a690ced7259b",
+      "output_schema": "sha256:66f74472504721f56a2fca5125c26035b2c2300bb8cb4de13e94a6294ff9b032"
+    }
+  }
+}

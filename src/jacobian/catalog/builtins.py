@@ -96,6 +96,12 @@ from jacobian.math.finite_topology._admission import (
     ADMISSIONS as FINITE_TOPOLOGY_ADMISSIONS,
 )
 from jacobian.math.finite_topology._tools import TOOLS as FINITE_TOPOLOGY_TOOLS
+from jacobian.math.finite_topology_spaces._admission import (
+    ADMISSIONS as FINITE_TOPOLOGY_SPACES_ADMISSIONS,
+)
+from jacobian.math.finite_topology_spaces._tools import (
+    TOOLS as FINITE_TOPOLOGY_SPACES_TOOLS,
+)
 from jacobian.math.formal_power_series._admission import (
     ADMISSIONS as FORMAL_POWER_SERIES_ADMISSIONS,
 )
@@ -336,6 +342,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *WORDS_TOOLS,
     *SYMBOLIC_DYNAMICS_TOOLS,
     *FINITE_TOPOLOGY_TOOLS,
+    *FINITE_TOPOLOGY_SPACES_TOOLS,
     *ELECTRICAL_NETWORKS_TOOLS,
     *REGULAR_LANGUAGES_TOOLS,
     *ALGEBRAIC_COMBINATORICS_TOOLS,
@@ -370,6 +377,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *FINITE_SETS_ADMISSIONS,
     *FINITE_STATE_TRANSDUCERS_ADMISSIONS,
     *FINITE_TOPOLOGY_ADMISSIONS,
+    *FINITE_TOPOLOGY_SPACES_ADMISSIONS,
     *FORMAL_POWER_SERIES_ADMISSIONS,
     *GEOMETRY_ADMISSIONS,
     *GEOMETRY_EUCLIDEAN_ADMISSIONS,

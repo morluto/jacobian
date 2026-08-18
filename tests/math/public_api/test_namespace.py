@@ -1,362 +1,87 @@
+"""Cross-owner invariants for the public ``jacobian.math`` namespace.
+
+Exact symbol expectations for each domain live in owner-local
+``test_public_api.py`` files under ``tests/math/<domain>/``.
+
+This module retains only the repository-wide composition contract:
+the exact small set/order of root ``jacobian.math`` domain exports
+plus cross-owner checks that no private names, duplicate exports,
+or compatibility aliases leak into the public surface.
+"""
+
 from __future__ import annotations
 
 import importlib
 
-import pytest
-
 import jacobian
 
-PUBLIC_API = {
-    "jacobian.math": (
-        "algebraic_combinatorics",
-        "arithmetic",
-        "arithmetic_dynamics",
-        "combinatorics",
-        "diophantine_approximation",
-        "finite_abelian_groups",
-        "finite_fields",
-        "finite_metric_spaces",
-        "finite_state_transducers",
-        "finite_topology",
-        "formal_power_series",
-        "graphical_models",
-        "graphs",
-        "impartial_games",
-        "matrices",
-        "numerical_semigroups",
-        "petri_nets",
-        "polynomials",
-        "prime_field_linear_algebra",
-        "probability",
-        "regular_languages",
-        "symbolic_dynamics",
-        "term_rewriting",
-        "tree_automata",
-        "words",
-    ),
-    "jacobian.math.algebraic_combinatorics": (
-        "conjugate_partition",
-        "hook_lengths",
-        "standard_young_tableaux_count",
-    ),
-    "jacobian.math.finite_fields": (
-        "Axis",
-        "AxisBoundMatrix",
-        "CollisionResult",
-        "DirectionRankLedger",
-        "FiberPartition",
-        "FiniteDimensionalSubspace",
-        "FiniteFieldElement",
-        "FiniteFieldPresentation",
-        "FiniteLinearMap",
-        "FiniteMapTable",
-        "FinitePolynomial",
-        "FinitePolynomialMap",
-        "OrbitDistribution",
-        "PermutationResult",
-        "ProjectiveLine",
-        "ProjectivePoint",
-        "RankResult",
-        "analyze_collisions",
-        "analyze_permutation",
-        "direction_rank_ledger",
-        "element",
-        "evaluate_finite_polynomial",
-        "fiber_partition",
-        "finite_field",
-        "finite_map_table",
-        "finite_polynomial",
-        "finite_polynomial_map",
-        "linear_map_rank",
-        "orbit_distribution",
-        "projective_line",
-        "projective_point",
-        "restrict_scalars",
-    ),
-    "jacobian.math.finite_topology": (
-        "BeatPointAnalysis",
-        "BeatPointWitness",
-        "ContinuityAnalysis",
-        "FiniteTopology",
-        "PointMap",
-        "beat_points",
-        "closure",
-        "connected_components",
-        "continuity",
-        "interior",
-        "is_continuous",
-        "is_t0",
-        "minimal_open_neighborhoods",
-        "specialization_preorder",
-    ),
-    "jacobian.math.arithmetic": (
-        "absolute_value",
-        "integerize_rational_vector",
-        "primitive_integer_vector",
-        "quotient",
-        "reciprocal",
-        "sign",
-        "sum_rationals",
-    ),
-    "jacobian.math.combinatorics": (
-        "IndexedRecurrenceResidual",
-        "PolynomialCoefficientRecurrenceTableRequest",
-        "PolynomialCoefficientRecurrenceTableResult",
-        "bell_number",
-        "bernoulli_number",
-        "catalan_number",
-        "derangement_number",
-        "double_factorial",
-        "fibonacci_number",
-        "integer_partitions",
-        "lucas_number",
-        "motzkin_number",
-        "partition_number",
-        "recurrence_table_residuals",
-        "stirling_first",
-        "stirling_second",
-    ),
-    "jacobian.math.diophantine_approximation": (
-        "continued_fraction",
-        "convergents",
-        "solve_pell",
-    ),
-    "jacobian.math.finite_metric_spaces": (
-        "ball",
-        "gromov_hyperbolicity",
-        "metric_profile",
-    ),
-    "jacobian.math.formal_power_series": (
-        "TruncatedSeries",
-        "add",
-        "compose",
-        "derivative",
-        "divide",
-        "from_polynomial",
-        "identity_check",
-        "integral_zero_constant",
-        "inverse",
-        "multiply",
-        "power",
-        "reversion",
-        "scalar_multiply",
-        "subtract",
-        "to_polynomial",
-        "truncate",
-    ),
-    "jacobian.math.arithmetic_dynamics": (
-        "FunctionalGraph",
-        "OrbitComputation",
-        "RepeatEvidence",
-        "cycle_multiplier",
-        "dynatomic_polynomial",
-        "finite_field_functional_graph",
-        "fixed_point_equation",
-        "iterate_polynomial",
-        "orbit_prefix",
-        "polynomial_coefficients",
-        "polynomial_from_coefficients",
-        "validate_cycle",
-    ),
-    "jacobian.math.graphs": (
-        "GraphCompositionInput",
-        "IndependenceNumberBudget",
-        "IndependenceNumberRequest",
-        "IndependenceNumberResult",
-        "SimpleUndirectedGraph",
-        "biconnected_components",
-        "complement",
-        "compose_graphs",
-        "diameter",
-        "explicit_graph",
-        "graph_power",
-        "independence_number",
-        "induced_subgraph",
-        "is_eulerian",
-        "line_graph",
-        "radius",
-        "strongly_connected_components",
-        "triangle_count",
-    ),
-    "jacobian.math.graphical_models": (
-        "Factor",
-        "d_separation",
-        "factor_marginalize",
-        "factor_multiply",
-        "variable_elimination",
-    ),
-    "jacobian.math.finite_state_transducers": (
-        "RationalEdge",
-        "RationalTransducer",
-        "SubseqFinalOutput",
-        "SubseqTransition",
-        "SubsequentialTransducer",
-        "coaccessible_states",
-        "compose_subsequential",
-        "identity_transducer",
-        "invert_rational",
-        "reachable_states",
-        "replay_rational_path",
-        "run_subsequential",
-        "trim_subsequential",
-    ),
-    "jacobian.math.matrices": (
-        "SmithNormalForm",
-        "adjugate",
-        "characteristic_polynomial",
-        "determinant",
-        "inverse",
-        "kronecker_product",
-        "multiply",
-        "partial_trace",
-        "permanent",
-        "rank",
-        "rref",
-        "smith_normal_form",
-        "solve_linear_system",
-        "trace",
-    ),
-    "jacobian.math.numerical_semigroups": (
-        "FactorizationGraph",
-        "apery_set",
-        "belongs",
-        "elasticity",
-        "element_catenary_degree",
-        "element_delta_set",
-        "element_elasticity",
-        "factorization_count",
-        "factorization_distance",
-        "factorization_graph",
-        "factorization_lengths",
-        "factorizations",
-        "minimal_generating_system",
-    ),
-    "jacobian.math.petri_nets": (
-        "Marking",
-        "PetriNet",
-        "compute_incidence_matrix",
-        "enabled_transitions",
-        "fire_transition",
-        "reachability_graph",
-    ),
-    "jacobian.math.impartial_games": (
-        "GameMove",
-        "GrundyAnalysis",
-        "ImpartialGame",
-        "SubtractionGrundyAnalysis",
-        "birthdays",
-        "grundy_classes",
-        "grundy_table",
-        "mex",
-        "nim_options",
-        "nim_sum",
-        "outcome_profile",
-        "position_grundy",
-        "subtraction_game",
-        "subtraction_grundy_prefix",
-    ),
-    "jacobian.math.polynomials": (
-        "derivative",
-        "discriminant",
-        "divide",
-        "evaluate",
-        "factorization",
-        "gcdex",
-        "groebner_basis",
-        "integral",
-        "partial_fractions",
-        "resultant",
-        "square_free_decomposition",
-    ),
-    "jacobian.math.prime_field_linear_algebra": (
-        "PrimeFieldMatrix",
-        "column_basis",
-        "nullspace",
-        "quotient_basis",
-        "rank",
-        "rref",
-    ),
-    "jacobian.math.probability": (
-        "FiniteJointTable",
-        "MutualInformationCertificate",
-        "MutualInformationResult",
-        "MutualInformationTerm",
-        "mutual_information",
-    ),
-    "jacobian.math.regular_languages": (
-        "DFA",
-        "DFATransition",
-        "count_accepted_words",
-        "dfa_complement",
-        "dfa_run",
-    ),
-    "jacobian.math.term_rewriting": (
-        "RewriteApplication",
-        "RewriteRule",
-        "Term",
-        "apply_substitution",
-        "match",
-        "normal_form",
-        "rewrite_steps",
-        "selected_rewrite_step",
-        "term_at_position",
-        "unify",
-    ),
-    "jacobian.math.tree_automata": (
-        "BottomUpTreeAutomaton",
-        "RankedTree",
-        "TreeAutomatonTransition",
-        "accepted_tree_count",
-        "run_tree_automaton",
-    ),
-    "jacobian.math.words": (
-        "FactorAnalysis",
-        "FiniteWord",
-        "PeriodAnalysis",
-        "WordMorphism",
-        "apply_morphism",
-        "compose_morphisms",
-        "conjugates",
-        "factor_occurrences",
-        "factors_of_length",
-        "incidence_matrix",
-        "parikh_vector",
-        "periods",
-        "prefix_function",
-        "primitive_root",
-    ),
-    "jacobian.math.symbolic_dynamics": (
-        "AdjacencyShift",
-        "BlockPresentation",
-        "ForbiddenBlockShift",
-        "LabeledTransition",
-        "adjacency_shift",
-        "block_language",
-        "finite_type_presentation",
-        "higher_block_presentation",
-        "normalize_forbidden_blocks",
-        "periodic_point_profile",
-    ),
-}
+ROOT_MATH_DOMAINS = (
+    "algebraic_combinatorics",
+    "arithmetic",
+    "arithmetic_dynamics",
+    "combinatorics",
+    "diophantine_approximation",
+    "finite_abelian_groups",
+    "finite_fields",
+    "finite_metric_spaces",
+    "finite_state_transducers",
+    "finite_topology",
+    "formal_power_series",
+    "graphical_models",
+    "graphs",
+    "impartial_games",
+    "matrices",
+    "numerical_semigroups",
+    "petri_nets",
+    "polynomials",
+    "prime_field_linear_algebra",
+    "probability",
+    "regular_languages",
+    "symbolic_dynamics",
+    "term_rewriting",
+    "tree_automata",
+    "words",
+)
 
 
-def test_public_manifest_is_exact() -> None:
-    for module_name, names in PUBLIC_API.items():
-        module = importlib.import_module(module_name)
-        assert tuple(module.__all__) == names
-        assert len(names) == len(set(names))
-        assert all(not name.startswith("_") for name in names)
-        assert all(hasattr(module, name) for name in names)
+def test_root_math_namespace_is_exact() -> None:
+    """The root ``jacobian.math.__all__`` must match the expected domain list."""
+    from jacobian import math
+
+    assert tuple(math.__all__) == ROOT_MATH_DOMAINS
+    assert len(math.__all__) == len(set(math.__all__))
 
 
-def test_functions_have_one_canonical_module() -> None:
+def test_no_private_names_in_any_public_all() -> None:
+    """Every public ``__all__`` must exclude private (underscore-prefixed) names."""
+    from jacobian import math
+
+    for domain in math.__all__:
+        module = importlib.import_module(f"jacobian.math.{domain}")
+        assert hasattr(module, "__all__"), f"{domain} has no __all__"
+        assert all(
+            not name.startswith("_") for name in module.__all__
+        ), f"{domain} exports a private name"
+
+
+def test_no_duplicate_root_exports() -> None:
+    """Root domain exports must be unique."""
+    from jacobian import math
+
+    assert len(math.__all__) == len(set(math.__all__))
+
+
+def test_public_functions_have_one_canonical_module() -> None:
+    """Every public callable must resolve to one canonical owner, not an alias."""
+    from jacobian import math
+
     function_locations: dict[object, list[str]] = {}
-    for module_name, names in PUBLIC_API.items():
-        module = importlib.import_module(module_name)
-        for name in names:
+    for domain in math.__all__:
+        module = importlib.import_module(f"jacobian.math.{domain}")
+        for name in module.__all__:
             value = getattr(module, name)
             if callable(value) and not isinstance(value, type(importlib)):
-                function_locations.setdefault(value, []).append(f"{module_name}.{name}")
+                function_locations.setdefault(value, []).append(f"jacobian.math.{domain}.{name}")
     assert all(len(locations) == 1 for locations in function_locations.values())
 
 
@@ -366,6 +91,21 @@ def test_root_namespace_stays_minimal() -> None:
 
 
 def test_parallel_contract_and_domain_namespaces_are_deleted() -> None:
+    import pytest
+
     for module_name in ("jacobian.contracts", "jacobian.domains"):
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module(module_name)
+
+
+def test_public_math_imports_have_no_catalog_side_effect() -> None:
+    """Importing a public math module must not import catalog publication layers."""
+
+    from jacobian import math
+
+    for domain in math.__all__:
+        module = importlib.import_module(f"jacobian.math.{domain}")
+        assert hasattr(module, "__all__"), f"{domain} has no __all__"
+        # Every declared symbol must be resolvable on the public module.
+        for name in module.__all__:
+            assert hasattr(module, name), f"{domain}.{name} is missing"

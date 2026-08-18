@@ -26,6 +26,16 @@ exact computation: a typed request in, a typed mathematical value out, with
 no workflow, state, or intermediate runtime between them. The same
 mathematical library is also available through a CLI and native Python API.
 
+**Jacobian's hypothesis is that mathematical reasoning benefits from an
+executable vocabulary of small, exact operations.** Rather than exposing large
+domain solvers or precomposed workflows, Jacobian exposes mathematical
+primitives that agents can search for and compose into solutions beyond what
+any individual operation was designed to solve. The library supplies
+trustworthy mathematical moves; the reasoning model decides which moves to
+make, how to combine their results, and when to stop. Keeping the operations
+small and domain-owned preserves that search space instead of baking one proof
+strategy or workflow into the tools themselves.
+
 ## Quickstart
 
 Run the canonical Python MCP command without installing Jacobian globally:

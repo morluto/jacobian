@@ -1,6 +1,6 @@
 # Author a Harbor benchmark task
 
-[Documentation home](../index.md) · [Benchmark contracts](../reference/evaluations/benchmark-contracts.md)
+[Benchmark home](../README.md) · [Benchmark contracts](benchmark-contracts.md)
 
 Harbor tasks are external evaluation assets. Choose a bounded, difficult
 mathematical claim because it reveals a capability needed for serious
@@ -8,11 +8,11 @@ mathematical investigation, not because an existing Jacobian operation makes
 it easy. A task can expose an operation gap; tool availability belongs in the
 experimental treatment, not in the definition of a good task.
 
-Copy [the task template](../../benchmarks/templates/task/README.md) into a
-registered dataset. Keep `instruction.md` and `environment/` agent-visible;
-keep `solution/` and `tests/` Oracle/verifier-only. Do not copy an existing
-task's ceremonial `answer.txt`, hidden `expected.json` predicate, keyword
-gate, or universal certificate union into a new task.
+Copy [the task template](../templates/task/README.md) into a registered dataset.
+Keep `instruction.md` and `environment/` agent-visible; keep `solution/` and
+`tests/` Oracle/verifier-only. Do not copy an existing task's ceremonial
+`answer.txt`, hidden `expected.json` predicate, keyword gate, or universal
+certificate union into a new task.
 
 ## Write the public contract first
 

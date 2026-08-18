@@ -45,6 +45,30 @@
       "input_schema": "sha256:f74564b49ea64569e7baa76f0357aff07a522381e5a5712fc1d53aca37aa16f8",
       "output_schema": "sha256:fff33a3156f4c93700116cad342aebc45cefc21ec19e058a2bb82e4ff3dfbe7c"
     },
+    "arithmetic_dynamics.cycle.multiplier.compute": {
+      "input_schema": "sha256:f231d24f5d0392b062b5c099d68f647dd19be62b89144b441dbe0d596a84f257",
+      "output_schema": "sha256:67056f7f17f15bed510628fcc5fa8dc6b562748073ad05ad991e706a78c87a21"
+    },
+    "arithmetic_dynamics.dynatomic_polynomial.compute": {
+      "input_schema": "sha256:e257c3eae1bfd5f7cf4e2abde06db300536360fc5f4c2724c3efd263085ab03a",
+      "output_schema": "sha256:f12a5e6fd4b40573f3024019b691da65a5422578ca39ae3a9f7774455cfde1b8"
+    },
+    "arithmetic_dynamics.finite_field.functional_graph.compute": {
+      "input_schema": "sha256:20bb147dc5ed52d639a783882e17bc711dc23595df301e88442a7d3b255b6bf7",
+      "output_schema": "sha256:513d1adc218ebc7968a48dbea1670ab74c7d1f53196aedc1b9faa4a1d1d926fd"
+    },
+    "arithmetic_dynamics.fixed_point_equation.compute": {
+      "input_schema": "sha256:4cc565b65b3c578a9154a6b107e190e2d3d34da7b664a29907c7f51b670aa48d",
+      "output_schema": "sha256:41cc2019d9652e88ea6e0a3a0f4473db27c18aff720761d8e783ee014b3cf568"
+    },
+    "arithmetic_dynamics.map.iterate.compute": {
+      "input_schema": "sha256:418a9d258c576bef89c068bf01f9cd312a850370420d3621c0291e4a41d423bd",
+      "output_schema": "sha256:09688049ea20154b304768574083336dac8f4e21d8c56d53690c7d445144e188"
+    },
+    "arithmetic_dynamics.point.orbit.compute": {
+      "input_schema": "sha256:a14f2f5ab95eb8074e488838bfb6f32d0562d0fa05e0937e4e63ad5c6b24fd5a",
+      "output_schema": "sha256:0c61d6befca7160f42a0a5d7ec564fc9322a9c42f0ea17987be3afb4c6dfb5bb"
+    },
     "boolean.erasure_noise.compute": {
       "input_schema": "sha256:5d30c772c330454e3fc49026c61ae8ca0e71eb2dab87420292e0c67a59473e2d",
       "output_schema": "sha256:107269b473b6bcd7c1a8129669b2fb4b5890ca71706258bb0c8bec08488a1c27"

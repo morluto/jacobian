@@ -13,6 +13,9 @@ from jacobian.math.algebraic_combinatorics._tools import (
 from jacobian.math.analysis._tools import TOOLS as ANALYSIS_TOOLS
 from jacobian.math.arithmetic._tools import TOOLS as ARITHMETIC_TOOLS
 from jacobian.math.arithmetic_counting._tools import TOOLS as ARITHMETIC_COUNTING_TOOLS
+from jacobian.math.arithmetic_dynamics._tools import (
+    TOOLS as ARITHMETIC_DYNAMICS_TOOLS,
+)
 from jacobian.math.arithmetic_functions._tools import (
     TOOLS as ARITHMETIC_FUNCTIONS_TOOLS,
 )
@@ -100,6 +103,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *NUMBER_FIELD_TOOLS,
     *MARKOV_CHAIN_TOOLS,
     *ARITHMETIC_TOOLS,
+    *ARITHMETIC_DYNAMICS_TOOLS,
     *NUMBER_THEORY_TOOLS,
     *DIOPHANTINE_APPROXIMATION_TOOLS,
     *COMBINATORICS_TOOLS,

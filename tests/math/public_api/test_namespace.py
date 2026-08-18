@@ -10,6 +10,7 @@ PUBLIC_API = {
     "jacobian.math": (
         "algebraic_combinatorics",
         "arithmetic",
+        "arithmetic_dynamics",
         "combinatorics",
         "diophantine_approximation",
         "finite_abelian_groups",
@@ -120,6 +121,19 @@ PUBLIC_API = {
         "subtract",
         "to_polynomial",
         "truncate",
+    "jacobian.math.arithmetic_dynamics": (
+        "FunctionalGraph",
+        "OrbitComputation",
+        "RepeatEvidence",
+        "cycle_multiplier",
+        "dynatomic_polynomial",
+        "finite_field_functional_graph",
+        "fixed_point_equation",
+        "iterate_polynomial",
+        "orbit_prefix",
+        "polynomial_coefficients",
+        "polynomial_from_coefficients",
+        "validate_cycle",
     ),
     "jacobian.math.graphs": (
         "GraphCompositionInput",

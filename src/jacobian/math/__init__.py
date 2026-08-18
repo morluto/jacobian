@@ -3,6 +3,7 @@
 from jacobian.math import (
     algebraic_combinatorics,
     arithmetic,
+    arithmetic_dynamics,
     combinatorics,
     diophantine_approximation,
     finite_abelian_groups,
@@ -24,6 +25,7 @@ from jacobian.math import (
 __all__ = [
     "algebraic_combinatorics",
     "arithmetic",
+    "arithmetic_dynamics",
     "combinatorics",
     "diophantine_approximation",
     "finite_abelian_groups",

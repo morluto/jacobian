@@ -25,12 +25,12 @@ PUBLIC_API = {
         "probability",
         "regular_languages",
         "term_rewriting",
+        "tree_automata",
     ),
     "jacobian.math.algebraic_combinatorics": (
         "conjugate_partition",
         "hook_lengths",
         "standard_young_tableaux_count",
-        "tree_automata",
     ),
     "jacobian.math.finite_fields": (
         "Axis",
@@ -226,6 +226,7 @@ PUBLIC_API = {
         "selected_rewrite_step",
         "term_at_position",
         "unify",
+    ),
     "jacobian.math.tree_automata": (
         "BottomUpTreeAutomaton",
         "RankedTree",

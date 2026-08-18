@@ -22,9 +22,9 @@ Jacobian is an MCP server that gives AI agents atomic, composable tools for
 higher mathematics. It exposes two tools: `math.find` searches an immutable
 library of typed mathematical operations, and `math.run` executes exactly one
 of them and returns its concrete typed result. Each operation is one bounded,
-exact computation: a typed request in, a typed mathematical value out, with
-no workflow, state, or intermediate runtime between them. The same
-mathematical library is also available through a CLI and native Python API.
+exact computation: a typed request in and a typed mathematical value out. The
+same mathematical library is also available through a CLI and native Python
+API.
 
 **Jacobian's hypothesis is that mathematical reasoning benefits from an
 executable vocabulary of small, exact operations.** Rather than exposing large
@@ -68,15 +68,15 @@ of the tested release contract yet. In particular, Alpine/musl cannot install
 the complete mandatory stack from PyPI.
 
 The Python distribution contains the mathematical kernel, CLI, and MCP server.
-The npm package contains no lifecycle manager or JavaScript API; it only maps
-its exact package version to the corresponding `uvx` invocation.
+The npm package deterministically maps its exact package version to the
+corresponding `uvx` invocation.
 
 ## Compute one bounded result
 
 An ordinary operation returns mathematics first. For example,
 `matrix.determinant.compute` accepts one exact rational matrix and returns its
 determinant directly. Callers compose results by passing their typed values to a
-subsequent operation; Jacobian retains no project state or artifact store.
+subsequent operation.
 
 ## Available mathematics
 
@@ -91,10 +91,9 @@ The built-in portfolio covers work in:
 
 SAT and SMT operations use the maintained Z3 Python binding directly. The
 optional `lean.check` operation runs one bounded source snippet in the fixed
-Lean service environment. It creates only a request-scoped temporary directory
-and returns typed diagnostics; it does not expose a proof-state session or
-retain source. Use `math.find` to search for an operation, browse an unfamiliar
-domain, and inspect one operation before calling `math.run` once.
+Lean service environment, using a request-scoped temporary directory and
+returning typed diagnostics. Use `math.find` to search for an operation, browse
+an unfamiliar domain, and inspect one operation before calling `math.run` once.
 
 See the [domain operation library](docs/reference/domain-operation-library.md)
 for the maintained operation portfolio and

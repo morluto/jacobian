@@ -14,19 +14,9 @@ discovering, running, and combining typed computations to investigate
 conjectures, build examples, calculate invariants, and check bounded claims.
 
 **Jacobian's hypothesis is that mathematical reasoning benefits from an
-executable vocabulary of small, exact operations.** Rather than exposing large
-domain solvers or precomposed workflows, Jacobian exposes mathematical
-primitives that agents can search for and compose into solutions beyond what
-any individual operation was designed to solve.
-
-This is why atomicity and composability are product requirements, not merely
-code-organization preferences. Jacobian supplies trustworthy mathematical
-moves; the reasoning model owns the search over those moves: what to
-investigate, which results to feed into later operations, how to cross domain
-boundaries, and when to stop. Prefer primitives that enlarge this reusable
-vocabulary over tools that bake in a proof strategy, domain workflow, or final
-solution. As models improve, the library should provide better mathematical
-building blocks rather than increasingly prescriptive solvers.
+executable vocabulary of small, exact operations.** Prefer reusable
+mathematical primitives over large solvers or workflows: Jacobian supplies the
+mathematical moves; the model decides how to compose them into larger solutions.
 
 It is a **stateless MCP server for atomic, composable mathematics** with two
 tools:

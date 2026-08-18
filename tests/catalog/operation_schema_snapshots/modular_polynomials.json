@@ -1,0 +1,9 @@
+{
+  "catalog_version": "1",
+  "operations": {
+    "modular.polynomial_identity.compute": {
+      "input_schema": "sha256:be2b33f30b804323d1c6e727cab2f059f571fc403b400ee7740381e5357e7404",
+      "output_schema": "sha256:1ddd5792407afc4b2eaeeb6875c402a9c4aeab32e0783dc375fe8b25e57a011d"
+    }
+  }
+}

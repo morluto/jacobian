@@ -1,0 +1,9 @@
+{
+  "catalog_version": "1",
+  "operations": {
+    "integer.compute.nth_root": {
+      "input_schema": "sha256:925acbcedb809b7a498c6c2982cd5ccd5013862f266afb830970c19e0356d533",
+      "output_schema": "sha256:571bcc3795f95eb446cfbe234b9a278ce159bb7df3d3bc30fc69002b604e45ad"
+    }
+  }
+}

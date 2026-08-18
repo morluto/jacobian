@@ -1,0 +1,9 @@
+{
+  "catalog_version": "1",
+  "operations": {
+    "finite_abelian_group.exact_factorization.compute": {
+      "input_schema": "sha256:1c1af27397f6e871b042146827f184be128cfe6c824877fa796ad191826ffed9",
+      "output_schema": "sha256:b5fedde2179445bed43a1bd76b1a295befe124648fbeab54e3fe79dab77a8042"
+    }
+  }
+}

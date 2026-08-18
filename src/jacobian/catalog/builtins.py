@@ -140,6 +140,10 @@ from jacobian.math.graphs.isomorphism._admission import (
     ADMISSIONS as GRAPHS_ISOMORPHISM_ADMISSIONS,
 )
 from jacobian.math.graphs.isomorphism._tools import TOOLS as GRAPH_ISOMORPHISM_TOOLS
+from jacobian.math.graphs.morphisms._admission import (
+    ADMISSIONS as GRAPHS_MORPHISMS_ADMISSIONS,
+)
+from jacobian.math.graphs.morphisms._tools import TOOLS as GRAPHS_MORPHISMS_TOOLS
 from jacobian.math.graphs.optimization._admission import (
     ADMISSIONS as GRAPHS_OPTIMIZATION_ADMISSIONS,
 )
@@ -279,6 +283,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *GRAPH_COLORING_OPS_TOOLS,
     *GRAPH_SPECTRAL_TOOLS,
     *GRAPH_FLOW_TOOLS,
+    *GRAPHS_MORPHISMS_TOOLS,
     *GRAPH_DECOMPOSITION_TOOLS,
     *GRAPH_ISOMORPHISM_TOOLS,
     *ROOT_ISOLATION_TOOLS,
@@ -381,6 +386,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *GRAPHS_DECOMPOSITION_ADMISSIONS,
     *GRAPHS_DIRECTED_ADMISSIONS,
     *GRAPHS_FLOW_ADMISSIONS,
+    *GRAPHS_MORPHISMS_ADMISSIONS,
     *GRAPHS_ISOMORPHISM_ADMISSIONS,
     *GRAPHS_OPTIMIZATION_ADMISSIONS,
     *GRAPHS_POLYNOMIALS_ADMISSIONS,

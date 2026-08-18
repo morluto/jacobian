@@ -42,11 +42,7 @@ def test_operation_ids_and_request_result_schemas_match_snapshot() -> None:
     }
 
     assert snapshot.catalog_version == expected["catalog_version"]
-<<<<<<< HEAD
     assert len(actual) == len(expected["operations"])
-=======
-    assert len(actual) == 370
->>>>>>> e5f117b6e (Add first-order term rewriting operations (#1921))
     assert actual == expected["operations"]
 
 

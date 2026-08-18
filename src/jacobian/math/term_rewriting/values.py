@@ -14,6 +14,12 @@ MAX_ARITY = 16
 MAX_RULES = 64
 
 
+def _variable_symbols(term: Term) -> set[int]:
+    if term.is_variable:
+        return {term.symbol}
+    return set().union(*(_variable_symbols(child) for child in term.children))
+
+
 class Term(StrictModel):
     """A first-order term represented as a tree.
 
@@ -47,7 +53,19 @@ class RewriteRule(StrictModel):
     def require_valid_rule(self) -> Self:
         if self.lhs.is_variable:
             raise ValueError("LHS must be a function application, not a variable")
+        extra_variables = _variable_symbols(self.rhs) - _variable_symbols(self.lhs)
+        if extra_variables:
+            raise ValueError("RHS variables must occur in the LHS")
         return self
+
+
+class RewriteApplication(StrictModel):
+    """One fully witnessed one-step rewrite derivation."""
+
+    position: tuple[int, ...]
+    rule_index: int = Field(ge=0)
+    substitution: dict[int, Term]
+    term: Term
 
 
 Term.model_rebuild()
@@ -64,6 +82,7 @@ __all__ = [
     "MAX_RULES",
     "MAX_SYMBOLS",
     "MAX_TERMS",
+    "RewriteApplication",
     "RewriteRule",
     "Substitution",
     "Term",

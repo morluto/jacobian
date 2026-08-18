@@ -171,9 +171,10 @@ _TERM_REWRITING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     _op(
         "term_rewriting.rewrite_step.compute",
-        "Apply one rewrite step to a term",
-        "Apply the leftmost-outermost matching rewrite rule to a term "
-        "and return the rewritten term.",
+        "Enumerate or select one-step term rewrites",
+        "Return every applicable one-step derivation, or apply one agent-selected "
+        "rule at one agent-selected position. Each result includes its position, "
+        "rule index, matching substitution, and rewritten term.",
         RewriteStepRequest,
         RewriteStepResult,
         compute_rewrite_step,
@@ -216,9 +217,10 @@ _TERM_REWRITING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     _op(
         "term_rewriting.normal_form.compute",
-        "Compute the normal form of a term",
-        "Iteratively apply rewrite rules until no rule applies or the "
-        "step limit is reached, returning the normal form (or last term).",
+        "Run an explicit bounded term-normalization strategy",
+        "Apply the explicitly declared leftmost-outermost, rule-order strategy. "
+        "Return NORMAL_FORM only when no rewrite applies; otherwise return "
+        "STEP_LIMIT with the exact next-step witness.",
         NormalFormRequest,
         NormalFormResult,
         compute_normal_form,
@@ -259,6 +261,7 @@ _TERM_REWRITING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                             },
                         }
                     ],
+                    "strategy": "LEFTMOST_OUTERMOST_RULE_ORDER",
                     "max_steps": 100,
                 },
             ),

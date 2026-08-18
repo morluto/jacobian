@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from jacobian.math.term_rewriting.values import RewriteRule, Term
+from typing import Literal
+
+from jacobian.math.term_rewriting.values import RewriteApplication, RewriteRule, Term
 
 __all__ = [
     "apply_substitution",
     "match",
     "normal_form",
-    "rewrite_step",
+    "rewrite_steps",
+    "selected_rewrite_step",
+    "term_at_position",
     "unify",
 ]
 
@@ -33,7 +37,7 @@ def apply_substitution(term: Term, subst: dict[int, Term]) -> Term:
 
 
 def match(pattern: Term, subject: Term) -> dict[int, Term] | None:
-    """One-way matching: match a pattern (with variables) against a ground subject."""
+    """One-way matching: instantiate pattern variables to obtain the subject."""
     if pattern.is_variable:
         return {pattern.symbol: subject}
     if subject.is_variable:
@@ -54,86 +58,143 @@ def match(pattern: Term, subject: Term) -> dict[int, Term] | None:
     return result
 
 
-def _unify(
-    left: Term, right: Term, subst: dict[int, Term],
-) -> dict[int, Term] | None:
-    """Recursive unification with substitution accumulation."""
-    left = _resolve(left, subst)
-    right = _resolve(right, subst)
-    if left.is_variable and right.is_variable and left.symbol == right.symbol:
-        return subst
-    if left.is_variable:
-        if left.symbol in _variables(right):
-            return None
-        new_subst = dict(subst)
-        new_subst[left.symbol] = right
-        return new_subst
-    if right.is_variable:
-        if right.symbol in _variables(left):
-            return None
-        new_subst = dict(subst)
-        new_subst[right.symbol] = left
-        return new_subst
-    if left.symbol != right.symbol or len(left.children) != len(right.children):
-        return None
-    new_subst = dict(subst)
-    for l_child, r_child in zip(left.children, right.children, strict=False):
-        result = _unify(l_child, r_child, new_subst)
-        if result is None:
-            return None
-        new_subst = result
-    return new_subst
-
-
-def _resolve(term: Term, subst: dict[int, Term]) -> Term:
+def _apply_recursive_substitution(term: Term, subst: dict[int, Term]) -> Term:
     if term.is_variable and term.symbol in subst:
-        return _resolve(subst[term.symbol], subst)
-    return term
+        return _apply_recursive_substitution(subst[term.symbol], subst)
+    if term.is_variable:
+        return term
+    return Term(
+        is_variable=False,
+        symbol=term.symbol,
+        children=tuple(
+            _apply_recursive_substitution(child, subst) for child in term.children
+        ),
+    )
 
 
 def unify(left: Term, right: Term) -> dict[int, Term] | None:
-    """Unify two terms, returning a substitution or None."""
-    return _unify(left, right, {})
+    """Unify two terms, returning an idempotent most-general unifier."""
+    equations = [(left, right)]
+    substitution: dict[int, Term] = {}
+    while equations:
+        equation_left, equation_right = equations.pop()
+        equation_left = _apply_recursive_substitution(equation_left, substitution)
+        equation_right = _apply_recursive_substitution(equation_right, substitution)
+        if equation_left == equation_right:
+            continue
+        if equation_right.is_variable:
+            equation_left, equation_right = equation_right, equation_left
+        if equation_left.is_variable:
+            if equation_left.symbol in _variables(equation_right):
+                return None
+            binding = {equation_left.symbol: equation_right}
+            substitution = {
+                variable: _apply_recursive_substitution(term, binding)
+                for variable, term in substitution.items()
+            }
+            substitution[equation_left.symbol] = equation_right
+            continue
+        if (
+            equation_right.is_variable
+            or equation_left.symbol != equation_right.symbol
+            or len(equation_left.children) != len(equation_right.children)
+        ):
+            return None
+        equations.extend(
+            zip(equation_left.children, equation_right.children, strict=True)
+        )
+    return substitution
 
 
-def _rewrite_at_root(term: Term, rules: list[RewriteRule]) -> Term | None:
-    for rule in rules:
-        subst = match(rule.lhs, term)
-        if subst is not None:
-            return apply_substitution(rule.rhs, subst)
-    return None
+def term_at_position(term: Term, position: tuple[int, ...]) -> Term:
+    """Return the subterm at a child-index path, raising for an invalid path."""
+    current = term
+    for child_index in position:
+        if not 0 <= child_index < len(current.children):
+            raise ValueError("rewrite position is outside the source term")
+        current = current.children[child_index]
+    return current
 
 
-def rewrite_step(term: Term, rules: list[RewriteRule]) -> tuple[bool, Term]:
-    """Apply one rewrite step at the leftmost-outermost redex.
+def _replace_at_position(
+    term: Term, position: tuple[int, ...], replacement: Term
+) -> Term:
+    if not position:
+        return replacement
+    child_index = position[0]
+    children = list(term.children)
+    children[child_index] = _replace_at_position(
+        children[child_index], position[1:], replacement
+    )
+    return Term(is_variable=False, symbol=term.symbol, children=tuple(children))
 
-    Returns (rewritten, new_term).
-    """
-    result = _rewrite_at_root(term, rules)
-    if result is not None:
-        return (True, result)
-    for i, child in enumerate(term.children):
-        rewritten, new_child = rewrite_step(child, rules)
-        if rewritten:
-            new_children = list(term.children)
-            new_children[i] = new_child
-            return (True, Term(is_variable=False, symbol=term.symbol, children=tuple(new_children)))
-    return (False, term)
+
+def _positions(term: Term, prefix: tuple[int, ...] = ()) -> tuple[tuple[int, ...], ...]:
+    return (
+        prefix,
+        *(
+            position
+            for child_index, child in enumerate(term.children)
+            for position in _positions(child, (*prefix, child_index))
+        ),
+    )
+
+
+def selected_rewrite_step(
+    term: Term,
+    rules: tuple[RewriteRule, ...],
+    position: tuple[int, ...],
+    rule_index: int,
+) -> RewriteApplication | None:
+    """Apply exactly the declared rule at exactly the declared position."""
+    redex = term_at_position(term, position)
+    substitution = match(rules[rule_index].lhs, redex)
+    if substitution is None:
+        return None
+    replacement = apply_substitution(rules[rule_index].rhs, substitution)
+    return RewriteApplication(
+        position=position,
+        rule_index=rule_index,
+        substitution=substitution,
+        term=_replace_at_position(term, position, replacement),
+    )
+
+
+def rewrite_steps(
+    term: Term, rules: tuple[RewriteRule, ...]
+) -> tuple[RewriteApplication, ...]:
+    """Return every applicable one-step derivation, including its witness."""
+    return tuple(
+        application
+        for position in _positions(term)
+        for rule_index in range(len(rules))
+        if (application := selected_rewrite_step(term, rules, position, rule_index))
+        is not None
+    )
 
 
 def normal_form(
-    term: Term, rules: list[RewriteRule], max_steps: int = 1000,
-) -> tuple[Term, bool, int]:
-    """Compute the normal form of a term.
+    term: Term, rules: tuple[RewriteRule, ...], max_steps: int = 1000
+) -> tuple[
+    Term,
+    Literal["NORMAL_FORM", "STEP_LIMIT"],
+    int,
+    RewriteApplication | None,
+]:
+    """Run the explicit leftmost-outermost, rule-order strategy.
 
-    Returns (term, converged, steps).
+    Returns (term, status, steps, next_step). ``next_step`` is the open
+    obligation when the declared step bound is exhausted.
     """
     steps = 0
     current = term
     while steps < max_steps:
-        rewritten, new_term = rewrite_step(current, rules)
-        if not rewritten:
-            return (current, True, steps)
-        current = new_term
+        applications = rewrite_steps(current, rules)
+        if not applications:
+            return (current, "NORMAL_FORM", steps, None)
+        current = applications[0].term
         steps += 1
-    return (current, False, steps)
+    applications = rewrite_steps(current, rules)
+    if not applications:
+        return (current, "NORMAL_FORM", steps, None)
+    return (current, "STEP_LIMIT", steps, applications[0])

@@ -33,9 +33,6 @@ from jacobian.math.finite_game_theory._tools import TOOLS as FINITE_GAME_THEORY_
 from jacobian.math.finite_metric_spaces._tools import (
     TOOLS as FINITE_METRIC_SPACES_TOOLS,
 )
-from jacobian.math.term_rewriting._tools import (
-    TOOLS as TERM_REWRITING_TOOLS,
-)
 from jacobian.math.finite_sets._tools import TOOLS as FINITE_SETS_TOOLS
 from jacobian.math.formal_power_series._tools import TOOLS as FORMAL_POWER_SERIES_TOOLS
 from jacobian.math.geometry._tools import TOOLS as GEOMETRY_TOOLS
@@ -85,6 +82,7 @@ from jacobian.math.regular_languages._tools import TOOLS as REGULAR_LANGUAGES_TO
 from jacobian.math.root_isolation._tools import TOOLS as ROOT_ISOLATION_TOOLS
 from jacobian.math.sequences._tools import TOOLS as SEQUENCES_TOOLS
 from jacobian.math.submodular_opt._tools import TOOLS as SUBMODULAR_OPT_TOOLS
+from jacobian.math.term_rewriting._tools import TOOLS as TERM_REWRITING_TOOLS
 from jacobian.math.topology._tools import TOOLS as TOPOLOGY_TOOLS
 
 _BUILTIN_CANDIDATES: MathTools = (

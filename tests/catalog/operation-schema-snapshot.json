@@ -1153,9 +1153,25 @@
       "input_schema": "sha256:2b40338042028e9a6e477838b179c012662fcd374322c1b0451039f9fc4b7f6e",
       "output_schema": "sha256:ca8d93197a2ccaa55fce3e8eab6cb1de174742a4a9463606807c4877054865df"
     },
+    "poset.antichain_profile.compute": {
+      "input_schema": "sha256:f5f976c7fadcf196d9c99702758c469b9aa33d5ed9d92cd9fd39a4a6c46d8504",
+      "output_schema": "sha256:baa54525e476bbc4081ce06a64a0ca7285c765f6dd1275c7ef389aa7485a19d4"
+    },
+    "poset.closure.compute": {
+      "input_schema": "sha256:8c523de94c4518ce16efd219de63311b779e2cbb40e983f26f3e1da0816e98bf",
+      "output_schema": "sha256:716b58d26859656f7553292f757370e3367d8c747b9d74691d38f5df62ac01f1"
+    },
+    "poset.dual.compute": {
+      "input_schema": "sha256:279cb415a127e29fdb74087665e97d999f32dddf03654dad57c839656edb277b",
+      "output_schema": "sha256:d546dec3c632f9a42f1ec2d278d8897d40763358af57fc542e0d8e023659f2f2"
+    },
     "poset.finite.compute": {
       "input_schema": "sha256:73c1738f192a084128ea68cc954c524bed9c6b65898f7a47498b9d5e516b94b2",
       "output_schema": "sha256:d5021ca8f1a5bfc3ab3612f4e80db9c447089aa82f7845d8dda8594bc39753f1"
+    },
+    "poset.incidence_convolution.compute": {
+      "input_schema": "sha256:fc69337f0a5f3d21570924a1e94dc76023b5cf9b3ad33586f9bc9d2684746d62",
+      "output_schema": "sha256:339070992c99f3989c7c00e1443507e1f33c2528a7363ccedc629e1d9c7e58cb"
     },
     "poset.linear_extensions.count": {
       "input_schema": "sha256:e1db5dfa1a85945ba8d8da52ad863146f51d1146f20bc295e2a27419ff89d713",
@@ -1168,6 +1184,10 @@
     "poset.width.compute": {
       "input_schema": "sha256:ff2a448f4335d1fac63825191d2d16991a33f31bfa7f7175c49b69495984ff0d",
       "output_schema": "sha256:58722ae468c6000b997cf340f9b7cc29f5aa8b466cee2242227d40d75208f8e1"
+    },
+    "poset.zeta_transform.compute": {
+      "input_schema": "sha256:868970b3a99028c903476fe0b1606462906625eee5182c0eb065b318debe78b2",
+      "output_schema": "sha256:fb22b106f8b8ce3794fc1a49aa1dbafcb3c0d6afc09db58a7c82c8ba35cc2cbb"
     },
     "probability.bh_step_up.compute": {
       "input_schema": "sha256:b51f86a304afd50af235612492073289c041418e8d45c4f517acf774df308fa9",
@@ -1424,6 +1444,26 @@
     "smt.solve": {
       "input_schema": "sha256:7b72b4b078d5fd79204326017e9f7e540cb2db2674d5ee2d9528d0a6b8026ca2",
       "output_schema": "sha256:92e1adfe39049966ea27b5d3e2d7993feb5b87dc8732f42b5f49ca9531f1f4bc"
+    },
+    "term_rewriting.matching.compute": {
+      "input_schema": "sha256:c96eac4da31e2b63291f171b62af3b184cbca9f8470a0208d05257829da4149a",
+      "output_schema": "sha256:069c8c20fdf9176965a2fd13d5707ebc83b721bc49c678eae9276ba67435a805"
+    },
+    "term_rewriting.normal_form.compute": {
+      "input_schema": "sha256:51b0d9d6c6feba749d1231dd42ede6aedeb81af6add5dca24df555f8a72a812c",
+      "output_schema": "sha256:cb7a3d657057d54ed657daac61d52734989b07a9708a4749aa926066724477c3"
+    },
+    "term_rewriting.rewrite_step.compute": {
+      "input_schema": "sha256:8349b581c6ef38226703aeaada8de1e2020a0b4218e1641fcbb1656184e6cf6c",
+      "output_schema": "sha256:87a5f125422414ff4bc8590bf818a08f607a11064f05ddbbebcf46b5c488205e"
+    },
+    "term_rewriting.substitution.compute": {
+      "input_schema": "sha256:6ef32066a105978f692a68ac12fb0029e67a3b7a5e5a6aa9fe8a1d4e480d5d86",
+      "output_schema": "sha256:24aa2a9150005c694e36f1a53231c546b9439f44e3f3b574b3fa15e098b53d18"
+    },
+    "term_rewriting.unification.compute": {
+      "input_schema": "sha256:91fae06f015576650d539360812fe6b5fb83d0d1daef2c638ec1ecf89c61fdc8",
+      "output_schema": "sha256:bb4d978e38decd921bbe4ccbc3ac7716f6686e7e73ea0cfda2386301b7109f81"
     },
     "topology.simplicial_complex.canonicalize": {
       "input_schema": "sha256:0231994adad255d263488096fd5792b8a3cf90fd8e478e3e189536874bdb53b5",

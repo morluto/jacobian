@@ -1,0 +1,18 @@
+{
+    "catalog_version": "1",
+    "domain": "hyperplane_arrangements",
+    "operations": {
+        "arrangement.chamber_count.compute": {
+            "input_schema": "sha256:309e298ec52824a0c9e3f9b2cfdb9e20b4545a399a9a53c81a8addb21baeba40",
+            "output_schema": "sha256:01008d9d148d983757bc323379eb8724a2e67e590fa509a3d803051188fa39d3"
+        },
+        "arrangement.characteristic_polynomial.compute": {
+            "input_schema": "sha256:bc2234a5ac173ae5c0959fa551b0b28c026dec1089a65d91b96d9849ef9b82b8",
+            "output_schema": "sha256:c42921288f0db4dd68d4e06634bcc00954c31e538715a03944fdee0391d4dd21"
+        },
+        "arrangement.construct": {
+            "input_schema": "sha256:83cb7d21273c14a662d3fd4a91a853f00cb47298bbdd32a20d4a59e10c9ef854",
+            "output_schema": "sha256:b8bc35b8f7d85a80b9f9f71cb5e587cad137b9449a76e539156c308fadfdbcfc"
+        }
+    }
+}

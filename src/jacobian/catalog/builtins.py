@@ -164,6 +164,12 @@ from jacobian.math.graphs.transforms._admission import (
     ADMISSIONS as GRAPHS_TRANSFORMS_ADMISSIONS,
 )
 from jacobian.math.graphs.transforms._tools import TOOLS as GRAPH_TRANSFORMS_TOOLS
+from jacobian.math.hyperplane_arrangements._admission import (
+    ADMISSIONS as HYPERPLANE_ARRANGEMENTS_ADMISSIONS,
+)
+from jacobian.math.hyperplane_arrangements._tools import (
+    TOOLS as HYPERPLANE_ARRANGEMENTS_TOOLS,
+)
 from jacobian.math.group._admission import ADMISSIONS as GROUP_ADMISSIONS
 from jacobian.math.group._tools import TOOLS as GROUP_TOOLS
 from jacobian.math.impartial_games._admission import (
@@ -301,6 +307,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *GRAPHS_TOOLS,
     *GRAPH_SYMMETRY_TOOLS,
     *GRAPH_TRANSFORMS_TOOLS,
+    *HYPERPLANE_ARRANGEMENTS_TOOLS,
     *CERTIFIED_SNF_TOOLS,
     *MATRICES_TOOLS,
     *CANONICAL_FORMS_TOOLS,
@@ -388,6 +395,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *GRAPHS_SPECTRAL_ADMISSIONS,
     *GRAPHS_SYMMETRY_ADMISSIONS,
     *GRAPHS_TRANSFORMS_ADMISSIONS,
+    *HYPERPLANE_ARRANGEMENTS_ADMISSIONS,
     *GROUP_ADMISSIONS,
     *IMPARTIAL_GAMES_ADMISSIONS,
     *LATTICES_ADMISSIONS,

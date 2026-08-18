@@ -33,6 +33,9 @@ from jacobian.math.finite_game_theory._tools import TOOLS as FINITE_GAME_THEORY_
 from jacobian.math.finite_metric_spaces._tools import (
     TOOLS as FINITE_METRIC_SPACES_TOOLS,
 )
+from jacobian.math.term_rewriting._tools import (
+    TOOLS as TERM_REWRITING_TOOLS,
+)
 from jacobian.math.finite_sets._tools import TOOLS as FINITE_SETS_TOOLS
 from jacobian.math.formal_power_series._tools import TOOLS as FORMAL_POWER_SERIES_TOOLS
 from jacobian.math.geometry._tools import TOOLS as GEOMETRY_TOOLS
@@ -147,7 +150,11 @@ _BUILTIN_CANDIDATES: MathTools = (
     *ALGEBRAIC_COMBINATORICS_TOOLS,
     *REAL_ALGEBRA_TOOLS,
     *FINITE_METRIC_SPACES_TOOLS,
+<<<<<<< HEAD
     *PETRI_NET_TOOLS,
+=======
+    *TERM_REWRITING_TOOLS,
+>>>>>>> e5f117b6e (Add first-order term rewriting operations (#1921))
 )
 
 BUILTIN_TOOLS: MathTools = curate_public_tools(_BUILTIN_CANDIDATES)

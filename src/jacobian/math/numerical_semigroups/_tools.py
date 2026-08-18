@@ -42,10 +42,10 @@ from jacobian.math.numerical_semigroups._operations import (
     compute_betti_elements,
     compute_catenary_degree,
     compute_delta_set,
+    compute_elasticity,
     compute_element_catenary_degree,
     compute_element_delta_set,
     compute_element_elasticity,
-    compute_elasticity,
     compute_factorization_distance,
     compute_factorization_graph,
     compute_factorization_lengths,
@@ -127,9 +127,10 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _operation(
         "number_theory.numerical_semigroup.factorizations.compute",
         "Compute complete factorization family Z(s)",
-        "Given a numerical semigroup and an element, compute the complete "
-        "factorization family Z(s) - all factorizations expressed as tuples "
-        "of minimal-generator multiplicities.",
+        "Given an ordered minimal generating system and an element, compute "
+        "the complete bounded factorization family Z(s), expressed as tuples "
+        "of generator multiplicities. Oversized exact outputs fail request "
+        "validation before computation.",
         FactorizationComputeRequest,
         FactorizationComputeResult,
         compute_factorizations,
@@ -293,8 +294,8 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "number_theory.numerical_semigroup.minimal_presentation.compute",
         "Compute a minimal presentation",
         "Compute one minimal presentation of a numerical semigroup, "
-        "returning one relation per pair of connected components of the "
-        "factorization graph at each Betti element.",
+        "returning exactly r-1 relations spanning the r factorization "
+        "components at each Betti element.",
         MinimalPresentationRequest,
         MinimalPresentationResult,
         compute_minimal_presentation,
@@ -312,9 +313,9 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _operation(
         "number_theory.numerical_semigroup.presentation_binomials.compute",
         "Convert presentation to sparse binomials",
-        "Convert a minimal presentation into sparse binomial form, where "
-        "each relation becomes a binomial with coefficient and exponent "
-        "vectors.",
+        "Validate presentation relations against the declared minimal "
+        "generators and convert each relation (u,v) to the toric binomial "
+        "X^u-X^v with coefficients 1 and -1.",
         PresentationBinomialsRequest,
         PresentationBinomialsResult,
         compute_presentation_binomials,
@@ -337,8 +338,9 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _operation(
         "number_theory.numerical_semigroup.delta_set.compute",
         "Compute global delta set",
-        "Compute the global delta set of a numerical semigroup - the "
-        "union of delta set over all Betti elements (finite theorem).",
+        "Compute the complete global delta set through the theorem-backed "
+        "eventual-periodicity bound, returning the bound and exact checked "
+        "range as completeness evidence.",
         DeltaSetRequest,
         DeltaSetResult,
         compute_delta_set,
@@ -375,9 +377,8 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _operation(
         "number_theory.numerical_semigroup.catenary_degree.compute",
         "Compute global catenary degree",
-        "Compute the global catenary degree of a numerical semigroup - "
-        "the maximum catenary degree over all Betti elements (finite "
-        "theorem).",
+        "Compute the global catenary degree as the maximum over the complete "
+        "Betti set, returning per-Betti degrees and maximizing witnesses.",
         CatenaryDegreeRequest,
         CatenaryDegreeResult,
         compute_catenary_degree,

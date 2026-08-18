@@ -3,13 +3,53 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import pairwise
+
+import networkx as _nx
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.math.numerical_semigroups._algorithms import (
+    betti_data,
+    catenary_degree_from_factorizations,
+    delta_periodicity_bound,
+    factorization_lengths,
+    factorization_predecessors,
+    factorizations,
+    minimal_generating_system,
+    reconstruct_factorization,
+)
 from jacobian.math.numerical_semigroups._models import (
-    MAX_ELEMENT,
-    MAX_FACTOR_SEARCH,
+    BettiCatenaryDegree,
+    BettiElementsRequest,
+    BettiElementsResult,
+    CatenaryDegreeRequest,
+    CatenaryDegreeResult,
+    DeltaSetRequest,
+    DeltaSetResult,
+    ElasticityRequest,
+    ElasticityResult,
+    ElementCatenaryDegreeRequest,
+    ElementCatenaryDegreeResult,
+    ElementDeltaSetRequest,
+    ElementDeltaSetResult,
+    ElementElasticityRequest,
+    ElementElasticityResult,
+    FactorizationComputeRequest,
+    FactorizationComputeResult,
+    FactorizationDistanceRequest,
+    FactorizationDistanceResult,
+    FactorizationGraphComputeRequest,
+    FactorizationGraphComputeResult,
+    FactorizationLengthsComputeRequest,
+    FactorizationLengthsComputeResult,
+    MinimalPresentationRelation,
+    MinimalPresentationRequest,
+    MinimalPresentationResult,
     NumericalSemigroupSummaryRequest,
     NumericalSemigroupSummaryResult,
+    PresentationBinomial,
+    PresentationBinomialsRequest,
+    PresentationBinomialsResult,
     SemigroupMembershipRequest,
     SemigroupMembershipResult,
 )
@@ -115,102 +155,15 @@ def compute_membership(
 # __all__ defined at end
 
 
-# ---------------------------------------------------------------------------
-# Extended operations: factorization, elasticity, catenary degree, etc.
-# ---------------------------------------------------------------------------
-
-import networkx as _nx
-
-from jacobian.math.numerical_semigroups._models import (
-    BettiElementsRequest,
-    BettiElementsResult,
-    CatenaryDegreeRequest,
-    CatenaryDegreeResult,
-    DeltaSetRequest,
-    DeltaSetResult,
-    ElasticityRequest,
-    ElasticityResult,
-    ElementCatenaryDegreeRequest,
-    ElementCatenaryDegreeResult,
-    ElementDeltaSetRequest,
-    ElementDeltaSetResult,
-    ElementElasticityRequest,
-    ElementElasticityResult,
-    FactorizationComputeRequest,
-    FactorizationComputeResult,
-    FactorizationDistanceRequest,
-    FactorizationDistanceResult,
-    FactorizationGraphComputeRequest,
-    FactorizationGraphComputeResult,
-    FactorizationLengthsComputeRequest,
-    FactorizationLengthsComputeResult,
-    MinimalPresentationRequest,
-    MinimalPresentationRelation,
-    MinimalPresentationResult,
-    PresentationBinomial,
-    PresentationBinomialsRequest,
-    PresentationBinomialsResult,
-)
-
-
 def _minimal_generators_list(gens: tuple[str, ...]) -> list[int]:
     """Return the sorted minimal generating set as a list of ints."""
-    raw = sorted({parse_canonical_integer(g) for g in gens})
-    if not raw:
-        return []
-    if raw[0] == 1:
-        return [1]
-    result = []
-    for generator in raw:
-        others = [other for other in raw if other != generator]
-        if not others:
-            result.append(generator)
-            continue
-        can_reach = [False] * (generator + 1)
-        can_reach[0] = True
-        for value in range(1, generator + 1):
-            can_reach[value] = any(
-                value >= other and can_reach[value - other] for other in others
-            )
-        if not can_reach[generator]:
-            result.append(generator)
-    return result
+    raw = tuple(sorted({parse_canonical_integer(g) for g in gens}))
+    return list(minimal_generating_system(raw))
 
 
-def _enumerate_factorizations(
-    atoms: list[int], target: int
-) -> list[tuple[int, ...]]:
-    """Enumerate all factorizations of *target* using *atoms* (minimal generators).
-
-    Uses bounded dynamic programming.  Returns a list of tuples, each of length
-    ``len(atoms)``, representing one factorization.
-    """
-    if target == 0:
-        return [tuple([0] * len(atoms))]
-    if not atoms:
-        return []
-    max_per_value = MAX_FACTOR_SEARCH * MAX_FACTOR_SEARCH
-    dp: list[list[tuple[int, ...]]] = [[] for _ in range(target + 1)]
-    dp[0] = [tuple([0] * len(atoms))]
-    for v in range(1, target + 1):
-        facts: list[tuple[int, ...]] = []
-        for idx, atom in enumerate(atoms):
-            if atom > v:
-                continue
-            for fact in dp[v - atom]:
-                new_fact = list(fact)
-                new_fact[idx] += 1
-                facts.append(tuple(new_fact))
-            if len(facts) > max_per_value:
-                break
-        seen: set[tuple[int, ...]] = set()
-        unique: list[tuple[int, ...]] = []
-        for f in facts:
-            if f not in seen:
-                seen.add(f)
-                unique.append(f)
-        dp[v] = unique
-    return dp[target]
+def _enumerate_factorizations(atoms: list[int], target: int) -> list[tuple[int, ...]]:
+    """Enumerate all factorizations after request-level output-bound validation."""
+    return list(factorizations(tuple(atoms), target))
 
 
 def _factorizations(atoms: list[int], target: int) -> list[tuple[int, ...]]:
@@ -223,9 +176,7 @@ def _length(fact: tuple[int, ...]) -> int:
     return sum(fact)
 
 
-def _gcd_factor(
-    f1: tuple[int, ...], f2: tuple[int, ...]
-) -> tuple[int, ...]:
+def _gcd_factor(f1: tuple[int, ...], f2: tuple[int, ...]) -> tuple[int, ...]:
     """Coordinate-wise minimum of two factorizations."""
     return tuple(min(a, b) for a, b in zip(f1, f2, strict=True))
 
@@ -252,7 +203,7 @@ def _build_factorization_graph(
     n = len(factorizations)
     if n == 0:
         return [], [], True
-    graph = _nx.Graph()
+    graph: _nx.Graph[int] = _nx.Graph()
     for i in range(n):
         graph.add_node(i)
     edges = []
@@ -274,78 +225,7 @@ def _catenary_degree_of(atoms: list[int], target: int) -> int:
     all consecutive distances ≤ *c*.  Equivalently, it is the maximum over all
     pairs (z, z') of the minimax path weight in the distance-weighted graph.
     """
-    facts = _factorizations(atoms, target)
-    if len(facts) <= 1:
-        return 0
-
-    n = len(facts)
-    _, components, _ = _build_factorization_graph(facts)
-    if len(components) <= 1:
-        return 0
-
-    # Build a complete distance-weighted graph.
-    dist_graph = _nx.Graph()
-    for i in range(n):
-        dist_graph.add_node(i)
-    for i in range(n):
-        for j in range(i + 1, n):
-            d = _distance(facts[i], facts[j])
-            dist_graph.add_edge(i, j, weight=d)
-
-    # Minimax path via MST.
-    mst = _nx.minimum_spanning_tree(dist_graph)
-    catenary = 0
-    for i in range(n):
-        for j in range(i + 1, n):
-            try:
-                path = _nx.shortest_path(mst, i, j, weight="weight")
-            except _nx.NetworkXNoPath:
-                continue
-            if len(path) < 2:
-                continue
-            path_max = 0
-            for k in range(len(path) - 1):
-                edge_weight = mst[path[k]][path[k + 1]]["weight"]
-                path_max = max(path_max, edge_weight)
-            catenary = max(catenary, path_max)
-    return catenary
-
-
-def _delta_set_of(atoms: list[int], target: int) -> list[int]:
-    """Delta set of one element = successive differences of the sorted length set."""
-    facts = _factorizations(atoms, target)
-    if len(facts) <= 1:
-        return []
-    lengths = sorted({sum(f) for f in facts})
-    if len(lengths) <= 1:
-        return []
-    return [lengths[i + 1] - lengths[i] for i in range(len(lengths) - 1)]
-
-
-def _betti_elements(atoms: list[int]) -> list[int]:
-    """Betti elements = elements where the factorization graph is disconnected."""
-    # The search space is bounded: Betti elements are at most lcm of pairs of
-    # atoms times some small factor.  We search up to the Frobenius-like bound.
-    if not atoms or atoms[0] == 1:
-        return []
-    max_atom = atoms[-1]
-    # Betti elements are bounded by the Frobenius number + 1, but we use a
-    # generous bound.  The conductor is at most (m-1)*max_atom where m is
-    # the multiplicity (smallest generator).
-    multiplicity = atoms[0]
-    conductor_bound = (multiplicity - 1) * max_atom
-    bound = conductor_bound * multiplicity
-    if bound > MAX_ELEMENT:
-        bound = MAX_ELEMENT
-    betti: list[int] = []
-    for n in range(1, bound + 1):
-        facts = _factorizations(atoms, n)
-        if len(facts) <= 1:
-            continue
-        _, _, connected = _build_factorization_graph(facts)
-        if not connected:
-            betti.append(n)
-    return betti
+    return catenary_degree_from_factorizations(tuple(_factorizations(atoms, target)))
 
 
 # ---------------------------------------------------------------------------
@@ -361,17 +241,15 @@ def compute_factorizations(
     if value < 0:
         return FactorizationComputeResult(
             value=request.value,
-            minimal_generators=tuple(
-                format_canonical_integer(a) for a in atoms
-            ),
+            minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
+            in_semigroup=False,
             factorizations=(),
         )
     facts = _factorizations(atoms, value)
     return FactorizationComputeResult(
         value=request.value,
-        minimal_generators=tuple(
-            format_canonical_integer(a) for a in atoms
-        ),
+        minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
+        in_semigroup=bool(facts),
         factorizations=tuple(facts),
     )
 
@@ -382,11 +260,17 @@ def compute_factorization_lengths(
     atoms = _minimal_generators_list(request.generators)
     value = parse_canonical_integer(request.value)
     if value < 0:
-        return FactorizationLengthsComputeResult(value=request.value, lengths=())
-    facts = _factorizations(atoms, value)
-    lengths = sorted({sum(f) for f in facts})
+        return FactorizationLengthsComputeResult(
+            value=request.value,
+            minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
+            in_semigroup=False,
+            lengths=(),
+        )
+    lengths = factorization_lengths(tuple(atoms), value)
     return FactorizationLengthsComputeResult(
         value=request.value,
+        minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
+        in_semigroup=bool(lengths),
         lengths=tuple(lengths),
     )
 
@@ -394,8 +278,6 @@ def compute_factorization_lengths(
 def compute_factorization_distance(
     request: FactorizationDistanceRequest,
 ) -> FactorizationDistanceResult:
-    atoms = _minimal_generators_list(request.generators)
-    value = parse_canonical_integer(request.value)
     f1 = tuple(request.first)
     f2 = tuple(request.second)
     d = _distance(f1, f2)
@@ -415,9 +297,8 @@ def compute_factorization_graph(
     if value < 0:
         return FactorizationGraphComputeResult(
             value=request.value,
-            minimal_generators=tuple(
-                format_canonical_integer(a) for a in atoms
-            ),
+            minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
+            in_semigroup=False,
             factorizations=(),
             edges=(),
             connected_components=(),
@@ -427,14 +308,11 @@ def compute_factorization_graph(
     edges, components, connected = _build_factorization_graph(facts)
     return FactorizationGraphComputeResult(
         value=request.value,
-        minimal_generators=tuple(
-            format_canonical_integer(a) for a in atoms
-        ),
+        minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
+        in_semigroup=bool(facts),
         factorizations=tuple(facts),
         edges=tuple((i, j) for i, j in edges),
-        connected_components=tuple(
-            tuple(sorted(comp)) for comp in components
-        ),
+        connected_components=tuple(tuple(sorted(comp)) for comp in components),
         is_connected=connected,
     )
 
@@ -444,11 +322,12 @@ def compute_element_delta_set(
 ) -> ElementDeltaSetResult:
     atoms = _minimal_generators_list(request.generators)
     value = parse_canonical_integer(request.value)
-    if value < 0:
-        return ElementDeltaSetResult(value=request.value, delta_set=())
-    deltas = _delta_set_of(atoms, value)
+    lengths = factorization_lengths(tuple(atoms), value)
+    deltas = sorted({right - left for left, right in pairwise(lengths)})
     return ElementDeltaSetResult(
         value=request.value,
+        minimal_generators=tuple(format_canonical_integer(atom) for atom in atoms),
+        factorization_lengths=lengths,
         delta_set=tuple(deltas),
     )
 
@@ -458,19 +337,15 @@ def compute_element_elasticity(
 ) -> ElementElasticityResult:
     atoms = _minimal_generators_list(request.generators)
     value = parse_canonical_integer(request.value)
-    if value < 0:
-        return ElementElasticityResult(value=request.value, elasticity="0")
-    facts = _factorizations(atoms, value)
-    if not facts:
-        return ElementElasticityResult(value=request.value, elasticity="0")
-    lengths = [sum(f) for f in facts]
+    lengths = factorization_lengths(tuple(atoms), value)
     min_len = min(lengths)
     max_len = max(lengths)
-    if min_len == 0:
-        return ElementElasticityResult(value=request.value, elasticity="0")
     frac = Fraction(max_len, min_len)
     return ElementElasticityResult(
         value=request.value,
+        minimal_generators=tuple(format_canonical_integer(atom) for atom in atoms),
+        minimum_length=min_len,
+        maximum_length=max_len,
         elasticity=f"{frac.numerator}/{frac.denominator}"
         if frac.denominator != 1
         else f"{frac.numerator}",
@@ -482,13 +357,12 @@ def compute_element_catenary_degree(
 ) -> ElementCatenaryDegreeResult:
     atoms = _minimal_generators_list(request.generators)
     value = parse_canonical_integer(request.value)
-    if value < 0:
-        return ElementCatenaryDegreeResult(
-            value=request.value, catenary_degree=0
-        )
-    c = _catenary_degree_of(atoms, value)
+    family = tuple(_factorizations(atoms, value))
+    c = catenary_degree_from_factorizations(family)
     return ElementCatenaryDegreeResult(
         value=request.value,
+        minimal_generators=tuple(format_canonical_integer(atom) for atom in atoms),
+        factorization_count=len(family),
         catenary_degree=c,
     )
 
@@ -496,58 +370,44 @@ def compute_element_catenary_degree(
 def compute_betti_elements(
     request: BettiElementsRequest,
 ) -> BettiElementsResult:
-    atoms = _minimal_generators_list(request.generators)
-    betti = _betti_elements(atoms)
+    atoms = tuple(_minimal_generators_list(request.generators))
+    apery, candidates, disconnected = betti_data(atoms)
     return BettiElementsResult(
-        betti_elements=tuple(
-            format_canonical_integer(b) for b in betti
-        ),
+        minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
+        apery_set=tuple(format_canonical_integer(value) for value in apery),
+        candidate_count=len(candidates),
+        betti_elements=tuple(format_canonical_integer(b) for b in disconnected),
     )
 
 
 def compute_minimal_presentation(
     request: MinimalPresentationRequest,
 ) -> MinimalPresentationResult:
-    atoms = _minimal_generators_list(request.generators)
-    betti = _betti_elements(atoms)
+    atoms = tuple(_minimal_generators_list(request.generators))
+    _, _, disconnected = betti_data(atoms)
+    predecessors = factorization_predecessors(atoms, max(disconnected, default=0))
     relations: list[MinimalPresentationRelation] = []
-    for betti_val in betti:
-        facts = _factorizations(atoms, betti_val)
-        if len(facts) <= 1:
-            continue
-        edges, components, _ = _build_factorization_graph(facts)
-        if len(components) <= 1:
-            continue
-        # For each pair of components, find one edge (relation) connecting them.
-        # We pick the first factorization from each component and form a relation.
-        for i in range(len(components)):
-            for j in range(i + 1, len(components)):
-                comp_i = list(components[i])
-                comp_j = list(components[j])
-                # Find the closest pair between the two components
-                best_d = None
-                best_pair = None
-                for idx_i in comp_i:
-                    for idx_j in comp_j:
-                        d = _distance(facts[idx_i], facts[idx_j])
-                        if best_d is None or d < best_d:
-                            best_d = d
-                            best_pair = (idx_i, idx_j)
-                if best_pair is not None:
-                    z, z2 = best_pair
-                    relations.append(
-                        MinimalPresentationRelation(
-                            first=facts[z],
-                            second=facts[z2],
-                        )
-                    )
+    for betti_value, components in disconnected.items():
+        representatives: list[tuple[int, ...]] = []
+        for component in components:
+            generator_index = component[0]
+            residual = reconstruct_factorization(
+                atoms, predecessors, betti_value - atoms[generator_index]
+            )
+            if residual is None:
+                raise RuntimeError("Betti component has no factorization witness")
+            coordinates = list(residual)
+            coordinates[generator_index] += 1
+            representatives.append(tuple(coordinates))
+        for target_representative in representatives[1:]:
+            relations.append(
+                MinimalPresentationRelation(
+                    first=representatives[0], second=target_representative
+                )
+            )
     return MinimalPresentationResult(
-        minimal_generators=tuple(
-            format_canonical_integer(a) for a in atoms
-        ),
-        betti_elements=tuple(
-            format_canonical_integer(b) for b in betti
-        ),
+        minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
+        betti_elements=tuple(format_canonical_integer(b) for b in disconnected),
         relations=tuple(relations),
     )
 
@@ -558,78 +418,97 @@ def compute_presentation_binomials(
     atoms = _minimal_generators_list(request.generators)
     binomials: list[PresentationBinomial] = []
     for relation in request.relations:
-        z1 = relation.first
-        z2 = relation.second
-        # left_coefficient = max of the two factorization coordinates (as strings)
-        left_coef = format_canonical_integer(sum(z1))
-        right_coef = format_canonical_integer(sum(z2))
         binomials.append(
             PresentationBinomial(
-                left_coefficient=left_coef,
-                left_exponents=tuple(z1),
-                right_coefficient=right_coef,
-                right_exponents=tuple(z2),
+                left_exponents=tuple(relation.first),
+                right_exponents=tuple(relation.second),
             )
         )
     return PresentationBinomialsResult(
-        minimal_generators=tuple(
-            format_canonical_integer(a) for a in atoms
-        ),
+        minimal_generators=tuple(format_canonical_integer(a) for a in atoms),
         binomials=tuple(binomials),
     )
 
 
 def compute_delta_set(request: DeltaSetRequest) -> DeltaSetResult:
-    atoms = _minimal_generators_list(request.generators)
-    betti = _betti_elements(atoms)
+    atoms = tuple(_minimal_generators_list(request.generators))
+    periodicity_bound = delta_periodicity_bound(atoms)
+    checked_through = periodicity_bound + atoms[-1] - 1
     all_deltas: set[int] = set()
-    for betti_val in betti:
-        for d in _delta_set_of(atoms, betti_val):
-            all_deltas.add(d)
-    return DeltaSetResult(delta_set=tuple(sorted(all_deltas)))
+    length_sets: list[set[int]] = [set() for _ in range(atoms[-1])]
+    length_sets[0].add(0)
+    for value in range(1, checked_through + 1):
+        lengths: set[int] = set()
+        for atom in atoms:
+            if value >= atom:
+                lengths.update(
+                    length + 1 for length in length_sets[(value - atom) % atoms[-1]]
+                )
+        ordered = sorted(lengths)
+        all_deltas.update(right - left for left, right in pairwise(ordered))
+        length_sets[value % atoms[-1]] = lengths
+    return DeltaSetResult(
+        minimal_generators=tuple(format_canonical_integer(atom) for atom in atoms),
+        delta_set=tuple(sorted(all_deltas)),
+        periodicity_bound=periodicity_bound,
+        checked_through=checked_through,
+    )
 
 
 def compute_elasticity(request: ElasticityRequest) -> ElasticityResult:
     atoms = _minimal_generators_list(request.generators)
-    if not atoms:
-        return ElasticityResult(elasticity="0")
-    if atoms[0] == 1:
-        return ElasticityResult(elasticity="1")
     max_atom = max(atoms)
     min_atom = min(atoms)
     frac = Fraction(max_atom, min_atom)
     return ElasticityResult(
         elasticity=f"{frac.numerator}/{frac.denominator}"
         if frac.denominator != 1
-        else f"{frac.numerator}"
+        else f"{frac.numerator}",
+        smallest_generator=format_canonical_integer(min_atom),
+        largest_generator=format_canonical_integer(max_atom),
     )
 
 
 def compute_catenary_degree(
     request: CatenaryDegreeRequest,
 ) -> CatenaryDegreeResult:
-    atoms = _minimal_generators_list(request.generators)
-    betti = _betti_elements(atoms)
-    max_cat = 0
-    for betti_val in betti:
-        c = _catenary_degree_of(atoms, betti_val)
-        max_cat = max(max_cat, c)
-    return CatenaryDegreeResult(catenary_degree=max_cat)
+    atoms = tuple(_minimal_generators_list(request.generators))
+    _, _, disconnected = betti_data(atoms)
+    degrees: list[BettiCatenaryDegree] = []
+    for betti_value in disconnected:
+        degrees.append(
+            BettiCatenaryDegree(
+                betti_element=format_canonical_integer(betti_value),
+                catenary_degree=_catenary_degree_of(list(atoms), betti_value),
+            )
+        )
+    maximum = max((record.catenary_degree for record in degrees), default=0)
+    return CatenaryDegreeResult(
+        minimal_generators=tuple(format_canonical_integer(atom) for atom in atoms),
+        catenary_degree=maximum,
+        betti_degrees=tuple(degrees),
+        witness_betti_elements=tuple(
+            record.betti_element
+            for record in degrees
+            if record.catenary_degree == maximum and maximum > 0
+        ),
+    )
+
 
 __all__ = [
-    "compute_membership",
-    "compute_summary",
-    "compute_factorizations",
-    "compute_factorization_lengths",
-    "compute_factorization_distance",
-    "compute_factorization_graph",
-    "compute_element_delta_set",
-    "compute_element_elasticity",
-    "compute_element_catenary_degree",
     "compute_betti_elements",
-    "compute_minimal_presentation",
-    "compute_presentation_binomials",
+    "compute_catenary_degree",
     "compute_delta_set",
     "compute_elasticity",
-    "compute_catenary_degree",
+    "compute_element_catenary_degree",
+    "compute_element_delta_set",
+    "compute_element_elasticity",
+    "compute_factorization_distance",
+    "compute_factorization_graph",
+    "compute_factorization_lengths",
+    "compute_factorizations",
+    "compute_membership",
+    "compute_minimal_presentation",
+    "compute_presentation_binomials",
+    "compute_summary",
 ]

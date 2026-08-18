@@ -63,40 +63,44 @@ class TestFactorizations:
             FactorizationComputeRequest(generators=("0", "5"), value="10")
 
     def test_factorizations_non_minimal_generators(self):
-        """Generators include a non-minimal element (e.g., 8 in <3,5>)."""
-        req = FactorizationComputeRequest(generators=("3", "5", "8"), value="15")
-        result = compute_factorizations(req)
-        assert result.minimal_generators == ("3", "5")
-        assert set(result.factorizations) == {(5, 0), (0, 3)}
+        """Coordinate-bearing requests reject ambiguous redundant generators."""
+        with pytest.raises(ValidationError, match="minimal generating system"):
+            FactorizationComputeRequest(generators=("3", "5", "8"), value="15")
+
+    def test_factorization_materialization_is_complete_past_old_silent_cap(self):
+        generators = ("6", "7", "8", "9", "10", "11")
+        result = compute_factorizations(
+            FactorizationComputeRequest(generators=generators, value="200")
+        )
+        counts = [0] * 201
+        counts[0] = 1
+        for generator in map(int, generators):
+            for value in range(generator, 201):
+                counts[value] += counts[value - generator]
+        assert counts[200] == 14_506
+        assert len(result.factorizations) == counts[200]
+        assert result.in_semigroup
 
 
 class TestFactorizationLengths:
     def test_lengths_15_in_3_5(self):
-        req = FactorizationLengthsComputeRequest(
-            generators=("3", "5"), value="15"
-        )
+        req = FactorizationLengthsComputeRequest(generators=("3", "5"), value="15")
         result = compute_factorization_lengths(req)
         assert result.lengths == (3, 5)
 
     def test_lengths_single(self):
-        req = FactorizationLengthsComputeRequest(
-            generators=("3", "5"), value="12"
-        )
+        req = FactorizationLengthsComputeRequest(generators=("3", "5"), value="12")
         result = compute_factorization_lengths(req)
         assert result.lengths == (4,)
 
     def test_lengths_empty_non_member(self):
-        req = FactorizationLengthsComputeRequest(
-            generators=("3", "5"), value="7"
-        )
+        req = FactorizationLengthsComputeRequest(generators=("3", "5"), value="7")
         result = compute_factorization_lengths(req)
         assert result.lengths == ()
 
     def test_lengths_consecutive_for_nugget(self):
         """<4,6,9>: factorizations of 36 have lengths 4..9 (consecutive)."""
-        req = FactorizationLengthsComputeRequest(
-            generators=("4", "6", "9"), value="36"
-        )
+        req = FactorizationLengthsComputeRequest(generators=("4", "6", "9"), value="36")
         result = compute_factorization_lengths(req)
         assert result.lengths == (4, 5, 6, 7, 8, 9)
 
@@ -119,7 +123,7 @@ class TestFactorizationDistance:
         assert result.distance == 0
 
     def test_distance_rejects_mismatched_lengths(self):
-        with pytest.raises(ValidationError, match="equal coordinate length"):
+        with pytest.raises(ValidationError, match="minimal generating system"):
             FactorizationDistanceRequest(
                 generators=("3", "5"), value="15", first=(5, 0, 0), second=(0, 3)
             )
@@ -130,29 +134,29 @@ class TestFactorizationDistance:
                 generators=("3", "5"), value="15", first=(-1, 0), second=(0, 3)
             )
 
+    def test_distance_rejects_vectors_for_a_different_element(self):
+        with pytest.raises(ValidationError, match="declared value"):
+            FactorizationDistanceRequest(
+                generators=("3", "5"), value="15", first=(4, 0), second=(0, 3)
+            )
+
 
 class TestFactorizationGraph:
     def test_graph_15_in_3_5_disconnected(self):
-        req = FactorizationGraphComputeRequest(
-            generators=("3", "5"), value="15"
-        )
+        req = FactorizationGraphComputeRequest(generators=("3", "5"), value="15")
         result = compute_factorization_graph(req)
         assert not result.is_connected
         assert len(result.connected_components) == 2
         assert len(result.factorizations) == 2
 
     def test_graph_12_in_3_5_connected(self):
-        req = FactorizationGraphComputeRequest(
-            generators=("3", "5"), value="12"
-        )
+        req = FactorizationGraphComputeRequest(generators=("3", "5"), value="12")
         result = compute_factorization_graph(req)
         assert result.is_connected
         assert len(result.connected_components) == 1
 
     def test_graph_edges(self):
-        req = FactorizationGraphComputeRequest(
-            generators=("4", "6", "9"), value="12"
-        )
+        req = FactorizationGraphComputeRequest(generators=("4", "6", "9"), value="12")
         result = compute_factorization_graph(req)
         # 12 = 3*4 + 0*6 + 0*9 = (3,0,0)
         # 12 = 0*4 + 2*6 + 0*9 = (0,2,0)
@@ -167,10 +171,10 @@ class TestElementDeltaSet:
         assert result.delta_set == (2,)
 
     def test_delta_set_36_in_4_6_9(self):
-        """Lengths of 36 in <4,6,9> are {4,5,6,7,8,9} -> delta = {1,1,1,1,1}."""
+        """A delta set contains distinct successive differences."""
         req = ElementDeltaSetRequest(generators=("4", "6", "9"), value="36")
         result = compute_element_delta_set(req)
-        assert result.delta_set == (1, 1, 1, 1, 1)
+        assert result.delta_set == (1,)
 
     def test_delta_set_single_factorization(self):
         req = ElementDeltaSetRequest(generators=("3", "5"), value="12")
@@ -202,15 +206,13 @@ class TestElementCatenaryDegree:
         assert result.catenary_degree == 5
 
     def test_catenary_connected_graph(self):
-        """If the factorization graph is connected, catenary degree is 0."""
-        req = ElementCatenaryDegreeRequest(generators=("3", "5"), value="12")
+        """R-connected does not mean catenary degree zero."""
+        req = ElementCatenaryDegreeRequest(generators=("3", "5"), value="18")
         result = compute_element_catenary_degree(req)
-        assert result.catenary_degree == 0
+        assert result.catenary_degree == 5
 
     def test_catenary_single_factorization(self):
-        req = ElementCatenaryDegreeRequest(
-            generators=("3", "5"), value="3"
-        )
+        req = ElementCatenaryDegreeRequest(generators=("3", "5"), value="3")
         result = compute_element_catenary_degree(req)
         assert result.catenary_degree == 0
 
@@ -232,6 +234,29 @@ class TestBettiElements:
         # <2,3>: Betti element should include 6=lcm(2,3)
         assert "6" in result.betti_elements
 
+    def test_betti_beyond_former_heuristic_cap(self):
+        result = compute_betti_elements(BettiElementsRequest(generators=("101", "103")))
+        assert result.betti_elements == ("10403",)
+        assert result.apery_set[0] == "0"
+        assert result.candidate_count == 200
+
+    def test_known_numericalsgps_example(self):
+        result = compute_betti_elements(
+            BettiElementsRequest(generators=("3", "5", "7"))
+        )
+        assert result.betti_elements == ("10", "12", "14")
+        presentation = compute_minimal_presentation(
+            MinimalPresentationRequest(generators=("3", "5", "7"))
+        )
+        assert {
+            frozenset((relation.first, relation.second))
+            for relation in presentation.relations
+        } == {
+            frozenset(((0, 0, 2), (3, 1, 0))),
+            frozenset(((0, 1, 1), (4, 0, 0))),
+            frozenset(((0, 2, 0), (1, 0, 1))),
+        }
+
 
 class TestMinimalPresentation:
     def test_presentation_3_5(self):
@@ -246,7 +271,33 @@ class TestMinimalPresentation:
         req = MinimalPresentationRequest(generators=("4", "6", "9"))
         result = compute_minimal_presentation(req)
         assert result.betti_elements == ("12", "18")
-        assert len(result.relations) >= 2
+        assert len(result.relations) == 2
+
+    def test_three_components_need_two_relations_not_all_pairs(self):
+        result = compute_minimal_presentation(
+            MinimalPresentationRequest(generators=("6", "10", "15"))
+        )
+        assert result.betti_elements == ("30",)
+        assert len(result.relations) == 2
+        for relation in result.relations:
+            assert (
+                sum(
+                    coordinate * generator
+                    for coordinate, generator in zip(
+                        relation.first, (6, 10, 15), strict=True
+                    )
+                )
+                == 30
+            )
+            assert (
+                sum(
+                    coordinate * generator
+                    for coordinate, generator in zip(
+                        relation.second, (6, 10, 15), strict=True
+                    )
+                )
+                == 30
+            )
 
 
 class TestPresentationBinomials:
@@ -258,9 +309,9 @@ class TestPresentationBinomials:
         result = compute_presentation_binomials(req)
         assert len(result.binomials) == 1
         b = result.binomials[0]
-        assert b.left_coefficient == "5"
+        assert b.left_coefficient == "1"
         assert b.left_exponents == (5, 0)
-        assert b.right_coefficient == "3"
+        assert b.right_coefficient == "-1"
         assert b.right_exponents == (0, 3)
 
     def test_binomials_4_6_9(self):
@@ -275,10 +326,16 @@ class TestPresentationBinomials:
         assert len(result.binomials) == 2
 
     def test_binomials_rejects_empty_relations(self):
-        with pytest.raises(ValidationError):
+        result = compute_presentation_binomials(
+            PresentationBinomialsRequest(generators=("1",), relations=[])
+        )
+        assert result.binomials == ()
+
+    def test_binomials_reject_nonrelations(self):
+        with pytest.raises(ValidationError, match="same semigroup degree"):
             PresentationBinomialsRequest(
                 generators=("3", "5"),
-                relations=[],
+                relations=[{"first": [1, 0], "second": [0, 1]}],
             )
 
 
@@ -292,6 +349,12 @@ class TestGlobalDeltaSet:
         req = DeltaSetRequest(generators=("4", "6", "9"))
         result = compute_delta_set(req)
         assert result.delta_set == (1,)
+
+    def test_global_delta_is_not_only_union_of_betti_deltas(self):
+        result = compute_delta_set(DeltaSetRequest(generators=("3", "8", "10")))
+        assert result.delta_set == (1, 2, 3, 4)
+        assert result.periodicity_bound == 96
+        assert result.checked_through == 105
 
 
 class TestGlobalElasticity:
@@ -321,3 +384,4 @@ class TestGlobalCatenaryDegree:
         req = CatenaryDegreeRequest(generators=("4", "6", "9"))
         result = compute_catenary_degree(req)
         assert result.catenary_degree == 3
+        assert result.witness_betti_elements == ("12", "18")

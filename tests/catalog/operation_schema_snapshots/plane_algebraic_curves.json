@@ -1,0 +1,18 @@
+{
+    "catalog_version": "1",
+    "domain": "plane_algebraic_curves",
+    "operations": {
+        "algebraic_geometry.affine_plane_curve.check": {
+            "input_schema": "sha256:3da4e24fb42e02ef27a2b86823396546c65f4eda6ae2181ff2296e73d6ead0d6",
+            "output_schema": "sha256:ebbe1cbf85ae3ac33a346cfd5457d80a87ec979f9849a5e340d3f79f06e762b9"
+        },
+        "algebraic_geometry.plane_curve.projective_closure.compute": {
+            "input_schema": "sha256:38f21b9ec38af2258ddecd2a8273562dbb725463e5df19eea5c5b889de6227e6",
+            "output_schema": "sha256:b18e7f7351c526592ca42bed59a186f182beedc167dcacbdbcfc11216ed775a3"
+        },
+        "algebraic_geometry.projective_curve.affine_chart.compute": {
+            "input_schema": "sha256:dbc389f87c55719512a31608d7108a0047cad7e78ddf8b049c3ace374a036a72",
+            "output_schema": "sha256:476deb3413dde8691cfec3fc9c965af5feac7278e8d6ebc471b5f32f6fb7fec9"
+        }
+    }
+}

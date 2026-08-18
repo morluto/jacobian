@@ -12,6 +12,12 @@ from jacobian.math.additive_combinatorics._admission import (
 from jacobian.math.additive_combinatorics._tools import (
     TOOLS as ADDITIVE_COMBINATORICS_TOOLS,
 )
+from jacobian.math.plane_algebraic_curves._admission import (
+    ADMISSIONS as PLANE_ALGEBRAIC_CURVES_ADMISSIONS,
+)
+from jacobian.math.plane_algebraic_curves._tools import (
+    TOOLS as PLANE_ALGEBRAIC_CURVES_TOOLS,
+)
 from jacobian.math.algebraic_combinatorics._admission import (
     ADMISSIONS as ALGEBRAIC_COMBINATORICS_ADMISSIONS,
 )
@@ -339,6 +345,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *ELECTRICAL_NETWORKS_TOOLS,
     *REGULAR_LANGUAGES_TOOLS,
     *ALGEBRAIC_COMBINATORICS_TOOLS,
+    *PLANE_ALGEBRAIC_CURVES_TOOLS,
     *REAL_ALGEBRA_TOOLS,
     *FINITE_METRIC_SPACES_TOOLS,
     *PETRI_NET_TOOLS,
@@ -351,6 +358,7 @@ _BUILTIN_CANDIDATES: MathTools = (
 _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *ADDITIVE_COMBINATORICS_ADMISSIONS,
     *ALGEBRAIC_COMBINATORICS_ADMISSIONS,
+    *PLANE_ALGEBRAIC_CURVES_ADMISSIONS,
     *ANALYSIS_ADMISSIONS,
     *ARITHMETIC_ADMISSIONS,
     *ARITHMETIC_COUNTING_ADMISSIONS,

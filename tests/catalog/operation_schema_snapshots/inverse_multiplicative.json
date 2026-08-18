@@ -1,0 +1,18 @@
+{
+    "catalog_version": "1",
+    "domain": "inverse_multiplicative",
+    "operations": {
+        "number_theory.euler_phi.preimage_count.compute": {
+            "input_schema": "sha256:7fc3a1c5b58016d848a4fcc35c8f3a53fcb31299701359d228c3de775f77ceda",
+            "output_schema": "sha256:4816d04cbbf4fb304ce5317261051b0b46b86e6e9dc0715d578d45bcf04f0f2c"
+        },
+        "number_theory.euler_phi.preimage_power_sums.compute": {
+            "input_schema": "sha256:0449cdfd8b19c3f7dbd6c0fbb71f3415988328bd80b7457fb9f922d4fdf75344",
+            "output_schema": "sha256:7cc6198b3410ebb04887ac935d4f71f702b63c160d4186c3f1e0168fdb9aef48"
+        },
+        "number_theory.euler_phi.preimages.compute": {
+            "input_schema": "sha256:2954228a5fd01a413fb380ff59981241efcc766119b6e8460006758a0392c08d",
+            "output_schema": "sha256:b2c700960b0f7ebda7ec8e746ae246332eb91b24923597b8928aa69a313c5cf2"
+        }
+    }
+}

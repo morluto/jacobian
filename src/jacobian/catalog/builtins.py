@@ -204,6 +204,12 @@ from jacobian.math.multiple_testing._admission import (
 from jacobian.math.multiple_testing._tools import TOOLS as MULTIPLE_TESTING_TOOLS
 from jacobian.math.number_field._admission import ADMISSIONS as NUMBER_FIELD_ADMISSIONS
 from jacobian.math.number_field._tools import TOOLS as NUMBER_FIELD_TOOLS
+from jacobian.math.inverse_multiplicative._admission import (
+    ADMISSIONS as INVERSE_MULTIPLICATIVE_ADMISSIONS,
+)
+from jacobian.math.inverse_multiplicative._tools import (
+    TOOLS as INVERSE_MULTIPLICATIVE_TOOLS,
+)
 from jacobian.math.number_theory._admission import (
     ADMISSIONS as NUMBER_THEORY_ADMISSIONS,
 )
@@ -289,6 +295,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *ARITHMETIC_TOOLS,
     *ARITHMETIC_DYNAMICS_TOOLS,
     *NUMBER_THEORY_TOOLS,
+    *INVERSE_MULTIPLICATIVE_TOOLS,
     *DIOPHANTINE_APPROXIMATION_TOOLS,
     *COMBINATORICS_TOOLS,
     *FINITE_SETS_TOOLS,
@@ -402,6 +409,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *MULTIPLE_TESTING_ADMISSIONS,
     *NUMBER_FIELD_ADMISSIONS,
     *NUMBER_THEORY_ADMISSIONS,
+    *INVERSE_MULTIPLICATIVE_ADMISSIONS,
     *NUMERICAL_SEMIGROUPS_ADMISSIONS,
     *OPTIMIZATION_ADMISSIONS,
     *PETRI_NETS_ADMISSIONS,

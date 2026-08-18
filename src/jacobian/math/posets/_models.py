@@ -581,6 +581,137 @@ class MobiusFunctionResult(PosetExactResult):
         return self
 
 
+
+
+# ---------------------------------------------------------------------------
+# Issue #1746: Closures, duals, zeta transforms, antichain profiles
+# ---------------------------------------------------------------------------
+
+
+class PosetSubset(StrictModel):
+    """A subset of poset elements for closure operations."""
+
+    elements: tuple[ElementLabel, ...] = Field(
+        default=(), max_length=MAX_POSET_ELEMENTS
+    )
+
+
+class PosetClosureRequest(StrictModel):
+    """Request lower/upper closure of a subset in a poset."""
+
+    poset: FinitePoset
+    subset: PosetSubset
+    closure_type: Literal["LOWER", "UPPER"] = "LOWER"
+
+    @model_validator(mode="after")
+    def require_subset_in_carrier(self) -> Self:
+        carrier = set(self.poset.elements)
+        for element in self.subset.elements:
+            if element not in carrier:
+                raise ValueError("subset elements must be poset elements")
+        return self
+
+
+class PosetClosureResult(PosetExactResult):
+    poset_digest: Sha256Digest
+    closure_type: Literal["LOWER", "UPPER"]
+    closure: tuple[ElementLabel, ...] = Field(
+        default=(), max_length=MAX_POSET_ELEMENTS
+    )
+    generated_element: tuple[ElementLabel, ...] = Field(
+        default=(), max_length=MAX_POSET_ELEMENTS
+    )
+
+
+class PosetDualRequest(StrictModel):
+    """Request the dual (opposite) of a poset."""
+
+    poset: FinitePoset
+
+
+class PosetDualResult(PosetExactResult):
+    poset: FinitePoset
+
+
+class ZetaTransformRequest(StrictModel):
+    """Compute the zeta transform of a function on the poset."""
+
+    poset: FinitePoset
+    function_values: tuple[MobiusValue, ...] = Field(
+        default=(), max_length=MAX_POSET_RELATIONS
+    )
+
+    @model_validator(mode="after")
+    def require_function_domain_covers(self) -> Self:
+        pairs = {v.lower + "|" + v.upper for v in self.function_values}
+        if len(pairs) != len(self.function_values):
+            raise ValueError("function values must have unique intervals")
+        carrier = set(self.poset.elements)
+        comparable = {(p.lower, p.upper) for p in self.poset.strict_order_pairs}
+        for v in self.function_values:
+            if v.lower not in carrier or v.upper not in carrier:
+                raise ValueError("function value endpoints must be poset elements")
+            if v.lower != v.upper and (v.lower, v.upper) not in comparable:
+                raise ValueError("function value must satisfy lower <= upper")
+        return self
+
+
+class ZetaTransformResult(PosetExactResult):
+    poset_digest: Sha256Digest
+    transform: Literal["ZETA"] = "ZETA"
+    values: tuple[MobiusValue, ...] = Field(
+        default=(), max_length=MAX_POSET_RELATIONS
+    )
+
+
+class IncidenceConvolutionRequest(StrictModel):
+    """Incidence-algebra convolution of two functions on the poset."""
+
+    poset: FinitePoset
+    first: tuple[MobiusValue, ...] = Field(
+        default=(), max_length=MAX_POSET_RELATIONS
+    )
+    second: tuple[MobiusValue, ...] = Field(
+        default=(), max_length=MAX_POSET_RELATIONS
+    )
+
+    @model_validator(mode="after")
+    def require_unique_values(self) -> Self:
+        for label, values in (("first", self.first), ("second", self.second)):
+            pairs = {v.lower + "|" + v.upper for v in values}
+            if len(pairs) != len(values):
+                raise ValueError(f"{label} values must have unique intervals")
+            carrier = set(self.poset.elements)
+            comparable = {(p.lower, p.upper) for p in self.poset.strict_order_pairs}
+            for v in values:
+                if v.lower not in carrier or v.upper not in carrier:
+                    raise ValueError(f"{label} value endpoints must be poset elements")
+                if v.lower != v.upper and (v.lower, v.upper) not in comparable:
+                    raise ValueError(f"{label} value must satisfy lower <= upper")
+        return self
+
+
+class IncidenceConvolutionResult(PosetExactResult):
+    poset_digest: Sha256Digest
+    values: tuple[MobiusValue, ...] = Field(
+        default=(), max_length=MAX_POSET_RELATIONS
+    )
+
+
+class AntichainProfileRequest(StrictModel):
+    """Request the antichain profile (maximal antichains)."""
+
+    poset: FinitePoset
+
+
+class AntichainProfileResult(PosetExactResult):
+    poset_digest: Sha256Digest
+    maximum_antichain_size: StrictInt = Field(ge=0, le=MAX_POSET_ELEMENTS)
+    antichain_count: StrictInt = Field(ge=1)
+    maximum_antichains: tuple[tuple[ElementLabel, ...], ...] = Field(
+        default=(), max_length=MAX_POSET_ELEMENTS
+    )
+
 __all__ = [
     "MAX_LINEAR_EXTENSION_ELEMENTS",
     "MAX_POSET_ELEMENTS",
@@ -609,4 +740,15 @@ __all__ = [
     "RelationInterpretation",
     "canonical_poset_ranks",
     "finite_poset_digest",
+    "AntichainProfileResult",
+    "AntichainProfileRequest",
+    "IncidenceConvolutionResult",
+    "IncidenceConvolutionRequest",
+    "PosetClosureResult",
+    "PosetClosureRequest",
+    "PosetDualResult",
+    "PosetDualRequest",
+    "PosetSubset",
+    "ZetaTransformResult",
+    "ZetaTransformRequest",
 ]

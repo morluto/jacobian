@@ -26,6 +26,16 @@ from jacobian.math.posets._models import (
     PosetRequest,
     PosetWidthResult,
     RelationInterpretation,
+    AntichainProfileRequest,
+    AntichainProfileResult,
+    IncidenceConvolutionRequest,
+    IncidenceConvolutionResult,
+    PosetClosureRequest,
+    PosetClosureResult,
+    PosetDualRequest,
+    PosetDualResult,
+    ZetaTransformRequest,
+    ZetaTransformResult,
     canonical_poset_ranks,
     finite_poset_digest,
 )
@@ -330,6 +340,166 @@ _MATERIALIZED_DIAMOND: dict[str, Any] = {
     "poset_digest": "sha256:bb8df218b7f750edddcb9259c6aff4ca7128e1d1e73bd092306c350583ab8e96",
 }
 
+
+def _closure(request: PosetClosureRequest) -> PosetClosureResult:
+    poset = request.poset
+    elements = set(poset.elements)
+    order_pairs = {(p.lower, p.upper) for p in poset.strict_order_pairs}
+    order_set = order_pairs | {(e, e) for e in elements}
+    if request.closure_type == "LOWER":
+        result = set()
+        for target in request.subset.elements:
+            for (lo, hi) in order_set:
+                if hi == target:
+                    result.add(lo)
+        result |= set(request.subset.elements)
+    else:
+        result = set()
+        for target in request.subset.elements:
+            for (lo, hi) in order_set:
+                if lo == target:
+                    result.add(hi)
+        result |= set(request.subset.elements)
+    return PosetClosureResult(
+        poset_digest=poset.poset_digest,
+        closure_type=request.closure_type,
+        closure=tuple(sorted(result)),
+        generated_element=tuple(sorted(result - set(request.subset.elements))),
+    )
+
+
+def _dual(request: PosetDualRequest) -> PosetDualResult:
+    poset = request.poset
+    elements = poset.elements
+    reversed_pairs = tuple(
+        OrderedPair(lower=p.upper, upper=p.lower) for p in poset.strict_order_pairs
+    )
+    reversed_covers = tuple(
+        OrderedPair(lower=p.upper, upper=p.lower) for p in poset.cover_relations
+    )
+    sorted_pairs = tuple(sorted((p.lower, p.upper) for p in reversed_pairs))
+    sorted_covers = tuple(sorted((p.lower, p.upper) for p in reversed_covers))
+    order_pairs_obj = tuple(
+        OrderedPair(lower=lo, upper=hi) for lo, hi in sorted_pairs
+    )
+    cover_pairs_obj = tuple(
+        OrderedPair(lower=lo, upper=hi) for lo, hi in sorted_covers
+    )
+    new_digest = finite_poset_digest(
+        elements=elements,
+        strict_order_pairs=order_pairs_obj,
+        cover_relations=cover_pairs_obj,
+        incomparable_pairs=poset.incomparable_pairs,
+        minimal_elements=tuple(sorted(poset.maximal_elements)),
+        maximal_elements=tuple(sorted(poset.minimal_elements)),
+        graded=poset.graded,
+        ranks=(
+            tuple(sorted(poset.ranks, key=lambda r: r.element))
+            if poset.ranks
+            else None
+        ),
+    )
+    new_poset = FinitePoset(
+        poset_format="jacobian.finite-poset/v1",
+        elements=elements,
+        strict_order_pairs=order_pairs_obj,
+        cover_relations=cover_pairs_obj,
+        incomparable_pairs=poset.incomparable_pairs,
+        minimal_elements=tuple(sorted(poset.maximal_elements)),
+        maximal_elements=tuple(sorted(poset.minimal_elements)),
+        graded=poset.graded,
+        ranks=(
+            tuple(sorted(poset.ranks, key=lambda r: r.element))
+            if poset.ranks
+            else None
+        ),
+        poset_digest=new_digest,
+    )
+    return PosetDualResult(poset=new_poset)
+
+
+def _zeta_transform(request: ZetaTransformRequest) -> ZetaTransformResult:
+    poset = request.poset
+    comparable = {(p.lower, p.upper) for p in poset.strict_order_pairs}
+    func_lookup = {(v.lower, v.upper): v.value for v in request.function_values}
+    all_intervals = []
+    for a in poset.elements:
+        for c in poset.elements:
+            if a == c or (a, c) in comparable:
+                all_intervals.append((a, c))
+    results = []
+    for (a, c) in all_intervals:
+        total = 0
+        for b in poset.elements:
+            if (b == a or (a, b) in comparable) and (b == c or (b, c) in comparable):
+                total += func_lookup.get((a, b), 0)
+        results.append(MobiusValue(lower=a, upper=c, value=total))
+    return ZetaTransformResult(
+        poset_digest=poset.poset_digest,
+        values=tuple(results),
+    )
+
+
+def _incidence_convolution(
+    request: IncidenceConvolutionRequest,
+) -> IncidenceConvolutionResult:
+    poset = request.poset
+    comparable = {(p.lower, p.upper) for p in poset.strict_order_pairs}
+    first_lookup = {(v.lower, v.upper): v.value for v in request.first}
+    second_lookup = {(v.lower, v.upper): v.value for v in request.second}
+    all_intervals = []
+    for a in poset.elements:
+        for c in poset.elements:
+            if a == c or (a, c) in comparable:
+                all_intervals.append((a, c))
+    results = []
+    for (a, c) in all_intervals:
+        total = 0
+        for b in poset.elements:
+            if (b == a or (a, b) in comparable) and (b == c or (b, c) in comparable):
+                total += first_lookup.get((a, b), 0) * second_lookup.get((b, c), 0)
+        results.append(MobiusValue(lower=a, upper=c, value=total))
+    return IncidenceConvolutionResult(
+        poset_digest=poset.poset_digest,
+        values=tuple(results),
+    )
+
+
+def _antichain_profile(
+    request: AntichainProfileRequest,
+) -> AntichainProfileResult:
+    poset = request.poset
+    elements = poset.elements
+    comparable = {(p.lower, p.upper) for p in poset.strict_order_pairs}
+
+    def is_antichain(subset: tuple[str, ...]) -> bool:
+        for i, a in enumerate(subset):
+            for b in subset[i + 1:]:
+                if (a, b) in comparable or (b, a) in comparable:
+                    return False
+        return True
+
+    n = len(elements)
+    max_size = 0
+    max_antichains: list[tuple[str, ...]] = []
+    antichain_count = 1
+    for mask in range(1, 1 << n):
+        subset = tuple(sorted(elements[i] for i in range(n) if mask & (1 << i)))
+        if is_antichain(subset):
+            antichain_count += 1
+            if len(subset) > max_size:
+                max_size = len(subset)
+                max_antichains = [subset]
+            elif len(subset) == max_size:
+                max_antichains.append(subset)
+    return AntichainProfileResult(
+        poset_digest=poset.poset_digest,
+        maximum_antichain_size=max_size,
+        antichain_count=antichain_count,
+        maximum_antichains=tuple(max_antichains),
+    )
+
+
 FINITE_POSET_OPERATIONS: MathTools = (
     MathTool(
         operation_id="poset.finite.compute",
@@ -467,6 +637,167 @@ FINITE_POSET_OPERATIONS: MathTools = (
             ),
         ),
     ),
+
+    MathTool(
+        operation_id="poset.closure.compute",
+        version="1",
+        title="Compute ideal or filter closure of a subset",
+        description=(
+            "Return the lower (ideal) or upper (filter) closure of a given "
+            "subset in a finite poset."
+        ),
+        request_type=PosetClosureRequest,
+        result_type=PosetClosureResult,
+        run=_closure,
+        tags=(
+            "poset",
+            "ideal",
+            "filter",
+            "closure",
+            "exact",
+        ),
+        examples=(
+            example(
+                "diamond_lower_closure",
+                "Compute the lower closure of {1} in the diamond poset.",
+                {
+                    "poset": _MATERIALIZED_DIAMOND,
+                    "subset": {"elements": ["1"]},
+                    "closure_type": "LOWER",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="poset.dual.compute",
+        version="1",
+        title="Compute the dual (opposite) of a finite poset",
+        description="Return the dual poset where all order relations are reversed.",
+        request_type=PosetDualRequest,
+        result_type=PosetDualResult,
+        run=_dual,
+        tags=(
+            "poset",
+            "dual",
+            "opposite",
+            "exact",
+        ),
+        examples=(
+            example(
+                "materialized_diamond",
+                "Compute the dual of the canonical diamond poset.",
+                {"poset": _MATERIALIZED_DIAMOND},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="poset.zeta_transform.compute",
+        version="1",
+        title="Compute the zeta transform of a function on a poset",
+        description=(
+            "Apply the incidence-algebra zeta transform to a function "
+            "defined on intervals of a finite poset."
+        ),
+        request_type=ZetaTransformRequest,
+        result_type=ZetaTransformResult,
+        run=_zeta_transform,
+        tags=(
+            "poset",
+            "zeta-transform",
+            "incidence-algebra",
+            "exact",
+        ),
+        examples=(
+            example(
+                "diamond_zeta",
+                "Compute the zeta transform of a constant function on the diamond.",
+                {
+                    "poset": _MATERIALIZED_DIAMOND,
+                    "function_values": [
+                        {"lower": "0", "upper": "0", "value": 1},
+                        {"lower": "a", "upper": "a", "value": 1},
+                        {"lower": "b", "upper": "b", "value": 1},
+                        {"lower": "1", "upper": "1", "value": 1},
+                    ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="poset.incidence_convolution.compute",
+        version="1",
+        title="Convolve two incidence-algebra functions on a poset",
+        description=(
+            "Compute the incidence-algebra convolution of two functions "
+            "defined on intervals of a finite poset."
+        ),
+        request_type=IncidenceConvolutionRequest,
+        result_type=IncidenceConvolutionResult,
+        run=_incidence_convolution,
+        tags=(
+            "poset",
+            "incidence-algebra",
+            "convolution",
+            "exact",
+        ),
+        examples=(
+            example(
+                "diamond_convolution",
+                "Convolve the zeta function with itself on the diamond.",
+                {
+                    "poset": _MATERIALIZED_DIAMOND,
+                    "first": [
+                        {"lower": "0", "upper": "0", "value": 1},
+                        {"lower": "0", "upper": "a", "value": 1},
+                        {"lower": "0", "upper": "b", "value": 1},
+                        {"lower": "0", "upper": "1", "value": 1},
+                        {"lower": "a", "upper": "a", "value": 1},
+                        {"lower": "a", "upper": "1", "value": 1},
+                        {"lower": "b", "upper": "b", "value": 1},
+                        {"lower": "b", "upper": "1", "value": 1},
+                        {"lower": "1", "upper": "1", "value": 1},
+                    ],
+                    "second": [
+                        {"lower": "0", "upper": "0", "value": 1},
+                        {"lower": "0", "upper": "a", "value": 1},
+                        {"lower": "0", "upper": "b", "value": 1},
+                        {"lower": "0", "upper": "1", "value": 1},
+                        {"lower": "a", "upper": "a", "value": 1},
+                        {"lower": "a", "upper": "1", "value": 1},
+                        {"lower": "b", "upper": "b", "value": 1},
+                        {"lower": "b", "upper": "1", "value": 1},
+                        {"lower": "1", "upper": "1", "value": 1},
+                    ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="poset.antichain_profile.compute",
+        version="1",
+        title="Compute the antichain profile of a finite poset",
+        description=(
+            "Return the maximum antichain size, total antichain count, and "
+            "all maximum antichains of a finite poset."
+        ),
+        request_type=AntichainProfileRequest,
+        result_type=AntichainProfileResult,
+        run=_antichain_profile,
+        tags=(
+            "poset",
+            "antichain",
+            "profile",
+            "exact",
+        ),
+        examples=(
+            example(
+                "materialized_diamond",
+                "Compute the antichain profile of the canonical diamond.",
+                {"poset": _MATERIALIZED_DIAMOND},
+            ),
+        ),
+    ),
+
 )
 
 __all__ = ["FINITE_POSET_OPERATIONS"]

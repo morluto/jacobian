@@ -637,33 +637,9 @@
       "input_schema": "sha256:6c06ade9881834813f6206e6cccb9964fdd5d453f508126271ad3882223027a4",
       "output_schema": "sha256:c639da2f4d746cf248ead0eb3612809b71ce29eb6e7dc60461cd7bf3688cdfd2"
     },
-    "number_theory.numerical_semigroup.elasticity.compute": {
-      "input_schema": "sha256:653c1407c35c4c0d956310620254ebfe6f9d96a322ba8b3db00d512a8959c9b4",
-      "output_schema": "sha256:26c0af38aa23c47d561fef532c61a5d3b35f3273285797b0ac3673a02c6d6951"
-    },
-    "number_theory.numerical_semigroup.element.catenary_degree.compute": {
-      "input_schema": "sha256:111f5e0edc9f95d6e32124ea84e7717d945b395218bd71b66c8025ed68bda726",
-      "output_schema": "sha256:063ded24b5970b9fe0e72cdef8a1ff15f16ee7538f031787fd5a96061c36999f"
-    },
-    "number_theory.numerical_semigroup.element.delta_set.compute": {
-      "input_schema": "sha256:a87d2f995825a0b052bfdb8952d0a20b48cbc9975fc029ce1b077fc9ef415225",
-      "output_schema": "sha256:4e236ae81caf1b2045a9582e40ec8ddd330ee6636caec8650adf5707275465a9"
-    },
-    "number_theory.numerical_semigroup.element.elasticity.compute": {
-      "input_schema": "sha256:52c878622b15a8714b31997f240e1de21bb7f588a84270ed829b6a598b6b6ade",
-      "output_schema": "sha256:a67d96def970cb25261149374ffd4db32bf8c2e3edbc469cadd5f260d3fa1419"
-    },
-    "number_theory.numerical_semigroup.factorization_distance.compute": {
-      "input_schema": "sha256:41824a63b2eb0a0fd49e0551941fdb01f521ae611d14812ab3f29a5f1f4d68dc",
-      "output_schema": "sha256:ef48a70f43bcfe40191de6fb39edafdc731a28a5585329b5a74e73dd410f3e9b"
-    },
     "number_theory.numerical_semigroup.factorization_graph.compute": {
       "input_schema": "sha256:05bbb230aeda5586efcd8f16ca080b649049435ea4071addd571fb7a73061333",
       "output_schema": "sha256:b5b11505b6ac493eebab59400767006da27903cee99e119afa94664ec945708f"
-    },
-    "number_theory.numerical_semigroup.factorization_lengths.compute": {
-      "input_schema": "sha256:2503062ef5da7835fc6987af937e0896e33842391de63819e3f449313f4f07eb",
-      "output_schema": "sha256:751aaf920b2e1f7ac8572beab46858f44f4fcba7fb77aef966c93e63e6f72877"
     },
     "number_theory.numerical_semigroup.factorizations.compute": {
       "input_schema": "sha256:c8e61f5287124813f89c50444fce3308c4d682e8235a5f9e8dc0d4657ebc880e",

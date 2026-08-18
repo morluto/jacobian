@@ -42,6 +42,9 @@ from jacobian.math.geometry._tools import TOOLS as GEOMETRY_TOOLS
 from jacobian.math.geometry.euclidean._tools import TOOLS as EUCLIDEAN_GEOMETRY_TOOLS
 from jacobian.math.geometry.exact._tools import TOOLS as EXACT_GEOMETRY_TOOLS
 from jacobian.math.geometry.projective._tools import TOOLS as PROJECTIVE_GEOMETRY_TOOLS
+from jacobian.math.graphical_models._tools import (
+    TOOLS as GRAPHICAL_MODEL_TOOLS,
+)
 from jacobian.math.graphs._tools import TOOLS as GRAPHS_TOOLS
 from jacobian.math.graphs.coloring._tools import TOOLS as GRAPH_COLORING_OPS_TOOLS
 from jacobian.math.graphs.decomposition._tools import TOOLS as GRAPH_DECOMPOSITION_TOOLS
@@ -156,6 +159,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *PETRI_NET_TOOLS,
     *TERM_REWRITING_TOOLS,
     *TREE_AUTOMATA_TOOLS,
+    *GRAPHICAL_MODEL_TOOLS,
 )
 
 BUILTIN_TOOLS: MathTools = curate_public_tools(_BUILTIN_CANDIDATES)

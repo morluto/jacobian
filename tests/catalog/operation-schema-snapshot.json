@@ -405,6 +405,22 @@
       "input_schema": "sha256:bd2cceea682c8950634db91dc40c9c61a68faab498f5136ca4bfb6d79582f37a",
       "output_schema": "sha256:2cdd532a4b56ad6ddfa8a877d2ce569ae0b45a1ba42ca8b8632361a190cbee69"
     },
+    "graphical_model.d_separation.compute": {
+      "input_schema": "sha256:c6c37dfe498c44e76aac2cc82e27e735d19d474db3e6b6dcd0dd65a88a064743",
+      "output_schema": "sha256:6ba43536d42f9a15a27c1d3a1276ba494e18dc7c10888dc6de419e6141db7ff3"
+    },
+    "graphical_model.factor.marginalize": {
+      "input_schema": "sha256:bd9e593d402b832a86fb48ce46111c2122867822b821d376e2a0546d48975caa",
+      "output_schema": "sha256:321d0dfb30e981091468635e561cb8975ac14e7a7a6cbfaf5ee44999ec74d3d3"
+    },
+    "graphical_model.factor.multiply": {
+      "input_schema": "sha256:c4466feaf7ec9a660c3fb10e51505f876fadd4dcf001e635a6cb0f755d4825f9",
+      "output_schema": "sha256:032babbe346ba4f9581d8a7504d0d37015f8402862959764fa49da54e8d5be9f"
+    },
+    "graphical_model.variable_elimination.compute": {
+      "input_schema": "sha256:1159147eadccca529c4b974ac6d97670bab7903ccaae0e4deced7ffaa7f7e501",
+      "output_schema": "sha256:16c344f722c81f3a2065e1c21bb3cbba5358948f05364d6511ba640685199e74"
+    },
     "group.element_order.compute": {
       "input_schema": "sha256:e286318c67b90da67d141f6d89e3be60ffa325fee0f23d660b5b1486e09ccdac",
       "output_schema": "sha256:3ce90e0edcb3ef366263e987af7e16337613818f6337166fca2c4fa9d677c93d"

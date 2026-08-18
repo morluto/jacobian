@@ -17,6 +17,7 @@ PUBLIC_API = {
         "finite_fields",
         "finite_metric_spaces",
         "formal_power_series",
+        "graphical_models",
         "graphs",
         "matrices",
         "numerical_semigroups",
@@ -155,6 +156,13 @@ PUBLIC_API = {
         "radius",
         "strongly_connected_components",
         "triangle_count",
+    ),
+    "jacobian.math.graphical_models": (
+        "Factor",
+        "d_separation",
+        "factor_marginalize",
+        "factor_multiply",
+        "variable_elimination",
     ),
     "jacobian.math.matrices": (
         "SmithNormalForm",

@@ -18,6 +18,12 @@ from jacobian.math.algebraic_combinatorics._admission import (
 from jacobian.math.algebraic_combinatorics._tools import (
     TOOLS as ALGEBRAIC_COMBINATORICS_TOOLS,
 )
+from jacobian.math.algebraic_topology_ops._admission import (
+    ADMISSIONS as ALGEBRAIC_TOPOLOGY_OPS_ADMISSIONS,
+)
+from jacobian.math.algebraic_topology_ops._tools import (
+    TOOLS as ALGEBRAIC_TOPOLOGY_OPS_TOOLS,
+)
 from jacobian.math.analysis._admission import ADMISSIONS as ANALYSIS_ADMISSIONS
 from jacobian.math.analysis._tools import TOOLS as ANALYSIS_TOOLS
 from jacobian.math.arithmetic._admission import ADMISSIONS as ARITHMETIC_ADMISSIONS
@@ -311,6 +317,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *POLYNOMIAL_TOOLS,
     *MULTIVARIATE_POLYNOMIAL_TOOLS,
     *ANALYSIS_TOOLS,
+    *ALGEBRAIC_TOPOLOGY_OPS_TOOLS,
     *PROBABILITY_TOOLS,
     *OPTIMIZATION_TOOLS,
     *TOPOLOGY_TOOLS,
@@ -352,6 +359,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *ADDITIVE_COMBINATORICS_ADMISSIONS,
     *ALGEBRAIC_COMBINATORICS_ADMISSIONS,
     *ANALYSIS_ADMISSIONS,
+    *ALGEBRAIC_TOPOLOGY_OPS_ADMISSIONS,
     *ARITHMETIC_ADMISSIONS,
     *ARITHMETIC_COUNTING_ADMISSIONS,
     *ARITHMETIC_DYNAMICS_ADMISSIONS,

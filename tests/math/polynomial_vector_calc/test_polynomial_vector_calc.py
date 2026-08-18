@@ -1,0 +1,72 @@
+"""Tests for polynomial vector calculus operations."""
+
+from jacobian.math.polynomial_vector_calc._models import (
+    DirectionalDerivativeRequest,
+    ScalarFieldRequest,
+    VectorFieldRequest,
+)
+from jacobian.math.polynomial_vector_calc._operations import (
+    compute_curl,
+    compute_directional_derivative,
+    compute_divergence,
+    compute_gradient,
+    compute_laplacian,
+)
+from jacobian.math.polynomial_vector_calc._tools import TOOLS
+
+
+def test_catalog_contains_only_audited_operations() -> None:
+    assert {tool.operation_id for tool in TOOLS} == {
+        "polynomial_field.scalar.gradient.compute",
+        "polynomial_field.scalar.laplacian.compute",
+        "polynomial_field.scalar.directional_derivative.compute",
+        "polynomial_field.vector.divergence.compute",
+        "polynomial_field.vector.curl.compute",
+    }
+
+
+def test_gradient_of_x2_y2() -> None:
+    request = ScalarFieldRequest(variables=("x", "y"), polynomial="x**2 + y**2")
+    result = compute_gradient(request)
+    assert result.components == ("2*x", "2*y")
+
+
+def test_laplacian_of_x3_y3() -> None:
+    request = ScalarFieldRequest(variables=("x", "y"), polynomial="x**3 + y**3")
+    result = compute_laplacian(request)
+    assert result.result == "6*x + 6*y"
+
+
+def test_directional_derivative() -> None:
+    request = DirectionalDerivativeRequest(
+        variables=("x", "y"),
+        polynomial="x**2 + y**2",
+        direction=("1", "1"),
+    )
+    result = compute_directional_derivative(request)
+    assert "2*x" in result.result and "2*y" in result.result
+
+
+def test_divergence() -> None:
+    request = VectorFieldRequest(
+        variables=("x", "y"), components=("x**2", "y**2")
+    )
+    result = compute_divergence(request)
+    assert result.result == "2*x + 2*y"
+
+
+def test_curl_3d() -> None:
+    request = VectorFieldRequest(
+        variables=("x", "y", "z"), components=("y", "0", "0")
+    )
+    result = compute_curl(request)
+    assert result.components == ("0", "0", "-1")
+
+
+def test_curl_requires_3d() -> None:
+    import pytest
+    request = VectorFieldRequest(
+        variables=("x", "y"), components=("x", "y")
+    )
+    with pytest.raises(ValueError, match="3D"):
+        compute_curl(request)

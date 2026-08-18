@@ -218,6 +218,12 @@ from jacobian.math.optimization._admission import ADMISSIONS as OPTIMIZATION_ADM
 from jacobian.math.optimization._tools import TOOLS as OPTIMIZATION_TOOLS
 from jacobian.math.petri_nets._admission import ADMISSIONS as PETRI_NETS_ADMISSIONS
 from jacobian.math.petri_nets._tools import TOOLS as PETRI_NET_TOOLS
+from jacobian.math.polynomial_vector_calc._admission import (
+    ADMISSIONS as POLYNOMIAL_VECTOR_CALC_ADMISSIONS,
+)
+from jacobian.math.polynomial_vector_calc._tools import (
+    TOOLS as POLYNOMIAL_VECTOR_CALC_TOOLS,
+)
 from jacobian.math.polynomials._admission import ADMISSIONS as POLYNOMIALS_ADMISSIONS
 from jacobian.math.polynomials._tools import TOOLS as POLYNOMIAL_TOOLS
 from jacobian.math.polynomials.maps._admission import (
@@ -309,6 +315,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *LATTICES_TOOLS,
     *FORMAL_POWER_SERIES_TOOLS,
     *POLYNOMIAL_TOOLS,
+    *POLYNOMIAL_VECTOR_CALC_TOOLS,
     *MULTIVARIATE_POLYNOMIAL_TOOLS,
     *ANALYSIS_TOOLS,
     *PROBABILITY_TOOLS,
@@ -406,6 +413,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *OPTIMIZATION_ADMISSIONS,
     *PETRI_NETS_ADMISSIONS,
     *POLYNOMIALS_ADMISSIONS,
+    *POLYNOMIAL_VECTOR_CALC_ADMISSIONS,
     *POLYNOMIALS_MAPS_ADMISSIONS,
     *POLYNOMIALS_MULTIVARIATE_ADMISSIONS,
     *POLYNOMIALS_REAL_ALGEBRA_ADMISSIONS,

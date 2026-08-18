@@ -1,0 +1,26 @@
+{
+    "catalog_version": "1",
+    "domain": "polynomial_vector_calc",
+    "operations": {
+        "polynomial_field.scalar.directional_derivative.compute": {
+            "input_schema": "sha256:d947a95cc545b28965f573c4833f16a6216fa5ad0afdf999ab87775475a865f1",
+            "output_schema": "sha256:c45c2f9d1d6cb43ec3029173e4b2b6cb370506fa43282800780d48bed2767663"
+        },
+        "polynomial_field.scalar.gradient.compute": {
+            "input_schema": "sha256:daad13ce7e7f7b4717a9c0cfed3207f6076fc788d108c5581bf5af6616b36aa5",
+            "output_schema": "sha256:7687c9d26cc39e3b61f0971fef973b21930163ade5c4c730f7a44bbab2369247"
+        },
+        "polynomial_field.scalar.laplacian.compute": {
+            "input_schema": "sha256:daad13ce7e7f7b4717a9c0cfed3207f6076fc788d108c5581bf5af6616b36aa5",
+            "output_schema": "sha256:c45c2f9d1d6cb43ec3029173e4b2b6cb370506fa43282800780d48bed2767663"
+        },
+        "polynomial_field.vector.curl.compute": {
+            "input_schema": "sha256:0fbc6d8bf556d0fd6f7e81c72244b38fade8a0caede65fb92f299799278f5c69",
+            "output_schema": "sha256:7687c9d26cc39e3b61f0971fef973b21930163ade5c4c730f7a44bbab2369247"
+        },
+        "polynomial_field.vector.divergence.compute": {
+            "input_schema": "sha256:0fbc6d8bf556d0fd6f7e81c72244b38fade8a0caede65fb92f299799278f5c69",
+            "output_schema": "sha256:c45c2f9d1d6cb43ec3029173e4b2b6cb370506fa43282800780d48bed2767663"
+        }
+    }
+}

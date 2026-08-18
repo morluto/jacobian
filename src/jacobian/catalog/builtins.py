@@ -114,6 +114,12 @@ from jacobian.math.geometry.projective._admission import (
     ADMISSIONS as GEOMETRY_PROJECTIVE_ADMISSIONS,
 )
 from jacobian.math.geometry.projective._tools import TOOLS as PROJECTIVE_GEOMETRY_TOOLS
+from jacobian.math.quivers._admission import (
+    ADMISSIONS as QUIVERS_ADMISSIONS,
+)
+from jacobian.math.quivers._tools import (
+    TOOLS as QUIVERS_TOOLS,
+)
 from jacobian.math.graphical_models._admission import (
     ADMISSIONS as GRAPHICAL_MODELS_ADMISSIONS,
 )
@@ -297,6 +303,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *SEQUENCES_TOOLS,
     *GEOMETRY_TOOLS,
     *PROJECTIVE_GEOMETRY_TOOLS,
+    *QUIVERS_TOOLS,
     *GRAPH_OPTIMIZATION_TOOLS,
     *GRAPHS_TOOLS,
     *GRAPH_SYMMETRY_TOOLS,
@@ -375,6 +382,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *GEOMETRY_EUCLIDEAN_ADMISSIONS,
     *GEOMETRY_EXACT_ADMISSIONS,
     *GEOMETRY_PROJECTIVE_ADMISSIONS,
+    *QUIVERS_ADMISSIONS,
     *GRAPHICAL_MODELS_ADMISSIONS,
     *GRAPHS_ADMISSIONS,
     *GRAPHS_COLORING_ADMISSIONS,

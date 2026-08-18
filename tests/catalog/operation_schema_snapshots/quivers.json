@@ -1,0 +1,18 @@
+{
+    "catalog_version": "1",
+    "domain": "quivers",
+    "operations": {
+        "quiver.adjacency_matrices.compute": {
+            "input_schema": "sha256:7c056fb8be416cb5f1af04c5f1fb5a6d1ee79f3de30f94446134f9b8cfc75ec0",
+            "output_schema": "sha256:dae127b74db9728a43476acdd9217a98790125777da4bfb394aeef18dec4b6fb"
+        },
+        "quiver.paths.fixed_length.compute": {
+            "input_schema": "sha256:11f97b212164c6369fd9b65894986c32d216ae0b922e9d86f48a5f4d5e706d67",
+            "output_schema": "sha256:abc2ffcd8bfc29a33b4e8d967ea8b982864be99b931b38900dee176f6fdcb368"
+        },
+        "quiver.vertex_profiles.compute": {
+            "input_schema": "sha256:291e9700dc7c40c4fba7622f4ad9c53ec1c9bd89b8325e6ea53f5656f18179a7",
+            "output_schema": "sha256:0ea20d3a22e19e217c1a3347f555aad5ccf3ab67524eaf8a73edc148f72370e2"
+        }
+    }
+}

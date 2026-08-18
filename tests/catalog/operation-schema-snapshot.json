@@ -1153,9 +1153,25 @@
       "input_schema": "sha256:2b40338042028e9a6e477838b179c012662fcd374322c1b0451039f9fc4b7f6e",
       "output_schema": "sha256:ca8d93197a2ccaa55fce3e8eab6cb1de174742a4a9463606807c4877054865df"
     },
+    "poset.antichain_profile.compute": {
+      "input_schema": "sha256:f5f976c7fadcf196d9c99702758c469b9aa33d5ed9d92cd9fd39a4a6c46d8504",
+      "output_schema": "sha256:baa54525e476bbc4081ce06a64a0ca7285c765f6dd1275c7ef389aa7485a19d4"
+    },
+    "poset.closure.compute": {
+      "input_schema": "sha256:8c523de94c4518ce16efd219de63311b779e2cbb40e983f26f3e1da0816e98bf",
+      "output_schema": "sha256:716b58d26859656f7553292f757370e3367d8c747b9d74691d38f5df62ac01f1"
+    },
+    "poset.dual.compute": {
+      "input_schema": "sha256:279cb415a127e29fdb74087665e97d999f32dddf03654dad57c839656edb277b",
+      "output_schema": "sha256:d546dec3c632f9a42f1ec2d278d8897d40763358af57fc542e0d8e023659f2f2"
+    },
     "poset.finite.compute": {
       "input_schema": "sha256:73c1738f192a084128ea68cc954c524bed9c6b65898f7a47498b9d5e516b94b2",
       "output_schema": "sha256:d5021ca8f1a5bfc3ab3612f4e80db9c447089aa82f7845d8dda8594bc39753f1"
+    },
+    "poset.incidence_convolution.compute": {
+      "input_schema": "sha256:fc69337f0a5f3d21570924a1e94dc76023b5cf9b3ad33586f9bc9d2684746d62",
+      "output_schema": "sha256:339070992c99f3989c7c00e1443507e1f33c2528a7363ccedc629e1d9c7e58cb"
     },
     "poset.linear_extensions.count": {
       "input_schema": "sha256:e1db5dfa1a85945ba8d8da52ad863146f51d1146f20bc295e2a27419ff89d713",
@@ -1168,6 +1184,10 @@
     "poset.width.compute": {
       "input_schema": "sha256:ff2a448f4335d1fac63825191d2d16991a33f31bfa7f7175c49b69495984ff0d",
       "output_schema": "sha256:58722ae468c6000b997cf340f9b7cc29f5aa8b466cee2242227d40d75208f8e1"
+    },
+    "poset.zeta_transform.compute": {
+      "input_schema": "sha256:868970b3a99028c903476fe0b1606462906625eee5182c0eb065b318debe78b2",
+      "output_schema": "sha256:fb22b106f8b8ce3794fc1a49aa1dbafcb3c0d6afc09db58a7c82c8ba35cc2cbb"
     },
     "probability.bh_step_up.compute": {
       "input_schema": "sha256:b51f86a304afd50af235612492073289c041418e8d45c4f517acf774df308fa9",

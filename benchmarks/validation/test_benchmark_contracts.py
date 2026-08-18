@@ -112,3 +112,20 @@ def test_regular_file_inside_rejects_symlinked_root(tmp_path: Path) -> None:
     root = tmp_path / "solution"
     root.symlink_to(outside)
     assert benchmark_contracts._regular_file_inside(root, "evidence/ok.bin") is None
+
+
+# ---------------------------------------------------------------------------
+# Regression: malformed observation/control JSON must fail closed
+# ---------------------------------------------------------------------------
+
+
+def test_observation_pair_failures_fails_closed_on_non_dict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(benchmark_contracts, "_read_json", lambda path: [])
+    failures = benchmark_contracts._observation_pair_failures()
+    assert any("malformed" in failure.lower() for failure in failures)
+
+    monkeypatch.setattr(benchmark_contracts, "_read_json", lambda path: None)
+    failures = benchmark_contracts._observation_pair_failures()
+    assert any("malformed" in failure.lower() for failure in failures)

@@ -126,10 +126,6 @@ packages = ["jacobian"]
 module = ["sympy", "sympy.*"]
 ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-module = ["jacobian.math.graphs.decomposition._operations"]
-disable_error_code = ["type-arg", "arg-type", "misc", "comparison-overlap", "unused-ignore", "var-annotated"]
-
 [tool.deptry]
 extend_exclude = ["benchmarks"]
 known_first_party = ["jacobian"]
@@ -147,49 +143,22 @@ root_package = "jacobian"
 [[tool.importlinter.contracts]]
 name = "The public math library does not depend on product layers"
 type = "forbidden"
-source_modules = [
-    "jacobian.math.algebraic_combinatorics.operations",
-    "jacobian.math.arithmetic.operations",
-    "jacobian.math.boolean.operations",
-    "jacobian.math.matrices.canonical_forms.operations",
-    "jacobian.math.matrices.certified_snf.operations",
-    "jacobian.math.matrices.certified_snf.values",
-    "jacobian.math.code_theory.operations",
-    "jacobian.math.combinatorics.recurrence_tables",
-    "jacobian.math.finite_abelian_groups",
-    "jacobian.math.finite_fields.operations",
-    "jacobian.math.finite_fields.values",
-    "jacobian.math.graphs.spectral.operations",
-    "jacobian.math.graphs.graph6",
-    "jacobian.math.graphs.independence",
-    "jacobian.math.graphs.operations",
-    "jacobian.math.graphs.values",
-    "jacobian.math.group.operations",
-    "jacobian.math.lattices.operations",
-    "jacobian.math.markov_chain.operations",
-    "jacobian.math.matrices.operations",
-    "jacobian.math.matrices.values",
-    "jacobian.math.modular_polynomials",
-    "jacobian.math.number_field.operations",
-    "jacobian.math.polynomials.operations",
-    "jacobian.math.polynomials.values",
-    "jacobian.math.prime_field_linear_algebra",
-    "jacobian.math.probability.mutual_information",
-    "jacobian.math.probability.values",
-    "jacobian.math.geometry.projective.values",
-    "jacobian.math.real_quadratic",
-    "jacobian.math.recurrence_solving.operations",
-    "jacobian.math.regular_languages.operations",
-    "jacobian.math.regular_languages.values",
-    "jacobian.math.root_isolation.operations",
-    "jacobian.math.matrices.symbolic.operations",
-]
+source_modules = ["jacobian.math.**"]
 forbidden_modules = [
     "jacobian.catalog",
     "jacobian.cli",
     "jacobian.dispatch",
     "jacobian.mcp",
     "jacobian.process",
+]
+ignore_imports = [
+    # Private publication/admission modules and internal tool-declaration
+    # helpers may import catalog declaration types to publish built-ins.
+    "jacobian.math.** -> jacobian.catalog.models",
+    "jacobian.math.** -> jacobian.catalog._examples",
+    "jacobian.math.** -> jacobian.catalog.admission",
+    # The logic domain launches bounded external solvers via jacobian.process.
+    "jacobian.math.logic._operations -> jacobian.process",
 ]
 
 [[tool.importlinter.contracts]]

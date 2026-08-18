@@ -20,4 +20,14 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "complete Grundy prefix with periodic tail certificate for a bounded subtraction game",
     ),
+    OperationAdmission(
+        "game.nim.nim_sum.compute",
+        AdmissionDecision.KEEP,
+        "exact bitwise xor nim sum determining the P/N outcome of a Nim position",
+    ),
+    OperationAdmission(
+        "game.impartial.outcome_profile.compute",
+        AdmissionDecision.KEEP,
+        "complete P/N position partition with Grundy values and terminal positions",
+    ),
 )

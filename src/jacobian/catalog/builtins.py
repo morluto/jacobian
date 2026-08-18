@@ -44,6 +44,10 @@ from jacobian.math.boolean_analysis._admission import (
     ADMISSIONS as BOOLEAN_ANALYSIS_ADMISSIONS,
 )
 from jacobian.math.boolean_analysis._tools import TOOLS as BOOLEAN_ANALYSIS_TOOLS
+from jacobian.math.code_linear._admission import (
+    ADMISSIONS as CODE_LINEAR_ADMISSIONS,
+)
+from jacobian.math.code_linear._tools import TOOLS as CODE_LINEAR_TOOLS
 from jacobian.math.code_theory._admission import ADMISSIONS as CODE_THEORY_ADMISSIONS
 from jacobian.math.code_theory._tools import TOOLS as CODE_THEORY_TOOLS
 from jacobian.math.combinatorics._admission import (
@@ -283,6 +287,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *GRAPH_ISOMORPHISM_TOOLS,
     *ROOT_ISOLATION_TOOLS,
     *RECURRENCE_SOLVING_TOOLS,
+    *CODE_LINEAR_TOOLS,
     *CODE_THEORY_TOOLS,
     *NUMBER_FIELD_TOOLS,
     *MARKOV_CHAIN_TOOLS,
@@ -358,6 +363,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *ARITHMETIC_FUNCTIONS_ADMISSIONS,
     *BOOLEAN_ADMISSIONS,
     *BOOLEAN_ANALYSIS_ADMISSIONS,
+    *CODE_LINEAR_ADMISSIONS,
     *CODE_THEORY_ADMISSIONS,
     *COMBINATORICS_ADMISSIONS,
     *CONVEX_ANALYSIS_ADMISSIONS,

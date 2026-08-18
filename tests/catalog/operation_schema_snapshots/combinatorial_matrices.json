@@ -1,0 +1,26 @@
+{
+  "catalog_version": "1",
+  "domain": "combinatorial_matrices",
+  "operations": {
+    "matrix.hadamard.determinant_profile.compute": {
+      "input_schema": "sha256:2bed119fe8ed1a6c4b93acb9a67d9129bd6fd4dc0d084d200fb334909a29efa4",
+      "output_schema": "sha256:82967463ed763c68b4a2502dc4cc68067d689473b952ff65c24e8c7decac04a1"
+    },
+    "matrix.hadamard.gram_profile.compute": {
+      "input_schema": "sha256:8b53e0c4dbe80d78684ba7ee4a7aa548570eaf4b26744139b7a287cfa28b483c",
+      "output_schema": "sha256:6286bd7d96158a2d20a1c3eff04ff97260af743b5f00c9be527b7ba0f1776c97"
+    },
+    "matrix.hadamard.normalize.compute": {
+      "input_schema": "sha256:8fb074a74dd078e4c7b7033750be61ca378d688da5ad4adb29871c29e770bf46",
+      "output_schema": "sha256:7833badc83fe9d8e803ec01568d1550536642feec1759ec6b7ce9e2362d33842"
+    },
+    "matrix.hadamard.sylvester.compute": {
+      "input_schema": "sha256:8fa9031546a2805a8dd6c6cda5c922848095ff5cb0848c8ecbb817002fbac828",
+      "output_schema": "sha256:42009601575a36953403c651c4ba599c335477eebea753adcddb7486e6f0fbc6"
+    },
+    "matrix.sign.profile.compute": {
+      "input_schema": "sha256:5cd8bca9b97550c24d3b13ed8d51cbe1d007719de0247c6c291c02e50b2fcc4b",
+      "output_schema": "sha256:04b3a31ebd7a923ff5a16e502bd5d7a09a14c7ba0010bda9287126eda4716835"
+    }
+  }
+}

@@ -32,10 +32,8 @@ RUFF_TARGETS = (
     "tools/pytest_lifecycle.py",
 )
 MYPY_TARGETS = (
-    "benchmarks/tooling/benchmark_timings.py",
-    "benchmarks/tooling/benchmark_validation.py",
-    "benchmarks/tooling/host_validation.py",
-    "benchmarks/tooling/validation_plan.py",
+    "benchmarks/tooling",
+    "benchmarks/validation",
     "tools/benchmark_pr_status.py",
     "tools/check_benchmark_adapters.py",
     "tools/check_benchmark_contracts.py",
@@ -60,7 +58,6 @@ def _commands() -> tuple[tuple[str, tuple[str, ...]], ...]:
             (
                 "-m",
                 "mypy",
-                "--follow-imports=skip",
                 *MYPY_TARGETS,
             ),
         ),

@@ -36,3 +36,17 @@ def test_static_gate_stops_and_fails_closed_on_a_failed_check(monkeypatch) -> No
 
     assert check_benchmark_static.main() == 9
     assert len(calls) == 1
+
+
+def test_mypy_covers_package_not_individual_files() -> None:
+    """Mypy targets should be package-level, not a per-file allowlist."""
+    targets = check_benchmark_static.MYPY_TARGETS
+    # At least one package-level target
+    package_targets = [t for t in targets if not t.endswith(".py")]
+    assert package_targets, "MYPY_TARGETS should include package-level targets"
+    # Must not use --follow-imports=skip
+    commands = check_benchmark_static._commands()
+    mypy_command = next(cmd for label, cmd in commands if label == "mypy")
+    assert "--follow-imports=skip" not in mypy_command
+
+

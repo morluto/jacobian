@@ -6,6 +6,12 @@ from jacobian.catalog.admission import OperationAdmission, curate_public_tools
 from jacobian.catalog.models import MathTools
 
 # Admission rows co-located with each owning math domain
+from jacobian.math.finite_dim_algebras._admission import (
+    ADMISSIONS as FINITE_DIM_ALGEBRAS_ADMISSIONS,
+)
+from jacobian.math.finite_dim_algebras._tools import (
+    TOOLS as FINITE_DIM_ALGEBRAS_TOOLS,
+)
 from jacobian.math.additive_combinatorics._admission import (
     ADMISSIONS as ADDITIVE_COMBINATORICS_ADMISSIONS,
 )
@@ -326,6 +332,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *BOOLEAN_ANALYSIS_TOOLS,
     *ARITHMETIC_FUNCTIONS_TOOLS,
     *ADDITIVE_COMBINATORICS_TOOLS,
+    *FINITE_DIM_ALGEBRAS_TOOLS,
     *MATRIX_ANALYSIS_TOOLS,
     *CONVEX_ANALYSIS_TOOLS,
     *SUBMODULAR_OPT_TOOLS,
@@ -350,6 +357,7 @@ _BUILTIN_CANDIDATES: MathTools = (
 
 _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *ADDITIVE_COMBINATORICS_ADMISSIONS,
+    *FINITE_DIM_ALGEBRAS_ADMISSIONS,
     *ALGEBRAIC_COMBINATORICS_ADMISSIONS,
     *ANALYSIS_ADMISSIONS,
     *ARITHMETIC_ADMISSIONS,

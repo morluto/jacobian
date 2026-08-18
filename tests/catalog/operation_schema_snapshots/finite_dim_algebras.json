@@ -1,0 +1,14 @@
+{
+    "catalog_version": "1",
+    "domain": "finite_dim_algebras",
+    "operations": {
+        "algebra.center.compute": {
+            "input_schema": "sha256:c19e07bb673bfd8d726cf10075c169e2398bb60747c884ef556c30356b5d8979",
+            "output_schema": "sha256:c8790b23325b65d725a61f0250e681f4d16509fca940025a7ef28ff4560c0a97"
+        },
+        "algebra.radical.compute": {
+            "input_schema": "sha256:3c015c009ace5ade66278d46c296a0f076329a19c7caa9a1735d97f1c0e5e253",
+            "output_schema": "sha256:0dc336155d970791a4a805ac2788002f1b5e12446c29b26f40cd4057f468c4b2"
+        }
+    }
+}

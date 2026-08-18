@@ -5,10 +5,10 @@ from __future__ import annotations
 import math
 
 from jacobian.math.frames._models import (
-    FrameRequest,
-    GramResult,
     CoherenceResult,
     FramePotentialResult,
+    FrameRequest,
+    GramResult,
 )
 
 

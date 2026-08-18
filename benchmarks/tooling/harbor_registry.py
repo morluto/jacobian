@@ -7,9 +7,9 @@ This module owns the immutable Suite/TaskRef values and registry loading.
 from benchmarks.tooling.harbor_suite import (
     BENCHMARKS,
     DATASET_PREFIX,
-    EnvironmentProfile,
-    ROOT,
     REGISTRY_PATH,
+    ROOT,
+    EnvironmentProfile,
     Suite,
     TaskDigest,
     TaskRef,
@@ -26,9 +26,9 @@ from benchmarks.tooling.harbor_suite import (
 __all__ = [
     "BENCHMARKS",
     "DATASET_PREFIX",
-    "EnvironmentProfile",
     "REGISTRY_PATH",
     "ROOT",
+    "EnvironmentProfile",
     "Suite",
     "TaskDigest",
     "TaskRef",

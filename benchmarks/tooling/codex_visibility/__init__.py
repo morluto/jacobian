@@ -20,15 +20,6 @@ from urllib.parse import urlsplit
 import httpx2
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import TextResourceContents
-from benchmarks.tooling.codex_visibility.contracts import (
-    AdoptionExpectation as AdoptionExpectation,
-    CueLevel as CueLevel,
-    ToolMode as ToolMode,
-    VisibilityCase as VisibilityCase,
-    VisibilityOutputOutcome as VisibilityOutputOutcome,
-    VisibilitySuite as VisibilitySuite,
-    load_suite as load_suite,
-)
 from tools.command_runner import (
     ToolCommandStatus,
     git_head_sha,
@@ -37,6 +28,27 @@ from tools.command_runner import (
 )
 
 from benchmarks.tooling.codex_telemetry import parse_agent_transcript
+from benchmarks.tooling.codex_visibility.contracts import (
+    AdoptionExpectation as AdoptionExpectation,
+)
+from benchmarks.tooling.codex_visibility.contracts import (
+    CueLevel as CueLevel,
+)
+from benchmarks.tooling.codex_visibility.contracts import (
+    ToolMode as ToolMode,
+)
+from benchmarks.tooling.codex_visibility.contracts import (
+    VisibilityCase as VisibilityCase,
+)
+from benchmarks.tooling.codex_visibility.contracts import (
+    VisibilityOutputOutcome as VisibilityOutputOutcome,
+)
+from benchmarks.tooling.codex_visibility.contracts import (
+    VisibilitySuite as VisibilitySuite,
+)
+from benchmarks.tooling.codex_visibility.contracts import (
+    load_suite as load_suite,
+)
 from jacobian.canonical import canonicalize_json
 from mcp import Client
 

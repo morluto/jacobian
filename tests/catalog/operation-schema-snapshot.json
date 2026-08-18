@@ -625,9 +625,61 @@
       "input_schema": "sha256:eca1fbc54c3d5c72d4711197aae16587172e4c4686055e9ca64222481fa5275a",
       "output_schema": "sha256:7297a74c4f3c5ac3de2f6c77dd3d44fa8690f14affdc3745a09e52dd49bcda60"
     },
+    "number_theory.numerical_semigroup.betti_elements.compute": {
+      "input_schema": "sha256:be456ffbca1d5991b1f6d71da7d9f95af266bf0d6b7353fa31b269683ddd296b",
+      "output_schema": "sha256:8aecb728b51d36eaf0e4879f9173c50e556d18282602b5a2a128068d3d43c53e"
+    },
+    "number_theory.numerical_semigroup.catenary_degree.compute": {
+      "input_schema": "sha256:856d4fe5bc8ca0d87e72f5c11d7ba428e0718fa57326681ba07d00683c5e6af5",
+      "output_schema": "sha256:7afa712fdb7d345393c77b50503f9c1b2301d811fb20f6e10940259046814cfc"
+    },
+    "number_theory.numerical_semigroup.delta_set.compute": {
+      "input_schema": "sha256:6c06ade9881834813f6206e6cccb9964fdd5d453f508126271ad3882223027a4",
+      "output_schema": "sha256:80b45e07e52c8986e8dd25931806771e79bbe13abf7f3da652627f13b0864002"
+    },
+    "number_theory.numerical_semigroup.elasticity.compute": {
+      "input_schema": "sha256:653c1407c35c4c0d956310620254ebfe6f9d96a322ba8b3db00d512a8959c9b4",
+      "output_schema": "sha256:4e563abda37d86d83485422c40f02e9616000939d50c5bcf650eb3d04436ee67"
+    },
+    "number_theory.numerical_semigroup.element.catenary_degree.compute": {
+      "input_schema": "sha256:111f5e0edc9f95d6e32124ea84e7717d945b395218bd71b66c8025ed68bda726",
+      "output_schema": "sha256:5c6c58a6798aa1833e49de3c5ff49f682716a0b606fcd12391d4ffb22cbe29b6"
+    },
+    "number_theory.numerical_semigroup.element.delta_set.compute": {
+      "input_schema": "sha256:a87d2f995825a0b052bfdb8952d0a20b48cbc9975fc029ce1b077fc9ef415225",
+      "output_schema": "sha256:a34ce33186c2b5206d2ec6f3d0bcb5719d9d2a8d02cce8257a1b8077690684ec"
+    },
+    "number_theory.numerical_semigroup.element.elasticity.compute": {
+      "input_schema": "sha256:52c878622b15a8714b31997f240e1de21bb7f588a84270ed829b6a598b6b6ade",
+      "output_schema": "sha256:69fdd50262af4080d6703fded1ab303f3742389e8c6440fe9ed87691af6b01bf"
+    },
+    "number_theory.numerical_semigroup.factorization_distance.compute": {
+      "input_schema": "sha256:41824a63b2eb0a0fd49e0551941fdb01f521ae611d14812ab3f29a5f1f4d68dc",
+      "output_schema": "sha256:ef48a70f43bcfe40191de6fb39edafdc731a28a5585329b5a74e73dd410f3e9b"
+    },
+    "number_theory.numerical_semigroup.factorization_graph.compute": {
+      "input_schema": "sha256:05bbb230aeda5586efcd8f16ca080b649049435ea4071addd571fb7a73061333",
+      "output_schema": "sha256:a9c775b4cd01c0cadccc3a8199c6859fdcb9dd2a3e5c9ba62bb949a5bfb3e75f"
+    },
+    "number_theory.numerical_semigroup.factorization_lengths.compute": {
+      "input_schema": "sha256:2503062ef5da7835fc6987af937e0896e33842391de63819e3f449313f4f07eb",
+      "output_schema": "sha256:f3cbcdcba0875bd04dca1cebf9a1753a0d7b08f1ab1e85b58c1f4b39eb1c2017"
+    },
+    "number_theory.numerical_semigroup.factorizations.compute": {
+      "input_schema": "sha256:c8e61f5287124813f89c50444fce3308c4d682e8235a5f9e8dc0d4657ebc880e",
+      "output_schema": "sha256:18a834e8204c375903d4c64e4c35486486b6abc428a244f1449ec2f008948416"
+    },
     "number_theory.numerical_semigroup.membership.compute": {
       "input_schema": "sha256:994409947c1647431e8aaac86516c11d1b17f31f5aaf635b14094f4130591ccc",
       "output_schema": "sha256:ea2ccebf9418464b7974ab4af6d63b82a8217ab7c1fe34658cfa0b27e868e5b5"
+    },
+    "number_theory.numerical_semigroup.minimal_presentation.compute": {
+      "input_schema": "sha256:7250a5e807ac6735e054ab4a0269a4843fa0f21886be4dca00d75faa9a3c2d90",
+      "output_schema": "sha256:00f0c9060d793c839c1d65f20670d2305e30cacfca67fa368bcb7f4fc5030184"
+    },
+    "number_theory.numerical_semigroup.presentation_binomials.compute": {
+      "input_schema": "sha256:2d865404e71ab43cf2d9f04126cee845fcc9ecd794f2663e26de1fde7d93c043",
+      "output_schema": "sha256:a4404e31a2ab63597bb34b2282d720f6b813718aff67b85eabb0089d25947c85"
     },
     "number_theory.numerical_semigroup.summary.compute": {
       "input_schema": "sha256:a96330f2cbf2fa44aa4ee06fa965ca37fa86281b96ab336eae54554a779888ea",

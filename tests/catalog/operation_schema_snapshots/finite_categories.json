@@ -1,0 +1,14 @@
+{
+  "catalog_version": "1",
+  "domain": "finite_categories",
+  "operations": {
+    "finite_category.opposite.compute": {
+      "input_schema": "sha256:d5a8542256b66f448e8fbb3eabfdb4bb0cd65c3afcdbca73360462d10ea8a657",
+      "output_schema": "sha256:21a457ad0ecfd642d7284ef4bcbad2b38ed8f3824eca6164475dc7d8a49c73d3"
+    },
+    "finite_category.profile.compute": {
+      "input_schema": "sha256:d5a8542256b66f448e8fbb3eabfdb4bb0cd65c3afcdbca73360462d10ea8a657",
+      "output_schema": "sha256:051f6ee7a190dcd52aec01f282100506a784c1bad8b25aaa331e3d6a13171d73"
+    }
+  }
+}

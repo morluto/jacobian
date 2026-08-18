@@ -76,6 +76,10 @@ from jacobian.math.electrical_networks._admission import (
 from jacobian.math.electrical_networks._tools import (
     TOOLS as ELECTRICAL_NETWORKS_TOOLS,
 )
+from jacobian.math.finite_categories._admission import (
+    ADMISSIONS as FINITE_CATEGORIES_ADMISSIONS,
+)
+from jacobian.math.finite_categories._tools import TOOLS as FINITE_CATEGORIES_TOOLS
 from jacobian.math.finite_fields._admission import (
     ADMISSIONS as FINITE_FIELDS_ADMISSIONS,
 )
@@ -280,6 +284,7 @@ from jacobian.math.words._admission import ADMISSIONS as WORDS_ADMISSIONS
 from jacobian.math.words._tools import TOOLS as WORDS_TOOLS
 
 _BUILTIN_CANDIDATES: MathTools = (
+    *FINITE_CATEGORIES_TOOLS,
     *BOOLEAN_TOOLS,
     *GROUP_TOOLS,
     *GRAPH_COLORING_OPS_TOOLS,
@@ -372,6 +377,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *DIOPHANTINE_APPROXIMATION_ADMISSIONS,
     *DISCREPANCY_THEORY_ADMISSIONS,
     *ELECTRICAL_NETWORKS_ADMISSIONS,
+    *FINITE_CATEGORIES_ADMISSIONS,
     *FINITE_FIELDS_ADMISSIONS,
     *FINITE_GAME_THEORY_ADMISSIONS,
     *FINITE_METRIC_SPACES_ADMISSIONS,

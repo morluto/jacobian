@@ -962,6 +962,21 @@ OPERATION_ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
     OperationAdmission(
+        "graphical_model.d_separation.compute",
+        AdmissionDecision.KEEP,
+        "exact d-separation verdict for a bounded directed acyclic graphical model",
+    ),
+    OperationAdmission(
+        "graphical_model.factor.marginalize",
+        AdmissionDecision.KEEP,
+        "exact bounded factor marginalization",
+    ),
+    OperationAdmission(
+        "graphical_model.factor.multiply",
+        AdmissionDecision.KEEP,
+        "exact bounded factor multiplication",
+    ),
+    OperationAdmission(
         "group.element_order.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

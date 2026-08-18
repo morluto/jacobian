@@ -12,7 +12,8 @@ from jsonschema import Draft202012Validator
 
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.harbor_suite import BENCHMARKS
-from benchmarks.tooling.strict_boundaries import HeldoutManifest, raise_strict_model
+from benchmarks.tooling.heldout_manifest_models import HeldoutManifest
+from benchmarks.tooling.strict_boundaries import raise_strict_model
 
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 

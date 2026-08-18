@@ -14,18 +14,22 @@ from pathlib import Path
 
 import pytest
 import tomli_w
+from benchmarks.tooling.benchmark_job_models import (
+    HarborJobDatasetEntry,
+    HarborJobSelection,
+)
 from benchmarks.tooling.harbor_suite import (
     HarborSuiteError,
     load_environment_profiles,
     validate_task_topology,
 )
-from benchmarks.tooling.heldout_runner import _validated_plan
-from benchmarks.tooling.strict_boundaries import (
-    HarborJobDatasetEntry,
-    HarborJobSelection,
-    HeldoutRunPlan,
+from benchmarks.tooling.harbor_task_contract import (
     TaskEnvironmentSection,
     TaskManifestSections,
+)
+from benchmarks.tooling.heldout_plan_models import HeldoutRunPlan
+from benchmarks.tooling.heldout_runner import _validated_plan
+from benchmarks.tooling.strict_boundaries import (
     format_strict_errors,
     raise_strict_model,
     strict_model_failures,

@@ -30,11 +30,9 @@ from benchmarks.tooling.harbor_digest import (
 from benchmarks.tooling.harbor_digest import (
     task_digest as _native_task_digest,
 )
+from benchmarks.tooling.harbor_task_contract import TaskManifestSections
 from benchmarks.tooling.public_contract import check as _check_public_contract
-from benchmarks.tooling.strict_boundaries import (
-    TaskManifestSections,
-    strict_model_failures,
-)
+from benchmarks.tooling.strict_boundaries import strict_model_failures
 
 ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = ROOT / "benchmarks"

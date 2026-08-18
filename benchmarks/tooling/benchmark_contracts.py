@@ -14,6 +14,7 @@ from typing import Any
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError, ValidationError
 
+from benchmarks.tooling.benchmark_job_models import HarborJobSelection
 from benchmarks.tooling.benchmark_snapshots import validate_lock
 from benchmarks.tooling.harbor_suite import (
     BENCHMARKS,
@@ -24,10 +25,7 @@ from benchmarks.tooling.harbor_suite import (
     load_registry,
 )
 from benchmarks.tooling.public_contract import check as check_public_contract_drift
-from benchmarks.tooling.strict_boundaries import (
-    HarborJobSelection,
-    strict_model_failures,
-)
+from benchmarks.tooling.strict_boundaries import strict_model_failures
 from benchmarks.tooling.verifier_audits import (
     canonical_string_rational_schema_failures,
     formula_string_schema_failures,

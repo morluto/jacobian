@@ -46,12 +46,12 @@ from typing import Any
 
 import tomli_w
 from jsonschema import Draft202012Validator
-
-from benchmarks.tooling import harbor_suite
-from benchmarks.tooling.command_runner import (
+from tools.command_runner import (
     ToolCommandStatus,
     run_operator_command,
 )
+
+from benchmarks.tooling import harbor_suite
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.harbor_suite import (
     EnvironmentProfile,

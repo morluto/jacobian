@@ -22,7 +22,8 @@ _AUGMENTED_DIGEST_MANIFEST = "jacobian-augmented-task-digests"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from benchmarks.tooling.command_runner import git_head_sha  # noqa: E402
+from tools.command_runner import git_head_sha  # noqa: E402
+
 from benchmarks.tooling.errors import HarborSuiteError  # noqa: E402
 from benchmarks.tooling.harbor_digest import durable_task_digest  # noqa: E402
 from benchmarks.tooling.harbor_suite import (  # noqa: E402

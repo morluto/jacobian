@@ -224,7 +224,7 @@ def run_verifier_in_child(
 ) -> VerifierOutput:
     """Run one task verifier in a clean interpreter and return both output files."""
 
-    from benchmarks.tooling.command_runner import (
+    from tools.command_runner import (
         ToolCommandRequest,
         ToolCommandStatus,
         operator_environment,

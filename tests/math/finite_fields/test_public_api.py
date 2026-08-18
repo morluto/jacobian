@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from jacobian.math import finite_fields
-
-import jacobian.math.finite_fields as finite_fields
-
 import pytest
 from flint import nmod_mat
-from jacobian.math import finite_fields
 
+from jacobian.math import finite_fields
 from jacobian.math.finite_fields import (
     Axis,
     AxisBoundMatrix,

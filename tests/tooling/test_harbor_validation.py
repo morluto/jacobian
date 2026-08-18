@@ -6,11 +6,11 @@ import dataclasses
 from pathlib import Path
 
 import pytest
-from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
 from benchmarks.tooling.harbor_suite import (
     validate_task_topology,
     validate_task_visibility,
 )
+from tools.command_runner import ToolCommandResult, ToolCommandStatus
 
 from tests.tooling.harbor_suite_support import (
     _make_suite_with_task,

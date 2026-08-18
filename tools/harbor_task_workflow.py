@@ -17,13 +17,6 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from benchmarks.tooling.command_runner import (  # noqa: E402
-    ToolCommandRequest,
-    ToolCommandStatus,
-    ToolResolver,
-    operator_environment,
-    run_tool_command,
-)
 from benchmarks.tooling.harbor_suite import (  # noqa: E402
     HarborSuiteError,
     get_suite,
@@ -32,6 +25,14 @@ from benchmarks.tooling.harbor_suite import (  # noqa: E402
 from benchmarks.tooling.validation_plan import (  # noqa: E402
     HostValidation,
     task_host_validation,
+)
+
+from tools.command_runner import (  # noqa: E402
+    ToolCommandRequest,
+    ToolCommandStatus,
+    ToolResolver,
+    operator_environment,
+    run_tool_command,
 )
 
 PYTEST_ROOT = ROOT / ".pytest_cache" / "harbor-validation"

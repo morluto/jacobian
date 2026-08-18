@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
+from tools.command_runner import ToolCommandStatus, run_operator_command
 
-from benchmarks.tooling.command_runner import ToolCommandStatus, run_operator_command
 from benchmarks.tooling.harbor_suite import ROOT, Suite, load_registry, task_digest
 
 

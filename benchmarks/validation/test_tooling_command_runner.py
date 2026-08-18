@@ -6,7 +6,7 @@ import threading
 from pathlib import Path
 
 import pytest
-from benchmarks.tooling.command_runner import (
+from tools.command_runner import (
     ToolCommandRequest,
     ToolCommandResult,
     ToolCommandStatus,
@@ -23,7 +23,7 @@ def test_git_head_sha_rejects_non_digest_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stdout: bytes
 ) -> None:
     monkeypatch.setattr(
-        "benchmarks.tooling.command_runner.run_operator_command",
+        "tools.command_runner.run_operator_command",
         lambda *_args, **_kwargs: ToolCommandResult(
             status=ToolCommandStatus.EXITED,
             exit_code=0,

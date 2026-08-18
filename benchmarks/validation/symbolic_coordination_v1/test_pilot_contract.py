@@ -11,9 +11,9 @@ from itertools import product
 from pathlib import Path
 
 import pytest
-from benchmarks.tooling.command_runner import ToolCommandStatus, run_operator_command
 from benchmarks.validation.symbolic_coordination_v1 import support
 from jsonschema.validators import Draft202012Validator
+from tools.command_runner import ToolCommandStatus, run_operator_command
 
 ROOT = Path(__file__).resolve().parents[3]
 DATASET = ROOT / "benchmarks/datasets/symbolic-coordination-v1"

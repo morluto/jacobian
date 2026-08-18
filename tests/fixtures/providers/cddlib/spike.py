@@ -13,20 +13,20 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from benchmarks.tooling.command_runner import (
-    ToolCommandResult,
-    ToolCommandStatus,
-)
 from benchmarks.tooling.spike_utils import (
     canonical_json,
     default_runner,
     sha256_bytes,
 )
+from tools.command_runner import (
+    ToolCommandResult,
+    ToolCommandStatus,
+)
 
 PIN_PATH = Path(__file__).with_name("pin.json")
 ADAPTER_SOURCE = Path(__file__)
 # Worker re-exec replaces the process environment; keep the image PYTHONPATH so
-# `benchmarks.tooling.command_runner` remains importable inside --worker mode.
+# `tools.command_runner` remains importable inside --worker mode.
 _ENVIRONMENT = {
     "LANG": "C",
     "LC_ALL": "C",

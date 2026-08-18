@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
+from tools.command_runner import git_head_sha
 
 from benchmarks.tooling import (
     observation_artifacts,
@@ -39,7 +40,6 @@ from benchmarks.tooling import (
     observation_selection,
 )
 from benchmarks.tooling.benchmark_job_models import HarborJobSelection
-from benchmarks.tooling.command_runner import git_head_sha
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.harbor_suite import (
     ROOT,

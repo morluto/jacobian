@@ -2,8 +2,8 @@ from fractions import Fraction
 
 import pytest
 
-from jacobian.math import numerical_semigroups as ns
 from jacobian.math import numerical_semigroups
+from jacobian.math import numerical_semigroups as ns
 from jacobian.math.numerical_semigroups._tools import TOOLS
 
 

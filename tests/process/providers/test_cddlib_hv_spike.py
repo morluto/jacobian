@@ -6,7 +6,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from benchmarks.tooling.command_runner import ToolCommandResult
 from tests.fixtures.providers.cddlib.spike import _expected_mathematical, run_spike
 from tests.process.providers._spike_support import (
     _canonical,
@@ -14,6 +13,7 @@ from tests.process.providers._spike_support import (
     _runner,
     _sha256,
 )
+from tools.command_runner import ToolCommandResult
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 BASE_PIN = json.loads(

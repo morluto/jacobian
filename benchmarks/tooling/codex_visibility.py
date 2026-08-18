@@ -22,14 +22,14 @@ import httpx2
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import TextResourceContents
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
-from benchmarks.tooling.codex_telemetry import parse_agent_transcript
-from benchmarks.tooling.command_runner import (
+from tools.command_runner import (
     ToolCommandStatus,
     git_head_sha,
     operator_environment,
     run_operator_command,
 )
+
+from benchmarks.tooling.codex_telemetry import parse_agent_transcript
 from jacobian.canonical import canonicalize_json
 from mcp import Client
 

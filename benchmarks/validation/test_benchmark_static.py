@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
 from tools import check_benchmark_static
+from tools.command_runner import ToolCommandResult, ToolCommandStatus
 
 
 def test_static_commands_scan_benchmarks_without_execution_commands() -> None:

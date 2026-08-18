@@ -19,7 +19,8 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from benchmarks.tooling.command_runner import ToolCommandStatus, run_operator_command
+from tools.command_runner import ToolCommandStatus, run_operator_command
+
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.harbor_digest import (
     HarborDigestError,

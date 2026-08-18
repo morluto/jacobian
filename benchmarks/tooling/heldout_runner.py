@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
+from tools.command_runner import operator_environment, run_operator_command
 
-from benchmarks.tooling.command_runner import operator_environment, run_operator_command
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.harbor_suite import BENCHMARKS
 from benchmarks.tooling.heldout_plan_models import HeldoutRunPlan

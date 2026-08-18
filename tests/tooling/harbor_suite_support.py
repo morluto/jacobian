@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 import tomli_w
-from benchmarks.tooling.command_runner import ToolCommandStatus, run_operator_command
 from benchmarks.tooling.harbor_suite import (
     TASK_SCHEMA_VERSION,
     EnvironmentProfile,
@@ -15,6 +14,7 @@ from benchmarks.tooling.harbor_suite import (
     load_registry,
     verifier_bundle_checksum_bytes,
 )
+from tools.command_runner import ToolCommandStatus, run_operator_command
 
 
 def _apply_synthetic_profiles(

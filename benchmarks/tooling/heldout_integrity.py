@@ -8,7 +8,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from benchmarks.tooling.command_runner import operator_environment, run_operator_command
+from tools.command_runner import operator_environment, run_operator_command
+
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.harbor_suite import task_digest
 from benchmarks.tooling.heldout_manifest import (

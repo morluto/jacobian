@@ -4,7 +4,7 @@ import hashlib
 import json
 from collections.abc import Callable, Sequence
 
-from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
+from tools.command_runner import ToolCommandResult, ToolCommandStatus
 
 
 def _sha256(payload: bytes) -> str:

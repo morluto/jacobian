@@ -1,7 +1,7 @@
 """Shared pure helpers for provider-feasibility spike scripts.
 
 These utilities are byte-identical across every provider spike that uses
-them.  They depend only on :mod:`benchmarks.tooling.command_runner` and the
+them.  They depend only on :mod:`tools.command_runner` and the
 standard library, so each provider ``environment/Dockerfile`` can ``COPY``
 this module alongside ``command_runner.py`` into the container.
 """
@@ -13,7 +13,7 @@ import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from benchmarks.tooling.command_runner import (
+from tools.command_runner import (
     ToolCommandRequest,
     ToolCommandResult,
     run_tool_command,

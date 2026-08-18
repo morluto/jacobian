@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from benchmarks.tooling.command_runner import (
+from tools.command_runner import (
     ToolCommandResult,
     ToolCommandStatus,
     operator_environment,

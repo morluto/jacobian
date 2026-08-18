@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from benchmarks.tooling.command_runner import ToolCommandResult
 from tests.fixtures.providers.nauty.spike import run_spike
 from tests.process.providers._spike_support import _result, _runner
+from tools.command_runner import ToolCommandResult
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 PIN = json.loads(

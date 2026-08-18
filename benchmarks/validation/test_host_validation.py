@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
-from benchmarks.tooling import command_runner
+import tools.command_runner as command_runner
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.host_validation import (
     ExecutionProvenance,

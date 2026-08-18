@@ -7,7 +7,8 @@ import json
 import tempfile
 from pathlib import Path
 
-from benchmarks.tooling.command_runner import run_operator_command
+from tools.command_runner import run_operator_command
+
 from benchmarks.tooling.harbor_suite import task_digest
 from benchmarks.tooling.heldout_manifest import (
     _digest,

@@ -11,13 +11,13 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from benchmarks.tooling.command_runner import (
-    ToolCommandResult,
-    ToolCommandStatus,
-)
 from benchmarks.tooling.spike_utils import (
     default_runner,
     sha256_bytes,
+)
+from tools.command_runner import (
+    ToolCommandResult,
+    ToolCommandStatus,
 )
 
 PIN_PATH = Path(__file__).with_name("nauty_provider_pin.json")

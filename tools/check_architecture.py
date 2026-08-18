@@ -108,18 +108,9 @@ def _process_violations(
         return ()
     violations: list[Violation] = []
     for node in _walk(tree):
-        if isinstance(node, ast.Import) and any(
+        if (isinstance(node, ast.Import) and any(
             alias.name == "subprocess" for alias in node.names
-        ):
-            violations.append(
-                _violation(
-                    relative,
-                    node,
-                    "subprocess-confined",
-                    "direct subprocess use belongs in jacobian.process",
-                )
-            )
-        elif isinstance(node, ast.ImportFrom) and node.module == "subprocess":
+        )) or (isinstance(node, ast.ImportFrom) and node.module == "subprocess"):
             violations.append(
                 _violation(
                     relative,
@@ -170,10 +161,10 @@ def _bounded_process_violations(
         ) or (
             isinstance(node, ast.Call)
             and (
-                isinstance(node.func, ast.Name)
-                and node.func.id == "run_bounded_process"
-                or isinstance(node.func, ast.Attribute)
-                and node.func.attr == "run_bounded_process"
+                (isinstance(node.func, ast.Name)
+                and node.func.id == "run_bounded_process")
+                or (isinstance(node.func, ast.Attribute)
+                and node.func.attr == "run_bounded_process")
             )
         ):
             violations.append(

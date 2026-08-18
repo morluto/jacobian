@@ -1,0 +1,38 @@
+{
+    "catalog_version": "1",
+    "domain": "finite_geometry",
+    "operations": {
+        "finite_geometry.grassmannian.count": {
+            "input_schema": "sha256:3948d6f0e311eaf80247cbcba03fc6cdf7d6555e7c26e05dfeb473d5b7154745",
+            "output_schema": "sha256:73c7fad1908551068c8a15ec282befb2d33d7e8e129beb4c5d9e6ee3d94491cd"
+        },
+        "finite_geometry.projective_point.canonicalize": {
+            "input_schema": "sha256:88c0737f673176d7a838330f4a3503360da0139b4b10a9cc5d2ab75a56efb73e",
+            "output_schema": "sha256:79a95212cce774b6ea5c8712bb9db9709972c201083a2905f5ef52ec3276d469"
+        },
+        "finite_geometry.projective_point.equal.decide": {
+            "input_schema": "sha256:42f0beb45dbe9a05c9850c0d1bf44010e384a40f28dfa80a132f92908288d0e6",
+            "output_schema": "sha256:ec7525c0c34b009b5de6429d4568f9d775f0be1debf2c6b5afbb87b97c317506"
+        },
+        "finite_geometry.projective_space.enumerate_points": {
+            "input_schema": "sha256:107cce3dcd30f81c58e6ab162de6159a3e5459fe330be67350f5332841cf7b45",
+            "output_schema": "sha256:f200fd567df3efc08e335ec7dadcdc1b60998caf70d0eec06002b568a6d719ba"
+        },
+        "finite_geometry.subspace.compute": {
+            "input_schema": "sha256:4adff99ac0fe6fb522d2cdb38da66d94e246fb77d53b6de2ae2c0093f0d33c0c",
+            "output_schema": "sha256:6e3fe8a70f1c576408d92203fc99e4a18c2577eb7258ea99663503106d22c3d9"
+        },
+        "finite_geometry.subspace.intersection.compute": {
+            "input_schema": "sha256:da8e7a5c0d695fa052253605fa722651ce8f60c6a22afc868b98db81b280e951",
+            "output_schema": "sha256:8be6d21041eb5b9c589e5ef39c6a47962ba65d48184bda4179c0a1f874aa51d1"
+        },
+        "finite_geometry.subspace.membership.decide": {
+            "input_schema": "sha256:85fe984ff021afb5341aee5fb5b67da8cbaf23e774dc934cce41ec04520b18ef",
+            "output_schema": "sha256:bcd44fd17e5f6195da9d79341608a365efc4668241e443a1676923fe61c2094f"
+        },
+        "finite_geometry.subspace.span.compute": {
+            "input_schema": "sha256:2f3c79536df5ab37cacdd65e5c06391c8bf73f420948768ae2d6ca0ab0451778",
+            "output_schema": "sha256:b610d23d950b2c6be9a85acee97eb979744b386c0c0a136b4b46f0300dde8d0c"
+        }
+    }
+}

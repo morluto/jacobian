@@ -78,6 +78,12 @@ from jacobian.math.finite_game_theory._admission import (
     ADMISSIONS as FINITE_GAME_THEORY_ADMISSIONS,
 )
 from jacobian.math.finite_game_theory._tools import TOOLS as FINITE_GAME_THEORY_TOOLS
+from jacobian.math.finite_geometry._admission import (
+    ADMISSIONS as FINITE_GEOMETRY_ADMISSIONS,
+)
+from jacobian.math.finite_geometry._tools import (
+    TOOLS as FINITE_GEOMETRY_TOOLS,
+)
 from jacobian.math.finite_metric_spaces._admission import (
     ADMISSIONS as FINITE_METRIC_SPACES_ADMISSIONS,
 )
@@ -284,6 +290,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *ROOT_ISOLATION_TOOLS,
     *RECURRENCE_SOLVING_TOOLS,
     *CODE_THEORY_TOOLS,
+    *FINITE_GEOMETRY_TOOLS,
     *NUMBER_FIELD_TOOLS,
     *MARKOV_CHAIN_TOOLS,
     *ARITHMETIC_TOOLS,
@@ -359,6 +366,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *BOOLEAN_ADMISSIONS,
     *BOOLEAN_ANALYSIS_ADMISSIONS,
     *CODE_THEORY_ADMISSIONS,
+    *FINITE_GEOMETRY_ADMISSIONS,
     *COMBINATORICS_ADMISSIONS,
     *CONVEX_ANALYSIS_ADMISSIONS,
     *DIOPHANTINE_APPROXIMATION_ADMISSIONS,

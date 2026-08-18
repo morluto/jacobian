@@ -193,6 +193,38 @@
       "input_schema": "sha256:202657e86345b3d795db45c9fffe94c46b9906bb366324624b8226bde095efd3",
       "output_schema": "sha256:aee79d380ed29b04d5a56ec0d02842a03bf904f3593e0523cebc0c62b096e7b8"
     },
+    "formal_series.rational.scalar_multiply.compute": {
+      "input_schema": "sha256:e13f57589ba86cb5aafa847e97eb1e4b25a5a92cab2cb063fdbe875f67062499",
+      "output_schema": "sha256:ad5a11cdca6a064ebbf8fff6dd68ec7c044a7eb837b1d4ffff213cc7285b01f1"
+    },
+    "formal_series.rational.subtract.compute": {
+      "input_schema": "sha256:c041b2c46a2add291bfe84999791a242a5f8e77f89c315712edc981d4ff02125",
+      "output_schema": "sha256:ec75fc96932ca677d21e77c3ff3d19afe9d96060cfb95d034cff0964c7e114bd"
+    },
+    "formal_series.rational.to_polynomial.compute": {
+      "input_schema": "sha256:1b80c04fc65eb310ad88f6c1f44ff3e202181716632eea8f62ca4aa3f3162b23",
+      "output_schema": "sha256:084dd380fc18d365e9c57e01f1357407957e3ecbdf379ef9de1089cda84d9ba3"
+    },
+    "formal_series.rational.truncate.compute": {
+      "input_schema": "sha256:bc7dcfe7176d471f8517297a8b4668a9aa1da2b878734baeb582b416ae8d9bff",
+      "output_schema": "sha256:f4e431dd60ee3d88d100f0e178b4f638955403da360bc104261319b6e0aeb302"
+    },
+    "game.impartial.birthday.compute": {
+      "input_schema": "sha256:379407668c26d6a7985bd76783a8436a55783f7945fdf58cbc1c0f1f7e7a1b8e",
+      "output_schema": "sha256:b762e201606d3bdb7138b6873a29c9313f08bfdb098cb376af26f75caef619b6"
+    },
+    "game.impartial.grundy_table.compute": {
+      "input_schema": "sha256:3c346097fe1d909f964a5e372f9b91811aa626380659e3ce196810f78656a21a",
+      "output_schema": "sha256:3c7e03c4a0196a97f8bef785640deb36ecc923cdc7f121c6746bf79a8a24b8c3"
+    },
+    "game.subtraction.grundy_prefix.compute": {
+      "input_schema": "sha256:95f79e6ad73fe029c3f8945a3438dbd8d8413575c727e0a7e531bf1ab31131e6",
+      "output_schema": "sha256:0d1653a50b7bf7441da2fd64ff942fc5e40627aa4a7d97f1c735e5d862d6eb2d"
+    },
+    "game_theory.best_response.compute": {
+      "input_schema": "sha256:fd3bbd5d7284ea00acb0389777e444d5b79922dcd6ca059c21c857431896a543",
+      "output_schema": "sha256:371091e4c2b3a8957198261b5f765a91152b90d60aee678d211f5d5a1af7b225"
+    },
     "game_theory.nash_equilibrium.compute": {
       "input_schema": "sha256:fd3bbd5d7284ea00acb0389777e444d5b79922dcd6ca059c21c857431896a543",
       "output_schema": "sha256:264894a7ff1a21d6c14adcf41f2b343966abef50baf694098701c18fd13f3964"

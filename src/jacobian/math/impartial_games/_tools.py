@@ -1,0 +1,124 @@
+"""Impartial-game operation declarations."""
+
+from collections.abc import Callable
+from typing import Any
+
+from jacobian._models import StrictModel
+from jacobian.catalog._examples import example
+from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.impartial_games._models import (
+    BirthdayRequest,
+    BirthdayResult,
+    GrundyTableRequest,
+    GrundyTableResult,
+    SubtractionGrundyPrefixRequest,
+    SubtractionGrundyPrefixResult,
+)
+from jacobian.math.impartial_games._operations import (
+    compute_birthday,
+    compute_grundy_table,
+    compute_subtraction_grundy_prefix,
+)
+
+
+def _op[
+    RequestT: StrictModel,
+    ResultT: StrictModel,
+](
+    operation_id: str,
+    title: str,
+    description: str,
+    request_model: type[RequestT],
+    result_model: type[ResultT],
+    operation: Callable[[RequestT], ResultT],
+    *tags: str,
+    examples: tuple[OperationExample, ...],
+) -> MathTool[RequestT, ResultT]:
+    return MathTool(
+        operation_id=operation_id,
+        version="1",
+        title=title,
+        description=description,
+        request_type=request_model,
+        result_type=result_model,
+        run=operation,
+        tags=tags,
+        examples=examples,
+    )
+
+
+_GAME = {
+    "positions": ["0", "1", "2", "3"],
+    "moves": [
+        {"source": "3", "target": "2"},
+        {"source": "3", "target": "1"},
+        {"source": "2", "target": "1"},
+        {"source": "2", "target": "0"},
+        {"source": "1", "target": "0"},
+    ],
+}
+
+
+TOOLS: tuple[MathTool[Any, Any], ...] = (
+    _op(
+        "game.impartial.grundy_table.compute",
+        "Compute a complete Grundy table",
+        "Compute every exact Grundy value and canonical option-value set for a "
+        "bounded finite normal-play impartial game DAG.",
+        GrundyTableRequest,
+        GrundyTableResult,
+        compute_grundy_table,
+        "game-theory",
+        "impartial",
+        "grundy",
+        "exact",
+        examples=(
+            example(
+                "four_position_game",
+                "Compute the complete Grundy table of a four-position DAG.",
+                {"game": _GAME},
+            ),
+        ),
+    ),
+    _op(
+        "game.impartial.birthday.compute",
+        "Compute all position birthdays",
+        "Compute the exact DAG height of every position, with terminals at zero.",
+        BirthdayRequest,
+        BirthdayResult,
+        compute_birthday,
+        "game-theory",
+        "impartial",
+        "birthday",
+        "exact",
+        examples=(
+            example(
+                "four_position_birthdays",
+                "Compute every birthday in a four-position game DAG.",
+                {"game": _GAME},
+            ),
+        ),
+    ),
+    _op(
+        "game.subtraction.grundy_prefix.compute",
+        "Compute a bounded subtraction-game Grundy prefix",
+        "Compute exact Grundy values and canonical option-value sets for every "
+        "heap from zero through the explicit maximum; no periodicity is implied.",
+        SubtractionGrundyPrefixRequest,
+        SubtractionGrundyPrefixResult,
+        compute_subtraction_grundy_prefix,
+        "game-theory",
+        "subtraction",
+        "grundy",
+        "exact",
+        examples=(
+            example(
+                "subtract_one_or_three",
+                "Compute heaps zero through five for subtraction set {1,3}.",
+                {"subtraction_set": [1, 3], "max_heap": 5},
+            ),
+        ),
+    ),
+)
+
+__all__ = ["TOOLS"]

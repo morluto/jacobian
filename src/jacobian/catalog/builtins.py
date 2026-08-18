@@ -61,6 +61,7 @@ from jacobian.math.graphs.spectral._tools import TOOLS as GRAPH_SPECTRAL_TOOLS
 from jacobian.math.graphs.symmetry._tools import TOOLS as GRAPH_SYMMETRY_TOOLS
 from jacobian.math.graphs.transforms._tools import TOOLS as GRAPH_TRANSFORMS_TOOLS
 from jacobian.math.group._tools import TOOLS as GROUP_TOOLS
+from jacobian.math.impartial_games._tools import TOOLS as IMPARTIAL_GAMES_TOOLS
 from jacobian.math.lattices._tools import TOOLS as LATTICES_TOOLS
 from jacobian.math.logic._tools import TOOLS as LOGIC_TOOLS
 from jacobian.math.markov_chain._tools import TOOLS as MARKOV_CHAIN_TOOLS
@@ -154,6 +155,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *POLYNOMIAL_MAPS_TOOLS,
     *EUCLIDEAN_GEOMETRY_TOOLS,
     *FINITE_GAME_THEORY_TOOLS,
+    *IMPARTIAL_GAMES_TOOLS,
     *ELECTRICAL_NETWORKS_TOOLS,
     *REGULAR_LANGUAGES_TOOLS,
     *ALGEBRAIC_COMBINATORICS_TOOLS,

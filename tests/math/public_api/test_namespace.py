@@ -121,6 +121,7 @@ PUBLIC_API = {
         "subtract",
         "to_polynomial",
         "truncate",
+    ),
     "jacobian.math.arithmetic_dynamics": (
         "FunctionalGraph",
         "OrbitComputation",

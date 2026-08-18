@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
+from benchmarks.tooling import heldout_runner
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.heldout_runner import (
     _default_command,
@@ -536,3 +537,12 @@ def test_runner_rejects_plan_with_wrong_condition(tmp_path: Path) -> None:
             probe_url="http://127.0.0.1:8000/mcp",
             probe_fn=_ready_probe,
         )
+
+
+def test_usage_rejects_non_dict_stats(tmp_path: Path) -> None:
+    """Non-object usage stats must fail closed."""
+    path = tmp_path / "result.json"
+    path.write_text(json.dumps({"stats": None}), encoding="utf-8")
+
+    with pytest.raises(HarborSuiteError, match="stats must be an object"):
+        heldout_runner._usage(path)

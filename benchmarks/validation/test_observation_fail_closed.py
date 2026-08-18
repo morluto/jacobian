@@ -1,11 +1,6 @@
-"""Regression tests for observation-evidence normalization and comparison.
+"""Fail-closed regressions for observation-results normalization."""
 
-These tests call private (``_``-prefixed) helpers from
-``benchmarks.tooling.observation_results`` directly because the fail-closed
-status normalization and observation-failure logic they guard has no public
-API surface — the helpers are internal implementation details of the
-benchmark observation pipeline.
-"""
+from collections import Counter
 
 
 def test_trial_status_missing_status_fails_closed() -> None:
@@ -76,8 +71,6 @@ def test_trial_status_non_string_status_fails_closed() -> None:
 
 
 def test_observation_failures_require_authoritative_completion_counts() -> None:
-    from collections import Counter
-
     from benchmarks.tooling.observation_results import _observation_failures
 
     failures = _observation_failures(
@@ -105,27 +98,3 @@ def test_observation_failures_require_authoritative_completion_counts() -> None:
     )
 
     assert any("completion counts" in failure for failure in failures)
-
-
-def test_compare_evidence_tolerates_missing_optional_metrics() -> None:
-    """Optional accounting and reward dimensions do not invalidate a pair."""
-    from copy import deepcopy
-
-    from benchmarks.tooling.observation_comparison import compare_evidence
-    from benchmarks.validation.observation_results_support import _evidence
-
-    control = _evidence("control", [1.0])
-    treatment = deepcopy(_evidence("treatment", [1.0]))
-    for evidence in (control, treatment):
-        trial = evidence["trials"][0]
-        for key in ("witness_validity", "scope_accuracy", "assurance_calibration"):
-            trial["rewards"].pop(key)
-        trial["tokens"]["input"] = None
-        trial["tokens"]["output"] = None
-        trial["cost_usd"] = None
-        trial["agent_seconds"] = None
-
-    report = compare_evidence(control, treatment)
-
-    assert report["status"] == "VALID"
-    assert report["metrics"]["witness_validity"]["pair_count"] == 0

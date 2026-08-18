@@ -187,3 +187,26 @@ def test_comparison_normalization_allows_only_frozen_jacobian_differences() -> N
     assert normalize_treatment_comparison_job(
         control
     ) != normalize_treatment_comparison_job(treatment)
+
+
+def test_compare_evidence_tolerates_missing_optional_metrics() -> None:
+    """Optional accounting and reward dimensions do not invalidate a pair."""
+    from copy import deepcopy
+
+    from benchmarks.validation.observation_results_support import _evidence
+
+    control = _evidence("control", [1.0])
+    treatment = deepcopy(_evidence("treatment", [1.0]))
+    for evidence in (control, treatment):
+        trial = evidence["trials"][0]
+        for key in ("witness_validity", "scope_accuracy", "assurance_calibration"):
+            trial["rewards"].pop(key)
+        trial["tokens"]["input"] = None
+        trial["tokens"]["output"] = None
+        trial["cost_usd"] = None
+        trial["agent_seconds"] = None
+
+    report = compare_evidence(control, treatment)
+
+    assert report["status"] == "VALID"
+    assert report["metrics"]["witness_validity"]["pair_count"] == 0

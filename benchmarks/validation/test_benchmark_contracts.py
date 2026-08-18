@@ -131,3 +131,16 @@ def test_registry_reordering_does_not_change_validation(
         "mathematical-benchmarks-v1" not in f or "not found" not in f for f in failures
     )
     assert failures == []
+
+
+def test_observation_pair_failures_fails_closed_on_non_dict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Malformed observation/control JSON must fail closed."""
+    monkeypatch.setattr(benchmark_contracts, "_read_json", lambda path: [])
+    failures = benchmark_contracts._observation_pair_failures()
+    assert any("malformed" in failure.lower() for failure in failures)
+
+    monkeypatch.setattr(benchmark_contracts, "_read_json", lambda path: None)
+    failures = benchmark_contracts._observation_pair_failures()
+    assert any("malformed" in failure.lower() for failure in failures)

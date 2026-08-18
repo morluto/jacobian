@@ -23,16 +23,13 @@ PUBLIC_API = {
         "polynomials",
         "prime_field_linear_algebra",
         "probability",
-<<<<<<< HEAD
         "regular_languages",
+        "term_rewriting",
     ),
     "jacobian.math.algebraic_combinatorics": (
         "conjugate_partition",
         "hook_lengths",
         "standard_young_tableaux_count",
-=======
-        "term_rewriting",
->>>>>>> 344b98e66 (fix term rewriting public capability boundary)
     ),
     "jacobian.math.finite_fields": (
         "Axis",
@@ -210,14 +207,13 @@ PUBLIC_API = {
         "MutualInformationTerm",
         "mutual_information",
     ),
-<<<<<<< HEAD
     "jacobian.math.regular_languages": (
         "DFA",
         "DFATransition",
         "count_accepted_words",
         "dfa_complement",
         "dfa_run",
-=======
+    ),
     "jacobian.math.term_rewriting": (
         "RewriteApplication",
         "RewriteRule",
@@ -229,7 +225,6 @@ PUBLIC_API = {
         "selected_rewrite_step",
         "term_at_position",
         "unify",
->>>>>>> 344b98e66 (fix term rewriting public capability boundary)
     ),
 }
 

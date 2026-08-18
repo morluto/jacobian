@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import reduce
+from heapq import heapify, heappop, heappush
 from operator import xor
-
-import networkx as nx
 
 from jacobian.math.impartial_games.values import (
     MAX_HEAP_BOUND,
@@ -51,14 +50,12 @@ def mex(values: tuple[int, ...]) -> int:
 def grundy_table(game: ImpartialGame) -> GrundyAnalysis:
     """Return the complete exact Grundy analysis of one finite game DAG."""
 
-    graph = _graph(game)
-    topological_order = tuple(nx.lexicographical_topological_sort(graph))
+    successors = _successors(game)
+    topological_order = _lexicographical_topological_order(game, successors)
     values: dict[str, int] = {}
     option_sets: dict[str, tuple[int, ...]] = {}
     for position in reversed(topological_order):
-        option_set = tuple(
-            sorted({values[target] for target in graph.successors(position)})
-        )
+        option_set = tuple(sorted({values[target] for target in successors[position]}))
         option_sets[position] = option_set
         values[position] = mex(option_set)
     return GrundyAnalysis(
@@ -73,13 +70,11 @@ def grundy_table(game: ImpartialGame) -> GrundyAnalysis:
 def birthdays(game: ImpartialGame) -> tuple[tuple[str, int], ...]:
     """Return every position birthday, with terminal positions at zero."""
 
-    graph = _graph(game)
-    order = tuple(nx.lexicographical_topological_sort(graph))
+    successors = _successors(game)
+    order = _lexicographical_topological_order(game, successors)
     result: dict[str, int] = {}
     for position in reversed(order):
-        successor_birthdays = tuple(
-            result[target] for target in graph.successors(position)
-        )
+        successor_birthdays = tuple(result[target] for target in successors[position])
         result[position] = (
             0 if not successor_birthdays else 1 + max(successor_birthdays)
         )
@@ -170,11 +165,35 @@ def subtraction_grundy_prefix(
     )
 
 
-def _graph(game: ImpartialGame) -> nx.DiGraph[str]:
-    graph: nx.DiGraph[str] = nx.DiGraph()
-    graph.add_nodes_from(game.positions)
-    graph.add_edges_from((move.source, move.target) for move in game.moves)
-    return graph
+def _successors(game: ImpartialGame) -> dict[str, tuple[str, ...]]:
+    successors: dict[str, list[str]] = {position: [] for position in game.positions}
+    for move in game.moves:
+        successors[move.source].append(move.target)
+    return {
+        position: tuple(sorted(targets)) for position, targets in successors.items()
+    }
+
+
+def _lexicographical_topological_order(
+    game: ImpartialGame, successors: dict[str, tuple[str, ...]]
+) -> tuple[str, ...]:
+    indegree = dict.fromkeys(game.positions, 0)
+    for targets in successors.values():
+        for target in targets:
+            indegree[target] += 1
+    available = [position for position, degree in indegree.items() if degree == 0]
+    heapify(available)
+    order: list[str] = []
+    while available:
+        source = heappop(available)
+        order.append(source)
+        for target in successors[source]:
+            indegree[target] -= 1
+            if indegree[target] == 0:
+                heappush(available, target)
+    if len(order) != len(game.positions):
+        raise RuntimeError("validated impartial game unexpectedly contains a cycle")
+    return tuple(order)
 
 
 def _validate_heaps(heaps: tuple[int, ...]) -> None:

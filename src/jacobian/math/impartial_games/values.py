@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections import deque
 from typing import Self
 
-import networkx as nx
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
@@ -46,10 +46,23 @@ class ImpartialGame(StrictModel):
             raise ValueError("every move endpoint must be a declared position")
         if any(source == target for source, target in edge_pairs):
             raise ValueError("game moves cannot contain self-loops")
-        graph: nx.DiGraph[str] = nx.DiGraph()
-        graph.add_nodes_from(self.positions)
-        graph.add_edges_from(edge_pairs)
-        if not nx.is_directed_acyclic_graph(graph):
+        successors: dict[str, list[str]] = {position: [] for position in self.positions}
+        indegree = dict.fromkeys(self.positions, 0)
+        for source, target in edge_pairs:
+            successors[source].append(target)
+            indegree[target] += 1
+        queue = deque(
+            position for position in self.positions if indegree[position] == 0
+        )
+        visited = 0
+        while queue:
+            source = queue.popleft()
+            visited += 1
+            for target in successors[source]:
+                indegree[target] -= 1
+                if indegree[target] == 0:
+                    queue.append(target)
+        if visited != len(self.positions):
             raise ValueError("impartial game must be acyclic")
         return self
 

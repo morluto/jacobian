@@ -37,6 +37,9 @@ from jacobian.math.finite_metric_spaces._tools import (
     TOOLS as FINITE_METRIC_SPACES_TOOLS,
 )
 from jacobian.math.finite_sets._tools import TOOLS as FINITE_SETS_TOOLS
+from jacobian.math.finite_state_transducers._tools import (
+    TOOLS as FINITE_STATE_TRANSDUCER_TOOLS,
+)
 from jacobian.math.formal_power_series._tools import TOOLS as FORMAL_POWER_SERIES_TOOLS
 from jacobian.math.geometry._tools import TOOLS as GEOMETRY_TOOLS
 from jacobian.math.geometry.euclidean._tools import TOOLS as EUCLIDEAN_GEOMETRY_TOOLS
@@ -160,6 +163,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *TERM_REWRITING_TOOLS,
     *TREE_AUTOMATA_TOOLS,
     *GRAPHICAL_MODEL_TOOLS,
+    *FINITE_STATE_TRANSDUCER_TOOLS,
 )
 
 BUILTIN_TOOLS: MathTools = curate_public_tools(_BUILTIN_CANDIDATES)

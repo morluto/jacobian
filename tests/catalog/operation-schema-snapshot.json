@@ -888,6 +888,18 @@
     "tree_automaton.run.compute": {
       "input_schema": "sha256:61bc44d47623089db1a9f3f590f462cc2d1ac8cb70bcffe27db76553fbc08fcd",
       "output_schema": "sha256:67b7e7b060986da4ebd31b9389319612d7e17883863029226414cba47d86dc01"
+    },
+    "transducer.relation.path.replay.compute": {
+      "input_schema": "sha256:e4ce664ecbe2b5ab94ed27d5f967263806832a671478d9f456a08c0d26c45344",
+      "output_schema": "sha256:9a7c083b5f6a4a8bfbfceaf0e4be6bdf40179efc5524bbe577d32875d20052e8"
+    },
+    "transducer.subsequential.compose.compute": {
+      "input_schema": "sha256:c1e3e17efd8b5ee350b54f868bce26131520f2e6795a651136068912b46cdff4",
+      "output_schema": "sha256:7a978b7d74c9a14f2e26cc56c057e29ded68f787db0eb613174d79a00eec648f"
+    },
+    "transducer.subsequential.run.compute": {
+      "input_schema": "sha256:0edd13bdb831c2b2549e7fa90d16f21a910e3fff6cb88c6aa09728ae218f3244",
+      "output_schema": "sha256:76e8854270db520c0af105495d5f3ae850199c34124268e9f4ca2f698d17f377"
     }
   }
 }

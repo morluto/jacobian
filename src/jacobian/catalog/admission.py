@@ -1369,9 +1369,44 @@ OPERATION_ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
     OperationAdmission(
+        "number_theory.numerical_semigroup.betti_elements.compute",
+        AdmissionDecision.KEEP,
+        "exact complete Betti enumeration replacing the capped heuristic search after the #1977 contract repair",
+    ),
+    OperationAdmission(
+        "number_theory.numerical_semigroup.catenary_degree.compute",
+        AdmissionDecision.KEEP,
+        "complete global catenary-degree invariant rebuilt on the repaired Betti basis after the #1977 contract repair",
+    ),
+    OperationAdmission(
+        "number_theory.numerical_semigroup.delta_set.compute",
+        AdmissionDecision.KEEP,
+        "complete global delta-set invariant rebuilt on the repaired Betti basis after the #1977 contract repair",
+    ),
+    OperationAdmission(
+        "number_theory.numerical_semigroup.factorization_graph.compute",
+        AdmissionDecision.KEEP,
+        "reusable factorization graph and component construction",
+    ),
+    OperationAdmission(
+        "number_theory.numerical_semigroup.factorizations.compute",
+        AdmissionDecision.KEEP,
+        "complete bounded factorization family for one element",
+    ),
+    OperationAdmission(
         "number_theory.numerical_semigroup.membership.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
+    OperationAdmission(
+        "number_theory.numerical_semigroup.minimal_presentation.compute",
+        AdmissionDecision.KEEP,
+        "minimal presentation rebuilt on the exact Betti basis after the #1977 contract repair",
+    ),
+    OperationAdmission(
+        "number_theory.numerical_semigroup.presentation_binomials.compute",
+        AdmissionDecision.KEEP,
+        "unit binomial coefficients of the repaired minimal presentation after the #1977 contract repair",
     ),
     OperationAdmission(
         "number_theory.numerical_semigroup.summary.compute",
@@ -1382,6 +1417,16 @@ OPERATION_ADMISSIONS: tuple[OperationAdmission, ...] = (
         "optimization.linear.rational_optimum.compute",
         AdmissionDecision.KEEP,
         "distinct exact or explicitly bounded search outcome with material computational leverage",
+    ),
+    OperationAdmission(
+        "petri_net.fire_transition.compute",
+        AdmissionDecision.KEEP,
+        "exact transition firing with typed marking semantics",
+    ),
+    OperationAdmission(
+        "petri_net.reachability_graph.compute",
+        AdmissionDecision.KEEP,
+        "bounded reachability construction with an explicit typed completeness frontier after the #1978 contract repair",
     ),
     OperationAdmission(
         "polynomial.compute.discriminant",

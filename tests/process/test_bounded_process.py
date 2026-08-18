@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 import os
@@ -7,6 +8,7 @@ import shutil
 import sys
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -131,25 +133,46 @@ def test_clean_worker_exit_drains_pipes_inherited_by_descendants() -> None:
     os.name != "posix",
     reason="detached process groups are exercised on POSIX",
 )
-def test_detached_descendant_with_inherited_pipe_fails_closed() -> None:
-    completed = run_bounded_process(
-        [
-            sys.executable,
-            "-c",
-            (
-                "import subprocess, sys; "
-                "subprocess.Popen("
-                "[sys.executable, '-c', 'import time; time.sleep(5)'], "
-                "stdout=sys.stdout, stderr=sys.stderr, start_new_session=True); "
-                "print('worker complete', flush=True)"
-            ),
-        ],
-        input_bytes=b"",
-        timeout_seconds=2,
-        environment=dict(os.environ),
-        stdout_limit=4096,
-        stderr_limit=4096,
-    )
+def test_detached_descendant_with_inherited_pipe_fails_closed(
+    tmp_path: Path,
+) -> None:
+    """Detached descendant keeps pipe open; result must fail closed (timed_out).
 
-    assert completed.returncode == 0
-    assert completed.timed_out
+    The escaped descendant is killed in ``finally`` so no process is left
+    running after the test, even if an assertion fails.
+    """
+    marker = tmp_path / "escaped.pid"
+    script = tmp_path / "escape_worker.py"
+    script.write_text(
+        "import subprocess, sys\n"
+        "p = subprocess.Popen("
+        "[sys.executable, '-c', 'import time; time.sleep(5)'], "
+        "stdout=sys.stdout, stderr=sys.stderr, start_new_session=True)\n"
+        "open(sys.argv[1], 'w').write(str(p.pid))\n"
+        "print('worker complete', flush=True)\n",
+        encoding="utf-8",
+    )
+    escaped_pid: int | None = None
+    try:
+        completed = run_bounded_process(
+            [sys.executable, str(script), str(marker)],
+            input_bytes=b"",
+            timeout_seconds=2,
+            environment=dict(os.environ),
+            stdout_limit=4096,
+            stderr_limit=4096,
+        )
+
+        assert completed.returncode == 0
+        assert completed.timed_out
+    finally:
+        if marker.exists():
+            try:
+                text = marker.read_text().strip()
+                if text:
+                    escaped_pid = int(text)
+            except OSError:
+                pass
+        if escaped_pid is not None:
+            with contextlib.suppress(OSError):
+                os.kill(escaped_pid, 9)

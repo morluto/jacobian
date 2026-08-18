@@ -92,7 +92,9 @@ the operation returns a concrete mathematical value or certificate.
   worker output. SAT and SMT use their maintained Python APIs directly.
 - Native public functions belong under `jacobian.math`, have explicit `__all__`,
   call typed kernels directly, and never invoke `math.run` or expose MCP,
-  runtime, installation, or storage objects.
+  runtime, installation, or storage objects. They accept domain values or a
+  maintained backend type that already carries the complete mathematical
+  meaning (see the [native Python API](docs/reference/python-api.md) contract).
 
 ### Mathematical boundedness is a proof obligation
 

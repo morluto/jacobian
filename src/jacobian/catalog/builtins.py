@@ -84,6 +84,7 @@ from jacobian.math.sequences._tools import TOOLS as SEQUENCES_TOOLS
 from jacobian.math.submodular_opt._tools import TOOLS as SUBMODULAR_OPT_TOOLS
 from jacobian.math.term_rewriting._tools import TOOLS as TERM_REWRITING_TOOLS
 from jacobian.math.topology._tools import TOOLS as TOPOLOGY_TOOLS
+from jacobian.math.tree_automata._tools import TOOLS as TREE_AUTOMATA_TOOLS
 
 _BUILTIN_CANDIDATES: MathTools = (
     *BOOLEAN_TOOLS,
@@ -150,6 +151,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *FINITE_METRIC_SPACES_TOOLS,
     *PETRI_NET_TOOLS,
     *TERM_REWRITING_TOOLS,
+    *TREE_AUTOMATA_TOOLS,
 )
 
 BUILTIN_TOOLS: MathTools = curate_public_tools(_BUILTIN_CANDIDATES)

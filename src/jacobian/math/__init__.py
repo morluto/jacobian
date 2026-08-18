@@ -18,6 +18,7 @@ from jacobian.math import (
     probability,
     regular_languages,
     term_rewriting,
+    tree_automata,
 )
 
 __all__ = [
@@ -38,4 +39,5 @@ __all__ = [
     "probability",
     "regular_languages",
     "term_rewriting",
+    "tree_automata",
 ]

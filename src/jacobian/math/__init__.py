@@ -23,6 +23,7 @@ from jacobian.math import (
     regular_languages,
     term_rewriting,
     tree_automata,
+    words,
 )
 
 __all__ = [
@@ -48,4 +49,5 @@ __all__ = [
     "regular_languages",
     "term_rewriting",
     "tree_automata",
+    "words",
 ]

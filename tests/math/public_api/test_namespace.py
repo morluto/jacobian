@@ -30,6 +30,7 @@ PUBLIC_API = {
         "regular_languages",
         "term_rewriting",
         "tree_automata",
+        "words",
     ),
     "jacobian.math.algebraic_combinatorics": (
         "conjugate_partition",
@@ -289,6 +290,22 @@ PUBLIC_API = {
         "TreeAutomatonTransition",
         "accepted_tree_count",
         "run_tree_automaton",
+    ),
+    "jacobian.math.words": (
+        "FactorAnalysis",
+        "FiniteWord",
+        "PeriodAnalysis",
+        "WordMorphism",
+        "apply_morphism",
+        "compose_morphisms",
+        "conjugates",
+        "factor_occurrences",
+        "factors_of_length",
+        "incidence_matrix",
+        "parikh_vector",
+        "periods",
+        "prefix_function",
+        "primitive_root",
     ),
 }
 

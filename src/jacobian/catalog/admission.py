@@ -2026,7 +2026,23 @@ OPERATION_ADMISSIONS: tuple[OperationAdmission, ...] = (
         "tree_automaton.run.compute",
         AdmissionDecision.KEEP,
         "typed bottom-up tree automaton run with a complete accepted or rejected verdict",
-    ),)
+    ),
+    OperationAdmission(
+        "word.factors.length.compute",
+        AdmissionDecision.KEEP,
+        "complete bounded factor table of a finite word",
+    ),
+    OperationAdmission(
+        "word.periods.compute",
+        AdmissionDecision.KEEP,
+        "complete period set with border certificate for a finite word",
+    ),
+    OperationAdmission(
+        "word_morphism.incidence_matrix.compute",
+        AdmissionDecision.KEEP,
+        "exact incidence matrix of a bounded word morphism",
+    ),
+)
 
 
 def curate_public_tools(candidates: MathTools) -> MathTools:

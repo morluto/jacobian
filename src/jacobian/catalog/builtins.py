@@ -95,6 +95,7 @@ from jacobian.math.submodular_opt._tools import TOOLS as SUBMODULAR_OPT_TOOLS
 from jacobian.math.term_rewriting._tools import TOOLS as TERM_REWRITING_TOOLS
 from jacobian.math.topology._tools import TOOLS as TOPOLOGY_TOOLS
 from jacobian.math.tree_automata._tools import TOOLS as TREE_AUTOMATA_TOOLS
+from jacobian.math.words._tools import TOOLS as WORDS_TOOLS
 
 _BUILTIN_CANDIDATES: MathTools = (
     *BOOLEAN_TOOLS,
@@ -156,6 +157,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *EUCLIDEAN_GEOMETRY_TOOLS,
     *FINITE_GAME_THEORY_TOOLS,
     *IMPARTIAL_GAMES_TOOLS,
+    *WORDS_TOOLS,
     *ELECTRICAL_NETWORKS_TOOLS,
     *REGULAR_LANGUAGES_TOOLS,
     *ALGEBRAIC_COMBINATORICS_TOOLS,

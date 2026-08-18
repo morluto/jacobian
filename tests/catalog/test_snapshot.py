@@ -41,7 +41,7 @@ def test_operation_ids_and_request_result_schemas_match_snapshot() -> None:
     }
 
     assert snapshot.catalog_version == expected["catalog_version"]
-    assert len(actual) == 360
+    assert len(actual) == 364
     assert actual == expected["operations"]
 
 

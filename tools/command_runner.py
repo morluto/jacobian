@@ -235,7 +235,8 @@ def _read_stream(
     sink_name: str,
     sink_failure: queue.Queue[tuple[str, str]],
 ) -> None:
-    read = getattr(stream, "read1", None) or stream.read
+    read = getattr(stream, "read1", None) or getattr(stream, "read", None)
+    assert read is not None
     while True:
         block = read(65_536)
         if not block:
@@ -268,7 +269,9 @@ def _launch_tool_process(
             env=dict(request.environment),
             start_new_session=os.name == "posix",
             creationflags=(
-                subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+                int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+                if os.name == "nt"
+                else 0
             ),
         )
     except OSError as exc:
@@ -596,7 +599,9 @@ class ToolInteractiveCommand:
                 bufsize=1,
                 start_new_session=os.name == "posix",
                 creationflags=(
-                    subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+                    int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+                    if os.name == "nt"
+                    else 0
                 ),
             )
         except OSError:

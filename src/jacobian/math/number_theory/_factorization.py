@@ -121,7 +121,10 @@ FACTORIZATION_OPERATIONS = (
     _operation(
         operation_id="integer.compute.prime_factorization",
         title="Factor an integer",
-        description="Compute a complete prime-power factorization.",
+        description=(
+            "Factor an integer into prime powers and return the complete "
+            "prime-power factorization."
+        ),
         request_model=NonzeroFactorizationRequest,
         result_model=PrimeFactorizationResult,
         implementation=_compute_prime_factorization,

@@ -70,6 +70,12 @@ from jacobian.math.electrical_networks._admission import (
 from jacobian.math.electrical_networks._tools import (
     TOOLS as ELECTRICAL_NETWORKS_TOOLS,
 )
+from jacobian.math.finite_abelian_groups_v2._admission import (
+    ADMISSIONS as FINITE_ABELIAN_GROUPS_V2_ADMISSIONS,
+)
+from jacobian.math.finite_abelian_groups_v2._tools import (
+    TOOLS as FINITE_ABELIAN_GROUPS_V2_TOOLS,
+)
 from jacobian.math.finite_fields._admission import (
     ADMISSIONS as FINITE_FIELDS_ADMISSIONS,
 )
@@ -293,6 +299,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *COMBINATORICS_TOOLS,
     *FINITE_SETS_TOOLS,
     *FINITE_FIELDS_TOOLS,
+    *FINITE_ABELIAN_GROUPS_V2_TOOLS,
     *LOGIC_TOOLS,
     *SEQUENCES_TOOLS,
     *GEOMETRY_TOOLS,
@@ -365,6 +372,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *DISCREPANCY_THEORY_ADMISSIONS,
     *ELECTRICAL_NETWORKS_ADMISSIONS,
     *FINITE_FIELDS_ADMISSIONS,
+    *FINITE_ABELIAN_GROUPS_V2_ADMISSIONS,
     *FINITE_GAME_THEORY_ADMISSIONS,
     *FINITE_METRIC_SPACES_ADMISSIONS,
     *FINITE_SETS_ADMISSIONS,

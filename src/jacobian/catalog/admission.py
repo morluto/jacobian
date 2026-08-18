@@ -1988,6 +1988,21 @@ OPERATION_ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
     OperationAdmission(
+        "transducer.relation.path.replay.compute",
+        AdmissionDecision.KEEP,
+        "exact path replay over a rational transducer relation",
+    ),
+    OperationAdmission(
+        "transducer.subsequential.compose.compute",
+        AdmissionDecision.KEEP,
+        "exact composition of bounded subsequential transducers",
+    ),
+    OperationAdmission(
+        "transducer.subsequential.run.compute",
+        AdmissionDecision.KEEP,
+        "exact subsequential transducer run with complete output",
+    ),
+    OperationAdmission(
         "tree_automaton.accepted_tree_count.compute",
         AdmissionDecision.KEEP,
         "exact bounded accepted-tree enumeration for a deterministic bottom-up tree automaton",

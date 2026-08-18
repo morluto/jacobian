@@ -572,6 +572,21 @@ OPERATION_ADMISSIONS: tuple[OperationAdmission, ...] = (
         native_symbol="jacobian.math.formal_power_series.truncate",
     ),
     OperationAdmission(
+        "game.impartial.birthday.compute",
+        AdmissionDecision.KEEP,
+        "exact birthday rank certificate for a bounded impartial game position",
+    ),
+    OperationAdmission(
+        "game.impartial.grundy_table.compute",
+        AdmissionDecision.KEEP,
+        "complete Grundy table over a bounded impartial game state space",
+    ),
+    OperationAdmission(
+        "game.subtraction.grundy_prefix.compute",
+        AdmissionDecision.KEEP,
+        "complete Grundy prefix with periodic tail certificate for a bounded subtraction game",
+    ),
+    OperationAdmission(
         "game_theory.best_response.compute",
         AdmissionDecision.DROP,
         "misnamed pure maximin row calculation that is not a best response without an opponent strategy",

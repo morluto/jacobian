@@ -219,6 +219,7 @@ PUBLIC_API = {
         "enabled_transitions",
         "fire_transition",
         "reachability_graph",
+    ),
     "jacobian.math.impartial_games": (
         "GameMove",
         "GrundyAnalysis",

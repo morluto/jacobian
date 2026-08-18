@@ -26,6 +26,7 @@ ROOT_MATH_DOMAINS = (
     "finite_metric_spaces",
     "finite_state_transducers",
     "finite_topology",
+    "formal_concept_analysis",
     "formal_power_series",
     "graphical_models",
     "graphs",

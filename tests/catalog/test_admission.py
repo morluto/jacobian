@@ -27,12 +27,12 @@ def test_every_frozen_candidate_has_exactly_one_admission_decision() -> None:
     reviewed_ids = [record.operation_id for record in OPERATION_ADMISSIONS]
 
     assert REVIEWED_BASE_REVISION == "61589543bbbff546edbc51d34a07887982fa4ad6"
-    assert len(candidate_ids) == len(set(candidate_ids)) == 399
+    assert len(candidate_ids) == len(set(candidate_ids)) == 406
     assert reviewed_ids == sorted(reviewed_ids)
     assert set(reviewed_ids) == set(candidate_ids)
     assert all(record.rationale.strip() for record in OPERATION_ADMISSIONS)
     assert Counter(record.decision for record in OPERATION_ADMISSIONS) == {
-        AdmissionDecision.KEEP: 239,
+        AdmissionDecision.KEEP: 246,
         AdmissionDecision.NATIVE_ONLY: 56,
         AdmissionDecision.DROP: 104,
     }
@@ -46,7 +46,7 @@ def test_public_catalog_contains_only_admitted_atomic_operations() -> None:
     }
 
     assert {tool.operation_id for tool in BUILTIN_TOOLS} == expected
-    assert len(BUILTIN_TOOLS) == 239
+    assert len(BUILTIN_TOOLS) == 246
 
 
 def test_catalog_construction_fails_closed_on_duplicate_candidates() -> None:

@@ -417,10 +417,6 @@
       "input_schema": "sha256:c4466feaf7ec9a660c3fb10e51505f876fadd4dcf001e635a6cb0f755d4825f9",
       "output_schema": "sha256:032babbe346ba4f9581d8a7504d0d37015f8402862959764fa49da54e8d5be9f"
     },
-    "graphical_model.variable_elimination.compute": {
-      "input_schema": "sha256:1159147eadccca529c4b974ac6d97670bab7903ccaae0e4deced7ffaa7f7e501",
-      "output_schema": "sha256:16c344f722c81f3a2065e1c21bb3cbba5358948f05364d6511ba640685199e74"
-    },
     "group.element_order.compute": {
       "input_schema": "sha256:e286318c67b90da67d141f6d89e3be60ffa325fee0f23d660b5b1486e09ccdac",
       "output_schema": "sha256:3ce90e0edcb3ef366263e987af7e16337613818f6337166fca2c4fa9d677c93d"

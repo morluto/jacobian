@@ -13,14 +13,11 @@ from jacobian.math.graphical_models._models import (
     FactorMarginalizeResult,
     FactorMultiplyRequest,
     FactorMultiplyResult,
-    VariableEliminationRequest,
-    VariableEliminationResult,
 )
 from jacobian.math.graphical_models._operations import (
     compute_d_separation,
     compute_factor_marginalize,
     compute_factor_multiply,
-    compute_variable_elimination,
 )
 
 
@@ -55,12 +52,6 @@ _FACTOR1 = {
     "variables": [0, 1],
     "domain_sizes": [2, 2, 2],
     "table": ["1/2", "1/2", "1/3", "2/3"],
-}
-
-_FACTOR2 = {
-    "variables": [1, 2],
-    "domain_sizes": [2, 2, 2],
-    "table": ["1/2", "1/2", "1/4", "3/4"],
 }
 
 _FACTOR_SINGLE = {
@@ -115,31 +106,6 @@ GRAPHICAL_MODEL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "factor": _FACTOR_SINGLE,
                     "variable": 0,
-                },
-            ),
-        ),
-    ),
-    _op(
-        "graphical_model.variable_elimination.compute",
-        "Compute a marginal via variable elimination",
-        "Compute a marginal distribution over query variables by eliminating "
-        "every non-query variable exactly once in the given order. The result "
-        "is an exact unnormalized marginal factor.",
-        VariableEliminationRequest,
-        VariableEliminationResult,
-        compute_variable_elimination,
-        "graphical-model",
-        "variable-elimination",
-        "exact",
-        examples=(
-            example(
-                "eliminate_chain_prefix",
-                "Eliminate variables 0 and 1 from two exact chain factors.",
-                {
-                    "factors": [_FACTOR1, _FACTOR2],
-                    "domain_sizes": [2, 2, 2],
-                    "elimination_order": [0, 1],
-                    "query_variables": [2],
                 },
             ),
         ),

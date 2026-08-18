@@ -8,9 +8,7 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.graphical_models.values import (
-    MAX_FACTOR_COUNT,
     MAX_MODEL_VARS,
-    DomainSize,
     Factor,
     Variable,
 )
@@ -61,47 +59,6 @@ class FactorMarginalizeResult(StrictModel):
 
         if self.factor != factor_marginalize(self.source_factor, self.variable):
             raise ValueError("factor must be the exact bound marginal")
-        return self
-
-
-class VariableEliminationRequest(StrictModel):
-    factors: tuple[Factor, ...] = Field(min_length=1, max_length=MAX_FACTOR_COUNT)
-    domain_sizes: tuple[DomainSize, ...] = Field(
-        min_length=1, max_length=MAX_MODEL_VARS
-    )
-    elimination_order: tuple[Variable, ...]
-    query_variables: tuple[Variable, ...]
-
-    @model_validator(mode="after")
-    def require_complete_bounded_elimination(self) -> Self:
-        from jacobian.math.graphical_models.operations import (
-            validate_variable_elimination_input,
-        )
-
-        validate_variable_elimination_input(
-            self.factors,
-            self.domain_sizes,
-            self.elimination_order,
-            self.query_variables,
-        )
-        return self
-
-
-class VariableEliminationResult(VariableEliminationRequest):
-    factor: Factor
-
-    @model_validator(mode="after")
-    def bind_elimination_result(self) -> Self:
-        from jacobian.math.graphical_models.operations import variable_elimination
-
-        expected = variable_elimination(
-            self.factors,
-            self.domain_sizes,
-            self.elimination_order,
-            self.query_variables,
-        )
-        if self.factor != expected:
-            raise ValueError("factor must be the exact bound elimination result")
         return self
 
 
@@ -156,6 +113,4 @@ __all__ = [
     "FactorMarginalizeResult",
     "FactorMultiplyRequest",
     "FactorMultiplyResult",
-    "VariableEliminationRequest",
-    "VariableEliminationResult",
 ]

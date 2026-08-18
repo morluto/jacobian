@@ -16,13 +16,11 @@ from jacobian.math.graphical_models._models import (
     FactorMarginalizeRequest,
     FactorMultiplyRequest,
     FactorMultiplyResult,
-    VariableEliminationRequest,
 )
 from jacobian.math.graphical_models._operations import (
     compute_d_separation,
     compute_factor_marginalize,
     compute_factor_multiply,
-    compute_variable_elimination,
 )
 
 
@@ -125,18 +123,15 @@ class TestVariableElimination:
     def test_exact_chain_marginal(self) -> None:
         factor_x = _factor((0,), ("1/4", "3/4"))
         factor_y_given_x = _factor((0, 1), ("1/2", "1/2", "1/3", "2/3"))
-        request = VariableEliminationRequest(
-            factors=(factor_x, factor_y_given_x),
-            domain_sizes=(2, 2, 2),
+        result = variable_elimination(
+            (factor_x, factor_y_given_x),
+            (2, 2, 2),
             elimination_order=(0,),
             query_variables=(1,),
         )
 
-        result = compute_variable_elimination(request)
-
-        assert result.factor.variables == (1,)
-        assert result.factor.table == ("3/8", "5/8")
-        assert result.factors == request.factors
+        assert result.variables == (1,)
+        assert result.table == ("3/8", "5/8")
 
     def test_eliminating_all_variables_returns_partition_scalar(self) -> None:
         result = variable_elimination(
@@ -150,19 +145,19 @@ class TestVariableElimination:
         assert result.table == ("5",)
 
     def test_incomplete_elimination_order_is_rejected_before_computation(self) -> None:
-        with pytest.raises(ValidationError, match="every non-query"):
-            VariableEliminationRequest(
-                factors=(_factor((0, 1), ("1", "1", "1", "1")),),
-                domain_sizes=(2, 2, 2),
+        with pytest.raises(ValueError, match="every non-query"):
+            variable_elimination(
+                (_factor((0, 1), ("1", "1", "1", "1")),),
+                (2, 2, 2),
                 elimination_order=(),
                 query_variables=(1,),
             )
 
     def test_query_must_occur_and_be_canonical(self) -> None:
-        with pytest.raises(ValidationError, match="occur"):
-            VariableEliminationRequest(
-                factors=(_factor((0,), ("1", "1")),),
-                domain_sizes=(2, 2, 2),
+        with pytest.raises(ValueError, match="occur"):
+            variable_elimination(
+                (_factor((0,), ("1", "1")),),
+                (2, 2, 2),
                 elimination_order=(0,),
                 query_variables=(1,),
             )
@@ -180,13 +175,20 @@ class TestVariableElimination:
             table=("1",) * 256,
         )
 
-        with pytest.raises(ValidationError, match="size bound"):
-            VariableEliminationRequest(
-                factors=(left, right),
-                domain_sizes=domain_sizes,
+        with pytest.raises(ValueError, match="size bound"):
+            variable_elimination(
+                (left, right),
+                domain_sizes,
                 elimination_order=(),
                 query_variables=tuple(range(16)),
             )
+
+    def test_variable_elimination_remains_native_only(self) -> None:
+        from jacobian.math.graphical_models._tools import TOOLS
+
+        assert "graphical_model.variable_elimination.compute" not in {
+            tool.operation_id for tool in TOOLS
+        }
 
 
 class TestDSeparation:

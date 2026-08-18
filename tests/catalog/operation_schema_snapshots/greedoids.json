@@ -1,0 +1,26 @@
+{
+  "catalog_version": "1",
+  "domain": "greedoids",
+  "operations": {
+    "greedoid.bases.compute": {
+      "input_schema": "sha256:ef4ac5fc46a744bc631b526fdaaa0ff220ca60af2a8a4aab2ce2437a0aa64f96",
+      "output_schema": "sha256:96f8cb5cfd8b5e2f6a21a3ce00a22227c2ebc112bf9381f92540ce4f375f59b3"
+    },
+    "greedoid.basic_word.profile.compute": {
+      "input_schema": "sha256:3f92ef99a259b4437e2f35c6db8fe4e861c99c171d7ed4b4a67dfaa1a36d040f",
+      "output_schema": "sha256:1a9f13716931d7aa916b08336cb6bb113372d941ddab4d4c1fc336c36f9a5844"
+    },
+    "greedoid.convex_geometry.compute": {
+      "input_schema": "sha256:c9676bda00f097b2b19293540524ec5f475e807584385015a47a1da66e895f9a",
+      "output_schema": "sha256:181dda71ee2d05306bc95c93446ac468d10d09efdde28e670f24dc79b984d7d9"
+    },
+    "greedoid.rank.compute": {
+      "input_schema": "sha256:7d27d89cdf323becd0da09348424c4d2de95b438dbd5a606c684af66b0328a67",
+      "output_schema": "sha256:4006dbdb918671630e357e5458fafa41eb0c095146789f356bdafb0682e00886"
+    },
+    "greedoid.recognize.compute": {
+      "input_schema": "sha256:44e5e6d140dc7ec4e7dd0ed9764b662a364f99635687c9f0cfa057819c2c60c1",
+      "output_schema": "sha256:b72c9041a74d4c8c4f5bf8d390e228251288b868656e07394926524b87a95248"
+    }
+  }
+}

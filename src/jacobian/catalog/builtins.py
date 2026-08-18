@@ -120,6 +120,8 @@ from jacobian.math.graphical_models._admission import (
 from jacobian.math.graphical_models._tools import (
     TOOLS as GRAPHICAL_MODEL_TOOLS,
 )
+from jacobian.math.greedoids._admission import ADMISSIONS as GREEDOIDS_ADMISSIONS
+from jacobian.math.greedoids._tools import TOOLS as GREEDOIDS_TOOLS
 from jacobian.math.graphs._admission import ADMISSIONS as GRAPHS_ADMISSIONS
 from jacobian.math.graphs._tools import TOOLS as GRAPHS_TOOLS
 from jacobian.math.graphs.coloring._admission import (
@@ -292,6 +294,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *DIOPHANTINE_APPROXIMATION_TOOLS,
     *COMBINATORICS_TOOLS,
     *FINITE_SETS_TOOLS,
+    *GREEDOIDS_TOOLS,
     *FINITE_FIELDS_TOOLS,
     *LOGIC_TOOLS,
     *SEQUENCES_TOOLS,
@@ -368,6 +371,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *FINITE_GAME_THEORY_ADMISSIONS,
     *FINITE_METRIC_SPACES_ADMISSIONS,
     *FINITE_SETS_ADMISSIONS,
+    *GREEDOIDS_ADMISSIONS,
     *FINITE_STATE_TRANSDUCERS_ADMISSIONS,
     *FINITE_TOPOLOGY_ADMISSIONS,
     *FORMAL_POWER_SERIES_ADMISSIONS,

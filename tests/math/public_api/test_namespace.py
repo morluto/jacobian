@@ -27,6 +27,7 @@ ROOT_MATH_DOMAINS = (
     "finite_state_transducers",
     "finite_topology",
     "formal_power_series",
+    "greedoids",
     "graphical_models",
     "graphs",
     "impartial_games",

@@ -33,9 +33,6 @@ from jacobian.math.finite_game_theory._tools import TOOLS as FINITE_GAME_THEORY_
 from jacobian.math.finite_metric_spaces._tools import (
     TOOLS as FINITE_METRIC_SPACES_TOOLS,
 )
-from jacobian.math.petri_nets._tools import (
-    TOOLS as PETRI_NET_TOOLS,
-)
 from jacobian.math.finite_sets._tools import TOOLS as FINITE_SETS_TOOLS
 from jacobian.math.formal_power_series._tools import TOOLS as FORMAL_POWER_SERIES_TOOLS
 from jacobian.math.geometry._tools import TOOLS as GEOMETRY_TOOLS
@@ -71,6 +68,7 @@ from jacobian.math.numerical_semigroups._tools import (
     TOOLS as NUMERICAL_SEMIGROUPS_TOOLS,
 )
 from jacobian.math.optimization._tools import TOOLS as OPTIMIZATION_TOOLS
+from jacobian.math.petri_nets._tools import TOOLS as PETRI_NET_TOOLS
 from jacobian.math.polynomials._tools import TOOLS as POLYNOMIAL_TOOLS
 from jacobian.math.polynomials.maps._tools import TOOLS as POLYNOMIAL_MAPS_TOOLS
 from jacobian.math.polynomials.multivariate._tools import (

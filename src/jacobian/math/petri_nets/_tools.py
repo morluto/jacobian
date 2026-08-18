@@ -141,9 +141,9 @@ PETRI_NET_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "petri_net.reachability_graph.compute",
         "Compute the bounded reachability graph of a Petri net",
-        "Return the bounded reachability graph from an initial marking via "
-        "BFS, including all reachable markings and firing edges. The graph "
-        "is truncated at max_states to bound the state space.",
+        "Return an exact BFS reachability graph when exploration closes within "
+        "max_states. If the bound is exhausted, return TRUNCATED with every "
+        "enabled omitted firing in an explicit replayable frontier.",
         ReachabilityRequest,
         ReachabilityResult,
         compute_reachability,

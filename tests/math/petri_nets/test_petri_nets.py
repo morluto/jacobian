@@ -8,6 +8,7 @@ from jacobian.math.petri_nets._models import (
     FireTransitionRequest,
     IncidenceMatrixRequest,
     ReachabilityRequest,
+    ReachabilityResult,
 )
 from jacobian.math.petri_nets._operations import (
     compute_enabled_transitions,
@@ -51,19 +52,25 @@ class TestEnabledTransitions:
     def test_simple_enabled(self):
         net = _simple_net()
         marking = Marking(tokens=(2, 0))
-        result = compute_enabled_transitions(EnabledTransitionsRequest(net=net, marking=marking))
+        result = compute_enabled_transitions(
+            EnabledTransitionsRequest(net=net, marking=marking)
+        )
         assert result.transitions == (0,)
 
     def test_none_enabled(self):
         net = _simple_net()
         marking = Marking(tokens=(0, 0))
-        result = compute_enabled_transitions(EnabledTransitionsRequest(net=net, marking=marking))
+        result = compute_enabled_transitions(
+            EnabledTransitionsRequest(net=net, marking=marking)
+        )
         assert result.transitions == ()
 
     def test_both_enabled(self):
         net = _token_passing_net()
         marking = Marking(tokens=(1, 1))
-        result = compute_enabled_transitions(EnabledTransitionsRequest(net=net, marking=marking))
+        result = compute_enabled_transitions(
+            EnabledTransitionsRequest(net=net, marking=marking)
+        )
         assert result.transitions == (0, 1)
 
 
@@ -132,7 +139,8 @@ class TestReachability:
         )
         # From (2,0): fire t0 -> (1,0), fire t0 again -> (0,0)
         assert (2, 0) in result.states
-        assert not result.truncated
+        assert result.status == "COMPLETE"
+        assert result.frontier == ()
 
     def test_cyclic_reachability(self):
         net = _token_passing_net()
@@ -144,7 +152,8 @@ class TestReachability:
         assert len(result.states) == 2
         assert (1, 0) in result.states
         assert (0, 1) in result.states
-        assert not result.truncated
+        assert result.status == "COMPLETE"
+        assert result.frontier == ()
 
     def test_truncation(self):
         net = _token_passing_net()
@@ -152,7 +161,75 @@ class TestReachability:
         result = compute_reachability(
             ReachabilityRequest(net=net, initial_marking=marking, max_states=1)
         )
-        assert result.truncated
+        assert result.status == "TRUNCATED"
+        assert result.states == ((1, 0),)
+        assert tuple(
+            (record.source_state, record.transition, record.target_marking)
+            for record in result.frontier
+        ) == ((0, 0, (0, 1)),)
+
+    def test_exact_state_limit_is_complete(self):
+        result = compute_reachability(
+            ReachabilityRequest(
+                net=_token_passing_net(),
+                initial_marking=Marking(tokens=(1, 0)),
+                max_states=2,
+            )
+        )
+        assert result.status == "COMPLETE"
+        assert result.frontier == ()
+
+    def test_max_states_one_self_loop_is_complete(self):
+        net = PetriNet(
+            place_count=1,
+            transition_count=1,
+            pre=((1,),),
+            post=((1,),),
+        )
+        result = compute_reachability(
+            ReachabilityRequest(
+                net=net,
+                initial_marking=Marking(tokens=(1,)),
+                max_states=1,
+            )
+        )
+        assert result.status == "COMPLETE"
+        assert result.states == ((1,),)
+        assert result.edges == ((0, 0, 0),)
+        assert result.frontier == ()
+
+    def test_unbounded_net_exposes_replayable_frontier(self):
+        net = PetriNet(
+            place_count=1,
+            transition_count=1,
+            pre=((0,),),
+            post=((1,),),
+        )
+        result = compute_reachability(
+            ReachabilityRequest(
+                net=net,
+                initial_marking=Marking(tokens=(0,)),
+                max_states=3,
+            )
+        )
+        assert result.status == "TRUNCATED"
+        assert result.states == ((0,), (1,), (2,))
+        assert result.edges == ((0, 0, 1), (1, 0, 2))
+        assert len(result.frontier) == 1
+        assert result.frontier[0].target_marking == (3,)
+
+    def test_result_rejects_false_complete_status(self):
+        result = compute_reachability(
+            ReachabilityRequest(
+                net=_token_passing_net(),
+                initial_marking=Marking(tokens=(1, 0)),
+                max_states=1,
+            )
+        )
+        payload = result.model_dump(mode="json")
+        payload["status"] = "COMPLETE"
+        with pytest.raises(ValidationError, match="open frontier"):
+            ReachabilityResult.model_validate(payload)
 
 
 # ---------------------------------------------------------------------------

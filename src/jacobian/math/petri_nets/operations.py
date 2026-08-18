@@ -29,7 +29,9 @@ def enabled_transitions(net: PetriNet, marking: Marking) -> list[int]:
 
 
 def fire_transition(
-    net: PetriNet, marking: Marking, transition: int,
+    net: PetriNet,
+    marking: Marking,
+    transition: int,
 ) -> tuple[bool, tuple[int, ...]]:
     """Fire a transition. Returns (success, new_marking)."""
     for p in range(net.place_count):
@@ -45,10 +47,7 @@ def fire_transition(
 def compute_incidence_matrix(net: PetriNet) -> tuple[tuple[int, ...], ...]:
     """Compute C = Post - Pre."""
     return tuple(
-        tuple(
-            net.post[p][t] - net.pre[p][t]
-            for t in range(net.transition_count)
-        )
+        tuple(net.post[p][t] - net.pre[p][t] for t in range(net.transition_count))
         for p in range(net.place_count)
     )
 
@@ -57,18 +56,24 @@ def reachability_graph(
     net: PetriNet,
     initial_marking: Marking,
     max_states: int = 10000,
-) -> tuple[list[tuple[int, ...]], list[tuple[int, int, int]], bool]:
+) -> tuple[
+    list[tuple[int, ...]],
+    list[tuple[int, int, int]],
+    list[tuple[int, int, tuple[int, ...]]],
+]:
     """Compute the bounded reachability graph via BFS.
 
-    Returns (states, edges, truncated).
+    Returns (states, edges, frontier).
     Each edge is (source_index, transition, target_index).
+    Each frontier record is an enabled firing whose target could not be
+    admitted because ``max_states`` was exhausted.
     """
     initial = tuple(initial_marking.tokens)
     state_list: list[tuple[int, ...]] = [initial]
     state_index: dict[tuple[int, ...], int] = {initial: 0}
     edges: list[tuple[int, int, int]] = []
+    frontier: list[tuple[int, int, tuple[int, ...]]] = []
     queue: deque[int] = deque([0])
-    truncated = False
     while queue:
         idx = queue.popleft()
         marking = Marking(tokens=state_list[idx])
@@ -79,10 +84,10 @@ def reachability_graph(
                 continue
             if new_tokens not in state_index:
                 if len(state_list) >= max_states:
-                    truncated = True
+                    frontier.append((idx, t, new_tokens))
                     continue
                 state_index[new_tokens] = len(state_list)
                 state_list.append(new_tokens)
                 queue.append(len(state_list) - 1)
             edges.append((idx, t, state_index[new_tokens]))
-    return (state_list, edges, truncated)
+    return (state_list, edges, frontier)

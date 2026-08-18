@@ -9,6 +9,7 @@ from jacobian.math.petri_nets._models import (
     FireTransitionResult,
     IncidenceMatrixRequest,
     IncidenceMatrixResult,
+    ReachabilityFrontier,
     ReachabilityRequest,
     ReachabilityResult,
 )
@@ -43,17 +44,26 @@ def compute_fire_transition(request: FireTransitionRequest) -> FireTransitionRes
 
 
 def compute_incidence(request: IncidenceMatrixRequest) -> IncidenceMatrixResult:
-    return IncidenceMatrixResult(
-        incidence=compute_incidence_matrix(request.net)
-    )
+    return IncidenceMatrixResult(incidence=compute_incidence_matrix(request.net))
 
 
 def compute_reachability(request: ReachabilityRequest) -> ReachabilityResult:
-    states, edges, truncated = reachability_graph(
+    states, edges, frontier = reachability_graph(
         request.net, request.initial_marking, request.max_states
     )
     return ReachabilityResult(
+        net=request.net,
+        initial_marking=request.initial_marking.tokens,
+        max_states=request.max_states,
         states=tuple(states),
         edges=tuple(edges),
-        truncated=truncated,
+        status="TRUNCATED" if frontier else "COMPLETE",
+        frontier=tuple(
+            ReachabilityFrontier(
+                source_state=source,
+                transition=transition,
+                target_marking=target,
+            )
+            for source, transition, target in frontier
+        ),
     )

@@ -44,6 +44,12 @@ from jacobian.math.boolean_analysis._admission import (
     ADMISSIONS as BOOLEAN_ANALYSIS_ADMISSIONS,
 )
 from jacobian.math.boolean_analysis._tools import TOOLS as BOOLEAN_ANALYSIS_TOOLS
+from jacobian.math.chip_firing._admission import (
+    ADMISSIONS as CHIP_FIRING_ADMISSIONS,
+)
+from jacobian.math.chip_firing._tools import (
+    TOOLS as CHIP_FIRING_TOOLS,
+)
 from jacobian.math.code_theory._admission import ADMISSIONS as CODE_THEORY_ADMISSIONS
 from jacobian.math.code_theory._tools import TOOLS as CODE_THEORY_TOOLS
 from jacobian.math.combinatorics._admission import (
@@ -274,6 +280,7 @@ from jacobian.math.words._admission import ADMISSIONS as WORDS_ADMISSIONS
 from jacobian.math.words._tools import TOOLS as WORDS_TOOLS
 
 _BUILTIN_CANDIDATES: MathTools = (
+    *CHIP_FIRING_TOOLS,
     *BOOLEAN_TOOLS,
     *GROUP_TOOLS,
     *GRAPH_COLORING_OPS_TOOLS,
@@ -359,6 +366,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *BOOLEAN_ADMISSIONS,
     *BOOLEAN_ANALYSIS_ADMISSIONS,
     *CODE_THEORY_ADMISSIONS,
+    *CHIP_FIRING_ADMISSIONS,
     *COMBINATORICS_ADMISSIONS,
     *CONVEX_ANALYSIS_ADMISSIONS,
     *DIOPHANTINE_APPROXIMATION_ADMISSIONS,

@@ -1,0 +1,14 @@
+{
+  "catalog_version": "1",
+  "domain": "chip_firing",
+  "operations": {
+    "graph.chip_firing.fire_vertex.compute": {
+      "input_schema": "sha256:1da7e6798a8922102aa557c1200e833b286d79b38644d27cbafe14badd086a81",
+      "output_schema": "sha256:5b6cd6a21cecafb4812765d8c6f285ad19f3cc046c404ef4e3f4e15176d6cfc2"
+    },
+    "graph.chip_firing.laplacian.compute": {
+      "input_schema": "sha256:1d7238ecd16eac5019c3c7114e8cd1733f305c6378a1fdb430cf1501f6b88f4a",
+      "output_schema": "sha256:fc6baedeacc15d252345ce179826a4fb1209f632e07c835f60198560382768d5"
+    }
+  }
+}

@@ -50,7 +50,7 @@ def symbolic_matrix_operation[
 SYMBOLIC_MATRIX_OPERATIONS = (
     symbolic_matrix_operation(
         "matrix.symbolic.determinant.compute",
-        "Compute an exact symbolic matrix determinant over QQ(t_1, ..., t_n)",
+        "Compute an exact symbolic matrix determinant (det) over QQ(t_1, ..., t_n)",
         "Compute the determinant of a square matrix whose entries are rational functions in declared algebraically independent variables, using SymPy's exact fraction-free Bareiss algorithm.",
         SymbolicMatrixRequest,
         SymbolicDeterminantResult,

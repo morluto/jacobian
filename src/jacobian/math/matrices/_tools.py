@@ -79,7 +79,7 @@ def matrix_operation[
 
 MATRIX_DETERMINANT_COMPUTE = matrix_operation(
     "matrix.determinant.compute",
-    "Compute an exact rational matrix determinant",
+    "Compute an exact rational matrix determinant (det)",
     "Compute the determinant of one square matrix over QQ through order 64 with SymPy's exact Bareiss algorithm.",
     MatrixDeterminantRequest,
     MatrixDeterminantResult,

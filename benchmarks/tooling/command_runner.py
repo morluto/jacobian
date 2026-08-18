@@ -235,7 +235,7 @@ def _read_stream(
     sink_name: str,
     sink_failure: queue.Queue[tuple[str, str]],
 ) -> None:
-    read = getattr(stream, "read1", None) or stream.read  # type: ignore[attr-defined]
+    read = getattr(stream, "read1", None) or stream.read
     while True:
         block = read(65_536)
         if not block:
@@ -585,7 +585,7 @@ class ToolInteractiveCommand:
     def start(self) -> None:
         """Launch the child and start background reader threads."""
         try:
-            self._process = subprocess.Popen(  # type: ignore[arg-type]
+            self._process = subprocess.Popen(
                 [self._request.executable, *self._request.arguments],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,

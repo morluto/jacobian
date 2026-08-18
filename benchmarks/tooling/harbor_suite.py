@@ -1153,6 +1153,7 @@ def report_ok(message: str) -> None:
 
 
 __all__ = [
+    "HarborSuiteError",
     "Suite",
     "TaskRef",
     "check_selected_tasks",

@@ -428,7 +428,9 @@ def test_trial_status_missing_status_fails_closed() -> None:
 def test_trial_status_non_string_status_fails_closed() -> None:
     """Non-string status values must be treated as ERROR, not COMPLETED."""
     for bad in (0, 1, True, False, [], {}):
-        assert _trial_status({"status": bad}, None) == "ERROR", f"{bad!r} should be ERROR"
+        assert _trial_status({"status": bad}, None) == "ERROR", (
+            f"{bad!r} should be ERROR"
+        )
 
 
 def test_observation_failures_require_authoritative_completion_counts() -> None:

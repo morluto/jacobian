@@ -469,7 +469,8 @@ def validate_all() -> list[str]:
     math_suite = get_suite("jacobian/mathematical-benchmarks-v1")
     failures.extend(
         _validate_job(
-            BENCHMARKS / "config" / "mathematical-benchmarks-v1-control.json", math_suite
+            BENCHMARKS / "config" / "mathematical-benchmarks-v1-control.json",
+            math_suite,
         )
     )
     failures.extend(

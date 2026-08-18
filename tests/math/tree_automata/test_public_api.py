@@ -7,7 +7,13 @@ from jacobian.math import tree_automata
 
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the tree_automata public API."""
-    expected = ("BottomUpTreeAutomaton", "RankedTree", "TreeAutomatonTransition", "accepted_tree_count", "run_tree_automaton",)
+    expected = (
+        "BottomUpTreeAutomaton",
+        "RankedTree",
+        "TreeAutomatonTransition",
+        "accepted_tree_count",
+        "run_tree_automaton",
+    )
     assert tuple(tree_automata.__all__) == expected
     assert len(tree_automata.__all__) == len(set(tree_automata.__all__))
     assert all(not name.startswith("_") for name in tree_automata.__all__)

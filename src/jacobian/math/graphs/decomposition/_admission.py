@@ -9,7 +9,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "graph.decomposition.biconnected_components.compute",
         AdmissionDecision.NATIVE_ONLY,
         "useful projection of the retained block-cut-tree decomposition",
-        native_symbol='jacobian.math.graphs.biconnected_components',
+        native_symbol="jacobian.math.graphs.biconnected_components",
     ),
     OperationAdmission(
         "graph.decomposition.block_cut_tree.compute",

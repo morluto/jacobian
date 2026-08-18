@@ -9,7 +9,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "metric_space.ball.compute",
         AdmissionDecision.NATIVE_ONLY,
         "direct row filter on a caller-supplied finite distance matrix",
-        native_symbol='jacobian.math.finite_metric_spaces.ball',
+        native_symbol="jacobian.math.finite_metric_spaces.ball",
     ),
     OperationAdmission(
         "metric_space.gromov_hyperbolicity.compute",

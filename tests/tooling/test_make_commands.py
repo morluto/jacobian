@@ -12,7 +12,6 @@ def _pull_request_trigger(workflow_path: str) -> str:
     return workflow.split("  pull_request:", 1)[1].split("  merge_group:", 1)[0]
 
 
-
 def test_exhaustive_local_reproduction_includes_exhaustive_marker_lane() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     all_ci = makefile.split(
@@ -24,7 +23,6 @@ def test_exhaustive_local_reproduction_includes_exhaustive_marker_lane() -> None
     assert "$(MAKE) _test-exhaustive" in all_ci
     assert "$(VALIDATION_LOCK) run --target test-full" in all_ci
     assert all_ci.index("$(MAKE) test-math") < all_ci.index("$(MAKE) _test-exhaustive")
-
 
 
 def test_focused_math_lane_skips_validation_lock() -> None:
@@ -44,7 +42,6 @@ def test_focused_math_lane_skips_validation_lock() -> None:
     assert "_harbor-oracle-all: _harbor-check-all" in harbor
 
 
-
 def test_lanes_use_their_declared_worker_and_fixture_affinity() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     math = makefile.split("test-math:", 1)[1].split("test-catalog:", 1)[0]
@@ -54,7 +51,6 @@ def test_lanes_use_their_declared_worker_and_fixture_affinity() -> None:
     assert "pytest -n 4 --dist worksteal" in math
     assert "pytest -n 2 --dist worksteal" in catalog
     assert "pytest -n 2 --dist worksteal" in integration
-
 
 
 def test_paths_file_stays_on_harbor_planning() -> None:
@@ -71,6 +67,3 @@ def test_paths_file_stays_on_harbor_planning() -> None:
     assert "validate-benchmark-plan" not in harbor
     assert "emit-plan-receipt" not in harbor
     assert "PATHS_FILE" not in workflow
-
-
-

@@ -14,7 +14,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "integer.compute.absolute_value",
         AdmissionDecision.NATIVE_ONLY,
         "useful deterministic helper retained through the supported native API",
-        native_symbol='jacobian.math.arithmetic.absolute_value',
+        native_symbol="jacobian.math.arithmetic.absolute_value",
     ),
     OperationAdmission(
         "integer.compute.decimal_digit_count",
@@ -35,7 +35,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "integer.compute.sign",
         AdmissionDecision.NATIVE_ONLY,
         "useful deterministic helper retained through the supported native API",
-        native_symbol='jacobian.math.arithmetic.sign',
+        native_symbol="jacobian.math.arithmetic.sign",
     ),
     OperationAdmission(
         "integer.transform.base_digits",
@@ -91,19 +91,19 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "rational.compute.quotient",
         AdmissionDecision.NATIVE_ONLY,
         "useful deterministic helper retained through the supported native API",
-        native_symbol='jacobian.math.arithmetic.quotient',
+        native_symbol="jacobian.math.arithmetic.quotient",
     ),
     OperationAdmission(
         "rational.compute.reciprocal",
         AdmissionDecision.NATIVE_ONLY,
         "useful deterministic helper retained through the supported native API",
-        native_symbol='jacobian.math.arithmetic.reciprocal',
+        native_symbol="jacobian.math.arithmetic.reciprocal",
     ),
     OperationAdmission(
         "rational.compute.sum",
         AdmissionDecision.NATIVE_ONLY,
         "useful deterministic helper retained through the supported native API",
-        native_symbol='jacobian.math.arithmetic.sum_rationals',
+        native_symbol="jacobian.math.arithmetic.sum_rationals",
     ),
     OperationAdmission(
         "rational.decide.equal",

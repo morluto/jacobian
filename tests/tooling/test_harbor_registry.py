@@ -146,7 +146,9 @@ def test_suite_rejects_task_path_outside_tasks_root(
         load_registry(reg)
 
 
-def test_suite_rejects_symlinked_task_path(tmp_path: Path, synthetic_harbor_root: Path) -> None:
+def test_suite_rejects_symlinked_task_path(
+    tmp_path: Path, synthetic_harbor_root: Path
+) -> None:
     ds_path = tmp_path / "test-v1"
     _make_canonical_task(tmp_path)
     (ds_path / "jobs").mkdir(parents=True)
@@ -164,7 +166,9 @@ def test_suite_rejects_symlinked_task_path(tmp_path: Path, synthetic_harbor_root
         load_registry(reg)
 
 
-def test_suite_rejects_noncanonical_task_id(tmp_path: Path, synthetic_harbor_root: Path) -> None:
+def test_suite_rejects_noncanonical_task_id(
+    tmp_path: Path, synthetic_harbor_root: Path
+) -> None:
     ds_path = tmp_path / "test-v1"
     ds_path.mkdir()
     (ds_path / "jobs").mkdir()

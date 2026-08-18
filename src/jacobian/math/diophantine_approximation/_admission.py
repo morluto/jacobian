@@ -14,7 +14,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "diophantine.convergents.compute",
         AdmissionDecision.NATIVE_ONLY,
         "useful deterministic projection of the retained continued-fraction result",
-        native_symbol='jacobian.math.diophantine_approximation.convergents',
+        native_symbol="jacobian.math.diophantine_approximation.convergents",
     ),
     OperationAdmission(
         "diophantine.pell_equation.solve",

@@ -78,8 +78,6 @@ _SKILL_ENTRY = re.compile(
 )
 
 
-
-
 def _sha256_bytes(value: bytes) -> str:
     return f"sha256:{hashlib.sha256(value).hexdigest()}"
 

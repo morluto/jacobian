@@ -24,6 +24,6 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "graph.directed.scc.compute",
         AdmissionDecision.NATIVE_ONLY,
         "useful projection of the retained condensation DAG construction",
-        native_symbol='jacobian.math.graphs.strongly_connected_components',
+        native_symbol="jacobian.math.graphs.strongly_connected_components",
     ),
 )

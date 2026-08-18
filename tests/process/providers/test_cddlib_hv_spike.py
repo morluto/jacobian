@@ -25,8 +25,9 @@ BASE_PIN = json.loads(
 EXPECTED_MATHEMATICAL = _expected_mathematical(BASE_PIN)
 
 
-
 RUN_SPIKE = run_spike
+
+
 def _provider_output(
     mathematical: dict[str, Any] | None = None,
     *,

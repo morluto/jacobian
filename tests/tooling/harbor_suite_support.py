@@ -49,9 +49,7 @@ def patch_harbor_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     return tmp_path
 
 
-def patch_harbor_root_with_git(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> Path:
+def patch_harbor_root_with_git(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """Like ``patch_harbor_root`` but also initializes a real Git repository.
 
     Only tests that exercise ``git check-ignore`` semantics should use this

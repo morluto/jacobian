@@ -49,7 +49,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "graph.invariant.diameter.compute",
         AdmissionDecision.NATIVE_ONLY,
         "useful deterministic helper retained through the supported native API",
-        native_symbol='jacobian.math.graphs.diameter',
+        native_symbol="jacobian.math.graphs.diameter",
     ),
     OperationAdmission(
         "graph.invariant.edge_connectivity.compute",
@@ -70,7 +70,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "graph.invariant.is_eulerian.compute",
         AdmissionDecision.NATIVE_ONLY,
         "useful deterministic helper retained through the supported native API",
-        native_symbol='jacobian.math.graphs.is_eulerian',
+        native_symbol="jacobian.math.graphs.is_eulerian",
     ),
     OperationAdmission(
         "graph.invariant.maximum_matching.compute",
@@ -81,7 +81,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "graph.invariant.radius.compute",
         AdmissionDecision.NATIVE_ONLY,
         "cheap projection of the retained all-pairs distance matrix",
-        native_symbol='jacobian.math.graphs.radius',
+        native_symbol="jacobian.math.graphs.radius",
     ),
     OperationAdmission(
         "graph.invariant.spanning_tree_count.compute",
@@ -92,7 +92,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "graph.invariant.triangle_count.compute",
         AdmissionDecision.NATIVE_ONLY,
         "useful deterministic helper retained through the supported native API",
-        native_symbol='jacobian.math.graphs.triangle_count',
+        native_symbol="jacobian.math.graphs.triangle_count",
     ),
     OperationAdmission(
         "graph.invariant.vertex_connectivity.compute",

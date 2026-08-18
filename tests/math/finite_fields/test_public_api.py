@@ -257,7 +257,40 @@ def test_slice_a_rejects_wrong_presentation_and_axis() -> None:
 
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the finite_fields public API."""
-    expected = ("Axis", "AxisBoundMatrix", "CollisionResult", "DirectionRankLedger", "FiberPartition", "FiniteDimensionalSubspace", "FiniteFieldElement", "FiniteFieldPresentation", "FiniteLinearMap", "FiniteMapTable", "FinitePolynomial", "FinitePolynomialMap", "OrbitDistribution", "PermutationResult", "ProjectiveLine", "ProjectivePoint", "RankResult", "analyze_collisions", "analyze_permutation", "direction_rank_ledger", "element", "evaluate_finite_polynomial", "fiber_partition", "finite_field", "finite_map_table", "finite_polynomial", "finite_polynomial_map", "linear_map_rank", "orbit_distribution", "projective_line", "projective_point", "restrict_scalars",)
+    expected = (
+        "Axis",
+        "AxisBoundMatrix",
+        "CollisionResult",
+        "DirectionRankLedger",
+        "FiberPartition",
+        "FiniteDimensionalSubspace",
+        "FiniteFieldElement",
+        "FiniteFieldPresentation",
+        "FiniteLinearMap",
+        "FiniteMapTable",
+        "FinitePolynomial",
+        "FinitePolynomialMap",
+        "OrbitDistribution",
+        "PermutationResult",
+        "ProjectiveLine",
+        "ProjectivePoint",
+        "RankResult",
+        "analyze_collisions",
+        "analyze_permutation",
+        "direction_rank_ledger",
+        "element",
+        "evaluate_finite_polynomial",
+        "fiber_partition",
+        "finite_field",
+        "finite_map_table",
+        "finite_polynomial",
+        "finite_polynomial_map",
+        "linear_map_rank",
+        "orbit_distribution",
+        "projective_line",
+        "projective_point",
+        "restrict_scalars",
+    )
     assert tuple(finite_fields.__all__) == expected
     assert len(finite_fields.__all__) == len(set(finite_fields.__all__))
     assert all(not name.startswith("_") for name in finite_fields.__all__)

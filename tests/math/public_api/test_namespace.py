@@ -59,9 +59,9 @@ def test_no_private_names_in_any_public_all() -> None:
     for domain in math.__all__:
         module = importlib.import_module(f"jacobian.math.{domain}")
         assert hasattr(module, "__all__"), f"{domain} has no __all__"
-        assert all(
-            not name.startswith("_") for name in module.__all__
-        ), f"{domain} exports a private name"
+        assert all(not name.startswith("_") for name in module.__all__), (
+            f"{domain} exports a private name"
+        )
 
 
 def test_no_duplicate_root_exports() -> None:
@@ -81,7 +81,9 @@ def test_public_functions_have_one_canonical_module() -> None:
         for name in module.__all__:
             value = getattr(module, name)
             if callable(value) and not isinstance(value, type(importlib)):
-                function_locations.setdefault(value, []).append(f"jacobian.math.{domain}.{name}")
+                function_locations.setdefault(value, []).append(
+                    f"jacobian.math.{domain}.{name}"
+                )
     assert all(len(locations) == 1 for locations in function_locations.values())
 
 

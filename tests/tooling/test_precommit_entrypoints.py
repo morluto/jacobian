@@ -21,7 +21,6 @@ def _pull_request_trigger(workflow_path: str) -> str:
     return workflow.split("  pull_request:", 1)[1].split("  merge_group:", 1)[0]
 
 
-
 def test_local_hook_commands_have_parseable_entrypoints_and_arguments(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -72,6 +71,3 @@ def test_local_hook_commands_have_parseable_entrypoints_and_arguments(
         )
         with pytest.raises(ArgumentsParsedError):
             main()
-
-
-

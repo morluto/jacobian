@@ -15,7 +15,9 @@ MAX_LENGTH = 16
 class BinaryCodeRequest(StrictModel):
     """A binary code as a list of distinct codewords."""
 
-    codewords: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=MAX_CODEWORDS)
+    codewords: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_CODEWORDS
+    )
 
     @model_validator(mode="after")
     def require_valid_codewords(self) -> Self:

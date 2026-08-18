@@ -12,14 +12,12 @@ def _pull_request_trigger(workflow_path: str) -> str:
     return workflow.split("  pull_request:", 1)[1].split("  merge_group:", 1)[0]
 
 
-
 def test_benchmark_labels_replan_without_generic_pr_edit_restarts() -> None:
     pull_request_trigger = _pull_request_trigger(".github/workflows/benchmarks.yml")
 
     assert "edited" not in pull_request_trigger
     assert "labeled" in pull_request_trigger
     assert "unlabeled" in pull_request_trigger
-
 
 
 def test_benchmark_workflow_has_distinct_pr_merge_and_full_portfolio_tiers() -> None:
@@ -35,7 +33,6 @@ def test_benchmark_workflow_has_distinct_pr_merge_and_full_portfolio_tiers() -> 
     assert "ci:benchmark-full" in workflow
 
 
-
 def test_oracle_workers_do_not_repeat_benchmark_contract_suite() -> None:
     workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
     oracle = workflow.split("  oracle:", 1)[1].split("  validation:", 1)[0]
@@ -45,14 +42,12 @@ def test_oracle_workers_do_not_repeat_benchmark_contract_suite() -> None:
     assert "make harbor-oracle DATASET" not in oracle
 
 
-
 def test_oracle_artifact_preserves_augmented_task_digest_manifest() -> None:
     workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
     oracle = workflow.split("  oracle:", 1)[1].split("  validation:", 1)[0]
 
     assert "jacobian-augmented-task-digests.*.json" in oracle
     assert ".jacobian-augmented-task-digests.*.json" not in oracle
-
 
 
 def test_benchmark_contracts_run_once_for_record_and_digest_evidence() -> None:
@@ -72,7 +67,6 @@ def test_benchmark_contracts_run_once_for_record_and_digest_evidence() -> None:
     assert "name: benchmark-plan" in workflow
 
 
-
 def test_benchmark_stable_gate_validates_provenance_receipts_in_python() -> None:
     workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
     validation = workflow.split("  validation:", 1)[1].split("  timings:", 1)[0]
@@ -87,14 +81,12 @@ def test_benchmark_stable_gate_validates_provenance_receipts_in_python() -> None
     assert "check_lane()" not in validation
 
 
-
 def test_benchmark_plan_is_shown_as_json_in_the_job_summary() -> None:
     workflow = (ROOT / ".github/workflows/benchmarks.yml").read_text(encoding="utf-8")
 
     assert "echo '```json'" in workflow
     assert 'cat "$plan_dir/plan.json"' in workflow
     assert "Plan receipt:" not in workflow
-
 
 
 def test_benchmark_job_outputs_are_only_if_projections() -> None:
@@ -116,7 +108,6 @@ def test_benchmark_job_outputs_are_only_if_projections() -> None:
     assert "PROSPECTIVE_DIGEST_FLAG" not in workflow
 
 
-
 def test_ci_does_not_schedule_deleted_checker_worker_coverage() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
@@ -124,7 +115,6 @@ def test_ci_does_not_schedule_deleted_checker_worker_coverage() -> None:
     assert "test-checker-subprocess-coverage" not in (ROOT / "Makefile").read_text(
         encoding="utf-8"
     )
-
 
 
 def test_local_oracle_targets_require_explicit_scope() -> None:
@@ -139,7 +129,6 @@ def test_local_oracle_targets_require_explicit_scope() -> None:
     assert "harbor-check-all" not in oracle
 
 
-
 def test_local_oracle_attempts_are_serialized_on_a_shared_docker_host() -> None:
     harbor = (ROOT / "make" / "harbor.mk").read_text(encoding="utf-8")
 
@@ -147,6 +136,3 @@ def test_local_oracle_attempts_are_serialized_on_a_shared_docker_host() -> None:
     assert harbor.count('exec 9>"$(HARBOR_ORACLE_LOCK)"; flock 9;') == 2
     assert "HARBOR_ORACLE_DOCKER_BUILD_MODE ?= auto" in harbor
     assert "export DOCKER_BUILDKIT=0 COMPOSE_BAKE=false" in harbor
-
-
-

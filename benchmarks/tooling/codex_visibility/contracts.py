@@ -118,9 +118,7 @@ class VisibilitySuite(BaseModel):
 
 def load_suite(path: Path) -> VisibilitySuite:
     """Load and fully validate a visibility suite."""
-    return VisibilitySuite.model_validate(
-        json.loads(path.read_text(encoding="utf-8"))
-    )
+    return VisibilitySuite.model_validate(json.loads(path.read_text(encoding="utf-8")))
 
 
 __all__ = [

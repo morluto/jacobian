@@ -17,7 +17,9 @@ def _sha256_bytes(value: bytes) -> str:
 
 def _json_digest(value: object) -> str:
     return _sha256_bytes(
-        json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+        json.dumps(
+            value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode()
     )
 
 

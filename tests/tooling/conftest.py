@@ -20,16 +20,12 @@ from tests.tooling.harbor_suite_support import (
 
 
 @pytest.fixture
-def synthetic_harbor_root(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> Path:
+def synthetic_harbor_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """Redirect harbor_suite.ROOT to tmp_path (no Git, no profiles)."""
     return patch_harbor_root(monkeypatch, tmp_path)
 
 
 @pytest.fixture
-def git_initialized_root(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> Path:
+def git_initialized_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """Redirect harbor_suite.ROOT to tmp_path with a real Git repository."""
     return patch_harbor_root_with_git(monkeypatch, tmp_path)

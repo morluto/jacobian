@@ -23,9 +23,9 @@ BASE_PIN = json.loads(
 )
 
 
-
-
 RUN_SPIKE = run_spike
+
+
 def _provider_output(
     mathematical: dict[str, Any] | None = None,
     *,

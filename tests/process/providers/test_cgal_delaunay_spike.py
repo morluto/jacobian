@@ -24,9 +24,9 @@ BASE_PIN = json.loads(
 )
 
 
-
-
 RUN_SPIKE = run_spike
+
+
 def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
     executable = tmp_path / "cgal-spike"
     adapter = tmp_path / "cgal-spike.cpp"

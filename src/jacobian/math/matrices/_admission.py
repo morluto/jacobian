@@ -9,7 +9,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "matrix.adjugate.compute",
         AdmissionDecision.NATIVE_ONLY,
         "useful deterministic helper retained through the supported native API",
-        native_symbol='jacobian.math.matrices.adjugate',
+        native_symbol="jacobian.math.matrices.adjugate",
     ),
     OperationAdmission(
         "matrix.characteristic_polynomial.compute",
@@ -30,13 +30,13 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "matrix.kronecker_product.compute",
         AdmissionDecision.NATIVE_ONLY,
         "useful deterministic helper retained through the supported native API",
-        native_symbol='jacobian.math.matrices.kronecker_product',
+        native_symbol="jacobian.math.matrices.kronecker_product",
     ),
     OperationAdmission(
         "matrix.multiply.compute",
         AdmissionDecision.NATIVE_ONLY,
         "useful deterministic helper retained through the supported native API",
-        native_symbol='jacobian.math.matrices.multiply',
+        native_symbol="jacobian.math.matrices.multiply",
     ),
     OperationAdmission(
         "matrix.normal_form.rref.compute",
@@ -77,6 +77,6 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "matrix.trace.compute",
         AdmissionDecision.NATIVE_ONLY,
         "useful deterministic helper retained through the supported native API",
-        native_symbol='jacobian.math.matrices.trace',
+        native_symbol="jacobian.math.matrices.trace",
     ),
 )

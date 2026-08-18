@@ -42,7 +42,10 @@ def compute_block_cut_tree(request: BlockCutTreeRequest) -> BlockCutTreeResult:
     each articulation point it contains.
     """
     g = _build_graph(request.graph)
-    blocks = [frozenset(cast(set[int], component)) for component in nx.biconnected_components(g)]
+    blocks = [
+        frozenset(cast(set[int], component))
+        for component in nx.biconnected_components(g)
+    ]
     articulation_points = sorted(nx.articulation_points(g))
 
     tree_edges: list[tuple[int, int]] = []

@@ -82,6 +82,7 @@ def compute_dual_code(request: GeneratorMatrixRequest) -> DualCodeResult:
 
 def compute_macwilliams_transform(request: MacWilliamsRequest) -> MacWilliamsResult:
     from math import comb
+
     q = request.field_order
     primal = list(request.weights)
     n = len(primal) - 1
@@ -92,12 +93,7 @@ def compute_macwilliams_transform(request: MacWilliamsRequest) -> MacWilliamsRes
             for j in range(i + 1):
                 if j > k or i - j > n - j:
                     continue
-                term = (
-                    comb(i, j)
-                    * comb(n - j, k - j)
-                    * (-1) ** j
-                    * (q - 1) ** (i - j)
-                )
+                term = comb(i, j) * comb(n - j, k - j) * (-1) ** j * (q - 1) ** (i - j)
                 s += primal[i] * term
         dual.append(s // request.code_cardinality)
     return MacWilliamsResult(dual_weights=tuple(dual))
@@ -105,7 +101,9 @@ def compute_macwilliams_transform(request: MacWilliamsRequest) -> MacWilliamsRes
 
 def compute_puncture(request: PunctureRequest) -> PunctureResult:
     matrix = [list(row) for row in request.generator_matrix]
-    punctured = [row[: request.coordinate] + row[request.coordinate + 1 :] for row in matrix]
+    punctured = [
+        row[: request.coordinate] + row[request.coordinate + 1 :] for row in matrix
+    ]
     rows, rank = _rref(punctured, request.field_order)
     new_len = len(matrix[0]) - 1
     gen = tuple(tuple(row) for row in rows[:rank]) if rank > 0 else ((0,) * new_len,)

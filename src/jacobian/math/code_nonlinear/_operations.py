@@ -17,10 +17,12 @@ def compute_distance_profile(request: BinaryCodeRequest) -> DistanceProfileResul
     codewords = request.codewords
     if len(codewords) == 1:
         w = sum(codewords[0])
-        return DistanceProfileResult(minimum_distance=w, weight_profile=(w,), method="EXACT_ENUMERATION")
+        return DistanceProfileResult(
+            minimum_distance=w, weight_profile=(w,), method="EXACT_ENUMERATION"
+        )
     min_dist = len(codewords[0]) + 1
     for i, w1 in enumerate(codewords):
-        for w2 in codewords[i + 1:]:
+        for w2 in codewords[i + 1 :]:
             dist = sum(a != b for a, b in zip(w1, w2, strict=True))
             if dist < min_dist:
                 min_dist = dist

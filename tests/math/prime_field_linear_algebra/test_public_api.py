@@ -98,8 +98,20 @@ def test_matrix_rejects_oversized_dimensions_before_primality() -> None:
 
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the prime_field_linear_algebra public API."""
-    expected = ("PrimeFieldMatrix", "column_basis", "nullspace", "quotient_basis", "rank", "rref",)
+    expected = (
+        "PrimeFieldMatrix",
+        "column_basis",
+        "nullspace",
+        "quotient_basis",
+        "rank",
+        "rref",
+    )
     assert tuple(prime_field_linear_algebra.__all__) == expected
-    assert len(prime_field_linear_algebra.__all__) == len(set(prime_field_linear_algebra.__all__))
+    assert len(prime_field_linear_algebra.__all__) == len(
+        set(prime_field_linear_algebra.__all__)
+    )
     assert all(not name.startswith("_") for name in prime_field_linear_algebra.__all__)
-    assert all(hasattr(prime_field_linear_algebra, name) for name in prime_field_linear_algebra.__all__)
+    assert all(
+        hasattr(prime_field_linear_algebra, name)
+        for name in prime_field_linear_algebra.__all__
+    )

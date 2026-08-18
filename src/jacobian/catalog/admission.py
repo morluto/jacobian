@@ -35,7 +35,9 @@ class OperationAdmission:
 REVIEWED_BASE_REVISION = "61589543bbbff546edbc51d34a07887982fa4ad6"
 
 
-def curate_public_tools(candidates: MathTools, admissions: tuple[OperationAdmission, ...]) -> MathTools:
+def curate_public_tools(
+    candidates: MathTools, admissions: tuple[OperationAdmission, ...]
+) -> MathTools:
     """Return only reviewed public operations and fail closed on ledger drift."""
 
     records = {record.operation_id: record for record in admissions}
@@ -59,7 +61,9 @@ def curate_public_tools(candidates: MathTools, admissions: tuple[OperationAdmiss
     )
 
 
-def admission_by_id(admissions: tuple[OperationAdmission, ...]) -> dict[str, OperationAdmission]:
+def admission_by_id(
+    admissions: tuple[OperationAdmission, ...],
+) -> dict[str, OperationAdmission]:
     return {record.operation_id: record for record in admissions}
 
 

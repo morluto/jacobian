@@ -44,8 +44,9 @@ LABELG_OUTPUT = (
 ).encode()
 
 
-
 RUN_SPIKE = run_spike
+
+
 def _source_archive(tmp_path: Path, *, pin_digest: bool = True) -> Path:
     archive_path = tmp_path / "nauty2_9_3.tar.gz"
     copyright_notice = b"Licensed under the Apache License, Version 2.0 (the License)\n"

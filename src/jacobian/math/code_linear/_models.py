@@ -25,11 +25,7 @@ def _validate_prime_matrix(
         raise ValueError("generator rows must have between 1 and 32 entries")
     if any(len(row) != width for row in generator_matrix):
         raise ValueError("generator matrix rows must have equal length")
-    if any(
-        not 0 <= entry < field_order
-        for row in generator_matrix
-        for entry in row
-    ):
+    if any(not 0 <= entry < field_order for row in generator_matrix for entry in row):
         raise ValueError("generator entries must be canonical field residues")
     return width
 

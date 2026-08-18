@@ -45,8 +45,24 @@ def test_native_operations_reject_invalid_or_undefined_inputs() -> None:
 
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the numerical_semigroups public API."""
-    expected = ("FactorizationGraph", "apery_set", "belongs", "elasticity", "element_catenary_degree", "element_delta_set", "element_elasticity", "factorization_count", "factorization_distance", "factorization_graph", "factorization_lengths", "factorizations", "minimal_generating_system",)
+    expected = (
+        "FactorizationGraph",
+        "apery_set",
+        "belongs",
+        "elasticity",
+        "element_catenary_degree",
+        "element_delta_set",
+        "element_elasticity",
+        "factorization_count",
+        "factorization_distance",
+        "factorization_graph",
+        "factorization_lengths",
+        "factorizations",
+        "minimal_generating_system",
+    )
     assert tuple(numerical_semigroups.__all__) == expected
     assert len(numerical_semigroups.__all__) == len(set(numerical_semigroups.__all__))
     assert all(not name.startswith("_") for name in numerical_semigroups.__all__)
-    assert all(hasattr(numerical_semigroups, name) for name in numerical_semigroups.__all__)
+    assert all(
+        hasattr(numerical_semigroups, name) for name in numerical_semigroups.__all__
+    )

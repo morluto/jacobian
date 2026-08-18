@@ -82,6 +82,10 @@ from jacobian.math.sequences._tools import TOOLS as SEQUENCES_TOOLS
 from jacobian.math.submodular_opt._tools import TOOLS as SUBMODULAR_OPT_TOOLS
 from jacobian.math.topology._tools import TOOLS as TOPOLOGY_TOOLS
 
+from jacobian.math.finite_state_transducers._tools import (
+    TOOLS as FINITE_STATE_TRANSDUCER_TOOLS,
+)
+
 BUILTIN_TOOLS: MathTools = (
     *BOOLEAN_TOOLS,
     *GROUP_TOOLS,
@@ -145,6 +149,7 @@ BUILTIN_TOOLS: MathTools = (
     *ALGEBRAIC_COMBINATORICS_TOOLS,
     *REAL_ALGEBRA_TOOLS,
     *FINITE_METRIC_SPACES_TOOLS,
+    *FINITE_STATE_TRANSDUCER_TOOLS,
 )
 
 __all__ = ["BUILTIN_TOOLS"]

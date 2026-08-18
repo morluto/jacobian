@@ -1,0 +1,18 @@
+{
+    "catalog_version": "1",
+    "domain": "commutative_algebra_ops",
+    "operations": {
+        "polynomial.ideal.quotient.compute": {
+            "input_schema": "sha256:6754650c7f6005a72bd97f88234a56b3e999f38c3b36b0c14f23f7c9f2b14647",
+            "output_schema": "sha256:f18dd674eac5b32459b9349c7a6feef194d22e3791a619d9aaa4edba3c1a4a3a"
+        },
+        "polynomial.ideal.radical.compute": {
+            "input_schema": "sha256:7edb439617b68a2780f25894ba74df839ba62316756a1a410c781fbe06ef5ede",
+            "output_schema": "sha256:5015b4b282b2b9c486846ba37bb9fd3bbf0267a261eb90b93b2afede6d7ba817"
+        },
+        "polynomial.ideal.radical_membership.decide": {
+            "input_schema": "sha256:2363594dff7469539b3c8ef180ccd83821de737fcbb2f5ee17b27f9f78a6f720",
+            "output_schema": "sha256:aa586b38defd4ec6cb53b44b54d8bd6ae1e59038de6d14728b7ce7df19a0d2c0"
+        }
+    }
+}

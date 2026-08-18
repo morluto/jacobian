@@ -785,3 +785,47 @@ __all__ = [
     "face_closure",
     "simplicial_complex_digest",
 ]
+
+
+class LinkRequest(StrictModel):
+    """Request the link of a simplex in a simplicial complex."""
+
+    complex: SimplicialComplexRequest
+    simplex: tuple[VertexLabel, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_valid_simplex(self) -> Self:
+        vertex_set = set(self.complex.vertices)
+        for v in self.simplex:
+            if v not in vertex_set:
+                raise ValueError("simplex vertices must be in the complex")
+        return self
+
+
+class LinkResult(TopologyExactResult):
+    """The link of a simplex: facets of the link complex."""
+
+    simplex: tuple[str, ...]
+    link_facets: tuple[tuple[str, ...], ...]
+    link_is_empty: bool
+
+
+__all__.extend(["LinkRequest", "LinkResult"])
+
+
+class FVectorRequest(StrictModel):
+    """Request the f-vector and h-vector of a simplicial complex."""
+
+    complex: SimplicialComplexRequest
+
+
+class FVectorResult(TopologyExactResult):
+    """The f-vector and h-vector of a simplicial complex."""
+
+    f_vector: tuple[int, ...]
+    h_vector: tuple[int, ...]
+    euler_characteristic: int
+    dimension: int
+
+
+__all__.extend(["FVectorRequest", "FVectorResult"])

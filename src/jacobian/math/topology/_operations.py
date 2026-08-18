@@ -23,6 +23,8 @@ from jacobian.math.topology._models import (
     ChainComplexResult,
     FacesInDimension,
     FiniteSimplicialComplex,
+    FVectorRequest,
+    FVectorResult,
     HomologyConvention,
     HomologyGroupResult,
     IntegralFreeGenerator,
@@ -31,6 +33,8 @@ from jacobian.math.topology._models import (
     IntegralSimplicialHomologyResult,
     IntegralTorsionGenerator,
     IntegralVector,
+    LinkRequest,
+    LinkResult,
     ModularVector,
     SimplexBasis,
     SimplicialComplexCanonicalizationResult,
@@ -682,3 +686,86 @@ TOPOLOGY_OPERATIONS: tuple[TopologyOperation, ...] = (
 )
 
 __all__ = ["TOPOLOGY_OPERATIONS"]
+
+
+def _build_all_simplices(facets: tuple) -> set:  # type: ignore[type-arg]
+    """Build all simplices from maximal facets."""
+    from itertools import combinations as _comb
+
+    all_s = set()
+    for facet in facets:
+        for r in range(1, len(facet) + 1):
+            for subset in _comb(facet, r):
+                all_s.add(frozenset(subset))
+    return all_s
+
+
+def _find_maximal_simplices(simplex_set: set) -> list:  # type: ignore[type-arg]
+    """Find maximal simplices in a set of frozensets."""
+    result = []
+    for s in simplex_set:
+        if not any(s < other for other in simplex_set if s != other):
+            result.append(s)
+    return result
+
+
+def compute_link(request: LinkRequest) -> LinkResult:
+    """Compute the link of a simplex in a simplicial complex."""
+    from jacobian.math.topology._models import LinkResult
+
+    target = set(request.simplex)
+    all_simplices = _build_all_simplices(request.complex.facets)
+    link_simplices = set()
+    for simplex in all_simplices:
+        if not (set(simplex) & target) and (simplex | target) in all_simplices:
+            link_simplices.add(simplex)
+    link_facets = _find_maximal_simplices(link_simplices)
+    link_facet_tuples = tuple(
+        tuple(sorted(s))
+        for s in sorted(link_facets, key=lambda s: (-len(s), sorted(s)))
+    )
+    return LinkResult(
+        simplex=request.simplex,
+        link_facets=link_facet_tuples,
+        link_is_empty=len(link_facets) == 0,
+    )
+
+
+def compute_f_vector(request: FVectorRequest) -> FVectorResult:
+    """Compute the f-vector and h-vector of a simplicial complex."""
+    from itertools import combinations as _comb
+    from math import comb as _comb_func
+
+    from jacobian.math.topology._models import FVectorResult
+
+    facets = request.complex.facets
+    all_simplices = set()
+    for facet in facets:
+        for r in range(1, len(facet) + 1):
+            for subset in _comb(facet, r):
+                all_simplices.add(tuple(sorted(subset)))
+
+    max_dim = 0
+    counts_by_dim: dict[int, int] = {}
+    for simplex in all_simplices:
+        dim = len(simplex) - 1
+        counts_by_dim[dim] = counts_by_dim.get(dim, 0) + 1
+        max_dim = max(max_dim, dim)
+
+    f_vector = tuple(counts_by_dim.get(d, 0) for d in range(max_dim + 1))
+    euler = sum((-1) ** d * counts_by_dim.get(d, 0) for d in range(max_dim + 1))
+
+    n = len(f_vector)
+    h_vector = []
+    for i in range(n):
+        h = 0
+        for j in range(i + 1):
+            h += ((-1) ** (i - j)) * f_vector[j] * _comb_func(n - 1 - j, i - j)
+        h_vector.append(h)
+
+    return FVectorResult(
+        f_vector=f_vector,
+        h_vector=tuple(h_vector),
+        euler_characteristic=euler,
+        dimension=max_dim,
+    )

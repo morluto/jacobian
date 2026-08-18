@@ -25,4 +25,14 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
+    OperationAdmission(
+        "topology.simplicial_complex.f_vector.compute",
+        AdmissionDecision.KEEP,
+        "exact f-vector, h-vector, and Euler characteristic of a simplicial complex",
+    ),
+    OperationAdmission(
+        "topology.simplicial_complex.link.compute",
+        AdmissionDecision.KEEP,
+        "exact link of a simplex with maximal facets of the link complex",
+    ),
 )

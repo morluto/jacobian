@@ -16,6 +16,7 @@ __all__ = [
 
 def enabled_transitions(net: PetriNet, marking: Marking) -> list[int]:
     """Return indices of all transitions enabled at the given marking."""
+    _require_marking_size(net, marking)
     result: list[int] = []
     for t in range(net.transition_count):
         enabled = True
@@ -34,6 +35,9 @@ def fire_transition(
     transition: int,
 ) -> tuple[bool, tuple[int, ...]]:
     """Fire a transition. Returns (success, new_marking)."""
+    _require_marking_size(net, marking)
+    if not 0 <= transition < net.transition_count:
+        raise ValueError("transition index is out of range")
     for p in range(net.place_count):
         if marking.tokens[p] < net.pre[p][transition]:
             return (False, marking.tokens)
@@ -68,6 +72,9 @@ def reachability_graph(
     Each frontier record is an enabled firing whose target could not be
     admitted because ``max_states`` was exhausted.
     """
+    _require_marking_size(net, initial_marking)
+    if not 1 <= max_states <= 100000:
+        raise ValueError("max_states must be between 1 and 100000")
     initial = tuple(initial_marking.tokens)
     state_list: list[tuple[int, ...]] = [initial]
     state_index: dict[tuple[int, ...], int] = {initial: 0}
@@ -91,3 +98,8 @@ def reachability_graph(
                 queue.append(len(state_list) - 1)
             edges.append((idx, t, state_index[new_tokens]))
     return (state_list, edges, frontier)
+
+
+def _require_marking_size(net: PetriNet, marking: Marking) -> None:
+    if len(marking.tokens) != net.place_count:
+        raise ValueError("marking length must match place_count")

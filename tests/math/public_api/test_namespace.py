@@ -19,6 +19,7 @@ PUBLIC_API = {
         "graphs",
         "matrices",
         "numerical_semigroups",
+        "petri_nets",
         "polynomials",
         "prime_field_linear_algebra",
         "probability",
@@ -168,6 +169,14 @@ PUBLIC_API = {
         "factorization_lengths",
         "factorizations",
         "minimal_generating_system",
+    ),
+    "jacobian.math.petri_nets": (
+        "Marking",
+        "PetriNet",
+        "compute_incidence_matrix",
+        "enabled_transitions",
+        "fire_transition",
+        "reachability_graph",
     ),
     "jacobian.math.polynomials": (
         "derivative",

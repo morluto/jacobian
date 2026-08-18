@@ -7,19 +7,13 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.petri_nets._models import (
-    EnabledTransitionsRequest,
-    EnabledTransitionsResult,
     FireTransitionRequest,
     FireTransitionResult,
-    IncidenceMatrixRequest,
-    IncidenceMatrixResult,
     ReachabilityRequest,
     ReachabilityResult,
 )
 from jacobian.math.petri_nets._operations import (
-    compute_enabled_transitions,
     compute_fire_transition,
-    compute_incidence,
     compute_reachability,
 )
 
@@ -63,39 +57,7 @@ _NET = {
     },
 }
 
-_NET2 = {
-    "net": {
-        "place_count": 2,
-        "transition_count": 2,
-        "pre": [[1, 0], [0, 0]],
-        "post": [[0, 0], [0, 1]],
-    },
-}
-
 PETRI_NET_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "petri_net.enabled_transitions.compute",
-        "Find enabled transitions in a Petri net",
-        "Return the indices of all transitions enabled at the given marking, "
-        "where a transition is enabled iff every place has enough tokens for "
-        "its pre-condition.",
-        EnabledTransitionsRequest,
-        EnabledTransitionsResult,
-        compute_enabled_transitions,
-        "petri-net",
-        "enabled",
-        "exact",
-        examples=(
-            example(
-                "simple_net",
-                "Enabled transitions of a 2-place, 2-transition net.",
-                {
-                    "net": _NET["net"],
-                    "marking": {"tokens": [2, 0]},
-                },
-            ),
-        ),
-    ),
     _op(
         "petri_net.fire_transition.compute",
         "Fire one transition in a Petri net",
@@ -117,24 +79,6 @@ PETRI_NET_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     "marking": {"tokens": [2, 0]},
                     "transition": 0,
                 },
-            ),
-        ),
-    ),
-    _op(
-        "petri_net.incidence_matrix.compute",
-        "Compute the incidence matrix of a Petri net",
-        "Return the incidence matrix C = Post - Pre for the given Petri net.",
-        IncidenceMatrixRequest,
-        IncidenceMatrixResult,
-        compute_incidence,
-        "petri-net",
-        "incidence",
-        "exact",
-        examples=(
-            example(
-                "simple_net_incidence",
-                "Incidence matrix of a 2-place, 2-transition net.",
-                {"net": _NET2["net"]},
             ),
         ),
     ),

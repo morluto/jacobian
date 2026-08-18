@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.math import petri_nets
 from jacobian.math.petri_nets._models import (
     EnabledTransitionsRequest,
     FireTransitionRequest,
@@ -16,6 +17,7 @@ from jacobian.math.petri_nets._operations import (
     compute_incidence,
     compute_reachability,
 )
+from jacobian.math.petri_nets._tools import TOOLS
 from jacobian.math.petri_nets.values import Marking, PetriNet
 
 # ---------------------------------------------------------------------------
@@ -41,6 +43,31 @@ def _token_passing_net() -> PetriNet:
         pre=((1, 0), (0, 1)),
         post=((0, 1), (1, 0)),
     )
+
+
+def test_catalog_contains_only_audited_agent_outcomes() -> None:
+    assert {tool.operation_id for tool in TOOLS} == {
+        "petri_net.fire_transition.compute",
+        "petri_net.reachability_graph.compute",
+    }
+
+
+def test_exploratory_operations_remain_native() -> None:
+    net = _token_passing_net()
+    marking = petri_nets.Marking(tokens=(1, 0))
+    assert petri_nets.enabled_transitions(net, marking) == [0]
+    assert petri_nets.compute_incidence_matrix(net) == ((-1, 1), (1, -1))
+
+
+def test_native_kernel_validates_cross_field_inputs() -> None:
+    with pytest.raises(ValueError, match="marking length"):
+        petri_nets.enabled_transitions(_simple_net(), Marking(tokens=(1,)))
+    with pytest.raises(ValueError, match="transition index"):
+        petri_nets.fire_transition(_simple_net(), Marking(tokens=(1, 0)), 2)
+    with pytest.raises(ValueError, match="max_states"):
+        petri_nets.reachability_graph(
+            _simple_net(), Marking(tokens=(1, 0)), max_states=0
+        )
 
 
 # ---------------------------------------------------------------------------

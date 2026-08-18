@@ -665,17 +665,9 @@
       "input_schema": "sha256:d880bc90d2c4886d904e1228ec305b546d7bb963973fa1bf9a557eff4cc6122c",
       "output_schema": "sha256:e53c4d5fc2cea6398960c8346f73f945cbb4a04201832d8e1d1714de105d3bac"
     },
-    "petri_net.enabled_transitions.compute": {
-      "input_schema": "sha256:e79ff46379d7618ccf4a08c592e2eb7c63c1564388f5f9cd4e939a4587d60dc9",
-      "output_schema": "sha256:ff556592e49afe6c52ad2154f858c65f0e94a76cd2b2567b48ee196c46723b23"
-    },
     "petri_net.fire_transition.compute": {
       "input_schema": "sha256:94d2ac5f44d2c91cdb382a029abf9861b1b084eb8341715c0cb372ca54c560dd",
       "output_schema": "sha256:8efc16c31ff354161694ecc2583a9ca798c61d898e150388d745ac71e4cee4ef"
-    },
-    "petri_net.incidence_matrix.compute": {
-      "input_schema": "sha256:db172217bdaa4c65862feb89393f64e788b51d7d3bf07df70bf479f31b8779e2",
-      "output_schema": "sha256:900e1c5e7aac2fe241c4ed2df7325b1f27547d15d345b22f34deab690d704350"
     },
     "petri_net.reachability_graph.compute": {
       "input_schema": "sha256:b6b01d34a22460c831f5f9ba4a9aa793229b29977ea2f004eed4bd0e7781641b",

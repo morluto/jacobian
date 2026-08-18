@@ -39,10 +39,11 @@ math.run(operation ID, JSON)
   -> return its concrete typed mathematical result
 ```
 
-The domain function may use SymPy, FLINT, NetworkX, Z3, or another
-maintained library as a private computational engine. Jacobian owns the public
-mathematical semantics and types; the library does not become a provider,
-runtime, worker, or second operation surface.
+The domain function may use a maintained library as a private computational
+engine; prefer an established backend over hand-rolling a kernel whenever it
+can perform the bounded computation. Jacobian owns the public mathematical
+semantics and types; the library does not become a provider, runtime, worker,
+or second operation surface.
 
 ## Non-negotiable boundaries
 

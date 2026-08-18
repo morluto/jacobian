@@ -102,6 +102,11 @@ Before declaring the operation, provide tests for:
 - request validation proving a schema-valid input either returns a typed
   result or is rejected by the request model—never a host exception.
 
+Before publication, record one admission decision for the operation in
+`src/jacobian/catalog/admission.py`; catalog construction fails closed without
+it (see the
+[public operation admission](public-operation-admission.md) contract).
+
 ### Boundedness proof
 
 Jacobian's operations are reusable mathematical instruments for agents doing

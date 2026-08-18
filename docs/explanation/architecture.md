@@ -1,8 +1,8 @@
 # Architecture
 
-Jacobian's product model is defined in the
-[product blueprint](product-blueprint.md): stateless functions over typed
-mathematical values, with composition owned by the caller.
+The [product blueprint](product-blueprint.md) owns Jacobian's product model.
+This page describes the package boundaries and ordinary execution path that
+implement it.
 
 The serving process compiles one immutable catalog directly from explicit
 `MathTool` entries and exposes `math.find` and `math.run` through the MCP Python

@@ -86,6 +86,12 @@ from jacobian.math.finite_metric_spaces._tools import (
 )
 from jacobian.math.finite_sets._admission import ADMISSIONS as FINITE_SETS_ADMISSIONS
 from jacobian.math.finite_sets._tools import TOOLS as FINITE_SETS_TOOLS
+from jacobian.math.finite_stochastic_processes._admission import (
+    ADMISSIONS as FINITE_STOCHASTIC_PROCESSES_ADMISSIONS,
+)
+from jacobian.math.finite_stochastic_processes._tools import (
+    TOOLS as FINITE_STOCHASTIC_PROCESSES_TOOLS,
+)
 from jacobian.math.finite_state_transducers._admission import (
     ADMISSIONS as FINITE_STATE_TRANSDUCERS_ADMISSIONS,
 )
@@ -292,6 +298,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *DIOPHANTINE_APPROXIMATION_TOOLS,
     *COMBINATORICS_TOOLS,
     *FINITE_SETS_TOOLS,
+    *FINITE_STOCHASTIC_PROCESSES_TOOLS,
     *FINITE_FIELDS_TOOLS,
     *LOGIC_TOOLS,
     *SEQUENCES_TOOLS,
@@ -368,6 +375,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *FINITE_GAME_THEORY_ADMISSIONS,
     *FINITE_METRIC_SPACES_ADMISSIONS,
     *FINITE_SETS_ADMISSIONS,
+    *FINITE_STOCHASTIC_PROCESSES_ADMISSIONS,
     *FINITE_STATE_TRANSDUCERS_ADMISSIONS,
     *FINITE_TOPOLOGY_ADMISSIONS,
     *FORMAL_POWER_SERIES_ADMISSIONS,

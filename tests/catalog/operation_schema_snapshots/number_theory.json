@@ -109,6 +109,22 @@
     "number_theory.compute.legendre_symbol": {
       "input_schema": "sha256:eca1fbc54c3d5c72d4711197aae16587172e4c4686055e9ca64222481fa5275a",
       "output_schema": "sha256:7297a74c4f3c5ac3de2f6c77dd3d44fa8690f14affdc3745a09e52dd49bcda60"
+    },
+    "integer.k_free_decomposition.compute": {
+      "input_schema": "sha256:0063bfd9be96eacfa369201ed5ab1994dfff9eaaa7f5e8c1faebaff304881088",
+      "output_schema": "sha256:31b32cf048e15743450da4cb3e6d76a96d72c6024e4114c5023af7517d6e01a4"
+    },
+    "integer.perfect_power.profile.compute": {
+      "input_schema": "sha256:5ee15081b121287c35e97563c2aec3128e6581d163a571b3643989b98ae99a4f",
+      "output_schema": "sha256:87cebc794efc356178407db5022c28015e1214ce5d311e3650236aa0f7d8d535"
+    },
+    "integer.squarefree_decomposition.compute": {
+      "input_schema": "sha256:5d46fcbf9a3a36159e3f3c9e7b66e77b6e211d95f613546179a7ba5914c03d07",
+      "output_schema": "sha256:12e6fabc047ccad27da6148db73f0a344f2778e4e7269d9902cda846b1dfb3bf"
+    },
+    "quadratic_radical.positive_integer.normalize.compute": {
+      "input_schema": "sha256:ab952d941704da27aee150d0397b8af89a91dddfd032bf4fbb4c531a953dc3e1",
+      "output_schema": "sha256:b96f56ba6dda4f99d68242b1b19783975d2332bd238c558c8b5dfd1fc550e2aa"
     }
   }
 }

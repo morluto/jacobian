@@ -215,4 +215,24 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
+    OperationAdmission(
+        "integer.perfect_power.profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
+    OperationAdmission(
+        "integer.k_free_decomposition.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
+    OperationAdmission(
+        "integer.squarefree_decomposition.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
+    OperationAdmission(
+        "quadratic_radical.positive_integer.normalize.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
 )

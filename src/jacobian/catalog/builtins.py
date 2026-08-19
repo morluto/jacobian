@@ -236,14 +236,14 @@ from jacobian.math.polynomials.real_algebra._admission import (
 from jacobian.math.polynomials.real_algebra._tools import TOOLS as REAL_ALGEBRA_TOOLS
 from jacobian.math.posets._admission import ADMISSIONS as POSETS_ADMISSIONS
 from jacobian.math.posets._tools import TOOLS as POSETS_TOOLS
+from jacobian.math.probability._admission import ADMISSIONS as PROBABILITY_ADMISSIONS
+from jacobian.math.probability._tools import TOOLS as PROBABILITY_TOOLS
 from jacobian.math.projective_coords_ops._admission import (
     ADMISSIONS as PROJECTIVE_COORDS_OPS_ADMISSIONS,
 )
 from jacobian.math.projective_coords_ops._tools import (
     TOOLS as PROJECTIVE_COORDS_OPS_TOOLS,
 )
-from jacobian.math.probability._admission import ADMISSIONS as PROBABILITY_ADMISSIONS
-from jacobian.math.probability._tools import TOOLS as PROBABILITY_TOOLS
 from jacobian.math.recurrence_solving._admission import (
     ADMISSIONS as RECURRENCE_SOLVING_ADMISSIONS,
 )

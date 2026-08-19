@@ -1,4 +1,5 @@
 """Tests for projective coordinate operations."""
+
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
@@ -28,9 +29,7 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_rational_point_construct() -> None:
-    request = RationalPointConstructRequest(
-        coordinates=(_r("2"), _r("4"))
-    )
+    request = RationalPointConstructRequest(coordinates=(_r("2"), _r("4")))
     result = compute_rational_point_construct(request)
     assert result.canonical[0].as_fraction() == 1
     assert result.canonical[1].as_fraction() == 2

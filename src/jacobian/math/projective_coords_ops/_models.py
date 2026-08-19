@@ -15,22 +15,30 @@ MAX_DIM = 16
 class RationalProjectivePoint(StrictModel):
     """A projective point [x0 : x1 : ... : xn] over the rationals."""
 
-    coordinates: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=MAX_DIM + 1)
+    coordinates: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_DIM + 1
+    )
 
     @model_validator(mode="after")
     def require_not_all_zero(self) -> Self:
         if all(c.as_fraction() == 0 for c in self.coordinates):
-            raise ValueError("projective point must have at least one nonzero coordinate")
+            raise ValueError(
+                "projective point must have at least one nonzero coordinate"
+            )
         return self
 
 
 class RationalPointConstructRequest(StrictModel):
-    coordinates: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=MAX_DIM + 1)
+    coordinates: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_DIM + 1
+    )
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
         if all(c.as_fraction() == 0 for c in self.coordinates):
-            raise ValueError("projective point must have at least one nonzero coordinate")
+            raise ValueError(
+                "projective point must have at least one nonzero coordinate"
+            )
         return self
 
 

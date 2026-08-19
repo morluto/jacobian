@@ -50,7 +50,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "number_theory.euler_phi.preimages.compute",
         "Compute the preimage of the Euler totient function",
         "Find all n such that phi(n) = target, where phi is Euler's totient "
-        "function. Uses exact enumeration up to a bounded range.",
+        "function. Builds the complete preimage exactly via the recursive prime-factor construction.",
         EulerPhiPreimageRequest,
         EulerPhiPreimageResult,
         compute_euler_phi_preimage,

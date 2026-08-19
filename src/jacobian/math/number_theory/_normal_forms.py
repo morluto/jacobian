@@ -89,10 +89,26 @@ class MaximalPerfectPowerResult(StrictModel):
                 )
             if self.is_nontrivial_perfect_power is None:
                 raise ValueError("nonunit profile requires is_nontrivial_perfect_power")
-            if int(self.base) ** self.exponent != int(self.source):
+            source = int(self.source)
+            base = int(self.base)
+            if base ** self.exponent != source:
                 raise ValueError("base^exponent does not reconstruct the source")
             if not self.factors:
                 raise ValueError("nonunit profile requires prime-exponent factors")
+            # Verify maximality: the exponent must be the gcd of all
+            # prime exponents (with odd restriction for negative source).
+            from math import gcd
+            exps = [row.exponent for row in self.factors]
+            g = exps[0]
+            for e in exps[1:]:
+                g = gcd(g, e)
+            if source < 0:
+                while g % 2 == 0 and g > 1:
+                    g //= 2
+                if g == 0:
+                    g = 1
+            if self.exponent != g:
+                raise ValueError("exponent is not maximal")
         else:
             if self.base is not None or self.exponent is not None:
                 raise ValueError("unit/zero profiles must not carry base or exponent")
@@ -136,8 +152,18 @@ class KFreeDecompositionResult(StrictModel):
                 raise ValueError("nonzero decomposition requires base and cofactor")
             a = int(self.extracted_base)
             c = int(self.k_free_cofactor)
-            if a**self.k * c != int(self.source):
+            source = int(self.source)
+            if a**self.k * c != source:
                 raise ValueError("a^k * c does not reconstruct the source")
+            if a < 1:
+                raise ValueError("extracted base must be >= 1")
+            # Verify k-freeness: no prime to the k-th power divides |c|
+            from sympy import factorint
+            abs_c = abs(c)
+            if abs_c > 1:
+                for _, e in factorint(abs_c).items():
+                    if e >= self.k:
+                        raise ValueError("cofactor is not k-free")
         else:
             if self.extracted_base is not None or self.k_free_cofactor is not None:
                 raise ValueError("zero decomposition must not carry base or cofactor")
@@ -182,6 +208,15 @@ class SquarefreeDecompositionResult(StrictModel):
             d = int(self.signed_squarefree_part)
             if s * s * d != int(self.source):
                 raise ValueError("s^2 * d does not reconstruct the source")
+            if s < 1:
+                raise ValueError("square factor must be >= 1")
+            # Verify squarefreeness of |d|
+            from sympy import factorint
+            abs_d = abs(d)
+            if abs_d > 1:
+                for _, e in factorint(abs_d).items():
+                    if e >= 2:
+                        raise ValueError("signed squarefree part is not squarefree")
         else:
             if (
                 self.square_factor is not None

@@ -35,7 +35,7 @@ class JoinRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_same_space(self) -> Self:
-        if self.sigma1.samples != self.sigma2.samples:
+        if self.sigma1.space.samples != self.sigma2.space.samples:
             raise ValueError("sigma algebras must share the same probability space")
         return self
 

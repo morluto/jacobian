@@ -6,8 +6,10 @@ caller composes the returned mathematical values.
 
 ## Start here
 
-- [Product model](explanation/product-blueprint.md) — what Jacobian is and why
-  operations are atomic and composable.
+- [Executable mathematical vocabulary](explanation/executable-mathematical-vocabulary.md) —
+  why operations are semantically atomic and how vocabulary gaps are discovered.
+- [Product model](explanation/product-blueprint.md) — caller/server ownership and
+  public contract boundaries.
 - [Architecture](explanation/architecture.md) — package structure and execution
   boundaries.
 - [Discover and invoke operations](how-to/invoke-domain-operations.md) — use

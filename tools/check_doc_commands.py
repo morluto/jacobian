@@ -18,9 +18,9 @@ from tools.makefile_catalog import MakefileCatalogError, discover_makefiles
 DEFAULT_DOCUMENTS = (
     Path("CONTRIBUTING.md"),
     Path("docs/reference/testing-strategy.md"),
-    Path("docs/reference/evaluations/benchmark-contracts.md"),
-    Path("docs/how-to/author-harbor-benchmark-task.md"),
-    Path("docs/how-to/run-agent-evaluations.md"),
+    Path("benchmarks/docs/benchmark-contracts.md"),
+    Path("benchmarks/docs/author-harbor-benchmark-task.md"),
+    Path("benchmarks/docs/run-agent-evaluations.md"),
 )
 SHELL_FENCE_LANGUAGES = {"bash", "console", "sh", "shell"}
 MAKE_TARGET = re.compile(r"[A-Za-z0-9_.-]+")

@@ -2,7 +2,11 @@ import json
 import shutil
 from pathlib import Path
 
-shutil.copyfile("/solution/input.json", "/app/input.json")
+# The frozen input is provided by the agent environment Dockerfile at
+# /app/input.json; copy a generated /solution/input.json only when present.
+frozen = Path("/solution/input.json")
+if frozen.exists():
+    shutil.copyfile(frozen, "/app/input.json")
 
 
 def r(n, d=1):

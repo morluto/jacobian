@@ -70,3 +70,39 @@ def test_syndrome_mod_3() -> None:
     )
     # s = (1*2+1*2) mod 3 = 4 mod 3 = 1, (0*2+1*2) mod 3 = 2
     assert result.syndrome == (1, 2)
+
+
+
+def test_dual_mod_3_fractional() -> None:
+    """Dual code over GF(3) where rational nullspace would give fractions."""
+    request = DualCodeRequest(
+        field_order=3,
+        generator_matrix=((2, 1),),
+    )
+    result = compute_dual_code(request)
+    assert result.dual_dimension == 1
+    assert result.code_dimension == 1
+    for row in result.parity_check_matrix:
+        s = sum(g * h for g, h in zip((2, 1), row)) % 3
+        assert s == 0
+
+
+def test_dual_mod_3_rank_drop() -> None:
+    """Dual code when mod-p rank drops below rational rank."""
+    request = DualCodeRequest(
+        field_order=3,
+        generator_matrix=((1, 2), (2, 1)),
+    )
+    result = compute_dual_code(request)
+    assert result.code_dimension == 1
+    assert result.dual_dimension == 1
+
+
+def test_dual_dependent_rows() -> None:
+    """Dimension should be the rank, not the number of rows."""
+    request = DualCodeRequest(
+        field_order=2,
+        generator_matrix=((1, 1), (1, 1)),
+    )
+    result = compute_dual_code(request)
+    assert result.code_dimension == 1

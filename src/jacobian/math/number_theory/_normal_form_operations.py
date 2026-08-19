@@ -9,11 +9,10 @@ factorization rows.
 
 from __future__ import annotations
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-
 import math
 from typing import Literal
 
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory._normal_forms import (
     KFreeDecompositionRequest,
     KFreeDecompositionResult,

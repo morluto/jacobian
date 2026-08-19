@@ -3,8 +3,6 @@
 [Documentation home](../index.md)
 
 Tests prove one observable mathematical or transport contract at a time.
-They do not reconstruct a complete runtime, database, publication pipeline,
-tenant, or checker service.
 
 ## Routine validation
 
@@ -34,10 +32,8 @@ as a substitute for a focused regression test.
 
 For an operation, test the typed request boundary, the domain result, and a
 real caller-visible invocation when the MCP projection changed. The integration
-catalog test executes every advertised invocation example. A result that
-feeds another operation should be passed as the next typed payload; do not add
-tests for producer IDs, stored references, serialization round trips inside the
-kernel, or hidden runtime state.
+catalog test executes every advertised invocation example. When one result feeds
+another operation, test that composition through the next typed payload.
 
 Use property tests for canonicalization and algebraic invariants when they
 state the contract more directly than examples. Use maintained libraries in
@@ -45,19 +41,14 @@ their owning domain tests rather than mocking their algorithms. A timeout,
 cancellation, unavailable external executable, or solver `UNKNOWN` is never a
 positive mathematical conclusion.
 
-`lean.check` is the one retained external process boundary. Its tests cover
-request bounds, timeout/error projection, and typed diagnostics. They do not
-create a session, cache, proof-state resource, or replay record.
+`lean.check` is the retained external process boundary. Its tests cover request
+bounds, process cleanup, timeout/error projection, and typed diagnostics.
 
 ## Documentation acceptance
 
-Documentation must describe the stateless two-tool surface consistently:
-
-- `math.find` discovers or inspects immutable built-in operation declarations;
-- `math.run` executes one typed payload and returns one bounded result;
-- callers keep any value needed for a later operation; and
-- no page teaches SQLite state, artifact publication, value references,
-  verification records, a workspace, or a migration workflow.
+Documentation should describe current behavior rather than refactor history.
+Link to the [product blueprint](../explanation/product-blueprint.md) for product
+philosophy, and keep tool/reference pages focused on the contracts they own.
 
 Run `make docs-linkcheck` after changing Markdown. It validates relative links,
 documented Make commands, and documented test paths.

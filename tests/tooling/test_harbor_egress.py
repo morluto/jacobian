@@ -101,7 +101,7 @@ def test_agent_eval_forwards_web_search_setting_to_harbor() -> None:
 
 
 def test_agent_eval_docs_exclude_host_codex_from_the_control_protocol() -> None:
-    guide = (ROOT / "docs" / "how-to" / "run-agent-evaluations.md").read_text(
+    guide = (ROOT / "benchmarks" / "docs" / "run-agent-evaluations.md").read_text(
         encoding="utf-8"
     )
 

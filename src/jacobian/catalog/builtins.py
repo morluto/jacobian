@@ -46,6 +46,12 @@ from jacobian.math.boolean_analysis._admission import (
 from jacobian.math.boolean_analysis._tools import TOOLS as BOOLEAN_ANALYSIS_TOOLS
 from jacobian.math.code_theory._admission import ADMISSIONS as CODE_THEORY_ADMISSIONS
 from jacobian.math.code_theory._tools import TOOLS as CODE_THEORY_TOOLS
+from jacobian.math.combinatorial_maps._admission import (
+    ADMISSIONS as COMBINATORIAL_MAPS_ADMISSIONS,
+)
+from jacobian.math.combinatorial_maps._tools import (
+    TOOLS as COMBINATORIAL_MAPS_TOOLS,
+)
 from jacobian.math.combinatorics._admission import (
     ADMISSIONS as COMBINATORICS_ADMISSIONS,
 )
@@ -70,6 +76,10 @@ from jacobian.math.electrical_networks._admission import (
 from jacobian.math.electrical_networks._tools import (
     TOOLS as ELECTRICAL_NETWORKS_TOOLS,
 )
+from jacobian.math.finite_categories._admission import (
+    ADMISSIONS as FINITE_CATEGORIES_ADMISSIONS,
+)
+from jacobian.math.finite_categories._tools import TOOLS as FINITE_CATEGORIES_TOOLS
 from jacobian.math.finite_fields._admission import (
     ADMISSIONS as FINITE_FIELDS_ADMISSIONS,
 )
@@ -83,6 +93,12 @@ from jacobian.math.finite_metric_spaces._admission import (
 )
 from jacobian.math.finite_metric_spaces._tools import (
     TOOLS as FINITE_METRIC_SPACES_TOOLS,
+)
+from jacobian.math.finite_semigroups._admission import (
+    ADMISSIONS as FINITE_SEMIGROUPS_ADMISSIONS,
+)
+from jacobian.math.finite_semigroups._tools import (
+    TOOLS as FINITE_SEMIGROUPS_TOOLS,
 )
 from jacobian.math.finite_sets._admission import ADMISSIONS as FINITE_SETS_ADMISSIONS
 from jacobian.math.finite_sets._tools import TOOLS as FINITE_SETS_TOOLS
@@ -274,6 +290,7 @@ from jacobian.math.words._admission import ADMISSIONS as WORDS_ADMISSIONS
 from jacobian.math.words._tools import TOOLS as WORDS_TOOLS
 
 _BUILTIN_CANDIDATES: MathTools = (
+    *FINITE_CATEGORIES_TOOLS,
     *BOOLEAN_TOOLS,
     *GROUP_TOOLS,
     *GRAPH_COLORING_OPS_TOOLS,
@@ -291,6 +308,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *NUMBER_THEORY_TOOLS,
     *DIOPHANTINE_APPROXIMATION_TOOLS,
     *COMBINATORICS_TOOLS,
+    *COMBINATORIAL_MAPS_TOOLS,
     *FINITE_SETS_TOOLS,
     *FINITE_FIELDS_TOOLS,
     *LOGIC_TOOLS,
@@ -325,6 +343,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *GRAPH_REALIZATION_TOOLS,
     *BOOLEAN_ANALYSIS_TOOLS,
     *ARITHMETIC_FUNCTIONS_TOOLS,
+    *FINITE_SEMIGROUPS_TOOLS,
     *ADDITIVE_COMBINATORICS_TOOLS,
     *MATRIX_ANALYSIS_TOOLS,
     *CONVEX_ANALYSIS_TOOLS,
@@ -349,6 +368,7 @@ _BUILTIN_CANDIDATES: MathTools = (
 )
 
 _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
+    *FINITE_SEMIGROUPS_ADMISSIONS,
     *ADDITIVE_COMBINATORICS_ADMISSIONS,
     *ALGEBRAIC_COMBINATORICS_ADMISSIONS,
     *ANALYSIS_ADMISSIONS,
@@ -360,10 +380,12 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *BOOLEAN_ANALYSIS_ADMISSIONS,
     *CODE_THEORY_ADMISSIONS,
     *COMBINATORICS_ADMISSIONS,
+    *COMBINATORIAL_MAPS_ADMISSIONS,
     *CONVEX_ANALYSIS_ADMISSIONS,
     *DIOPHANTINE_APPROXIMATION_ADMISSIONS,
     *DISCREPANCY_THEORY_ADMISSIONS,
     *ELECTRICAL_NETWORKS_ADMISSIONS,
+    *FINITE_CATEGORIES_ADMISSIONS,
     *FINITE_FIELDS_ADMISSIONS,
     *FINITE_GAME_THEORY_ADMISSIONS,
     *FINITE_METRIC_SPACES_ADMISSIONS,

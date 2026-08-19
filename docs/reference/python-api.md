@@ -1,8 +1,7 @@
 # Native Python API
 
-Jacobian exposes a small native mathematical API under `jacobian.math`. It is
-independent of MCP: native functions do not call `math.run`, construct a
-runtime, or retain state.
+Jacobian exposes a small native mathematical API under `jacobian.math`. Native
+functions call the domain kernels directly and are independent of MCP.
 
 ```python
 from fractions import Fraction
@@ -22,10 +21,9 @@ or a maintained backend type when it already carries the complete mathematical
 meaning. Private backend modules perform lazy conversions and calls to SymPy,
 NetworkX, FLINT, or Z3.
 
-Native values are not wire envelopes. An operation parses one typed request,
-calls the same domain kernel, and serializes one typed result at the final MCP
-boundary. No native API exposes MCP, operation catalog, persistence,
-publication, or checker objects.
+Native values are mathematical values rather than wire envelopes. An operation
+parses one typed request, calls the same domain kernel, and serializes one typed
+result at the final MCP boundary.
 
 The native surface also retains useful deterministic helpers intentionally
 excluded from `math.find`, including classical combinatorial numbers, basic

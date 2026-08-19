@@ -14,7 +14,7 @@ from jacobian.math.matrices.rational_linear._operations import (
 from jacobian.math.optimization._models import RationalLinearProgramRequest
 from jacobian.math.optimization._tools import TOOLS as OPTIMIZATION_TOOLS
 
-pytestmark = pytest.mark.requires_provider("flint")
+pytestmark = pytest.mark.requires_backend("flint")
 
 
 def _system(rhs: list[dict[str, str]]) -> dict[str, object]:

@@ -44,18 +44,18 @@ from jacobian.math.boolean_analysis._admission import (
     ADMISSIONS as BOOLEAN_ANALYSIS_ADMISSIONS,
 )
 from jacobian.math.boolean_analysis._tools import TOOLS as BOOLEAN_ANALYSIS_TOOLS
-from jacobian.math.commutative_algebra_ops._admission import (
-    ADMISSIONS as COMMUTATIVE_ALGEBRA_OPS_ADMISSIONS,
-)
-from jacobian.math.commutative_algebra_ops._tools import (
-    TOOLS as COMMUTATIVE_ALGEBRA_OPS_TOOLS,
-)
 from jacobian.math.code_theory._admission import ADMISSIONS as CODE_THEORY_ADMISSIONS
 from jacobian.math.code_theory._tools import TOOLS as CODE_THEORY_TOOLS
 from jacobian.math.combinatorics._admission import (
     ADMISSIONS as COMBINATORICS_ADMISSIONS,
 )
 from jacobian.math.combinatorics._tools import TOOLS as COMBINATORICS_TOOLS
+from jacobian.math.commutative_algebra_ops._admission import (
+    ADMISSIONS as COMMUTATIVE_ALGEBRA_OPS_ADMISSIONS,
+)
+from jacobian.math.commutative_algebra_ops._tools import (
+    TOOLS as COMMUTATIVE_ALGEBRA_OPS_TOOLS,
+)
 from jacobian.math.convex_analysis._admission import (
     ADMISSIONS as CONVEX_ANALYSIS_ADMISSIONS,
 )

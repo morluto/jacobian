@@ -22,9 +22,7 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_ideal_radical_basic() -> None:
-    request = IdealRadicalRequest(
-        variables=("x", "y"), generators=("x**2", "x*y")
-    )
+    request = IdealRadicalRequest(variables=("x", "y"), generators=("x**2", "x*y"))
     result = compute_ideal_radical(request)
     assert len(result.generators) == 2
     assert "x**2" in result.generators

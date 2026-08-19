@@ -109,7 +109,9 @@ def compute_subgroup_generated(
         current = queue.pop(0)
         for gen in generators:
             new_coord = tuple(
-                (current[i] + gen[i]) % factors[i] if factors[i] > 0 else current[i] + gen[i]
+                (current[i] + gen[i]) % factors[i]
+                if factors[i] > 0
+                else current[i] + gen[i]
                 for i in range(n)
             )
             if new_coord not in subgroup:
@@ -147,6 +149,7 @@ def compute_quotient(request: QuotientRequest) -> QuotientResult:
     # Use sympy's smith_normal_form from the smith module
     try:
         from sympy.matrices.normalforms import smith_normal_form
+
         smith = smith_normal_form(augmented, domain=None)
     except (ImportError, AttributeError):
         smith = augmented

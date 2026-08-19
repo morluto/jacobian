@@ -30,9 +30,7 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_element_reduce_modular() -> None:
-    request = ElementReduceRequest(
-        invariant_factors=(6,), coordinates=(7,)
-    )
+    request = ElementReduceRequest(invariant_factors=(6,), coordinates=(7,))
     result = compute_element_reduce(request)
     assert result.reduced == (1,)
 
@@ -54,33 +52,25 @@ def test_element_equal_different() -> None:
 
 
 def test_element_order_in_z6() -> None:
-    request = ElementOrderRequest(
-        invariant_factors=(6,), coordinates=(2,)
-    )
+    request = ElementOrderRequest(invariant_factors=(6,), coordinates=(2,))
     result = compute_element_order(request)
     assert result.order == 3
 
 
 def test_element_order_identity() -> None:
-    request = ElementOrderRequest(
-        invariant_factors=(6,), coordinates=(0,)
-    )
+    request = ElementOrderRequest(invariant_factors=(6,), coordinates=(0,))
     result = compute_element_order(request)
     assert result.order == 1
 
 
 def test_subgroup_generated_index() -> None:
-    request = SubgroupGeneratedRequest(
-        invariant_factors=(6,), generators=((2,),)
-    )
+    request = SubgroupGeneratedRequest(invariant_factors=(6,), generators=((2,),))
     result = compute_subgroup_generated(request)
     assert result.index == 2
 
 
 def test_quotient_z6_by_2z() -> None:
-    request = QuotientRequest(
-        invariant_factors=(6,), subgroup_generators=((2,),)
-    )
+    request = QuotientRequest(invariant_factors=(6,), subgroup_generators=((2,),))
     result = compute_quotient(request)
     assert result.quotient_order == 2
 

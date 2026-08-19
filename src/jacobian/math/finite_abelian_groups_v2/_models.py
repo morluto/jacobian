@@ -72,9 +72,7 @@ class ElementOrderRequest(StrictModel):
 
 class SubgroupGeneratedRequest(StrictModel):
     invariant_factors: tuple[int, ...] = Field(min_length=1, max_length=MAX_ORDERS)
-    generators: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=MAX_ORDERS
-    )
+    generators: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:

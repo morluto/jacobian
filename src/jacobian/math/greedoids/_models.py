@@ -47,6 +47,16 @@ class RankRequest(StrictModel):
     system: FiniteFeasibleSetSystem
     subset: tuple[int, ...] | None = Field(default=None)
 
+    @model_validator(mode="after")
+    def require_valid_subset(self) -> Self:
+        if self.subset is not None:
+            n = len(self.system.ground)
+            if len(set(self.subset)) != len(self.subset):
+                raise ValueError("subset must not contain duplicates")
+            if any(not 0 <= i < n for i in self.subset):
+                raise ValueError("subset indices must be in range")
+        return self
+
 
 class RankResult(StrictModel):
     """The greedoid rank of the supplied subset."""
@@ -60,6 +70,16 @@ class BasesRequest(StrictModel):
 
     system: FiniteFeasibleSetSystem
     subset: tuple[int, ...] | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def require_valid_subset(self) -> Self:
+        if self.subset is not None:
+            n = len(self.system.ground)
+            if len(set(self.subset)) != len(self.subset):
+                raise ValueError("subset must not contain duplicates")
+            if any(not 0 <= i < n for i in self.subset):
+                raise ValueError("subset indices must be in range")
+        return self
 
 
 class BasesResult(StrictModel):

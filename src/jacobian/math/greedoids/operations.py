@@ -143,8 +143,13 @@ def bases(
     feasible_in_subset = [fs for fs in _feasible_sets(system) if fs <= subset]
     if not feasible_in_subset:
         return 0, []
-    max_size = max(len(fs) for fs in feasible_in_subset)
-    basis_list = [fs for fs in feasible_in_subset if len(fs) == max_size]
+    # Bases are inclusion-maximal feasible sets (not just max-cardinality).
+    basis_list = [
+        fs
+        for fs in feasible_in_subset
+        if not any(other > fs for other in feasible_in_subset)
+    ]
+    max_size = max(len(fs) for fs in basis_list) if basis_list else 0
     return max_size, basis_list
 
 
@@ -200,7 +205,7 @@ def basic_word_profile(
                 "prefix_set": tuple(sorted(prefix)),
             }
     r, _ = bases(system)
-    is_full = len(word) == r and r > 0
+    is_full = len(word) == r
     return {
         "status": "BASIC_WORD",
         "prefix_length": len(word),

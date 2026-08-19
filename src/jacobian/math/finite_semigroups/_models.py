@@ -23,6 +23,9 @@ class FiniteSemigroup(StrictModel):
         labels = set(self.elements)
         if len(labels) != len(self.elements):
             raise ValueError("element labels must be distinct")
+        for label in self.elements:
+            if len(label) > MAX_LABEL_LENGTH:
+                raise ValueError("element label exceeds the bounded length budget")
         if len(self.multiplication) != len(self.elements):
             raise ValueError("multiplication table must have one row per element")
         for row in self.multiplication:
@@ -66,14 +69,45 @@ class PowerProfileRequest(StrictModel):
 
 
 class PowerProfileResult(StrictModel):
-    """The power profile of one element in a finite semigroup."""
+    """The power profile of one element in a finite semigroup.
 
+    The supplied semigroup and element are carried on the result so the
+    bound model can re-run the exact native kernel and verify the power
+    sequence, index, period, idempotent, and cyclic subsemigroup.  ``index``
+    is the smallest positive exponent whose power first repeats; ``powers``
+    is ``a, a^2, a^3, ...`` in one-based exponent order.
+    """
+
+    semigroup: FiniteSemigroup
     element: str
     powers: tuple[str, ...]
-    index: int = Field(ge=0)
+    index: int = Field(ge=1)
     period: int = Field(ge=1)
     idempotent: str
     cyclic_subsemigroup: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def bind_power_profile(self) -> Self:
+        from jacobian.math.finite_semigroups._operations import _power_profile_data
+
+        powers, index, period, idempotent, cyclic = _power_profile_data(
+            self.semigroup.elements,
+            self.semigroup.multiplication,
+            self.element,
+        )
+        if self.powers != powers:
+            raise ValueError("powers must be the exact power sequence of the element")
+        if self.index != index:
+            raise ValueError("index must be the first repeated power exponent")
+        if self.period != period:
+            raise ValueError("period must be the power cycle length")
+        if self.idempotent != idempotent:
+            raise ValueError("idempotent must be the unique idempotent power")
+        if self.cyclic_subsemigroup != cyclic:
+            raise ValueError(
+                "cyclic_subsemigroup must be the exact closure of the element"
+            )
+        return self
 
 
 class GeneratedSubsemigroupRequest(StrictModel):

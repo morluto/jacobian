@@ -42,6 +42,16 @@ NULL_SG = {
     ],
 }
 
+# Monogenic semigroup <a> with a^1=x, a^2=y, a^3=z, a^4=y (index 2, period 2).
+CYCLIC_TAIL = {
+    "elements": ["x", "y", "z"],
+    "multiplication": [
+        ["y", "z", "y"],
+        ["z", "y", "z"],
+        ["y", "z", "y"],
+    ],
+}
+
 
 class TestFiniteSemigroup:
     def test_z3_is_valid(self) -> None:
@@ -78,27 +88,38 @@ class TestFiniteSemigroup:
                 ],
             )
 
+    def test_overlong_label_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="length budget"):
+            FiniteSemigroup(
+                elements=["a", "x" * 65],
+                multiplication=[
+                    ["a", "a"],
+                    ["a", "a"],
+                ],
+            )
+
 
 class TestPowerProfile:
     def test_z3_element_1(self) -> None:
         result = compute_power_profile(PowerProfileRequest(semigroup=Z3, element="1"))
         assert result.element == "1"
         assert result.powers == ("1", "2", "0")
-        assert result.index == 0
+        # a^1 = 1, a^2 = 2, a^3 = 0, a^4 = 1: index 1, period 3.
+        assert result.index == 1
         assert result.period == 3
-        assert result.idempotent == "1"
+        assert result.idempotent == "0"
 
-    def test_z3_element_0_is_identity(self) -> None:
+    def test_z3_element_0_is_idempotent(self) -> None:
         result = compute_power_profile(PowerProfileRequest(semigroup=Z3, element="0"))
         assert result.powers == ("0",)
-        assert result.index == 0
+        assert result.index == 1
         assert result.period == 1
         assert result.idempotent == "0"
 
     def test_band_element_a(self) -> None:
         result = compute_power_profile(PowerProfileRequest(semigroup=BAND, element="a"))
         assert result.powers == ("a",)
-        assert result.index == 0
+        assert result.index == 1
         assert result.period == 1
         assert result.idempotent == "a"
 
@@ -106,12 +127,50 @@ class TestPowerProfile:
         result = compute_power_profile(
             PowerProfileRequest(semigroup=NULL_SG, element="x")
         )
+        # a^1 = x, a^2 = 0, a^3 = 0: index 2, period 1.
         assert result.powers == ("x", "0")
+        assert result.index == 2
+        assert result.period == 1
         assert result.idempotent == "0"
 
     def test_cyclic_subsemigroup(self) -> None:
         result = compute_power_profile(PowerProfileRequest(semigroup=Z3, element="1"))
         assert result.cyclic_subsemigroup == ("1", "2", "0")
+
+    def test_nontrivial_tail_index_and_period(self) -> None:
+        result = compute_power_profile(
+            PowerProfileRequest(semigroup=CYCLIC_TAIL, element="x")
+        )
+        assert result.powers == ("x", "y", "z")
+        assert result.index == 2
+        assert result.period == 2
+        assert result.idempotent == "y"
+
+    def test_powers_replay_from_table(self) -> None:
+        result = compute_power_profile(PowerProfileRequest(semigroup=Z3, element="1"))
+        mult = Z3["multiplication"]
+        elements = Z3["elements"]
+        idx = {label: i for i, label in enumerate(elements)}
+        a = result.element
+        running = a
+        for power in result.powers:
+            assert power == running
+            running = mult[idx[running]][idx[a]]
+
+    def test_idempotent_is_idempotent(self) -> None:
+        for sg, element in [(Z3, "1"), (Z3, "0"), (BAND, "a"), (NULL_SG, "x")]:
+            result = compute_power_profile(
+                PowerProfileRequest(semigroup=sg, element=element)
+            )
+            mult = sg["multiplication"]
+            elements = sg["elements"]
+            idx = {label: i for i, label in enumerate(elements)}
+            e = result.idempotent
+            assert mult[idx[e]][idx[e]] == e
+
+    def test_cyclic_subsemigroup_is_exact_closure(self) -> None:
+        result = compute_power_profile(PowerProfileRequest(semigroup=Z3, element="1"))
+        assert set(result.cyclic_subsemigroup) == set(result.powers)
 
 
 class TestGeneratedSubsemigroup:

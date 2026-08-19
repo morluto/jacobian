@@ -8,57 +8,60 @@ from jacobian.math.finite_semigroups._models import (
 )
 
 
-def compute_power_profile(request: PowerProfileRequest) -> PowerProfileResult:
-    """Compute the power profile of one element in a finite semigroup."""
+def _power_profile_data(
+    elements: tuple[str, ...],
+    multiplication: tuple[tuple[str, ...], ...],
+    element: str,
+) -> tuple[tuple[str, ...], int, int, str, tuple[str, ...]]:
+    """Compute ``(powers, index, period, idempotent, cyclic)`` for one element.
 
-    elements = request.semigroup.elements
-    mult = request.semigroup.multiplication
+    ``powers[i]`` is ``a^(i+1)`` (1-based exponents).  ``index`` is the
+    smallest positive exponent whose power first repeats, ``period`` the
+    cycle length, and ``idempotent`` the unique idempotent ``a^k`` with
+    ``k >= index`` and ``k ≡ 0 (mod period)``.
+    """
+
     idx = {label: i for i, label in enumerate(elements)}
-
-    a = request.element
+    a = element
     powers: list[str] = [a]
     seen: dict[str, int] = {a: 0}
 
     current = a
+    zero_based_index = 0
+    period = 1
     while True:
-        # Compute next power: mult[current][a]
-        next_power = mult[idx[current]][idx[a]]
+        next_power = multiplication[idx[current]][idx[a]]
         if next_power in seen:
-            # Found repeat
-            index = seen[next_power]
-            period = len(powers) - index
+            zero_based_index = seen[next_power]
+            period = len(powers) - zero_based_index
             break
         seen[next_power] = len(powers)
         powers.append(next_power)
         current = next_power
 
-    # Find idempotent: the identity of the cyclic group in the eventual cycle
-    # The cycle is powers[index:index+period]
-    # The idempotent is a^(k*period) where k is such that k*period >= index
-    # and k*period is 0 mod the cycle length
-    # Actually: e = a^(m * ceil(index/period) * period) but simpler:
-    # The idempotent in the cycle is powers[index + ((period - (index % period)) % period)]
-    # or equivalently: powers[index + ((-index) % period)]
-    # But we need the idempotent power, which is the power that equals itself when multiplied by itself
-    # In a finite cyclic semigroup with index m and period p, the idempotent is a^(m + ((p - (m % p)) % p))
-    # Actually: the idempotent is a^(k) where k >= m and k % p == 0, so k = m + ((p - m % p) % p)
-    m = index
-    p = period
-    k = m + ((p - m % p) % p)
-    idempotent = (
-        powers[k] if k < len(powers) else powers[index + ((k - index) % period)]
+    index = zero_based_index + 1
+    k = index + ((-index) % period)
+    idempotent = powers[k - 1]
+    cyclic = tuple(powers)
+    return tuple(powers), index, period, idempotent, cyclic
+
+
+def compute_power_profile(request: PowerProfileRequest) -> PowerProfileResult:
+    """Compute the power profile of one element in a finite semigroup."""
+
+    powers, index, period, idempotent, cyclic = _power_profile_data(
+        request.semigroup.elements,
+        request.semigroup.multiplication,
+        request.element,
     )
-
-    # Cyclic subsemigroup = {a, a^2, ..., a^(m+p-1)}
-    cyclic_subsemigroup = tuple(powers[: m + p])
-
     return PowerProfileResult(
-        element=a,
-        powers=tuple(powers),
+        semigroup=request.semigroup,
+        element=request.element,
+        powers=powers,
         index=index,
         period=period,
         idempotent=idempotent,
-        cyclic_subsemigroup=cyclic_subsemigroup,
+        cyclic_subsemigroup=cyclic,
     )
 
 

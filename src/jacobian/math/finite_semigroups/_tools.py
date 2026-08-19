@@ -61,8 +61,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "semigroup.element.power_profile.compute",
         "Compute the power profile of a semigroup element",
         "Compute the sequence a, a^2, a^3, ... until the first repeat, "
-        "determining the index, period, idempotent limit, and complete "
-        "cyclic subsemigroup of one element in a finite semigroup.",
+        "determining the one-based index, period, idempotent limit, and "
+        "complete cyclic subsemigroup of one element in a finite semigroup.",
         PowerProfileRequest,
         PowerProfileResult,
         compute_power_profile,

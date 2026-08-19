@@ -16,7 +16,7 @@
         },
         "abelian_group.presentation.normalize": {
             "input_schema": "sha256:99aa8403697750793111dc060ea8301b7c7ee158dd9e81927b72efc7cf6c8bdc",
-            "output_schema": "sha256:23fe22ec3a9fa5cb484f7f0232febcdab8377e3e7c23f86c7e630fb72fb7739d"
+            "output_schema": "sha256:d8f76df331446ba5174db3139a580b56a9bf3e31606b01ad6c39808e6b8559d3"
         },
         "abelian_group.quotient.compute": {
             "input_schema": "sha256:b822ed48c2f0c5ba1cc0b31484caf3a455c49f11fa87bacf76279882cb161746",

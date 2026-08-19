@@ -24,12 +24,16 @@ def from_preorder(
     return FiniteTopologicalSpace(points=points, preorder=preorder)
 
 
-def specialization_preorder(space: FiniteTopologicalSpace) -> tuple[tuple[int, ...], ...]:
+def specialization_preorder(
+    space: FiniteTopologicalSpace,
+) -> tuple[tuple[int, ...], ...]:
     """Return the specialization preorder rows."""
     return space.preorder
 
 
-def minimal_neighbourhoods(space: FiniteTopologicalSpace) -> tuple[tuple[int, ...], ...]:
+def minimal_neighbourhoods(
+    space: FiniteTopologicalSpace,
+) -> tuple[tuple[int, ...], ...]:
     """Return the minimal open neighbourhood of each point.
 
     In an Alexandrov space, the minimal open neighbourhood of x is {y : y <= x}
@@ -38,9 +42,7 @@ def minimal_neighbourhoods(space: FiniteTopologicalSpace) -> tuple[tuple[int, ..
     return space.preorder
 
 
-def interior(
-    space: FiniteTopologicalSpace, subset: frozenset[int]
-) -> frozenset[int]:
+def interior(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[int]:
     """Return the interior of a subset (largest open set contained in it)."""
     result: set[int] = set()
     for i in range(len(space.points)):
@@ -50,9 +52,7 @@ def interior(
     return frozenset(result)
 
 
-def closure(
-    space: FiniteTopologicalSpace, subset: frozenset[int]
-) -> frozenset[int]:
+def closure(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[int]:
     """Return the closure of a subset (smallest closed set containing it)."""
     result: set[int] = set()
     for i in subset:
@@ -64,9 +64,7 @@ def closure(
     return frozenset(result)
 
 
-def boundary(
-    space: FiniteTopologicalSpace, subset: frozenset[int]
-) -> frozenset[int]:
+def boundary(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[int]:
     """Return the boundary of a subset: closure minus interior."""
     cl = closure(space, subset)
     inter = interior(space, subset)

@@ -14,7 +14,9 @@ from jacobian.math.hyperplane_arrangements._models import (
 )
 
 
-def compute_arrangement(request: HyperplaneArrangementRequest) -> HyperplaneArrangementResult:
+def compute_arrangement(
+    request: HyperplaneArrangementRequest,
+) -> HyperplaneArrangementResult:
     """Check if an arrangement is central (all hyperplanes pass through origin)."""
     is_central = True
     for hp in request.hyperplanes:

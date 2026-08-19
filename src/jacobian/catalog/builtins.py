@@ -164,14 +164,14 @@ from jacobian.math.graphs.transforms._admission import (
     ADMISSIONS as GRAPHS_TRANSFORMS_ADMISSIONS,
 )
 from jacobian.math.graphs.transforms._tools import TOOLS as GRAPH_TRANSFORMS_TOOLS
+from jacobian.math.group._admission import ADMISSIONS as GROUP_ADMISSIONS
+from jacobian.math.group._tools import TOOLS as GROUP_TOOLS
 from jacobian.math.hyperplane_arrangements._admission import (
     ADMISSIONS as HYPERPLANE_ARRANGEMENTS_ADMISSIONS,
 )
 from jacobian.math.hyperplane_arrangements._tools import (
     TOOLS as HYPERPLANE_ARRANGEMENTS_TOOLS,
 )
-from jacobian.math.group._admission import ADMISSIONS as GROUP_ADMISSIONS
-from jacobian.math.group._tools import TOOLS as GROUP_TOOLS
 from jacobian.math.impartial_games._admission import (
     ADMISSIONS as IMPARTIAL_GAMES_ADMISSIONS,
 )

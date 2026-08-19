@@ -47,17 +47,13 @@ def test_arrangement_noncentral() -> None:
 
 
 def test_characteristic_polynomial_generic() -> None:
-    request = CharacteristicPolynomialRequest(
-        ambient_dimension=2, hyperplane_count=2
-    )
+    request = CharacteristicPolynomialRequest(ambient_dimension=2, hyperplane_count=2)
     result = compute_characteristic_polynomial(request)
     assert result.degree == 2
     assert len(result.coefficients) == 3
 
 
 def test_chamber_count_generic() -> None:
-    request = ChamberCountRequest(
-        ambient_dimension=2, hyperplane_count=2
-    )
+    request = ChamberCountRequest(ambient_dimension=2, hyperplane_count=2)
     result = compute_chamber_count(request)
     assert result.chamber_count == 4

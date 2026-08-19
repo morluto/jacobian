@@ -58,10 +58,6 @@
       "input_schema": "sha256:e088f79bec7582eeb573f90a4871bff9717be34f173e067590bd4b9c459dd8b4",
       "output_schema": "sha256:ad2765313367b7aa708e2f34b2ea97206c01343af416696fa94852479917f9eb"
     },
-    "graph.independent_set.maximum.compute": {
-      "input_schema": "sha256:7ec4e127468e32f18976f395d7fd14b3ede3fdc2a84917d3df3a467f7bd5b6eb",
-      "output_schema": "sha256:6535485bc70338ab9281a115fcbdd1de99fb489ef0953c5f36d24b37ab14dde4"
-    },
     "graph.induced_bipartite.maximum.compute": {
       "input_schema": "sha256:c5325fe91eaf07a82ed42666b0691144b4db1d369a1dfca9a42b73f190c88919",
       "output_schema": "sha256:11c828c2b39eb3753fc9833b44a70a627a56b5dd9f340e2fd81ece853ff98dd6"

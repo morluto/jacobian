@@ -11,13 +11,10 @@ from jacobian.math.graphs.coloring._models import (
     KColorabilityResult,
     MaximalIndependentSetRequest,
     MaximalIndependentSetResult,
-    MaximumIndependentSetRequest,
-    MaximumIndependentSetResult,
 )
 from jacobian.math.graphs.coloring._operations import (
     compute_k_colorability,
     compute_maximal_independent_set_decision,
-    compute_maximum_independent_set,
 )
 
 
@@ -70,29 +67,6 @@ GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                         "edges": [[0, 1], [1, 2], [2, 0]],
                     },
                     "colors": 3,
-                },
-            ),
-        ),
-    ),
-    graph_coloring_operation(
-        "graph.independent_set.maximum.compute",
-        "Compute the maximum independent set of a graph",
-        "Compute the maximum independent set of a simple undirected graph using a Z3 optimization encoding.",
-        MaximumIndependentSetRequest,
-        MaximumIndependentSetResult,
-        compute_maximum_independent_set,
-        "graph",
-        "independent-set",
-        "exact",
-        examples=(
-            example(
-                "path_max_is",
-                "Compute the maximum independent set of a path graph.",
-                {
-                    "graph": {
-                        "vertex_count": 4,
-                        "edges": [[0, 1], [1, 2], [2, 3]],
-                    },
                 },
             ),
         ),

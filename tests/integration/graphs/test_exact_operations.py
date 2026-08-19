@@ -5,11 +5,9 @@ from pydantic import ValidationError
 
 from jacobian.math.graphs.coloring._models import (
     KColorabilityRequest,
-    MaximumIndependentSetRequest,
 )
 from jacobian.math.graphs.coloring._operations import (
     compute_k_colorability,
-    compute_maximum_independent_set,
 )
 from jacobian.math.graphs.flow._models import MaxFlowRequest
 from jacobian.math.graphs.flow._operations import compute_max_flow
@@ -44,25 +42,6 @@ def test_k_colorability_uses_an_exact_decision_procedure() -> None:
     assert result.coloring is not None
     assert all(
         result.coloring[left] != result.coloring[right]
-        for left, right in request.graph.edges
-    )
-
-
-def test_maximum_independent_set_is_exact() -> None:
-    request = MaximumIndependentSetRequest.model_validate(
-        {
-            "graph": {
-                "vertex_count": 5,
-                "edges": [[0, 1], [1, 2], [2, 3], [3, 4], [4, 0]],
-            }
-        }
-    )
-
-    result = compute_maximum_independent_set(request)
-
-    assert result.cardinality == 2
-    assert all(
-        left not in result.independent_set or right not in result.independent_set
         for left, right in request.graph.edges
     )
 

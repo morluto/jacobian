@@ -47,14 +47,23 @@ _CATEGORY = {
         {"morphism_id": "id_B", "source": "B", "target": "B"},
         {"morphism_id": "f", "source": "A", "target": "B"},
     ],
+    "identities": [["A", "id_A"], ["B", "id_B"]],
+    "composition": [
+        ["id_A", "id_A", "id_A"],
+        ["f", "id_A", "f"],
+        ["id_B", "id_B", "id_B"],
+        ["id_B", "f", "f"],
+    ],
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "finite_category.profile.compute",
         "Compute the profile of a finite category",
-        "Compute hom-set counts, endomorphism counts, and identity "
-        "morphisms for a finite category presented extensionally.",
+        "Compute hom-set cardinalities, endomorphism counts, and the "
+        "designated identity morphism for each object of a finite category "
+        "presented extensionally with identities and a total composition "
+        "table.",
         FiniteCategoryRequest,
         CategoryProfileResult,
         compute_category_profile,
@@ -64,17 +73,23 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "two_object_category",
-                "Profile a 2-object, 3-morphism category; "
-                "every morphism source/target must be a declared object.",
-                {"objects": _CATEGORY["objects"], "morphisms": _CATEGORY["morphisms"]},
+                "Profile a 2-object, 3-morphism category; every morphism "
+                "source/target must be a declared object and the category "
+                "laws must hold.",
+                {
+                    "objects": _CATEGORY["objects"],
+                    "morphisms": _CATEGORY["morphisms"],
+                    "identities": _CATEGORY["identities"],
+                    "composition": _CATEGORY["composition"],
+                },
             ),
         ),
     ),
     _op(
         "finite_category.opposite.compute",
         "Compute the opposite category",
-        "Compute the opposite category with all morphism directions "
-        "reversed (source and target swapped).",
+        "Compute the opposite category with all morphism directions reversed "
+        "(source and target swapped) and composition order reversed.",
         FiniteCategoryRequest,
         OppositeCategoryResult,
         compute_opposite_category,
@@ -84,9 +99,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "opposite_of_two_object",
-                "Compute the opposite of a 2-object category; "
-                "every morphism source/target must be a declared object.",
-                {"objects": _CATEGORY["objects"], "morphisms": _CATEGORY["morphisms"]},
+                "Compute the opposite of a 2-object category; every morphism "
+                "source/target must be a declared object and the category "
+                "laws must hold.",
+                {
+                    "objects": _CATEGORY["objects"],
+                    "morphisms": _CATEGORY["morphisms"],
+                    "identities": _CATEGORY["identities"],
+                    "composition": _CATEGORY["composition"],
+                },
             ),
         ),
     ),

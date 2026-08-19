@@ -10,19 +10,24 @@ MAX_VARS = 6
 MAX_GENERATORS = 32
 
 
-class IdealRequest(StrictModel):
-    """An ideal in a polynomial ring Q[x1,...,xn]."""
-
-    variables: tuple[str, ...] = Field(min_length=1, max_length=MAX_VARS)
-    generators: tuple[str, ...] = Field(min_length=1, max_length=MAX_GENERATORS)
-
-
 class IdealRadicalRequest(StrictModel):
+    """Request for radical of an ideal I = <generators> in Q[variables]."""
+
     variables: tuple[str, ...] = Field(min_length=1, max_length=MAX_VARS)
     generators: tuple[str, ...] = Field(min_length=1, max_length=MAX_GENERATORS)
+
+
+class IdealRadicalMembershipRequest(StrictModel):
+    """Request for checking membership of a polynomial in the radical of an ideal."""
+
+    variables: tuple[str, ...] = Field(min_length=1, max_length=MAX_VARS)
+    generators: tuple[str, ...] = Field(min_length=1, max_length=MAX_GENERATORS)
+    polynomial: str = Field(min_length=1)
 
 
 class IdealQuotientRequest(StrictModel):
+    """Request for the ideal quotient (I : J) in Q[variables]."""
+
     variables: tuple[str, ...] = Field(min_length=1, max_length=MAX_VARS)
     generators_a: tuple[str, ...] = Field(min_length=1, max_length=MAX_GENERATORS)
     generators_b: tuple[str, ...] = Field(min_length=1, max_length=MAX_GENERATORS)
@@ -35,8 +40,7 @@ class IdealRadicalResult(StrictModel):
 
 class IdealRadicalMembershipResult(StrictModel):
     in_radical: bool
-    membership_witness: str = ""
-    method: str = "GROEBNER_BASIS"
+    method: str = "RABINOWITSCH"
 
 
 class IdealQuotientResult(StrictModel):

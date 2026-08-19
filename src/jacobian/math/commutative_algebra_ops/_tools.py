@@ -9,10 +9,10 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.commutative_algebra_ops._models import (
     IdealQuotientRequest,
     IdealQuotientResult,
+    IdealRadicalMembershipRequest,
     IdealRadicalMembershipResult,
     IdealRadicalRequest,
     IdealRadicalResult,
-    IdealRequest,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
@@ -49,8 +49,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "polynomial.ideal.radical.compute",
         "Compute the radical of an ideal",
-        "Compute the radical √I of a polynomial ideal using SymPy's "
-        "Gröbner basis machinery.",
+        "Compute the radical sqrt(I) of a polynomial ideal using SymPy's "
+        "Groebner basis machinery.",
         IdealRadicalRequest,
         IdealRadicalResult,
         compute_ideal_radical,
@@ -71,8 +71,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "polynomial.ideal.radical_membership.decide",
         "Check membership in the radical of an ideal",
-        "Check whether a polynomial f lies in the radical √I.",
-        IdealRequest,
+        "Check whether a polynomial f lies in the radical sqrt(I) of the "
+        "ideal I = <generators> in Q[variables], using the Rabinowitsch "
+        "trick.",
+        IdealRadicalMembershipRequest,
         IdealRadicalMembershipResult,
         compute_ideal_radical_membership,
         "commutative-algebra",
@@ -85,6 +87,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "variables": ["x"],
                     "generators": ["x**2"],
+                    "polynomial": "x",
                 },
             ),
         ),
@@ -92,7 +95,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "polynomial.ideal.quotient.compute",
         "Compute the ideal quotient (I : J)",
-        "Compute the colon ideal (I : J) = {f : f*J ⊆ I} using SymPy.",
+        "Compute the colon ideal (I : J) = {f : f*J subseteq I} using SymPy.",
         IdealQuotientRequest,
         IdealQuotientResult,
         compute_ideal_quotient,

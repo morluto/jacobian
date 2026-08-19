@@ -132,7 +132,7 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
     asyncio.run(scenario())
 
 
-@pytest.mark.requires_provider("flint")
+@pytest.mark.requires_backend("flint")
 def test_mcp_composes_public_finite_field_values_with_native_projections(
     tmp_path: Path,
 ) -> None:

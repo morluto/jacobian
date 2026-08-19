@@ -808,6 +808,7 @@ class LinkRequest(StrictModel):
         for facet in self.complex.facets:
             for r in range(1, len(facet) + 1):
                 from itertools import combinations
+
                 for subset in combinations(facet, r):
                     all_faces.add(frozenset(subset))
         if simplex_set not in all_faces and len(simplex_set) > 0:

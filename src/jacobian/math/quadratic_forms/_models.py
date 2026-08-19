@@ -26,7 +26,7 @@ class SymmetricMatrix(StrictModel):
             if len(row) != n:
                 raise ValueError("matrix must be square")
             for entry in row:
-                if abs(entry) >= 10 ** MAX_ENTRY_DIGITS:
+                if abs(entry) >= 10**MAX_ENTRY_DIGITS:
                     raise ValueError(
                         f"matrix entries must not exceed {MAX_ENTRY_DIGITS} digits"
                     )

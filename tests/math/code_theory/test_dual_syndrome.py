@@ -82,7 +82,7 @@ def test_dual_mod_3_fractional() -> None:
     assert result.dual_dimension == 1
     assert result.code_dimension == 1
     for row in result.parity_check_matrix:
-        s = sum(g * h for g, h in zip((2, 1), row)) % 3
+        s = sum(g * h for g, h in zip((2, 1), row, strict=True)) % 3
         assert s == 0
 
 

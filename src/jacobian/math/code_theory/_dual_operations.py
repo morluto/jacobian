@@ -41,7 +41,7 @@ def _nullspace_mod_prime(rows: tuple[tuple[int, ...], ...], p: int) -> list[list
         if pivot_row == row_count:
             break
 
-    rank = pivot_row
+    # rank = pivot_row  # used implicitly via pivot_cols
     # Free columns correspond to nullspace basis vectors
     pivot_set = set(pivot_cols)
     free_cols = [c for c in range(col_count) if c not in pivot_set]

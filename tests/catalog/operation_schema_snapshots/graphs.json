@@ -162,10 +162,6 @@
             "input_schema": "sha256:bd2cceea682c8950634db91dc40c9c61a68faab498f5136ca4bfb6d79582f37a",
             "output_schema": "sha256:2cdd532a4b56ad6ddfa8a877d2ce569ae0b45a1ba42ca8b8632361a190cbee69"
         },
-        "network.circulation.feasibility.compute": {
-            "input_schema": "sha256:9a3b7460629bedbd849772fa97f57bb3d669dedf75684ee2f74867dd16de136e",
-            "output_schema": "sha256:3f7e3d8a9c5baf06bb5815e443b3f51260105a2c911a6b6b87f69df72da2314b"
-        },
         "network.min_cost_flow.compute": {
             "input_schema": "sha256:418d6b47cfe56117f4b037b57ffce6e070d8fa617073be6a068b03b898e8bb05",
             "output_schema": "sha256:730031125e0951b4cfa651d7758bd806434ddd0e8063267f20979c2d22d1fd44"

@@ -123,6 +123,10 @@ class CodeEqualRequest(StrictModel):
         width_b = len(self.generator_matrix_b[0])
         if width_a != width_b:
             raise ValueError("generator matrices must have the same code length")
+        if self.field_order ** len(self.generator_matrix_a) > MAX_CODEWORDS:
+            raise ValueError("code cardinality exceeds enumeration bound")
+        if self.field_order ** len(self.generator_matrix_b) > MAX_CODEWORDS:
+            raise ValueError("code cardinality exceeds enumeration bound")
         return self
 
 
@@ -136,8 +140,10 @@ class MacWilliamsRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_distribution(self) -> Self:
-        if any(w < 0 or w > self.length for w in self.weights):
-            raise ValueError("weights must be between 0 and length")
+        if len(self.weights) != self.length + 1:
+            raise ValueError("weights must have length + 1 entries")
+        if any(w < 0 for w in self.weights):
+            raise ValueError("weight counts must be non-negative")
         if self.weights[0] != 1:
             raise ValueError("first weight count must be 1 (zero codeword)")
         if sum(self.weights) != self.code_cardinality:

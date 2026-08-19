@@ -155,7 +155,25 @@ def compute_codeword_check(
 
     coefficients: tuple[int, ...] = ()
     if is_member:
-        coefficients = tuple([0] * len(matrix))
+        # Solve x * G = word over GF(q) by RREF on the augmented
+        # transpose [G^T | word^T].
+        gt = [[matrix[r][c] % q for r in range(len(matrix))] for c in range(len(matrix[0]))]
+        aug_t = [gt[c] + [word[c] % q] for c in range(len(matrix[0]))]
+        rref_aug, rank_aug2 = _rref(aug_t, q)
+        # Extract solution from augmented column
+        coeffs: list[int] = [0] * len(matrix)
+        pivot_cols: list[int] = []
+        for r in range(rank_aug2):
+            for c in range(len(matrix)):
+                if rref_aug[r][c] != 0:
+                    pivot_cols.append(c)
+                    break
+        for r in range(rank_aug2):
+            for c in range(len(matrix)):
+                if rref_aug[r][c] != 0:
+                    coeffs[c] = rref_aug[r][-1] % q
+                    break
+        coefficients = tuple(coeffs)
 
     syndrome_vec = _mat_mul_vec(
         _nullspace([list(row) for row in request.generator_matrix], q), word, q
@@ -190,7 +208,7 @@ def _rowspace_contains(
         augmented.append(list(row))
     _, aug_rank = _rref(augmented, q)
     _, g_rank = _rref([list(r) for r in g], q)
-    return aug_rank == g_rank + (target_rank - g_rank)
+    return aug_rank == g_rank
 
 
 def _enumerate_code(
@@ -254,7 +272,7 @@ def compute_macwilliams_transform(request: MacWilliamsRequest) -> MacWilliamsRes
                         comb(i, j)
                         * comb(n - i, k - j)
                         * ((-1) ** j)
-                        * (q - 1) ** (i - j)
+                        * (q - 1) ** (k - j)
                     )
                     s += primal[i] * term
         dual.append(s // request.code_cardinality)
@@ -281,14 +299,40 @@ def compute_shorten(request: ShortenRequest) -> ShortenResult:
     q = request.field_order
     col = request.coordinate
 
-    shortened = [list(row) for row in matrix]
-    for row in shortened:
-        row[col] = 0
+    # Shortening: keep codewords c with c[col] = 0, then delete col.
+    # RREF the generator to get a basis, then find the subcode vanishing at col.
+    rref, rank = _rref([list(row) for row in matrix], q)
+    n = len(matrix[0])
 
-    rref, rank = _rref(shortened, q)
-    result_rows = [list(row) for row in rref[:rank]]
-    shortened_result = [row[:col] + row[col + 1 :] for row in result_rows]
-    final_rref, final_rank = _rref(shortened_result, q)
+    # Build the column of coordinate values from the RREF basis
+    col_values = [rref[i][col] % q for i in range(rank)]
+
+    # Find rows where col is nonzero (pivot rows for the coordinate functional)
+    nonzero_rows = [i for i in range(rank) if col_values[i] != 0]
+
+    if not nonzero_rows:
+        # All rows already have 0 at col: shortened = punctured code
+        shortened_result = [rref[i][:col] + rref[i][col + 1:] for i in range(rank)]
+    else:
+        # Keep rows with 0 at col, plus combinations that zero out col
+        piv0 = nonzero_rows[0]
+        shortened_rows: list[list[int]] = []
+        for i in range(rank):
+            if i not in nonzero_rows:
+                shortened_rows.append(rref[i][:col] + rref[i][col + 1:])
+        for p in nonzero_rows:
+            if p == piv0:
+                continue
+            factor = (col_values[p] * pow(col_values[piv0], -1, q)) % q
+            combined = []
+            for j in range(n):
+                if j == col:
+                    continue
+                combined.append((rref[p][j] - factor * rref[piv0][j]) % q)
+            shortened_rows.append(combined)
+        shortened_result = shortened_rows
+
+    final_rref, final_rank = _rref(shortened_result, q) if shortened_result else ([], 0)
     new_len = len(matrix[0]) - 1
     gen = tuple(tuple(row) for row in final_rref[:final_rank]) if final_rank > 0 else ()
     return ShortenResult(

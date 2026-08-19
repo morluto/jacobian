@@ -253,19 +253,19 @@ def restrict(td: TreeDecomposition, subset: frozenset[str]) -> dict[str, object]
     # Build edges by contracting through deleted nodes: for each pair of
     # active nodes, check if there's a path through deleted nodes.
     new_edges_list: list[tuple[int, int]] = []
-    visited: set[int] = set()
+    visited_edges: set[tuple[int, int]] = set()
     for i in keep_indices:
         # BFS from node i through deleted nodes to find all active neighbors
-        stack = [(i, set())]
+        stack: list[tuple[int, set[int]]] = [(i, set())]
         while stack:
             node, path = stack.pop()
             for neighbor in adjacency[node]:
                 if neighbor in active_nodes and neighbor != i:
-                    if (neighbor, i) not in visited and (i, neighbor) not in visited:
-                        edge = (min(i, neighbor), max(i, neighbor))
+                    edge = (min(i, neighbor), max(i, neighbor))
+                    if edge not in visited_edges:
                         if edge not in new_edges_list:
                             new_edges_list.append(edge)
-                        visited.add(edge)
+                        visited_edges.add(edge)
                 elif neighbor not in active_nodes and neighbor not in path:
                     stack.append((neighbor, path | {node}))
     # Prune redundant leaves: leaf whose bag is a subset of its neighbor.

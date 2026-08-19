@@ -28,7 +28,7 @@
     },
     "combinatorial_map.vertex_face_incidence.compute": {
       "input_schema": "sha256:ef9c7321870ddd6d1229760d7ce369d1a4c05005a358f2df33a58c8a1e9b27f1",
-      "output_schema": "sha256:81993b7bb681ae33299f89be8e1771e196884ffb1cfadc4c10dafde7ec27ec14"
+      "output_schema": "sha256:61b76195d0f24866992c5aa1207541c477d96d6ef4f1b09f3b53a8e879fec5f2"
     }
   }
 }

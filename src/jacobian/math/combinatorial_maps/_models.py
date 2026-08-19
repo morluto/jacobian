@@ -108,9 +108,7 @@ class OrientationReverseResult(StrictModel):
                 "reversed_map must be the exact orientation reversal of the input map"
             )
         if self.face_bijection != expected_bijection:
-            raise ValueError(
-                "face_bijection must be the exact induced face bijection"
-            )
+            raise ValueError("face_bijection must be the exact induced face bijection")
         return self
 
 
@@ -148,9 +146,13 @@ class VertexFaceIncidenceRequest(StrictModel):
 
 
 class VertexFaceIncidenceResult(StrictModel):
-    """Per-(vertex, face) multiplicity and per-vertex face set."""
+    """Per-(vertex, face) multiplicity and per-vertex face set.
 
-    multiplicity: dict[tuple[int, int], int]
+    ``multiplicity`` maps each vertex to its per-face occurrence counts;
+    the nested shape keeps the wire representation JSON-safe.
+    """
+
+    multiplicity: dict[int, dict[int, int]]
     boolean_incidence: dict[int, tuple[int, ...]]
 
 

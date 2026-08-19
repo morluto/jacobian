@@ -14,7 +14,9 @@ MAX_ROTATION_LENGTH = 64
 MAX_LABEL_BYTES = 1024
 
 
-def _validate_dart(dart: tuple[int, int, int], vertex_count: int, dart_count: int) -> None:
+def _validate_dart(
+    dart: tuple[int, int, int], vertex_count: int, dart_count: int
+) -> None:
     if len(dart) != 3:
         raise ValueError("each dart must carry (tail, head, reverse)")
     tail, head, reverse = dart
@@ -26,9 +28,7 @@ def _validate_dart(dart: tuple[int, int, int], vertex_count: int, dart_count: in
         raise ValueError("dart reverse out of range")
 
 
-def _validate_involution(
-    darts: tuple[tuple[int, int, int], ...]
-) -> None:
+def _validate_involution(darts: tuple[tuple[int, int, int], ...]) -> None:
     for dart_index, dart in enumerate(darts):
         tail, head, reverse = dart
         if reverse == dart_index:
@@ -56,9 +56,7 @@ def _validate_rotation(
 ) -> None:
     for vertex, row in enumerate(rotations):
         if not row and outgoing[vertex]:
-            raise ValueError(
-                "an outgoing-dart vertex must declare a nonempty rotation"
-            )
+            raise ValueError("an outgoing-dart vertex must declare a nonempty rotation")
         if len(row) > MAX_ROTATION_LENGTH:
             raise ValueError(
                 "a local rotation exceeds the bounded rotation-length budget"
@@ -69,9 +67,7 @@ def _validate_rotation(
         for dart_index in row:
             dart = darts[dart_index]
             if dart[0] != vertex:
-                raise ValueError(
-                    "rotation must list only outgoing darts of its vertex"
-                )
+                raise ValueError("rotation must list only outgoing darts of its vertex")
             if dart_index in seen:
                 raise ValueError("rotation must not repeat a dart")
             seen.add(dart_index)

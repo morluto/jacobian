@@ -40,10 +40,14 @@ def _four_cycle() -> FiniteCombinatorialMap:
     return FiniteCombinatorialMap(
         vertex_count=4,
         darts=(
-            (0, 1, 1), (1, 0, 0),
-            (1, 2, 3), (2, 1, 2),
-            (2, 3, 5), (3, 2, 4),
-            (3, 0, 7), (0, 3, 6),
+            (0, 1, 1),
+            (1, 0, 0),
+            (1, 2, 3),
+            (2, 1, 2),
+            (2, 3, 5),
+            (3, 2, 4),
+            (3, 0, 7),
+            (0, 3, 6),
         ),
         rotations=((0, 7), (1, 2), (3, 4), (5, 6)),
     )
@@ -69,8 +73,10 @@ def _torus() -> FiniteCombinatorialMap:
     return FiniteCombinatorialMap(
         vertex_count=1,
         darts=(
-            (0, 0, 1), (0, 0, 0),
-            (0, 0, 3), (0, 0, 2),
+            (0, 0, 1),
+            (0, 0, 0),
+            (0, 0, 3),
+            (0, 0, 2),
         ),
         rotations=((0, 2, 1, 3),),
     )
@@ -84,8 +90,10 @@ def _tree() -> FiniteCombinatorialMap:
     return FiniteCombinatorialMap(
         vertex_count=3,
         darts=(
-            (0, 1, 1), (1, 0, 0),
-            (1, 2, 3), (2, 1, 2),
+            (0, 1, 1),
+            (1, 0, 0),
+            (1, 2, 3),
+            (2, 1, 2),
         ),
         rotations=((0,), (1, 2), (3,)),
     )
@@ -99,8 +107,10 @@ def _disconnected() -> FiniteCombinatorialMap:
     return FiniteCombinatorialMap(
         vertex_count=2,
         darts=(
-            (0, 0, 1), (0, 0, 0),
-            (1, 1, 3), (1, 1, 2),
+            (0, 0, 1),
+            (0, 0, 0),
+            (1, 1, 3),
+            (1, 1, 2),
         ),
         rotations=((0, 1), (2, 3)),
     )
@@ -167,7 +177,10 @@ class TestFaces:
             FiniteCombinatorialMap(
                 vertex_count=3,
                 darts=((0, 1, 1), (1, 0, 0)),
-                rotations=((0,), (1,),),
+                rotations=(
+                    (0,),
+                    (1,),
+                ),
             )
 
 
@@ -178,7 +191,9 @@ class TestFaces:
 
 class TestEulerCharacteristic:
     def test_four_cycle_sphere(self) -> None:
-        result = compute_euler_characteristic(EulerCharacteristicRequest(map=_four_cycle()))
+        result = compute_euler_characteristic(
+            EulerCharacteristicRequest(map=_four_cycle())
+        )
         assert result.total == {"V": 4, "E": 4, "F": 2, "chi": 2}
         assert len(result.per_component) == 1
         assert result.per_component[0] == {"V": 4, "E": 4, "F": 2, "chi": 2}
@@ -228,9 +243,7 @@ class TestOrientableGenus:
         assert result.total == 0
 
     def test_disconnected_sums(self) -> None:
-        result = compute_orientable_genus(
-            OrientableGenusRequest(map=_disconnected())
-        )
+        result = compute_orientable_genus(OrientableGenusRequest(map=_disconnected()))
         assert result.per_component == (0, 0)
         assert result.total == 0
 
@@ -247,9 +260,7 @@ class TestOrientationReverse:
         reversed_map = result.reversed_map
         assert reversed_map.vertex_count == m.vertex_count
         # Apply again.
-        inner = compute_orientation_reverse(
-            OrientationReverseRequest(map=reversed_map)
-        )
+        inner = compute_orientation_reverse(OrientationReverseRequest(map=reversed_map))
         assert inner.reversed_map == m
 
     def test_orientation_preserves_euler(self) -> None:
@@ -258,7 +269,9 @@ class TestOrientationReverse:
             OrientationReverseRequest(map=m)
         ).reversed_map
         original = compute_euler_characteristic(EulerCharacteristicRequest(map=m))
-        after = compute_euler_characteristic(EulerCharacteristicRequest(map=reversed_map))
+        after = compute_euler_characteristic(
+            EulerCharacteristicRequest(map=reversed_map)
+        )
         assert original.total == after.total
 
     def test_orientation_preserves_genus(self) -> None:
@@ -335,22 +348,19 @@ class TestDual:
 class TestVertexFaceIncidence:
     def test_four_cycle_incidence(self) -> None:
         m = _four_cycle()
-        result = compute_vertex_face_incidence(
-            VertexFaceIncidenceRequest(map=m)
-        )
+        result = compute_vertex_face_incidence(VertexFaceIncidenceRequest(map=m))
         # Each of 4 vertices is incident to both faces.
         for vertex in range(4):
             assert set(result.boolean_incidence[vertex]) == {0, 1}
         # Each vertex appears once per face -> 8 multiplicity entries.
-        assert len(result.multiplicity) == 8
-        for value in result.multiplicity.values():
-            assert value == 1
+        assert sum(len(row) for row in result.multiplicity.values()) == 8
+        for row in result.multiplicity.values():
+            for value in row.values():
+                assert value == 1
 
     def test_torus_incidence(self) -> None:
         m = _torus()
-        result = compute_vertex_face_incidence(
-            VertexFaceIncidenceRequest(map=m)
-        )
+        result = compute_vertex_face_incidence(VertexFaceIncidenceRequest(map=m))
         assert set(result.boolean_incidence[0]) == {0}
 
 

@@ -91,23 +91,15 @@ def compute_orientation_reverse(
 def compute_connected_components(
     request: ConnectedComponentsRequest,
 ) -> ConnectedComponentsResult:
-    vertex_component, dart_component, face_component = connected_components(
-        request.map
-    )
+    vertex_component, dart_component, face_component = connected_components(request.map)
     n_vertices = request.map.vertex_count
     n_darts = len(request.map.darts)
     walks, _, _, _ = face_orbits(request.map)
     n_faces = len(walks)
     return ConnectedComponentsResult(
-        vertex_component=tuple(
-            vertex_component[v] for v in range(n_vertices)
-        ),
-        dart_component=tuple(
-            dart_component[d] for d in range(n_darts)
-        ),
-        face_component=tuple(
-            face_component[f] for f in range(n_faces)
-        ),
+        vertex_component=tuple(vertex_component[v] for v in range(n_vertices)),
+        dart_component=tuple(dart_component[d] for d in range(n_darts)),
+        face_component=tuple(face_component[f] for f in range(n_faces)),
     )
 
 
@@ -120,10 +112,11 @@ def compute_vertex_face_incidence(
     request: VertexFaceIncidenceRequest,
 ) -> VertexFaceIncidenceResult:
     multiplicity, boolean = vertex_face_incidence(request.map)
-    boolean_incidence = {
-        v: tuple(sorted(boolean[v])) for v in sorted(boolean)
-    }
+    nested: dict[int, dict[int, int]] = {}
+    for (vertex, face), count in multiplicity.items():
+        nested.setdefault(vertex, {})[face] = count
+    boolean_incidence = {v: tuple(sorted(boolean[v])) for v in sorted(boolean)}
     return VertexFaceIncidenceResult(
-        multiplicity=multiplicity,
+        multiplicity=nested,
         boolean_incidence=boolean_incidence,
     )

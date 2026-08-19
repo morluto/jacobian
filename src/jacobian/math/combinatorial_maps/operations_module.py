@@ -23,9 +23,7 @@ __all__ = [
 ]
 
 
-def rotation_successor(
-    map_: FiniteCombinatorialMap, dart: int
-) -> int:
+def rotation_successor(map_: FiniteCombinatorialMap, dart: int) -> int:
     """Return the dart following ``dart`` in its local rotation."""
 
     tail = map_.darts[dart][0]
@@ -154,8 +152,8 @@ def euler_characteristic(
         vertex = map_.darts[walks[face_index][0]][0]
         comp = vertex_component[vertex]
         component_faces[comp] = component_faces.get(comp, 0) + 1
-    all_components = set(component_vertices) | set(component_edges) | set(
-        component_faces
+    all_components = (
+        set(component_vertices) | set(component_edges) | set(component_faces)
     )
     per_component: list[dict[str, int]] = []
     total_v = total_e = total_f = 0
@@ -163,13 +161,16 @@ def euler_characteristic(
         v = len(component_vertices.get(comp, set()))
         e = component_edges.get(comp, 0)
         f = component_faces.get(comp, 0)
-        per_component.append(
-            {"V": v, "E": e, "F": f, "chi": v - e + f}
-        )
+        per_component.append({"V": v, "E": e, "F": f, "chi": v - e + f})
         total_v += v
         total_e += e
         total_f += f
-    total = {"V": total_v, "E": total_e, "F": total_f, "chi": total_v - total_e + total_f}
+    total = {
+        "V": total_v,
+        "E": total_e,
+        "F": total_f,
+        "chi": total_v - total_e + total_f,
+    }
     return per_component, total
 
 
@@ -223,9 +224,7 @@ def orientation_reverse(
                 face_bijection[old_face] = new_face
                 break
         if old_face not in face_bijection:
-            raise ValueError(
-                "orientation reversal did not induce a face bijection"
-            )
+            raise ValueError("orientation reversal did not induce a face bijection")
     return reversed_map, face_bijection
 
 
@@ -263,9 +262,7 @@ def dual_map(
     # The dual rotation at dual vertex f is the cyclic order of dual darts
     # whose tail-face is f -- i.e. the darts on the boundary of primal face f.
     # The face walk is already in cyclic order, so use it directly.
-    face_darts: dict[int, list[int]] = {
-        f: [] for f in range(face_count)
-    }
+    face_darts: dict[int, list[int]] = {f: [] for f in range(face_count)}
     for face_index, walk in enumerate(walks):
         face_darts[face_index] = list(walk)
     dual_rotations: list[tuple[int, ...]] = []

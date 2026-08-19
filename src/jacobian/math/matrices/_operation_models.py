@@ -297,11 +297,33 @@ class MatrixProductResult(StrictModel):
 
 
 class RationalLinearSolveResult(StrictModel):
-    solution: tuple[CanonicalRational, ...] = Field(
+    """Result of solving a linear system Ax=b over QQ.
+
+    The outcome discriminates between:
+    - UNIQUE: the system has a unique solution (solution field is populated)
+    - INCONSISTENT: the system has no solution
+    - NON_UNIQUE: the system has infinitely many solutions (non-unique)
+    """
+
+    outcome: Literal["UNIQUE", "INCONSISTENT", "NON_UNIQUE"]
+    solution: tuple[CanonicalRational, ...] | None = Field(
+        default=None,
         min_length=1,
         max_length=MAX_MATRIX_DIMENSION,
     )
     convention: Literal["UNIQUE_SOLUTION_OVER_QQ"] = "UNIQUE_SOLUTION_OVER_QQ"
+
+    @model_validator(mode="after")
+    def require_outcome_solution_consistency(self) -> Self:
+        if self.outcome == "UNIQUE":
+            if self.solution is None:
+                raise ValueError("a unique solution must populate the solution field")
+        else:
+            if self.solution is not None:
+                raise ValueError(
+                    "a non-unique or inconsistent result must not populate the solution field"
+                )
+        return self
 
 
 class MatrixAdjugateResult(StrictModel):

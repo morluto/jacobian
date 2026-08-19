@@ -12,5 +12,5 @@ operations are:
 - `poset.width.compute` for an exact maximum antichain and same-size chain
   partition.
 
-Their values compose in ordinary requests and responses. There is no bulk
-ledger, recurrence publication, or server-side replay state.
+Their typed results can be reused directly as inputs to later operations where
+the contracts align.

@@ -6,7 +6,6 @@
 environment included in the service image. It returns either `ELABORATED` or
 `REJECTED` and a bounded list of typed diagnostics.
 
-The operation uses a temporary directory for that one invocation and removes it
-when the process exits. It has no proof-state session, declaration search,
-cache, source publication, replay record, or stored proof reference. A timeout
-or process failure is an execution failure, not an elaboration result.
+Each invocation uses a request-scoped temporary directory, removes it when the
+process exits, and returns the resulting diagnostics. A timeout or process
+failure is an execution failure, not an elaboration result.

@@ -31,5 +31,5 @@ a witness path to `evidence/answer.txt`. Do not copy a universal certificate uni
 into a generated family; each task's schema admits only the certificate that
 family can reward. Instruction, schema, solver, and verifier must accept
 the same objects. Closed success variants omit inapplicable fields. See
-[authoring a Harbor benchmark task](../../../docs/how-to/author-harbor-benchmark-task.md)
-and [benchmark contracts](../../../docs/reference/evaluations/benchmark-contracts.md).
+[authoring a Harbor benchmark task](../../docs/author-harbor-benchmark-task.md)
+and [benchmark contracts](../../docs/benchmark-contracts.md).

@@ -84,7 +84,7 @@ testpaths = [
 # deadline would interrupt native solvers that process/Lean isolate instead.
 timeout_method = "thread"
 markers = [
-    "requires_provider(name): test requires a production provider readiness probe",
+    "requires_backend(name): test requires a maintained mathematical backend",
     "requires_lean: test requires the fixed external Lean toolchain",
     "property: property-based invariant tests",
     "exhaustive: broad finite reference sweeps run by scheduled validation",

@@ -1,7 +1,6 @@
 """Tests for simplicial complex link operation."""
 
-from jacobian.math.topology._models import LinkRequest
-from jacobian.math.topology._models import FVectorRequest
+from jacobian.math.topology._models import FVectorRequest, LinkRequest
 from jacobian.math.topology._operations import compute_link
 
 

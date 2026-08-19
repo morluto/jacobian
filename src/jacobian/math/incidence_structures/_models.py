@@ -29,6 +29,8 @@ class IncidenceStructure(StrictModel):
             raise ValueError("blocks and block IDs must have same length")
         point_set = set(self.points)
         for block in self.blocks:
+            if len(set(block)) != len(block):
+                raise ValueError("duplicate point labels within a block are not allowed")
             for p in block:
                 if p not in point_set:
                     raise ValueError("every block member must be a declared point")

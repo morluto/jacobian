@@ -1,4 +1,3 @@
-import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -22,25 +21,7 @@ result = {
     ],
     "formal_status": "UNBOUNDED_BELOW",
 }
-limitations = ["LEAN_ELABORATION_NOT_ASSESSED", "INFORMAL_MINIMUM_NOT_REPROVED"]
-evidence = {
-    "schema_version": "1",
-    "task_id": "jacobian/polynomial-precedence-unboundedness-audit",
-    "result": result,
-    "limitations": limitations,
-}
-epath = Path("/app/evidence/precedence-audit.json")
-epath.parent.mkdir(parents=True, exist_ok=True)
-epath.write_text(json.dumps(evidence, separators=(",", ":")))
-submission = {
-    "result": result,
-    "witness": [
-        {
-            "path": "evidence/precedence-audit.json",
-            "sha256": "sha256:" + hashlib.sha256(epath.read_bytes()).hexdigest(),
-        }
-    ],
-}
+submission = {"result": result}
 Path("/app/submission.json").write_text(json.dumps(submission, indent=2) + "\n")
 Path("/app/answer.txt").write_text(
     "The formal expression is unbounded below along the submitted exact rational polynomial family.\n"

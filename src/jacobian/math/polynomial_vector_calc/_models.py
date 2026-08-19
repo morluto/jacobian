@@ -22,6 +22,8 @@ class ScalarFieldRequest(StrictModel):
     def require_valid(self) -> Self:
         if any(not v.isidentifier() for v in self.variables):
             raise ValueError("variable names must be valid identifiers")
+        if len(set(self.variables)) != len(self.variables):
+            raise ValueError("variable names must be distinct")
         return self
 
 
@@ -35,6 +37,14 @@ class VectorFieldRequest(StrictModel):
     def require_valid(self) -> Self:
         if any(not v.isidentifier() for v in self.variables):
             raise ValueError("variable names must be valid identifiers")
+        if len(set(self.variables)) != len(self.variables):
+            raise ValueError("variable names must be distinct")
+        if len(self.components) != len(self.variables):
+            raise ValueError(
+                "vector field must have one component per variable "
+                f"(got {len(self.components)} components, "
+                f"{len(self.variables)} variables)"
+            )
         return self
 
 

@@ -14,13 +14,37 @@ from jacobian.math.polynomial_vector_calc._models import (
 
 
 def _parse_poly(expr_str: str, variables: tuple[str, ...]) -> sympy.Expr:
-    """Parse a polynomial expression string with given variable names."""
+    """Parse a polynomial expression string with given variable names.
+
+    Validates that the result is a polynomial in exactly the declared variables
+    with rational coefficients, rejecting transcendental expressions, foreign
+    symbols, and non-polynomial inputs.
+    """
     var_symbols = sympy.symbols(variables)
     if len(variables) == 1:
         var_symbols = (var_symbols,)
-    return sympy.sympify(
-        expr_str, locals=dict(zip(variables, var_symbols, strict=True))
-    )
+    try:
+        expr = sympy.sympify(
+            expr_str, locals=dict(zip(variables, var_symbols, strict=True))
+        )
+    except Exception as exc:
+        raise ValueError(
+            f"failed to parse expression: {expr_str}"
+        ) from exc
+    # is_polynomial returns True, False, or None (unknown); treat None as False
+    if expr.is_polynomial(*var_symbols) is not True:
+        raise ValueError(
+            f"expression must be a polynomial in {variables}, "
+            f"got non-polynomial: {expr}"
+        )
+    free_symbols = expr.free_symbols
+    allowed = set(var_symbols)
+    extra = free_symbols - allowed
+    if extra:
+        raise ValueError(
+            f"expression contains undeclared symbols: {sorted(s.name for s in extra)}"
+        )
+    return expr
 
 
 def compute_gradient(request: ScalarFieldRequest) -> VectorResult:
@@ -55,12 +79,9 @@ def compute_curl(request: VectorFieldRequest) -> VectorResult:
         raise ValueError("curl is defined for 3D vector fields")
     x, y, z = sympy.symbols(request.variables)
     fx, fy, fz = (
-        sympy.sympify(c)
-        for c in [
-            _parse_poly(request.components[0], request.variables),
-            _parse_poly(request.components[1], request.variables),
-            _parse_poly(request.components[2], request.variables),
-        ]
+        _parse_poly(request.components[0], request.variables),
+        _parse_poly(request.components[1], request.variables),
+        _parse_poly(request.components[2], request.variables),
     )
     curl_x = sympy.diff(fz, y) - sympy.diff(fy, z)
     curl_y = sympy.diff(fx, z) - sympy.diff(fz, x)

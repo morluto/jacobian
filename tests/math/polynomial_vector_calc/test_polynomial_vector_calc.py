@@ -65,3 +65,54 @@ def test_curl_requires_3d() -> None:
     request = VectorFieldRequest(variables=("x", "y"), components=("x", "y"))
     with pytest.raises(ValueError, match="3D"):
         compute_curl(request)
+
+
+class TestVectorFieldValidation:
+    """Tests for the strengthened VectorFieldRequest contract."""
+
+    def test_component_count_mismatch_rejected(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="one component per variable"):
+            VectorFieldRequest(variables=("x", "y"), components=("x**2",))
+
+    def test_too_many_components_rejected(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="one component per variable"):
+            VectorFieldRequest(
+                variables=("x", "y"), components=("x", "y", "x*y")
+            )
+
+    def test_correct_component_count_accepted(self) -> None:
+        vf = VectorFieldRequest(
+            variables=("x", "y", "z"), components=("x", "y", "z")
+        )
+        assert len(vf.components) == 3
+
+    def test_non_polynomial_rejected(self) -> None:
+        """The parser should reject non-polynomial expressions like 1/x."""
+        import pytest
+
+        with pytest.raises((ValueError, TypeError)):
+            compute_gradient(
+                ScalarFieldRequest(variables=("x",), polynomial="1/x")
+            )
+
+    def test_foreign_symbol_rejected(self) -> None:
+        """The parser should reject symbols not in the declared variables."""
+        import pytest
+
+        with pytest.raises(ValueError, match="failed to parse"):
+            compute_gradient(
+                ScalarFieldRequest(variables=("x",), polynomial="y + x")
+            )
+
+    def test_distinct_variables_required(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="distinct"):
+            ScalarFieldRequest(variables=("x", "x"), polynomial="x")

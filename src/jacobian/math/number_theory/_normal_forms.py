@@ -17,7 +17,7 @@ from jacobian._models import StrictModel
 # Shared bounds
 # ---------------------------------------------------------------------------
 
-_MAX_INTEGER_LENGTH = 256
+_MAX_INTEGER_LENGTH = 12  # bounded by factorint work (see _models.FactorizationInteger)
 _MAX_EXPONENT = 1_000_000
 
 

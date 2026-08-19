@@ -9,6 +9,8 @@ factorization rows.
 
 from __future__ import annotations
 
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+
 import math
 from typing import Literal
 
@@ -56,7 +58,7 @@ def perfect_power_profile(
     For negative n, only odd exponents are admissible, so the maximal exponent
     is the largest odd divisor of the gcd.
     """
-    n = int(request.value)
+    n = parse_canonical_integer(request.value)
 
     if n == 0:
         return MaximalPerfectPowerResult(source=request.value, classification="ZERO")
@@ -91,7 +93,7 @@ def perfect_power_profile(
         base_val = -base_val
 
     factor_rows = tuple(
-        PrimeExponentRow(prime=str(p), exponent=e) for p, e in primes_exp
+        PrimeExponentRow(prime=format_canonical_integer(p), exponent=e) for p, e in primes_exp
     )
 
     return MaximalPerfectPowerResult(
@@ -117,7 +119,7 @@ def k_free_decomposition(
     For nonzero n: a >= 1, c has the same sign as n, and no prime to the k-th
     power divides |c|.
     """
-    n = int(request.value)
+    n = parse_canonical_integer(request.value)
     k = request.k
 
     if n == 0:
@@ -139,7 +141,7 @@ def k_free_decomposition(
         a *= p**q
         if r > 0:
             c_abs *= p**r
-        rows.append(PrimeQuotientRemainderRow(prime=str(p), quotient=q, remainder=r))
+        rows.append(PrimeQuotientRemainderRow(prime=format_canonical_integer(p), quotient=q, remainder=r))
 
     c = sign * c_abs
 
@@ -147,8 +149,8 @@ def k_free_decomposition(
         source=request.value,
         k=k,
         classification="NONZERO",
-        extracted_base=str(a),
-        k_free_cofactor=str(c),
+        extracted_base=format_canonical_integer(a),
+        k_free_cofactor=format_canonical_integer(c),
         factor_rows=tuple(rows),
     )
 
@@ -165,7 +167,7 @@ def squarefree_decomposition(
 
     For nonzero n: s >= 1, d has the same sign as n, |d| is squarefree.
     """
-    n = int(request.value)
+    n = parse_canonical_integer(request.value)
 
     if n == 0:
         return SquarefreeDecompositionResult(
@@ -186,15 +188,15 @@ def squarefree_decomposition(
         s *= p**half
         if rem > 0:
             d_abs *= p
-        parity_rows.append(PrimeExponentParityRow(prime=str(p), exponent=e, parity=rem))
+        parity_rows.append(PrimeExponentParityRow(prime=format_canonical_integer(p), exponent=e, parity=rem))
 
     d = sign * d_abs
 
     return SquarefreeDecompositionResult(
         source=request.value,
         classification="NONZERO",
-        square_factor=str(s),
-        signed_squarefree_part=str(d),
+        square_factor=format_canonical_integer(s),
+        signed_squarefree_part=format_canonical_integer(d),
         parity_rows=tuple(parity_rows),
     )
 
@@ -212,7 +214,7 @@ def normalize_positive_quadratic_radical(
     For n = 0: s = 0, d = 1.
     For n > 0: n = s^2 * d from squarefree decomposition, d >= 1 squarefree.
     """
-    n = int(request.value)
+    n = parse_canonical_integer(request.value)
 
     if n == 0:
         return NormalizedQuadraticRadicalResult(
@@ -243,7 +245,7 @@ def normalize_positive_quadratic_radical(
 
     return NormalizedQuadraticRadicalResult(
         source=request.value,
-        coefficient=str(s),
-        radicand=str(d),
+        coefficient=format_canonical_integer(s),
+        radicand=format_canonical_integer(d),
         classification=classification,
     )

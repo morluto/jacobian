@@ -10,8 +10,6 @@ import networkx as nx
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.graphs.flow._models import (
-    CirculationRequest,
-    CirculationResult,
     EdgeDisjointPathsRequest,
     EdgeDisjointPathsResult,
     FlowEdgeResult,
@@ -115,25 +113,38 @@ def compute_edge_disjoint_paths(
 
 
 def compute_min_cost_flow(request: MinCostFlowRequest) -> MinCostFlowResult:
-    """Compute minimum-cost flow with demands using NetworkX.
+    """Compute minimum-cost flow with demands using exact integer arithmetic.
 
-    Each vertex has a demand: positive demand means the vertex consumes flow
-    (sink), negative means it produces flow (source). Total demand must sum
-    to zero. Returns the minimum cost and per-edge flow.
+    All rational capacities and costs are scaled to integers by a common
+    denominator before calling NetworkX's network simplex.  The integer
+    results are then divided back to exact rationals.
     """
+    edges = request.graph.edges
+    capacities = [e.capacity.as_fraction() for e in edges]
+    costs = [e.cost.as_fraction() for e in edges]
+
+    # Compute the least common multiple of all denominators so that
+    # scaling produces integers.
+    from math import lcm
+
+    scale = 1
+    for frac in capacities + costs:
+        scale = lcm(scale, frac.denominator)
+
+    # Build graph with integer capacities and costs.
     g: nx.DiGraph[Any] = nx.DiGraph()
     g.add_nodes_from(range(request.graph.vertex_count))
     for node in range(request.graph.vertex_count):
         g.nodes[node]["demand"] = request.demands[node]
-    for edge in request.graph.edges:
+    for edge, cap, cost in zip(edges, capacities, costs):
         g.add_edge(
             edge.source,
             edge.target,
-            capacity=float(edge.capacity.as_fraction()),
-            weight=float(edge.cost.as_fraction()),
+            capacity=int(cap * scale),
+            weight=int(cost * scale),
         )
     try:
-        flow_cost, flow_dict = nx.network_simplex(g)
+        flow_cost_int, flow_dict = nx.network_simplex(g)
     except (nx.NetworkXUnfeasible, nx.NetworkXError):
         return MinCostFlowResult(
             total_cost=_rational(0),
@@ -149,37 +160,15 @@ def compute_min_cost_flow(request: MinCostFlowRequest) -> MinCostFlowResult:
                     FlowEdgeResult(
                         source=source_node,
                         target=target_node,
-                        flow=_rational(Fraction(flow_amount).limit_denominator(10**12)),
+                        flow=_rational(int(flow_amount)),
                     )
                 )
+    # The integer flow cost is sum(scaled_weight * flow) = sum((cost * scale) * flow)
+    # = scale * sum(cost * flow) = scale * total_cost.
+    # Therefore total_cost = flow_cost_int / scale.
+    total_cost = Fraction(int(flow_cost_int), scale)
     return MinCostFlowResult(
-        total_cost=_rational(Fraction(flow_cost).limit_denominator(10**12)),
+        total_cost=_rational(total_cost),
         feasible=True,
         flow_edges=tuple(flow_edges),
-    )
-
-
-def compute_circulation(request: CirculationRequest) -> CirculationResult:
-    """Check whether a feasible circulation exists.
-
-    A circulation assigns non-negative flow to each edge such that flow
-    conservation holds at every vertex and 0 <= flow <= capacity on each edge.
-    Uses the max-flow formulation: add a super source and super sink, connect
-    super source to all nodes and super sink from all nodes with capacity
-    equal to the lower bound (here 0). Since lower bounds are 0, a zero
-    circulation always satisfies conservation and capacity.
-    """
-    g: nx.DiGraph[Any] = nx.DiGraph()
-    g.add_nodes_from(range(request.graph.vertex_count))
-    for edge in request.graph.edges:
-        g.add_edge(
-            edge.source,
-            edge.target,
-            capacity=float(edge.capacity.as_fraction()),
-        )
-    feasible = nx.is_directed_acyclic_graph(g) or True
-    # A zero circulation is always feasible when all capacities >= 0.
-    return CirculationResult(
-        feasible=feasible,
-        flow_edges=(),
     )

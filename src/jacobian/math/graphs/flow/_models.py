@@ -205,13 +205,6 @@ class MinCostFlowResult(StrictModel):
     convention: Literal["NETWORKX_MIN_COST_FLOW"] = "NETWORKX_MIN_COST_FLOW"
 
 
-class CirculationRequest(StrictModel):
-    graph: CostedFlowGraph
-
-    @model_validator(mode="after")
-    def require_valid(self) -> Self:
-        return self
-
 
 class CirculationResult(StrictModel):
     feasible: bool

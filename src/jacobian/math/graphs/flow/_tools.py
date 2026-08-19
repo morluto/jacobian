@@ -7,8 +7,6 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.flow._models import (
-    CirculationRequest,
-    CirculationResult,
     EdgeDisjointPathsRequest,
     EdgeDisjointPathsResult,
     MaxFlowRequest,
@@ -19,7 +17,6 @@ from jacobian.math.graphs.flow._models import (
     MinCutResult,
 )
 from jacobian.math.graphs.flow._operations import (
-    compute_circulation,
     compute_edge_disjoint_paths,
     compute_max_flow,
     compute_min_cost_flow,
@@ -257,43 +254,6 @@ GRAPH_FLOW_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                         ],
                     },
                     "demands": [-2, 0, 2],
-                },
-            ),
-        ),
-    ),
-    graph_flow_operation(
-        "network.circulation.feasibility.compute",
-        "Check circulation feasibility",
-        "Check whether a feasible circulation exists in a directed graph "
-        "with nonnegative capacities.",
-        CirculationRequest,
-        CirculationResult,
-        compute_circulation,
-        "network",
-        "circulation",
-        "exact",
-        examples=(
-            example(
-                "simple_circulation",
-                "Check a simple graph with nonnegative capacities.",
-                {
-                    "graph": {
-                        "vertex_count": 2,
-                        "edges": [
-                            {
-                                "source": 0,
-                                "target": 1,
-                                "capacity": {"num": "1", "den": "1"},
-                                "cost": {"num": "0", "den": "1"},
-                            },
-                            {
-                                "source": 1,
-                                "target": 0,
-                                "capacity": {"num": "1", "den": "1"},
-                                "cost": {"num": "0", "den": "1"},
-                            },
-                        ],
-                    },
                 },
             ),
         ),

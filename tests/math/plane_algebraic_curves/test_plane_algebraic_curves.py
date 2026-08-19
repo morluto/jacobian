@@ -22,9 +22,7 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_affine_curve_check_circle() -> None:
-    request = AffineCurveRequest(
-        variables=("x", "y"), polynomial="x**2 + y**2 - 1"
-    )
+    request = AffineCurveRequest(variables=("x", "y"), polynomial="x**2 + y**2 - 1")
     result = compute_affine_curve_check(request)
     assert result.is_valid is True
     assert result.degree == 2

@@ -9,13 +9,8 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.finite_dim_algebras._models import (
     CenterRequest,
     CenterResult,
-    RadicalRequest,
-    RadicalResult,
 )
-from jacobian.math.finite_dim_algebras._operations import (
-    compute_center,
-    compute_radical,
-)
+from jacobian.math.finite_dim_algebras._operations import compute_center
 
 
 def _op[RequestT: StrictModel, ResultT: StrictModel](
@@ -42,6 +37,16 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
     )
 
 
+_ZERO_ALG_2 = {
+    "dimension": 2,
+    "field_order": 2,
+    "multiplication": [
+        [[0, 0], [0, 0]],
+        [[0, 0], [0, 0]],
+    ],
+}
+
+
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "algebra.center.compute",
@@ -56,40 +61,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "exact",
         examples=(
             example(
-                "commutative_algebra",
-                "Center of a 2D commutative algebra over F_2.",
-                {
-                    "algebra": {
-                        "dimension": 2,
-                        "field_order": 2,
-                        "multiplication": [[0, 0], [0, 0]],
-                    },
-                },
-            ),
-        ),
-    ),
-    _op(
-        "algebra.radical.compute",
-        "Compute the Jacobson radical of a finite-dimensional algebra",
-        "Compute the Jacobson radical of a finite-dimensional algebra given "
-        "by structure constants over a prime field.",
-        RadicalRequest,
-        RadicalResult,
-        compute_radical,
-        "algebra",
-        "radical",
-        "exact",
-        examples=(
-            example(
-                "semisimple_algebra",
-                "Jacobson radical of a semisimple algebra.",
-                {
-                    "algebra": {
-                        "dimension": 2,
-                        "field_order": 2,
-                        "multiplication": [[0, 0], [0, 0]],
-                    },
-                },
+                "zero_algebra",
+                "Center of the 2-dimensional zero algebra over F_2.",
+                {"algebra": _ZERO_ALG_2},
             ),
         ),
     ),

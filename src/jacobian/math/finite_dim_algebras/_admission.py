@@ -10,9 +10,4 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
-    OperationAdmission(
-        "algebra.radical.compute",
-        AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
-    ),
 )

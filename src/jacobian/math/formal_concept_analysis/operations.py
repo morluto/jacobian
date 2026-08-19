@@ -115,7 +115,9 @@ def _next_closed_intent(
     return None
 
 
-def _inclusion_order(concepts: list[dict[str, object]]) -> list[tuple[int, int]]:
+def _inclusion_order(
+    concepts: list[dict[str, frozenset[int]]],
+) -> list[tuple[int, int]]:
     order: list[tuple[int, int]] = []
     n = len(concepts)
     for i in range(n):

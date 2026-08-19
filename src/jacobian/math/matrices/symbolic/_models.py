@@ -96,9 +96,7 @@ class SymbolicEigenvaluesResult(StrictModel):
       represent them in radicals.
     """
 
-    representation: Literal["EXPLICIT_ROOTS", "ROOTS_BY_POLYNOMIAL"] = (
-        "EXPLICIT_ROOTS"
-    )
+    representation: Literal["EXPLICIT_ROOTS", "ROOTS_BY_POLYNOMIAL"] = "EXPLICIT_ROOTS"
     eigenvalues: tuple[str, ...] | None = Field(
         default=None,
         min_length=1,

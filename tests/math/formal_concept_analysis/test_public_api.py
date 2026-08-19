@@ -18,6 +18,11 @@ def test_exact_public_api_symbols() -> None:
         "object_derivation",
     )
     assert tuple(formal_concept_analysis.__all__) == expected
-    assert len(formal_concept_analysis.__all__) == len(set(formal_concept_analysis.__all__))
+    assert len(formal_concept_analysis.__all__) == len(
+        set(formal_concept_analysis.__all__)
+    )
     assert all(not name.startswith("_") for name in formal_concept_analysis.__all__)
-    assert all(hasattr(formal_concept_analysis, name) for name in formal_concept_analysis.__all__)
+    assert all(
+        hasattr(formal_concept_analysis, name)
+        for name in formal_concept_analysis.__all__
+    )

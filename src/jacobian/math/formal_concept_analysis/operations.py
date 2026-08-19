@@ -16,9 +16,7 @@ __all__ = [
 ]
 
 
-def object_derivation(
-    ctx: FormalContext, objects: frozenset[int]
-) -> frozenset[int]:
+def object_derivation(ctx: FormalContext, objects: frozenset[int]) -> frozenset[int]:
     """Return A' = {m in M : every g in A has attribute m}.
 
     Under standard FCA semantics, the derivation of the empty object set is
@@ -64,7 +62,9 @@ def attribute_closure(ctx: FormalContext, attributes: frozenset[int]) -> frozens
     return object_derivation(ctx, attribute_derivation(ctx, attributes))
 
 
-def concept_from_objects(ctx: FormalContext, objects: frozenset[int]) -> dict[str, frozenset[int]]:
+def concept_from_objects(
+    ctx: FormalContext, objects: frozenset[int]
+) -> dict[str, frozenset[int]]:
     """Return the unique concept (A'', A')."""
     intent = object_derivation(ctx, objects)
     extent = attribute_derivation(ctx, intent)
@@ -85,7 +85,7 @@ def enumerate_concepts(ctx: FormalContext) -> list[dict[str, frozenset[int]]]:
     all closed attribute intents."""
     n = len(ctx.attributes)
     closed_intents: set[frozenset[int]] = set()
-    for mask in range(2 ** n):
+    for mask in range(2**n):
         candidate = frozenset(i for i in range(n) if mask & (1 << i))
         closure = object_derivation(ctx, attribute_derivation(ctx, candidate))
         closed_intents.add(frozenset(closure))
@@ -108,26 +108,25 @@ def _next_closed_intent(
         candidate = frozenset(a for a in current_set if a < i)
         candidate = candidate | {i}
         closure = object_derivation(ctx, attribute_derivation(ctx, candidate))
-        if (closure == candidate or candidate.issubset(closure)) and frozenset(closure) > current:
-                return frozenset(closure)
+        if (closure == candidate or candidate.issubset(closure)) and frozenset(
+            closure
+        ) > current:
+            return frozenset(closure)
     return None
 
 
-def concept_lattice(  # noqa: C901
-    ctx: FormalContext,
-) -> dict[str, object]:
-    """Return the concept lattice: concepts, partial order by extent inclusion,
-    cover relation, top and bottom concepts."""
-    concepts = enumerate_concepts(ctx)
-    n = len(concepts)
+def _inclusion_order(concepts: list[dict[str, object]]) -> list[tuple[int, int]]:
     order: list[tuple[int, int]] = []
+    n = len(concepts)
     for i in range(n):
+        ext_i = concepts[i]["extent"]
         for j in range(n):
-            if i != j:
-                ext_i = concepts[i]["extent"]
-                ext_j = concepts[j]["extent"]
-                if ext_i.issubset(ext_j):
-                    order.append((i, j))
+            if i != j and ext_i.issubset(concepts[j]["extent"]):
+                order.append((i, j))
+    return order
+
+
+def _cover_relation(order: list[tuple[int, int]], n: int) -> list[tuple[int, int]]:
     order_set = set(order)
     covers: list[tuple[int, int]] = []
     for i, j in order:
@@ -138,6 +137,18 @@ def concept_lattice(  # noqa: C901
                 break
         if is_cover:
             covers.append((i, j))
+    return covers
+
+
+def concept_lattice(
+    ctx: FormalContext,
+) -> dict[str, object]:
+    """Return the concept lattice: concepts, partial order by extent inclusion,
+    cover relation, top and bottom concepts."""
+    concepts = enumerate_concepts(ctx)
+    n = len(concepts)
+    order = _inclusion_order(concepts)
+    covers = _cover_relation(order, n)
     if n == 0:
         return {"concepts": (), "order": (), "covers": (), "top": None, "bottom": None}
     bottom = 0

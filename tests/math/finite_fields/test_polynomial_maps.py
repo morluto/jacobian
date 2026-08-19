@@ -19,7 +19,7 @@ from jacobian.math.finite_fields import (
 )
 from jacobian.math.finite_fields._tools import TOOLS
 
-pytestmark = pytest.mark.requires_provider("flint")
+pytestmark = pytest.mark.requires_backend("flint")
 
 
 def _map(*exponents: int) -> FinitePolynomialMap:

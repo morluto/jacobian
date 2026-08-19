@@ -11,16 +11,17 @@ from jacobian.math.plane_algebraic_curves._models import (
     AffineCurveResult,
     ProjectiveClosureRequest,
     ProjectiveClosureResult,
+    _parse_polynomial,
 )
+
+HOMOGENIZING_COORDINATE = "z"
 
 
 def compute_affine_curve_check(request: AffineCurveRequest) -> AffineCurveResult:
     """Check that a polynomial defines a valid affine plane curve."""
-    var_symbols = sympy.symbols(request.variables)
-    var_map = dict(zip(request.variables, var_symbols, strict=True))
-    poly = sympy.sympify(request.polynomial, locals=var_map)
+    poly = _parse_polynomial(request.polynomial, request.variables)
     degree = int(sympy.total_degree(poly))
-    is_valid = poly != 0
+    is_valid = poly != 0 and degree >= 1
     return AffineCurveResult(
         is_valid=is_valid,
         degree=degree,
@@ -32,9 +33,8 @@ def compute_projective_closure(
 ) -> ProjectiveClosureResult:
     """Compute the projective closure by homogenizing with a new variable."""
     var_symbols = list(sympy.symbols(request.variables))
-    var_map = dict(zip(request.variables, var_symbols, strict=True))
-    poly = sympy.sympify(request.polynomial, locals=var_map)
-    z = sympy.Symbol("z")
+    poly = _parse_polynomial(request.polynomial, request.variables)
+    z = sympy.Symbol(HOMOGENIZING_COORDINATE)
     terms = sympy.Poly(poly, *var_symbols)
     degree = terms.total_degree()
     new_terms = []
@@ -48,20 +48,14 @@ def compute_projective_closure(
     homogenized = sympy.expand(sum(new_terms))
     return ProjectiveClosureResult(
         polynomial=str(homogenized),
-        variables=(*request.variables, "z"),
+        variables=(*request.variables, HOMOGENIZING_COORDINATE),
     )
 
 
 def compute_affine_chart(request: AffineChartRequest) -> AffineChartResult:
     """Extract an affine chart by dehomogenizing at the chart variable."""
-    var_symbols = list(sympy.symbols(request.variables))
-    var_map = dict(zip(request.variables, var_symbols, strict=True))
     chart_var = sympy.Symbol(request.chart_variable)
-
-    if request.chart_variable not in request.variables:
-        raise ValueError("chart_variable must be one of the projective variables")
-
-    poly = sympy.sympify(request.polynomial, locals=var_map)
+    poly = _parse_polynomial(request.polynomial, request.variables)
     idx = request.variables.index(request.chart_variable)
     other_vars = [v for i, v in enumerate(request.variables) if i != idx]
 

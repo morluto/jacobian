@@ -28,6 +28,7 @@ class CartanMatrixRequest(StrictModel):
             if self.matrix[i][i] != 2:
                 raise ValueError("diagonal entries must be 2")
         self._check_off_diagonal(n)
+        self._check_finite_type(n)
         return self
 
     def _check_off_diagonal(self, n: int) -> None:
@@ -41,6 +42,39 @@ class CartanMatrixRequest(StrictModel):
                     raise ValueError("off-diagonal entries must be non-positive")
                 if aij * aji not in (0, 1, 2, 3):
                     raise ValueError("off-diagonal product must be 0, 1, 2, or 3")
+                if (aij == 0) != (aji == 0):
+                    raise ValueError(
+                        "generalized Cartan matrix requires a_ij == 0 iff a_ji == 0"
+                    )
+
+    def _check_finite_type(self, n: int) -> None:
+        """Check that the Cartan matrix is of finite type.
+
+        For a generalized Cartan matrix of finite type, the positive roots
+        are finite.  We enumerate them by applying simple reflections to
+        already-discovered positive roots, keeping only positive results,
+        with a generous bound on the root count.
+        """
+        matrix = self.matrix
+        # Simple roots
+        positive_roots: set[tuple[int, ...]] = set()
+        for i in range(n):
+            root = tuple(1 if j == i else 0 for j in range(n))
+            positive_roots.add(root)
+
+        max_roots = n * n * 6  # generous bound for finite type (n<=8)
+        changed = True
+        while changed:
+            changed = False
+            for root in list(positive_roots):
+                for i in range(n):
+                    inner = sum(root[j] * matrix[i][j] for j in range(n))
+                    new_root = tuple(root[j] - inner * matrix[i][j] for j in range(n))
+                    if new_root not in positive_roots and all(v > 0 for v in new_root):
+                        positive_roots.add(new_root)
+                        changed = True
+                        if len(positive_roots) > max_roots:
+                            raise ValueError("Cartan matrix is not of finite type")
 
 
 class PositiveRootsResult(StrictModel):

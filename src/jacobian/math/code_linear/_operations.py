@@ -157,7 +157,10 @@ def compute_codeword_check(
     if is_member:
         # Solve x * G = word over GF(q) by RREF on the augmented
         # transpose [G^T | word^T].
-        gt = [[matrix[r][c] % q for r in range(len(matrix))] for c in range(len(matrix[0]))]
+        gt = [
+            [matrix[r][c] % q for r in range(len(matrix))]
+            for c in range(len(matrix[0]))
+        ]
         aug_t = [gt[c] + [word[c] % q] for c in range(len(matrix[0]))]
         rref_aug, rank_aug2 = _rref(aug_t, q)
         # Extract solution from augmented column
@@ -312,14 +315,14 @@ def compute_shorten(request: ShortenRequest) -> ShortenResult:
 
     if not nonzero_rows:
         # All rows already have 0 at col: shortened = punctured code
-        shortened_result = [rref[i][:col] + rref[i][col + 1:] for i in range(rank)]
+        shortened_result = [rref[i][:col] + rref[i][col + 1 :] for i in range(rank)]
     else:
         # Keep rows with 0 at col, plus combinations that zero out col
         piv0 = nonzero_rows[0]
         shortened_rows: list[list[int]] = []
         for i in range(rank):
             if i not in nonzero_rows:
-                shortened_rows.append(rref[i][:col] + rref[i][col + 1:])
+                shortened_rows.append(rref[i][:col] + rref[i][col + 1 :])
         for p in nonzero_rows:
             if p == piv0:
                 continue

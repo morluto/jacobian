@@ -11,6 +11,15 @@ from jacobian._models import StrictModel
 MAX_POINTS = 32
 
 
+def _require_distinct(nodes: tuple[str, ...]) -> None:
+    """Reject repeated interpolation nodes."""
+    seen: set[str] = set()
+    for n in nodes:
+        if n in seen:
+            raise ValueError("interpolation nodes must be pairwise distinct")
+        seen.add(n)
+
+
 class DividedDifferencesRequest(StrictModel):
     """Compute divided differences from sample points."""
 
@@ -21,6 +30,7 @@ class DividedDifferencesRequest(StrictModel):
     def require_valid(self) -> Self:
         if len(self.nodes) != len(self.values):
             raise ValueError("nodes and values must have the same length")
+        _require_distinct(self.nodes)
         return self
 
 
@@ -30,6 +40,13 @@ class NewtonFormRequest(StrictModel):
     nodes: tuple[str, ...] = Field(min_length=1, max_length=MAX_POINTS)
     values: tuple[str, ...] = Field(min_length=1, max_length=MAX_POINTS)
 
+    @model_validator(mode="after")
+    def require_valid(self) -> Self:
+        if len(self.nodes) != len(self.values):
+            raise ValueError("nodes and values must have the same length")
+        _require_distinct(self.nodes)
+        return self
+
 
 class NewtonEvaluateRequest(StrictModel):
     """Evaluate a polynomial in Newton form at a point."""
@@ -37,6 +54,13 @@ class NewtonEvaluateRequest(StrictModel):
     nodes: tuple[str, ...] = Field(min_length=1, max_length=MAX_POINTS)
     values: tuple[str, ...] = Field(min_length=1, max_length=MAX_POINTS)
     evaluation_point: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_valid(self) -> Self:
+        if len(self.nodes) != len(self.values):
+            raise ValueError("nodes and values must have the same length")
+        _require_distinct(self.nodes)
+        return self
 
 
 # Results

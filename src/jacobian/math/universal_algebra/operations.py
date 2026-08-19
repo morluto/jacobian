@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from itertools import product as iproduct
 
-from .values import FiniteAlgebra, FlatTerm
+from .values import FiniteAlgebra, FlatTerm, OperationSymbol
 
 __all__ = [
     "congruence_check",

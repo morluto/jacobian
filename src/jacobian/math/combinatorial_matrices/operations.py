@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .values import HadamardMatrix, SignMatrix
+from .values import MAX_MATRIX_ORDER, HadamardMatrix, SignMatrix
 
 __all__ = [
     "determinant_profile",

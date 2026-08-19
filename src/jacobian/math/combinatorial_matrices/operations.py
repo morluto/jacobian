@@ -20,7 +20,9 @@ def sign_profile(matrix: SignMatrix) -> dict[str, object]:
     row_count = len(matrix.rows)
     col_count = len(matrix.rows[0]) if row_count else 0
     row_sums = [sum(row) for row in matrix.rows]
-    col_sums = [sum(matrix.rows[i][j] for i in range(row_count)) for j in range(col_count)]
+    col_sums = [
+        sum(matrix.rows[i][j] for i in range(row_count)) for j in range(col_count)
+    ]
     plus_one = sum(1 for row in matrix.rows for entry in row if entry == 1)
     minus_one = sum(1 for row in matrix.rows for entry in row if entry == -1)
     return {
@@ -51,10 +53,7 @@ def gram_profile(matrix: SignMatrix) -> dict[str, object]:
     )
     residuals = tuple(gram[i][i] - n for i in range(n)) if n == m else ()
     nonzero_off = tuple(
-        (i, j, gram[i][j])
-        for i in range(n)
-        for j in range(i + 1, n)
-        if gram[i][j] != 0
+        (i, j, gram[i][j]) for i in range(n) for j in range(i + 1, n) if gram[i][j] != 0
     )
     return {
         "order": n,
@@ -96,7 +95,7 @@ def determinant_profile(hadamard: HadamardMatrix) -> dict[str, object]:
     if n % 2 != 0 and n != 1:
         raise ValueError("Hadamard matrices have even order (except order 1)")
     magnitude = n ** (n // 2)
-    gram_determinant = n ** n
+    gram_determinant = n**n
     return {
         "order": n,
         "determinant_magnitude": magnitude,
@@ -105,9 +104,7 @@ def determinant_profile(hadamard: HadamardMatrix) -> dict[str, object]:
     }
 
 
-def kronecker(
-    left: HadamardMatrix, right: HadamardMatrix
-) -> dict[str, object]:
+def kronecker(left: HadamardMatrix, right: HadamardMatrix) -> dict[str, object]:
     """Return the Kronecker product of two Hadamard matrices as a Hadamard
     matrix, factor-to-product row/column maps, and the exact Gram
     factorization."""
@@ -155,5 +152,5 @@ def sylvester(k: int) -> dict[str, object]:
     return {
         "matrix": tuple(tuple(row) for row in result),
         "construction": "sylvester_recursion",
-        "order": 2 ** k,
+        "order": 2**k,
     }

@@ -17,6 +17,10 @@ def test_exact_public_api_symbols() -> None:
         "sylvester",
     )
     assert tuple(combinatorial_matrices.__all__) == expected
-    assert len(combinatorial_matrices.__all__) == len(set(combinatorial_matrices.__all__))
+    assert len(combinatorial_matrices.__all__) == len(
+        set(combinatorial_matrices.__all__)
+    )
     assert all(not name.startswith("_") for name in combinatorial_matrices.__all__)
-    assert all(hasattr(combinatorial_matrices, name) for name in combinatorial_matrices.__all__)
+    assert all(
+        hasattr(combinatorial_matrices, name) for name in combinatorial_matrices.__all__
+    )

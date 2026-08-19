@@ -72,9 +72,7 @@ class HadamardMatrix(StrictModel):
                 inner = sum(h[i][k] * h[j][k] for k in range(n))
                 expected = n if i == j else 0
                 if inner != expected:
-                    raise ValueError(
-                        "Hadamard orthogonality H H^T = n I_n is violated"
-                    )
+                    raise ValueError("Hadamard orthogonality H H^T = n I_n is violated")
         return self
 
 

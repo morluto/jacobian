@@ -82,9 +82,7 @@ class TestGramProfile:
         assert result.nonzero_off_diagonal == ()
 
     def test_non_hadamard(self) -> None:
-        result = compute_gram_profile(
-            GramProfileRequest(matrix=_non_hadamard())
-        )
+        result = compute_gram_profile(GramProfileRequest(matrix=_non_hadamard()))
         assert result.is_hadamard is False
         assert result.gram == ((2, 2), (2, 2))
 

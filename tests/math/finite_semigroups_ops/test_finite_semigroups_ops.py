@@ -29,25 +29,19 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_element_power_in_z3() -> None:
-    request = ElementPowerRequest(
-        multiplication_table=Z3_TABLE, element=1, exponent=2
-    )
+    request = ElementPowerRequest(multiplication_table=Z3_TABLE, element=1, exponent=2)
     result = compute_element_power(request)
     assert result.result == 2
 
 
 def test_element_power_identity() -> None:
-    request = ElementPowerRequest(
-        multiplication_table=Z3_TABLE, element=1, exponent=1
-    )
+    request = ElementPowerRequest(multiplication_table=Z3_TABLE, element=1, exponent=1)
     result = compute_element_power(request)
     assert result.result == 1
 
 
 def test_idempotents_of_band() -> None:
-    request = IdempotentsRequest(
-        multiplication_table=((0, 0), (0, 1))
-    )
+    request = IdempotentsRequest(multiplication_table=((0, 0), (0, 1)))
     result = compute_idempotents(request)
     assert result.idempotents == (0, 1)
 
@@ -62,17 +56,13 @@ def test_generated_subsemigroup_generates_all() -> None:
 
 
 def test_principal_ideals_in_z3() -> None:
-    request = PrincipalIdealsRequest(
-        multiplication_table=Z3_TABLE, elements=(1,)
-    )
+    request = PrincipalIdealsRequest(multiplication_table=Z3_TABLE, elements=(1,))
     result = compute_principal_ideals(request)
     assert len(result.ideals) == 1
     assert set(result.ideals[0]) == {0, 1, 2}
 
 
 def test_element_power_rejects_zero_exponent() -> None:
-    request = ElementPowerRequest(
-        multiplication_table=Z3_TABLE, element=1, exponent=0
-    )
+    request = ElementPowerRequest(multiplication_table=Z3_TABLE, element=1, exponent=0)
     with pytest.raises(ValueError, match="identity"):
         compute_element_power(request)

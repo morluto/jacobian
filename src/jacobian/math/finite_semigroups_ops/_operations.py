@@ -14,9 +14,7 @@ from jacobian.math.finite_semigroups_ops._models import (
 )
 
 
-def _multiply(
-    table: tuple[tuple[int, ...], ...], a: int, b: int
-) -> int:
+def _multiply(table: tuple[tuple[int, ...], ...], a: int, b: int) -> int:
     return table[a][b]
 
 

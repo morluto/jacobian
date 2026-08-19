@@ -113,7 +113,9 @@ def dual_poset(request: DualPosetRequest) -> DualPosetResult:
         minimal_elements=dual_minimal,
         maximal_elements=dual_maximal,
         graded=poset.graded,
-        ranks=tuple(dual_ranks) if (dual_ranks is not None and poset.ranks is not None) else None,
+        ranks=tuple(dual_ranks)
+        if (dual_ranks is not None and poset.ranks is not None)
+        else None,
     )
     from jacobian.math.posets._models import FinitePoset
 
@@ -125,7 +127,9 @@ def dual_poset(request: DualPosetRequest) -> DualPosetResult:
         minimal_elements=dual_minimal,
         maximal_elements=dual_maximal,
         graded=poset.graded,
-        ranks=tuple(dual_ranks) if (dual_ranks is not None and poset.ranks is not None) else None,
+        ranks=tuple(dual_ranks)
+        if (dual_ranks is not None and poset.ranks is not None)
+        else None,
         poset_digest=dual_digest,
     )
     return DualPosetResult(

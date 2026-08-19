@@ -31,9 +31,23 @@ class FiniteCFGO(StrictModel):
     def require_valid(self) -> Self:
         if self.start_symbol not in self.nonterminals:
             raise ValueError("start_symbol must be a nonterminal")
+        nonterminal_set = set(self.nonterminals)
+        terminal_set = set(self.terminals)
+        disjoint = nonterminal_set & terminal_set
+        if disjoint:
+            raise ValueError(
+                f"terminals and nonterminals must be disjoint: {sorted(disjoint)}"
+            )
+        declared = nonterminal_set | terminal_set
         for rule in self.rules:
-            if rule.head not in self.nonterminals:
+            if rule.head not in nonterminal_set:
                 raise ValueError("rule heads must be nonterminals")
+            for symbol in rule.body:
+                if symbol not in declared:
+                    raise ValueError(
+                        f"rule body symbol {symbol!r} is not a declared terminal "
+                        "or nonterminal"
+                    )
         return self
 
 

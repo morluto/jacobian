@@ -152,3 +152,15 @@ class TestInducedSubposet:
         assert ("a", "b") in pairs
         assert ("a", "c") in pairs
         assert ("b", "c") not in pairs
+
+    def test_non_convex_subset(self) -> None:
+        """Subposet skipping an intermediate element must recompute the cover."""
+        # Chain a < b < c; restrict to {a, c}, skipping b.
+        p = make_poset(("a", "b", "c"), (("a", "b"), ("b", "c")))
+        r = induced_subposet(InducedSubposetRequest(poset=p, subset=("a", "c")))
+        assert set(r.subposet.elements) == {"a", "c"}
+        pairs = {(x.lower, x.upper) for x in r.subposet.strict_order_pairs}
+        assert ("a", "c") in pairs
+        # The cover should be {a, c}, not empty
+        covers = {(x.lower, x.upper) for x in r.subposet.cover_relations}
+        assert ("a", "c") in covers

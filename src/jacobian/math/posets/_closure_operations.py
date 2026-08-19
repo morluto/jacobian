@@ -144,17 +144,23 @@ def induced_subposet(request: InducedSubposetRequest) -> InducedSubposetResult:
     subset_set = set(request.subset)
     elements = tuple(sorted(subset_set))
 
-    # Filter strict pairs to only those within the subset
-    strict_pairs = tuple(
-        OrderedPair(lower=p.lower, upper=p.upper)
+    # Filter strict pairs to only those within the subset, then compute
+    # the full transitive closure so that non-convex subsets still have
+    # correct order relations (e.g. chain a<b<c restricted to {a,c} gives a<c).
+    filtered_pairs = {
+        (p.lower, p.upper)
         for p in poset.strict_order_pairs
         if p.lower in subset_set and p.upper in subset_set
+    }
+    from jacobian.math.posets._models import _strict_closure, _transitive_reduction
+    closure = _strict_closure(elements, filtered_pairs)
+    strict_pairs = tuple(
+        OrderedPair(lower=lower, upper=upper) for lower, upper in sorted(closure)
     )
-    # Filter covers
+    restricted_covers_set = _transitive_reduction(elements, closure)
     covers = tuple(
-        OrderedPair(lower=p.lower, upper=p.upper)
-        for p in poset.cover_relations
-        if p.lower in subset_set and p.upper in subset_set
+        OrderedPair(lower=lower, upper=upper)
+        for lower, upper in sorted(restricted_covers_set)
     )
     # Compute incomparable pairs
     strict_set = {(p.lower, p.upper) for p in strict_pairs}
@@ -175,9 +181,7 @@ def induced_subposet(request: InducedSubposetRequest) -> InducedSubposetResult:
     from jacobian.math.posets._models import FinitePoset
 
     ranks = canonical_poset_ranks(elements, {(p.lower, p.upper) for p in covers})
-    ranked = poset.graded and all(
-        e in {r.element for r in poset.ranks} if poset.ranks else True for e in elements
-    )
+    ranked = ranks is not None
     # Compute digest
     digest = finite_poset_digest(
         elements=elements,

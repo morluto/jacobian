@@ -1,6 +1,7 @@
 """Tests for simplicial complex link operation."""
 
 from jacobian.math.topology._models import LinkRequest
+from jacobian.math.topology._models import FVectorRequest
 from jacobian.math.topology._operations import compute_link
 
 
@@ -47,9 +48,6 @@ def test_link_of_face_in_boundary() -> None:
     )
     assert ("v1",) in result.link_facets
     assert ("v2",) in result.link_facets
-
-
-from jacobian.math.topology._models import FVectorRequest
 
 
 def test_f_vector_filled_triangle() -> None:
@@ -101,6 +99,6 @@ def test_link_rejects_non_face() -> None:
                 simplex=("v0", "v2"),
             )
         )
-        assert False, "Should have raised ValidationError"
+        raise AssertionError("Should have raised ValidationError")
     except ValidationError:
         pass

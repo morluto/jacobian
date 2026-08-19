@@ -760,7 +760,7 @@ def compute_f_vector(request: FVectorRequest) -> FVectorResult:
     # where f_{-1} = 1 (the empty face) and k ranges from 0 to d.
     d = max_dim + 1  # the dimension parameter for the h-vector
     # f_{i-1} for i=0 is the empty face count (1), for i>=1 it's f_vector[i-1]
-    f_with_empty: list[int] = [1] + list(f_vector)  # f_{-1}=1, f_0, f_1, ...
+    f_with_empty: list[int] = [1, *list(f_vector)]  # f_{-1}=1, f_0, f_1, ...
     h_vector: list[int] = []
     for k in range(d + 1):
         h = 0

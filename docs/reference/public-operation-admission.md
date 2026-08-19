@@ -3,7 +3,6 @@
 [Documentation home](../index.md)
 
 - Status: Current catalog-maintenance contract
-- Reviewed catalog base: `61589543bbbff546edbc51d34a07887982fa4ad6`
 - Machine-readable ledger: `src/jacobian/catalog/admission.py`
 
 The public `math.find` / `math.run` catalog is a curated basis of mathematical
@@ -40,7 +39,7 @@ not by itself satisfy these gates.
 
 ## Decisions
 
-The exhaustive ledger uses five decisions:
+The ledger uses five decisions:
 
 | Decision | Catalog effect | Required disposition |
 | --- | --- | --- |
@@ -50,37 +49,13 @@ The exhaustive ledger uses five decisions:
 | `DROP` | Excluded | Retain no supported public interface solely for compatibility or coverage. |
 | `CONTRACT_FIX` | Excluded | Repair the named correctness defect and add an adversarial regression, then reclassify the operation before publication. |
 
-The final 2026-08-17 audit classifies all 360 candidate declarations: 200
-`KEEP`, 56 `NATIVE_ONLY`, and 104 `DROP`. No unresolved `SPLIT` or
-`CONTRACT_FIX` decision is published. The Nash-equilibrium and stationary-
-distribution repairs were reclassified to `KEEP`; three coherent profile
-results initially marked `SPLIT` were also retained after re-review. A decision
-is not inherited by a renamed or materially changed operation; such a candidate
-needs a fresh row.
+`src/jacobian/catalog/admission.py` is the authority for current decisions. A
+renamed or materially changed candidate needs a fresh decision; do not preserve
+a public operation solely because an earlier version was admitted.
 
-The same review covered every open mathematical pull request at its frozen head;
-see the [dated open-PR audit](open-math-pr-audit-2026-08-17.md).
-
-## Migration from the uncurated catalog
-
-Consumers must rediscover operations against the current catalog instead of
-assuming that every previous candidate remains callable. A `NATIVE_ONLY` row's
+Consumers should discover against the current catalog. A `NATIVE_ONLY` row's
 `native_symbol` names its supported `jacobian.math` replacement; a `DROP` row
-has no compatibility operation. The schema snapshot records the complete set of
-200 public IDs.
-
-Three retained contracts also changed during the audit:
-
-- `game_theory.nash_equilibrium.compute` version 2 uses exact primal and dual
-  linear programs, including for games with negative values.
-- `probability.markov_chain.stationary_distribution.compute` version 2 returns
-  the extreme stationary distribution for every closed communicating class and
-  states whether the family is unique. The singular native
-  `stationary_distribution` helper rejects non-unique chains; use
-  `stationary_distribution_extremes` for the complete family.
-- `metric_space.profile.compute` version 2 reports
-  `DIRECT_DISTANCE_MATRIX_SCAN`, matching its direct scan of the supplied
-  distance matrix.
+has no compatibility operation.
 
 ## Review procedure
 
@@ -97,6 +72,5 @@ For a catalog-changing pull request:
 5. Regenerate the schema snapshot and run the catalog, native-API, and owning
    mathematical tests.
 
-Do not use the ledger as a dynamic recommendation or runtime policy layer. It
-is a source review record that determines the explicit immutable built-in
-catalog; `math.find` remains stateless discovery over that result.
+The ledger is source review data for constructing the immutable public catalog;
+it is not a runtime recommendation or planning layer.

@@ -147,8 +147,7 @@ submitted claim.
 ## Validate
 
 Read `AGENTS.md`, `CONTRIBUTING.md`, and
-`docs/reference/evaluations/benchmark-contracts.md`. Use the pinned runner and
-planner:
+`benchmarks/docs/benchmark-contracts.md`. Use the pinned runner and planner:
 
 ```sh
 uvx --from harbor==0.20.0 harbor --version

@@ -100,9 +100,9 @@ def generated_subalgebra(
     closure under all basic operations and nullary constants."""
     n = len(algebra.carrier)
     carrier_set = set(generators)
-    for symbol in algebra.operations:
+    for op_idx, symbol in enumerate(algebra.operations):
         if symbol.arity == 0:
-            for output in algebra.tables[algebra.operations.index(symbol)]:
+            for output in algebra.tables[op_idx]:
                 carrier_set.add(output)
     changed = True
     rounds = 0
@@ -126,7 +126,7 @@ def generated_subalgebra(
     return {
         "generated_carrier": tuple(sorted_carrier),
         "rounds": rounds,
-        "is_closed": len(carrier_set) == len(generators) if generators else True,
+        "is_closed": set(generators) == carrier_set if generators else True,
     }
 
 
@@ -180,16 +180,30 @@ def congruence_check(
         }
     from itertools import product as iproduct
 
+    # Instead of iterating over all pairs (x, y) of argument tuples (which
+    # is O(n^(2*arity)), iterate over all x and for each x vary only one
+    # coordinate at a time to a different element in the same block.
+    # This is O(n^arity * arity) and covers the same invariant: if any
+    # pair of same-block arguments maps to different blocks, a one-coordinate
+    # variation will find it.
     for op_idx, symbol in enumerate(algebra.operations):
         if symbol.arity == 0:
             continue
         for x in iproduct(range(n), repeat=symbol.arity):
-            for y in iproduct(range(n), repeat=symbol.arity):
-                violation = _compatibility_violation(
-                    algebra, block_of, n, op_idx, symbol, x, y
-                )
-                if violation is not None:
-                    return violation
+            for j in range(symbol.arity):
+                for y_elem in range(n):
+                    if y_elem == x[j]:
+                        continue
+                    if block_of[x[j]] != block_of[y_elem]:
+                        continue
+                    y = list(x)
+                    y[j] = y_elem
+                    y = tuple(y)
+                    violation = _compatibility_violation(
+                        algebra, block_of, n, op_idx, symbol, x, y
+                    )
+                    if violation is not None:
+                        return violation
     return {"is_congruence": True}
 
 
@@ -213,11 +227,14 @@ def quotient(
             quotient_tables.append((block_of[original_output],))
         else:
             block_count = len(partition)
+            # Use a representative for each block (the minimum element)
+            representatives = [min(block) for block in partition]
             table = []
             for args in iproduct(range(block_count), repeat=symbol.arity):
+                # Compute the operation on the representatives
                 cell_index = 0
                 for arg in args:
-                    cell_index = cell_index * n + arg
+                    cell_index = cell_index * n + representatives[arg]
                 output = algebra.tables[op_idx][cell_index]
                 table.append(block_of[output])
             quotient_tables.append(tuple(table))

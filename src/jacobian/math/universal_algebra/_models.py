@@ -60,6 +60,13 @@ class SubalgebraRequest(StrictModel):
     algebra: FiniteAlgebra
     generators: tuple[int, ...] = Field(default=())
 
+    @model_validator(mode="after")
+    def require_valid_generators(self) -> Self:
+        n = len(self.algebra.carrier)
+        if any(not 0 <= g < n for g in self.generators):
+            raise ValueError("generator out of carrier range")
+        return self
+
 
 class SubalgebraResult(StrictModel):
     """The generated carrier, closure rounds, and closed-ness."""
@@ -101,6 +108,19 @@ class QuotientRequest(StrictModel):
 
     algebra: FiniteAlgebra
     partition: tuple[tuple[int, ...], ...]
+
+    @model_validator(mode="after")
+    def require_partition_covers_carrier(self) -> Self:
+        n = len(self.algebra.carrier)
+        seen: set[int] = set()
+        for block in self.partition:
+            for elem in block:
+                if not 0 <= elem < n:
+                    raise ValueError("partition element out of carrier range")
+                if elem in seen:
+                    raise ValueError("partition blocks must be disjoint")
+                seen.add(elem)
+        return self
 
 
 class QuotientResult(StrictModel):

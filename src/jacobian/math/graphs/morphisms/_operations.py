@@ -109,8 +109,13 @@ def compute_core_check(request: CoreCheckRequest) -> CoreCheckResult:
             return False
         for candidate in range(source.vertex_count):
             vertex_map[pos] = candidate
+            assigned_edges = tuple(
+                (u, v)
+                for u, v in source.edges
+                if vertex_map[u] != -1 and vertex_map[v] != -1
+            )
             if _is_endomorphism(
-                source.edges, source_adj, vertex_map
+                assigned_edges, source_adj, vertex_map
             ) and search_non_injective(pos + 1):
                 return True
             vertex_map[pos] = -1

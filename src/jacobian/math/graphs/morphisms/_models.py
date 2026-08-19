@@ -11,6 +11,11 @@ from jacobian._models import StrictModel
 MAX_VERTICES = 64
 MAX_EDGES = 512
 
+# Exhaustive backtracking search over graph morphisms is exponential in the
+# vertex count.  This dedicated bound keeps every search-based morphism
+# operation inside a tested, provably bounded domain.
+MORPHISM_MAX_VERTICES = 20
+
 
 class SimpleGraph(StrictModel):
     """A simple undirected graph with integer-labelled vertices."""
@@ -51,9 +56,25 @@ class HomomorphismFindRequest(StrictModel):
     source_graph: SimpleGraph
     target_graph: SimpleGraph
 
+    @model_validator(mode="after")
+    def require_search_bounded(self) -> Self:
+        if self.source_graph.vertex_count > MORPHISM_MAX_VERTICES:
+            raise ValueError(
+                f"source graph must have at most {MORPHISM_MAX_VERTICES} vertices"
+            )
+        return self
+
 
 class CoreCheckRequest(StrictModel):
     graph: SimpleGraph
+
+    @model_validator(mode="after")
+    def require_search_bounded(self) -> Self:
+        if self.graph.vertex_count > MORPHISM_MAX_VERTICES:
+            raise ValueError(
+                f"graph must have at most {MORPHISM_MAX_VERTICES} vertices"
+            )
+        return self
 
 
 class RetractionCheckRequest(StrictModel):
@@ -62,6 +83,10 @@ class RetractionCheckRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
+        if self.graph.vertex_count > MORPHISM_MAX_VERTICES:
+            raise ValueError(
+                f"graph must have at most {MORPHISM_MAX_VERTICES} vertices"
+            )
         if len(self.subgraph_vertices) > self.graph.vertex_count:
             raise ValueError("subgraph_vertices must be a subset")
         for v in self.subgraph_vertices:

@@ -12,7 +12,7 @@
     },
     "greedoid.convex_geometry.compute": {
       "input_schema": "sha256:c9676bda00f097b2b19293540524ec5f475e807584385015a47a1da66e895f9a",
-      "output_schema": "sha256:181dda71ee2d05306bc95c93446ac468d10d09efdde28e670f24dc79b984d7d9"
+      "output_schema": "sha256:df08d88228afb9f0e6731e03ad4211dfe6d4cbacc25fa9dea9b35bc9e781818c"
     },
     "greedoid.rank.compute": {
       "input_schema": "sha256:7d27d89cdf323becd0da09348424c4d2de95b438dbd5a606c684af66b0328a67",

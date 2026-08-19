@@ -92,10 +92,8 @@ def compute_basic_word_profile(
 def compute_convex_geometry(
     request: ConvexGeometryRequest,
 ) -> ConvexGeometryResult:
-    closed_family, complement_map = antimatroid_to_convex_geometry(
-        request.system
-    )
+    closed_family, complement_map = antimatroid_to_convex_geometry(request.system)
     return ConvexGeometryResult(
         closed_family=tuple(closed_family),
-        complement_map=complement_map,
+        complement_map=tuple(sorted(complement_map.items())),
     )

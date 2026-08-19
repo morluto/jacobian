@@ -120,8 +120,6 @@ from jacobian.math.graphical_models._admission import (
 from jacobian.math.graphical_models._tools import (
     TOOLS as GRAPHICAL_MODEL_TOOLS,
 )
-from jacobian.math.greedoids._admission import ADMISSIONS as GREEDOIDS_ADMISSIONS
-from jacobian.math.greedoids._tools import TOOLS as GREEDOIDS_TOOLS
 from jacobian.math.graphs._admission import ADMISSIONS as GRAPHS_ADMISSIONS
 from jacobian.math.graphs._tools import TOOLS as GRAPHS_TOOLS
 from jacobian.math.graphs.coloring._admission import (
@@ -166,6 +164,8 @@ from jacobian.math.graphs.transforms._admission import (
     ADMISSIONS as GRAPHS_TRANSFORMS_ADMISSIONS,
 )
 from jacobian.math.graphs.transforms._tools import TOOLS as GRAPH_TRANSFORMS_TOOLS
+from jacobian.math.greedoids._admission import ADMISSIONS as GREEDOIDS_ADMISSIONS
+from jacobian.math.greedoids._tools import TOOLS as GREEDOIDS_TOOLS
 from jacobian.math.group._admission import ADMISSIONS as GROUP_ADMISSIONS
 from jacobian.math.group._tools import TOOLS as GROUP_TOOLS
 from jacobian.math.impartial_games._admission import (

@@ -37,9 +37,7 @@ def _accessibility_obstruction(
         if not row:
             continue
         fs = frozenset(row)
-        removable = any(
-            tuple(sorted(fs - {elem})) in index for elem in sorted(fs)
-        )
+        removable = any(tuple(sorted(fs - {elem})) in index for elem in sorted(fs))
         if not removable:
             return tuple(sorted(fs))
     return None
@@ -113,7 +111,7 @@ def union_closed(system: FiniteFeasibleSetSystem) -> bool:
     feasible_sets = _feasible_sets(system)
     index = system.feasible_index()
     for i, a in enumerate(feasible_sets):
-        for b in feasible_sets[i + 1:]:
+        for b in feasible_sets[i + 1 :]:
             if tuple(sorted(a | b)) not in index:
                 return False
     return True
@@ -142,9 +140,7 @@ def bases(
     """
     if subset is None:
         subset = frozenset(range(len(system.ground)))
-    feasible_in_subset = [
-        fs for fs in _feasible_sets(system) if fs <= subset
-    ]
+    feasible_in_subset = [fs for fs in _feasible_sets(system) if fs <= subset]
     if not feasible_in_subset:
         return 0, []
     max_size = max(len(fs) for fs in feasible_in_subset)
@@ -163,8 +159,7 @@ def feasible_continuations(
     return [
         e
         for e in range(n)
-        if e not in feasible_set
-        and tuple(sorted(feasible_set | {e})) in index
+        if e not in feasible_set and tuple(sorted(feasible_set | {e})) in index
     ]
 
 

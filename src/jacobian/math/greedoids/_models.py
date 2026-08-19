@@ -101,10 +101,14 @@ class ConvexGeometryRequest(StrictModel):
 
 
 class ConvexGeometryResult(StrictModel):
-    """The closed-set family and the feasible->closed complement map."""
+    """The closed-set family and the feasible->closed complement map.
+
+    ``complement_map`` is an ordered list of ``(feasible, closed)`` pairs so
+    the wire representation stays JSON-safe.
+    """
 
     closed_family: tuple[tuple[int, ...], ...]
-    complement_map: dict[tuple[int, ...], tuple[int, ...]]
+    complement_map: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]
 
 
 __all__ = [

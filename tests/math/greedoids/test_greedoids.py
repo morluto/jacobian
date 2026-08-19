@@ -121,9 +121,7 @@ class TestRecognize:
         assert result.feasible_set == (0, 1)
 
     def test_exchange_violation(self) -> None:
-        result = compute_recognize(
-            RecognizeRequest(system=_non_greedoid_exchange())
-        )
+        result = compute_recognize(RecognizeRequest(system=_non_greedoid_exchange()))
         assert result.status == "NOT_A_GREEDOID"
         assert result.obstruction == "exchange_violation"
 
@@ -147,9 +145,7 @@ class TestRankAndBases:
         assert result.rank == 1
 
     def test_rank_of_empty_subset(self) -> None:
-        result = compute_rank(
-            RankRequest(system=_two_element_antimatroid(), subset=())
-        )
+        result = compute_rank(RankRequest(system=_two_element_antimatroid(), subset=()))
         assert result.rank == 0
 
     def test_bases_of_full_ground(self) -> None:
@@ -174,9 +170,7 @@ class TestRankAndBases:
 class TestBasicWordProfile:
     def test_full_basic_word(self) -> None:
         result = compute_basic_word_profile(
-            BasicWordProfileRequest(
-                system=_two_element_antimatroid(), word=(0, 1)
-            )
+            BasicWordProfileRequest(system=_two_element_antimatroid(), word=(0, 1))
         )
         assert result.status == "BASIC_WORD"
         assert result.is_full is True
@@ -185,18 +179,14 @@ class TestBasicWordProfile:
     def test_prefix_basic_word(self) -> None:
         # Word (0,) is a basic word of length 1; not full.
         result = compute_basic_word_profile(
-            BasicWordProfileRequest(
-                system=_two_element_antimatroid(), word=(0,)
-            )
+            BasicWordProfileRequest(system=_two_element_antimatroid(), word=(0,))
         )
         assert result.status == "BASIC_WORD"
         assert result.is_full is False
 
     def test_repeated_element(self) -> None:
         result = compute_basic_word_profile(
-            BasicWordProfileRequest(
-                system=_two_element_antimatroid(), word=(0, 0)
-            )
+            BasicWordProfileRequest(system=_two_element_antimatroid(), word=(0, 0))
         )
         assert result.status == "NOT_A_BASIC_WORD"
         assert result.obstruction == "repeated_element"
@@ -231,8 +221,9 @@ class TestConvexGeometry:
             ConvexGeometryRequest(system=_two_element_antimatroid())
         )
         # The complement map reverses inclusion: empty feasible -> full closed.
-        assert result.complement_map[()] == (0, 1)
-        assert result.complement_map[(0, 1)] == ()
+        lookup = dict(result.complement_map)
+        assert lookup[()] == (0, 1)
+        assert lookup[(0, 1)] == ()
 
 
 # ---------------------------------------------------------------------------
@@ -251,9 +242,7 @@ class TestValidation:
 
     def test_duplicate_feasible_set_rejected(self) -> None:
         with pytest.raises(ValidationError, match="duplicate-free"):
-            FiniteFeasibleSetSystem(
-                ground=("a", "b"), feasible=((), (0,), (0,))
-            )
+            FiniteFeasibleSetSystem(ground=("a", "b"), feasible=((), (0,), (0,)))
 
     def test_index_out_of_range_rejected(self) -> None:
         with pytest.raises(ValidationError, match="out of range"):

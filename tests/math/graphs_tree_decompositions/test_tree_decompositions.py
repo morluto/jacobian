@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from typing import Any, cast
+
+import pytest
 from pydantic import ValidationError
 
 from jacobian.math.graphs.tree_decompositions import TreeDecomposition
@@ -101,9 +102,7 @@ class TestWidth:
 class TestVertexOccurrences:
     def test_path_occurrences(self) -> None:
         td = _path_decomposition()
-        result = compute_vertex_occurrences(
-            VertexOccurrencesRequest(decomposition=td)
-        )
+        result = compute_vertex_occurrences(VertexOccurrencesRequest(decomposition=td))
         per_vertex = result.per_vertex
         # Vertex b appears in both bags.
         assert set(cast(Any, per_vertex["b"]["nodes"])) == {"t0", "t1"}

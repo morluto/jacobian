@@ -106,9 +106,7 @@ def _check_connectedness(
                     reached.add(nxt)
                     stack.append(nxt)
         if reached != set(containing):
-            raise ValueError(
-                "the connectedness axiom is violated for vertex " + vertex
-            )
+            raise ValueError("the connectedness axiom is violated for vertex " + vertex)
 
 
 class TreeDecomposition(StrictModel):
@@ -131,9 +129,7 @@ class TreeDecomposition(StrictModel):
                 raise ValueError("tree edges must not be loops")
             if left not in node_set or right not in node_set:
                 raise ValueError("tree edge references an undeclared node")
-        edge_pairs = [
-            (a, b) if a <= b else (b, a) for a, b in self.tree_edges
-        ]
+        edge_pairs = [(a, b) if a <= b else (b, a) for a, b in self.tree_edges]
         if len(set(edge_pairs)) != len(edge_pairs):
             raise ValueError("tree edges must be unique")
         index_of = {label: i for i, label in enumerate(self.tree_nodes)}
@@ -144,9 +140,7 @@ class TreeDecomposition(StrictModel):
         _validate_bags(self.bags, vertex_set)
         _check_vertex_coverage(self.bags, vertex_set)
         _check_edge_coverage(self.graph, self.bags)
-        _check_connectedness(
-            self.graph, self.bags, int_edges, len(self.tree_nodes)
-        )
+        _check_connectedness(self.graph, self.bags, int_edges, len(self.tree_nodes))
         return self
 
 

@@ -49,7 +49,7 @@ def compute_vertex_occurrences(
     request: VertexOccurrencesRequest,
 ) -> VertexOccurrencesResult:
     result = vertex_occurrences(request.decomposition)
-    return VertexOccurrencesResult(per_vertex=result)  # type: ignore[arg-type]
+    return VertexOccurrencesResult(per_vertex=result)
 
 
 def compute_adhesions(request: AdhesionsRequest) -> AdhesionsResult:

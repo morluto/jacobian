@@ -177,9 +177,9 @@ def _check_compatibility(
                         continue
                     if block_of[x[j]] != block_of[y_elem]:
                         continue
-                    y = list(x)
-                    y[j] = y_elem
-                    y = tuple(y)
+                    y_list = list(x)
+                    y_list[j] = y_elem
+                    y: tuple[int, ...] = tuple(y_list)
                     violation = _compatibility_violation(
                         algebra, block_of, n, op_idx, symbol, x, y
                     )

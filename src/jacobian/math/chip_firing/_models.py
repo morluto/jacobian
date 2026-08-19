@@ -23,12 +23,23 @@ class LabelledGraph(StrictModel):
         labels = set(self.vertices)
         if len(labels) != len(self.vertices):
             raise ValueError("vertex labels must be distinct")
+        seen_edges: set[tuple[str, str]] = set()
         for edge in self.edges:
             u, v = edge
             if u not in labels or v not in labels:
                 raise ValueError("every edge endpoint must be a declared vertex")
             if u == v:
                 raise ValueError("self-loops are not allowed")
+            canonical = (min(u, v), max(u, v))
+            if canonical in seen_edges:
+                raise ValueError("duplicate edges are not allowed in a simple graph")
+            seen_edges.add(canonical)
+        degree: dict[str, int] = {v: 0 for v in self.vertices}
+        for u, v in self.edges:
+            degree[u] += 1
+            degree[v] += 1
+            if degree[u] > MAX_DEGREE or degree[v] > MAX_DEGREE:
+                raise ValueError(f"vertex degree exceeds maximum {MAX_DEGREE}")
         if len(self.edges) > MAX_VERTICES * MAX_DEGREE // 2:
             raise ValueError("too many edges")
         return self

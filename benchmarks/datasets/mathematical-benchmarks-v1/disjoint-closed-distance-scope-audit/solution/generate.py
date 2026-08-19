@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 import shutil
@@ -39,23 +38,7 @@ def main():
         "formal_conclusion": "POSITIVE_DISTANCE",
         "corrected_conclusion": "SEPARATED_BUT_DISTANCE_INFIMUM_ZERO",
     }
-    evidence = {
-        "schema_version": "1",
-        "task_id": "jacobian/disjoint-closed-distance-scope-audit",
-        "result": result,
-    }
-    ep = app / "evidence/disjoint-closed-distance-audit.json"
-    ep.parent.mkdir(parents=True, exist_ok=True)
-    ep.write_text(json.dumps(evidence, separators=(",", ":")))
-    submission = {
-        "result": result,
-        "witness": [
-            {
-                "path": "evidence/disjoint-closed-distance-audit.json",
-                "sha256": "sha256:" + hashlib.sha256(ep.read_bytes()).hexdigest(),
-            }
-        ],
-    }
+    submission = {"result": result}
     (app / "submission.json").write_text(json.dumps(submission, indent=2))
     (app / "answer.txt").write_text(
         "Exact countermodel certificate generated; see submission.json.\n"

@@ -51,7 +51,7 @@ def gram_profile(matrix: SignMatrix) -> dict[str, object]:
     is_hadamard = n == m and all(
         gram[i][j] == (n if i == j else 0) for i in range(n) for j in range(n)
     )
-    residuals = tuple(gram[i][i] - n for i in range(n)) if n == m else ()
+    residuals = tuple(gram[i][i] - m for i in range(min(n, m)))
     nonzero_off = tuple(
         (i, j, gram[i][j]) for i in range(n) for j in range(i + 1, n) if gram[i][j] != 0
     )
@@ -111,6 +111,10 @@ def kronecker(left: HadamardMatrix, right: HadamardMatrix) -> dict[str, object]:
     a = [list(row) for row in left.rows]
     b = [list(row) for row in right.rows]
     n, m = len(a), len(b)
+    if n * m > MAX_MATRIX_ORDER:
+        raise ValueError(
+            f"Kronecker product order {n * m} exceeds maximum {MAX_MATRIX_ORDER}"
+        )
     result: list[list[int]] = []
     row_map: list[tuple[int, int]] = []
     for i in range(n):

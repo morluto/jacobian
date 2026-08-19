@@ -38,6 +38,9 @@ moves to make, how to combine their results, and when to stop. Keeping the
 operations semantically narrow and domain-owned preserves that search space
 instead of baking one proof strategy or workflow into the tools themselves.
 
+See [Executable mathematical vocabulary](docs/explanation/executable-mathematical-vocabulary.md)
+for what semantic atomicity means and how the operation vocabulary grows.
+
 ## Quickstart
 
 Run the canonical Python MCP command without installing Jacobian globally:

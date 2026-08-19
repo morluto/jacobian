@@ -59,22 +59,6 @@ def sigma_algebra_join(
     return FiniteSigmaAlgebra(space=sigma1.space, blocks=tuple(b for b in blocks))
 
 
-def sigma_algebra_join_correct(
-    sigma1: FiniteSigmaAlgebra,
-    sigma2: FiniteSigmaAlgebra,
-) -> FiniteSigmaAlgebra:
-    """Return the least sigma algebra containing both sigma algebras."""
-    if sigma1.space != sigma2.space:
-        raise ValueError("sigma algebras must share the same probability space")
-    blocks: list[tuple[str, ...]] = []
-    for b1 in sigma1.blocks:
-        for b2 in sigma2.blocks:
-            intersection = frozenset(b1) & frozenset(b2)
-            if intersection:
-                blocks.append(tuple(sorted(intersection)))
-    return FiniteSigmaAlgebra(space=sigma1.space, blocks=tuple(b for b in blocks))
-
-
 def conditional_expectation(
     rv: FiniteRandomVariable,
     sigma: FiniteSigmaAlgebra,
@@ -122,7 +106,7 @@ def filtration_natural(
         if accumulated is None:
             accumulated = current
         else:
-            accumulated = sigma_algebra_join_correct(accumulated, current)
+            accumulated = sigma_algebra_join(accumulated, current)
         sigmas.append(accumulated)
     return tuple(sigmas)
 

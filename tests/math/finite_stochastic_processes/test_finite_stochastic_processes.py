@@ -86,10 +86,10 @@ class TestJoin:
     def test_trivial_join(self) -> None:
         sigma = FiniteSigmaAlgebra(space=_coin_space(), blocks=(("H", "T"),))
         from jacobian.math.finite_stochastic_processes.operations import (
-            sigma_algebra_join_correct,
+            sigma_algebra_join,
         )
 
-        result = sigma_algebra_join_correct(sigma, sigma)
+        result = sigma_algebra_join(sigma, sigma)
         assert len(result.blocks) == 1
 
 

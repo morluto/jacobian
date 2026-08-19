@@ -39,10 +39,10 @@ def compute_sigma_from_observation(
 
 def compute_join(request: JoinRequest) -> FiniteSigmaAlgebra:
     from jacobian.math.finite_stochastic_processes.operations import (
-        sigma_algebra_join_correct,
+        sigma_algebra_join,
     )
 
-    return sigma_algebra_join_correct(request.sigma1, request.sigma2)
+    return sigma_algebra_join(request.sigma1, request.sigma2)
 
 
 def compute_conditional_expectation(

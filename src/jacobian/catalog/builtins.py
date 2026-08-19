@@ -12,12 +12,6 @@ from jacobian.math.additive_combinatorics._admission import (
 from jacobian.math.additive_combinatorics._tools import (
     TOOLS as ADDITIVE_COMBINATORICS_TOOLS,
 )
-from jacobian.math.plane_algebraic_curves._admission import (
-    ADMISSIONS as PLANE_ALGEBRAIC_CURVES_ADMISSIONS,
-)
-from jacobian.math.plane_algebraic_curves._tools import (
-    TOOLS as PLANE_ALGEBRAIC_CURVES_TOOLS,
-)
 from jacobian.math.algebraic_combinatorics._admission import (
     ADMISSIONS as ALGEBRAIC_COMBINATORICS_ADMISSIONS,
 )
@@ -224,6 +218,12 @@ from jacobian.math.optimization._admission import ADMISSIONS as OPTIMIZATION_ADM
 from jacobian.math.optimization._tools import TOOLS as OPTIMIZATION_TOOLS
 from jacobian.math.petri_nets._admission import ADMISSIONS as PETRI_NETS_ADMISSIONS
 from jacobian.math.petri_nets._tools import TOOLS as PETRI_NET_TOOLS
+from jacobian.math.plane_algebraic_curves._admission import (
+    ADMISSIONS as PLANE_ALGEBRAIC_CURVES_ADMISSIONS,
+)
+from jacobian.math.plane_algebraic_curves._tools import (
+    TOOLS as PLANE_ALGEBRAIC_CURVES_TOOLS,
+)
 from jacobian.math.polynomials._admission import ADMISSIONS as POLYNOMIALS_ADMISSIONS
 from jacobian.math.polynomials._tools import TOOLS as POLYNOMIAL_TOOLS
 from jacobian.math.polynomials.maps._admission import (

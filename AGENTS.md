@@ -14,9 +14,13 @@ discovering, running, and combining typed computations to investigate
 conjectures, build examples, calculate invariants, and check bounded claims.
 
 **Jacobian's hypothesis is that mathematical reasoning benefits from an
-executable vocabulary of small, exact operations.** Prefer reusable
-mathematical primitives over large solvers or workflows: Jacobian supplies the
-mathematical moves; the model decides how to compose them into larger solutions.
+executable vocabulary of semantically scoped, bounded operations.** Prefer
+reusable mathematical primitives over large solvers or workflows: Jacobian
+supplies the mathematical moves; the model decides how to compose them into
+larger solutions.
+
+Atomicity is semantic: an operation establishes one stable, reusable
+mathematical postcondition. It need not have a small or simple implementation.
 
 It exposes two MCP tools:
 
@@ -56,10 +60,14 @@ semantics and types.
   one bounded external call genuinely requires it.
 - Built-in tools are explicit immutable `MathTool` tuples: discovery metadata
   plus one direct typed domain function. Every catalog candidate requires an
-  explicit admission row in `src/jacobian/catalog/admission.py`; catalog
-  construction fails closed without one (see the
+  owner-local admission decision in its mathematical domain's `_admission.py`
+  module; `jacobian.catalog.admission` owns the shared policy types and
+  fail-closed validation (see the
   [public operation admission](docs/reference/public-operation-admission.md)
   contract).
+- Before adding a public operation, establish that the missing capability is an
+  operation gap rather than a discovery, representation, interoperability,
+  contract, scale, backend, or reasoning failure.
 - Keep operations composable and domain-owned. Discovery must not prescribe a
   proof strategy, next step, or stopping rule.
 - Jacobian is pre-stable. When a request/result contract is broader than the
@@ -69,7 +77,7 @@ semantics and types.
 
 ## Implement mathematics directly
 
-A `MathTool` is an exact mathematical instrument, not a lesson, proof recipe,
+A `MathTool` is a bounded mathematical instrument, not a lesson, proof recipe,
 or workflow. Add an operation only when it exposes a stable bounded computation
 or check that remains useful as models improve at mathematical reasoning and
 notation. The model chooses what to investigate and how to compose results;

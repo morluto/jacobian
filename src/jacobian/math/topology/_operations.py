@@ -714,12 +714,13 @@ def compute_f_vector(request: FVectorRequest) -> FVectorResult:
     # Compute h-vector from f-vector
     from math import comb as _comb_func
 
-    n = len(f_vector)
-    h_vector = []
-    for i in range(n):
+    n = max_dim + 1
+    f_with_empty: list[int] = [1, *list(f_vector)]
+    h_vector: list[int] = []
+    for k in range(n + 1):
         h = 0
-        for j in range(i + 1):
-            h += ((-1) ** (i - j)) * f_vector[j] * _comb_func(n - 1 - j, i - j)
+        for i in range(k + 1):
+            h += ((-1) ** (k - i)) * _comb_func(n - i, k - i) * f_with_empty[i]
         h_vector.append(h)
 
     return FVectorResult(

@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 import shutil
@@ -20,26 +19,7 @@ def main():
         "bad_factor_is_hausdorff": False,
         "missing_assumption": "ALL_FACTORS_NONEMPTY",
     }
-    limitations = ["FINITE_TOPOLOGIES_ONLY", "LEAN_ELABORATION_NOT_ASSESSED"]
-    task_id = "jacobian/product-hausdorff-nonempty-scope-audit"
-    evidence = {
-        "schema_version": "1",
-        "task_id": task_id,
-        "result": result,
-        "limitations": limitations,
-    }
-    ep = app / "evidence/product-hausdorff-audit.json"
-    ep.parent.mkdir(parents=True, exist_ok=True)
-    ep.write_text(json.dumps(evidence, separators=(",", ":")))
-    submission = {
-        "result": result,
-        "witness": [
-            {
-                "path": "evidence/product-hausdorff-audit.json",
-                "sha256": "sha256:" + hashlib.sha256(ep.read_bytes()).hexdigest(),
-            }
-        ],
-    }
+    submission = {"result": result}
     (app / "submission.json").write_text(json.dumps(submission, indent=2))
     (app / "answer.txt").write_text(
         "Finite topology countermodel generated; see submission.json.\n"

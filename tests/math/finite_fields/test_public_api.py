@@ -22,7 +22,7 @@ from jacobian.math.finite_fields import (
 from jacobian.math.finite_fields._tools import TOOLS
 from jacobian.math.prime_field_linear_algebra import rank
 
-pytestmark = pytest.mark.requires_provider("flint")
+pytestmark = pytest.mark.requires_backend("flint")
 
 
 def _slice_a_values() -> tuple[

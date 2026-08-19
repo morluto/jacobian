@@ -19,6 +19,7 @@ ROOT_MATH_DOMAINS = (
     "algebraic_combinatorics",
     "arithmetic",
     "arithmetic_dynamics",
+    "combinatorial_maps",
     "combinatorial_matrices",
     "combinatorics",
     "diophantine_approximation",

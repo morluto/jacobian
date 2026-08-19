@@ -162,6 +162,7 @@ def test_multiply_rejects_extreme_coefficient() -> None:
     # Their product is 1/10^100 which is fine, but with enough terms
     # the Cauchy product at high degree would exceed the bound.
     import sys
+
     sys.set_int_max_str_digits(10000)
 
     order = 400

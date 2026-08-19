@@ -110,16 +110,15 @@ class _SeriesPairRequest(StrictModel):
         """
         order = self.left.truncation_order
         max_left = max(
-            max(len(c.num.lstrip("-")), len(c.den))
-            for c in self.left.coefficients
+            max(len(c.num.lstrip("-")), len(c.den)) for c in self.left.coefficients
         )
         max_right = max(
-            max(len(c.num.lstrip("-")), len(c.den))
-            for c in self.right.coefficients
+            max(len(c.num.lstrip("-")), len(c.den)) for c in self.right.coefficients
         )
         # Each Cauchy sum term has height at most max_left + max_right digits.
         # Summing n terms adds at most log10(n) more digits.
         import math
+
         bound = (max_left + max_right) * order + int(math.log10(order)) + 1
         if bound > MAX_RESULT_RATIONAL_DIGITS:
             raise ValueError(
@@ -304,12 +303,10 @@ class SeriesComposeRequest(StrictModel):
         # Coefficient growth: composition repeatedly raises inner to powers.
         # Each output coefficient has height at most order * (max_outer + max_inner) digits.
         max_outer = max(
-            max(len(c.num.lstrip("-")), len(c.den))
-            for c in self.outer.coefficients
+            max(len(c.num.lstrip("-")), len(c.den)) for c in self.outer.coefficients
         )
         max_inner = max(
-            max(len(c.num.lstrip("-")), len(c.den))
-            for c in self.inner.coefficients
+            max(len(c.num.lstrip("-")), len(c.den)) for c in self.inner.coefficients
         )
         bound = (max_outer + max_inner) * self.outer.truncation_order + 1
         if bound > MAX_RESULT_RATIONAL_DIGITS:
@@ -352,8 +349,7 @@ class SeriesReversionRequest(StrictModel):
         # Reversion repeatedly divides by the linear coefficient and accumulates.
         # Coefficient height grows at most linearly in the truncation order.
         max_input = max(
-            max(len(c.num.lstrip("-")), len(c.den))
-            for c in series.coefficients
+            max(len(c.num.lstrip("-")), len(c.den)) for c in series.coefficients
         )
         bound = 2 * max_input * self.truncation_order + 1
         if bound > MAX_RESULT_RATIONAL_DIGITS:

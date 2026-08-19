@@ -19,8 +19,13 @@ class FacesRequest(StrictModel):
 
 
 class FacesResult(StrictModel):
-    """The complete face-orbit family of the supplied map."""
+    """The complete face-orbit family of the supplied map.
 
+    The original input map is carried on the result so the bound model can
+    re-run the exact native kernel and verify the face-orbit family.
+    """
+
+    map: FiniteCombinatorialMap
     face_walks: tuple[tuple[int, ...], ...]
     face_of_dart: tuple[int, ...]
     successor: tuple[int, ...]
@@ -29,16 +34,15 @@ class FacesResult(StrictModel):
     def bind_faces(self) -> Self:
         from jacobian.math.combinatorial_maps.operations_module import face_orbits
 
-        n = len(self.face_of_dart) if self.face_of_dart else 0
-        if n != len(self.successor):
-            raise ValueError("face_of_dart and successor must have equal length")
-        if any(idx < 0 or idx >= n for idx in self.face_of_dart):
-            raise ValueError("face indices must be in range")
-        for face in self.face_walks:
-            for dart in face:
-                if dart < 0 or dart >= n:
-                    raise ValueError("face walk dart index out of range")
-        _ = face_orbits
+        walks, face_of_dart, successor, _ = face_orbits(self.map)
+        expected_walks = tuple(tuple(walk) for walk in walks)
+        if self.face_walks != expected_walks:
+            raise ValueError("face_walks must be the exact face-orbit family")
+        n = len(self.map.darts)
+        if self.face_of_dart != tuple(face_of_dart[d] for d in range(n)):
+            raise ValueError("face_of_dart must be the exact per-dart face assignment")
+        if self.successor != tuple(successor):
+            raise ValueError("successor must be the exact dart-successor permutation")
         return self
 
 

@@ -43,6 +43,7 @@ def compute_faces(request: FacesRequest) -> FacesResult:
     walks, face_of_dart, successor, _ = face_orbits(request.map)
     n = len(request.map.darts)
     return FacesResult(
+        map=request.map,
         face_walks=tuple(tuple(walk) for walk in walks),
         face_of_dart=tuple(face_of_dart[d] for d in range(n)),
         successor=tuple(successor),

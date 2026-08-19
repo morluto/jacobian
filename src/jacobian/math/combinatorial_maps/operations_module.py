@@ -214,17 +214,24 @@ def orientation_reverse(
         darts=map_.darts,
         rotations=reversed_rotations,
     )
-    old_walks, _, _, _ = face_orbits(map_)
-    new_walks, _, _, _ = face_orbits(reversed_map)
+    old_walks, old_face_of_dart, _, _ = face_orbits(map_)
+    new_walks, new_face_of_dart, _, _ = face_orbits(reversed_map)
+    # The reversed face permutation is phi' = alpha . phi^-1 . alpha, so the
+    # new orbit of a dart is the reversal image of the old orbit: old face O
+    # corresponds to the new face containing the reversed darts of O.  Match
+    # through the dart correspondence rather than by set equality, which only
+    # works for reverse-symmetric maps.
     face_bijection: dict[int, int] = {}
-    for old_face, old_walk in enumerate(old_walks):
-        old_set = frozenset(old_walk)
-        for new_face, new_walk in enumerate(new_walks):
-            if frozenset(new_walk) == old_set:
-                face_bijection[old_face] = new_face
-                break
-        if old_face not in face_bijection:
+    for dart_index, dart in enumerate(map_.darts):
+        old_face = old_face_of_dart[dart[2]]
+        new_face = new_face_of_dart[dart_index]
+        existing = face_bijection.setdefault(old_face, new_face)
+        if existing != new_face:
             raise ValueError("orientation reversal did not induce a face bijection")
+    if len(face_bijection) != len(old_walks) or len(
+        set(face_bijection.values())
+    ) != len(new_walks):
+        raise ValueError("orientation reversal did not induce a face bijection")
     return reversed_map, face_bijection
 
 

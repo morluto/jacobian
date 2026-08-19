@@ -54,14 +54,37 @@ def _four_cycle() -> FiniteCombinatorialMap:
 
 
 def _isolated_vertex() -> FiniteCombinatorialMap:
-    """One isolated vertex. No edges; a single vertex has one face (the
-    empty face) under the closed-surface convention. We model this with a
-    single self-loop to satisfy the non-empty dart requirement and verify
-    the sphere's genus."""
+    """A sphere vertex under the self-loop convention.
+
+    The accepted map category requires every vertex to be incident to at
+    least one dart, so an isolated sphere vertex is represented by a single
+    self-loop: V=1, E=1, F=2, chi=2, g=0.
+    """
     return FiniteCombinatorialMap(
         vertex_count=1,
         darts=((0, 0, 1), (0, 0, 0)),
         rotations=((0, 1),),
+    )
+
+
+def _theta_graph() -> FiniteCombinatorialMap:
+    """Three parallel edges between two vertices: V=2, E=3, F=3, chi=2.
+
+    The map is deliberately not reverse-symmetric: reversing the local
+    rotations permutes the faces, so a face bijection matched by dart-set
+    equality would fail.
+    """
+    return FiniteCombinatorialMap(
+        vertex_count=2,
+        darts=(
+            (0, 1, 1),
+            (1, 0, 0),
+            (0, 1, 3),
+            (1, 0, 2),
+            (0, 1, 5),
+            (1, 0, 4),
+        ),
+        rotations=((0, 2, 4), (1, 5, 3)),
     )
 
 
@@ -289,6 +312,29 @@ class TestOrientationReverse:
         assert len(result.face_bijection) == 2
         assert set(result.face_bijection.values()) == {0, 1}
 
+    def test_theta_graph_reversal_is_face_bijection(self) -> None:
+        m = _theta_graph()
+        result = compute_orientation_reverse(OrientationReverseRequest(map=m))
+        assert set(result.face_bijection) == {0, 1, 2}
+        assert set(result.face_bijection.values()) == {0, 1, 2}
+        # Old face O corresponds to the new face containing the reversed
+        # darts of O (the reversal image under the face-permutation
+        # conjugation), not to a new orbit with the same dart set.
+        old_walks = compute_faces(FacesRequest(map=m)).face_walks
+        new_walks = compute_faces(FacesRequest(map=result.reversed_map)).face_walks
+        for old_face, new_face in result.face_bijection.items():
+            reversal_image = frozenset(m.darts[d][2] for d in old_walks[old_face])
+            assert reversal_image == frozenset(new_walks[new_face])
+            assert frozenset(old_walks[old_face]) != frozenset(new_walks[new_face])
+
+    def test_theta_graph_double_reverse_is_identity(self) -> None:
+        m = _theta_graph()
+        result = compute_orientation_reverse(OrientationReverseRequest(map=m))
+        inner = compute_orientation_reverse(
+            OrientationReverseRequest(map=result.reversed_map)
+        )
+        assert inner.reversed_map == m
+
 
 # ---------------------------------------------------------------------------
 # Connected components
@@ -338,6 +384,37 @@ class TestDual:
         m = _torus()
         result = compute_dual(DualRequest(map=m))
         assert result.dual.vertex_count == 1
+
+    def test_theta_graph_dual_faces_match_primal_vertices(self) -> None:
+        m = _theta_graph()
+        result = compute_dual(DualRequest(map=m))
+        # The dual has one vertex per primal face and one face per primal
+        # vertex (V=2, E=3, F=3 in the primal).
+        assert result.dual.vertex_count == 3
+        assert len(compute_faces(FacesRequest(map=result.dual)).face_walks) == 2
+        assert len(result.dual.darts) == len(m.darts)
+
+    def test_dual_preserves_euler_characteristic(self) -> None:
+        for m in (_four_cycle(), _torus(), _tree(), _theta_graph(), _disconnected()):
+            primal = compute_euler_characteristic(EulerCharacteristicRequest(map=m))
+            dual = compute_dual(DualRequest(map=m)).dual
+            dual_euler = compute_euler_characteristic(
+                EulerCharacteristicRequest(map=dual)
+            )
+            assert dual_euler.total["chi"] == primal.total["chi"]
+            # Duality swaps vertices and faces and preserves edges.
+            assert dual_euler.total["V"] == primal.total["F"]
+            assert dual_euler.total["E"] == primal.total["E"]
+            assert dual_euler.total["F"] == primal.total["V"]
+
+    def test_dual_of_dual_recovers_primal_structure(self) -> None:
+        m = _theta_graph()
+        dual = compute_dual(DualRequest(map=m)).dual
+        dual_of_dual = compute_dual(DualRequest(map=dual)).dual
+        assert dual_of_dual.vertex_count == m.vertex_count
+        primal_faces = compute_faces(FacesRequest(map=m)).face_walks
+        transported_faces = compute_faces(FacesRequest(map=dual_of_dual)).face_walks
+        assert sorted(map(len, transported_faces)) == sorted(map(len, primal_faces))
 
 
 # ---------------------------------------------------------------------------
@@ -409,6 +486,50 @@ class TestValidation:
                 vertex_count=10000,
                 darts=((0, 1, 1), (1, 0, 0)),
                 rotations=((0,), (1,)),
+            )
+
+    def test_negative_dart_index_in_rotation_rejected(self) -> None:
+        # Dart -1 aliases the last dart through Python negative indexing; it
+        # must be rejected instead of silently accepted.
+        with pytest.raises(ValidationError, match="out of range"):
+            FiniteCombinatorialMap(
+                vertex_count=1,
+                darts=((0, 0, 1), (0, 0, 0)),
+                rotations=((-1, 0),),
+            )
+
+    def test_out_of_range_dart_index_rejected_without_index_error(self) -> None:
+        with pytest.raises(ValidationError, match="out of range"):
+            FiniteCombinatorialMap(
+                vertex_count=1,
+                darts=((0, 0, 1), (0, 0, 0)),
+                rotations=((0, 5),),
+            )
+
+    def test_isolated_vertex_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="incident to at least one dart"):
+            FiniteCombinatorialMap(
+                vertex_count=2,
+                darts=((0, 0, 1), (0, 0, 0)),
+                rotations=((0, 1), ()),
+            )
+
+    def test_long_facial_walk_rejected_to_keep_dual_bounded(self) -> None:
+        # A 65-vertex cycle has two facial walks of length 65, which would
+        # overflow the dual rotation budget; the map is rejected up front.
+        size = 65
+        darts: list[tuple[int, int, int]] = []
+        rotations: list[tuple[int, ...]] = []
+        for i in range(size):
+            j = (i + 1) % size
+            darts.append((i, j, 2 * i + 1))
+            darts.append((j, i, 2 * i))
+            rotations.append((2 * i, 2 * ((i - 1) % size) + 1))
+        with pytest.raises(ValidationError, match="facial walk"):
+            FiniteCombinatorialMap(
+                vertex_count=size,
+                darts=tuple(darts),
+                rotations=tuple(rotations),
             )
 
 

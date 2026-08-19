@@ -12,6 +12,12 @@ MAX_MAP_VERTICES = 256
 MAX_MAP_DARTS = 1024
 MAX_ROTATION_LENGTH = 64
 MAX_LABEL_BYTES = 1024
+# The dual map has one vertex per primal face and one rotation entry per
+# primal facial-walk element.  These bounds keep the dual of every accepted
+# map inside the same value budgets: the dual's faces correspond one-for-one
+# with primal vertices and its facial walks with primal rotation rows.
+MAX_FACES = MAX_MAP_VERTICES
+MAX_FACIAL_WALK_LENGTH = MAX_ROTATION_LENGTH
 
 
 def _validate_dart(
@@ -55,7 +61,9 @@ def _validate_rotation(
     darts: tuple[tuple[int, int, int], ...],
 ) -> None:
     for vertex, row in enumerate(rotations):
-        if not row and outgoing[vertex]:
+        if not outgoing[vertex]:
+            raise ValueError("every vertex must be incident to at least one dart")
+        if not row:
             raise ValueError("an outgoing-dart vertex must declare a nonempty rotation")
         if len(row) > MAX_ROTATION_LENGTH:
             raise ValueError(
@@ -65,12 +73,33 @@ def _validate_rotation(
             raise ValueError("rotation length must equal the outgoing dart count")
         seen: set[int] = set()
         for dart_index in row:
+            if not 0 <= dart_index < len(darts):
+                raise ValueError("rotation dart index out of range")
             dart = darts[dart_index]
             if dart[0] != vertex:
                 raise ValueError("rotation must list only outgoing darts of its vertex")
             if dart_index in seen:
                 raise ValueError("rotation must not repeat a dart")
             seen.add(dart_index)
+
+
+def _validate_facial_budgets(map_: FiniteCombinatorialMap) -> None:
+    """Reject maps whose facial structure would overflow the dual budgets.
+
+    The dual of an accepted map must itself be an accepted value: it has one
+    vertex per primal face and one rotation entry per primal facial-walk
+    element, so the primal face count and facial-walk lengths are bounded
+    here.  The constraint set is closed under duality (dual faces correspond
+    to primal vertices and dual facial walks to primal rotation rows).
+    """
+    from jacobian.math.combinatorial_maps.operations_module import face_orbits
+
+    walks, _, _, _ = face_orbits(map_)
+    if len(walks) > MAX_FACES:
+        raise ValueError("face count exceeds the bounded dual-vertex budget")
+    for walk in walks:
+        if len(walk) > MAX_FACIAL_WALK_LENGTH:
+            raise ValueError("a facial walk exceeds the bounded dual-rotation budget")
 
 
 class FiniteCombinatorialMap(StrictModel):
@@ -99,6 +128,7 @@ class FiniteCombinatorialMap(StrictModel):
         _validate_involution(self.darts)
         outgoing = _build_outgoing(self.darts, self.vertex_count)
         _validate_rotation(self.rotations, outgoing, self.darts)
+        _validate_facial_budgets(self)
         return self
 
 
@@ -109,6 +139,8 @@ class FacialWalk(StrictModel):
 
 
 __all__ = [
+    "MAX_FACES",
+    "MAX_FACIAL_WALK_LENGTH",
     "MAX_LABEL_BYTES",
     "MAX_MAP_DARTS",
     "MAX_MAP_VERTICES",

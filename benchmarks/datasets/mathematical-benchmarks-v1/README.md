@@ -57,7 +57,7 @@ All Jacobian treatments reach the local sidecar through
 to both jobs; only the treatment adds the Jacobian sidecar and MCP config. This
 paired setup is for workflow comparison; the public dataset is not held-out
 evidence. For a fresh task-image pull behind a proxy, follow the opt-in Buildx
-builder setup in [Run agent observations](../../../docs/how-to/run-agent-evaluations.md).
+builder setup in [Run agent observations](../../docs/run-agent-evaluations.md).
 
 To evaluate the canonical `math.find` and `math.run` surface, keep each model,
 task set, and prompt condition in a separate result root:

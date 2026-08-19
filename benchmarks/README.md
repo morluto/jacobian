@@ -6,6 +6,9 @@ which mathematical subject the task belongs to. Subject organization lives in
 the required `primary_domain` taxonomy and the more detailed `field` metadata;
 tasks remain direct children of their dataset roots.
 
+See [benchmark documentation](docs/index.md) for task authoring, evaluation
+methods, and operator-run observations.
+
 `benchmarks/datasets/<dataset>/` is the Harbor dataset root and contains the
 dataset's executable task bundles directly. `members/` retains Jacobian's
 authoritative identity, provenance, assurance, provider, environment-profile,
@@ -83,7 +86,7 @@ make codex-visibility
 mathematical correctness task. It compares no Jacobian with Jacobian MCP only
 and measures whether Codex discovers, inspects, invokes, completes, or
 independently checks relevant operations. See
-[Run the MCP visibility evaluation](../docs/how-to/run-codex-visibility-evaluation.md).
+[Run the MCP visibility evaluation](docs/run-codex-visibility-evaluation.md).
 
 `symbolic-coordination-v1` keeps its deterministic 26-case pilot separate
 from the fixed `mathematical-benchmarks-v1` snapshots. Its task bundles are solvable
@@ -161,8 +164,8 @@ Performance timing is reported separately from reward, and research datasets
 are explicitly non-comparative diagnostics. Uniform task structure does not
 make rewards across these datasets comparable.
 
-See [authoring a Harbor benchmark task](../docs/how-to/author-harbor-benchmark-task.md),
-[benchmark contracts](../docs/reference/evaluations/benchmark-contracts.md), and the
+See [authoring a Harbor benchmark task](docs/author-harbor-benchmark-task.md),
+[benchmark contracts](docs/benchmark-contracts.md), and the
 [Harbor benchmarks skill](../.agents/skills/harbor-benchmarks/SKILL.md).
 
 ## Research loop and subject taxonomy

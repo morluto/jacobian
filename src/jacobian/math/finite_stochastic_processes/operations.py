@@ -72,9 +72,7 @@ def sigma_algebra_join_correct(
             intersection = frozenset(b1) & frozenset(b2)
             if intersection:
                 blocks.append(tuple(sorted(intersection)))
-    return FiniteSigmaAlgebra(
-        space=sigma1.space, blocks=tuple(b for b in blocks)
-    )
+    return FiniteSigmaAlgebra(space=sigma1.space, blocks=tuple(b for b in blocks))
 
 
 def conditional_expectation(

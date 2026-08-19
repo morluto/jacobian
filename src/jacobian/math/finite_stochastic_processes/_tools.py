@@ -159,7 +159,11 @@ FINIT_STOCHASTIC_PROCESS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "coin_doob_martingale",
                 "Doob martingale of a coin payoff process.",
-                {"space": _SPACE, "observations": [["heads", "tails"]], "payoff": ["1", "0"]},
+                {
+                    "space": _SPACE,
+                    "observations": [["heads", "tails"]],
+                    "payoff": ["1", "0"],
+                },
             ),
         ),
     ),

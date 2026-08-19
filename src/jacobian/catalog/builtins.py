@@ -86,17 +86,17 @@ from jacobian.math.finite_metric_spaces._tools import (
 )
 from jacobian.math.finite_sets._admission import ADMISSIONS as FINITE_SETS_ADMISSIONS
 from jacobian.math.finite_sets._tools import TOOLS as FINITE_SETS_TOOLS
-from jacobian.math.finite_stochastic_processes._admission import (
-    ADMISSIONS as FINITE_STOCHASTIC_PROCESSES_ADMISSIONS,
-)
-from jacobian.math.finite_stochastic_processes._tools import (
-    TOOLS as FINITE_STOCHASTIC_PROCESSES_TOOLS,
-)
 from jacobian.math.finite_state_transducers._admission import (
     ADMISSIONS as FINITE_STATE_TRANSDUCERS_ADMISSIONS,
 )
 from jacobian.math.finite_state_transducers._tools import (
     TOOLS as FINITE_STATE_TRANSDUCER_TOOLS,
+)
+from jacobian.math.finite_stochastic_processes._admission import (
+    ADMISSIONS as FINITE_STOCHASTIC_PROCESSES_ADMISSIONS,
+)
+from jacobian.math.finite_stochastic_processes._tools import (
+    TOOLS as FINITE_STOCHASTIC_PROCESSES_TOOLS,
 )
 from jacobian.math.finite_topology._admission import (
     ADMISSIONS as FINITE_TOPOLOGY_ADMISSIONS,

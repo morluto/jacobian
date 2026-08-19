@@ -48,7 +48,14 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
         "probability.filtration.natural.compute",
         "probability.process.doob_martingale.compute",
     }
-    assert {t.operation_id for t in TOOLS if t.operation_id.startswith("probability.finite_sigma_algebra.") or t.operation_id.startswith("probability.conditional_expectation.") or t.operation_id.startswith("probability.filtration.") or t.operation_id.startswith("probability.process.doob_martingale.")} == expected_ids
+    assert {
+        t.operation_id
+        for t in TOOLS
+        if t.operation_id.startswith("probability.finite_sigma_algebra.")
+        or t.operation_id.startswith("probability.conditional_expectation.")
+        or t.operation_id.startswith("probability.filtration.")
+        or t.operation_id.startswith("probability.process.doob_martingale.")
+    } == expected_ids
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +88,7 @@ class TestJoin:
         from jacobian.math.finite_stochastic_processes.operations import (
             sigma_algebra_join_correct,
         )
+
         result = sigma_algebra_join_correct(sigma, sigma)
         assert len(result.blocks) == 1
 

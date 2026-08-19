@@ -17,6 +17,11 @@ def test_exact_public_api_symbols() -> None:
         "sigma_algebra_join",
     )
     assert tuple(finite_stochastic_processes.__all__) == expected
-    assert len(finite_stochastic_processes.__all__) == len(set(finite_stochastic_processes.__all__))
+    assert len(finite_stochastic_processes.__all__) == len(
+        set(finite_stochastic_processes.__all__)
+    )
     assert all(not name.startswith("_") for name in finite_stochastic_processes.__all__)
-    assert all(hasattr(finite_stochastic_processes, name) for name in finite_stochastic_processes.__all__)
+    assert all(
+        hasattr(finite_stochastic_processes, name)
+        for name in finite_stochastic_processes.__all__
+    )

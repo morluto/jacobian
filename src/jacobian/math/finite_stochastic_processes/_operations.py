@@ -31,7 +31,9 @@ __all__ = [
 ]
 
 
-def compute_sigma_from_observation(request: FromObservationRequest) -> FiniteSigmaAlgebra:
+def compute_sigma_from_observation(
+    request: FromObservationRequest,
+) -> FiniteSigmaAlgebra:
     return sigma_algebra_from_observation(request.space, request.observation)
 
 
@@ -39,6 +41,7 @@ def compute_join(request: JoinRequest) -> FiniteSigmaAlgebra:
     from jacobian.math.finite_stochastic_processes.operations import (
         sigma_algebra_join_correct,
     )
+
     return sigma_algebra_join_correct(request.sigma1, request.sigma2)
 
 
@@ -50,15 +53,11 @@ def compute_conditional_expectation(
 
 def compute_filtration(request: FiltrationRequest) -> FiltrationResult:
     sigmas = filtration_natural(request.space, request.observations)
-    return FiltrationResult(
-        sigmas=tuple(
-            {"blocks": s.blocks} for s in sigmas
-        )
-    )
+    return FiltrationResult(sigmas=tuple({"blocks": s.blocks} for s in sigmas))
 
 
 def compute_doob_martingale(
     request: DoobMartingaleRequest,
-    ) -> DoobMartingaleResult:
+) -> DoobMartingaleResult:
     result = doob_martingale(request.space, request.observations, request.payoff)
     return DoobMartingaleResult(martingale=result)

@@ -88,6 +88,6 @@ def compute_euler_phi_power_sum(
     """Compute the sum of k-th powers of the preimage of phi."""
     preimage = _inverse_phi(request.target)
     return EulerPhiPowerSumResult(
-        power_sum=sum(n ** request.exponent for n in preimage),
+        power_sum=sum(n**request.exponent for n in preimage),
         count=len(preimage),
     )

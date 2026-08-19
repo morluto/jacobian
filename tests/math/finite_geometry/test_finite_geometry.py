@@ -40,9 +40,7 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_projective_point_canonicalize_scales_to_one() -> None:
-    request = ProjectivePointCanonicalizeRequest(
-        field_order=5, vector=(2, 3)
-    )
+    request = ProjectivePointCanonicalizeRequest(field_order=5, vector=(2, 3))
     result = compute_projective_point_canonicalize(request)
     assert result.canonical_vector[0] == 1
     assert result.scale == 2
@@ -70,9 +68,7 @@ def test_projective_point_equal_different_points() -> None:
 
 
 def test_subspace_compute_basic() -> None:
-    request = SubspaceComputeRequest(
-        field_order=3, vectors=((1, 0, 0), (0, 1, 0))
-    )
+    request = SubspaceComputeRequest(field_order=3, vectors=((1, 0, 0), (0, 1, 0)))
     result = compute_subspace_compute(request)
     assert result.dimension == 2
     assert result.ambient_dimension == 3
@@ -99,9 +95,7 @@ def test_subspace_membership_nonmember() -> None:
 
 
 def test_subspace_span_dependent() -> None:
-    request = SubspaceSpanRequest(
-        field_order=2, vectors=((1, 0), (1, 0))
-    )
+    request = SubspaceSpanRequest(field_order=2, vectors=((1, 0), (1, 0)))
     result = compute_subspace_span(request)
     assert result.dimension == 1
 
@@ -133,9 +127,7 @@ def test_grassmannian_count_planes_in_f2_4() -> None:
 
 
 def test_projective_space_enumerate_pg1_f2() -> None:
-    request = ProjectiveSpaceEnumerateRequest(
-        field_order=2, projective_dimension=1
-    )
+    request = ProjectiveSpaceEnumerateRequest(field_order=2, projective_dimension=1)
     result = compute_projective_space_enumerate(request)
     assert result.count == 3
     assert len(result.points) == 3

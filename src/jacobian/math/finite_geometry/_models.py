@@ -19,9 +19,7 @@ def _validate_prime_field(field_order: int) -> None:
         raise ValueError("field_order must be prime")
 
 
-def _validate_nonzero_vector(
-    vector: tuple[int, ...], field_order: int
-) -> None:
+def _validate_nonzero_vector(vector: tuple[int, ...], field_order: int) -> None:
     if not vector:
         raise ValueError("vector must be nonempty")
     if len(vector) > MAX_DIM:
@@ -74,11 +72,7 @@ class SubspaceComputeRequest(StrictModel):
             raise ValueError("vectors must have between 1 and 32 entries")
         if any(len(v) != width for v in self.vectors):
             raise ValueError("all vectors must have the same dimension")
-        if any(
-            not 0 <= entry < self.field_order
-            for v in self.vectors
-            for entry in v
-        ):
+        if any(not 0 <= entry < self.field_order for v in self.vectors for entry in v):
             raise ValueError("vector entries must be canonical field residues")
         return self
 
@@ -99,9 +93,7 @@ class SubspaceMembershipRequest(StrictModel):
         if len(self.word) != width:
             raise ValueError("word dimension must match ambient dimension")
         if any(
-            not 0 <= entry < self.field_order
-            for v in self.generators
-            for entry in v
+            not 0 <= entry < self.field_order for v in self.generators for entry in v
         ):
             raise ValueError("generator entries must be canonical field residues")
         if any(not 0 <= v < self.field_order for v in self.word):
@@ -121,11 +113,7 @@ class SubspaceSpanRequest(StrictModel):
             raise ValueError("vectors must have between 1 and 32 entries")
         if any(len(v) != width for v in self.vectors):
             raise ValueError("all vectors must have the same dimension")
-        if any(
-            not 0 <= entry < self.field_order
-            for v in self.vectors
-            for entry in v
-        ):
+        if any(not 0 <= entry < self.field_order for v in self.vectors for entry in v):
             raise ValueError("vector entries must be canonical field residues")
         return self
 
@@ -141,21 +129,19 @@ class SubspaceIntersectionRequest(StrictModel):
         width_a = len(self.generators_a[0])
         width_b = len(self.generators_b[0])
         if width_a != width_b:
-            raise ValueError("both subspace generator sets must have the same ambient dimension")
+            raise ValueError(
+                "both subspace generator sets must have the same ambient dimension"
+            )
         if any(len(v) != width_a for v in self.generators_a):
             raise ValueError("generators_a rows must have equal length")
         if any(len(v) != width_b for v in self.generators_b):
             raise ValueError("generators_b rows must have equal length")
         if any(
-            not 0 <= entry < self.field_order
-            for v in self.generators_a
-            for entry in v
+            not 0 <= entry < self.field_order for v in self.generators_a for entry in v
         ):
             raise ValueError("generators_a entries must be canonical field residues")
         if any(
-            not 0 <= entry < self.field_order
-            for v in self.generators_b
-            for entry in v
+            not 0 <= entry < self.field_order for v in self.generators_b for entry in v
         ):
             raise ValueError("generators_b entries must be canonical field residues")
         return self

@@ -22,9 +22,7 @@ from jacobian.math.finite_geometry._models import (
 )
 
 
-def _rref(
-    matrix: list[list[int]], field_order: int
-) -> tuple[list[list[int]], int]:
+def _rref(matrix: list[list[int]], field_order: int) -> tuple[list[list[int]], int]:
     """Reduced row echelon form and rank over a prime field."""
     rows = [list(row) for row in matrix]
     row_count = len(rows)
@@ -57,9 +55,7 @@ def _rref(
     return rows, pivot_row
 
 
-def _canonical_basis(
-    matrix: list[list[int]], field_order: int
-) -> list[list[int]]:
+def _canonical_basis(matrix: list[list[int]], field_order: int) -> list[list[int]]:
     rref, rank = _rref(matrix, field_order)
     return list(rref[:rank]) if rank > 0 else []
 
@@ -189,9 +185,7 @@ def compute_subspace_intersection(
     )
 
 
-def _nullspace(
-    matrix: list[list[int]], field_order: int
-) -> list[list[int]]:
+def _nullspace(matrix: list[list[int]], field_order: int) -> list[list[int]]:
     rows, rank = _rref(matrix, field_order)
     n = len(matrix[0])
     piv_cols: list[int] = []

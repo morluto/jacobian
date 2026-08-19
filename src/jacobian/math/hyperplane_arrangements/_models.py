@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
+import sympy
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
@@ -20,6 +21,16 @@ class RationalHyperplane(StrictModel):
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
+        try:
+            parsed = [sympy.Rational(c) for c in self.coefficients]
+        except (ValueError, TypeError, sympy.SympifyError) as exc:
+            raise ValueError("coefficients must be exact rationals") from exc
+        if all(c == 0 for c in parsed):
+            raise ValueError("hyperplane coefficients must not all be zero")
+        try:
+            sympy.Rational(self.constant)
+        except (ValueError, TypeError, sympy.SympifyError) as exc:
+            raise ValueError("constant must be an exact rational") from exc
         return self
 
 

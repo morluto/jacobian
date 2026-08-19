@@ -20,7 +20,7 @@ def compute_arrangement(
     """Check if an arrangement is central (all hyperplanes pass through origin)."""
     is_central = True
     for hp in request.hyperplanes:
-        if sympy.sympify(hp.constant) != 0:
+        if sympy.Rational(hp.constant) != 0:
             is_central = False
             break
     return HyperplaneArrangementResult(
@@ -33,20 +33,24 @@ def compute_arrangement(
 def compute_characteristic_polynomial(
     request: CharacteristicPolynomialRequest,
 ) -> CharacteristicPolynomialResult:
-    """Compute the characteristic polynomial of a generic central arrangement.
+    r"""Compute the characteristic polynomial of a generic central arrangement.
 
-    For a generic arrangement of m hyperplanes in R^n, the characteristic
-    polynomial is chi(t) = sum_{k=0}^{n} (-1)^k * C(m, k) * t^(n-k) * (m-k)^(n-k).
-    For generic arrangements, this simplifies to the Zaslavsky formula.
+    For a generic central arrangement of m hyperplanes in R^n, the
+    characteristic polynomial is::
+
+        chi(t) = (t - 1) * sum_{k=0}^{n-1} (-1)^k * C(m-1, k) * t^{n-1-k}
+
+    This is always monic of degree n.  When m <= n it coincides with the
+    general-position formula ``sum_{k=0}^{m} (-1)^k C(m,k) t^{n-k}``.
     """
     t = sympy.Symbol("t")
     n = request.ambient_dimension
     m = request.hyperplane_count
-    poly = sum(
-        (-1) ** k * sympy.binomial(m, k) * t ** (n - k) * (m - k) ** (n - k)
-        for k in range(min(n, m) + 1)
+    inner = sum(
+        (-1) ** k * sympy.binomial(m - 1, k) * t ** (n - 1 - k)
+        for k in range(n)
     )
-    poly = sympy.expand(poly)
+    poly = sympy.expand((t - 1) * inner)
     coeffs = poly.as_poly().all_coeffs()
     coeffs_str = tuple(str(c) for c in reversed(coeffs))
     return CharacteristicPolynomialResult(
@@ -56,14 +60,19 @@ def compute_characteristic_polynomial(
 
 
 def compute_chamber_count(request: ChamberCountRequest) -> ChamberCountResult:
-    """Count the number of chambers of a generic central arrangement.
+    r"""Count the number of chambers of a generic central arrangement.
 
-    For a generic central arrangement of m hyperplanes in R^n, the number
-    of chambers is sum_{k=0}^{n} C(m, k).
+    For a generic central (linear) arrangement of m hyperplanes in R^n, the
+    number of chambers (regions) is::
+
+        r = 2 * sum_{k=0}^{n-1} C(m-1, k)
+
+    This is consistent with the characteristic polynomial via Zaslavsky's
+    theorem: ``r = (-1)^n * chi(-1)``.
     """
     n = request.ambient_dimension
     m = request.hyperplane_count
-    count = sum(sympy.binomial(m, k) for k in range(min(n, m) + 1))
+    count = 2 * sum(sympy.binomial(m - 1, k) for k in range(n))
     return ChamberCountResult(
         chamber_count=int(count),
     )

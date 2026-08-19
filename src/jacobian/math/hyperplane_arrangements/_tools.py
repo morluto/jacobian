@@ -93,7 +93,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "arrangement.chamber_count.compute",
         "Count chambers of a generic central arrangement",
         "Count the number of chambers (regions) of a generic central "
-        "hyperplane arrangement using the formula sum C(m, k).",
+        "hyperplane arrangement using the central formula 2 * sum C(m-1, k).",
         ChamberCountRequest,
         ChamberCountResult,
         compute_chamber_count,

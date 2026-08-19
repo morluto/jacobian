@@ -44,9 +44,7 @@ def _boolean_algebra() -> FiniteAlgebra:
 
 
 def _variable_term(variable_id: int) -> FlatTerm:
-    return FlatTerm(
-        nodes=(Term(kind="variable", variable_id=variable_id),), root=0
-    )
+    return FlatTerm(nodes=(Term(kind="variable", variable_id=variable_id),), root=0)
 
 
 def _and_term() -> FlatTerm:
@@ -83,13 +81,17 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
 class TestEvaluate:
     def test_and_00(self) -> None:
         result = compute_evaluate(
-            EvaluateRequest(algebra=_boolean_algebra(), term=_and_term(), assignment=(0, 0))
+            EvaluateRequest(
+                algebra=_boolean_algebra(), term=_and_term(), assignment=(0, 0)
+            )
         )
         assert result.value == 0
 
     def test_and_11(self) -> None:
         result = compute_evaluate(
-            EvaluateRequest(algebra=_boolean_algebra(), term=_and_term(), assignment=(1, 1))
+            EvaluateRequest(
+                algebra=_boolean_algebra(), term=_and_term(), assignment=(1, 1)
+            )
         )
         assert result.value == 1
 

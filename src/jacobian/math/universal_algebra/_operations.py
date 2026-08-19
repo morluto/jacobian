@@ -43,7 +43,8 @@ def compute_equation_profile(request: EquationProfileRequest) -> EquationProfile
     )
     if result["status"] == "HOLDS":
         return EquationProfileResult(
-            status="HOLDS", satisfying_count=result["satisfying_count"]  # type: ignore[arg-type]
+            status="HOLDS",
+            satisfying_count=result["satisfying_count"],  # type: ignore[arg-type]
         )
     return EquationProfileResult(
         status="FAILS",

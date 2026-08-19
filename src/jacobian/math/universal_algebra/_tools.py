@@ -72,7 +72,12 @@ _TERM = {
     "nodes": [
         {"kind": "variable", "variable_id": 0, "operation": None, "children": []},
         {"kind": "variable", "variable_id": 1, "operation": None, "children": []},
-        {"kind": "application", "variable_id": None, "operation": 0, "children": [0, 1]},
+        {
+            "kind": "application",
+            "variable_id": None,
+            "operation": 0,
+            "children": [0, 1],
+        },
     ],
     "root": 2,
 }
@@ -121,7 +126,12 @@ UNIVERSAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     "left": _TERM,
                     "right": {
                         "nodes": [
-                            {"kind": "variable", "variable_id": 0, "operation": None, "children": []},
+                            {
+                                "kind": "variable",
+                                "variable_id": 0,
+                                "operation": None,
+                                "children": [],
+                            },
                         ],
                         "root": 0,
                     },

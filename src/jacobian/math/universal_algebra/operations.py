@@ -15,7 +15,37 @@ __all__ = [
 ]
 
 
-def evaluate_term(  # noqa: C901
+def _evaluate_node(
+    algebra: FiniteAlgebra,
+    term: FlatTerm,
+    assignment: dict[int, int],
+    n: int,
+    index: int,
+) -> int:
+    node = term.nodes[index]
+    if node.kind == "variable":
+        if node.variable_id is None:
+            raise ValueError("variable node missing variable_id")
+        if node.variable_id not in assignment:
+            raise ValueError("incomplete assignment")
+        return assignment[node.variable_id]
+    if node.kind == "application":
+        if node.operation is None:
+            raise ValueError("application node missing operation index")
+        if node.operation < 0 or node.operation >= len(algebra.operations):
+            raise ValueError("operation index out of range")
+        arity = algebra.operations[node.operation].arity
+        if len(node.children) != arity:
+            raise ValueError("application arity mismatch")
+        args = [_evaluate_node(algebra, term, assignment, n, c) for c in node.children]
+        cell_index = 0
+        for arg in args:
+            cell_index = cell_index * n + arg
+        return algebra.tables[node.operation][cell_index]
+    raise ValueError(f"unknown node kind: {node.kind}")
+
+
+def evaluate_term(
     algebra: FiniteAlgebra, term: FlatTerm, assignment: dict[int, int]
 ) -> int:
     """Evaluate a source-bound term under a complete variable assignment.
@@ -25,31 +55,7 @@ def evaluate_term(  # noqa: C901
     n = len(algebra.carrier)
     if any(not 0 <= v < n for v in assignment.values()):
         raise ValueError("assignment value out of carrier range")
-
-    def eval_node(index: int) -> int:
-        node = term.nodes[index]
-        if node.kind == "variable":
-            if node.variable_id is None:
-                raise ValueError("variable node missing variable_id")
-            if node.variable_id not in assignment:
-                raise ValueError("incomplete assignment")
-            return assignment[node.variable_id]
-        if node.kind == "application":
-            if node.operation is None:
-                raise ValueError("application node missing operation index")
-            if node.operation < 0 or node.operation >= len(algebra.operations):
-                raise ValueError("operation index out of range")
-            arity = algebra.operations[node.operation].arity
-            if len(node.children) != arity:
-                raise ValueError("application arity mismatch")
-            args = [eval_node(child) for child in node.children]
-            cell_index = 0
-            for arg in args:
-                cell_index = cell_index * n + arg
-            return algebra.tables[node.operation][cell_index]
-        raise ValueError(f"unknown node kind: {node.kind}")
-
-    return eval_node(term.root)
+    return _evaluate_node(algebra, term, assignment, n, term.root)
 
 
 def equation_profile(
@@ -78,7 +84,7 @@ def equation_profile(
                     "left_value": lv,
                     "right_value": rv,
                 }
-    if satisfying == n ** variable_count:
+    if satisfying == n**variable_count:
         return {"status": "HOLDS", "satisfying_count": satisfying}
     return {
         "status": "FAILS",
@@ -87,7 +93,9 @@ def equation_profile(
     }
 
 
-def generated_subalgebra(algebra: FiniteAlgebra, generators: tuple[int, ...]) -> dict[str, object]:
+def generated_subalgebra(
+    algebra: FiniteAlgebra, generators: tuple[int, ...]
+) -> dict[str, object]:
     """Return the least subalgebra containing the generating set by finite
     closure under all basic operations and nullary constants."""
     n = len(algebra.carrier)
@@ -122,7 +130,36 @@ def generated_subalgebra(algebra: FiniteAlgebra, generators: tuple[int, ...]) ->
     }
 
 
-def congruence_check(  # noqa: C901
+def _compatibility_violation(
+    algebra: FiniteAlgebra,
+    block_of: dict[int, int],
+    n: int,
+    op_idx: int,
+    symbol: OperationSymbol,
+    x: tuple[int, ...],
+    y: tuple[int, ...],
+) -> dict[str, object] | None:
+    if not all(block_of[x[j]] == block_of[y[j]] for j in range(symbol.arity)):
+        return None
+    cell_x = 0
+    cell_y = 0
+    for j in range(symbol.arity):
+        cell_x = cell_x * n + x[j]
+        cell_y = cell_y * n + y[j]
+    fx = algebra.tables[op_idx][cell_x]
+    fy = algebra.tables[op_idx][cell_y]
+    if block_of[fx] == block_of[fy]:
+        return None
+    return {
+        "is_congruence": False,
+        "obstruction": "compatibility_violation",
+        "operation": op_idx,
+        "x": x,
+        "y": y,
+    }
+
+
+def congruence_check(
     algebra: FiniteAlgebra, partition: tuple[tuple[int, ...], ...]
 ) -> dict[str, object]:
     """Check whether a carrier partition is a compatible equivalence
@@ -137,7 +174,10 @@ def congruence_check(  # noqa: C901
         for elem in block:
             block_of[elem] = block_idx
     if len(block_of) != n:
-        return {"is_congruence": False, "obstruction": "partition does not cover carrier"}
+        return {
+            "is_congruence": False,
+            "obstruction": "partition does not cover carrier",
+        }
     from itertools import product as iproduct
 
     for op_idx, symbol in enumerate(algebra.operations):
@@ -145,22 +185,11 @@ def congruence_check(  # noqa: C901
             continue
         for x in iproduct(range(n), repeat=symbol.arity):
             for y in iproduct(range(n), repeat=symbol.arity):
-                if all(block_of[x[j]] == block_of[y[j]] for j in range(symbol.arity)):
-                    cell_x = 0
-                    cell_y = 0
-                    for j in range(symbol.arity):
-                        cell_x = cell_x * n + x[j]
-                        cell_y = cell_y * n + y[j]
-                    fx = algebra.tables[op_idx][cell_x]
-                    fy = algebra.tables[op_idx][cell_y]
-                    if block_of[fx] != block_of[fy]:
-                        return {
-                            "is_congruence": False,
-                            "obstruction": "compatibility_violation",
-                            "operation": op_idx,
-                            "x": tuple(x),
-                            "y": tuple(y),
-                        }
+                violation = _compatibility_violation(
+                    algebra, block_of, n, op_idx, symbol, x, y
+                )
+                if violation is not None:
+                    return violation
     return {"is_congruence": True}
 
 
@@ -199,5 +228,3 @@ def quotient(
         ),
         "tables": tuple(quotient_tables),
     }
-
-

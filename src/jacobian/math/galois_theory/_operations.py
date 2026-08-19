@@ -50,15 +50,14 @@ def compute_frobenius_cycle(request: FrobeniusCycleRequest) -> FrobeniusCycleRes
 
 def compute_galois_group(request: GaloisGroupRequest) -> GaloisGroupResult:
     """Compute the Galois group of a polynomial over Q."""
-    from sympy import Poly, galois_group
+    from sympy import Poly, Symbol, galois_group
 
     degree = len(request.coefficients) - 1
-    poly = Poly(request.coefficients, domain="QQ")
-    group = galois_group(poly)
-    group_name = str(group[0])
-    order = int(group[1]) if len(group) > 1 else 1
-
-    is_solvable = degree <= 4 or order <= 24
+    poly = Poly(list(request.coefficients), Symbol("x"), domain="QQ")
+    perm_group, solvable = galois_group(poly)
+    group_name = str(perm_group)
+    order = int(perm_group.order())
+    is_solvable = bool(solvable)
 
     return GaloisGroupResult(
         group_name=group_name,

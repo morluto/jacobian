@@ -30,6 +30,51 @@ class TransitionMatrixRequest(StrictModel):
                 raise ValueError("each transition row must sum to one")
         return self
 
+    @model_validator(mode="after")
+    def preflight_stationary_rational_height(self) -> Self:
+        """Reject requests whose stationary-distribution rational height
+        conservatively exceeds the canonical-rational digit limit.
+
+        For a k×k closed-class submatrix, the stationary distribution solves
+        an integer linear system whose determinant bounds the denominator
+        height.  By Hadamard's bound, |det(A)| <= (k * max_entry^2)^(k/2)
+        where max_entry is the largest absolute value in the cleared integer
+        matrix.  We use this to derive a conservative digit bound.
+        """
+        from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+
+        dimension = len(self.matrix)
+        # Find the common denominator of all entries
+        max_den = 1
+        for row in self.matrix:
+            for value in row:
+                den = value.den.lstrip("-")
+                if len(den) > max_den:
+                    # Track the max denominator digit count, not the value
+                    pass
+        # Each entry has numerator/denominator of at most D digits
+        max_digit_count = max(
+            len(value.num.lstrip("-"))
+            for row in self.matrix
+            for value in row
+        ) + max(
+            len(value.den.lstrip("-"))
+            for row in self.matrix
+            for value in row
+        )
+        # After clearing denominators, the integer matrix entries have
+        # height at most (max_entry)^dimension.  By Hadamard's bound,
+        # det(A) has at most dimension * max_digit_count * dimension digits.
+        # This is a very conservative bound.
+        hadamard_digit_bound = dimension * dimension * max_digit_count + 1
+        if hadamard_digit_bound > MAX_CANONICAL_RATIONAL_DIGITS:
+            raise ValueError(
+                "stationary distribution rational height conservatively exceeds "
+                "the canonical-rational digit limit; the transition matrix entries "
+                "have denominators too large for exact stationary solving"
+            )
+        return self
+
 
 class ExtremeStationaryDistribution(StrictModel):
     """One canonical extreme point supported on a closed class."""

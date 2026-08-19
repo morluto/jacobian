@@ -34,7 +34,7 @@ class LabelledGraph(StrictModel):
             if canonical in seen_edges:
                 raise ValueError("duplicate edges are not allowed in a simple graph")
             seen_edges.add(canonical)
-        degree: dict[str, int] = {v: 0 for v in self.vertices}
+        degree: dict[str, int] = dict.fromkeys(self.vertices, 0)
         for u, v in self.edges:
             degree[u] += 1
             degree[v] += 1

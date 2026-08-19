@@ -97,9 +97,7 @@ def test_core_check_p3_is_not_core() -> None:
 def test_core_check_c4_is_not_core() -> None:
     """C4 (4-cycle) retracts onto an edge, so it is not a core."""
     request = CoreCheckRequest(
-        graph=SimpleGraph(
-            vertex_count=4, edges=((0, 1), (1, 2), (2, 3), (0, 3))
-        )
+        graph=SimpleGraph(vertex_count=4, edges=((0, 1), (1, 2), (2, 3), (0, 3)))
     )
     result = compute_core_check(request)
     assert result.is_core is False

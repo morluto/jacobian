@@ -32,9 +32,6 @@ class OperationAdmission:
     native_symbol: str | None = None
 
 
-REVIEWED_BASE_REVISION = "61589543bbbff546edbc51d34a07887982fa4ad6"
-
-
 def curate_public_tools(
     candidates: MathTools, admissions: tuple[OperationAdmission, ...]
 ) -> MathTools:
@@ -68,7 +65,6 @@ def admission_by_id(
 
 
 __all__ = [
-    "REVIEWED_BASE_REVISION",
     "AdmissionDecision",
     "OperationAdmission",
     "admission_by_id",

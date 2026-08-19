@@ -127,7 +127,11 @@ class SubspaceIntersectionRequest(StrictModel):
     def require_valid(self) -> Self:
         _validate_prime_field(self.field_order)
         width_a = len(self.generators_a[0])
+        if width_a == 0 or width_a > MAX_DIM:
+            raise ValueError("generators must have between 1 and 32 entries")
         width_b = len(self.generators_b[0])
+        if width_b == 0 or width_b > MAX_DIM:
+            raise ValueError("generators must have between 1 and 32 entries")
         if width_a != width_b:
             raise ValueError(
                 "both subspace generator sets must have the same ambient dimension"

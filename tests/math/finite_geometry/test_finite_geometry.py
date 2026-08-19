@@ -110,6 +110,41 @@ def test_subspace_intersection_trivial() -> None:
     assert result.dimension == 0
 
 
+def test_subspace_intersection_identical() -> None:
+    """Two identical subspaces should intersect at full dimension."""
+    request = SubspaceIntersectionRequest(
+        field_order=2,
+        generators_a=((1, 0),),
+        generators_b=((1, 0),),
+    )
+    result = compute_subspace_intersection(request)
+    assert result.dimension == 1
+
+
+def test_subspace_intersection_overlapping() -> None:
+    """Two planes in F_3^3 meeting in a line."""
+    request = SubspaceIntersectionRequest(
+        field_order=3,
+        generators_a=((1, 0, 0), (0, 1, 0)),
+        generators_b=((0, 1, 0), (0, 0, 1)),
+    )
+    result = compute_subspace_intersection(request)
+    assert result.dimension == 1
+
+
+def test_projective_point_equal_reports_scale() -> None:
+    """Scale should be the actual scalar relating the two vectors."""
+    request = ProjectivePointEqualRequest(
+        field_order=5,
+        vector_a=(2, 3),
+        vector_b=(4, 1),
+    )
+    result = compute_projective_point_equal(request)
+    assert result.equal is True
+    # 4 = 2 * 2 mod 5, so scale should be 2
+    assert result.scale == 2
+
+
 def test_grassmannian_count_lines_in_pg_2_2() -> None:
     request = GrassmannianCountRequest(
         field_order=2, ambient_dimension=3, subspace_dimension=1

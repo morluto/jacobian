@@ -96,9 +96,15 @@ def compute_projective_point_equal(
     canon_a = _canonicalize_projective(a, q)
     canon_b = _canonicalize_projective(b, q)
     equal = canon_a == canon_b
+    scale = 0
+    if equal:
+        for i in range(len(a)):
+            if a[i] % q != 0:
+                scale = (b[i] * pow(a[i] % q, -1, q)) % q
+                break
     return ProjectivePointEqualResult(
         equal=equal,
-        scale=1 if equal else 0,
+        scale=scale,
     )
 
 
@@ -152,23 +158,31 @@ def compute_subspace_intersection(
     matrix_b = [list(row) for row in request.generators_b]
 
     # Intersect row spaces: solve x in rowspace(A) and x in rowspace(B)
-    # Use: intersection = nullspace of stacked [A; B] - but that gives
-    # the sum. Instead, use: x = A^T * a = B^T * b, so [A^T | -B^T] * [a; b] = 0.
-    # The intersection is then the image of the nullspace.
-    # Simpler: intersect by computing rowspace(A) ∩ rowspace(B) via:
-    # stack [A; B], compute nullspace, split nullspace vectors.
+    # Intersection of rowspace(A) ∩ rowspace(B):
+    # A vector v is in both row spaces iff v = A^T * a = B^T * b for some
+    # coefficient vectors a, b.  This gives [A^T | -B^T] * [a; b] = 0.
+    # The nullspace of [A^T | -B^T] gives coefficient pairs [a; b]; the
+    # intersection vectors are A^T * a (= B^T * b).
     n = len(matrix_a[0])
-    stacked = matrix_a + matrix_b
-    _, _ = _rref(stacked, q)
-    null = _nullspace(stacked, q)
-
-    # The intersection vectors come from the nullspace: if [a; b] is in
-    # the nullspace of [A; B], then A*a = B*b = intersection vector.
     k = len(matrix_a)
+    m = len(matrix_b)
+
+    # Build [A^T | -B^T]: an n x (k+m) matrix where columns 0..k-1 are A^T
+    # and columns k..k+m-1 are -B^T.
+    combined: list[list[int]] = []
+    for j in range(n):
+        row: list[int] = []
+        for i in range(k):
+            row.append(matrix_a[i][j] % q)
+        for i in range(m):
+            row.append((-matrix_b[i][j]) % q)
+        combined.append(row)
+
+    null = _nullspace(combined, q)
+
     intersection_basis: list[list[int]] = []
     for vec in null:
         a_part = vec[:k]
-        # intersection vector = A * a_part
         iv = [0] * n
         for ai, coeff in enumerate(a_part):
             for j in range(n):

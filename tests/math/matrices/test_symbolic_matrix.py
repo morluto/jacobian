@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from jacobian.math.matrices.symbolic._models import (
+    SquareSymbolicMatrixRequest,
     SymbolicCharacteristicPolynomialResult,
     SymbolicDeterminantResult,
     SymbolicEigenvaluesResult,
@@ -99,6 +100,52 @@ def test_symbolic_eigenvalues_requires_square_matrix() -> None:
     request = _request([["a", "b", "c"]], ["a", "b", "c"])
     with pytest.raises(ValueError, match="square"):
         compute_symbolic_eigenvalues(request)
+
+
+def test_symbolic_characteristic_polynomial_rejects_rectangular() -> None:
+    """Rectangular matrices should be rejected by the request model for charpoly."""
+    with pytest.raises(ValueError, match="square"):
+        SquareSymbolicMatrixRequest.model_validate(
+            {"matrix": {"variables": ["a", "b"], "entries": [["a", "b"]]}}
+        )
+
+
+def test_square_request_rejects_rectangular_for_determinant() -> None:
+    """SquareSymbolicMatrixRequest rejects rectangular matrices for determinant."""
+    with pytest.raises(ValueError, match="square"):
+        SquareSymbolicMatrixRequest.model_validate(
+            {"matrix": {"variables": ["a", "b"], "entries": [["a", "b"]]}}
+        )
+
+
+def test_square_request_rejects_rectangular_for_eigenvalues() -> None:
+    """SquareSymbolicMatrixRequest rejects rectangular matrices for eigenvalues."""
+    with pytest.raises(ValueError, match="square"):
+        SquareSymbolicMatrixRequest.model_validate(
+            {"matrix": {"variables": ["a", "b"], "entries": [["a", "b"]]}}
+        )
+
+
+def test_rectangular_accepted_by_rank_request() -> None:
+    """Rectangular matrices remain valid for the rank operation."""
+    request = _request([["a", "b", "c"]], ["a", "b", "c"])
+    result = compute_symbolic_rank(request)
+    assert result.rank == 1
+
+
+def test_square_request_accepts_1x1() -> None:
+    """1x1 boundary shape validates for all square-only operations."""
+    SquareSymbolicMatrixRequest.model_validate(
+        {"matrix": {"variables": ["a"], "entries": [["a"]]}}
+    )
+
+
+def test_square_request_accepts_32x32() -> None:
+    """32x32 boundary shape validates for all square-only operations."""
+    entries = [["1"] * 32 for _ in range(32)]
+    SquareSymbolicMatrixRequest.model_validate(
+        {"matrix": {"variables": [], "entries": entries}}
+    )
 
 
 def test_symbolic_matrix_rejects_non_rectangular() -> None:

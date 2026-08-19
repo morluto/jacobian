@@ -58,6 +58,26 @@ class SymbolicMatrixRequest(StrictModel):
         return self
 
 
+class SquareSymbolicMatrixRequest(SymbolicMatrixRequest):
+    """A square symbolic matrix for operations requiring square input.
+
+    Operations like determinant, characteristic polynomial, and eigenvalues
+    are only defined for square matrices.  This request type enforces
+    squareness at the request boundary rather than relying on a backend
+    ValueError.
+    """
+
+    @model_validator(mode="after")
+    def require_square(self) -> Self:
+        rows = len(self.matrix.entries)
+        cols = len(self.matrix.entries[0])
+        if rows != cols:
+            raise ValueError(
+                "operation requires a square symbolic matrix"
+            )
+        return self
+
+
 class SymbolicDeterminantResult(StrictModel):
     """The exact symbolic determinant as a canonical SymPy expression string."""
 

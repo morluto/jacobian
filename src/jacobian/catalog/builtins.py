@@ -4,14 +4,6 @@ from __future__ import annotations
 
 from jacobian.catalog.admission import OperationAdmission, curate_public_tools
 from jacobian.catalog.models import MathTools
-
-# Admission rows co-located with each owning math domain
-from jacobian.math.finite_dim_algebras._admission import (
-    ADMISSIONS as FINITE_DIM_ALGEBRAS_ADMISSIONS,
-)
-from jacobian.math.finite_dim_algebras._tools import (
-    TOOLS as FINITE_DIM_ALGEBRAS_TOOLS,
-)
 from jacobian.math.additive_combinatorics._admission import (
     ADMISSIONS as ADDITIVE_COMBINATORICS_ADMISSIONS,
 )
@@ -75,6 +67,14 @@ from jacobian.math.electrical_networks._admission import (
 )
 from jacobian.math.electrical_networks._tools import (
     TOOLS as ELECTRICAL_NETWORKS_TOOLS,
+)
+
+# Admission rows co-located with each owning math domain
+from jacobian.math.finite_dim_algebras._admission import (
+    ADMISSIONS as FINITE_DIM_ALGEBRAS_ADMISSIONS,
+)
+from jacobian.math.finite_dim_algebras._tools import (
+    TOOLS as FINITE_DIM_ALGEBRAS_TOOLS,
 )
 from jacobian.math.finite_fields._admission import (
     ADMISSIONS as FINITE_FIELDS_ADMISSIONS,

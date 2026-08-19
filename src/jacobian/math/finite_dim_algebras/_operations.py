@@ -20,6 +20,7 @@ def compute_center(request: CenterRequest) -> CenterResult:
     center_vectors: list[tuple[int, ...]] = []
 
     from itertools import product as iter_product
+
     for z_tuple in iter_product(range(q), repeat=n):
         z = list(z_tuple)
         is_central = True

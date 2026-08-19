@@ -20,10 +20,12 @@ def _rhs(*values: str) -> list[dict]:
 
 def test_unique_solution() -> None:
     """A nonsingular system returns a UNIQUE outcome with a solution."""
-    request = RationalLinearSolveRequest.model_validate({
-        "matrix": {"entries": _matrix([["1", "0"], ["0", "1"]])},
-        "rhs": _rhs("2", "3"),
-    })
+    request = RationalLinearSolveRequest.model_validate(
+        {
+            "matrix": {"entries": _matrix([["1", "0"], ["0", "1"]])},
+            "rhs": _rhs("2", "3"),
+        }
+    )
     result = compute_rational_linear_solve(request)
     assert result.outcome == "UNIQUE"
     assert result.solution is not None
@@ -32,10 +34,12 @@ def test_unique_solution() -> None:
 
 def test_inconsistent_system_returns_typed_outcome() -> None:
     """An inconsistent system returns INCONSISTENT, not a ValueError."""
-    request = RationalLinearSolveRequest.model_validate({
-        "matrix": {"entries": _matrix([["1", "1"], ["1", "1"]])},
-        "rhs": _rhs("0", "1"),
-    })
+    request = RationalLinearSolveRequest.model_validate(
+        {
+            "matrix": {"entries": _matrix([["1", "1"], ["1", "1"]])},
+            "rhs": _rhs("0", "1"),
+        }
+    )
     result = compute_rational_linear_solve(request)
     assert result.outcome == "INCONSISTENT"
     assert result.solution is None
@@ -43,10 +47,12 @@ def test_inconsistent_system_returns_typed_outcome() -> None:
 
 def test_non_unique_system_returns_typed_outcome() -> None:
     """A non-unique system returns NON_UNIQUE, not a ValueError."""
-    request = RationalLinearSolveRequest.model_validate({
-        "matrix": {"entries": _matrix([["1", "1"], ["1", "1"]])},
-        "rhs": _rhs("1", "1"),
-    })
+    request = RationalLinearSolveRequest.model_validate(
+        {
+            "matrix": {"entries": _matrix([["1", "1"], ["1", "1"]])},
+            "rhs": _rhs("1", "1"),
+        }
+    )
     result = compute_rational_linear_solve(request)
     assert result.outcome == "NON_UNIQUE"
     assert result.solution is None
@@ -59,6 +65,6 @@ def test_singular_inverse_rejected() -> None:
     )
 
     with pytest.raises(Exception, match="singular"):
-        NonsingularIntegerMatrixRequest.model_validate({
-            "matrix": {"entries": [["1", "2"], ["2", "4"]]}
-        })
+        NonsingularIntegerMatrixRequest.model_validate(
+            {"matrix": {"entries": [["1", "2"], ["2", "4"]]}}
+        )

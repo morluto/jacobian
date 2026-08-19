@@ -22,17 +22,13 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_divided_differences_basic() -> None:
-    request = DividedDifferencesRequest(
-        nodes=("0", "1", "2"), values=("1", "2", "5")
-    )
+    request = DividedDifferencesRequest(nodes=("0", "1", "2"), values=("1", "2", "5"))
     result = compute_divided_differences(request)
     assert result.coefficients == ("1", "1", "1")
 
 
 def test_newton_form_basic() -> None:
-    request = NewtonFormRequest(
-        nodes=("0", "1", "2"), values=("1", "2", "5")
-    )
+    request = NewtonFormRequest(nodes=("0", "1", "2"), values=("1", "2", "5"))
     result = compute_newton_form(request)
     assert result.coefficients == ("1", "1", "1")
     assert result.nodes == ("0", "1", "2")

@@ -18,7 +18,9 @@ def _parse_poly(expr_str: str, variables: tuple[str, ...]) -> sympy.Expr:
     var_symbols = sympy.symbols(variables)
     if len(variables) == 1:
         var_symbols = (var_symbols,)
-    return sympy.sympify(expr_str, locals=dict(zip(variables, var_symbols, strict=True)))
+    return sympy.sympify(
+        expr_str, locals=dict(zip(variables, var_symbols, strict=True))
+    )
 
 
 def compute_gradient(request: ScalarFieldRequest) -> VectorResult:
@@ -39,9 +41,7 @@ def compute_divergence(request: VectorFieldRequest) -> ScalarResult:
     if len(request.variables) == 1:
         var_symbols = (var_symbols,)
     polys = [_parse_poly(c, request.variables) for c in request.components]
-    div = sum(
-        sympy.diff(p, v) for p, v in zip(polys, var_symbols, strict=True)
-    )
+    div = sum(sympy.diff(p, v) for p, v in zip(polys, var_symbols, strict=True))
     return ScalarResult(
         result=str(sympy.expand(div)),
         variables=request.variables,
@@ -54,16 +54,23 @@ def compute_curl(request: VectorFieldRequest) -> VectorResult:
     if len(request.variables) != 3:
         raise ValueError("curl is defined for 3D vector fields")
     x, y, z = sympy.symbols(request.variables)
-    fx, fy, fz = (sympy.sympify(c) for c in [
-        _parse_poly(request.components[0], request.variables),
-        _parse_poly(request.components[1], request.variables),
-        _parse_poly(request.components[2], request.variables),
-    ])
+    fx, fy, fz = (
+        sympy.sympify(c)
+        for c in [
+            _parse_poly(request.components[0], request.variables),
+            _parse_poly(request.components[1], request.variables),
+            _parse_poly(request.components[2], request.variables),
+        ]
+    )
     curl_x = sympy.diff(fz, y) - sympy.diff(fy, z)
     curl_y = sympy.diff(fx, z) - sympy.diff(fz, x)
     curl_z = sympy.diff(fy, x) - sympy.diff(fx, y)
     return VectorResult(
-        components=(str(sympy.expand(curl_x)), str(sympy.expand(curl_y)), str(sympy.expand(curl_z))),
+        components=(
+            str(sympy.expand(curl_x)),
+            str(sympy.expand(curl_y)),
+            str(sympy.expand(curl_z)),
+        ),
         variables=request.variables,
         method="SYMPY_CURL",
     )

@@ -29,9 +29,7 @@ class VectorFieldRequest(StrictModel):
     """A multivariate polynomial vector field."""
 
     variables: tuple[str, ...] = Field(min_length=1, max_length=MAX_VARS)
-    components: tuple[str, ...] = Field(
-        min_length=1, max_length=MAX_POLYS
-    )
+    components: tuple[str, ...] = Field(min_length=1, max_length=MAX_POLYS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -45,9 +43,7 @@ class DirectionalDerivativeRequest(StrictModel):
 
     variables: tuple[str, ...] = Field(min_length=1, max_length=MAX_VARS)
     polynomial: str = Field(min_length=1, max_length=4096)
-    direction: tuple[str, ...] = Field(
-        min_length=1, max_length=MAX_POLYS
-    )
+    direction: tuple[str, ...] = Field(min_length=1, max_length=MAX_POLYS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:

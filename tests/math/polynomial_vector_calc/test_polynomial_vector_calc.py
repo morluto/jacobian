@@ -48,25 +48,20 @@ def test_directional_derivative() -> None:
 
 
 def test_divergence() -> None:
-    request = VectorFieldRequest(
-        variables=("x", "y"), components=("x**2", "y**2")
-    )
+    request = VectorFieldRequest(variables=("x", "y"), components=("x**2", "y**2"))
     result = compute_divergence(request)
     assert result.result == "2*x + 2*y"
 
 
 def test_curl_3d() -> None:
-    request = VectorFieldRequest(
-        variables=("x", "y", "z"), components=("y", "0", "0")
-    )
+    request = VectorFieldRequest(variables=("x", "y", "z"), components=("y", "0", "0"))
     result = compute_curl(request)
     assert result.components == ("0", "0", "-1")
 
 
 def test_curl_requires_3d() -> None:
     import pytest
-    request = VectorFieldRequest(
-        variables=("x", "y"), components=("x", "y")
-    )
+
+    request = VectorFieldRequest(variables=("x", "y"), components=("x", "y"))
     with pytest.raises(ValueError, match="3D"):
         compute_curl(request)

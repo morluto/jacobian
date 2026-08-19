@@ -91,8 +91,7 @@ class MapIterateRequest(PolynomialCoefficientRequest):
             return self
         values = self.coefficient_values()
         max_digits = max(
-            len(str(abs(int(v.numerator)))) + len(str(v.denominator))
-            for v in values
+            len(str(abs(int(v.numerator)))) + len(str(v.denominator)) for v in values
         )
         # The iterate f^n has at most d^n terms, each with height
         # at most max_digits * (d^n - 1).  We bound d^n - 1 <= d^n <= degree * n.

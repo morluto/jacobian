@@ -20,15 +20,15 @@ class CubicalCell(StrictModel):
     @model_validator(mode="after")
     def require_valid_intervals(self) -> Self:
         for a, b in self.intervals:
-            if a >= b:
-                raise ValueError("each interval must have a < b (interval is [a, b])")
-            if b - a != 1:
-                raise ValueError("each interval must have unit length (b = a + 1)")
+            if a > b:
+                raise ValueError("each interval must have a <= b (interval is [a, b])")
+            if b - a > 1:
+                raise ValueError("each interval must have length 0 or 1 (b <= a + 1)")
         return self
 
     @property
     def dimension(self) -> int:
-        return len(self.intervals)
+        return sum(1 for a, b in self.intervals if b > a)
 
 
 class CubicalComplexRequest(StrictModel):

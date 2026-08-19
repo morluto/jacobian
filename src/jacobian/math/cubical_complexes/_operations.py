@@ -11,26 +11,41 @@ from jacobian.math.cubical_complexes._models import (
 
 
 def compute_f_vector(request: CubicalComplexRequest) -> FVectorResult:
-    """Compute the f-vector and Euler characteristic of a cubical complex."""
+    """Compute the f-vector and Euler characteristic of a cubical complex.
+
+    The f-vector counts all faces (including the supplied maximal cells) by
+    dimension.  A single square [0,1]x[0,1] has 4 vertices, 4 edges, 1 square,
+    so its f-vector is (4, 4, 1).
+    """
     cells = request.cells
 
-    # Find all cells by dimension (including faces)
-    all_cells_by_dim: dict[int, set[tuple[tuple[int, int], ...]]] = {}
+    # Generate all faces including lower and upper degenerations
+    all_cells: set[tuple[tuple[int, int], ...]] = set()
+
+    def add_faces(intervals: tuple[tuple[int, int], ...]) -> None:
+        if intervals in all_cells:
+            return
+        all_cells.add(intervals)
+        for i, (a, b) in enumerate(intervals):
+            if b > a:
+                face_lower = list(intervals)
+                face_lower[i] = (a, a)
+                add_faces(tuple(face_lower))
+                face_upper = list(intervals)
+                face_upper[i] = (b, b)
+                add_faces(tuple(face_upper))
 
     for cell in cells:
-        dim = cell.dimension
-        key = cell.intervals
-        if dim not in all_cells_by_dim:
-            all_cells_by_dim[dim] = set()
-        all_cells_by_dim[dim].add(key)
+        add_faces(cell.intervals)
 
-    max_dim = max((cell.dimension for cell in cells), default=0)
+    # Count by dimension (number of non-degenerate intervals)
+    by_dim: dict[int, int] = {}
+    for c in all_cells:
+        dim = sum(1 for a, b in c if b > a)
+        by_dim[dim] = by_dim.get(dim, 0) + 1
 
-    f_vector = []
-    for d in range(max_dim + 1):
-        count = len(all_cells_by_dim.get(d, set()))
-        f_vector.append(count)
-
+    max_dim = max(by_dim.keys()) if by_dim else 0
+    f_vector = [by_dim.get(d, 0) for d in range(max_dim + 1)]
     euler = sum((-1) ** d * f for d, f in enumerate(f_vector))
 
     return FVectorResult(
@@ -46,25 +61,29 @@ def compute_face_closure(request: FaceClosureRequest) -> FaceClosureResult:
 
     all_cells: set[tuple[tuple[int, int], ...]] = set()
 
-    for cell in cells:
-        all_cells.add(cell.intervals)
-        # Add all proper faces
-        dim = cell.dimension
-        for mask in range(1, 1 << dim):
-            face = []
-            for i in range(dim):
-                if mask & (1 << i):
-                    _a, _b = cell.intervals[i]
-                    face.append((_a, _a))
-                else:
-                    face.append(cell.intervals[i])
-            face_tuple = tuple(face)
-            all_cells.add(face_tuple)
+    def add_faces(intervals: tuple[tuple[int, int], ...]) -> None:
+        if intervals in all_cells:
+            return
+        all_cells.add(intervals)
+        for i, (a, b) in enumerate(intervals):
+            if b > a:
+                for new_b in (a, b):
+                    new_interval = (a, new_b) if new_b == a else (new_b, new_b)
+                    if new_b == a:
+                        face = list(intervals)
+                        face[i] = (a, a)
+                        add_faces(tuple(face))
+                    else:
+                        face = list(intervals)
+                        face[i] = (b, b)
+                        add_faces(tuple(face))
 
-    # Count by dimension
+    for cell in cells:
+        add_faces(cell.intervals)
+
     by_dim: dict[int, int] = {}
     for c in all_cells:
-        dim = sum(1 for a, b in c if a < b)
+        dim = sum(1 for a, b in c if b > a)
         by_dim[dim] = by_dim.get(dim, 0) + 1
 
     max_dim = max(by_dim.keys()) if by_dim else 0

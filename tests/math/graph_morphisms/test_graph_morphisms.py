@@ -65,17 +65,13 @@ def test_homomorphism_find_no_homomorphism() -> None:
 
 
 def test_core_check_k2_is_core() -> None:
-    request = CoreCheckRequest(
-        graph=SimpleGraph(vertex_count=2, edges=((0, 1),))
-    )
+    request = CoreCheckRequest(graph=SimpleGraph(vertex_count=2, edges=((0, 1),)))
     result = compute_core_check(request)
     assert result.is_core is True
 
 
 def test_core_check_independent_set_is_not_core() -> None:
-    request = CoreCheckRequest(
-        graph=SimpleGraph(vertex_count=3, edges=())
-    )
+    request = CoreCheckRequest(graph=SimpleGraph(vertex_count=3, edges=()))
     result = compute_core_check(request)
     assert result.is_core is False
 

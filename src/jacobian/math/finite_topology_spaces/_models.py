@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from typing import Self
+
+from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.finite_topology_spaces.values import (
@@ -16,6 +18,14 @@ class SubsetRequest(StrictModel):
 
     space: FiniteTopologicalSpace
     subset: tuple[int, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_valid_indices(self) -> Self:
+        n = len(self.space.points)
+        for i in self.subset:
+            if not 0 <= i < n:
+                raise ValueError("subset index out of range")
+        return self
 
 
 class InteriorResult(StrictModel):

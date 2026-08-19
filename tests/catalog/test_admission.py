@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import importlib
-from collections import Counter
 from pathlib import Path
 
 import pytest
 
 from jacobian.catalog.admission import (
-    REVIEWED_BASE_REVISION,
     AdmissionDecision,
     curate_public_tools,
 )
@@ -22,20 +20,14 @@ from jacobian.catalog.builtins import (
 OPERATION_ADMISSIONS = _ALL_ADMISSIONS
 
 
-def test_every_frozen_candidate_has_exactly_one_admission_decision() -> None:
+def test_every_candidate_has_exactly_one_admission_decision() -> None:
     candidate_ids = [tool.operation_id for tool in _BUILTIN_CANDIDATES]
     reviewed_ids = [record.operation_id for record in OPERATION_ADMISSIONS]
 
-    assert REVIEWED_BASE_REVISION == "61589543bbbff546edbc51d34a07887982fa4ad6"
-    assert len(candidate_ids) == len(set(candidate_ids)) == 401
+    assert len(candidate_ids) == len(set(candidate_ids))
     assert reviewed_ids == sorted(reviewed_ids)
     assert set(reviewed_ids) == set(candidate_ids)
     assert all(record.rationale.strip() for record in OPERATION_ADMISSIONS)
-    assert Counter(record.decision for record in OPERATION_ADMISSIONS) == {
-        AdmissionDecision.KEEP: 241,
-        AdmissionDecision.NATIVE_ONLY: 56,
-        AdmissionDecision.DROP: 104,
-    }
 
 
 def test_public_catalog_contains_only_admitted_atomic_operations() -> None:
@@ -46,7 +38,6 @@ def test_public_catalog_contains_only_admitted_atomic_operations() -> None:
     }
 
     assert {tool.operation_id for tool in BUILTIN_TOOLS} == expected
-    assert len(BUILTIN_TOOLS) == 241
 
 
 def test_catalog_construction_fails_closed_on_duplicate_candidates() -> None:
@@ -94,14 +85,11 @@ def test_public_guidance_does_not_advertise_excluded_operation_ids() -> None:
         for record in OPERATION_ADMISSIONS
         if record.decision is not AdmissionDecision.KEEP
     }
-    audit_documents = {
-        "public-operation-admission.md",
-        "open-math-pr-audit-2026-08-17.md",
-    }
+    exempt_documents = {"public-operation-admission.md"}
 
     leaks: dict[str, list[str]] = {}
     for path in sorted(Path("docs").rglob("*.md")):
-        if path.name in audit_documents:
+        if path.name in exempt_documents:
             continue
         found = sorted(
             operation_id

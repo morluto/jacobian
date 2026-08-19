@@ -30,8 +30,8 @@ def compute_rational_point_construct(
     coords = request.coordinates
     for _i, c in enumerate(coords):
         if c.as_fraction() != 0:
-            scale = c
             inv = Fraction(1, 1) / c.as_fraction()
+            scale = _rational(inv)
             canonical = tuple(_rational(v.as_fraction() * inv) for v in coords)
             return RationalPointConstructResult(
                 canonical=canonical,

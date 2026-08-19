@@ -85,7 +85,7 @@ class RationalPointConstructResult(StrictModel):
 class StandardChartResult(StrictModel):
     affine_point: tuple[CanonicalRational, ...]
     chart_index: int = Field(ge=0)
-    method: str = "DEhomOGENIZATION"
+    method: str = "DEHOMOGENIZATION"
 
 
 class ChartTransitionResult(StrictModel):

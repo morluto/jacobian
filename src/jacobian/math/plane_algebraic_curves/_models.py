@@ -29,10 +29,12 @@ def _require_valid_variables(variables: tuple[str, ...]) -> None:
 
 
 def _parse_polynomial(raw: str, variables: tuple[str, ...]) -> sympy.Basic:
-    """Parse *raw* as a sympy polynomial over *variables*.
+    """Parse *raw* as a sympy polynomial over *variables* with rational coefficients.
 
     Converts parse failures and non-polynomial expressions into ValueError so
     that a request the model accepts always yields a typed domain result.
+    Coefficients must be rational numbers (integers or rationals over QQ);
+    transcendental or symbolic constants such as pi are rejected.
     """
     var_symbols = sympy.symbols(variables)
     var_map = dict(zip(variables, var_symbols, strict=True))
@@ -48,6 +50,17 @@ def _parse_polynomial(raw: str, variables: tuple[str, ...]) -> sympy.Basic:
         )
     if not expression.is_polynomial(*var_symbols):
         raise ValueError("polynomial expression must be a polynomial")
+    # Validate coefficients are rational (over QQ)
+    try:
+        poly = sympy.Poly(expression, *var_symbols, domain=sympy.QQ)
+    except sympy.CoercionFailed as exc:
+        raise ValueError(
+            "polynomial coefficients must be rational"
+        ) from exc
+    if poly.domain != sympy.QQ:
+        raise ValueError(
+            f"polynomial coefficients must be rational, got domain {poly.domain}"
+        )
     return expression
 
 
@@ -98,6 +111,15 @@ class AffineChartRequest(StrictModel):
         _require_polynomial(self.polynomial, self.variables)
         if self.chart_variable not in self.variables:
             raise ValueError("chart_variable must be one of the projective variables")
+        # Validate that the polynomial is homogeneous (all terms have the same total degree)
+        var_symbols = sympy.symbols(self.variables)
+        poly = sympy.Poly(
+            _parse_polynomial(self.polynomial, self.variables),
+            *var_symbols,
+            domain=sympy.QQ,
+        )
+        if not poly.is_homogeneous:
+            raise ValueError("projective polynomial must be homogeneous")
         return self
 
 

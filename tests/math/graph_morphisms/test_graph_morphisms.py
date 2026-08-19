@@ -120,3 +120,39 @@ def test_retraction_check_p3_to_edge() -> None:
     )
     result = compute_retraction_check(request)
     assert result.is_retraction is True
+
+
+
+def test_core_check_c5_is_core() -> None:
+    """C5 (5-cycle, odd) is a core: every endomorphism is an automorphism."""
+    request = CoreCheckRequest(
+        graph=SimpleGraph(
+            vertex_count=5, edges=((0, 1), (1, 2), (2, 3), (3, 4), (4, 0))
+        )
+    )
+    result = compute_core_check(request)
+    assert result.is_core is True
+
+
+def test_core_check_k4_is_core() -> None:
+    """K4 (complete graph on 4 vertices) is a core."""
+    request = CoreCheckRequest(
+        graph=SimpleGraph(
+            vertex_count=4,
+            edges=((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)),
+        )
+    )
+    result = compute_core_check(request)
+    assert result.is_core is True
+
+
+def test_retraction_check_c4_to_edge() -> None:
+    """C4 retracts onto any of its edges: vertex 2 maps to 0, vertex 3 maps to 1."""
+    request = RetractionCheckRequest(
+        graph=SimpleGraph(
+            vertex_count=4, edges=((0, 1), (1, 2), (2, 3), (0, 3))
+        ),
+        subgraph_vertices=(0, 1),
+    )
+    result = compute_retraction_check(request)
+    assert result.is_retraction is True

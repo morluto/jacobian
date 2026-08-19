@@ -1,12 +1,12 @@
-# Deploy the stateless remote MCP server
+# Deploy the remote MCP server
 
 [Documentation home](../index.md)
 
 Deploy Jacobian as one immutable Python service artifact. The application owns
 mathematical execution and health reporting; the deployment platform owns
-provisioning, configuration, rollout, rollback, TLS, and process supervision.
-The checked-in files under `deploy/` are examples for those platform boundaries,
-not an installer or release transaction engine.
+provisioning, configuration, rollout, rollback, TLS, process supervision, and
+persistence. The checked-in files under `deploy/` are examples for those
+platform boundaries.
 
 ## Build an immutable artifact
 
@@ -43,8 +43,8 @@ outside the artifact and mount it as a secret:
 }
 ```
 
-The authenticated subject is request context only. It does not select a private
-runtime, state directory, artifact store, or database.
+The authenticated subject is attached to the current request as authorization
+context.
 
 ## Start Streamable HTTP
 
@@ -76,10 +76,8 @@ source control.
 Run `uv run python -m deploy.smoke_remote <url>` against the private listener
 and public endpoint before directing traffic to the new artifact. Where Lean is
 intentionally installed, also run `uv run python -m deploy.smoke_lean <url>`.
-The probe implementations live in [`deploy/`](../../deploy/). A rollback
-selects the previous immutable artifact; there is no application database
-migration or state rollback step.
+The probe implementations live in [`deploy/`](../../deploy/). Roll back by
+selecting the previous immutable artifact and rerunning the probes.
 
-When moving hosts, provision the same pinned artifact, transfer only
-operator-owned configuration and secrets, run the probes, and move traffic.
-The stateless mathematical server has no tenant state tree to copy or merge.
+When moving hosts, provision the same pinned artifact, transfer operator-owned
+configuration and secrets, run the probes, and move traffic.

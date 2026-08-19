@@ -8,13 +8,11 @@ validates then executes exactly one of them.
 The ordinary path is: select declaration, parse its Pydantic request once,
 call the domain function, and return its concrete result. A domain function may
 use a maintained library privately for its algorithm; callers see Jacobian's
-typed mathematical values, not backend/provider objects.
+typed mathematical values, not backend objects.
 
 Keep values, codecs, invariants, and backend conversions with their domain.
 Shared contracts are limited to passive cross-domain primitives. A bounded
-operation reports mathematical completeness or uncertainty in its own result;
-it does not add a generic assurance, artifact, publication, replay, or
-verification wrapper.
+operation reports mathematical completeness or uncertainty in its own result.
 
 Public request contracts must make their valid representation visible before a
 backend call. Express constraints that JSON Schema can represent in typed field
@@ -61,17 +59,23 @@ requests; they are not the primary documentation for an operation's wire
 contract.
 
 Use maintained backends through thin private adapters. Direct bounded results
-compose by being supplied as the next operation's typed
-payload.
+compose by being supplied as the next operation's typed payload.
 
 The logic family illustrates the boundary. `sat.cnf.canonicalize` returns a
 canonical CNF value; `sat.assignment.check` and `sat.solve` accept that value
 directly. `smt.solve` accepts one bounded QF SMT-LIB query. `lean.check` accepts
 one bounded source snippet and returns elaboration diagnostics after a one-shot
-process invocation. None of these operations consumes or produces a stored
-reference.
+process invocation.
 
 ## Operation preflight
+
+First diagnose the gap: a missing operation is only one of several possible
+responses to an observed composition failure. Classify the failure as
+representation, interoperability, discovery, contract, scale/backend, operation,
+or reasoning before designing an implementation (see
+[Executable mathematical vocabulary](../explanation/executable-mathematical-vocabulary.md)).
+Only a genuine operation gap proceeds to the
+[admission contract](public-operation-admission.md).
 
 Do not add a public operation until its stated mathematical claim has a bounded,
 appropriate implementation. A public operation is the `MathTool` contract—its
@@ -102,9 +106,9 @@ Before declaring the operation, provide tests for:
 - request validation proving a schema-valid input either returns a typed
   result or is rejected by the request model—never a host exception.
 
-Before publication, record one admission decision for the operation in
-`src/jacobian/catalog/admission.py`; catalog construction fails closed without
-it (see the
+Before publication, record one owner-local admission decision in the
+mathematical domain's `_admission.py` module. `jacobian.catalog.admission` owns
+the shared policy types and fail-closed validation (see the
 [public operation admission](public-operation-admission.md) contract).
 
 ### Boundedness proof

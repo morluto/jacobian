@@ -13,9 +13,7 @@ from jacobian.math.context_free_languages_ops._models import (
 )
 
 
-def _compute_nullable(
-    grammar: FiniteCFGO, terminal_set: set[str]
-) -> dict[str, bool]:
+def _compute_nullable(grammar: FiniteCFGO, terminal_set: set[str]) -> dict[str, bool]:
     """Return a map from nonterminal to its nullability via fixed-point iteration."""
     nullable = dict.fromkeys(grammar.nonterminals, False)
     changed = True

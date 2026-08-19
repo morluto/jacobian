@@ -6,12 +6,29 @@ from typing import Literal, Self
 
 from pydantic import model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
 
 # Bounds shared by every arithmetic-function operation.
 _MIN_LENGTH = 1
 _MAX_LENGTH = 10_000
+
+
+def _preflight_rational_height(values: tuple[CanonicalRational, ...], label: str) -> None:
+    """Reject requests whose exact rational height conservatively exceeds the limit.
+
+    For summatory and convolution operations, the output denominators are
+    bounded by the LCM of input denominators.  The LCM of denominators each
+    with at most D digits has at most n*D digits where n is the length.
+    """
+    n = len(values)
+    max_digits = max(len(v.den.lstrip("-")) for v in values)
+    bound = n * max_digits + 1
+    if bound > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise ValueError(
+            f"{label} rational height conservatively exceeds "
+            f"the {MAX_CANONICAL_RATIONAL_DIGITS}-digit canonical-rational limit"
+        )
 
 
 class DirichletConvolutionRequest(StrictModel):
@@ -33,6 +50,12 @@ class DirichletConvolutionRequest(StrictModel):
             )
         if len(self.f) != len(self.g):
             raise ValueError("f and g must have the same length")
+        return self
+
+    @model_validator(mode="after")
+    def preflight_rational_height(self) -> Self:
+        _preflight_rational_height(self.f, "convolution")
+        _preflight_rational_height(self.g, "convolution")
         return self
 
 
@@ -89,6 +112,11 @@ class SummatoryFunctionRequest(StrictModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def preflight_rational_height(self) -> Self:
+        _preflight_rational_height(self.values, "summatory")
+        return self
+
 
 class SummatoryFunctionResult(StrictModel):
     """Result: the partial sums ``S(1)..S(n)``."""
@@ -114,6 +142,11 @@ class DirichletInverseRequest(StrictModel):
             )
         if self.values[0].as_fraction() == 0:
             raise ValueError("f(1) must be nonzero")
+        return self
+
+    @model_validator(mode="after")
+    def preflight_rational_height(self) -> Self:
+        _preflight_rational_height(self.values, "Dirichlet inverse")
         return self
 
 

@@ -81,7 +81,5 @@ def compute_first_sets(request: FirstSetsRequest) -> FirstSetsResult:
         if not changed:
             break
     return FirstSetsResult(
-        first_sets=tuple(
-            tuple(sorted(first[nt])) for nt in grammar.nonterminals
-        )
+        first_sets=tuple(tuple(sorted(first[nt])) for nt in grammar.nonterminals)
     )

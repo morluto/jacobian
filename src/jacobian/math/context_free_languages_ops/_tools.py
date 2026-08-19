@@ -107,8 +107,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "grammar.first_sets.compute",
         "Compute FIRST sets of a CFG",
-        "Compute the FIRST set for each nonterminal via fixed-point "
-        "iteration.",
+        "Compute the FIRST set for each nonterminal via fixed-point iteration.",
         FirstSetsRequest,
         FirstSetsResult,
         compute_first_sets,

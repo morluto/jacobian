@@ -56,6 +56,12 @@ from jacobian.math.combinatorics._admission import (
     ADMISSIONS as COMBINATORICS_ADMISSIONS,
 )
 from jacobian.math.combinatorics._tools import TOOLS as COMBINATORICS_TOOLS
+from jacobian.math.context_free_languages_ops._admission import (
+    ADMISSIONS as CONTEXT_FREE_LANGUAGES_OPS_ADMISSIONS,
+)
+from jacobian.math.context_free_languages_ops._tools import (
+    TOOLS as CONTEXT_FREE_LANGUAGES_OPS_TOOLS,
+)
 from jacobian.math.convex_analysis._admission import (
     ADMISSIONS as CONVEX_ANALYSIS_ADMISSIONS,
 )
@@ -307,6 +313,7 @@ _BUILTIN_CANDIDATES: MathTools = (
     *ROOT_ISOLATION_TOOLS,
     *RECURRENCE_SOLVING_TOOLS,
     *CODE_THEORY_TOOLS,
+    *CONTEXT_FREE_LANGUAGES_OPS_TOOLS,
     *NUMBER_FIELD_TOOLS,
     *MARKOV_CHAIN_TOOLS,
     *ARITHMETIC_TOOLS,
@@ -386,6 +393,7 @@ _RAW_ADMISSIONS: tuple[OperationAdmission, ...] = (
     *BOOLEAN_ADMISSIONS,
     *BOOLEAN_ANALYSIS_ADMISSIONS,
     *CODE_THEORY_ADMISSIONS,
+    *CONTEXT_FREE_LANGUAGES_OPS_ADMISSIONS,
     *COMBINATORICS_ADMISSIONS,
     *COMBINATORIAL_MAPS_ADMISSIONS,
     *CONVEX_ANALYSIS_ADMISSIONS,

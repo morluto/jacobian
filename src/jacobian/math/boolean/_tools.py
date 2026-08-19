@@ -43,7 +43,10 @@ BOOLEAN_OPERATIONS = (
     boolean_operation(
         "boolean.fourier.walsh_transform.compute",
         "Compute an exact Walsh-Hadamard transform from a Boolean truth table",
-        "Compute the exact integer Walsh-Hadamard spectrum of a Boolean function from its complete truth table using SymPy's fast Walsh-Hadamard transform (fwht). No floating-point arithmetic is involved.",
+        "Compute the exact Boolean Walsh spectrum of a Boolean function from its complete truth table. "
+        "The spectrum is computed by applying the fast Walsh-Hadamard transform to the sign vector "
+        "(-1)^f = 1 - 2f, where f is the 0/1 truth table. The truth table is indexed in natural "
+        "(little-endian) order. No floating-point arithmetic is involved.",
         BooleanTruthTableRequest,
         BooleanWalshTransformResult,
         compute_walsh_hadamard_transform,
@@ -55,14 +58,14 @@ BOOLEAN_OPERATIONS = (
         "exact-integer",
         examples=(
             example(
-                "walsh_majority_of_one_bit",
-                "Compute the Walsh spectrum of the 1-bit Boolean function f(0)=1, f(1)=0.",
-                {"truth_table": [1, 0]},
+                "walsh_constant_zero_one_bit",
+                "Compute the Walsh spectrum of the 1-bit constant-zero function f=[0,0].",
+                {"truth_table": [0, 0]},
             ),
             example(
-                "walsh_two_bit_function",
-                "Compute the Walsh spectrum of a 2-bit function; the truth-table length must be a power of two.",
-                {"truth_table": [1, 0, 0, 1]},
+                "walsh_identity_one_bit",
+                "Compute the Walsh spectrum of the 1-bit identity function f=[0,1].",
+                {"truth_table": [0, 1]},
             ),
         ),
     ),

@@ -34,7 +34,11 @@ class BooleanTruthTableRequest(StrictModel):
 
 
 class BooleanWalshTransformResult(StrictModel):
-    """The exact integer Walsh-Hadamard spectrum of a truth table."""
+    """The exact Boolean Walsh spectrum of a Boolean truth table.
+
+    The spectrum is computed from the sign vector ``(-1)^f = 1 - 2f``,
+    using the fast Walsh-Hadamard transform in Hadamard (natural) order.
+    """
 
     spectrum: tuple[CanonicalInteger, ...] = Field(
         min_length=1,
@@ -42,7 +46,7 @@ class BooleanWalshTransformResult(StrictModel):
     )
     variable_count: int = Field(ge=0, le=12)
     ordering: Literal["HADAMARD"] = "HADAMARD"
-    convention: Literal["SYMPY_FWHT"] = "SYMPY_FWHT"
+    convention: Literal["BOOLEAN_SIGN"] = "BOOLEAN_SIGN"
 
     @model_validator(mode="after")
     def require_spectrum_shape(self) -> Self:

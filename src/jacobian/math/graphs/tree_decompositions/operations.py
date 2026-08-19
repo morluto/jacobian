@@ -241,7 +241,8 @@ def restrict(td: TreeDecomposition, subset: frozenset[str]) -> dict[str, object]
     }
     # New bags intersected with S.
     new_bags = [tuple(v for v in bag if v in subset) for bag in td.bags]
-    # Cleanup: remove empty bags and merge redundant bags.
+    # Cleanup: remove empty bags, contracting through deleted internal nodes
+    # to keep the tree connected.
     keep_indices = [i for i, bag in enumerate(new_bags) if bag]
     active_nodes = set(keep_indices)
     int_edges = _int_edges(td)
@@ -249,11 +250,31 @@ def restrict(td: TreeDecomposition, subset: frozenset[str]) -> dict[str, object]
     for a, b in int_edges:
         adjacency[a].append(b)
         adjacency[b].append(a)
-    # Filter edges to active nodes
+    # Build edges by contracting through deleted nodes: for each pair of
+    # active nodes, check if there's a path through deleted nodes.
     new_edges_list: list[tuple[int, int]] = []
-    for a, b in int_edges:
-        if a in active_nodes and b in active_nodes:
-            new_edges_list.append((a, b))
+    visited: set[int] = set()
+    for i in keep_indices:
+        # BFS from node i through deleted nodes to find all active neighbors
+        stack = [(i, set())]
+        while stack:
+            node, path = stack.pop()
+            for neighbor in adjacency[node]:
+                if neighbor in active_nodes and neighbor != i:
+                    if (neighbor, i) not in visited and (i, neighbor) not in visited:
+                        edge = (min(i, neighbor), max(i, neighbor))
+                        if edge not in new_edges_list:
+                            new_edges_list.append(edge)
+                        visited.add(edge)
+                elif neighbor not in active_nodes and neighbor not in path:
+                    stack.append((neighbor, path | {node}))
+    # Prune redundant leaves: leaf whose bag is a subset of its neighbor.
+    # Build adjacency from new_edges_list for the active subgraph
+    active_adj: dict[int, list[int]] = {i: [] for i in active_nodes}
+    for a, b in new_edges_list:
+        active_adj[a].append(b)
+        active_adj[b].append(a)
+    _prune_redundant_leaves(active_nodes, active_adj, new_bags)
     # Prune redundant leaves: leaf whose bag is a subset of its neighbor.
     _prune_redundant_leaves(active_nodes, adjacency, new_bags)
     final_nodes = sorted(active_nodes)

@@ -6,12 +6,12 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.matrices.symbolic._models import (
+    SquareSymbolicMatrixRequest,
     SymbolicCharacteristicPolynomialResult,
     SymbolicDeterminantResult,
     SymbolicEigenvaluesResult,
     SymbolicMatrixRequest,
     SymbolicRankResult,
-    SquareSymbolicMatrixRequest,
 )
 from jacobian.math.matrices.symbolic._operations import (
     compute_symbolic_characteristic_polynomial,

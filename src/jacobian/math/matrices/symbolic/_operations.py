@@ -9,12 +9,12 @@ from jacobian.math.matrices.symbolic import (
     symbolic_rank,
 )
 from jacobian.math.matrices.symbolic._models import (
+    SquareSymbolicMatrixRequest,
     SymbolicCharacteristicPolynomialResult,
     SymbolicDeterminantResult,
     SymbolicEigenvaluesResult,
     SymbolicMatrixRequest,
     SymbolicRankResult,
-    SquareSymbolicMatrixRequest,
 )
 
 

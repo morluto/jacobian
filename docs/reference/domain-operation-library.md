@@ -12,9 +12,7 @@ typed mathematical values, not backend/provider objects.
 
 Keep values, codecs, invariants, and backend conversions with their domain.
 Shared contracts are limited to passive cross-domain primitives. A bounded
-operation reports mathematical completeness or uncertainty in its own result;
-it does not add a generic assurance, artifact, publication, replay, or
-verification wrapper.
+operation reports mathematical completeness or uncertainty in its own result.
 
 Public request contracts must make their valid representation visible before a
 backend call. Express constraints that JSON Schema can represent in typed field
@@ -61,15 +59,13 @@ requests; they are not the primary documentation for an operation's wire
 contract.
 
 Use maintained backends through thin private adapters. Direct bounded results
-compose by being supplied as the next operation's typed
-payload.
+compose by being supplied as the next operation's typed payload.
 
 The logic family illustrates the boundary. `sat.cnf.canonicalize` returns a
 canonical CNF value; `sat.assignment.check` and `sat.solve` accept that value
 directly. `smt.solve` accepts one bounded QF SMT-LIB query. `lean.check` accepts
 one bounded source snippet and returns elaboration diagnostics after a one-shot
-process invocation. None of these operations consumes or produces a stored
-reference.
+process invocation.
 
 ## Operation preflight
 

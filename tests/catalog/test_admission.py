@@ -94,14 +94,11 @@ def test_public_guidance_does_not_advertise_excluded_operation_ids() -> None:
         for record in OPERATION_ADMISSIONS
         if record.decision is not AdmissionDecision.KEEP
     }
-    audit_documents = {
-        "public-operation-admission.md",
-        "open-math-pr-audit-2026-08-17.md",
-    }
+    exempt_documents = {"public-operation-admission.md"}
 
     leaks: dict[str, list[str]] = {}
     for path in sorted(Path("docs").rglob("*.md")):
-        if path.name in audit_documents:
+        if path.name in exempt_documents:
             continue
         found = sorted(
             operation_id

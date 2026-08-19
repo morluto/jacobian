@@ -100,6 +100,34 @@ class _SeriesPairRequest(StrictModel):
             raise ValueError("operands must share the same truncation order")
         return self
 
+    @model_validator(mode="after")
+    def preflight_coefficient_height(self) -> Self:
+        """Reject pairs whose Cauchy product coefficients would exceed the result bound.
+
+        For multiplication, each output coefficient c_n = sum_{i=0}^n a_i * b_{n-i}
+        has numerator/denominator height at most n * (max_a + max_b) digits.
+        The worst case is at n = truncation_order - 1.
+        """
+        order = self.left.truncation_order
+        max_left = max(
+            max(len(c.num.lstrip("-")), len(c.den))
+            for c in self.left.coefficients
+        )
+        max_right = max(
+            max(len(c.num.lstrip("-")), len(c.den))
+            for c in self.right.coefficients
+        )
+        # Each Cauchy sum term has height at most max_left + max_right digits.
+        # Summing n terms adds at most log10(n) more digits.
+        import math
+        bound = (max_left + max_right) * order + int(math.log10(order)) + 1
+        if bound > MAX_RESULT_RATIONAL_DIGITS:
+            raise ValueError(
+                "coefficient growth would exceed the "
+                f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+            )
+        return self
+
 
 class SeriesDivideRequest(_SeriesPairRequest):
     """Divide two series when the denominator is a unit."""
@@ -273,6 +301,22 @@ class SeriesComposeRequest(StrictModel):
             raise ValueError(
                 "inner series must have zero constant term for composition with a finite prefix"
             )
+        # Coefficient growth: composition repeatedly raises inner to powers.
+        # Each output coefficient has height at most order * (max_outer + max_inner) digits.
+        max_outer = max(
+            max(len(c.num.lstrip("-")), len(c.den))
+            for c in self.outer.coefficients
+        )
+        max_inner = max(
+            max(len(c.num.lstrip("-")), len(c.den))
+            for c in self.inner.coefficients
+        )
+        bound = (max_outer + max_inner) * self.outer.truncation_order + 1
+        if bound > MAX_RESULT_RATIONAL_DIGITS:
+            raise ValueError(
+                "composition coefficient growth would exceed the "
+                f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+            )
         return self
 
 
@@ -305,6 +349,18 @@ class SeriesReversionRequest(StrictModel):
             raise ValueError("reversion requires zero constant term")
         if series.coefficients[1].as_fraction() == 0:
             raise ValueError("reversion requires nonzero linear coefficient")
+        # Reversion repeatedly divides by the linear coefficient and accumulates.
+        # Coefficient height grows at most linearly in the truncation order.
+        max_input = max(
+            max(len(c.num.lstrip("-")), len(c.den))
+            for c in series.coefficients
+        )
+        bound = 2 * max_input * self.truncation_order + 1
+        if bound > MAX_RESULT_RATIONAL_DIGITS:
+            raise ValueError(
+                "reversion coefficient growth would exceed the "
+                f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+            )
         return self
 
     def as_series(self) -> InputTruncatedSeries:

@@ -7,7 +7,7 @@
 <h1 align="center">Jacobian</h1>
 
 <p align="center">
-  <strong>Atomic mathematics for agents: discover one typed operation, run it, and compose its bounded result.</strong>
+  <strong>An executable mathematical vocabulary for agents: discover one typed operation, run it, and compose its result.</strong>
 </p>
 
 <p align="center">
@@ -18,23 +18,25 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/morluto/jacobian" alt="MIT license"></a>
 </p>
 
-Jacobian is an MCP server that gives AI agents atomic, composable tools for
-higher mathematics. It exposes two tools: `math.find` searches an immutable
-library of typed mathematical operations, and `math.run` executes exactly one
-of them and returns its concrete typed result. Each operation is one bounded,
-exact computation: a typed request in and a typed mathematical value out. The
-same mathematical library is also available through a CLI and native Python
-API.
+Jacobian is an MCP server that gives AI agents a searchable vocabulary of typed
+mathematical operations. `math.find` discovers an operation, and `math.run`
+executes exactly one bounded mathematical contract and returns its typed
+result. The same mathematical library is also available through a CLI and
+native Python API.
+
+Each operation establishes one stable, reusable mathematical postcondition
+rather than prescribing a workflow or proof strategy. Results are exact where
+claimed and make approximation, incompleteness, or uncertainty explicit.
 
 **Jacobian's hypothesis is that mathematical reasoning benefits from an
-executable vocabulary of small, exact operations.** Rather than exposing large
-domain solvers or precomposed workflows, Jacobian exposes mathematical
-primitives that agents can search for and compose into solutions beyond what
-any individual operation was designed to solve. The library supplies
-trustworthy mathematical moves; the reasoning model decides which moves to
-make, how to combine their results, and when to stop. Keeping the operations
-small and domain-owned preserves that search space instead of baking one proof
-strategy or workflow into the tools themselves.
+executable vocabulary of semantically scoped, bounded operations.** Rather than
+exposing large domain solvers or precomposed workflows, Jacobian exposes
+mathematical primitives that agents can search for and compose into solutions
+beyond what any individual operation was designed to solve. The library
+supplies trustworthy mathematical moves; the reasoning model decides which
+moves to make, how to combine their results, and when to stop. Keeping the
+operations semantically narrow and domain-owned preserves that search space
+instead of baking one proof strategy or workflow into the tools themselves.
 
 ## Quickstart
 

@@ -3,13 +3,22 @@
 [Documentation home](../index.md)
 
 - Status: Current catalog-maintenance contract
-- Machine-readable ledger: `src/jacobian/catalog/admission.py`
+- Shared admission policy: `src/jacobian/catalog/admission.py`
+- Owner-local decisions: `src/jacobian/math/**/_admission.py`
 
 The public `math.find` / `math.run` catalog is a curated basis of mathematical
 operations, not an inventory of every callable helper in `jacobian.math` or in
 an installed backend. Every candidate declaration must have exactly one
-admission decision before it can enter the catalog. Catalog construction fails
-closed when the candidate inventory and decision ledger disagree.
+owner-local admission decision before it can enter the catalog. Catalog
+construction fails closed when the candidate inventory and composed decision
+ledger disagree.
+
+Before applying these gates, identify the reusable gap. Show why the current
+public operations and shared mathematical values do not cleanly provide the
+required result, and why the proposed postcondition is independently canonical
+or reusable beyond the motivating workflow. A discovery, representation,
+interoperability, contract, backend, scale, or reasoning failure is not by
+itself evidence for a new public operation.
 
 ## Admission gates
 
@@ -49,9 +58,11 @@ The ledger uses five decisions:
 | `DROP` | Excluded | Retain no supported public interface solely for compatibility or coverage. |
 | `CONTRACT_FIX` | Excluded | Repair the named correctness defect and add an adversarial regression, then reclassify the operation before publication. |
 
-`src/jacobian/catalog/admission.py` is the authority for current decisions. A
-renamed or materially changed candidate needs a fresh decision; do not preserve
-a public operation solely because an earlier version was admitted.
+Each mathematical domain's `_admission.py` module is the authority for its
+current decisions; `src/jacobian/catalog/admission.py` owns the shared policy
+types and fail-closed validation. A renamed or materially changed candidate
+needs a fresh decision; do not preserve a public operation solely because an
+earlier version was admitted.
 
 Consumers should discover against the current catalog. A `NATIVE_ONLY` row's
 `native_symbol` names its supported `jacobian.math` replacement; a `DROP` row
@@ -63,7 +74,8 @@ For a catalog-changing pull request:
 
 1. Compare the candidate against nearby IDs, native symbols, input and output
    types, and discovery wording.
-2. Record one decision and a concrete mathematical rationale in the ledger.
+2. Record one decision and a concrete mathematical rationale in the owning
+   domain's `_admission.py` module.
 3. For `NATIVE_ONLY`, name an importable callable whose containing public
    module includes it in `__all__`.
 4. For bounded search, test both a complete result and the applicable
@@ -72,5 +84,5 @@ For a catalog-changing pull request:
 5. Regenerate the schema snapshot and run the catalog, native-API, and owning
    mathematical tests.
 
-The ledger is source review data for constructing the immutable public catalog;
-it is not a runtime recommendation or planning layer.
+The owner-local decision ledger is source review data for constructing the
+immutable public catalog; it is not a runtime recommendation or planning layer.

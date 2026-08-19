@@ -72,7 +72,7 @@ def test_walsh_complement_identity() -> None:
         r1 = compute_walsh_hadamard_transform(_request(truth))
         complement = [1 - b for b in truth]
         r2 = compute_walsh_hadamard_transform(_request(complement))
-        for v1, v2 in zip(r1.spectrum, r2.spectrum, strict=False):
+        for v1, v2 in zip(r1.spectrum, r2.spectrum, strict=True):
             assert int(v1) == -int(v2), f"Complement identity failed for {truth}"
 
 

@@ -2,6 +2,10 @@
     "catalog_version": "1",
     "domain": "finite_semigroups",
     "operations": {
+        "semigroup.element.power.compute": {
+            "input_schema": "sha256:3518aec84f4c4387a754f98858db8c170cb37aa35159033c7c22ea073766a02a",
+            "output_schema": "sha256:56a9b1dc408efd2ddf2d6e1c9e109b7b88d851a85fc0d2f752c2699ae6d7de06"
+        },
         "semigroup.element.power_profile.compute": {
             "input_schema": "sha256:ba87a8d64931bd1bc95c71fcf8dd626219ed6400f1f66254cac07f61cc3aa800",
             "output_schema": "sha256:e31dd318c1e001b15ca5d4fb7aa348d81f3ae1499e0534e9ceaf8f59ea5d90d7"
@@ -9,6 +13,14 @@
         "semigroup.generated_subsemigroup.compute": {
             "input_schema": "sha256:fd25734a1cdf4cbe9db71a6d7461bf8c948540c841bb8415f260893be5492957",
             "output_schema": "sha256:a3f82c056ee2dfb1b989c2f058b75230e3dac1495c1988a59ad8b4f315daee80"
+        },
+        "semigroup.idempotents.compute": {
+            "input_schema": "sha256:65e283bd9430a9d7699373b721d0dea363cfed544578015e8e564113641d25e5",
+            "output_schema": "sha256:a1a1d24ffe13315b73797b906ef49611ca3679712d3768082e2dabc7ef67d15d"
+        },
+        "semigroup.principal_ideals.compute": {
+            "input_schema": "sha256:9cb36779df48e52f88adbb666e1b09a901617a8cde86d883ba5231c94bafbb43",
+            "output_schema": "sha256:85d05034923789d240a6a202641b77963a18f687e86ab1a3d8ca6dfba3770fc4"
         }
     }
 }

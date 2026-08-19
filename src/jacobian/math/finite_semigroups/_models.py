@@ -130,3 +130,102 @@ class GeneratedSubsemigroupResult(StrictModel):
 
     generators: tuple[str, ...]
     elements: tuple[str, ...]
+
+
+class ElementPowerRequest(StrictModel):
+    """Request the exact power ``element^exponent`` in a finite semigroup."""
+
+    semigroup: FiniteSemigroup
+    element: str
+    exponent: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_element_exists(self) -> Self:
+        if self.element not in set(self.semigroup.elements):
+            raise ValueError("element must be in the semigroup")
+        return self
+
+
+class ElementPowerResult(StrictModel):
+    """The exact power ``element^exponent`` in a finite semigroup."""
+
+    semigroup: FiniteSemigroup
+    element: str
+    exponent: int = Field(ge=1)
+    power: str
+
+    @model_validator(mode="after")
+    def bind_power(self) -> Self:
+        from jacobian.math.finite_semigroups._operations import _element_power
+
+        power = _element_power(
+            self.semigroup.elements,
+            self.semigroup.multiplication,
+            self.element,
+            self.exponent,
+        )
+        if self.power != power:
+            raise ValueError("power must be the exact iterated product of the element")
+        return self
+
+
+class IdempotentsRequest(StrictModel):
+    """Request all idempotent elements ``e`` with ``e*e = e``."""
+
+    semigroup: FiniteSemigroup
+
+
+class IdempotentsResult(StrictModel):
+    """All idempotent elements of a finite semigroup."""
+
+    semigroup: FiniteSemigroup
+    idempotents: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def bind_idempotents(self) -> Self:
+        from jacobian.math.finite_semigroups._operations import _idempotents
+
+        idempotents = _idempotents(self.semigroup.elements, self.semigroup.multiplication)
+        if self.idempotents != idempotents:
+            raise ValueError("idempotents must be exactly the elements with e*e = e")
+        return self
+
+
+class PrincipalIdealsRequest(StrictModel):
+    """Request the principal ideal of each listed element."""
+
+    semigroup: FiniteSemigroup
+    elements: tuple[str, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_elements_exist(self) -> Self:
+        labels = set(self.semigroup.elements)
+        for element in self.elements:
+            if element not in labels:
+                raise ValueError("every element must be in the semigroup")
+        return self
+
+
+class PrincipalIdealsResult(StrictModel):
+    """The principal ideals of the requested elements.
+
+    The principal ideal of ``a`` is ``{a} union {x*a : x in S} union
+    {a*x : x in S}``.
+    """
+
+    semigroup: FiniteSemigroup
+    elements: tuple[str, ...]
+    ideals: tuple[tuple[str, ...], ...]
+
+    @model_validator(mode="after")
+    def bind_ideals(self) -> Self:
+        from jacobian.math.finite_semigroups._operations import _principal_ideals
+
+        ideals = _principal_ideals(
+            self.semigroup.elements,
+            self.semigroup.multiplication,
+            self.elements,
+        )
+        if self.ideals != ideals:
+            raise ValueError("ideals must be the exact principal ideals of the elements")
+        return self

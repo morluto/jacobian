@@ -1,11 +1,71 @@
 """Exact bounded finite semigroup operations."""
 
 from jacobian.math.finite_semigroups._models import (
+    ElementPowerRequest,
+    ElementPowerResult,
     GeneratedSubsemigroupRequest,
     GeneratedSubsemigroupResult,
+    IdempotentsRequest,
+    IdempotentsResult,
     PowerProfileRequest,
     PowerProfileResult,
+    PrincipalIdealsRequest,
+    PrincipalIdealsResult,
 )
+
+
+def _element_power(
+    elements: tuple[str, ...],
+    multiplication: tuple[tuple[str, ...], ...],
+    element: str,
+    exponent: int,
+) -> str:
+    """Compute ``element^exponent`` by iterated multiplication.
+
+    ``exponent`` must be at least 1; the semigroup may have no identity, so
+    ``a^0`` is undefined and rejected at the request boundary.
+    """
+
+    idx = {label: i for i, label in enumerate(elements)}
+    power = element
+    for _ in range(exponent - 1):
+        power = multiplication[idx[power]][idx[element]]
+    return power
+
+
+def _idempotents(
+    elements: tuple[str, ...],
+    multiplication: tuple[tuple[str, ...], ...],
+) -> tuple[str, ...]:
+    """Return every element ``e`` with ``e*e = e`` in declared order."""
+
+    idx = {label: i for i, label in enumerate(elements)}
+    return tuple(e for e in elements if multiplication[idx[e]][idx[e]] == e)
+
+
+def _principal_ideals(
+    elements: tuple[str, ...],
+    multiplication: tuple[tuple[str, ...], ...],
+    requested: tuple[str, ...],
+) -> tuple[tuple[str, ...], ...]:
+    """Return the principal ideal of each requested element.
+
+    The principal ideal of ``a`` is ``{a} union {x*a : x in S} union
+    {a*x : x in S}``.  Ideals are returned in declared element order with
+    each ideal's elements in declared semigroup order.
+    """
+
+    idx = {label: i for i, label in enumerate(elements)}
+    n = len(elements)
+    ideals: list[tuple[str, ...]] = []
+    for element in requested:
+        ideal = {element}
+        i = idx[element]
+        for j in range(n):
+            ideal.add(multiplication[j][i])
+            ideal.add(multiplication[i][j])
+        ideals.append(tuple(e for e in elements if e in ideal))
+    return tuple(ideals)
 
 
 def _power_profile_data(
@@ -91,4 +151,46 @@ def compute_generated_subsemigroup(
     return GeneratedSubsemigroupResult(
         generators=request.generators,
         elements=result_elements,
+    )
+
+
+def compute_element_power(request: ElementPowerRequest) -> ElementPowerResult:
+    """Compute ``element^exponent`` in a finite semigroup."""
+
+    power = _element_power(
+        request.semigroup.elements,
+        request.semigroup.multiplication,
+        request.element,
+        request.exponent,
+    )
+    return ElementPowerResult(
+        semigroup=request.semigroup,
+        element=request.element,
+        exponent=request.exponent,
+        power=power,
+    )
+
+
+def compute_idempotents(request: IdempotentsRequest) -> IdempotentsResult:
+    """Find every idempotent element ``e`` with ``e*e = e``."""
+
+    idempotents = _idempotents(request.semigroup.elements, request.semigroup.multiplication)
+    return IdempotentsResult(
+        semigroup=request.semigroup,
+        idempotents=idempotents,
+    )
+
+
+def compute_principal_ideals(request: PrincipalIdealsRequest) -> PrincipalIdealsResult:
+    """Compute the principal ideal of each requested element."""
+
+    ideals = _principal_ideals(
+        request.semigroup.elements,
+        request.semigroup.multiplication,
+        request.elements,
+    )
+    return PrincipalIdealsResult(
+        semigroup=request.semigroup,
+        elements=request.elements,
+        ideals=ideals,
     )

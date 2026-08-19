@@ -7,14 +7,23 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.finite_semigroups._models import (
+    ElementPowerRequest,
+    ElementPowerResult,
     GeneratedSubsemigroupRequest,
     GeneratedSubsemigroupResult,
+    IdempotentsRequest,
+    IdempotentsResult,
     PowerProfileRequest,
     PowerProfileResult,
+    PrincipalIdealsRequest,
+    PrincipalIdealsResult,
 )
 from jacobian.math.finite_semigroups._operations import (
+    compute_element_power,
     compute_generated_subsemigroup,
+    compute_idempotents,
     compute_power_profile,
+    compute_principal_ideals,
 )
 
 
@@ -101,6 +110,71 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "semigroup": _SEMIGROUP,
                     "generators": ["1"],
+                },
+            ),
+        ),
+    ),
+    _op(
+        "semigroup.element.power.compute",
+        "Compute the power of a semigroup element",
+        "Compute the exact iterated product element^exponent for a positive "
+        "exponent in a finite semigroup.",
+        ElementPowerRequest,
+        ElementPowerResult,
+        compute_element_power,
+        "algebra",
+        "semigroup",
+        "exact",
+        examples=(
+            example(
+                "power_2_in_cyclic_group",
+                "Compute 1^2 in Z/3Z.",
+                {
+                    "semigroup": _SEMIGROUP,
+                    "element": "1",
+                    "exponent": 2,
+                },
+            ),
+        ),
+    ),
+    _op(
+        "semigroup.idempotents.compute",
+        "Find the idempotent elements of a finite semigroup",
+        "Return every element e with e*e = e in a finite semigroup.",
+        IdempotentsRequest,
+        IdempotentsResult,
+        compute_idempotents,
+        "algebra",
+        "semigroup",
+        "exact",
+        examples=(
+            example(
+                "idempotents_of_z3",
+                "Find the idempotents of Z/3Z; only the zero element is idempotent.",
+                {
+                    "semigroup": _SEMIGROUP,
+                },
+            ),
+        ),
+    ),
+    _op(
+        "semigroup.principal_ideals.compute",
+        "Compute principal ideals in a finite semigroup",
+        "For each requested element compute its principal ideal "
+        "{a} union {x*a, a*x : x in S}.",
+        PrincipalIdealsRequest,
+        PrincipalIdealsResult,
+        compute_principal_ideals,
+        "algebra",
+        "semigroup",
+        "exact",
+        examples=(
+            example(
+                "ideal_in_z3",
+                "Compute the principal ideal of 1 in Z/3Z.",
+                {
+                    "semigroup": _SEMIGROUP,
+                    "elements": ["1"],
                 },
             ),
         ),

@@ -4,13 +4,19 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.finite_semigroups._models import (
+    ElementPowerRequest,
     FiniteSemigroup,
     GeneratedSubsemigroupRequest,
+    IdempotentsRequest,
     PowerProfileRequest,
+    PrincipalIdealsRequest,
 )
 from jacobian.math.finite_semigroups._operations import (
+    compute_element_power,
     compute_generated_subsemigroup,
+    compute_idempotents,
     compute_power_profile,
+    compute_principal_ideals,
 )
 
 # Z/3Z as a semigroup under addition mod 3
@@ -203,3 +209,103 @@ class TestGeneratedSubsemigroup:
             GeneratedSubsemigroupRequest(semigroup=Z3, generators=["1", "2"])
         )
         assert set(result.generators) == {"1", "2"}
+
+
+class TestElementPower:
+    def test_z3_power_2(self) -> None:
+        result = compute_element_power(
+            ElementPowerRequest(semigroup=Z3, element="1", exponent=2)
+        )
+        assert result.power == "2"
+
+    def test_z3_power_identity(self) -> None:
+        result = compute_element_power(
+            ElementPowerRequest(semigroup=Z3, element="1", exponent=1)
+        )
+        assert result.power == "1"
+
+    def test_z3_power_4_cycles(self) -> None:
+        result = compute_element_power(
+            ElementPowerRequest(semigroup=Z3, element="2", exponent=4)
+        )
+        assert result.power == "2"
+
+    def test_null_semigroup_power(self) -> None:
+        result = compute_element_power(
+            ElementPowerRequest(semigroup=NULL_SG, element="x", exponent=2)
+        )
+        assert result.power == "0"
+
+    def test_exponent_zero_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="exponent"):
+            ElementPowerRequest(semigroup=Z3, element="1", exponent=0)
+
+    def test_missing_element_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="element must be in the semigroup"):
+            ElementPowerRequest(semigroup=Z3, element="9", exponent=2)
+
+    def test_power_replays_from_table(self) -> None:
+        result = compute_element_power(
+            ElementPowerRequest(semigroup=Z3, element="1", exponent=5)
+        )
+        mult = Z3["multiplication"]
+        elements = Z3["elements"]
+        idx = {label: i for i, label in enumerate(elements)}
+        running = "1"
+        for _ in range(4):
+            running = mult[idx[running]][idx["1"]]
+        assert result.power == running
+
+
+class TestIdempotents:
+    def test_z3_only_zero(self) -> None:
+        result = compute_idempotents(IdempotentsRequest(semigroup=Z3))
+        assert result.idempotents == ("0",)
+
+    def test_band_both_idempotent(self) -> None:
+        result = compute_idempotents(IdempotentsRequest(semigroup=BAND))
+        assert result.idempotents == ("a", "b")
+
+    def test_null_semigroup_only_zero(self) -> None:
+        result = compute_idempotents(IdempotentsRequest(semigroup=NULL_SG))
+        assert result.idempotents == ("0",)
+
+    def test_every_reported_element_is_idempotent(self) -> None:
+        for sg in (Z3, BAND, NULL_SG):
+            result = compute_idempotents(IdempotentsRequest(semigroup=sg))
+            mult = sg["multiplication"]
+            elements = sg["elements"]
+            idx = {label: i for i, label in enumerate(elements)}
+            for e in result.idempotents:
+                assert mult[idx[e]][idx[e]] == e
+
+
+class TestPrincipalIdeals:
+    def test_z3_ideal_of_1_is_whole_semigroup(self) -> None:
+        result = compute_principal_ideals(
+            PrincipalIdealsRequest(semigroup=Z3, elements=["1"])
+        )
+        assert set(result.ideals[0]) == {"0", "1", "2"}
+
+    def test_band_ideals(self) -> None:
+        result = compute_principal_ideals(
+            PrincipalIdealsRequest(semigroup=BAND, elements=["a", "b"])
+        )
+        assert result.ideals == (("a", "b"), ("a", "b"))
+
+    def test_null_ideal_of_x(self) -> None:
+        result = compute_principal_ideals(
+            PrincipalIdealsRequest(semigroup=NULL_SG, elements=["x"])
+        )
+        assert set(result.ideals[0]) == {"0", "x"}
+
+    def test_ideal_contains_the_element(self) -> None:
+        for sg, element in [(Z3, "1"), (BAND, "a"), (NULL_SG, "x")]:
+            result = compute_principal_ideals(
+                PrincipalIdealsRequest(semigroup=sg, elements=[element])
+            )
+            assert element in result.ideals[0]
+
+    def test_missing_element_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="every element must be in the semigroup"):
+            PrincipalIdealsRequest(semigroup=Z3, elements=["nope"])

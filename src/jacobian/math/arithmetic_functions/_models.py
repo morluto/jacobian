@@ -14,7 +14,9 @@ _MIN_LENGTH = 1
 _MAX_LENGTH = 10_000
 
 
-def _preflight_rational_height(values: tuple[CanonicalRational, ...], label: str) -> None:
+def _preflight_rational_height(
+    values: tuple[CanonicalRational, ...], label: str
+) -> None:
     """Reject requests whose exact rational height conservatively exceeds the limit.
 
     For summatory and convolution operations, the output denominators are

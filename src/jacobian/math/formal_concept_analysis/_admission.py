@@ -33,7 +33,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "formal_context.concepts.enumerate.compute",
         AdmissionDecision.KEEP,
-        "exact complete concept enumeration via NextClosure over attribute intents",
+        "exact complete concept enumeration via brute-force over attribute intents",
     ),
     OperationAdmission(
         "formal_context.concept_lattice.compute",

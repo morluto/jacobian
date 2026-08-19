@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from typing import Self
+
+from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.formal_concept_analysis.values import FormalContext
@@ -13,6 +15,14 @@ class DerivationRequest(StrictModel):
 
     context: FormalContext
     subset: tuple[int, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_valid_indices(self) -> Self:
+        max_idx = max(len(self.context.objects), len(self.context.attributes))
+        for i in self.subset:
+            if not 0 <= i < max_idx:
+                raise ValueError("subset index out of range")
+        return self
 
 
 class DerivationResult(StrictModel):
@@ -36,6 +46,14 @@ class ConceptRequest(StrictModel):
     context: FormalContext
     subset: tuple[int, ...] = Field(default=())
 
+    @model_validator(mode="after")
+    def require_valid_indices(self) -> Self:
+        max_idx = max(len(self.context.objects), len(self.context.attributes))
+        for i in self.subset:
+            if not 0 <= i < max_idx:
+                raise ValueError("subset index out of range")
+        return self
+
 
 class ConceptResult(StrictModel):
     """A formal concept (extent, intent)."""
@@ -44,10 +62,22 @@ class ConceptResult(StrictModel):
     intent: tuple[int, ...]
 
 
+# Bound the concept enumeration to prevent unbounded 2^|M| work.
+MAX_CONCEPT_ATTRIBUTES = 20
+
+
 class EnumerateConceptsRequest(StrictModel):
     """Enumerate all formal concepts."""
 
     context: FormalContext
+
+    @model_validator(mode="after")
+    def require_bounded_attribute_count(self) -> Self:
+        if len(self.context.attributes) > MAX_CONCEPT_ATTRIBUTES:
+            raise ValueError(
+                f"concept enumeration supports at most {MAX_CONCEPT_ATTRIBUTES} attributes"
+            )
+        return self
 
 
 class EnumerateConceptsResult(StrictModel):

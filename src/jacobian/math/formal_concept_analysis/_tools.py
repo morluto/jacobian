@@ -162,7 +162,7 @@ FORMAL_CONCEPT_ANALYSIS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "formal_context.concepts.enumerate.compute",
         "Enumerate every formal concept exactly once",
-        "Return the complete concept family using the NextClosure algorithm "
+        "Return the complete concept family of closed attribute intents. "
         "over attribute intents. The family, not the enumeration order, is "
         "mathematical.",
         EnumerateConceptsRequest,

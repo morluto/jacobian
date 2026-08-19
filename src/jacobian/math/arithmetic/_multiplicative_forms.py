@@ -54,51 +54,98 @@ class PerfectPowerProfileResult(StrictModel):
     reconstruction: CanonicalInteger | None = None
 
     @model_validator(mode="after")
-    def require_nonunit_fields(self) -> Self:
-        if self.kind == "NONUNIT" and (
-            self.base is None or self.exponent is None or self.reconstruction is None
-        ):
-            raise ValueError("NONUNIT requires base, exponent, and reconstruction")
+    def require_consistent_fields(self) -> Self:
+        if self.kind == "NONUNIT":
+            if (
+                self.base is None
+                or self.exponent is None
+                or self.reconstruction is None
+            ):
+                raise ValueError(
+                    "NONUNIT requires base, exponent, and reconstruction"
+                )
+            if self.exponent < 1:
+                raise ValueError("NONUNIT exponent must be >= 1")
+        else:
+            # ZERO, POSITIVE_UNIT, NEGATIVE_UNIT must not carry NONUNIT fields
+            if self.base is not None or self.exponent is not None:
+                raise ValueError(
+                    f"{self.kind} must not carry base or exponent"
+                )
+            if self.factors:
+                raise ValueError(f"{self.kind} must not carry factors")
+            if self.is_nontrivial_perfect_power:
+                raise ValueError(
+                    f"{self.kind} must not claim a nontrivial perfect power"
+                )
         return self
 
 
 class KFreeDecompositionResult(StrictModel):
     """The unique decomposition n = a^k * c with c k-th-power-free."""
 
-    kind: Literal["ZERO", "NONUNIT"]
+    kind: Literal["ZERO", "UNIT", "NONUNIT"]
     base: CanonicalInteger | None = None
     cofactor: CanonicalInteger | None = None
     factors: tuple[PrimeExponentRow, ...] = ()
     reconstruction: CanonicalInteger | None = None
 
     @model_validator(mode="after")
-    def require_nonunit_fields(self) -> Self:
-        if self.kind == "NONUNIT" and (
-            self.base is None or self.cofactor is None or self.reconstruction is None
-        ):
-            raise ValueError("NONUNIT requires base, cofactor, and reconstruction")
+    def require_consistent_fields(self) -> Self:
+        if self.kind == "NONUNIT":
+            if (
+                self.base is None
+                or self.cofactor is None
+                or self.reconstruction is None
+            ):
+                raise ValueError(
+                    "NONUNIT requires base, cofactor, and reconstruction"
+                )
+        elif self.kind == "UNIT":
+            if self.base is not None or self.cofactor is not None:
+                raise ValueError("UNIT must not carry base or cofactor")
+            if self.factors:
+                raise ValueError("UNIT must not carry factors")
+        else:  # ZERO
+            if self.base is not None or self.cofactor is not None:
+                raise ValueError("ZERO must not carry base or cofactor")
+            if self.factors:
+                raise ValueError("ZERO must not carry factors")
         return self
 
 
 class SquarefreeDecompositionResult(StrictModel):
     """The unique decomposition n = s^2 * d with |d| squarefree."""
 
-    kind: Literal["ZERO", "NONUNIT"]
+    kind: Literal["ZERO", "UNIT", "NONUNIT"]
     square_factor: CanonicalInteger | None = None
     squarefree_part: CanonicalInteger | None = None
     factors: tuple[PrimeExponentRow, ...] = ()
     reconstruction: CanonicalInteger | None = None
 
     @model_validator(mode="after")
-    def require_nonunit_fields(self) -> Self:
-        if self.kind == "NONUNIT" and (
-            self.square_factor is None
-            or self.squarefree_part is None
-            or self.reconstruction is None
-        ):
-            raise ValueError(
-                "NONUNIT requires square_factor, squarefree_part, and reconstruction"
-            )
+    def require_consistent_fields(self) -> Self:
+        if self.kind == "NONUNIT":
+            if (
+                self.square_factor is None
+                or self.squarefree_part is None
+                or self.reconstruction is None
+            ):
+                raise ValueError(
+                    "NONUNIT requires square_factor, squarefree_part, and reconstruction"
+                )
+        elif self.kind == "UNIT":
+            if self.square_factor is not None or self.squarefree_part is not None:
+                raise ValueError("UNIT must not carry square_factor or squarefree_part")
+            if self.factors:
+                raise ValueError("UNIT must not carry factors")
+        else:  # ZERO
+            if self.square_factor is not None or self.squarefree_part is not None:
+                raise ValueError(
+                    "ZERO must not carry square_factor or squarefree_part"
+                )
+            if self.factors:
+                raise ValueError("ZERO must not carry factors")
         return self
 
 

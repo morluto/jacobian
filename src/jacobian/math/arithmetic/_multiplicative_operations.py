@@ -91,6 +91,8 @@ def compute_k_free_decomposition(
 
     if n == 0:
         return KFreeDecompositionResult(kind="ZERO")
+    if n == 1 or n == -1:
+        return KFreeDecompositionResult(kind="UNIT")
 
     prime_exps = _factorize_abs(n)
 
@@ -130,6 +132,8 @@ def compute_squarefree_decomposition(
 
     if n == 0:
         return SquarefreeDecompositionResult(kind="ZERO")
+    if n == 1 or n == -1:
+        return SquarefreeDecompositionResult(kind="UNIT")
 
     prime_exps = _factorize_abs(n)
 

@@ -250,3 +250,40 @@ class TestNormalizedQuadraticRadical:
             s = int(result.coefficient)
             d = int(result.radicand)
             assert s**2 * d == int(n)
+
+
+class TestUnitHandling:
+    """Tests for the UNIT variant in k-free and squarefree decompositions."""
+
+    def test_k_free_unit_1(self) -> None:
+        result = compute_k_free_decomposition(IntegerKRequest(value="1", k=3))
+        assert result.kind == "UNIT"
+
+    def test_k_free_unit_neg1(self) -> None:
+        result = compute_k_free_decomposition(IntegerKRequest(value="-1", k=3))
+        assert result.kind == "UNIT"
+
+    def test_squarefree_unit_1(self) -> None:
+        result = compute_squarefree_decomposition(IntegerRequest(value="1"))
+        assert result.kind == "UNIT"
+
+    def test_squarefree_unit_neg1(self) -> None:
+        result = compute_squarefree_decomposition(IntegerRequest(value="-1"))
+        assert result.kind == "UNIT"
+
+    def test_k_free_zero_unchanged(self) -> None:
+        result = compute_k_free_decomposition(IntegerKRequest(value="0", k=3))
+        assert result.kind == "ZERO"
+
+    def test_squarefree_zero_unchanged(self) -> None:
+        result = compute_squarefree_decomposition(IntegerRequest(value="0"))
+        assert result.kind == "ZERO"
+
+    def test_perfect_power_zero_no_fields(self) -> None:
+        """ZERO variant must not carry NONUNIT fields."""
+        result = compute_perfect_power_profile(IntegerRequest(value="0"))
+        assert result.kind == "ZERO"
+        assert result.base is None
+        assert result.exponent is None
+        assert result.factors == ()
+        assert result.is_nontrivial_perfect_power is False

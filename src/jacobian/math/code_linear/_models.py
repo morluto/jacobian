@@ -112,12 +112,8 @@ class CodeEqualRequest(StrictModel):
     """Check whether two generator matrices define the same code."""
 
     field_order: int = Field(ge=2, le=251)
-    generator_matrix_a: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=16
-    )
-    generator_matrix_b: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=16
-    )
+    generator_matrix_a: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
+    generator_matrix_b: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:

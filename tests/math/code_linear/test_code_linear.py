@@ -43,9 +43,7 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_from_generator_canonicalizes_dependent_rows() -> None:
-    request = GeneratorMatrixRequest(
-        field_order=2, generator_matrix=((1, 1), (1, 1))
-    )
+    request = GeneratorMatrixRequest(field_order=2, generator_matrix=((1, 1), (1, 1)))
     result = compute_from_generator(request)
     assert result.dimension == 1
     assert result.length == 2
@@ -90,18 +88,14 @@ def test_codeword_check_nonmember() -> None:
 
 
 def test_syndrome_zero_for_codeword() -> None:
-    request = SyndromeRequest(
-        field_order=2, parity_check_matrix=((1, 1),), word=(1, 1)
-    )
+    request = SyndromeRequest(field_order=2, parity_check_matrix=((1, 1),), word=(1, 1))
     result = compute_syndrome(request)
     assert result.syndrome == (0,)
     assert result.is_member is True
 
 
 def test_syndrome_nonzero_for_noncodeword() -> None:
-    request = SyndromeRequest(
-        field_order=2, parity_check_matrix=((1, 1),), word=(1, 0)
-    )
+    request = SyndromeRequest(field_order=2, parity_check_matrix=((1, 1),), word=(1, 0))
     result = compute_syndrome(request)
     assert result.syndrome == (1,)
     assert result.is_member is False
@@ -138,18 +132,14 @@ def test_macwilliams_self_dual_repetition_code() -> None:
 
 
 def test_puncture_reduces_length() -> None:
-    request = PunctureRequest(
-        field_order=2, generator_matrix=((1, 1),), coordinate=0
-    )
+    request = PunctureRequest(field_order=2, generator_matrix=((1, 1),), coordinate=0)
     result = compute_puncture(request)
     assert result.length == 1
     assert result.dimension == 1
 
 
 def test_shorten_reduces_dimension_and_length() -> None:
-    request = ShortenRequest(
-        field_order=2, generator_matrix=((1, 1, 1),), coordinate=0
-    )
+    request = ShortenRequest(field_order=2, generator_matrix=((1, 1, 1),), coordinate=0)
     result = compute_shorten(request)
     assert result.length == 2
     assert result.dimension == 1
@@ -167,13 +157,9 @@ def test_request_rejects_bad_entry() -> None:
 
 def test_syndrome_request_rejects_bad_word_length() -> None:
     with pytest.raises(ValidationError, match="length"):
-        SyndromeRequest(
-            field_order=2, parity_check_matrix=((1, 1),), word=(1,)
-        )
+        SyndromeRequest(field_order=2, parity_check_matrix=((1, 1),), word=(1,))
 
 
 def test_codeword_check_request_rejects_bad_word_length() -> None:
     with pytest.raises(ValidationError, match="length"):
-        CodewordCheckRequest(
-            field_order=2, generator_matrix=((1, 1),), word=(1,)
-        )
+        CodewordCheckRequest(field_order=2, generator_matrix=((1, 1),), word=(1,))

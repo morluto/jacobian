@@ -23,9 +23,7 @@ from jacobian.math.code_linear._models import (
 )
 
 
-def _rref(
-    matrix: list[list[int]], field_order: int
-) -> tuple[list[list[int]], int]:
+def _rref(matrix: list[list[int]], field_order: int) -> tuple[list[list[int]], int]:
     """Reduced row echelon form and rank over a prime field."""
     rows = [list(row) for row in matrix]
     row_count = len(rows)
@@ -82,9 +80,7 @@ def _nullspace(matrix: list[list[int]], field_order: int) -> list[list[int]]:
     return basis
 
 
-def _canonical_generator(
-    matrix: list[list[int]], field_order: int
-) -> list[list[int]]:
+def _canonical_generator(matrix: list[list[int]], field_order: int) -> list[list[int]]:
     """Return canonical RREF rows for a matrix's row space."""
     rref, rank = _rref(matrix, field_order)
     return list(rref[:rank])
@@ -94,8 +90,7 @@ def _mat_mul_vec(
     matrix: list[list[int]], vec: list[int], field_order: int
 ) -> list[int]:
     return [
-        sum(row[j] * vec[j] for j in range(len(vec))) % field_order
-        for row in matrix
+        sum(row[j] * vec[j] for j in range(len(vec))) % field_order for row in matrix
     ]
 
 
@@ -108,7 +103,7 @@ def compute_from_generator(request: GeneratorMatrixRequest) -> FromGeneratorResu
     canonical = _canonical_generator(matrix, request.field_order)
     dim = len(canonical)
     length = len(request.generator_matrix[0])
-    cardinality = request.field_order ** dim
+    cardinality = request.field_order**dim
     return FromGeneratorResult(
         canonical_generator=tuple(tuple(row) for row in canonical),
         dimension=dim,
@@ -198,7 +193,9 @@ def _rowspace_contains(
     return aug_rank == g_rank + (target_rank - g_rank)
 
 
-def _enumerate_code(rref: list[list[int]], rank: int, n: int, q: int) -> set[tuple[int, ...]]:
+def _enumerate_code(
+    rref: list[list[int]], rank: int, n: int, q: int
+) -> set[tuple[int, ...]]:
     """Enumerate all codewords from a RREF basis."""
     from itertools import product
 
@@ -290,16 +287,10 @@ def compute_shorten(request: ShortenRequest) -> ShortenResult:
 
     rref, rank = _rref(shortened, q)
     result_rows = [list(row) for row in rref[:rank]]
-    shortened_result = [
-        row[:col] + row[col + 1 :] for row in result_rows
-    ]
+    shortened_result = [row[:col] + row[col + 1 :] for row in result_rows]
     final_rref, final_rank = _rref(shortened_result, q)
     new_len = len(matrix[0]) - 1
-    gen = (
-        tuple(tuple(row) for row in final_rref[:final_rank])
-        if final_rank > 0
-        else ()
-    )
+    gen = tuple(tuple(row) for row in final_rref[:final_rank]) if final_rank > 0 else ()
     return ShortenResult(
         generator=gen,
         dimension=final_rank,

@@ -42,9 +42,7 @@ def test_vertex_profiles_kronecker() -> None:
 
 def test_fixed_length_paths_triangle() -> None:
     request = FixedLengthPathsRequest(
-        quiver=FiniteQuiver(
-            vertex_count=3, arrows=((0, 1), (1, 2), (2, 0))
-        ),
+        quiver=FiniteQuiver(vertex_count=3, arrows=((0, 1), (1, 2), (2, 0))),
         length=2,
     )
     result = compute_fixed_length_paths(request)

@@ -72,8 +72,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "quiver.vertex_profiles.compute",
         "Compute in-degree and out-degree profiles of a quiver",
-        "Compute the in-degree and out-degree for each vertex of a finite "
-        "quiver.",
+        "Compute the in-degree and out-degree for each vertex of a finite quiver.",
         VertexProfilesRequest,
         VertexProfilesResult,
         compute_vertex_profiles,

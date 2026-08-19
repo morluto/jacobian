@@ -114,12 +114,6 @@ from jacobian.math.geometry.projective._admission import (
     ADMISSIONS as GEOMETRY_PROJECTIVE_ADMISSIONS,
 )
 from jacobian.math.geometry.projective._tools import TOOLS as PROJECTIVE_GEOMETRY_TOOLS
-from jacobian.math.quivers._admission import (
-    ADMISSIONS as QUIVERS_ADMISSIONS,
-)
-from jacobian.math.quivers._tools import (
-    TOOLS as QUIVERS_TOOLS,
-)
 from jacobian.math.graphical_models._admission import (
     ADMISSIONS as GRAPHICAL_MODELS_ADMISSIONS,
 )
@@ -244,6 +238,12 @@ from jacobian.math.posets._admission import ADMISSIONS as POSETS_ADMISSIONS
 from jacobian.math.posets._tools import TOOLS as POSETS_TOOLS
 from jacobian.math.probability._admission import ADMISSIONS as PROBABILITY_ADMISSIONS
 from jacobian.math.probability._tools import TOOLS as PROBABILITY_TOOLS
+from jacobian.math.quivers._admission import (
+    ADMISSIONS as QUIVERS_ADMISSIONS,
+)
+from jacobian.math.quivers._tools import (
+    TOOLS as QUIVERS_TOOLS,
+)
 from jacobian.math.recurrence_solving._admission import (
     ADMISSIONS as RECURRENCE_SOLVING_ADMISSIONS,
 )

@@ -21,9 +21,7 @@ def compute_adjacency_matrices(
     for source, target in request.quiver.arrows:
         matrix[source][target] += 1
     adj = tuple(tuple(row) for row in matrix)
-    transpose = tuple(
-        tuple(matrix[j][i] for j in range(n)) for i in range(n)
-    )
+    transpose = tuple(tuple(matrix[j][i] for j in range(n)) for i in range(n))
     return AdjacencyMatricesResult(
         adjacency_matrix=adj,
         transpose_matrix=transpose,

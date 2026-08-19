@@ -151,11 +151,3 @@ def test_symbolic_eigenvalues_explicit_for_representable() -> None:
     assert result.eigenvalues is not None
     assert result.characteristic_polynomial is None
 
-
-def test_symbolic_eigenvalues_explicit_for_representable() -> None:
-    """Regular 2x2 matrix returns EXPLICIT_ROOTS."""
-    request = _request([["1", "2"], ["3", "4"]], [])
-    result = compute_symbolic_eigenvalues(request)
-    assert result.representation == "EXPLICIT_ROOTS"
-    assert result.eigenvalues is not None
-    assert result.characteristic_polynomial is None

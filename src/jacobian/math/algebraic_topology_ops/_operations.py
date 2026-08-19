@@ -32,7 +32,7 @@ def compute_edge_path_word(request: EdgePathWordRequest) -> EdgePathWordResult:
                 found = True
                 break
         if not found:
-            word.append(f"INVALID({u}->{v})")
+            raise ValueError(f"path step {u}->{v} is not an edge in the graph")
     return EdgePathWordResult(
         word=tuple(word),
         length=len(word),

@@ -796,9 +796,25 @@ class LinkRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_simplex(self) -> Self:
         vertex_set = set(self.complex.vertices)
+        if len(set(self.simplex)) != len(self.simplex):
+            raise ValueError("simplex vertices must be distinct")
         for v in self.simplex:
             if v not in vertex_set:
                 raise ValueError("simplex vertices must be in the complex")
+        # Check that the simplex is a face of the complex
+        simplex_set = set(self.simplex)
+        facet_set = {frozenset(f) for f in self.complex.facets}
+        all_faces: set[frozenset[str]] = set()
+        for facet in self.complex.facets:
+            for r in range(1, len(facet) + 1):
+                from itertools import combinations
+                for subset in combinations(facet, r):
+                    all_faces.add(frozenset(subset))
+        if simplex_set not in all_faces and len(simplex_set) > 0:
+            # Check if simplex is contained in any facet
+            is_face = any(simplex_set <= facet for facet in facet_set)
+            if not is_face:
+                raise ValueError("simplex must be a face of the complex")
         return self
 
 

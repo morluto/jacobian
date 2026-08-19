@@ -47,3 +47,57 @@ def test_link_of_face_in_boundary() -> None:
     )
     assert ("v1",) in result.link_facets
     assert ("v2",) in result.link_facets
+
+
+
+from jacobian.math.topology._models import FVectorRequest
+
+
+def test_f_vector_filled_triangle() -> None:
+    """Filled triangle has f=(3,3,1) and h=(1,0,0,0)."""
+    from jacobian.math.topology._operations import compute_f_vector
+    request = FVectorRequest(
+        complex={"vertices": ["v0", "v1", "v2"], "facets": [["v0", "v1", "v2"]]}
+    )
+    result = compute_f_vector(request)
+    assert result.f_vector == (3, 3, 1)
+    assert result.h_vector == (1, 0, 0, 0)
+
+
+def test_f_vector_single_edge() -> None:
+    """Single edge has f=(2,1) and h=(1,0,0)."""
+    from jacobian.math.topology._operations import compute_f_vector
+    request = FVectorRequest(
+        complex={"vertices": ["v0", "v1"], "facets": [["v0", "v1"]]}
+    )
+    result = compute_f_vector(request)
+    assert result.f_vector == (2, 1)
+    assert result.h_vector == (1, 0, 0)
+
+
+def test_f_vector_h_vector_invariant() -> None:
+    """h_0 must always be 1 for a non-empty complex."""
+    from jacobian.math.topology._operations import compute_f_vector
+    request = FVectorRequest(
+        complex={"vertices": ["v0", "v1", "v2"], "facets": [["v0", "v1", "v2"]]}
+    )
+    result = compute_f_vector(request)
+    assert result.h_vector[0] == 1
+
+
+def test_link_rejects_non_face() -> None:
+    """Non-face simplex should be rejected, not silently returned as empty link."""
+    from pydantic import ValidationError
+    try:
+        compute_link(
+            LinkRequest(
+                complex={
+                    "vertices": ["v0", "v1", "v2", "v3"],
+                    "facets": [["v0", "v1"], ["v2", "v3"]],
+                },
+                simplex=("v0", "v2"),
+            )
+        )
+        assert False, "Should have raised ValidationError"
+    except ValidationError:
+        pass

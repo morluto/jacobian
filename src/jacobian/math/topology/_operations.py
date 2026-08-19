@@ -755,12 +755,17 @@ def compute_f_vector(request: FVectorRequest) -> FVectorResult:
     f_vector = tuple(counts_by_dim.get(d, 0) for d in range(max_dim + 1))
     euler = sum((-1) ** d * counts_by_dim.get(d, 0) for d in range(max_dim + 1))
 
-    n = len(f_vector)
-    h_vector = []
-    for i in range(n):
+    # Standard h-vector: for a (d-1)-dimensional complex (d = max_dim + 1),
+    # h_k = sum_{i=0}^{k} (-1)^{k-i} * C(d-i, k-i) * f_{i-1}
+    # where f_{-1} = 1 (the empty face) and k ranges from 0 to d.
+    d = max_dim + 1  # the dimension parameter for the h-vector
+    # f_{i-1} for i=0 is the empty face count (1), for i>=1 it's f_vector[i-1]
+    f_with_empty: list[int] = [1] + list(f_vector)  # f_{-1}=1, f_0, f_1, ...
+    h_vector: list[int] = []
+    for k in range(d + 1):
         h = 0
-        for j in range(i + 1):
-            h += ((-1) ** (i - j)) * f_vector[j] * _comb_func(n - 1 - j, i - j)
+        for i in range(k + 1):
+            h += ((-1) ** (k - i)) * _comb_func(d - i, k - i) * f_with_empty[i]
         h_vector.append(h)
 
     return FVectorResult(

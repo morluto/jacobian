@@ -13,6 +13,8 @@ Read the [documentation home](docs/index.md), the
 [testing strategy](docs/reference/testing-strategy.md).
 Use the installed catalog and current references for present tool membership.
 Before proposing a public operation, follow the
+[public operation admission](docs/reference/public-operation-admission.md)
+contract and the
 [operation preflight](docs/reference/domain-operation-library.md#operation-preflight).
 
 ## Contributor quick path
@@ -36,7 +38,7 @@ validation called out below.
 owner tests. The
 pre-push hook stays `make lint typecheck`. Focused debugging uses
 `uv run pytest path/to/test.py`. Default `uv run pytest` collects the ordinary
-Lean-free `testpaths`; it does not run storage, process, MCP, or Lean trees.
+Lean-free `testpaths`; it does not run process, MCP, or Lean trees.
 
 CI runs the ordinary Python surface, MCP boundaries, and the wheel smoke. Full
 Lean runs on merge-group candidates and on `main`, not on every pull request.
@@ -248,7 +250,7 @@ Test directories mirror their semantic owners: `tests/math`, `tests/catalog`,
 `tests/dispatch`, `tests/cli`, `tests/tooling`, and `tests/integration`, with
 separate `tests/process` and `tests/mcp` boundary owners. Use the matching
 `make test-*` target as the canonical entry point. Markers are retained
-only when they alter execution: `requires_provider(name)`,
+only when they alter execution: `requires_backend(name)`,
 `requires_lean`, `property`, and `exhaustive`. They do not replace
 directory ownership. Scheduled validation owns `make test-exhaustive`; keep a
 representative behavioral case in the ordinary owning lane.

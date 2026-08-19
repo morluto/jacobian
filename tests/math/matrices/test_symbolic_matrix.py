@@ -150,4 +150,3 @@ def test_symbolic_eigenvalues_explicit_for_representable() -> None:
     assert result.representation == "EXPLICIT_ROOTS"
     assert result.eigenvalues is not None
     assert result.characteristic_polynomial is None
-

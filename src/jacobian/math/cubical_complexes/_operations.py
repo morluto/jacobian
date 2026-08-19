@@ -68,7 +68,6 @@ def compute_face_closure(request: FaceClosureRequest) -> FaceClosureResult:
         for i, (a, b) in enumerate(intervals):
             if b > a:
                 for new_b in (a, b):
-                    new_interval = (a, new_b) if new_b == a else (new_b, new_b)
                     if new_b == a:
                         face = list(intervals)
                         face[i] = (a, a)

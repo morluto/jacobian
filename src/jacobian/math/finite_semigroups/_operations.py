@@ -174,7 +174,9 @@ def compute_element_power(request: ElementPowerRequest) -> ElementPowerResult:
 def compute_idempotents(request: IdempotentsRequest) -> IdempotentsResult:
     """Find every idempotent element ``e`` with ``e*e = e``."""
 
-    idempotents = _idempotents(request.semigroup.elements, request.semigroup.multiplication)
+    idempotents = _idempotents(
+        request.semigroup.elements, request.semigroup.multiplication
+    )
     return IdempotentsResult(
         semigroup=request.semigroup,
         idempotents=idempotents,

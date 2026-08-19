@@ -307,5 +307,7 @@ class TestPrincipalIdeals:
             assert element in result.ideals[0]
 
     def test_missing_element_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="every element must be in the semigroup"):
+        with pytest.raises(
+            ValidationError, match="every element must be in the semigroup"
+        ):
             PrincipalIdealsRequest(semigroup=Z3, elements=["nope"])

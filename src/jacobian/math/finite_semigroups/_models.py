@@ -185,7 +185,9 @@ class IdempotentsResult(StrictModel):
     def bind_idempotents(self) -> Self:
         from jacobian.math.finite_semigroups._operations import _idempotents
 
-        idempotents = _idempotents(self.semigroup.elements, self.semigroup.multiplication)
+        idempotents = _idempotents(
+            self.semigroup.elements, self.semigroup.multiplication
+        )
         if self.idempotents != idempotents:
             raise ValueError("idempotents must be exactly the elements with e*e = e")
         return self
@@ -227,5 +229,7 @@ class PrincipalIdealsResult(StrictModel):
             self.elements,
         )
         if self.ideals != ideals:
-            raise ValueError("ideals must be the exact principal ideals of the elements")
+            raise ValueError(
+                "ideals must be the exact principal ideals of the elements"
+            )
         return self

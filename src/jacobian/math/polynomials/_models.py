@@ -70,9 +70,7 @@ class PolynomialGcdRequest(PolynomialPairRequest):
         left_zero = len(self.left.polynomial.terms) == 0
         right_zero = len(self.right.polynomial.terms) == 0
         if left_zero and right_zero:
-            raise ValueError(
-                "gcd(0, 0) is undefined: zero has no monic normalization"
-            )
+            raise ValueError("gcd(0, 0) is undefined: zero has no monic normalization")
         return self
 
 

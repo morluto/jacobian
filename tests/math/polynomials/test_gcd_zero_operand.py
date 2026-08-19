@@ -65,12 +65,8 @@ def test_gcd_right_zero_succeeds() -> None:
 
 def test_gcd_is_symmetric() -> None:
     """gcd(f, 0) and gcd(0, f) return the same normalized GCD."""
-    r1 = polynomial_gcd(
-        PolynomialGcdRequest.model_validate({"left": ZERO, "right": F})
-    )
-    r2 = polynomial_gcd(
-        PolynomialGcdRequest.model_validate({"left": F, "right": ZERO})
-    )
+    r1 = polynomial_gcd(PolynomialGcdRequest.model_validate({"left": ZERO, "right": F}))
+    r2 = polynomial_gcd(PolynomialGcdRequest.model_validate({"left": F, "right": ZERO}))
     assert r1.gcd == r2.gcd
 
 

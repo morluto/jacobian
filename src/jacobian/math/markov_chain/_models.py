@@ -35,7 +35,7 @@ class TransitionMatrixRequest(StrictModel):
         """Reject requests whose stationary-distribution rational height
         conservatively exceeds the canonical-rational digit limit.
 
-        For a k×k closed-class submatrix, the stationary distribution solves
+        For a kxk closed-class submatrix, the stationary distribution solves
         an integer linear system whose determinant bounds the denominator
         height.  By Hadamard's bound, |det(A)| <= (k * max_entry^2)^(k/2)
         where max_entry is the largest absolute value in the cleared integer

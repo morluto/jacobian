@@ -28,27 +28,21 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 def test_ideal_radical_xy() -> None:
     """Radical of <x^2, xy> is <x>."""
-    request = IdealRadicalRequest(
-        variables=("x", "y"), generators=("x**2", "x*y")
-    )
+    request = IdealRadicalRequest(variables=("x", "y"), generators=("x**2", "x*y"))
     result = compute_ideal_radical(request)
     assert result.generators == ("x", "x")
 
 
 def test_ideal_radical_already_radical() -> None:
     """Radical of <x^2 - 2> is <x^2 - 2> (already radical)."""
-    request = IdealRadicalRequest(
-        variables=("x",), generators=("x**2 - 2",)
-    )
+    request = IdealRadicalRequest(variables=("x",), generators=("x**2 - 2",))
     result = compute_ideal_radical(request)
     assert result.generators == ("x**2 - 2",)
 
 
 def test_ideal_radical_square_free() -> None:
     """Radical of <x^2, y^2> is <x, y>."""
-    request = IdealRadicalRequest(
-        variables=("x", "y"), generators=("x**2", "y**2")
-    )
+    request = IdealRadicalRequest(variables=("x", "y"), generators=("x**2", "y**2"))
     result = compute_ideal_radical(request)
     assert "x" in result.generators[0]
     assert "y" in result.generators[1]
@@ -139,8 +133,6 @@ def test_ideal_quotient_by_whole_ring() -> None:
 
 def test_ideal_radical_single_var() -> None:
     """Radical of <x^2> in Q[x] is <x>."""
-    request = IdealRadicalRequest(
-        variables=("x",), generators=("x**2",)
-    )
+    request = IdealRadicalRequest(variables=("x",), generators=("x**2",))
     result = compute_ideal_radical(request)
     assert result.generators == ("x",)

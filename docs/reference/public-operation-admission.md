@@ -18,7 +18,9 @@ public operations and shared mathematical values do not cleanly provide the
 required result, and why the proposed postcondition is independently canonical
 or reusable beyond the motivating workflow. A discovery, representation,
 interoperability, contract, backend, scale, or reasoning failure is not by
-itself evidence for a new public operation.
+itself evidence for a new public operation. See
+[Executable mathematical vocabulary](../explanation/executable-mathematical-vocabulary.md)
+for the semantic-atomicity test and gap-diagnosis methodology.
 
 ## Admission gates
 

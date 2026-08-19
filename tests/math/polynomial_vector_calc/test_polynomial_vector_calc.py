@@ -105,7 +105,7 @@ class TestVectorFieldValidation:
         """The parser should reject symbols not in the declared variables."""
         import pytest
 
-        with pytest.raises(ValueError, match="failed to parse"):
+        with pytest.raises(ValueError, match="undeclared symbols"):
             compute_gradient(
                 ScalarFieldRequest(variables=("x",), polynomial="y + x")
             )
@@ -116,3 +116,34 @@ class TestVectorFieldValidation:
 
         with pytest.raises(ValidationError, match="distinct"):
             ScalarFieldRequest(variables=("x", "x"), polynomial="x")
+
+
+
+def test_gradient_single_variable() -> None:
+    """Gradient of x**2 in one variable should give (2*x,)."""
+    request = ScalarFieldRequest(variables=("x",), polynomial="x**2")
+    result = compute_gradient(request)
+    assert result.components == ("2*x",)
+
+
+def test_divergence_single_variable() -> None:
+    """Divergence of a 1D vector field (x**2) should give 2*x."""
+    request = VectorFieldRequest(variables=("x",), components=("x**2",))
+    result = compute_divergence(request)
+    assert result.result == "2*x"
+
+
+def test_laplacian_single_variable() -> None:
+    """Laplacian of x**3 in one variable should give 6*x."""
+    request = ScalarFieldRequest(variables=("x",), polynomial="x**3")
+    result = compute_laplacian(request)
+    assert result.result == "6*x"
+
+
+def test_directional_derivative_single_variable() -> None:
+    """Directional derivative of x**2 along (2,) should give 4*x."""
+    request = DirectionalDerivativeRequest(
+        variables=("x",), polynomial="x**2", direction=("2",)
+    )
+    result = compute_directional_derivative(request)
+    assert result.result == "4*x"

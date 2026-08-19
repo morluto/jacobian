@@ -21,7 +21,7 @@ def _parse_poly(expr_str: str, variables: tuple[str, ...]) -> sympy.Expr:
     symbols, and non-polynomial inputs.
     """
     var_symbols = sympy.symbols(variables)
-    if len(variables) == 1:
+    if isinstance(var_symbols, sympy.Symbol):
         var_symbols = (var_symbols,)
     try:
         expr = sympy.sympify(
@@ -48,8 +48,8 @@ def _parse_poly(expr_str: str, variables: tuple[str, ...]) -> sympy.Expr:
 
 
 def compute_gradient(request: ScalarFieldRequest) -> VectorResult:
-    var_symbols = sympy.symbols(variables := request.variables)
-    if len(variables) == 1:
+    var_symbols = sympy.symbols(request.variables)
+    if isinstance(var_symbols, sympy.Symbol):
         var_symbols = (var_symbols,)
     poly = _parse_poly(request.polynomial, request.variables)
     grads = [sympy.diff(poly, v) for v in var_symbols]
@@ -62,7 +62,7 @@ def compute_gradient(request: ScalarFieldRequest) -> VectorResult:
 
 def compute_divergence(request: VectorFieldRequest) -> ScalarResult:
     var_symbols = sympy.symbols(request.variables)
-    if len(request.variables) == 1:
+    if isinstance(var_symbols, sympy.Symbol):
         var_symbols = (var_symbols,)
     polys = [_parse_poly(c, request.variables) for c in request.components]
     div = sum(sympy.diff(p, v) for p, v in zip(polys, var_symbols, strict=True))
@@ -99,7 +99,7 @@ def compute_curl(request: VectorFieldRequest) -> VectorResult:
 
 def compute_laplacian(request: ScalarFieldRequest) -> ScalarResult:
     var_symbols = sympy.symbols(request.variables)
-    if len(request.variables) == 1:
+    if isinstance(var_symbols, sympy.Symbol):
         var_symbols = (var_symbols,)
     poly = _parse_poly(request.polynomial, request.variables)
     laplacian = sum(sympy.diff(poly, v, 2) for v in var_symbols)
@@ -114,7 +114,7 @@ def compute_directional_derivative(
     request: DirectionalDerivativeRequest,
 ) -> ScalarResult:
     var_symbols = sympy.symbols(request.variables)
-    if len(request.variables) == 1:
+    if isinstance(var_symbols, sympy.Symbol):
         var_symbols = (var_symbols,)
     poly = _parse_poly(request.polynomial, request.variables)
     grad = [sympy.diff(poly, v) for v in var_symbols]

@@ -57,6 +57,10 @@ class DirectionalDerivativeRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
+        if any(not v.isidentifier() for v in self.variables):
+            raise ValueError("variable names must be valid identifiers")
+        if len(set(self.variables)) != len(self.variables):
+            raise ValueError("variable names must be distinct")
         if len(self.direction) != len(self.variables):
             raise ValueError("direction vector length must match variables length")
         return self

@@ -47,8 +47,7 @@ def compute_characteristic_polynomial(
     n = request.ambient_dimension
     m = request.hyperplane_count
     inner = sum(
-        (-1) ** k * sympy.binomial(m - 1, k) * t ** (n - 1 - k)
-        for k in range(n)
+        (-1) ** k * sympy.binomial(m - 1, k) * t ** (n - 1 - k) for k in range(n)
     )
     poly = sympy.expand((t - 1) * inner)
     coeffs = poly.as_poly().all_coeffs()

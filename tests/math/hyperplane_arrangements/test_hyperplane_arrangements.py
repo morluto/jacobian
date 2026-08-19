@@ -100,9 +100,7 @@ def test_chamber_count_zaslavsky_consistency() -> None:
     """regions = (-1)^n * chi(-1) must hold for several (n, m) pairs."""
     for n, m in [(1, 1), (2, 2), (2, 3), (3, 4), (3, 5), (4, 6)]:
         chi_result = compute_characteristic_polynomial(
-            CharacteristicPolynomialRequest(
-                ambient_dimension=n, hyperplane_count=m
-            )
+            CharacteristicPolynomialRequest(ambient_dimension=n, hyperplane_count=m)
         )
         count_result = compute_chamber_count(
             ChamberCountRequest(ambient_dimension=n, hyperplane_count=m)

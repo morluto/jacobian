@@ -93,9 +93,9 @@ class GaloisGroupResult(StrictModel):
     order: int = Field(ge=1)
     degree: int = Field(ge=1)
     is_solvable: bool
-    method: str = "SYmpyGaloisGroup"
+    method: str = "SYMPY_GALOIS_GROUP"
 
 
 class SolvableResult(StrictModel):
     solvable_by_radicals: bool
-    method: str = "DEGREE_CHECK"
+    method: str = "GALOIS_GROUP_SOLVABILITY"

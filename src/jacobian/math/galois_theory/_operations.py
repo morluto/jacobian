@@ -48,30 +48,45 @@ def compute_frobenius_cycle(request: FrobeniusCycleRequest) -> FrobeniusCycleRes
     )
 
 
-def compute_galois_group(request: GaloisGroupRequest) -> GaloisGroupResult:
-    """Compute the Galois group of a polynomial over Q."""
+def _galois_group_from_coeffs(coeffs: tuple[int, ...]):
+    """Return the SymPy permutation group for a polynomial over Q.
+
+    Coefficients are in ascending order: coeffs[0] is the constant term,
+    coeffs[-1] is the leading coefficient.  SymPy's ``Poly`` expects
+    descending order, so we reverse.
+    """
     from sympy import Poly, Symbol, galois_group
 
-    degree = len(request.coefficients) - 1
-    poly = Poly(list(request.coefficients), Symbol("x"), domain="QQ")
-    perm_group, solvable = galois_group(poly)
+    x = Symbol("x")
+    # coefficients[0] = constant, coefficients[-1] = leading
+    # Poly expects highest-degree first
+    descending = list(reversed(coeffs))
+    poly = Poly(descending, x, domain="QQ")
+    perm_group, _alt = galois_group(poly)
+    return perm_group
+
+
+def compute_galois_group(request: GaloisGroupRequest) -> GaloisGroupResult:
+    """Compute the Galois group of a polynomial over Q."""
+    perm_group = _galois_group_from_coeffs(request.coefficients)
     group_name = str(perm_group)
     order = int(perm_group.order())
-    is_solvable = bool(solvable)
+    is_solvable = bool(perm_group.is_solvable)
 
     return GaloisGroupResult(
         group_name=group_name,
         order=order,
-        degree=degree,
+        degree=len(request.coefficients) - 1,
         is_solvable=is_solvable,
     )
 
 
 def compute_solvable(request: SolvableRequest) -> SolvableResult:
-    """A polynomial is solvable by radicals iff its Galois group is solvable."""
-    degree = len(request.coefficients) - 1
-    if degree <= 4:
-        return SolvableResult(solvable_by_radicals=True)
-    if degree >= 5:
-        return SolvableResult(solvable_by_radicals=False)
-    return SolvableResult(solvable_by_radicals=False)
+    """Determine if a polynomial is solvable by radicals.
+
+    A polynomial is solvable by radicals iff its Galois group is solvable.
+    This is computed from the actual Galois group, not from the degree alone.
+    """
+    perm_group = _galois_group_from_coeffs(request.coefficients)
+    is_solvable = bool(perm_group.is_solvable)
+    return SolvableResult(solvable_by_radicals=is_solvable)

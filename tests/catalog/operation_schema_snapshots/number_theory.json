@@ -111,19 +111,19 @@
       "output_schema": "sha256:7297a74c4f3c5ac3de2f6c77dd3d44fa8690f14affdc3745a09e52dd49bcda60"
     },
     "integer.k_free_decomposition.compute": {
-      "input_schema": "sha256:0063bfd9be96eacfa369201ed5ab1994dfff9eaaa7f5e8c1faebaff304881088",
+      "input_schema": "sha256:73d756b48f2a4ab38d9a29d27b08e4e3b022d7ea5dc0680b8bf9d26ce08d989c",
       "output_schema": "sha256:31b32cf048e15743450da4cb3e6d76a96d72c6024e4114c5023af7517d6e01a4"
     },
     "integer.perfect_power.profile.compute": {
-      "input_schema": "sha256:5ee15081b121287c35e97563c2aec3128e6581d163a571b3643989b98ae99a4f",
+      "input_schema": "sha256:c85a658d7aaf83d7724850efac260304405b6e139e741f401be2f9ac3e58058e",
       "output_schema": "sha256:87cebc794efc356178407db5022c28015e1214ce5d311e3650236aa0f7d8d535"
     },
     "integer.squarefree_decomposition.compute": {
-      "input_schema": "sha256:5d46fcbf9a3a36159e3f3c9e7b66e77b6e211d95f613546179a7ba5914c03d07",
+      "input_schema": "sha256:ccf2be910c626d897f1fffe97e4be52ad9a9f85222e72142eaf8c83bae868b0e",
       "output_schema": "sha256:12e6fabc047ccad27da6148db73f0a344f2778e4e7269d9902cda846b1dfb3bf"
     },
     "quadratic_radical.positive_integer.normalize.compute": {
-      "input_schema": "sha256:ab952d941704da27aee150d0397b8af89a91dddfd032bf4fbb4c531a953dc3e1",
+      "input_schema": "sha256:fd7ab2fb9ad0319b304c02ab4e5c3a66185765e74160b4cec9dc264744174bc0",
       "output_schema": "sha256:b96f56ba6dda4f99d68242b1b19783975d2332bd238c558c8b5dfd1fc550e2aa"
     }
   }

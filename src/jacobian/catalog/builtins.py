@@ -170,6 +170,12 @@ from jacobian.math.impartial_games._admission import (
     ADMISSIONS as IMPARTIAL_GAMES_ADMISSIONS,
 )
 from jacobian.math.impartial_games._tools import TOOLS as IMPARTIAL_GAMES_TOOLS
+from jacobian.math.inverse_multiplicative._admission import (
+    ADMISSIONS as INVERSE_MULTIPLICATIVE_ADMISSIONS,
+)
+from jacobian.math.inverse_multiplicative._tools import (
+    TOOLS as INVERSE_MULTIPLICATIVE_TOOLS,
+)
 from jacobian.math.lattices._admission import ADMISSIONS as LATTICES_ADMISSIONS
 from jacobian.math.lattices._tools import TOOLS as LATTICES_TOOLS
 from jacobian.math.logic._admission import ADMISSIONS as LOGIC_ADMISSIONS
@@ -204,12 +210,6 @@ from jacobian.math.multiple_testing._admission import (
 from jacobian.math.multiple_testing._tools import TOOLS as MULTIPLE_TESTING_TOOLS
 from jacobian.math.number_field._admission import ADMISSIONS as NUMBER_FIELD_ADMISSIONS
 from jacobian.math.number_field._tools import TOOLS as NUMBER_FIELD_TOOLS
-from jacobian.math.inverse_multiplicative._admission import (
-    ADMISSIONS as INVERSE_MULTIPLICATIVE_ADMISSIONS,
-)
-from jacobian.math.inverse_multiplicative._tools import (
-    TOOLS as INVERSE_MULTIPLICATIVE_TOOLS,
-)
 from jacobian.math.number_theory._admission import (
     ADMISSIONS as NUMBER_THEORY_ADMISSIONS,
 )

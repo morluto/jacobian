@@ -30,7 +30,9 @@ def _euler_phi(n: int) -> int:
     return result
 
 
-def compute_euler_phi_preimage(request: EulerPhiPreimageRequest) -> EulerPhiPreimageResult:
+def compute_euler_phi_preimage(
+    request: EulerPhiPreimageRequest,
+) -> EulerPhiPreimageResult:
     """Compute all n such that phi(n) = target."""
     target = request.target
     if target == 1:

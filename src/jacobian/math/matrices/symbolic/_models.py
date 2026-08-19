@@ -72,9 +72,7 @@ class SquareSymbolicMatrixRequest(SymbolicMatrixRequest):
         rows = len(self.matrix.entries)
         cols = len(self.matrix.entries[0])
         if rows != cols:
-            raise ValueError(
-                "operation requires a square symbolic matrix"
-            )
+            raise ValueError("operation requires a square symbolic matrix")
         return self
 
 

@@ -54,8 +54,6 @@ def test_orthogonality_orthogonal() -> None:
 
 
 def test_transpose() -> None:
-    request = LatinSquareRequest(
-        square={"order": 2, "cells": ((0, 1), (1, 0))}
-    )
+    request = LatinSquareRequest(square={"order": 2, "cells": ((0, 1), (1, 0))})
     result = compute_latin_square_transpose(request)
     assert result.transposed == ((0, 1), (1, 0))

@@ -48,8 +48,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "latin_square.check",
         "Check if a matrix is a Latin square",
-        "Verify that each row and column contains every symbol 0..n-1 "
-        "exactly once.",
+        "Verify that each row and column contains every symbol 0..n-1 exactly once.",
         LatinSquareRequest,
         LatinSquareCheckResult,
         compute_latin_square_check,

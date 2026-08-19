@@ -45,7 +45,5 @@ def compute_latin_square_transpose(
     """Transpose a Latin square (swap rows and columns)."""
     n = request.square.order
     cells = request.square.cells
-    transposed = tuple(
-        tuple(cells[j][i] for j in range(n)) for i in range(n)
-    )
+    transposed = tuple(tuple(cells[j][i] for j in range(n)) for i in range(n))
     return LatinSquareTransposeResult(transposed=transposed)

@@ -7,6 +7,7 @@ from jacobian.math.quadratic_forms._models import (
     DiscriminantRequest,
     EvaluationRequest,
     SignatureRequest,
+    SymmetricMatrix,
 )
 from jacobian.math.quadratic_forms._operations import (
     compute_discriminant,
@@ -62,6 +63,17 @@ def test_signature_indefinite() -> None:
     assert result.n_positive == 1
     assert result.n_negative == 1
     assert result.is_indefinite is True
+
+
+def test_signature_irrational_eigenvalues() -> None:
+    """Matrix [[1,1],[1,2]] has eigenvalues (3±√5)/2, both positive.
+    The old int() truncation misclassified (3-√5)/2 ≈ 0.382 as zero."""
+    request = SignatureRequest(form=SymmetricMatrix(matrix=((1, 1), (1, 2))))
+    result = compute_signature(request)
+    assert result.n_positive == 2
+    assert result.n_negative == 0
+    assert result.n_zero == 0
+    assert result.is_positive_definite is True
 
 
 def test_signature_negative_definite() -> None:

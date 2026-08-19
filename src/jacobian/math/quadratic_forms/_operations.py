@@ -49,10 +49,12 @@ def compute_signature(request: SignatureRequest) -> SignatureResult:
     n_zero = 0
 
     for eigenval, mult in eigenvals.items():
-        eigenval_int = int(eigenval)
-        if eigenval_int > 0:
+        # Use exact sign determination, not int() truncation.
+        # int() truncates irrational eigenvalues (e.g. (3-sqrt(5))/2 ≈ 0.38
+        # becomes 0), misclassifying positive eigenvalues as zero.
+        if eigenval.is_positive:
             n_positive += mult
-        elif eigenval_int < 0:
+        elif eigenval.is_negative:
             n_negative += mult
         else:
             n_zero += mult

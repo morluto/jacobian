@@ -9,6 +9,7 @@ from pydantic import Field, model_validator
 from jacobian._models import StrictModel
 
 MAX_DIM = 10
+MAX_ENTRY_DIGITS = 100  # limit entry magnitude to ~10^100 for bounded eigenvalue work
 
 
 class SymmetricMatrix(StrictModel):
@@ -24,6 +25,11 @@ class SymmetricMatrix(StrictModel):
         for row in self.matrix:
             if len(row) != n:
                 raise ValueError("matrix must be square")
+            for entry in row:
+                if abs(entry) >= 10 ** MAX_ENTRY_DIGITS:
+                    raise ValueError(
+                        f"matrix entries must not exceed {MAX_ENTRY_DIGITS} digits"
+                    )
         for i in range(n):
             for j in range(n):
                 if self.matrix[i][j] != self.matrix[j][i]:

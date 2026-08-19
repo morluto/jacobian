@@ -153,6 +153,7 @@ def induced_subposet(request: InducedSubposetRequest) -> InducedSubposetResult:
         if p.lower in subset_set and p.upper in subset_set
     }
     from jacobian.math.posets._models import _strict_closure, _transitive_reduction
+
     closure = _strict_closure(elements, filtered_pairs)
     strict_pairs = tuple(
         OrderedPair(lower=lower, upper=upper) for lower, upper in sorted(closure)

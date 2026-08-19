@@ -93,7 +93,8 @@ def perfect_power_profile(
         base_val = -base_val
 
     factor_rows = tuple(
-        PrimeExponentRow(prime=format_canonical_integer(p), exponent=e) for p, e in primes_exp
+        PrimeExponentRow(prime=format_canonical_integer(p), exponent=e)
+        for p, e in primes_exp
     )
 
     return MaximalPerfectPowerResult(
@@ -141,7 +142,11 @@ def k_free_decomposition(
         a *= p**q
         if r > 0:
             c_abs *= p**r
-        rows.append(PrimeQuotientRemainderRow(prime=format_canonical_integer(p), quotient=q, remainder=r))
+        rows.append(
+            PrimeQuotientRemainderRow(
+                prime=format_canonical_integer(p), quotient=q, remainder=r
+            )
+        )
 
     c = sign * c_abs
 
@@ -188,7 +193,11 @@ def squarefree_decomposition(
         s *= p**half
         if rem > 0:
             d_abs *= p
-        parity_rows.append(PrimeExponentParityRow(prime=format_canonical_integer(p), exponent=e, parity=rem))
+        parity_rows.append(
+            PrimeExponentParityRow(
+                prime=format_canonical_integer(p), exponent=e, parity=rem
+            )
+        )
 
     d = sign * d_abs
 

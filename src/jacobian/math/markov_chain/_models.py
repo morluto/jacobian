@@ -54,14 +54,8 @@ class TransitionMatrixRequest(StrictModel):
                     pass
         # Each entry has numerator/denominator of at most D digits
         max_digit_count = max(
-            len(value.num.lstrip("-"))
-            for row in self.matrix
-            for value in row
-        ) + max(
-            len(value.den.lstrip("-"))
-            for row in self.matrix
-            for value in row
-        )
+            len(value.num.lstrip("-")) for row in self.matrix for value in row
+        ) + max(len(value.den.lstrip("-")) for row in self.matrix for value in row)
         # After clearing denominators, the integer matrix entries have
         # height at most (max_entry)^dimension.  By Hadamard's bound,
         # det(A) has at most dimension * max_digit_count * dimension digits.

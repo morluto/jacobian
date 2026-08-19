@@ -19,7 +19,6 @@ from jacobian.math.graphs.optimization._invariant_models import (
     GraphEdgeConnectivityResult,
     GraphEulerianResult,
     GraphGirthResult,
-    GraphIndependenceNumberResult,
     GraphInvariantRequest,
     GraphMaximumMatchingRequest,
     GraphMaximumMatchingResult,
@@ -239,22 +238,18 @@ def _k_core_execute(
     )
 
 
-def _maximum_cardinality(
+def _clique_execute(
     request: GraphOptimizationRequest,
-    *,
-    independent: bool,
-) -> GraphCliqueNumberResult | GraphIndependenceNumberResult:
+) -> GraphCliqueNumberResult:
+    """Compute the clique number via bounded Z3 threshold search."""
+
     import networkx as nx
     import z3  # type: ignore[import-untyped]
 
-    source = cast(Any, build_simple_graph(request.graph))
-    graph = nx.complement(source) if independent else source
+    graph = cast(Any, build_simple_graph(request.graph))
     vertices = tuple(request.graph.vertices)
-    result_model = (
-        GraphIndependenceNumberResult if independent else GraphCliqueNumberResult
-    )
     if not vertices:
-        return result_model(
+        return GraphCliqueNumberResult(
             status="EXACT",
             order=0,
             optimum_value=0,
@@ -338,7 +333,7 @@ def _maximum_cardinality(
         upper_bound = len(incumbent)
         exact = True
 
-    return result_model(
+    return GraphCliqueNumberResult(
         status="EXACT" if exact else "UNKNOWN",
         order=len(vertices),
         optimum_value=len(incumbent) if exact else None,
@@ -349,15 +344,6 @@ def _maximum_cardinality(
         tested=tuple(tested),
         termination_reason=termination,
         detail="bounded Z3 threshold search seeded by a NetworkX approximation",
-    )
-
-
-def _clique_execute(
-    request: GraphOptimizationRequest,
-) -> GraphCliqueNumberResult:
-    return cast(
-        GraphCliqueNumberResult,
-        _maximum_cardinality(request, independent=False),
     )
 
 

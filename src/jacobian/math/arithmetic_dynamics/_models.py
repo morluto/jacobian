@@ -76,6 +76,34 @@ class MapIterateRequest(PolynomialCoefficientRequest):
             raise ValueError("iterate output degree exceeds bound")
         return self
 
+    @model_validator(mode="after")
+    def preflight_coefficient_height(self) -> Self:
+        """Reject iterates whose coefficient height conservatively exceeds the output limit.
+
+        For a monomial f(x) = a*x^d, the n-th iterate has leading coefficient
+        a^(d^n - 1).  For general polynomials, coefficient height grows at
+        least as fast.  We use a conservative bound: if the maximum input
+        coefficient has D digits, the iterate coefficient height is at most
+        D * (d^n - 1) digits, bounded by D * n * d for small n.
+        """
+        degree = self.polynomial_degree()
+        if degree < 2 or self.n == 0:
+            return self
+        values = self.coefficient_values()
+        max_digits = max(
+            len(str(abs(int(v.numerator)))) + len(str(v.denominator))
+            for v in values
+        )
+        # The iterate f^n has at most d^n terms, each with height
+        # at most max_digits * (d^n - 1).  We bound d^n - 1 <= d^n <= degree * n.
+        coefficient_bound = max_digits * (degree**self.n) * (self.n + 1)
+        if coefficient_bound > MAX_POLYNOMIAL_OUTPUT_DIGITS:
+            raise ValueError(
+                "iterate coefficient height conservatively exceeds "
+                f"the {MAX_POLYNOMIAL_OUTPUT_DIGITS}-digit output bound"
+            )
+        return self
+
 
 class OrbitPrefixRequest(PolynomialCoefficientRequest):
     """Compute until a first repeat or an explicit finite/output bound."""

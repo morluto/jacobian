@@ -406,6 +406,23 @@ class IntegerValueResult(StrictModel):
     value: BoundedInteger
 
 
+_MAX_PRIMORIAL_DIGITS = 3_400
+PrimorialInteger = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^(?:0|[1-9][0-9]*)$",
+        max_length=_MAX_PRIMORIAL_DIGITS,
+        strict=True,
+    ),
+]
+
+
+class PrimorialResult(StrictModel):
+    """The primorial (product of the first n primes)."""
+
+    value: PrimorialInteger
+
+
 class ExtendedGcdResult(StrictModel):
     """A gcd together with exact Bezout coefficients."""
 

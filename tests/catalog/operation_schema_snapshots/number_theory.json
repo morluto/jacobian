@@ -56,7 +56,7 @@
     },
     "integer.compute.primorial": {
       "input_schema": "sha256:3d81837ffb8fe813ac90b00aef903c25914397e8a893904d2bb04271f6b84d0f",
-      "output_schema": "sha256:6cb225d96edc6645364559afda8f81d3316878549c644468baed7adcd049121f"
+      "output_schema": "sha256:e62d2748709ab22a4450ab31983316b86f30099b2af2413bf226a9dcee5bb345"
     },
     "integer.compute.valuation": {
       "input_schema": "sha256:e0af1b4376762713cfbb237d7c4952ba5b96dfd7ce62aad41095cccd3256a5f3",

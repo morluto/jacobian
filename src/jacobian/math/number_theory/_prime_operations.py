@@ -9,6 +9,7 @@ from jacobian.math.number_theory._models import (
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,
     PreviousPrimeRequest,
+    PrimorialResult,
 )
 
 
@@ -42,10 +43,10 @@ def compute_nth_prime(request: PositiveIntegerRequest) -> IntegerValueResult:
     return IntegerValueResult(value=str(int(prime(request.n))))
 
 
-def compute_primorial(request: PositiveIntegerRequest) -> IntegerValueResult:
+def compute_primorial(request: PositiveIntegerRequest) -> PrimorialResult:
     from sympy import primorial
 
-    return IntegerValueResult(value=str(int(primorial(request.n))))
+    return PrimorialResult(value=str(int(primorial(request.n))))
 
 
 def compute_euler_totient(request: PositiveIntegerRequest) -> IntegerValueResult:

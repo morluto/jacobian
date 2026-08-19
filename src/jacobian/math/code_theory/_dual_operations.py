@@ -8,9 +8,7 @@ from jacobian.math.code_theory._models import (
 )
 
 
-def _nullspace_mod_prime(
-    rows: tuple[tuple[int, ...], ...], p: int
-) -> list[list[int]]:
+def _nullspace_mod_prime(rows: tuple[tuple[int, ...], ...], p: int) -> list[list[int]]:
     """Compute the nullspace of a matrix over GF(p) via Gaussian elimination."""
     row_count = len(rows)
     col_count = len(rows[0]) if row_count > 0 else 0
@@ -20,11 +18,7 @@ def _nullspace_mod_prime(
     pivot_cols: list[int] = []
     for col in range(col_count):
         pivot = next(
-            (
-                i
-                for i in range(pivot_row, row_count)
-                if mat[i][col] % p != 0
-            ),
+            (i for i in range(pivot_row, row_count) if mat[i][col] % p != 0),
             None,
         )
         if pivot is None:
@@ -38,7 +32,10 @@ def _nullspace_mod_prime(
             factor = mat[i][col] % p
             if factor == 0:
                 continue
-            mat[i] = [(a - factor * b) % p for a, b in zip(mat[i], mat[pivot_row], strict=True)]
+            mat[i] = [
+                (a - factor * b) % p
+                for a, b in zip(mat[i], mat[pivot_row], strict=True)
+            ]
         pivot_cols.append(col)
         pivot_row += 1
         if pivot_row == row_count:
@@ -75,9 +72,7 @@ def compute_dual_code(request: DualCodeRequest) -> DualCodeResult:
     rank = _matrix_rank_mod_prime(request.generator_matrix, p)
     null_basis = _nullspace_mod_prime(request.generator_matrix, p)
 
-    parity_check: tuple[tuple[int, ...], ...] = tuple(
-        tuple(vec) for vec in null_basis
-    )
+    parity_check: tuple[tuple[int, ...], ...] = tuple(tuple(vec) for vec in null_basis)
 
     return DualCodeResult(
         field_order=p,

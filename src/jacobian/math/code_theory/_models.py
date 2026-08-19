@@ -169,7 +169,9 @@ class SyndromeRequest(StrictModel):
     """Compute the syndrome of a received word under a parity check matrix."""
 
     field_order: int = Field(ge=2, le=251)
-    parity_check_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
+    parity_check_matrix: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=16
+    )
     received_word: tuple[int, ...] = Field(min_length=1, max_length=32)
 
     @model_validator(mode="after")

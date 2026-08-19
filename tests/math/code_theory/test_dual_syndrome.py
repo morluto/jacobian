@@ -72,7 +72,6 @@ def test_syndrome_mod_3() -> None:
     assert result.syndrome == (1, 2)
 
 
-
 def test_dual_mod_3_fractional() -> None:
     """Dual code over GF(3) where rational nullspace would give fractions."""
     request = DualCodeRequest(

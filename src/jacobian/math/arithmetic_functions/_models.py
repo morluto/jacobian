@@ -6,12 +6,38 @@ from typing import Literal, Self
 
 from pydantic import model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math._rational_height import RationalHeight, sum_heights
 
 # Bounds shared by every arithmetic-function operation.
 _MIN_LENGTH = 1
 _MAX_LENGTH = 10_000
+
+
+def _heights(values: tuple[CanonicalRational, ...]) -> tuple[RationalHeight, ...]:
+    return tuple(RationalHeight.from_canonical(value) for value in values)
+
+
+def _divisors(value: int) -> tuple[int, ...]:
+    small: list[int] = []
+    large: list[int] = []
+    candidate = 1
+    while candidate * candidate <= value:
+        if value % candidate == 0:
+            small.append(candidate)
+            if candidate != value // candidate:
+                large.append(value // candidate)
+        candidate += 1
+    return (*small, *reversed(large))
+
+
+def _require_result_height(height: RationalHeight, operation: str) -> None:
+    if height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
+        raise ValueError(
+            f"{operation} rational height exceeds the "
+            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound"
+        )
 
 
 class DirichletConvolutionRequest(StrictModel):
@@ -35,6 +61,18 @@ class DirichletConvolutionRequest(StrictModel):
             raise ValueError("f and g must have the same length")
         return self
 
+    @model_validator(mode="after")
+    def require_bounded_result_height(self) -> Self:
+        left = _heights(self.f)
+        right = _heights(self.g)
+        for index in range(1, len(left) + 1):
+            terms = (
+                left[divisor - 1].product(right[index // divisor - 1])
+                for divisor in _divisors(index)
+            )
+            _require_result_height(sum_heights(terms), "Dirichlet convolution")
+        return self
+
 
 class DirichletConvolutionResult(StrictModel):
     """Result: the Dirichlet convolution ``(f*g)(1)..(f*g)(n)``."""
@@ -44,6 +82,12 @@ class DirichletConvolutionResult(StrictModel):
     convention: Literal["JACOBIAN_DIRICHLET_CONVOLUTION"] = (
         "JACOBIAN_DIRICHLET_CONVOLUTION"
     )
+
+    @model_validator(mode="after")
+    def bind_length(self) -> Self:
+        if self.length != len(self.values):
+            raise ValueError("length must match the number of values")
+        return self
 
 
 class MobiusTransformRequest(StrictModel):
@@ -66,6 +110,14 @@ class MobiusTransformRequest(StrictModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def require_bounded_result_height(self) -> Self:
+        heights = _heights(self.values)
+        for index in range(1, len(heights) + 1):
+            terms = (heights[index // divisor - 1] for divisor in _divisors(index))
+            _require_result_height(sum_heights(terms), "Möbius transform")
+        return self
+
 
 class MobiusTransformResult(StrictModel):
     """Result: the (inverse) Möbius transform at indices 1..n."""
@@ -74,6 +126,12 @@ class MobiusTransformResult(StrictModel):
     length: int
     inverse: bool
     convention: Literal["JACOBIAN_MOBIUS_TRANSFORM"] = "JACOBIAN_MOBIUS_TRANSFORM"
+
+    @model_validator(mode="after")
+    def bind_length(self) -> Self:
+        if self.length != len(self.values):
+            raise ValueError("length must match the number of values")
+        return self
 
 
 class SummatoryFunctionRequest(StrictModel):
@@ -89,6 +147,11 @@ class SummatoryFunctionRequest(StrictModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def require_bounded_result_height(self) -> Self:
+        _require_result_height(sum_heights(_heights(self.values)), "summatory function")
+        return self
+
 
 class SummatoryFunctionResult(StrictModel):
     """Result: the partial sums ``S(1)..S(n)``."""
@@ -96,6 +159,12 @@ class SummatoryFunctionResult(StrictModel):
     values: tuple[CanonicalRational, ...]
     length: int
     convention: Literal["JACOBIAN_SUMMATORY_FUNCTION"] = "JACOBIAN_SUMMATORY_FUNCTION"
+
+    @model_validator(mode="after")
+    def bind_length(self) -> Self:
+        if self.length != len(self.values):
+            raise ValueError("length must match the number of values")
+        return self
 
 
 class DirichletInverseRequest(StrictModel):
@@ -116,6 +185,22 @@ class DirichletInverseRequest(StrictModel):
             raise ValueError("f(1) must be nonzero")
         return self
 
+    @model_validator(mode="after")
+    def require_bounded_result_height(self) -> Self:
+        source = _heights(self.values)
+        inverse = [RationalHeight(1, 1).quotient(source[0])]
+        _require_result_height(inverse[0], "Dirichlet inverse")
+        for index in range(2, len(source) + 1):
+            terms = (
+                source[divisor - 1].product(inverse[index // divisor - 1])
+                for divisor in _divisors(index)
+                if divisor > 1
+            )
+            height = sum_heights(terms).quotient(source[0])
+            _require_result_height(height, "Dirichlet inverse")
+            inverse.append(height)
+        return self
+
 
 class DirichletInverseResult(StrictModel):
     """Result: the Dirichlet inverse at indices 1..n."""
@@ -123,6 +208,12 @@ class DirichletInverseResult(StrictModel):
     values: tuple[CanonicalRational, ...]
     length: int
     convention: Literal["JACOBIAN_DIRICHLET_INVERSE"] = "JACOBIAN_DIRICHLET_INVERSE"
+
+    @model_validator(mode="after")
+    def bind_length(self) -> Self:
+        if self.length != len(self.values):
+            raise ValueError("length must match the number of values")
+        return self
 
 
 __all__ = [

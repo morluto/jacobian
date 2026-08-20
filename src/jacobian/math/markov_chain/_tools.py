@@ -8,6 +8,7 @@ from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.markov_chain._models import (
     ErgodicDecisionResult,
+    StationaryDistributionRequest,
     StationaryDistributionResult,
     TransitionMatrixRequest,
 )
@@ -47,7 +48,7 @@ MARKOV_CHAIN_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Compute the stationary-distribution family of a Markov chain",
         "Compute the canonical extreme stationary distribution on every closed "
         "communicating class; their convex hull is the complete stationary family.",
-        TransitionMatrixRequest,
+        StationaryDistributionRequest,
         StationaryDistributionResult,
         compute_stationary_distribution,
         "probability",

@@ -8,6 +8,7 @@ from pydantic import Field, StrictInt, StringConstraints, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.math._rational_height import RationalHeight, sum_heights
 
 # ---------------------------------------------------------------------------
 # Public bounds
@@ -18,6 +19,67 @@ MAX_RATIONAL_DIGITS = 256
 MAX_RESULT_RATIONAL_DIGITS = 4_096
 MAX_RESULT_BYTES = 10 * 1024 * 1024
 MAX_POWER_EXPONENT = 1_000
+
+
+def _height(value: CanonicalRational) -> RationalHeight:
+    return RationalHeight.from_canonical(value)
+
+
+def _max_height(values: tuple[CanonicalRational, ...]) -> RationalHeight:
+    heights = tuple(_height(value) for value in values)
+    return RationalHeight(
+        max(value.numerator_digits for value in heights),
+        max(value.denominator_digits for value in heights),
+    )
+
+
+def _merge_max(left: RationalHeight, right: RationalHeight) -> RationalHeight:
+    return RationalHeight(
+        max(left.numerator_digits, right.numerator_digits),
+        max(left.denominator_digits, right.denominator_digits),
+    )
+
+
+def _convolution_height(
+    left: RationalHeight, right: RationalHeight, term_count: int
+) -> RationalHeight:
+    term = left.product(right)
+    return sum_heights(term for _ in range(term_count))
+
+
+def _require_height(height: RationalHeight, operation: str) -> None:
+    if height.exceeds(MAX_RESULT_RATIONAL_DIGITS):
+        raise ValueError(
+            f"{operation} coefficient growth exceeds the "
+            f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+        )
+
+
+def _inverse_height(series: InputTruncatedSeries) -> RationalHeight:
+    source = _max_height(series.coefficients)
+    reciprocal = RationalHeight(1, 1).quotient(_height(series.coefficients[0]))
+    _require_height(reciprocal, "inverse")
+    result = reciprocal
+    for degree in range(1, series.truncation_order):
+        recurrence_sum = sum_heights(source.product(result) for _ in range(degree))
+        coefficient = reciprocal.product(recurrence_sum)
+        _require_height(coefficient, "inverse")
+        result = _merge_max(result, coefficient)
+    return result
+
+
+def _composition_height(
+    outer: RationalHeight, inner: RationalHeight, order: int, operation: str
+) -> RationalHeight:
+    power = RationalHeight(1, 1)
+    result = outer.product(power)
+    for _ in range(1, order):
+        power = _convolution_height(power, inner, order)
+        _require_height(power, operation)
+        result = sum_heights((result, outer.product(power)))
+        _require_height(result, operation)
+    return result
+
 
 Variable = Annotated[
     str,
@@ -101,6 +163,32 @@ class _SeriesPairRequest(StrictModel):
         return self
 
 
+class _SeriesAddSubtractRequest(_SeriesPairRequest):
+    @model_validator(mode="after")
+    def require_bounded_result_height(self) -> Self:
+        for left, right in zip(
+            self.left.coefficients, self.right.coefficients, strict=True
+        ):
+            _require_height(sum_heights((_height(left), _height(right))), "sum")
+        return self
+
+
+class _SeriesMultiplyRequest(_SeriesPairRequest):
+    @model_validator(mode="after")
+    def require_bounded_result_height(self) -> Self:
+        left = _max_height(self.left.coefficients)
+        right = _max_height(self.right.coefficients)
+        _require_height(
+            _convolution_height(left, right, self.left.truncation_order),
+            "multiplication",
+        )
+        return self
+
+
+class _SeriesIdentityCheckRequest(_SeriesMultiplyRequest):
+    pass
+
+
 class SeriesDivideRequest(_SeriesPairRequest):
     """Divide two series when the denominator is a unit."""
 
@@ -108,6 +196,26 @@ class SeriesDivideRequest(_SeriesPairRequest):
     def require_unit_denominator(self) -> Self:
         if self.right.coefficients[0].as_fraction() == 0:
             raise ValueError("denominator must have a nonzero constant term")
+        return self
+
+    @model_validator(mode="after")
+    def require_bounded_result_height(self) -> Self:
+        inverse = _inverse_height(self.right)
+        quotient = _convolution_height(
+            _max_height(self.left.coefficients),
+            inverse,
+            self.left.truncation_order,
+        )
+        _require_height(quotient, "division")
+        residual = _convolution_height(
+            _max_height(self.right.coefficients),
+            quotient,
+            self.left.truncation_order,
+        )
+        _require_height(
+            sum_heights((residual, _max_height(self.left.coefficients))),
+            "division residual",
+        )
         return self
 
 
@@ -135,6 +243,14 @@ class SeriesScalarMultiplyRequest(StrictModel):
     series: InputTruncatedSeries
     scalar: CanonicalRational
 
+    @model_validator(mode="after")
+    def require_bounded_result_height(self) -> Self:
+        _require_height(
+            _max_height(self.series.coefficients).product(_height(self.scalar)),
+            "scalar multiplication",
+        )
+        return self
+
 
 class SeriesScalarMultiplyResult(StrictModel):
     result: TruncatedSeries
@@ -152,14 +268,18 @@ class SeriesPowerRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_result_digit_budget(self) -> Self:
-        if self.exponent == 0:
-            return self
-        for coefficient in self.series.coefficients:
-            digits = max(len(coefficient.num.lstrip("-")), len(coefficient.den))
-            if digits * self.exponent > MAX_RESULT_RATIONAL_DIGITS:
-                raise ValueError(
-                    "power would exceed the 4096-digit result coefficient bound"
-                )
+        order = self.series.truncation_order
+        result = RationalHeight(1, 1)
+        base = _max_height(self.series.coefficients)
+        exponent = self.exponent
+        while exponent > 0:
+            if exponent & 1:
+                result = _convolution_height(result, base, order)
+                _require_height(result, "power")
+            exponent >>= 1
+            if exponent:
+                base = _convolution_height(base, base, order)
+                _require_height(base, "power")
         return self
 
 
@@ -200,21 +320,11 @@ class SeriesInverseRequest(StrictModel):
         )
         if series.coefficients[0].as_fraction() == 0:
             raise ValueError("inverse requires a nonzero constant term")
-        # In the recurrence b_n = -a_0^-1 * sum(a_i * b_{n-i}), each path
-        # contributes at most one reciprocal and one input coefficient per
-        # degree.  Two input digit widths cover numerator and denominator
-        # growth; one extra digit per degree covers the recurrence sum.
-        maximum_input_digits = max(
-            max(len(coefficient.num.lstrip("-")), len(coefficient.den))
-            for coefficient in series.coefficients
+        inverse = _inverse_height(series)
+        residual = _convolution_height(
+            _max_height(series.coefficients), inverse, self.truncation_order
         )
-        if (2 * maximum_input_digits + 1) * self.truncation_order > (
-            MAX_RESULT_RATIONAL_DIGITS
-        ):
-            raise ValueError(
-                "inverse coefficient growth would exceed the "
-                f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
-            )
+        _require_height(residual, "inverse residual")
         return self
 
     def as_series(self) -> InputTruncatedSeries:
@@ -273,6 +383,9 @@ class SeriesComposeRequest(StrictModel):
             raise ValueError(
                 "inner series must have zero constant term for composition with a finite prefix"
             )
+        outer = _max_height(self.outer.coefficients)
+        inner = _max_height(self.inner.coefficients)
+        _composition_height(outer, inner, self.outer.truncation_order, "composition")
         return self
 
 
@@ -305,6 +418,22 @@ class SeriesReversionRequest(StrictModel):
             raise ValueError("reversion requires zero constant term")
         if series.coefficients[1].as_fraction() == 0:
             raise ValueError("reversion requires nonzero linear coefficient")
+        source = _max_height(series.coefficients)
+        linear = _height(series.coefficients[1])
+        result = RationalHeight(1, 1).quotient(linear)
+        _require_height(result, "reversion")
+        for degree in range(2, self.truncation_order):
+            powers: list[RationalHeight] = []
+            power = result
+            for _ in range(2, degree + 1):
+                power = _convolution_height(power, result, degree + 1)
+                powers.append(power)
+            known = sum_heights(source.product(power) for power in powers)
+            coefficient = known.quotient(linear)
+            _require_height(coefficient, "reversion")
+            result = _merge_max(result, coefficient)
+        _composition_height(source, result, self.truncation_order, "reversion residual")
+        _composition_height(result, source, self.truncation_order, "reversion residual")
         return self
 
     def as_series(self) -> InputTruncatedSeries:
@@ -345,6 +474,10 @@ class SeriesIntegralRequest(StrictModel):
     def require_output_order_in_range(self) -> Self:
         if self.output_order > self.series.truncation_order + 1:
             raise ValueError("output_order must not exceed source_order + 1")
+        integer = RationalHeight(len(str(max(1, self.output_order - 1))), 1)
+        _require_height(
+            _max_height(self.series.coefficients).quotient(integer), "integration"
+        )
         return self
 
 

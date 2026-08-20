@@ -9,6 +9,7 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math._rational_height import RationalHeight, sum_heights
 
 MAX_COEFFICIENT_DIGITS = 128
 MAX_DEGREE = 30
@@ -19,6 +20,130 @@ MAX_ORBIT_STEPS = 1_000
 MAX_ORBIT_VALUE_DIGITS = 2_048
 MAX_POLYNOMIAL_OUTPUT_DIGITS = 32_768
 MAX_FIELD_PRIME = 10_000
+
+CoefficientHeight = RationalHeight | None
+
+
+def _fraction_height(value: Fraction) -> CoefficientHeight:
+    if value == 0:
+        return None
+    return RationalHeight(len(str(abs(value.numerator))), len(str(value.denominator)))
+
+
+def _add_heights(
+    left: CoefficientHeight, right: CoefficientHeight
+) -> CoefficientHeight:
+    if left is None:
+        return right
+    if right is None:
+        return left
+    return sum_heights((left, right))
+
+
+def _multiply_height_polynomials(
+    left: tuple[CoefficientHeight, ...], right: tuple[CoefficientHeight, ...]
+) -> tuple[CoefficientHeight, ...]:
+    result: list[CoefficientHeight] = [None] * (len(left) + len(right) - 1)
+    for left_index, left_height in enumerate(left):
+        if left_height is None:
+            continue
+        for right_index, right_height in enumerate(right):
+            if right_height is None:
+                continue
+            index = left_index + right_index
+            result[index] = _add_heights(
+                result[index], left_height.product(right_height)
+            )
+    return _trim_heights(tuple(result))
+
+
+def _compose_height_polynomials(
+    outer: tuple[CoefficientHeight, ...], inner: tuple[CoefficientHeight, ...]
+) -> tuple[CoefficientHeight, ...]:
+    result: tuple[CoefficientHeight, ...] = (None,)
+    for coefficient in reversed(outer):
+        result = _multiply_height_polynomials(result, inner)
+        result = (_add_heights(result[0], coefficient), *result[1:])
+    return result
+
+
+def _require_polynomial_height(
+    coefficients: tuple[CoefficientHeight, ...], operation: str
+) -> None:
+    if any(
+        height is not None and height.exceeds(MAX_POLYNOMIAL_OUTPUT_DIGITS)
+        for height in coefficients
+    ):
+        raise ValueError(
+            f"{operation} coefficient growth exceeds the "
+            f"{MAX_POLYNOMIAL_OUTPUT_DIGITS}-digit output bound"
+        )
+
+
+def _iterate_heights(
+    source: tuple[CoefficientHeight, ...], count: int
+) -> tuple[CoefficientHeight, ...]:
+    result: tuple[CoefficientHeight, ...] = (None, RationalHeight(1, 1))
+    for _ in range(count):
+        result = _compose_height_polynomials(source, result)
+        _require_polynomial_height(result, "iterate")
+    return result
+
+
+def _trim_heights(
+    coefficients: tuple[CoefficientHeight, ...],
+) -> tuple[CoefficientHeight, ...]:
+    end = len(coefficients)
+    while end > 1 and coefficients[end - 1] is None:
+        end -= 1
+    return coefficients[:end]
+
+
+def _divide_height_polynomials(
+    numerator: tuple[CoefficientHeight, ...],
+    denominator: tuple[CoefficientHeight, ...],
+) -> tuple[CoefficientHeight, ...]:
+    remainder = list(_trim_heights(numerator))
+    divisor = _trim_heights(denominator)
+    divisor_degree = len(divisor) - 1
+    divisor_lead = divisor[-1]
+    if divisor_lead is None:
+        raise RuntimeError("height preflight received a zero polynomial divisor")
+    quotient: list[CoefficientHeight] = [None] * max(1, len(remainder) - divisor_degree)
+    while len(remainder) - 1 >= divisor_degree and remainder[-1] is not None:
+        offset = len(remainder) - 1 - divisor_degree
+        coefficient = remainder[-1].quotient(divisor_lead)
+        quotient[offset] = coefficient
+        _require_polynomial_height((coefficient,), "dynatomic quotient")
+        for index, divisor_height in enumerate(divisor):
+            if divisor_height is None:
+                continue
+            target = offset + index
+            remainder[target] = _add_heights(
+                remainder[target], coefficient.product(divisor_height)
+            )
+        remainder[-1] = None  # exact leading-term cancellation
+        remainder = list(_trim_heights(tuple(remainder)))
+        _require_polynomial_height(tuple(remainder), "dynatomic division")
+    return _trim_heights(tuple(quotient))
+
+
+def _mobius(value: int) -> int:
+    factors = 0
+    candidate = 2
+    remaining = value
+    while candidate * candidate <= remaining:
+        if remaining % candidate == 0:
+            remaining //= candidate
+            factors += 1
+            if remaining % candidate == 0:
+                return 0
+            while remaining % candidate == 0:
+                remaining //= candidate
+        candidate += 1
+    if remaining > 1:
+        factors += 1
+    return -1 if factors % 2 else 1
 
 
 def parse_canonical_rational(value: str, *, label: str) -> Fraction:
@@ -74,6 +199,8 @@ class MapIterateRequest(PolynomialCoefficientRequest):
         output_degree = 1 if self.n == 0 else degree**self.n
         if output_degree > MAX_ITERATE_DEGREE:
             raise ValueError("iterate output degree exceeds bound")
+        source = tuple(_fraction_height(value) for value in self.coefficient_values())
+        _iterate_heights(source, self.n)
         return self
 
 
@@ -101,6 +228,25 @@ class DynatomicPolynomialRequest(PolynomialCoefficientRequest):
             raise ValueError("dynatomic polynomial requires map degree at least two")
         if degree**self.n > MAX_DYNATOMIC_DEGREE:
             raise ValueError("dynatomic output degree exceeds bound")
+        source = tuple(_fraction_height(value) for value in self.coefficient_values())
+        numerator: tuple[CoefficientHeight, ...] = (RationalHeight(1, 1),)
+        denominator: tuple[CoefficientHeight, ...] = (RationalHeight(1, 1),)
+        for divisor in range(1, self.n + 1):
+            if self.n % divisor != 0:
+                continue
+            term = list(_iterate_heights(source, divisor))
+            if len(term) < 2:
+                term.extend([None] * (2 - len(term)))
+            term[1] = _add_heights(term[1], RationalHeight(1, 1))
+            mobius = _mobius(self.n // divisor)
+            if mobius == 1:
+                numerator = _multiply_height_polynomials(numerator, tuple(term))
+                _require_polynomial_height(numerator, "dynatomic numerator")
+            elif mobius == -1:
+                denominator = _multiply_height_polynomials(denominator, tuple(term))
+                _require_polynomial_height(denominator, "dynatomic denominator")
+        quotient = _divide_height_polynomials(numerator, denominator)
+        _require_polynomial_height(quotient, "dynatomic quotient")
         return self
 
 

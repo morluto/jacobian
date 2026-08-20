@@ -9,6 +9,7 @@ from jacobian.math.number_theory._models import (
     PrimorialResult,
 )
 from jacobian.math.number_theory._prime_operations import compute_primorial
+from jacobian.math.number_theory._primes import PRIME_OPERATIONS
 
 
 def test_primorial_boundary_113() -> None:
@@ -42,3 +43,10 @@ def test_primorial_5() -> None:
     """Primorial(5) = 2*3*5*7*11 = 2310."""
     result = compute_primorial(PositiveIntegerRequest(n=5))
     assert result.value == "2310"
+
+
+def test_primorial_contract_version_tracks_the_result_schema_change() -> None:
+    operation = next(
+        item for item in PRIME_OPERATIONS if item.operation_id == "integer.compute.primorial"
+    )
+    assert operation.version == "3"

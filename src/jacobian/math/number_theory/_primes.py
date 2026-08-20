@@ -100,6 +100,7 @@ PRIME_OPERATIONS = (
                 "primorial_5", "Compute the product of the first five primes.", {"n": 5}
             ),
         ),
+        version="3",
     ),
     number_theory_operation(
         "integer.compute.euler_totient",

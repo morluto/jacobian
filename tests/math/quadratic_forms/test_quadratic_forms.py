@@ -81,6 +81,24 @@ def test_signature_negative_definite() -> None:
     assert result.is_negative_definite is True
 
 
+def test_signature_exact_quartic_root_signs() -> None:
+    matrix = [
+        [2, -1, -3, 1, -3],
+        [-1, 1, 2, 3, -3],
+        [-3, 2, 2, 1, 0],
+        [1, 3, 1, 2, -1],
+        [-3, -3, 0, -1, 1],
+    ]
+    result = compute_signature(SignatureRequest(form={"matrix": matrix}))
+    assert (result.n_positive, result.n_negative, result.n_zero) == (3, 2, 0)
+    assert result.is_indefinite is True
+
+
+def test_signature_singular_semidefinite() -> None:
+    result = compute_signature(SignatureRequest(form={"matrix": [[1, 1], [1, 1]]}))
+    assert (result.n_positive, result.n_negative, result.n_zero) == (1, 0, 1)
+
+
 def test_non_symmetric_rejected() -> None:
     with pytest.raises(ValidationError, match="symmetric"):
         SignatureRequest(form={"matrix": [[1, 2], [0, 1]]})

@@ -75,9 +75,20 @@ def test_shorter_forbidden_factors_are_enforced_in_long_memory_presentation() ->
         forbidden_blocks=(("0",), ("1", "1")),
     )
     presentation = finite_type_presentation(shift)
-    assert presentation.state_blocks == (("1",),)
+    assert presentation.state_blocks == ()
     assert presentation.transitions == ()
-    assert presentation.adjacency_matrix == ((0,),)
+    assert presentation.adjacency_matrix == ()
+
+
+def test_two_sided_language_removes_states_without_left_extension() -> None:
+    two_sided = ForbiddenBlockShift(
+        alphabet=("0", "1"),
+        forbidden_blocks=(("0", "0"), ("1", "0")),
+        two_sided=True,
+    )
+    one_sided = two_sided.model_copy(update={"two_sided": False})
+    assert block_language(two_sided, 1) == (("1",),)
+    assert block_language(one_sided, 1) == (("0",), ("1",))
 
 
 def test_forbidden_family_normalization_and_empty_block() -> None:
@@ -163,13 +174,13 @@ def test_periodic_profile_handles_square_mobius_factor() -> None:
         shift=AdjacencyShift(matrix=((2,),)), max_period=4
     )
     result = compute_periodic_point_profile(request)
-    assert result.fixed_point_counts == (2, 4, 8, 16)
-    assert result.least_period_point_counts == (2, 2, 6, 12)
-    assert result.primitive_orbit_counts == (2, 1, 2, 3)
+    assert result.fixed_point_counts == ("2", "4", "8", "16")
+    assert result.least_period_point_counts == ("2", "2", "6", "12")
+    assert result.primitive_orbit_counts == ("2", "1", "2", "3")
     assert result.complete_through_period == 4
 
     payload = result.model_dump()
-    payload["primitive_orbit_counts"] = (2, 1, 2, 4)
+    payload["primitive_orbit_counts"] = ("2", "1", "2", "4")
     with pytest.raises(ValidationError, match="not bound"):
         PeriodicPointProfileResult.model_validate(payload)
 
@@ -185,7 +196,7 @@ def test_value_models_reject_ambiguous_and_invalid_carriers() -> None:
         AdjacencyShift(matrix=((-1,),))
 
 
-def test_random_block_languages_match_independent_filter_oracle() -> None:
+def test_random_block_languages_match_bounded_extension_oracle() -> None:
     random_source = random.Random(1968)
     alphabet = ("0", "1")
     candidate_forbidden = tuple(
@@ -201,9 +212,12 @@ def test_random_block_languages_match_independent_filter_oracle() -> None:
         )
         shift = ForbiddenBlockShift(alphabet=alphabet, forbidden_blocks=forbidden)
         for length in range(5):
-            expected = tuple(
+            memory = max((len(block) - 1 for block in forbidden), default=0)
+            state_count = len(alphabet) ** memory
+            padding = state_count + memory
+            extended = (
                 word
-                for word in itertools.product(alphabet, repeat=length)
+                for word in itertools.product(alphabet, repeat=length + 2 * padding)
                 if all(
                     not any(
                         word[start : start + len(block)] == block
@@ -211,6 +225,9 @@ def test_random_block_languages_match_independent_filter_oracle() -> None:
                     )
                     for block in forbidden
                 )
+            )
+            expected = tuple(
+                sorted({word[padding : padding + length] for word in extended})
             )
             assert block_language(shift, length) == expected
 
@@ -250,3 +267,12 @@ def test_periodic_profiles_match_closed_walk_and_divisor_oracles() -> None:
         assert orbits == tuple(
             count // period for period, count in enumerate(expected_exact, 1)
         )
+
+
+def test_periodic_profile_returns_large_counts_as_canonical_integers() -> None:
+    result = compute_periodic_point_profile(
+        PeriodicPointProfileRequest(
+            shift=AdjacencyShift(matrix=((1_000_000,),)), max_period=3
+        )
+    )
+    assert result.fixed_point_counts[-1] == "1000000000000000000"

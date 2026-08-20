@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.symbolic_dynamics._models import (
     BlockLanguageRequest,
     BlockLanguageResult,
@@ -45,9 +46,13 @@ def compute_periodic_point_profile(
     return PeriodicPointProfileResult(
         **request.model_dump(),
         periods=tuple(range(1, request.max_period + 1)),
-        fixed_point_counts=fixed,
-        least_period_point_counts=exact,
-        primitive_orbit_counts=orbits,
+        fixed_point_counts=tuple(format_canonical_integer(value) for value in fixed),
+        least_period_point_counts=tuple(
+            format_canonical_integer(value) for value in exact
+        ),
+        primitive_orbit_counts=tuple(
+            format_canonical_integer(value) for value in orbits
+        ),
         complete_through_period=request.max_period,
     )
 

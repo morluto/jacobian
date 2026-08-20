@@ -36,20 +36,20 @@ class TestRootSystemData:
         result = compute_root_system_data(CartanMatrixRequest(matrix=A2))
         assert result.rank == 2
         assert result.num_positive_roots == 3
-        assert result.coxeter_number == 3
-        assert result.highest_root == (1, 1)
+        assert result.components[0].coxeter_number == 3
+        assert result.components[0].highest_root == (1, 1)
 
     def test_a3_positive_roots(self) -> None:
         result = compute_root_system_data(CartanMatrixRequest(matrix=A3))
         assert result.rank == 3
         assert result.num_positive_roots == 6
-        assert result.coxeter_number == 4
+        assert result.components[0].coxeter_number == 4
 
     def test_g2_positive_roots(self) -> None:
         result = compute_root_system_data(CartanMatrixRequest(matrix=G2))
         assert result.rank == 2
         assert result.num_positive_roots == 6
-        assert result.coxeter_number == 6
+        assert result.components[0].coxeter_number == 6
 
     def test_negative_roots(self) -> None:
         result = compute_root_system_data(CartanMatrixRequest(matrix=A2))
@@ -59,3 +59,32 @@ class TestRootSystemData:
     def test_simple_roots(self) -> None:
         result = compute_root_system_data(CartanMatrixRequest(matrix=A2))
         assert result.simple_roots == ((1, 0), (0, 1))
+
+    def test_reducible_data_is_componentwise(self) -> None:
+        result = compute_root_system_data(
+            CartanMatrixRequest(matrix=[[2, 0, 0], [0, 2, -1], [0, -1, 2]])
+        )
+        assert tuple(
+            component.simple_root_indices for component in result.components
+        ) == (
+            (0,),
+            (1, 2),
+        )
+        assert tuple(component.coxeter_number for component in result.components) == (
+            2,
+            3,
+        )
+        assert tuple(component.highest_root for component in result.components) == (
+            (1, 0, 0),
+            (0, 1, 1),
+        )
+
+
+def test_affine_cartan_matrix_is_rejected_before_enumeration() -> None:
+    with pytest.raises(ValidationError, match="finite type"):
+        CartanMatrixRequest(matrix=[[2, -1, -1], [-1, 2, -1], [-1, -1, 2]])
+
+
+def test_nonsymmetrizable_cycle_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="symmetrizable"):
+        CartanMatrixRequest(matrix=[[2, -1, -1], [-2, 2, -1], [-1, -2, 2]])

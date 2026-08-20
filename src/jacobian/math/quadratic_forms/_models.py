@@ -85,3 +85,20 @@ class SignatureResult(StrictModel):
     is_positive_definite: bool
     is_negative_definite: bool
     is_indefinite: bool
+
+    @model_validator(mode="after")
+    def require_consistent_inertia(self) -> Self:
+        counts = (self.n_positive, self.n_negative, self.n_zero)
+        if any(count < 0 for count in counts):
+            raise ValueError("inertia counts must be nonnegative")
+        if self.is_positive_definite != (
+            self.n_positive > 0 and self.n_negative == 0 and self.n_zero == 0
+        ):
+            raise ValueError("positive-definite flag must agree with inertia")
+        if self.is_negative_definite != (
+            self.n_negative > 0 and self.n_positive == 0 and self.n_zero == 0
+        ):
+            raise ValueError("negative-definite flag must agree with inertia")
+        if self.is_indefinite != (self.n_positive > 0 and self.n_negative > 0):
+            raise ValueError("indefinite flag must agree with inertia")
+        return self

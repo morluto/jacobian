@@ -93,6 +93,8 @@ class GradedJacobianSyzygyRequest(StrictModel):
             raise ValueError(
                 "graded Jacobian syzygies currently require exactly three variables"
             )
+        if len(set(variables)) != len(variables):
+            raise ValueError("graded Jacobian syzygy variables must be unique")
         source_degree = _compute_homogeneous_source_degree(
             self.polynomial, self.linear_factors
         )

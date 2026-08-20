@@ -6,7 +6,9 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.symbolic_dynamics.operations import (
     block_language,
     enumeration_size,
@@ -83,12 +85,19 @@ class PeriodicPointProfileRequest(StrictModel):
     shift: AdjacencyShift
     max_period: int = Field(ge=1, le=MAX_PERIOD)
 
+    @model_validator(mode="after")
+    def require_bounded_matrix_powering(self) -> Self:
+        states = len(self.shift.matrix)
+        if states**3 * self.max_period > 10_000_000:
+            raise ValueError("periodic-point matrix powering exceeds the work bound")
+        return self
+
 
 class PeriodicPointProfileResult(PeriodicPointProfileRequest):
     periods: tuple[int, ...]
-    fixed_point_counts: tuple[int, ...]
-    least_period_point_counts: tuple[int, ...]
-    primitive_orbit_counts: tuple[int, ...]
+    fixed_point_counts: tuple[CanonicalInteger, ...]
+    least_period_point_counts: tuple[CanonicalInteger, ...]
+    primitive_orbit_counts: tuple[CanonicalInteger, ...]
     complete_through_period: int = Field(ge=1, le=MAX_PERIOD)
     method: Literal["EXACT_MATRIX_TRACES_AND_MOBIUS_INVERSION"] = (
         "EXACT_MATRIX_TRACES_AND_MOBIUS_INVERSION"
@@ -99,9 +108,12 @@ class PeriodicPointProfileResult(PeriodicPointProfileRequest):
         fixed, exact, orbits = periodic_point_profile(self.shift, self.max_period)
         if (
             self.periods != tuple(range(1, self.max_period + 1))
-            or self.fixed_point_counts != fixed
-            or self.least_period_point_counts != exact
-            or self.primitive_orbit_counts != orbits
+            or self.fixed_point_counts
+            != tuple(format_canonical_integer(value) for value in fixed)
+            or self.least_period_point_counts
+            != tuple(format_canonical_integer(value) for value in exact)
+            or self.primitive_orbit_counts
+            != tuple(format_canonical_integer(value) for value in orbits)
             or self.complete_through_period != self.max_period
         ):
             raise ValueError("periodic-point profile is not bound to the request")

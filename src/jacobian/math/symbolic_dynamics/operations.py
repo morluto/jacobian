@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import itertools
 
+import networkx as nx
+
 from jacobian.math.symbolic_dynamics.values import (
     MAX_ENUMERATED_BLOCKS,
     AdjacencyShift,
@@ -53,11 +55,88 @@ def block_language(
         raise ValueError("block length must be nonnegative")
     enumeration_size(len(shift.alphabet), block_length)
     forbidden = normalize_forbidden_blocks(shift)
+    if () in forbidden:
+        return ()
+    memory = max(0, max((len(block) - 1 for block in forbidden), default=0))
+    states, graph, left_infinite, right_infinite = _presentation_support(shift, memory)
+    if block_length == 0:
+        return (
+            ((),)
+            if right_infinite
+            and (not shift.two_sided or left_infinite & right_infinite)
+            else ()
+        )
+    candidates = _locally_allowed_words(shift, block_length)
+    if memory == 0:
+        return candidates if right_infinite else ()
+    state_index = set(states)
+    occurring = []
+    for word in candidates:
+        starts: tuple[tuple[str, ...], ...]
+        ends: tuple[tuple[str, ...], ...]
+        if len(word) >= memory:
+            starts = (word[:memory],)
+            ends = (word[-memory:],)
+        else:
+            starts = tuple(state for state in states if state[: len(word)] == word)
+            ends = starts
+        if any(
+            start in state_index
+            and end in right_infinite
+            and (not shift.two_sided or start in left_infinite)
+            and (len(word) >= memory or nx.has_path(graph, start, end))
+            for start in starts
+            for end in ends
+        ):
+            occurring.append(word)
+    return tuple(occurring)
+
+
+def _locally_allowed_words(
+    shift: ForbiddenBlockShift, length: int
+) -> tuple[tuple[str, ...], ...]:
+    forbidden = normalize_forbidden_blocks(shift)
     return tuple(
-        block
-        for block in itertools.product(shift.alphabet, repeat=block_length)
-        if not any(_contains(block, excluded) for excluded in forbidden)
+        word
+        for word in itertools.product(shift.alphabet, repeat=length)
+        if not any(_contains(word, excluded) for excluded in forbidden)
     )
+
+
+def _presentation_support(
+    shift: ForbiddenBlockShift, memory: int
+) -> tuple[
+    tuple[tuple[str, ...], ...],
+    nx.DiGraph[tuple[str, ...]],
+    set[tuple[str, ...]],
+    set[tuple[str, ...]],
+]:
+    states = _locally_allowed_words(shift, memory)
+    extensions = _locally_allowed_words(shift, memory + 1)
+    graph: nx.DiGraph[tuple[str, ...]] = nx.DiGraph()
+    graph.add_nodes_from(states)
+    for word in extensions:
+        source = word[:memory] if memory else ()
+        target = word[-memory:] if memory else ()
+        if source in graph and target in graph:
+            graph.add_edge(source, target)
+    cyclic = {
+        node
+        for component in nx.strongly_connected_components(graph)
+        for node in component
+        if len(component) > 1 or graph.has_edge(node, node)
+    }
+    right_infinite = {
+        node
+        for node in graph
+        if any(nx.has_path(graph, node, cycle) for cycle in cyclic)
+    }
+    left_infinite = {
+        node
+        for node in graph
+        if any(nx.has_path(graph, cycle, node) for cycle in cyclic)
+    }
+    return states, graph, left_infinite, right_infinite
 
 
 def _presentation_from_states_and_words(

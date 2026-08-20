@@ -1,5 +1,6 @@
 """Exact quadratic form operations using SymPy for linear algebra."""
 
+from jacobian.math._exact_linear_algebra import symmetric_inertia
 from jacobian.math.quadratic_forms._models import (
     DiscriminantRequest,
     DiscriminantResult,
@@ -34,30 +35,10 @@ def compute_discriminant(request: DiscriminantRequest) -> DiscriminantResult:
 
 
 def compute_signature(request: SignatureRequest) -> SignatureResult:
-    """Compute the signature (inertia) of a quadratic form using SymPy eigenvalues."""
-    from sympy import Matrix
-
+    """Compute inertia by exact characteristic-polynomial root counting."""
     a = request.form.matrix
     n = len(a)
-    m = Matrix(a)
-
-    # Compute eigenvalues
-    eigenvals = m.eigenvals()
-
-    n_positive = 0
-    n_negative = 0
-    n_zero = 0
-
-    for eigenval, mult in eigenvals.items():
-        # Use exact sign determination, not int() truncation.
-        # int() truncates irrational eigenvalues (e.g. (3-sqrt(5))/2 ≈ 0.38
-        # becomes 0), misclassifying positive eigenvalues as zero.
-        if eigenval.is_positive:
-            n_positive += mult
-        elif eigenval.is_negative:
-            n_negative += mult
-        else:
-            n_zero += mult
+    n_positive, n_negative, n_zero = symmetric_inertia(a)
 
     return SignatureResult(
         n_positive=n_positive,

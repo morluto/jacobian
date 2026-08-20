@@ -49,8 +49,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute positive roots from a Cartan matrix",
         "Compute all positive roots of a finite crystallographic root "
         "system from its Cartan matrix, using closure under simple "
-        "reflections. Returns simple roots, positive roots, highest root, "
-        "and Coxeter number.",
+        "reflections. Returns simple and positive roots plus highest-root "
+        "and Coxeter data for each irreducible component.",
         CartanMatrixRequest,
         RootSystemDataResult,
         compute_root_system_data,

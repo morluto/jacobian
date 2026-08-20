@@ -21,6 +21,43 @@ from jacobian.math.polynomials.maps._operations import (
 )
 
 
+def _polynomial(
+    variable: str,
+    *terms: tuple[int, int],
+) -> dict[str, Any]:
+    return {
+        "polynomial_schema_version": "1",
+        "domain": "QQ",
+        "variables": [variable],
+        "polynomial": {
+            "terms": [
+                {
+                    "coefficient": {"num": str(coefficient), "den": "1"},
+                    "exponents": [exponent],
+                }
+                for coefficient, exponent in terms
+            ]
+        },
+    }
+
+
+def _bivariate_polynomial(*terms: tuple[int, tuple[int, int]]) -> dict[str, Any]:
+    return {
+        "polynomial_schema_version": "1",
+        "domain": "QQ",
+        "variables": ["x", "y"],
+        "polynomial": {
+            "terms": [
+                {
+                    "coefficient": {"num": str(coefficient), "den": "1"},
+                    "exponents": list(exponents),
+                }
+                for coefficient, exponents in terms
+            ]
+        },
+    }
+
+
 def _op[
     RequestT: StrictModel,
     ResultT: StrictModel,
@@ -33,7 +70,7 @@ def _op[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
+    version: str = "2",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
@@ -52,7 +89,7 @@ POLYNOMIAL_MAP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "polynomial.map.evaluate",
         "Evaluate a polynomial at a rational point",
-        "Evaluate a polynomial expression at a rational point using SymPy.",
+        "Evaluate a canonical rational polynomial at a complete ordered rational point.",
         EvalRequest,
         EvalResult,
         evaluate_polynomial,
@@ -62,9 +99,13 @@ POLYNOMIAL_MAP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "simple_eval",
-                "Evaluate x**2 + 2*y at x=3, y=1.",
+                "Evaluate x^2 + 2y at x=3, y=1; the point must use the "
+                "polynomial's complete ordered axis.",
                 {
-                    "polynomial": {"expression": "x**2 + 2*y"},
+                    "polynomial": _bivariate_polynomial(
+                        (1, (2, 0)),
+                        (2, (0, 1)),
+                    ),
                     "point": {
                         "variables": ["x", "y"],
                         "values": [{"num": "3", "den": "1"}, {"num": "1", "den": "1"}],
@@ -76,7 +117,7 @@ POLYNOMIAL_MAP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "polynomial.map.jacobian",
         "Compute the Jacobian matrix of a polynomial map",
-        "Compute the Jacobian matrix dF/dx of a polynomial map using SymPy.",
+        "Compute the row-major Jacobian matrix of a canonical polynomial map.",
         JacobianRequest,
         JacobianResult,
         compute_jacobian,
@@ -86,12 +127,13 @@ POLYNOMIAL_MAP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "simple_jacobian",
-                "Jacobian of [x**2, y**2] w.r.t. (x, y).",
+                "Compute the Jacobian of [x^2, y^2] with respect to (x, y); "
+                "every output must use that complete ordered axis.",
                 {
                     "input_variables": ["x", "y"],
                     "output_polynomials": [
-                        {"expression": "x**2"},
-                        {"expression": "y**2"},
+                        _bivariate_polynomial((1, (2, 0))),
+                        _bivariate_polynomial((1, (0, 2))),
                     ],
                 },
             ),
@@ -100,7 +142,7 @@ POLYNOMIAL_MAP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "polynomial.map.compose",
         "Compose two polynomials",
-        "Compose outer(inner(x)) using SymPy substitution.",
+        "Compose two bounded univariate canonical rational polynomials.",
         CompositionRequest,
         CompositionResult,
         compose_polynomials,
@@ -110,10 +152,11 @@ POLYNOMIAL_MAP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "simple_compose",
-                "Compose x**2 with x+1.",
+                "Compose x^2 with x+1; each polynomial must use exactly its "
+                "declared substitution variable.",
                 {
-                    "outer": {"expression": "x**2"},
-                    "inner": {"expression": "x + 1"},
+                    "outer": _polynomial("x", (1, 2)),
+                    "inner": _polynomial("x", (1, 1), (1, 0)),
                     "inner_variable": "x",
                     "outer_variable": "x",
                 },

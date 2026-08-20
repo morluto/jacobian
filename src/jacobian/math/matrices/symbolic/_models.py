@@ -7,26 +7,30 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.polynomials.values import PolynomialVariable, RationalFunction
 
-MAX_SYMBOLIC_MATRIX_DIMENSION = 32
-MAX_SYMBOLIC_VARIABLES = 16
-MAX_SYMBOLIC_ENTRY_LENGTH = 4096
+MAX_SYMBOLIC_MATRIX_DIMENSION = 8
+MAX_SYMBOLIC_VARIABLES = 8
+MAX_SYMBOLIC_MATRIX_TERMS = 512
 
 
 class SymbolicMatrix(StrictModel):
     """One nonempty rectangular matrix over a multivariate rational-function field.
 
-    Each entry is a string SymPy expression in the declared variables, for
-    example ``"a*c"`` or ``"f/e"``.  The expression is parsed with SymPy and
-    reduced over ``QQ(t_1, ..., t_n)``.
+    Every entry is a canonical reduced numerator/denominator value over the
+    declared ordered variables. For example, the former expression ``a*c`` is
+    represented by one numerator term with exponents ``(1, 0, 1, ...)`` and a
+    unit denominator; ``f/e`` is represented by numerator ``f`` and denominator
+    ``e``. This preserves every element of ``QQ(t_1, ..., t_n)`` without parsing
+    caller text with SymPy.
     """
 
     matrix_schema_version: Literal["1"] = "1"
-    variables: tuple[str, ...] = Field(
+    variables: tuple[PolynomialVariable, ...] = Field(
         min_length=0,
         max_length=MAX_SYMBOLIC_VARIABLES,
     )
-    entries: tuple[tuple[str, ...], ...] = Field(
+    entries: tuple[tuple[RationalFunction, ...], ...] = Field(
         min_length=1,
         max_length=MAX_SYMBOLIC_MATRIX_DIMENSION,
     )
@@ -41,10 +45,19 @@ class SymbolicMatrix(StrictModel):
             )
         if any(len(row) != column_count for row in self.entries):
             raise ValueError("matrix rows must all have the same length")
-        for row in self.entries:
-            for value in row:
-                if len(value) > MAX_SYMBOLIC_ENTRY_LENGTH:
-                    raise ValueError("symbolic matrix entry exceeds the length bound")
+        if len(set(self.variables)) != len(self.variables):
+            raise ValueError("symbolic matrix variables must be unique")
+        values = tuple(value for row in self.entries for value in row)
+        if any(value.variables != self.variables for value in values):
+            raise ValueError(
+                "every symbolic matrix entry must use the declared ordered field"
+            )
+        term_count = sum(
+            len(value.numerator.terms) + len(value.denominator.terms)
+            for value in values
+        )
+        if term_count > MAX_SYMBOLIC_MATRIX_TERMS:
+            raise ValueError("symbolic matrix exceeds the 512-term operation budget")
         return self
 
 
@@ -77,9 +90,9 @@ class SquareSymbolicMatrixRequest(SymbolicMatrixRequest):
 
 
 class SymbolicDeterminantResult(StrictModel):
-    """The exact symbolic determinant as a canonical SymPy expression string."""
+    """The exact determinant in the matrix's rational-function field."""
 
-    determinant: str
+    determinant: RationalFunction
     method: Literal["SYMPY_BAREISS"] = "SYMPY_BAREISS"
 
 
@@ -96,7 +109,7 @@ class SymbolicCharacteristicPolynomialResult(StrictModel):
 
     variable: Literal["lambda"] = "lambda"
     degree: int = Field(ge=1, le=MAX_SYMBOLIC_MATRIX_DIMENSION)
-    coefficients_descending: tuple[str, ...] = Field(
+    coefficients_descending: tuple[RationalFunction, ...] = Field(
         min_length=2,
         max_length=MAX_SYMBOLIC_MATRIX_DIMENSION + 1,
     )
@@ -125,7 +138,7 @@ class SymbolicEigenvaluesResult(StrictModel):
         min_length=1,
         max_length=MAX_SYMBOLIC_MATRIX_DIMENSION,
     )
-    characteristic_polynomial: tuple[str, ...] | None = Field(
+    characteristic_polynomial: tuple[RationalFunction, ...] | None = Field(
         default=None,
         min_length=2,
         max_length=MAX_SYMBOLIC_MATRIX_DIMENSION + 1,

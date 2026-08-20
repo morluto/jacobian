@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sympy.matrices.exceptions import MatrixError
+
 from jacobian.math.matrices.symbolic import (
     symbolic_characteristic_polynomial,
     symbolic_determinant,
@@ -22,8 +24,8 @@ def compute_symbolic_determinant(
     request: SquareSymbolicMatrixRequest,
 ) -> SymbolicDeterminantResult:
     determinant = symbolic_determinant(
-        [list(row) for row in request.matrix.entries],
-        list(request.matrix.variables),
+        request.matrix.entries,
+        request.matrix.variables,
     )
     return SymbolicDeterminantResult(determinant=determinant)
 
@@ -32,8 +34,8 @@ def compute_symbolic_rank(
     request: SymbolicMatrixRequest,
 ) -> SymbolicRankResult:
     rank, pivot_columns = symbolic_rank(
-        [list(row) for row in request.matrix.entries],
-        list(request.matrix.variables),
+        request.matrix.entries,
+        request.matrix.variables,
     )
     return SymbolicRankResult(rank=rank, pivot_columns=pivot_columns)
 
@@ -42,8 +44,8 @@ def compute_symbolic_characteristic_polynomial(
     request: SquareSymbolicMatrixRequest,
 ) -> SymbolicCharacteristicPolynomialResult:
     degree, coeffs = symbolic_characteristic_polynomial(
-        [list(row) for row in request.matrix.entries],
-        list(request.matrix.variables),
+        request.matrix.entries,
+        request.matrix.variables,
     )
     return SymbolicCharacteristicPolynomialResult(
         degree=degree,
@@ -54,11 +56,11 @@ def compute_symbolic_characteristic_polynomial(
 def compute_symbolic_eigenvalues(
     request: SquareSymbolicMatrixRequest,
 ) -> SymbolicEigenvaluesResult:
-    entries = [list(row) for row in request.matrix.entries]
-    variables = list(request.matrix.variables)
+    entries = request.matrix.entries
+    variables = request.matrix.variables
     try:
         eigenvalues = symbolic_eigenvalues(entries, variables)
-    except Exception:
+    except MatrixError:
         # SymPy raises MatrixError when eigenvalues cannot be represented
         # in radicals.  Return the exact characteristic polynomial instead.
         degree, coeffs = symbolic_characteristic_polynomial(entries, variables)

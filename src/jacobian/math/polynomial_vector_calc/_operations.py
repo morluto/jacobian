@@ -2,108 +2,95 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 import sympy
 
 from jacobian.math.polynomial_vector_calc._models import (
+    CurlRequest,
     DirectionalDerivativeRequest,
     ScalarFieldRequest,
     ScalarResult,
     VectorFieldRequest,
     VectorResult,
 )
+from jacobian.math.polynomials._conversions import (
+    rational_polynomial_from_sympy,
+    rational_polynomial_to_sympy,
+    symbols_for_variables,
+)
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
-def _parse_poly(expr_str: str, variables: tuple[str, ...]) -> sympy.Expr:
-    """Parse a polynomial expression string with given variable names.
+def _wire(expression: sympy.Expr, variables: tuple[str, ...]) -> RationalPolynomial:
+    return rational_polynomial_from_sympy(
+        sympy.Poly(
+            sympy.expand(expression), *symbols_for_variables(variables), domain=sympy.QQ
+        ),
+        variables,
+        maximum_terms=256,
+    )
 
-    Validates that the result is a polynomial in exactly the declared variables
-    with rational coefficients, rejecting transcendental expressions, foreign
-    symbols, and non-polynomial inputs.
-    """
-    var_symbols = sympy.symbols(variables)
-    if isinstance(var_symbols, sympy.Symbol):
-        var_symbols = (var_symbols,)
-    try:
-        expr = sympy.sympify(
-            expr_str, locals=dict(zip(variables, var_symbols, strict=True))
-        )
-    except Exception as exc:
-        raise ValueError(f"failed to parse expression: {expr_str}") from exc
-    # is_polynomial returns True, False, or None (unknown); treat None as False
-    if expr.is_polynomial(*var_symbols) is not True:
-        raise ValueError(
-            f"expression must be a polynomial in {variables}, "
-            f"got non-polynomial: {expr}"
-        )
-    free_symbols = expr.free_symbols
-    allowed = set(var_symbols)
-    extra = free_symbols - allowed
-    if extra:
-        raise ValueError(
-            f"expression contains undeclared symbols: {sorted(s.name for s in extra)}"
-        )
-    return expr
+
+def _expressions(
+    polynomials: Iterable[RationalPolynomial],
+) -> tuple[sympy.Expr, ...]:
+    return tuple(rational_polynomial_to_sympy(item).as_expr() for item in polynomials)
 
 
 def compute_gradient(request: ScalarFieldRequest) -> VectorResult:
-    var_symbols = sympy.symbols(request.variables)
-    if isinstance(var_symbols, sympy.Symbol):
-        var_symbols = (var_symbols,)
-    poly = _parse_poly(request.polynomial, request.variables)
-    grads = [sympy.diff(poly, v) for v in var_symbols]
+    variables = request.polynomial.variables
+    expression = rational_polynomial_to_sympy(request.polynomial).as_expr()
     return VectorResult(
-        components=tuple(str(g) for g in grads),
-        variables=request.variables,
+        components=tuple(
+            _wire(sympy.diff(expression, variable), variables)
+            for variable in symbols_for_variables(variables)
+        ),
         method="SYMPY_GRADIENT",
     )
 
 
 def compute_divergence(request: VectorFieldRequest) -> ScalarResult:
-    var_symbols = sympy.symbols(request.variables)
-    if isinstance(var_symbols, sympy.Symbol):
-        var_symbols = (var_symbols,)
-    polys = [_parse_poly(c, request.variables) for c in request.components]
-    div = sum(sympy.diff(p, v) for p, v in zip(polys, var_symbols, strict=True))
+    variables = request.components[0].variables
+    expression = sum(
+        sympy.diff(component, variable)
+        for component, variable in zip(
+            _expressions(request.components),
+            symbols_for_variables(variables),
+            strict=True,
+        )
+    )
     return ScalarResult(
-        result=str(sympy.expand(div)),
-        variables=request.variables,
+        result=_wire(expression, variables),
         method="SYMPY_DIVERGENCE",
     )
 
 
-def compute_curl(request: VectorFieldRequest) -> VectorResult:
-    """Curl in 3D: (d_z F_y - d_y F_z, d_x F_z - d_z F_x, d_y F_x - d_x F_y)."""
-    if len(request.variables) != 3:
-        raise ValueError("curl is defined for 3D vector fields")
-    x, y, z = sympy.symbols(request.variables)
-    fx, fy, fz = (
-        _parse_poly(request.components[0], request.variables),
-        _parse_poly(request.components[1], request.variables),
-        _parse_poly(request.components[2], request.variables),
-    )
-    curl_x = sympy.diff(fz, y) - sympy.diff(fy, z)
-    curl_y = sympy.diff(fx, z) - sympy.diff(fz, x)
-    curl_z = sympy.diff(fy, x) - sympy.diff(fx, y)
+def compute_curl(request: CurlRequest) -> VectorResult:
+    """Return the standard three-dimensional curl of a polynomial field."""
+
+    variables = request.components[0].variables
+    x, y, z = symbols_for_variables(variables)
+    fx, fy, fz = _expressions(request.components)
     return VectorResult(
         components=(
-            str(sympy.expand(curl_x)),
-            str(sympy.expand(curl_y)),
-            str(sympy.expand(curl_z)),
+            _wire(sympy.diff(fz, y) - sympy.diff(fy, z), variables),
+            _wire(sympy.diff(fx, z) - sympy.diff(fz, x), variables),
+            _wire(sympy.diff(fy, x) - sympy.diff(fx, y), variables),
         ),
-        variables=request.variables,
         method="SYMPY_CURL",
     )
 
 
 def compute_laplacian(request: ScalarFieldRequest) -> ScalarResult:
-    var_symbols = sympy.symbols(request.variables)
-    if isinstance(var_symbols, sympy.Symbol):
-        var_symbols = (var_symbols,)
-    poly = _parse_poly(request.polynomial, request.variables)
-    laplacian = sum(sympy.diff(poly, v, 2) for v in var_symbols)
+    variables = request.polynomial.variables
+    expression = rational_polynomial_to_sympy(request.polynomial).as_expr()
+    laplacian = sum(
+        sympy.diff(expression, variable, 2)
+        for variable in symbols_for_variables(variables)
+    )
     return ScalarResult(
-        result=str(sympy.expand(laplacian)),
-        variables=request.variables,
+        result=_wire(laplacian, variables),
         method="SYMPY_LAPLACIAN",
     )
 
@@ -111,15 +98,32 @@ def compute_laplacian(request: ScalarFieldRequest) -> ScalarResult:
 def compute_directional_derivative(
     request: DirectionalDerivativeRequest,
 ) -> ScalarResult:
-    var_symbols = sympy.symbols(request.variables)
-    if isinstance(var_symbols, sympy.Symbol):
-        var_symbols = (var_symbols,)
-    poly = _parse_poly(request.polynomial, request.variables)
-    grad = [sympy.diff(poly, v) for v in var_symbols]
-    direction = [sympy.sympify(d) for d in request.direction]
-    result = sum(g * d for g, d in zip(grad, direction, strict=True))
+    variables = request.polynomial.variables
+    expression = rational_polynomial_to_sympy(request.polynomial).as_expr()
+    gradient = (
+        sympy.diff(expression, variable)
+        for variable in symbols_for_variables(variables)
+    )
+    direction = (
+        sympy.Rational(*coordinate.as_integer_ratio())
+        for coordinate in request.direction
+    )
     return ScalarResult(
-        result=str(sympy.expand(result)),
-        variables=request.variables,
+        result=_wire(
+            sum(
+                derivative * coordinate
+                for derivative, coordinate in zip(gradient, direction, strict=True)
+            ),
+            variables,
+        ),
         method="SYMPY_DIRECTIONAL_DERIVATIVE",
     )
+
+
+__all__ = [
+    "compute_curl",
+    "compute_directional_derivative",
+    "compute_divergence",
+    "compute_gradient",
+    "compute_laplacian",
+]

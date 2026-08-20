@@ -6,6 +6,7 @@ import pytest
 import sympy
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.arithmetic_dynamics import (
     finite_field_functional_graph,
     fixed_point_equation,
@@ -32,42 +33,50 @@ from jacobian.math.arithmetic_dynamics._operations import (
 from jacobian.math.arithmetic_dynamics._tools import TOOLS
 
 
+def _r(value: int | str) -> CanonicalRational:
+    return CanonicalRational.from_fraction(Fraction(value))
+
+
 class TestMapIterate:
     def test_zero_iterate_is_identity(self) -> None:
         result = compute_map_iterate(
-            MapIterateRequest(coefficients=("1", "0", "1"), n=0)
+            MapIterateRequest(coefficients=(_r(1), _r(0), _r(1)), n=0)
         )
 
-        assert result.coefficients == ("0", "1")
+        assert result.coefficients == (_r(0), _r(1))
         assert result.degree == 1
         assert result.complete is True
 
     def test_second_iterate_is_exact(self) -> None:
         result = compute_map_iterate(
-            MapIterateRequest(coefficients=("1", "0", "1"), n=2)
+            MapIterateRequest(coefficients=(_r(1), _r(0), _r(1)), n=2)
         )
 
-        assert result.coefficients == ("2", "0", "2", "0", "1")
+        assert result.coefficients == (_r(2), _r(0), _r(2), _r(0), _r(1))
         assert result.degree == 4
 
     def test_zero_polynomial_iterates_without_backend_degree_coercion(self) -> None:
-        result = compute_map_iterate(MapIterateRequest(coefficients=("0",), n=3))
+        result = compute_map_iterate(MapIterateRequest(coefficients=(_r(0),), n=3))
 
-        assert result.coefficients == ("0",)
+        assert result.coefficients == (_r(0),)
         assert result.degree == 0
 
     def test_degree_growth_beyond_output_bound_is_rejected(self) -> None:
         with pytest.raises(ValidationError, match="iterate output degree"):
-            MapIterateRequest(coefficients=("1", "0", "0", "0", "0", "1"), n=5)
+            MapIterateRequest(
+                coefficients=(_r(1), _r(0), _r(0), _r(0), _r(0), _r(1)), n=5
+            )
 
 
 class TestOrbitPrefix:
     def test_repeat_proves_preperiod_and_period(self) -> None:
         result = compute_orbit_prefix(
-            OrbitPrefixRequest(coefficients=("0", "0", "1"), start="0", max_steps=5)
+            OrbitPrefixRequest(
+                coefficients=(_r(0), _r(0), _r(1)), start=_r(0), max_steps=5
+            )
         )
 
-        assert result.orbit == ("0", "0")
+        assert result.orbit == (_r(0), _r(0))
         assert result.termination == "REPEAT_FOUND"
         assert result.repeat is not None
         assert result.repeat.preperiod == 0
@@ -77,10 +86,10 @@ class TestOrbitPrefix:
 
     def test_finite_nonrepeating_prefix_does_not_imply_eventual_behavior(self) -> None:
         result = compute_orbit_prefix(
-            OrbitPrefixRequest(coefficients=("1", "1"), start="0", max_steps=3)
+            OrbitPrefixRequest(coefficients=(_r(1), _r(1)), start=_r(0), max_steps=3)
         )
 
-        assert result.orbit == ("0", "1", "2", "3")
+        assert result.orbit == (_r(0), _r(1), _r(2), _r(3))
         assert result.termination == "STEP_BOUND_REACHED"
         assert result.repeat is None
         assert result.eventual_behavior_complete is False
@@ -88,20 +97,20 @@ class TestOrbitPrefix:
 
     def test_zero_step_request_is_an_explicit_truncated_prefix(self) -> None:
         result = compute_orbit_prefix(
-            OrbitPrefixRequest(coefficients=("1", "1"), start="0", max_steps=0)
+            OrbitPrefixRequest(coefficients=(_r(1), _r(1)), start=_r(0), max_steps=0)
         )
 
-        assert result.orbit == ("0",)
+        assert result.orbit == (_r(0),)
         assert result.computed_steps == 0
         assert result.termination == "STEP_BOUND_REACHED"
         assert result.truncated is True
 
     def test_output_growth_stops_with_nonconcluding_typed_boundary(self) -> None:
-        degree_thirty = ("0",) * 30 + ("1",)
+        degree_thirty = (_r(0),) * 30 + (_r(1),)
         result = compute_orbit_prefix(
             OrbitPrefixRequest(
                 coefficients=degree_thirty,
-                start="1" + "0" * 127,
+                start=_r("1" + "0" * 127),
                 max_steps=2,
             )
         )
@@ -115,9 +124,9 @@ class TestOrbitPrefix:
     def test_result_model_rejects_completion_without_repeat_evidence(self) -> None:
         with pytest.raises(ValidationError, match="cannot imply eventual behavior"):
             OrbitPrefixResult(
-                source_coefficients=("1", "1"),
-                start="0",
-                orbit=("0", "1"),
+                source_coefficients=(_r(1), _r(1)),
+                start=_r(0),
+                orbit=(_r(0), _r(1)),
                 requested_steps=1,
                 computed_steps=1,
                 termination="STEP_BOUND_REACHED",
@@ -129,9 +138,9 @@ class TestOrbitPrefix:
     def test_result_model_rejects_orbit_not_bound_to_source_map(self) -> None:
         with pytest.raises(ValidationError, match="bound polynomial map"):
             OrbitPrefixResult(
-                source_coefficients=("1", "1"),
-                start="0",
-                orbit=("0", "2"),
+                source_coefficients=(_r(1), _r(1)),
+                start=_r(0),
+                orbit=(_r(0), _r(2)),
                 requested_steps=1,
                 computed_steps=1,
                 termination="STEP_BOUND_REACHED",
@@ -144,69 +153,63 @@ class TestOrbitPrefix:
 class TestDynatomicPolynomial:
     def test_first_dynatomic_polynomial(self) -> None:
         result = compute_dynatomic_polynomial(
-            DynatomicPolynomialRequest(coefficients=("0", "0", "1"), n=1)
+            DynatomicPolynomialRequest(coefficients=(_r(0), _r(0), _r(1)), n=1)
         )
 
-        assert result.coefficients == ("0", "-1", "1")
+        assert result.coefficients == (_r(0), _r(-1), _r(1))
 
     def test_square_factor_mobius_case_and_divisor_product_identity(self) -> None:
         source = polynomial_from_coefficients((0, 0, 1))
         phi_1 = compute_dynatomic_polynomial(
-            DynatomicPolynomialRequest(coefficients=("0", "0", "1"), n=1)
+            DynatomicPolynomialRequest(coefficients=(_r(0), _r(0), _r(1)), n=1)
         )
         phi_2 = compute_dynatomic_polynomial(
-            DynatomicPolynomialRequest(coefficients=("0", "0", "1"), n=2)
+            DynatomicPolynomialRequest(coefficients=(_r(0), _r(0), _r(1)), n=2)
         )
         phi_4 = compute_dynatomic_polynomial(
-            DynatomicPolynomialRequest(coefficients=("0", "0", "1"), n=4)
+            DynatomicPolynomialRequest(coefficients=(_r(0), _r(0), _r(1)), n=4)
         )
-        product = polynomial_from_coefficients(tuple(map(Fraction, phi_1.coefficients)))
-        product *= polynomial_from_coefficients(
-            tuple(map(Fraction, phi_2.coefficients))
+        product = polynomial_from_coefficients(
+            tuple(value.as_fraction() for value in phi_1.coefficients)
         )
         product *= polynomial_from_coefficients(
-            tuple(map(Fraction, phi_4.coefficients))
+            tuple(value.as_fraction() for value in phi_2.coefficients)
+        )
+        product *= polynomial_from_coefficients(
+            tuple(value.as_fraction() for value in phi_4.coefficients)
         )
 
-        assert phi_4.coefficients == (
-            "1",
-            "0",
-            "0",
-            "1",
-            "0",
-            "0",
-            "1",
-            "0",
-            "0",
-            "1",
-            "0",
-            "0",
-            "1",
+        assert phi_4.coefficients == tuple(
+            _r(value) for value in (1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1)
         )
         assert product == fixed_point_equation(source, 4)
 
     def test_linear_map_is_outside_dynatomic_contract(self) -> None:
         with pytest.raises(ValidationError, match="degree at least two"):
-            DynatomicPolynomialRequest(coefficients=("1", "1"), n=2)
+            DynatomicPolynomialRequest(coefficients=(_r(1), _r(1)), n=2)
 
 
 class TestCycleMultiplier:
     def test_validated_two_cycle_multiplier(self) -> None:
         result = compute_cycle_multiplier(
-            CycleMultiplierRequest(coefficients=("1", "-1"), cycle=("0", "1"))
+            CycleMultiplierRequest(coefficients=(_r(1), _r(-1)), cycle=(_r(0), _r(1)))
         )
 
-        assert result.multiplier == "1"
+        assert result.multiplier == _r(1)
         assert result.period == 2
         assert result.validated_cycle is True
 
     def test_arbitrary_points_cannot_be_labeled_a_cycle(self) -> None:
         with pytest.raises(ValidationError, match="follow the polynomial map"):
-            CycleMultiplierRequest(coefficients=("0", "0", "1"), cycle=("0", "1"))
+            CycleMultiplierRequest(
+                coefficients=(_r(0), _r(0), _r(1)), cycle=(_r(0), _r(1))
+            )
 
     def test_repeated_cycle_points_are_rejected(self) -> None:
         with pytest.raises(ValidationError, match="distinct"):
-            CycleMultiplierRequest(coefficients=("0", "0", "1"), cycle=("0", "0"))
+            CycleMultiplierRequest(
+                coefficients=(_r(0), _r(0), _r(1)), cycle=(_r(0), _r(0))
+            )
 
 
 class TestFiniteFieldFunctionalGraph:
@@ -288,16 +291,19 @@ class TestFiniteFieldFunctionalGraph:
 
 
 class TestCanonicalAndPortfolioContracts:
-    @pytest.mark.parametrize("coefficient", ["01", "+1", "2/4", "1.0"])
+    @pytest.mark.parametrize(
+        "coefficient",
+        ["1", {"num": "01", "den": "1"}, {"num": "2", "den": "4"}],
+    )
     def test_noncanonical_rational_coefficients_are_rejected(
-        self, coefficient: str
+        self, coefficient: object
     ) -> None:
-        with pytest.raises(ValidationError, match="canonical"):
-            MapIterateRequest(coefficients=(coefficient,), n=1)
+        with pytest.raises(ValidationError):
+            MapIterateRequest.model_validate({"coefficients": [coefficient], "n": 1})
 
     def test_trailing_zero_coefficients_are_rejected(self) -> None:
         with pytest.raises(ValidationError, match="trailing zeros"):
-            MapIterateRequest(coefficients=("1", "0"), n=1)
+            MapIterateRequest(coefficients=(_r(1), _r(0)), n=1)
 
     def test_fixed_point_equation_is_native_not_a_catalog_slot(self) -> None:
         operation_ids = {tool.operation_id for tool in TOOLS}

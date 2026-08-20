@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.finite_state_transducers._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -21,3 +26,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact subsequential transducer run with complete output",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

@@ -84,7 +84,7 @@
     },
     "matrix.symbolic.eigenvalues.compute": {
       "input_schema": "sha256:ac00e4bb995206d5fe1f385a9a267b08b5d9359f5a5e8583f6225cb9ea8ccef1",
-      "output_schema": "sha256:e74363168b36c1d637f1d33b58b0d20aa78e611212e13ceeb92b0152a4094859"
+      "output_schema": "sha256:66501a5a7405a077368e5d9d88ca91bb817adbad45de6f0a9ac13874a22175e1"
     },
     "matrix.symbolic.rank.compute": {
       "input_schema": "sha256:ac00e4bb995206d5fe1f385a9a267b08b5d9359f5a5e8583f6225cb9ea8ccef1",

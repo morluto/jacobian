@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.formal_power_series._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -90,3 +95,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         native_symbol="jacobian.math.formal_power_series.truncate",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

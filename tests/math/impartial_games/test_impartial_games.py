@@ -182,11 +182,13 @@ class TestNativePortfolio:
         with pytest.raises(ValueError, match="move bound"):
             subtraction_game(tuple(range(1, 101)), 100)
 
-    def test_only_three_audited_outcomes_are_public(self) -> None:
+    def test_only_five_audited_outcomes_are_public(self) -> None:
         assert {tool.operation_id for tool in TOOLS} == {
             "game.impartial.birthday.compute",
             "game.impartial.grundy_table.compute",
             "game.subtraction.grundy_prefix.compute",
+            "game.nim.nim_sum.compute",
+            "game.impartial.outcome_profile.compute",
         }
 
     def test_native_birthdays_equal_public_kernel(self) -> None:

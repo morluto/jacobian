@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.numerical_semigroups._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -51,3 +56,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "one complete exact finite gap profile with its mutually determined canonical invariants",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

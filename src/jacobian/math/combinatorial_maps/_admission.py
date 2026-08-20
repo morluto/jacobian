@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.combinatorial_maps._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -41,3 +46,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact finite vertex-face incidence structure with multiplicity",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

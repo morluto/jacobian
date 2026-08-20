@@ -72,7 +72,13 @@ def _require_ideal_budget(ideal: RationalPolynomialIdeal, *, label: str) -> None
 class IdealRadicalRequest(StrictModel):
     """Compute ``sqrt(I)`` for a bounded ideal ``I`` in ``QQ[variables]``."""
 
-    ideal: RationalPolynomialIdeal
+    ideal: RationalPolynomialIdeal = Field(
+        description=(
+            "An ideal in at most 6 variables with at most 16 generators and "
+            "256 aggregate terms; generator total degree is at most 12 and "
+            "coefficient components are at most 128 digits."
+        )
+    )
     resource_budget: IdealComputationBudget = Field(
         default_factory=IdealComputationBudget
     )
@@ -114,8 +120,19 @@ class IdealRadicalMembershipRequest(StrictModel):
 class IdealQuotientRequest(StrictModel):
     """Compute ``(I : J)`` for bounded ideals in one ``QQ`` ring."""
 
-    dividend: RationalPolynomialIdeal
-    divisor: RationalPolynomialIdeal
+    dividend: RationalPolynomialIdeal = Field(
+        description=(
+            "An ideal in at most 6 variables with at most 16 generators and "
+            "256 aggregate terms; generator total degree is at most 12 and "
+            "coefficient components are at most 128 digits."
+        )
+    )
+    divisor: RationalPolynomialIdeal = Field(
+        description=(
+            "An ideal in the dividend's exact ordered ring, with the same "
+            "6-variable, 16-generator, 256-term, degree-12, and 128-digit bounds."
+        )
+    )
     resource_budget: IdealComputationBudget = Field(
         default_factory=IdealComputationBudget
     )

@@ -139,6 +139,24 @@ def test_relative_path_backend_is_resolved_before_entering_worker_directory(
     )
 
 
+def test_relative_prlimit_path_is_resolved_before_entering_worker_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = Path(_executable(tmp_path, 'print("not the protocol")'))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "jacobian.math.commutative_algebra_ops._singular.shutil.which",
+        lambda name: executable.name if name in {"Singular", "prlimit"} else None,
+    )
+
+    result = run_singular_ideal_operation(
+        "radical", _ideal(), None, IdealComputationBudget()
+    )
+
+    assert result.outcome == "ERROR"
+
+
 def test_nonzero_exit_is_a_typed_execution_error(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

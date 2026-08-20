@@ -49,7 +49,9 @@ class ConditionalExpectationRequest(StrictModel):
     @model_validator(mode="after")
     def require_same_space(self) -> Self:
         if self.rv.space != self.sigma.space:
-            raise ValueError("random variable and sigma algebra must share the same probability space")
+            raise ValueError(
+                "random variable and sigma algebra must share the same probability space"
+            )
         return self
 
 

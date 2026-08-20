@@ -1,6 +1,11 @@
 """Owner-local admission decisions for built-in math operations."""
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.quadratic_forms._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -19,3 +24,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact inertia and definiteness classification via SymPy eigenvalues",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

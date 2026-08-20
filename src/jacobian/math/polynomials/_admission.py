@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.polynomials._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -101,3 +106,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         native_symbol="jacobian.math.polynomials.divide",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

@@ -61,7 +61,8 @@ The ledger uses five decisions:
 | `CONTRACT_FIX` | Excluded | Repair the named correctness defect and add an adversarial regression, then reclassify the operation before publication. |
 
 Each mathematical domain's `_admission.py` module is the authority for its
-current decisions; `src/jacobian/catalog/admission.py` owns the shared policy
+current decisions and exports one `REGISTRATION` binding its candidate `TOOLS`
+to those decisions. `src/jacobian/catalog/admission.py` owns the shared policy
 types and fail-closed validation. A renamed or materially changed candidate
 needs a fresh decision; do not preserve a public operation solely because an
 earlier version was admitted.

@@ -102,6 +102,8 @@ class ConceptLatticeResult(StrictModel):
 
 
 __all__ = [
+    "MAX_CONCEPTS",
+    "MAX_CONCEPT_ATTRIBUTES",
     "ClosureResult",
     "ConceptLatticeResult",
     "ConceptRequest",
@@ -110,6 +112,4 @@ __all__ = [
     "DerivationResult",
     "EnumerateConceptsRequest",
     "EnumerateConceptsResult",
-    "MAX_CONCEPT_ATTRIBUTES",
-    "MAX_CONCEPTS",
 ]

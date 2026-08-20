@@ -102,7 +102,9 @@ def _next_closure(
         candidate = {a for a in current_set if a < i}
         candidate.add(i)
         # closure = candidate'' (closure under the closure operator)
-        closure = object_derivation(ctx, attribute_derivation(ctx, frozenset(candidate)))
+        closure = object_derivation(
+            ctx, attribute_derivation(ctx, frozenset(candidate))
+        )
         closure_set = set(closure)
         # Check lectic condition: closure agrees with current below i,
         # and i is in the closure (candidate is "licit-closed" up to i).

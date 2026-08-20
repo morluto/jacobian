@@ -245,7 +245,6 @@ def saturate_lattice(
 
 def sublattice_index(
     embedding: list[list[int]],
-    sublattice_rank: int,
     parent_rank: int,
 ) -> tuple[int, list[int], int]:
     """Return ``(index, invariant_factors, free_rank)`` for an inclusion.

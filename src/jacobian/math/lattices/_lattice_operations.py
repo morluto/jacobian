@@ -194,7 +194,6 @@ def compute_sublattice_index(request: SublatticeIndexRequest) -> SublatticeIndex
     parent_rank = len(request.parent.basis.entries)
     index, factors, free_rank = _sublattice_index(
         embedding,
-        sublattice_rank=len(request.sublattice.basis.entries),
         parent_rank=parent_rank,
     )
     return SublatticeIndexResult(

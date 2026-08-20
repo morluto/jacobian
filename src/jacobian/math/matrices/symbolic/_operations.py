@@ -11,8 +11,9 @@ from jacobian.math.matrices.symbolic import (
     symbolic_rank,
 )
 from jacobian.math.matrices.symbolic._models import (
-    SquareSymbolicMatrixRequest,
+    SymbolicCharacteristicPolynomialRequest,
     SymbolicCharacteristicPolynomialResult,
+    SymbolicDeterminantRequest,
     SymbolicDeterminantResult,
     SymbolicEigenvaluesResult,
     SymbolicMatrixRequest,
@@ -21,7 +22,7 @@ from jacobian.math.matrices.symbolic._models import (
 
 
 def compute_symbolic_determinant(
-    request: SquareSymbolicMatrixRequest,
+    request: SymbolicDeterminantRequest,
 ) -> SymbolicDeterminantResult:
     determinant = symbolic_determinant(
         request.matrix.entries,
@@ -41,7 +42,7 @@ def compute_symbolic_rank(
 
 
 def compute_symbolic_characteristic_polynomial(
-    request: SquareSymbolicMatrixRequest,
+    request: SymbolicCharacteristicPolynomialRequest,
 ) -> SymbolicCharacteristicPolynomialResult:
     degree, coeffs = symbolic_characteristic_polynomial(
         request.matrix.entries,
@@ -54,7 +55,7 @@ def compute_symbolic_characteristic_polynomial(
 
 
 def compute_symbolic_eigenvalues(
-    request: SquareSymbolicMatrixRequest,
+    request: SymbolicCharacteristicPolynomialRequest,
 ) -> SymbolicEigenvaluesResult:
     entries = request.matrix.entries
     variables = request.matrix.variables

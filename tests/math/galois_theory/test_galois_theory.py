@@ -149,6 +149,22 @@ def test_factorization_result_rejects_a_forged_certificate() -> None:
     with pytest.raises(ValidationError, match="prime"):
         GaloisFactorResult.model_validate(payload)
 
+    with pytest.raises(ValidationError, match="factor must be irreducible"):
+        GaloisFactorResult(
+            field_order=3,
+            source_coefficients=(2, 0, 1),
+            unit=1,
+            factors=(
+                {
+                    "coefficients": (2, 0, 1),
+                    "multiplicity": 1,
+                },
+            ),
+            distinct_factor_count=1,
+            factor_count=1,
+            is_irreducible=True,
+        )
+
 
 def test_frobenius_cycle_is_canonical_positive_partition() -> None:
     result = compute_frobenius_cycle(

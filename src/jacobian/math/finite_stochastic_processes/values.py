@@ -62,12 +62,6 @@ class FiniteRandomVariable(StrictModel):
     def require_valid_rv(self) -> Self:
         if len(self.values) != len(self.space.samples):
             raise ValueError("values must have one entry per sample")
-        for value in self.values:
-            require_bounded_rational(
-                value,
-                max_digits=256,
-                label="random-variable value",
-            )
         return self
 
 

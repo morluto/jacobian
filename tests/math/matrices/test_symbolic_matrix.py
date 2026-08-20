@@ -10,7 +10,9 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.math.matrices.symbolic._models import (
     SquareSymbolicMatrixRequest,
+    SymbolicCharacteristicPolynomialRequest,
     SymbolicCharacteristicPolynomialResult,
+    SymbolicDeterminantRequest,
     SymbolicDeterminantResult,
     SymbolicEigenvaluesResult,
     SymbolicMatrix,
@@ -90,10 +92,26 @@ def _square_request(
     )
 
 
-def _generic_two_by_two() -> SquareSymbolicMatrixRequest:
+def _determinant_request(
+    entries: Sequence[Sequence[RationalFunction]],
+    variables: tuple[str, ...],
+) -> SymbolicDeterminantRequest:
+    return SymbolicDeterminantRequest(matrix=_square_request(entries, variables).matrix)
+
+
+def _characteristic_request(
+    entries: Sequence[Sequence[RationalFunction]],
+    variables: tuple[str, ...],
+) -> SymbolicCharacteristicPolynomialRequest:
+    return SymbolicCharacteristicPolynomialRequest(
+        matrix=_square_request(entries, variables).matrix
+    )
+
+
+def _generic_two_by_two() -> SymbolicDeterminantRequest:
     variables = ("a", "b", "c", "d")
     a, b, c, d = (_variable(variables, index) for index in range(4))
-    return _square_request(((a, c), (b, d)), variables)
+    return _determinant_request(((a, c), (b, d)), variables)
 
 
 def test_symbolic_determinant_of_two_by_two() -> None:
@@ -107,10 +125,33 @@ def test_symbolic_determinant_of_two_by_two() -> None:
 
 
 def test_symbolic_determinant_of_constant_matrix() -> None:
-    request = _square_request(
+    request = _determinant_request(
         ((_constant(1), _constant(2)), (_constant(3), _constant(4))), ()
     )
     assert compute_symbolic_determinant(request).determinant == _constant(-2)
+
+
+def test_determinant_request_rejects_unrepresentable_expansion() -> None:
+    variables = tuple(f"x{index}" for index in range(8))
+    zero = _rf(variables)
+    diagonal = tuple(
+        _rf(
+            variables,
+            (1, 1, tuple(2 if position == index else 0 for position in range(8))),
+            (1, 1, tuple(1 if position == index else 0 for position in range(8))),
+            (1, 1, (0,) * 8),
+        )
+        for index in range(8)
+    )
+    entries = tuple(
+        tuple(diagonal[row] if row == column else zero for column in range(8))
+        for row in range(8)
+    )
+
+    with pytest.raises(ValidationError, match="term operation budget"):
+        SymbolicDeterminantRequest(
+            matrix=SymbolicMatrix(variables=variables, entries=entries)
+        )
 
 
 def test_symbolic_rank_of_full_and_singular_matrices() -> None:
@@ -132,12 +173,14 @@ def test_rational_function_entries_use_the_advertised_field() -> None:
         (1, 1, (0,)),
         denominator=((1, 1, (1,)),),
     )
-    result = compute_symbolic_determinant(_square_request(((inverse_x,),), variables))
+    result = compute_symbolic_determinant(
+        _determinant_request(((inverse_x,),), variables)
+    )
     assert result.determinant == inverse_x
 
 
 def test_symbolic_characteristic_polynomial_of_constant_matrix() -> None:
-    request = _square_request(
+    request = _characteristic_request(
         ((_constant(1), _constant(2)), (_constant(3), _constant(4))), ()
     )
     result = compute_symbolic_characteristic_polynomial(request)
@@ -153,7 +196,7 @@ def test_symbolic_characteristic_polynomial_of_constant_matrix() -> None:
 def test_symbolic_characteristic_polynomial_of_zero_matrix() -> None:
     zero = _constant(0)
     result = compute_symbolic_characteristic_polynomial(
-        _square_request(((zero, zero), (zero, zero)), ())
+        _characteristic_request(((zero, zero), (zero, zero)), ())
     )
     assert result.coefficients_descending == (
         _constant(1),
@@ -163,7 +206,7 @@ def test_symbolic_characteristic_polynomial_of_zero_matrix() -> None:
 
 
 def test_symbolic_eigenvalues_of_constant_matrix() -> None:
-    request = _square_request(
+    request = _characteristic_request(
         ((_constant(1), _constant(2)), (_constant(3), _constant(4))), ()
     )
     result = compute_symbolic_eigenvalues(request)
@@ -210,10 +253,10 @@ def test_symbolic_matrix_dimensions_are_bounded_at_eight() -> None:
 def test_symbolic_descriptors_publish_operation_specific_boundaries() -> None:
     request_types = {tool.operation_id: tool.request_type for tool in TOOLS}
     assert request_types == {
-        "matrix.symbolic.determinant.compute": SquareSymbolicMatrixRequest,
+        "matrix.symbolic.determinant.compute": SymbolicDeterminantRequest,
         "matrix.symbolic.rank.compute": SymbolicMatrixRequest,
-        "matrix.symbolic.characteristic_polynomial.compute": SquareSymbolicMatrixRequest,
-        "matrix.symbolic.eigenvalues.compute": SquareSymbolicMatrixRequest,
+        "matrix.symbolic.characteristic_polynomial.compute": SymbolicCharacteristicPolynomialRequest,
+        "matrix.symbolic.eigenvalues.compute": SymbolicCharacteristicPolynomialRequest,
     }
 
 
@@ -262,7 +305,7 @@ def test_symbolic_eigenvalues_returns_polynomial_for_unrepresentable_roots() -> 
     zero = _rf(variables)
     one = _rf(variables, (1, 1, (0,)))
     a = _variable(variables, 0)
-    request = _square_request(
+    request = _characteristic_request(
         (
             (zero, zero, zero, zero, a),
             (one, zero, zero, zero, one),
@@ -280,7 +323,7 @@ def test_symbolic_eigenvalues_returns_polynomial_for_unrepresentable_roots() -> 
 
 
 def test_symbolic_eigenvalues_explicit_for_representable_roots() -> None:
-    request = _square_request(
+    request = _characteristic_request(
         ((_constant(1), _constant(2)), (_constant(3), _constant(4))), ()
     )
     result = compute_symbolic_eigenvalues(request)

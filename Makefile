@@ -86,6 +86,14 @@ test-lean: ## Pinned Lean/Mathlib boundary (serial, 300s, kill-safe).
 		-m requires_lean $(if $(TESTS),$(TESTS),tests/process/logic) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
+test-singular: ## Pinned Singular ideal backend (serial, 120s, kill-safe).
+	@command -v Singular >/dev/null || { echo "Singular 4.4 is required" >&2; exit 1; }
+	$(PYTEST_RUNNER) --name singular --timeout-seconds 1200 -- \
+		-n 0 --timeout=120 --timeout-method=signal \
+		tests/math/commutative_algebra_ops \
+		tests/process/commutative_algebra_ops \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+
 test: test-ordinary ## All ordinary Python tests.
 
 test-ordinary: ## Lean-free ordinary suite in the fixed CI group order.
@@ -111,6 +119,7 @@ _test-full:
 	$(MAKE) test-integration
 	$(MAKE) test-process
 	$(MAKE) test-mcp
+	$(MAKE) test-singular
 	$(MAKE) test-lean
 
 test-stress: ## Repeat explicitly marked property tests on the scheduled lane.

@@ -210,6 +210,8 @@ ignore_imports = [
     "jacobian.math.** -> jacobian.catalog.admission",
     # The logic domain launches bounded external solvers via jacobian.process.
     "jacobian.math.logic._operations -> jacobian.process",
+    # General ideal radical/quotient run in a bounded one-shot Singular process.
+    "jacobian.math.commutative_algebra_ops._singular -> jacobian.process",
 ]
 
 [[tool.importlinter.contracts]]

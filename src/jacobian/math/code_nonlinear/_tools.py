@@ -8,13 +8,25 @@ from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.code_nonlinear._models import (
     BinaryCodeRequest,
+    ConstantWeightProfileRequest,
+    ConstantWeightProfileResult,
     ConstantWeightRequest,
     ConstantWeightResult,
     DistanceProfileResult,
+    ExplicitProfileRequest,
+    ExplicitProfileResult,
+    ToSetSystemRequest,
+    ToSetSystemResult,
+    WordDistanceRequest,
+    WordDistanceResult,
 )
 from jacobian.math.code_nonlinear._operations import (
     compute_constant_weight,
+    compute_constant_weight_profile,
     compute_distance_profile,
+    compute_explicit_profile,
+    compute_to_set_system,
+    compute_word_distance,
 )
 
 
@@ -78,6 +90,50 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {"length": 4, "weight": 2},
             ),
         ),
+    ),
+    _op(
+        "code.binary.word_distance.compute",
+        "Compute Hamming distance between two binary words",
+        "Compute the exact Hamming distance, differing coordinates, weights, and support intersection of two equal-length binary words.",
+        WordDistanceRequest,
+        WordDistanceResult,
+        compute_word_distance,
+        "code",
+        "distance",
+        "exact",
+    ),
+    _op(
+        "code.binary.explicit.profile.compute",
+        "Compute the complete profile of an explicit binary code",
+        "Compute length, cardinality, weight distribution, minimum/maximum pairwise Hamming distance, distance histogram, and extremal pairs for a nonlinear binary code.",
+        ExplicitProfileRequest,
+        ExplicitProfileResult,
+        compute_explicit_profile,
+        "code",
+        "distance",
+        "exact",
+    ),
+    _op(
+        "code.binary.constant_weight.profile.compute",
+        "Profile of a constant-weight binary code",
+        "Compute the profile of a constant-weight binary code using support-intersection distances.",
+        ConstantWeightProfileRequest,
+        ConstantWeightProfileResult,
+        compute_constant_weight_profile,
+        "code",
+        "constant-weight",
+        "exact",
+    ),
+    _op(
+        "code.binary.explicit.to_set_system.compute",
+        "Map codewords to support subsets",
+        "Map each binary codeword to its support subset on coordinate labels.",
+        ToSetSystemRequest,
+        ToSetSystemResult,
+        compute_to_set_system,
+        "code",
+        "set-system",
+        "exact",
     ),
 )
 

@@ -13,6 +13,10 @@ from jacobian.math.numerical_semigroups._models import (
     CatenaryDegreeResult,
     DeltaSetRequest,
     DeltaSetResult,
+    ElasticityRequest,
+    ElasticityResult,
+    ElementElasticityRequest,
+    ElementElasticityResult,
     FactorizationComputeRequest,
     FactorizationComputeResult,
     FactorizationGraphComputeRequest,
@@ -30,6 +34,8 @@ from jacobian.math.numerical_semigroups._operations import (
     compute_betti_elements,
     compute_catenary_degree,
     compute_delta_set,
+    compute_element_elasticity,
+    compute_elasticity,
     compute_factorization_graph,
     compute_factorizations,
     compute_membership,
@@ -248,6 +254,47 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "global_catenary_3_5",
                 "Global catenary degree of <3,5>.",
+                {"generators": ["3", "5"]},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.elasticity.compute",
+        "Compute element elasticity",
+        "Compute the elasticity of one element in a numerical semigroup: "
+        "the ratio of the maximum to minimum factorization length over all "
+        "factorizations of the element. Returns as an exact fraction.",
+        ElementElasticityRequest,
+        ElementElasticityResult,
+        compute_element_elasticity,
+        "number-theory",
+        "numerical-semigroup",
+        "factorization",
+        "exact",
+        examples=(
+            example(
+                "elasticity_15_in_3_5",
+                "Elasticity of 15 in <3,5>.",
+                {"generators": ["3", "5"], "value": "15"},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.elasticity.global_compute",
+        "Compute global elasticity",
+        "Compute the global elasticity of a numerical semigroup: the ratio "
+        "of the largest to smallest minimal generator, which is the "
+        "supremum of element elasticities.",
+        ElasticityRequest,
+        ElasticityResult,
+        compute_elasticity,
+        "number-theory",
+        "numerical-semigroup",
+        "exact",
+        examples=(
+            example(
+                "global_elasticity_3_5",
+                "Global elasticity of <3,5>.",
                 {"generators": ["3", "5"]},
             ),
         ),

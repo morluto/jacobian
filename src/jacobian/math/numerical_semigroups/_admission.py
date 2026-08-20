@@ -26,6 +26,16 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "complete global delta-set invariant rebuilt on the repaired Betti basis after the #1977 contract repair",
     ),
     OperationAdmission(
+        "number_theory.numerical_semigroup.elasticity.compute",
+        AdmissionDecision.KEEP,
+        "exact per-element elasticity as the max/min factorization-length ratio",
+    ),
+    OperationAdmission(
+        "number_theory.numerical_semigroup.elasticity.global_compute",
+        AdmissionDecision.KEEP,
+        "global semigroup elasticity as the largest/smallest generator ratio",
+    ),
+    OperationAdmission(
         "number_theory.numerical_semigroup.factorization_graph.compute",
         AdmissionDecision.KEEP,
         "reusable factorization graph and component construction",

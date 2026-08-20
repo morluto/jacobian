@@ -18,6 +18,8 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
         "number_theory.numerical_semigroup.presentation_binomials.compute",
         "number_theory.numerical_semigroup.delta_set.compute",
         "number_theory.numerical_semigroup.catenary_degree.compute",
+        "number_theory.numerical_semigroup.elasticity.compute",
+        "number_theory.numerical_semigroup.elasticity.global_compute",
     }
 
 

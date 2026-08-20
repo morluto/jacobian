@@ -103,7 +103,9 @@ class OperationInspectionResult(StrictModel):
 class OperationValidationIssue(StrictModel):
     """One field-level recovery item for a selected operation payload."""
 
-    location: tuple[str | int, ...]
+    location: tuple[Annotated[str, Field(max_length=128)] | StrictInt, ...] = Field(
+        max_length=32
+    )
     code: str = Field(min_length=1, max_length=128)
     message: str = Field(min_length=1, max_length=1_024)
     input: Any | None = None

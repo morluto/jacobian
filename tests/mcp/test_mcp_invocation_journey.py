@@ -143,6 +143,30 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                 for issue in oversized_error.value.data["errors"]
             )
 
+            oversized_fields = {
+                f"{'x' * 4_096}{index}": "y" * 2_000 for index in range(64)
+            }
+            with pytest.raises(MCPError) as bounded_locations_error:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": "integer.compute.extended_gcd",
+                        "payload": {
+                            "left": "84",
+                            "right": "30",
+                            **oversized_fields,
+                        },
+                    },
+                )
+            bounded_data = bounded_locations_error.value.data
+            assert all(
+                len(component) <= 128
+                for issue in bounded_data["errors"]
+                for component in issue["location"]
+                if isinstance(component, str)
+            )
+            assert len(json.dumps(bounded_data).encode("utf-8")) <= 64 * 1_024
+
             with pytest.raises(MCPError) as multiple_errors:
                 await client.call_tool(
                     "math.run",

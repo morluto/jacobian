@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from mcp.server.mcpserver import Context
@@ -28,6 +29,11 @@ from jacobian.mcp.runtime import (
     _authorize,
     _catalog,
 )
+
+_MAX_VALIDATION_ERRORS = 64
+_MAX_VALIDATION_LOCATION_COMPONENTS = 32
+_MAX_VALIDATION_LOCATION_LENGTH = 128
+_MAX_VALIDATION_ISSUES_BYTES = 48 * 1_024
 
 
 def math_find(
@@ -91,20 +97,12 @@ def math_run(
         )
     except OperationRequestValidationError as exc:
         validation_error = exc.validation_error
-        errors = tuple(
-            OperationValidationIssue(
-                location=tuple(
-                    item for item in error["loc"] if isinstance(item, (str, int))
-                ),
-                code=str(error["type"]),
-                message=_bounded_validation_message(error["msg"]),
-                input=_recoverable_error_input(error.get("input")),
-            )
-            for error in validation_error.errors(
+        errors = _bounded_validation_issues(
+            validation_error.errors(
                 include_url=False,
                 include_context=False,
                 include_input=True,
-            )[:64]
+            )
         )
         data = OperationInvalidRequestData(
             operation_id=operation_id,
@@ -115,6 +113,44 @@ def math_run(
             message="operation payload failed validation",
             data=data.model_dump(mode="json"),
         ) from exc
+
+
+def _bounded_validation_issues(
+    errors: Sequence[Mapping[str, Any]],
+) -> tuple[OperationValidationIssue, ...]:
+    """Build useful field diagnostics within one aggregate response budget."""
+
+    from jacobian.canonical import encode_strict_json
+
+    issues: list[OperationValidationIssue] = []
+    encoded_size = 0
+    for error in errors[:_MAX_VALIDATION_ERRORS]:
+        issue = OperationValidationIssue(
+            location=_bounded_validation_location(error["loc"]),
+            code=str(error["type"]),
+            message=_bounded_validation_message(error["msg"]),
+            input=_recoverable_error_input(error.get("input")),
+        )
+        issue_size = len(encode_strict_json(issue.model_dump(mode="json")))
+        if encoded_size + issue_size > _MAX_VALIDATION_ISSUES_BYTES:
+            break
+        issues.append(issue)
+        encoded_size += issue_size
+    return tuple(issues)
+
+
+def _bounded_validation_location(value: Any) -> tuple[str | int, ...]:
+    """Sanitize caller-controlled Pydantic locations for recovery output."""
+
+    location: list[str | int] = []
+    for component in value:
+        if isinstance(component, str):
+            location.append(_bounded_text(component, _MAX_VALIDATION_LOCATION_LENGTH))
+        elif type(component) is int:
+            location.append(component)
+        if len(location) == _MAX_VALIDATION_LOCATION_COMPONENTS:
+            break
+    return tuple(location)
 
 
 def _recoverable_error_input(value: Any) -> Any | None:
@@ -132,5 +168,10 @@ def _recoverable_error_input(value: Any) -> Any | None:
 def _bounded_validation_message(value: Any) -> str:
     """Keep caller-influenced Pydantic diagnostics inside the public schema."""
 
-    message = str(value)
-    return message if len(message) <= 1_024 else f"{message[:1_021]}..."
+    return _bounded_text(str(value), 1_024)
+
+
+def _bounded_text(value: str, maximum_length: int) -> str:
+    return (
+        value if len(value) <= maximum_length else f"{value[: maximum_length - 3]}..."
+    )

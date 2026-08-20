@@ -12,6 +12,7 @@ from jacobian.math.latin_squares_ops._models import (
     LatinSquareTransposeResult,
     OrthogonalityRequest,
     OrthogonalityResult,
+    TransposeRequest,
 )
 from jacobian.math.latin_squares_ops._operations import (
     compute_latin_square_check,
@@ -100,7 +101,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "latin_square.transpose.compute",
         "Transpose a Latin square",
         "Swap rows and columns of a Latin square.",
-        LatinSquareRequest,
+        TransposeRequest,
         LatinSquareTransposeResult,
         compute_latin_square_transpose,
         "latin-square",

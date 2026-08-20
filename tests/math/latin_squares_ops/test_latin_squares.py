@@ -1,8 +1,12 @@
 """Tests for Latin square operations."""
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian.math.latin_squares_ops._models import (
     LatinSquareRequest,
     OrthogonalityRequest,
+    TransposeRequest,
 )
 from jacobian.math.latin_squares_ops._operations import (
     compute_latin_square_check,
@@ -54,6 +58,29 @@ def test_orthogonality_orthogonal() -> None:
 
 
 def test_transpose() -> None:
-    request = LatinSquareRequest(square={"order": 2, "cells": ((0, 1), (1, 0))})
+    request = TransposeRequest(square={"order": 2, "cells": ((0, 1), (1, 0))})
     result = compute_latin_square_transpose(request)
     assert result.transposed == ((0, 1), (1, 0))
+
+
+def test_orthogonality_rejects_non_latin_square() -> None:
+    """Orthogonality must only be computed on actual Latin squares."""
+    non_latin = {"order": 2, "cells": [[0, 0], [1, 1]]}
+    with pytest.raises(ValidationError):
+        OrthogonalityRequest(square_a=non_latin, square_b=Z2)
+    with pytest.raises(ValidationError):
+        OrthogonalityRequest(square_a=Z2, square_b=non_latin)
+
+
+def test_transpose_rejects_non_latin_square() -> None:
+    """Transpose must only be computed on actual Latin squares."""
+    non_latin = {"order": 2, "cells": [[0, 0], [1, 1]]}
+    with pytest.raises(ValidationError):
+        TransposeRequest(square=non_latin)
+
+
+def test_check_accepts_non_latin_square() -> None:
+    """The check operation must accept non-Latin squares to test them."""
+    request = LatinSquareRequest(square={"order": 2, "cells": ((0, 0), (1, 1))})
+    result = compute_latin_square_check(request)
+    assert result.is_latin is False

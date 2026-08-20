@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from jacobian.math.latin_squares_ops._models import (
-    LatinSquareCheckResult,
     LatinSquareRequest,
+    LatinSquareCheckResult,
     LatinSquareTransposeResult,
     OrthogonalityRequest,
     OrthogonalityResult,
+    TransposeRequest,
 )
 
 
@@ -40,7 +41,7 @@ def compute_orthogonality(request: OrthogonalityRequest) -> OrthogonalityResult:
 
 
 def compute_latin_square_transpose(
-    request: LatinSquareRequest,
+    request: TransposeRequest,
 ) -> LatinSquareTransposeResult:
     """Transpose a Latin square (swap rows and columns)."""
     n = request.square.order

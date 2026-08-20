@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.boolean._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -11,3 +16,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "reusable typed mathematical construction or transformation with a distinct discovery intent",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

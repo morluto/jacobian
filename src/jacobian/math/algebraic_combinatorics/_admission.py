@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.algebraic_combinatorics._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -23,4 +28,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "useful deterministic helper retained through the supported native API",
         native_symbol="jacobian.math.algebraic_combinatorics.standard_young_tableaux_count",
     ),
+    OperationAdmission(
+        "combinatorics.rsk.permutation.compute",
+        AdmissionDecision.KEEP,
+        "RSK correspondence with insertion/recording tableaux, shape, and LIS/LDS lengths",
+    ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

@@ -1,0 +1,18 @@
+{
+  "catalog_version": "1",
+  "domain": "projective_coords_ops",
+  "operations": {
+    "projective.chart_transition.compute": {
+      "input_schema": "sha256:a1a8e861998d910997d4a3376f946d480263433af632f3e18f21f8856aa2727b",
+      "output_schema": "sha256:ca16172cf4fbc56c67bd31b7bf90a052497391af16884de7474fba510d0317f6"
+    },
+    "projective.rational_point.construct": {
+      "input_schema": "sha256:252dbcae7c0d2a3e1c911bf5f6a8d3c56763d0f673c77c4c57b149361118ffa0",
+      "output_schema": "sha256:e28e31ddf8672685284de4b9f30a0ce47563432d4f3233b6791348b82fcc9e07"
+    },
+    "projective.standard_chart.compute": {
+      "input_schema": "sha256:28e244772a727fbd402bef2db9a035c214f8ae7e208fe7add3ae33c2ccb12122",
+      "output_schema": "sha256:48946c63a7b53c055a42f43209f71c1f1366db76eca40455fec3530a2f963458"
+    }
+  }
+}

@@ -136,7 +136,7 @@ def compute_min_cost_flow(request: MinCostFlowRequest) -> MinCostFlowResult:
     g.add_nodes_from(range(request.graph.vertex_count))
     for node in range(request.graph.vertex_count):
         g.nodes[node]["demand"] = request.demands[node]
-    for edge, cap, cost in zip(edges, capacities, costs):
+    for edge, cap, cost in zip(edges, capacities, costs, strict=True):
         g.add_edge(
             edge.source,
             edge.target,

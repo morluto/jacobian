@@ -205,7 +205,6 @@ class MinCostFlowResult(StrictModel):
     convention: Literal["NETWORKX_MIN_COST_FLOW"] = "NETWORKX_MIN_COST_FLOW"
 
 
-
 class CirculationResult(StrictModel):
     feasible: bool
     flow_edges: tuple[FlowEdgeResult, ...] = Field(default=())

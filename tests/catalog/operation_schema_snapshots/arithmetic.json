@@ -12,7 +12,7 @@
     },
     "integer.k_free_decomposition.compute": {
       "input_schema": "sha256:8772b18ec2778032d4a008419d0926cd7940fc259327cd1b5d3c7ae7f481d2c6",
-      "output_schema": "sha256:b81e9bbe3db2b6768d7830b28561a5360ed19b62a5a611aaa10de05ac6edd100"
+      "output_schema": "sha256:b3027fcd4d9f8b360d8ebbba9f2a88b7a7bf91198e0c11fc8100d3eed6771f97"
     },
     "integer.perfect_power.profile.compute": {
       "input_schema": "sha256:b960f22f4544ba9c68fa0a8785f911b1263fd91aeaa980b5b49eb0f2750ca3a7",
@@ -20,11 +20,11 @@
     },
     "integer.squarefree_decomposition.compute": {
       "input_schema": "sha256:b960f22f4544ba9c68fa0a8785f911b1263fd91aeaa980b5b49eb0f2750ca3a7",
-      "output_schema": "sha256:d0b81eec9bb47dd5dd2686a5b9be4d3859888fda6ef0132d32066f477ea77ed4"
+      "output_schema": "sha256:d220879bfd0cee2d2d71a01c1b33ce8fb94335267de8a40a23767640e9f5fa16"
     },
     "integer.squarefree_part.compute": {
       "input_schema": "sha256:b960f22f4544ba9c68fa0a8785f911b1263fd91aeaa980b5b49eb0f2750ca3a7",
-      "output_schema": "sha256:d0b81eec9bb47dd5dd2686a5b9be4d3859888fda6ef0132d32066f477ea77ed4"
+      "output_schema": "sha256:d220879bfd0cee2d2d71a01c1b33ce8fb94335267de8a40a23767640e9f5fa16"
     },
     "quadratic_radical.positive_integer.normalize.compute": {
       "input_schema": "sha256:7015435b09ee64de62c8eab28a6d73e94ec669a5c12bbfcfa0a8bd4f5827a738",

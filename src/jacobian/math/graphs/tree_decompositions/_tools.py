@@ -177,6 +177,7 @@ TREE_DECOMPOSITION_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"decomposition": _DECOMPOSITION, "subset": ["a", "b"]},
             ),
         ),
+        version="2",
     ),
     _op(
         "graph.tree_decomposition.bag_intersection_graph.compute",

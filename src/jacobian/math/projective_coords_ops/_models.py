@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -67,8 +67,6 @@ class ChartTransitionRequest(StrictModel):
             raise ValueError("chart index out of range")
         if self.point.coordinates[self.chart_i].as_fraction() == 0:
             raise ValueError("chart_i coordinate must be nonzero")
-        if self.point.coordinates[self.chart_j].as_fraction() == 0:
-            raise ValueError("chart_j coordinate must be nonzero")
         return self
 
 
@@ -89,7 +87,30 @@ class StandardChartResult(StrictModel):
 
 
 class ChartTransitionResult(StrictModel):
-    transition: tuple[CanonicalRational, ...]
+    status: Literal["DEFINED", "OUTSIDE_TARGET_CHART"]
+    transition: tuple[CanonicalRational, ...] | None
     chart_i: int = Field(ge=0)
     chart_j: int = Field(ge=0)
+    projective_dimension: int = Field(ge=0, le=MAX_DIM)
     method: str = "CHART_TRANSITION"
+
+    @model_validator(mode="after")
+    def require_status_consistency(self) -> Self:
+        if (self.status == "DEFINED") != (self.transition is not None):
+            raise ValueError(
+                "DEFINED must carry target-chart coordinates and "
+                "OUTSIDE_TARGET_CHART must not"
+            )
+        if (
+            self.chart_i > self.projective_dimension
+            or self.chart_j > self.projective_dimension
+        ):
+            raise ValueError("chart axes must belong to the projective point")
+        if (
+            self.transition is not None
+            and len(self.transition) != self.projective_dimension
+        ):
+            raise ValueError(
+                "defined transition must contain every target-chart coordinate"
+            )
+        return self

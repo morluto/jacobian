@@ -222,7 +222,9 @@ def test_exact_result_limit_is_not_reported_as_invalid_backend_encoding(
     )
 
     assert result.outcome == "LIMIT_EXCEEDED"
-    assert result.detail == "The exact Singular ideal exceeds the declared result bound."
+    assert (
+        result.detail == "The exact Singular ideal exceeds the declared result bound."
+    )
 
 
 def test_stderr_on_zero_exit_fails_closed(

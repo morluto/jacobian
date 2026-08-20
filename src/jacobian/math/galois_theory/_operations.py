@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sympy.combinatorics.permutations import PermutationGroup
+
 from jacobian.math.galois_theory._models import (
     FrobeniusCycleRequest,
     FrobeniusCycleResult,
@@ -48,7 +53,7 @@ def compute_frobenius_cycle(request: FrobeniusCycleRequest) -> FrobeniusCycleRes
     )
 
 
-def _galois_group_from_coeffs(coeffs: tuple[int, ...]):
+def _galois_group_from_coeffs(coeffs: tuple[int, ...]) -> PermutationGroup:
     """Return the SymPy permutation group for a polynomial over Q.
 
     Coefficients are in ascending order: coeffs[0] is the constant term,

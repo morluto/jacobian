@@ -91,13 +91,14 @@ class MaximalPerfectPowerResult(StrictModel):
                 raise ValueError("nonunit profile requires is_nontrivial_perfect_power")
             source = int(self.source)
             base = int(self.base)
-            if base ** self.exponent != source:
+            if base**self.exponent != source:
                 raise ValueError("base^exponent does not reconstruct the source")
             if not self.factors:
                 raise ValueError("nonunit profile requires prime-exponent factors")
             # Verify maximality: the exponent must be the gcd of all
             # prime exponents (with odd restriction for negative source).
             from math import gcd
+
             exps = [row.exponent for row in self.factors]
             g = exps[0]
             for e in exps[1:]:
@@ -159,6 +160,7 @@ class KFreeDecompositionResult(StrictModel):
                 raise ValueError("extracted base must be >= 1")
             # Verify k-freeness: no prime to the k-th power divides |c|
             from sympy import factorint
+
             abs_c = abs(c)
             if abs_c > 1:
                 for _, e in factorint(abs_c).items():
@@ -212,6 +214,7 @@ class SquarefreeDecompositionResult(StrictModel):
                 raise ValueError("square factor must be >= 1")
             # Verify squarefreeness of |d|
             from sympy import factorint
+
             abs_d = abs(d)
             if abs_d > 1:
                 for _, e in factorint(abs_d).items():

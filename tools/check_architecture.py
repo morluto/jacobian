@@ -282,6 +282,47 @@ def _unsafe_wire_conversion_violations(
     )
 
 
+def _evaluator_aliases(tree: ast.AST) -> tuple[set[str], set[str]]:
+    direct_names = set(_EVALUATOR_CAPABLE_FUNCTIONS)
+    builtin_modules = {"builtins"}
+    for node in _walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "builtins":
+                    builtin_modules.add(alias.asname or alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if (
+                    node.module == "builtins" and alias.name in {"eval", "exec"}
+                ) or (
+                    node.module is not None
+                    and (
+                        node.module == "sympy" or node.module.startswith("sympy.")
+                    )
+                    and alias.name in _EVALUATOR_CAPABLE_FUNCTIONS
+                ):
+                    direct_names.add(alias.asname or alias.name)
+    return direct_names, builtin_modules
+
+
+def _evaluator_call_name(
+    node: ast.Call,
+    direct_names: set[str],
+    builtin_modules: set[str],
+) -> str | None:
+    if isinstance(node.func, ast.Name):
+        return node.func.id if node.func.id in direct_names else None
+    if isinstance(node.func, ast.Attribute) and (
+        node.func.attr not in {"eval", "exec"}
+        or (
+            isinstance(node.func.value, ast.Name)
+            and node.func.value.id in builtin_modules
+        )
+    ):
+        return node.func.attr
+    return None
+
+
 def _evaluator_parser_violations(
     relative: PurePosixPath, tree: ast.AST
 ) -> tuple[Violation, ...]:
@@ -289,19 +330,13 @@ def _evaluator_parser_violations(
 
     if not relative.is_relative_to(PurePosixPath("src/jacobian/math")):
         return ()
+    direct_names, builtin_modules = _evaluator_aliases(tree)
     violations: list[Violation] = []
     for node in _walk(tree):
         if not isinstance(node, ast.Call):
             continue
-        name = None
-        if isinstance(node.func, ast.Name):
-            name = node.func.id
-        elif isinstance(node.func, ast.Attribute) and node.func.attr not in {
-            "eval",
-            "exec",
-        }:
-            name = node.func.attr
-        if name in _EVALUATOR_CAPABLE_FUNCTIONS:
+        name = _evaluator_call_name(node, direct_names, builtin_modules)
+        if name is not None:
             violations.append(
                 _violation(
                     relative,

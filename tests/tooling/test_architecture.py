@@ -100,6 +100,10 @@ def test_direct_canonical_wire_conversion_is_rejected(tmp_path: Path) -> None:
         "eval(caller_input)\n",
         "exec(caller_input)\n",
         "lambdify(axis, caller_input)\n",
+        "import builtins\nbuiltins.eval(caller_input)\n",
+        "import builtins as b\nb.exec(caller_input)\n",
+        "from builtins import eval as evaluate\nevaluate(caller_input)\n",
+        "from sympy import sympify as parse\nparse(caller_input)\n",
     ],
 )
 def test_evaluator_capable_parsers_are_forbidden_in_math_tree(

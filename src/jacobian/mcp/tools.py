@@ -97,7 +97,7 @@ def math_run(
                     item for item in error["loc"] if isinstance(item, (str, int))
                 ),
                 code=str(error["type"]),
-                message=str(error["msg"]),
+                message=_bounded_validation_message(error["msg"]),
                 input=_recoverable_error_input(error.get("input")),
             )
             for error in exc.errors(
@@ -127,3 +127,10 @@ def _recoverable_error_input(value: Any) -> Any | None:
     except CanonicalizationError:
         return None
     return value if len(encoded) <= 2_048 else None
+
+
+def _bounded_validation_message(value: Any) -> str:
+    """Keep caller-influenced Pydantic diagnostics inside the public schema."""
+
+    message = str(value)
+    return message if len(message) <= 1_024 else f"{message[:1_021]}..."

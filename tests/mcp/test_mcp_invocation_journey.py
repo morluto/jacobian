@@ -124,6 +124,25 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
             }
             assert "reject-this-private-value" not in invalid_error.value.message
 
+            with pytest.raises(MCPError) as oversized_error:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": "universal_algebra.term.evaluate.compute",
+                        "payload": {
+                            "term": {
+                                "nodes": [{"kind": "x" * 4_096}],
+                                "root": 0,
+                            }
+                        },
+                    },
+                )
+            assert oversized_error.value.code == -32602
+            assert all(
+                len(issue["message"]) <= 1_024
+                for issue in oversized_error.value.data["errors"]
+            )
+
             with pytest.raises(MCPError) as multiple_errors:
                 await client.call_tool(
                     "math.run",

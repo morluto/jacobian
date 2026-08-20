@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from .values import FormalContext
 
+# This bound is also enforced in the request models (_models.py).
+MAX_CONCEPTS = 10000
+
 __all__ = [
+    "MAX_CONCEPTS",
     "attribute_closure",
     "attribute_derivation",
     "concept_from_attributes",
@@ -38,8 +42,8 @@ def attribute_derivation(
 ) -> frozenset[int]:
     """Return B' = {g in G : every m in B is possessed by g}.
 
-    Under standard FCA semantics, the derivation of the empty attribute set
-    is every object.
+    Under standard FCA semantics, the derivation of the empty attribute set is
+    every object.
     """
     if not attributes:
         return frozenset(range(len(ctx.objects)))
@@ -80,39 +84,64 @@ def concept_from_attributes(
     return {"extent": extent, "intent": intent}
 
 
-def enumerate_concepts(ctx: FormalContext) -> list[dict[str, frozenset[int]]]:
-    """Return every formal concept exactly once by brute-force enumeration of
-    all closed attribute intents."""
-    n = len(ctx.attributes)
-    closed_intents: set[frozenset[int]] = set()
-    for mask in range(2**n):
-        candidate = frozenset(i for i in range(n) if mask & (1 << i))
-        closure = object_derivation(ctx, attribute_derivation(ctx, candidate))
-        closed_intents.add(frozenset(closure))
-    concepts = []
-    for intent in closed_intents:
-        extent = attribute_derivation(ctx, intent)
-        concepts.append({"extent": extent, "intent": intent})
-    return concepts
-
-
-def _next_closed_intent(
-    ctx: FormalContext, current: frozenset[int]
+def _next_closure(
+    ctx: FormalContext, current: frozenset[int], n: int
 ) -> frozenset[int] | None:
-    """Find the next closed intent in lectic order using brute-force enumeration."""
-    n = len(ctx.attributes)
+    """Find the next closed attribute set in lectic order after *current*.
+
+    Implements Ganter's NextClosure algorithm.  The lectic order compares
+    sets by scanning from the largest element downward: A < B iff the
+    largest element where A and B differ belongs to B.
+    """
     current_set = set(current)
     for i in range(n - 1, -1, -1):
         if i in current_set:
+            current_set.discard(i)
             continue
-        candidate = frozenset(a for a in current_set if a < i)
-        candidate = candidate | {i}
-        closure = object_derivation(ctx, attribute_derivation(ctx, candidate))
-        if (closure == candidate or candidate.issubset(closure)) and frozenset(
-            closure
-        ) > current:
-            return frozenset(closure)
+        # Candidate = (current ∩ {0,...,i-1}) ∪ {i}
+        candidate = {a for a in current_set if a < i}
+        candidate.add(i)
+        # closure = candidate'' (closure under the closure operator)
+        closure = object_derivation(ctx, attribute_derivation(ctx, frozenset(candidate)))
+        closure_set = set(closure)
+        # Check lectic condition: closure agrees with current below i,
+        # and i is in the closure (candidate is "licit-closed" up to i).
+        # The standard condition is:
+        #   closure ∩ {0,...,i-1} == current ∩ {0,...,i-1}  AND  i ∈ closure
+        if i not in closure_set:
+            continue
+        if {a for a in closure_set if a < i} != {a for a in current_set if a < i}:
+            continue
+        # closure is the next closed set in lectic order
+        return frozenset(closure_set)
     return None
+
+
+def enumerate_concepts(ctx: FormalContext) -> list[dict[str, frozenset[int]]]:
+    """Return every formal concept exactly once using Ganter's NextClosure
+    algorithm over the declared attribute order.
+
+    The algorithm enumerates closed attribute intents in lectic order.
+    Each step requires O(n) derivation operations, so the total cost is
+    proportional to the number of concepts times n, not to 2^n.
+    """
+    n = len(ctx.attributes)
+    concepts: list[dict[str, frozenset[int]]] = []
+
+    # The empty set is always closed (it is the intent of the top concept).
+    current: frozenset[int] | None = frozenset()
+    while current is not None:
+        intent = current
+        extent = attribute_derivation(ctx, intent)
+        concepts.append({"extent": extent, "intent": intent})
+        if len(concepts) > MAX_CONCEPTS:
+            raise ValueError(
+                f"concept count exceeds maximum of {MAX_CONCEPTS}; "
+                "narrow the context or reduce the number of attributes"
+            )
+        current = _next_closure(ctx, current, n)
+
+    return concepts
 
 
 def _inclusion_order(

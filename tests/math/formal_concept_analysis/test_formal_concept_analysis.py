@@ -160,8 +160,8 @@ class TestEnumeration:
             EnumerateConceptsRequest(context=_diagonal_context())
         )
         # Diagonal: o0 has both a0 and a1; o1 has a1.
-        # Concepts: ({o0,o1}, {a1}), ({o0}, {a0,a1})
-        assert result.count == 2
+        # Concepts: ({o0,o1}, {}), ({o0,o1}, {a1}), ({o0}, {a0,a1})
+        assert result.count == 3
 
 
 # ---------------------------------------------------------------------------

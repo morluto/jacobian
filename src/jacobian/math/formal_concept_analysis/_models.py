@@ -62,8 +62,12 @@ class ConceptResult(StrictModel):
     intent: tuple[int, ...]
 
 
-# Bound the concept enumeration to prevent unbounded 2^|M| work.
+# Bound the concept enumeration. NextClosure has cost proportional to the
+# number of concepts (not 2^|M|), but the number of concepts itself can be
+# exponential in the number of attributes.  We bound both the attribute count
+# and the number of concepts returned.
 MAX_CONCEPT_ATTRIBUTES = 20
+MAX_CONCEPTS = 10000
 
 
 class EnumerateConceptsRequest(StrictModel):
@@ -106,4 +110,6 @@ __all__ = [
     "DerivationResult",
     "EnumerateConceptsRequest",
     "EnumerateConceptsResult",
+    "MAX_CONCEPT_ATTRIBUTES",
+    "MAX_CONCEPTS",
 ]

@@ -142,3 +142,70 @@ class EdgeDisjointPathsResult(StrictModel):
     source: int = Field(ge=0, le=63)
     sink: int = Field(ge=0, le=63)
     convention: Literal["NETWORKX_EDGE_DISJOINT_PATHS"] = "NETWORKX_EDGE_DISJOINT_PATHS"
+
+
+class CostedFlowEdge(StrictModel):
+    """One directed edge with a capacity and a cost per unit of flow."""
+
+    source: int = Field(ge=0, le=63)
+    target: int = Field(ge=0, le=63)
+    capacity: CanonicalRational
+    cost: CanonicalRational
+
+
+class CostedFlowGraph(StrictModel):
+    """A directed graph with capacities and per-unit costs for flow problems."""
+
+    vertex_count: int = Field(ge=2, le=64)
+    edges: tuple[CostedFlowEdge, ...] = Field(min_length=1, max_length=512)
+
+    @model_validator(mode="after")
+    def require_valid(self) -> Self:
+        seen: set[tuple[int, int]] = set()
+        for edge in self.edges:
+            if not (
+                0 <= edge.source < self.vertex_count
+                and 0 <= edge.target < self.vertex_count
+            ):
+                raise ValueError("edge vertices must be in 0..vertex_count-1")
+            if edge.capacity.as_fraction() < 0:
+                raise ValueError("edge capacities must be nonnegative")
+            endpoint_pair = (edge.source, edge.target)
+            if endpoint_pair in seen:
+                raise ValueError("directed edges must be unique")
+            seen.add(endpoint_pair)
+        return self
+
+
+class MinCostFlowRequest(StrictModel):
+    graph: CostedFlowGraph
+    demands: tuple[int, ...] = Field(default=(), max_length=64)
+
+    @model_validator(mode="after")
+    def require_valid(self) -> Self:
+        if len(self.demands) != self.graph.vertex_count:
+            raise ValueError("demands length must match vertex_count")
+        if sum(self.demands) != 0:
+            raise ValueError("demands must sum to zero")
+        return self
+
+
+class FlowEdgeResult(StrictModel):
+    """The flow assigned to one directed edge."""
+
+    source: int = Field(ge=0, le=63)
+    target: int = Field(ge=0, le=63)
+    flow: CanonicalRational
+
+
+class MinCostFlowResult(StrictModel):
+    total_cost: CanonicalRational
+    flow_edges: tuple[FlowEdgeResult, ...] = Field(default=())
+    feasible: bool
+    convention: Literal["NETWORKX_MIN_COST_FLOW"] = "NETWORKX_MIN_COST_FLOW"
+
+
+class CirculationResult(StrictModel):
+    feasible: bool
+    flow_edges: tuple[FlowEdgeResult, ...] = Field(default=())
+    convention: Literal["NETWORKX_CIRCULATION"] = "NETWORKX_CIRCULATION"

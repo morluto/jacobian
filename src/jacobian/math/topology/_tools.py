@@ -32,7 +32,7 @@ _f_vector_tool = MathTool(
         example(
             "triangle_f_vector",
             "Compute f-vector of a triangle (3 vertices, 3 edges, 1 face); "
-            "facets must be a list of maximal simplices.",
+            "facets must be a list of simplices.",
             {
                 "complex": {
                     "vertices": ["v0", "v1", "v2"],
@@ -48,9 +48,8 @@ _link_tool = MathTool(
     version="1",
     title="Compute the link of a simplex",
     description=(
-        "Compute the link of a simplex sigma in a simplicial complex K: "
-        "all simplices tau such that sigma intersect tau = empty and sigma union tau "
-        "is a simplex of K. Returns the facets of the link complex."
+        "Compute the link of a simplex in a finite simplicial complex and return "
+        "the maximal facets of the resulting link complex."
     ),
     request_type=LinkRequest,
     result_type=LinkResult,
@@ -59,8 +58,7 @@ _link_tool = MathTool(
     examples=(
         example(
             "link_of_vertex_in_triangle",
-            "Compute the link of vertex v0 in a triangle; "
-            "the simplex must be a subset of the complex vertices.",
+            "Compute the link of one vertex in a triangle.",
             {
                 "complex": {
                     "vertices": ["v0", "v1", "v2"],

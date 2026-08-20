@@ -25,6 +25,16 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
+    OperationAdmission(
+        "code.dual_code.compute",
+        AdmissionDecision.KEEP,
+        "exact parity check matrix via null space computation over GF(p)",
+    ),
+    OperationAdmission(
+        "code.syndrome.compute",
+        AdmissionDecision.KEEP,
+        "exact syndrome vector H*r^T mod p for received word decoding",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

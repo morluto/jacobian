@@ -787,49 +787,6 @@ __all__ = [
 ]
 
 
-class LinkRequest(StrictModel):
-    """Request the link of a simplex in a simplicial complex."""
-
-    complex: SimplicialComplexRequest
-    simplex: tuple[VertexLabel, ...] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def require_valid_simplex(self) -> Self:
-        vertex_set = set(self.complex.vertices)
-        if len(set(self.simplex)) != len(self.simplex):
-            raise ValueError("simplex vertices must be distinct")
-        for v in self.simplex:
-            if v not in vertex_set:
-                raise ValueError("simplex vertices must be in the complex")
-        # Check that the simplex is a face of the complex
-        simplex_set = set(self.simplex)
-        facet_set = {frozenset(f) for f in self.complex.facets}
-        all_faces: set[frozenset[str]] = set()
-        for facet in self.complex.facets:
-            for r in range(1, len(facet) + 1):
-                from itertools import combinations
-
-                for subset in combinations(facet, r):
-                    all_faces.add(frozenset(subset))
-        if simplex_set not in all_faces and len(simplex_set) > 0:
-            # Check if simplex is contained in any facet
-            is_face = any(simplex_set <= facet for facet in facet_set)
-            if not is_face:
-                raise ValueError("simplex must be a face of the complex")
-        return self
-
-
-class LinkResult(TopologyExactResult):
-    """The link of a simplex: facets of the link complex."""
-
-    simplex: tuple[str, ...]
-    link_facets: tuple[tuple[str, ...], ...]
-    link_is_empty: bool
-
-
-__all__.extend(["LinkRequest", "LinkResult"])
-
-
 class FVectorRequest(StrictModel):
     """Request the f-vector and h-vector of a simplicial complex."""
 
@@ -845,4 +802,30 @@ class FVectorResult(TopologyExactResult):
     dimension: int
 
 
-__all__.extend(["FVectorRequest", "FVectorResult"])
+class LinkRequest(StrictModel):
+    """Request the link of a simplex in a simplicial complex."""
+
+    complex: SimplicialComplexRequest
+    simplex: tuple[VertexLabel, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_valid_simplex(self) -> Self:
+        simplex = set(self.simplex)
+        if len(simplex) != len(self.simplex):
+            raise ValueError("simplex vertices must be distinct")
+        if not simplex.issubset(self.complex.vertices):
+            raise ValueError("simplex vertices must be in the complex")
+        if not any(simplex.issubset(facet) for facet in self.complex.facets):
+            raise ValueError("simplex must be a face of the complex")
+        return self
+
+
+class LinkResult(TopologyExactResult):
+    """The maximal facets of the link of a simplex."""
+
+    simplex: tuple[str, ...]
+    link_facets: tuple[tuple[str, ...], ...]
+    link_is_empty: bool
+
+
+__all__.extend(["FVectorRequest", "FVectorResult", "LinkRequest", "LinkResult"])

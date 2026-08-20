@@ -6,11 +6,19 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.code_theory._dual_operations import (
+    compute_dual_code,
+    compute_syndrome,
+)
 from jacobian.math.code_theory._models import (
     CoveringRadiusRequest,
     CoveringRadiusResult,
+    DualCodeRequest,
+    DualCodeResult,
     LinearCodeRequest,
     MinimumDistanceResult,
+    SyndromeRequest,
+    SyndromeResult,
     WeightDistributionResult,
 )
 from jacobian.math.code_theory._operations import (
@@ -96,6 +104,60 @@ CODE_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "binary_repetition_code",
                 "Covering radius of the binary repetition code of length four.",
                 {"field_order": 2, "generator_matrix": [[1, 1, 1, 1]]},
+            ),
+        ),
+    ),
+    ct_operation(
+        "code.dual_code.compute",
+        "Compute the dual code",
+        "Compute the parity check matrix (dual code) from a "
+        "generator matrix over a prime field GF(p), using exact null "
+        "space computation.",
+        DualCodeRequest,
+        DualCodeResult,
+        compute_dual_code,
+        "coding-theory",
+        "dual-code",
+        examples=(
+            example(
+                "hamming_7_4_generator",
+                "Compute the dual code of a [7,4] Hamming generator; "
+                "field_order must be prime and entries must be canonical.",
+                {
+                    "field_order": 2,
+                    "generator_matrix": [
+                        [1, 0, 0, 0, 1, 1, 0],
+                        [0, 1, 0, 0, 1, 0, 1],
+                        [0, 0, 1, 0, 0, 1, 1],
+                        [0, 0, 0, 1, 1, 1, 1],
+                    ],
+                },
+            ),
+        ),
+    ),
+    ct_operation(
+        "code.syndrome.compute",
+        "Compute the syndrome of a received word",
+        "Compute the syndrome vector H * r^T mod p for a "
+        "received word r under a parity check matrix H over GF(p).",
+        SyndromeRequest,
+        SyndromeResult,
+        compute_syndrome,
+        "coding-theory",
+        "syndrome",
+        examples=(
+            example(
+                "syndrome_of_correctable_error",
+                "Compute the syndrome of a received word; "
+                "field_order must be prime and word length must match columns.",
+                {
+                    "field_order": 2,
+                    "parity_check_matrix": [
+                        [1, 1, 0],
+                        [0, 1, 1],
+                    ],
+                    "received_word": [1, 0, 1],
+                },
             ),
         ),
     ),

@@ -25,6 +25,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
+    OperationAdmission(
+        "network.min_cost_flow.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact or explicitly bounded search outcome with material computational leverage",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

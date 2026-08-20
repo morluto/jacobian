@@ -46,6 +46,90 @@ class GeneratorMatrixRequest(StrictModel):
         return self
 
 
+class ParityCheckRequest(StrictModel):
+    """A linear code given by a generator matrix for computing a parity-check."""
+
+    field_order: int = Field(ge=2, le=251)
+    generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
+
+    @model_validator(mode="after")
+    def require_valid(self) -> Self:
+        _validate_prime_matrix(self.field_order, self.generator_matrix)
+        return self
+
+
+class CodewordCheckRequest(StrictModel):
+    """Check whether a word is a codeword of the code."""
+
+    field_order: int = Field(ge=2, le=251)
+    generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
+    word: tuple[int, ...] = Field(min_length=1, max_length=MAX_LENGTH)
+
+    @model_validator(mode="after")
+    def require_valid(self) -> Self:
+        width = _validate_prime_matrix(self.field_order, self.generator_matrix)
+        if len(self.word) != width:
+            raise ValueError("word length must match code length")
+        if any(not 0 <= v < self.field_order for v in self.word):
+            raise ValueError("word entries must be canonical field residues")
+        return self
+
+
+class SyndromeRequest(StrictModel):
+    """Compute the syndrome of a word under a parity-check matrix."""
+
+    field_order: int = Field(ge=2, le=251)
+    parity_check_matrix: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=16
+    )
+    word: tuple[int, ...] = Field(min_length=1, max_length=MAX_LENGTH)
+
+    @model_validator(mode="after")
+    def require_valid(self) -> Self:
+        from sympy import isprime
+
+        if not isprime(self.field_order):
+            raise ValueError("field_order must be prime")
+        width = len(self.parity_check_matrix[0])
+        if width == 0 or width > MAX_LENGTH:
+            raise ValueError("parity-check rows must have between 1 and 32 entries")
+        if any(len(row) != width for row in self.parity_check_matrix):
+            raise ValueError("parity-check matrix rows must have equal length")
+        if any(
+            not 0 <= entry < self.field_order
+            for row in self.parity_check_matrix
+            for entry in row
+        ):
+            raise ValueError("parity-check entries must be canonical field residues")
+        if len(self.word) != width:
+            raise ValueError("word length must match code length")
+        if any(not 0 <= v < self.field_order for v in self.word):
+            raise ValueError("word entries must be canonical field residues")
+        return self
+
+
+class CodeEqualRequest(StrictModel):
+    """Check whether two generator matrices define the same code."""
+
+    field_order: int = Field(ge=2, le=251)
+    generator_matrix_a: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
+    generator_matrix_b: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
+
+    @model_validator(mode="after")
+    def require_valid(self) -> Self:
+        _validate_prime_matrix(self.field_order, self.generator_matrix_a)
+        _validate_prime_matrix(self.field_order, self.generator_matrix_b)
+        width_a = len(self.generator_matrix_a[0])
+        width_b = len(self.generator_matrix_b[0])
+        if width_a != width_b:
+            raise ValueError("generator matrices must have the same code length")
+        if self.field_order ** len(self.generator_matrix_a) > MAX_CODEWORDS:
+            raise ValueError("code cardinality exceeds enumeration bound")
+        if self.field_order ** len(self.generator_matrix_b) > MAX_CODEWORDS:
+            raise ValueError("code cardinality exceeds enumeration bound")
+        return self
+
+
 class MacWilliamsRequest(StrictModel):
     """Primal weight distribution for MacWilliams transform."""
 
@@ -56,8 +140,10 @@ class MacWilliamsRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_distribution(self) -> Self:
-        if any(w < 0 or w > self.length for w in self.weights):
-            raise ValueError("weights must be between 0 and length")
+        if len(self.weights) != self.length + 1:
+            raise ValueError("weights must have length + 1 entries")
+        if any(w < 0 for w in self.weights):
+            raise ValueError("weight counts must be non-negative")
         if self.weights[0] != 1:
             raise ValueError("first weight count must be 1 (zero codeword)")
         if sum(self.weights) != self.code_cardinality:
@@ -81,12 +167,69 @@ class PunctureRequest(StrictModel):
         return self
 
 
+class ShortenRequest(StrictModel):
+    """Shorten a linear code by fixing one coordinate to zero and puncturing it."""
+
+    field_order: int = Field(ge=2, le=251)
+    generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
+    coordinate: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def require_valid_request(self) -> Self:
+        _validate_prime_matrix(self.field_order, self.generator_matrix)
+        width = len(self.generator_matrix[0])
+        if self.coordinate >= width:
+            raise ValueError("coordinate index out of range")
+        return self
+
+
+# Results
+
+
+class FromGeneratorResult(StrictModel):
+    canonical_generator: tuple[tuple[int, ...], ...]
+    dimension: int = Field(ge=0)
+    length: int = Field(ge=0)
+    cardinality: int = Field(ge=1)
+    method: str = "RREF"
+
+
 class DualCodeResult(StrictModel):
     dual_generator: tuple[tuple[int, ...], ...]
     dimension: int = Field(ge=0)
     dual_dimension: int = Field(ge=0)
     length: int = Field(ge=0)
     method: str = "NULLSPACE"
+
+
+class ParityCheckResult(StrictModel):
+    parity_check: tuple[tuple[int, ...], ...]
+    dimension: int = Field(ge=0)
+    rank_h: int = Field(ge=0)
+    length: int = Field(ge=0)
+    method: str = "NULLSPACE"
+
+
+class CodewordCheckResult(StrictModel):
+    is_member: bool
+    hamming_weight: int = Field(ge=0)
+    coefficients: tuple[int, ...] = ()
+    syndrome: tuple[int, ...] = ()
+    method: str = "RREF_MEMBERSHIP"
+
+
+class SyndromeResult(StrictModel):
+    syndrome: tuple[int, ...]
+    is_member: bool
+    method: str = "MATRIX_VECTOR_PRODUCT"
+
+
+class CodeEqualResult(StrictModel):
+    equal: bool
+    dimension_a: int = Field(ge=0)
+    dimension_b: int = Field(ge=0)
+    witness_word: tuple[int, ...] | None = None
+    method: str = "MUTUAL_ROW_SPACE_CONTAINMENT"
 
 
 class MacWilliamsResult(StrictModel):
@@ -99,3 +242,10 @@ class PunctureResult(StrictModel):
     dimension: int = Field(ge=0)
     length: int = Field(ge=0)
     method: str = "PUNCTURE"
+
+
+class ShortenResult(StrictModel):
+    generator: tuple[tuple[int, ...], ...]
+    dimension: int = Field(ge=0)
+    length: int = Field(ge=0)
+    method: str = "SHORTEN"

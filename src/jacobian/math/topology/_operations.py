@@ -688,63 +688,21 @@ TOPOLOGY_OPERATIONS: tuple[TopologyOperation, ...] = (
 __all__ = ["TOPOLOGY_OPERATIONS"]
 
 
-def _build_all_simplices(facets: tuple) -> set:  # type: ignore[type-arg]
-    """Build all simplices from maximal facets."""
-    from itertools import combinations as _comb
-
-    all_s = set()
-    for facet in facets:
-        for r in range(1, len(facet) + 1):
-            for subset in _comb(facet, r):
-                all_s.add(frozenset(subset))
-    return all_s
-
-
-def _find_maximal_simplices(simplex_set: set) -> list:  # type: ignore[type-arg]
-    """Find maximal simplices in a set of frozensets."""
-    result = []
-    for s in simplex_set:
-        if not any(s < other for other in simplex_set if s != other):
-            result.append(s)
-    return result
-
-
-def compute_link(request: LinkRequest) -> LinkResult:
-    """Compute the link of a simplex in a simplicial complex."""
-    from jacobian.math.topology._models import LinkResult
-
-    target = set(request.simplex)
-    all_simplices = _build_all_simplices(request.complex.facets)
-    link_simplices = set()
-    for simplex in all_simplices:
-        if not (set(simplex) & target) and (simplex | target) in all_simplices:
-            link_simplices.add(simplex)
-    link_facets = _find_maximal_simplices(link_simplices)
-    link_facet_tuples = tuple(
-        tuple(sorted(s))
-        for s in sorted(link_facets, key=lambda s: (-len(s), sorted(s)))
-    )
-    return LinkResult(
-        simplex=request.simplex,
-        link_facets=link_facet_tuples,
-        link_is_empty=len(link_facets) == 0,
-    )
-
-
 def compute_f_vector(request: FVectorRequest) -> FVectorResult:
     """Compute the f-vector and h-vector of a simplicial complex."""
-    from itertools import combinations as _comb
-    from math import comb as _comb_func
-
-    from jacobian.math.topology._models import FVectorResult
-
     facets = request.complex.facets
-    all_simplices = set()
+
+    # Build all simplices from facets
+    from itertools import combinations as _comb
+
+    all_simplices: set[tuple[str, ...]] = set()
     for facet in facets:
-        for r in range(1, len(facet) + 1):
+        n = len(facet)
+        for r in range(1, n + 1):
             for subset in _comb(facet, r):
                 all_simplices.add(tuple(sorted(subset)))
 
+    # Count by dimension
     max_dim = 0
     counts_by_dim: dict[int, int] = {}
     for simplex in all_simplices:
@@ -755,17 +713,16 @@ def compute_f_vector(request: FVectorRequest) -> FVectorResult:
     f_vector = tuple(counts_by_dim.get(d, 0) for d in range(max_dim + 1))
     euler = sum((-1) ** d * counts_by_dim.get(d, 0) for d in range(max_dim + 1))
 
-    # Standard h-vector: for a (d-1)-dimensional complex (d = max_dim + 1),
-    # h_k = sum_{i=0}^{k} (-1)^{k-i} * C(d-i, k-i) * f_{i-1}
-    # where f_{-1} = 1 (the empty face) and k ranges from 0 to d.
-    d = max_dim + 1  # the dimension parameter for the h-vector
-    # f_{i-1} for i=0 is the empty face count (1), for i>=1 it's f_vector[i-1]
-    f_with_empty: list[int] = [1, *list(f_vector)]  # f_{-1}=1, f_0, f_1, ...
+    # Compute h-vector from f-vector
+    from math import comb as _comb_func
+
+    n = max_dim + 1
+    f_with_empty: list[int] = [1, *list(f_vector)]
     h_vector: list[int] = []
-    for k in range(d + 1):
+    for k in range(n + 1):
         h = 0
         for i in range(k + 1):
-            h += ((-1) ** (k - i)) * _comb_func(d - i, k - i) * f_with_empty[i]
+            h += ((-1) ** (k - i)) * _comb_func(n - i, k - i) * f_with_empty[i]
         h_vector.append(h)
 
     return FVectorResult(
@@ -773,4 +730,31 @@ def compute_f_vector(request: FVectorRequest) -> FVectorResult:
         h_vector=tuple(h_vector),
         euler_characteristic=euler,
         dimension=max_dim,
+    )
+
+
+def compute_link(request: LinkRequest) -> LinkResult:
+    """Compute the link of a simplex in a simplicial complex."""
+    target = frozenset(request.simplex)
+    link_simplices: set[frozenset[str]] = set()
+    for facet in request.complex.facets:
+        remainder = frozenset(facet) - target
+        if target.issubset(facet) and remainder:
+            link_simplices.add(remainder)
+
+    link_facets = {
+        simplex
+        for simplex in link_simplices
+        if not any(simplex < other for other in link_simplices)
+    }
+    ordered_facets = tuple(
+        tuple(sorted(simplex))
+        for simplex in sorted(
+            link_facets, key=lambda value: (-len(value), sorted(value))
+        )
+    )
+    return LinkResult(
+        simplex=request.simplex,
+        link_facets=ordered_facets,
+        link_is_empty=not ordered_facets,
     )

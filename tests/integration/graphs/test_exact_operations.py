@@ -104,6 +104,20 @@ def test_spectral_contract_rejects_non_simple_graphs() -> None:
         )
 
 
+def test_native_spectral_api_requires_a_validated_simple_graph() -> None:
+    from jacobian.math.graphs.spectral import (
+        GraphEdgeList,
+        adjacency_spectrum,
+        laplacian_spectrum,
+    )
+
+    graph = GraphEdgeList(vertex_count=2, edges=((0, 1),))
+    assert dict(laplacian_spectrum(graph)) == {"0": 1, "2": 1}
+
+    with pytest.raises(ValidationError, match="self-loops"):
+        adjacency_spectrum(GraphEdgeList(vertex_count=2, edges=((0, 0),)))
+
+
 def test_laplacian_spectrum_uses_normalized_simple_graph_degree() -> None:
     result = compute_laplacian_spectrum(
         GraphSpectrumRequest.model_validate(

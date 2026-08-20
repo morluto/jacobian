@@ -157,6 +157,21 @@ def test_recurrence_finder_solves_for_coefficients() -> None:
     assert result.coefficients == ("2",)
 
 
+def test_native_recurrence_api_enforces_the_sequence_contract() -> None:
+    from jacobian.math.recurrence_solving import closed_form, find_recurrence
+
+    recurrence = find_recurrence(("3", "6", "12", "24"))
+    assert recurrence.status == "FOUND"
+    assert recurrence.coefficients == ("2",)
+    assert closed_form(("1", "-2"), ("3",)).expression == "3*2**n"
+
+    with pytest.raises(ValidationError, match="at least 2"):
+        find_recurrence(("1",))
+
+    with pytest.raises(ValidationError, match="initial value count"):
+        closed_form(("1", "-1", "-1"), ("1",))
+
+
 def test_recurrence_finder_reports_a_missing_nonvacuous_fit() -> None:
     result = compute_find_recurrence(RecurrenceFindRequest(sequence=("0", "1")))
 

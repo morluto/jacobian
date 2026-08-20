@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.math.code_theory import minimum_distance
 from jacobian.math.code_theory._models import (
     CoveringRadiusRequest,
     LinearCodeRequest,
@@ -32,6 +33,21 @@ def test_code_contract_rejects_nonprime_fields_and_unbounded_enumeration() -> No
         LinearCodeRequest(field_order=4, generator_matrix=((1,),))
     with pytest.raises(ValidationError, match="enumeration"):
         LinearCodeRequest(field_order=251, generator_matrix=((1,), (1,), (1,)))
+
+
+def test_native_code_api_enforces_the_prime_field_contract() -> None:
+    assert minimum_distance(((1, 1),), 2) == 2
+
+    with pytest.raises(ValidationError, match="prime"):
+        minimum_distance(((1,),), 4)
+
+
+@pytest.mark.parametrize("generator_matrix", [(), ((1, 0), (1,))])
+def test_native_code_api_rejects_invalid_generator_shapes(
+    generator_matrix: tuple[tuple[int, ...], ...],
+) -> None:
+    with pytest.raises(ValidationError, match=r"at least 1|equal length"):
+        minimum_distance(generator_matrix, 2)
 
 
 def test_binary_repetition_code_length_three_has_covering_radius_one() -> None:

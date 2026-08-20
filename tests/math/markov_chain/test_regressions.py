@@ -5,8 +5,12 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.markov_chain import stationary_distribution
-from jacobian.math.markov_chain._models import TransitionMatrixRequest
+from jacobian.math.markov_chain import (
+    StationaryDistributionRequest,
+    TransitionMatrixRequest,
+    ergodic_properties,
+    stationary_distribution,
+)
 from jacobian.math.markov_chain._operations import (
     compute_ergodic_decision,
     compute_stationary_distribution,
@@ -67,7 +71,7 @@ def test_aperiodicity_is_checked_for_each_communicating_class() -> None:
 
 
 def test_stationary_family_exposes_every_closed_class() -> None:
-    request = TransitionMatrixRequest.model_validate(
+    request = StationaryDistributionRequest.model_validate(
         {
             "matrix": [
                 [
@@ -100,13 +104,31 @@ def test_stationary_family_exposes_every_closed_class() -> None:
 
 
 def test_native_singular_stationary_helper_rejects_nonunique_chain() -> None:
-    matrix = [
-        [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
-        [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
-    ]
+    request = StationaryDistributionRequest.model_validate(
+        {
+            "matrix": [
+                [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+                [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+            ]
+        }
+    )
 
     with pytest.raises(ValueError, match="does not have a unique"):
-        stationary_distribution(matrix)
+        stationary_distribution(request)
+
+
+def test_native_markov_api_accepts_public_validated_requests() -> None:
+    request = StationaryDistributionRequest.model_validate(
+        {
+            "matrix": [
+                [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
+                [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
+            ]
+        }
+    )
+
+    assert stationary_distribution(request) == (Fraction(1, 2), Fraction(1, 2))
+    assert ergodic_properties(request) == (True, True)
 
 
 def test_stationary_family_solves_each_nonsingleton_closed_class_exactly() -> None:

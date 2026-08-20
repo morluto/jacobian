@@ -17,15 +17,15 @@ from jacobian.math.code_theory._models import (
 
 
 def compute_min_distance(request: LinearCodeRequest) -> MinimumDistanceResult:
-    dist = minimum_distance(request.generator_matrix, request.field_order)  # type: ignore[no-untyped-call]
+    dist = minimum_distance(request.generator_matrix, request.field_order)
     return MinimumDistanceResult(minimum_distance=dist)
 
 
 def compute_weight_dist(request: LinearCodeRequest) -> WeightDistributionResult:
-    weights = weight_distribution(request.generator_matrix, request.field_order)  # type: ignore[no-untyped-call]
+    weights = weight_distribution(request.generator_matrix, request.field_order)
     return WeightDistributionResult(weights=tuple((w, c) for w, c in weights))
 
 
 def compute_covering_radius(request: CoveringRadiusRequest) -> CoveringRadiusResult:
-    radius = covering_radius(request.generator_matrix, request.field_order)  # type: ignore[no-untyped-call]
+    radius = covering_radius(request.generator_matrix, request.field_order)
     return CoveringRadiusResult(covering_radius=radius)

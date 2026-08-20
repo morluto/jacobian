@@ -2,15 +2,36 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Literal
+
 from jacobian.canonical import parse_canonical_integer
 
-__all__ = ["closed_form", "find_recurrence"]
+__all__ = ["ClosedForm", "Recurrence", "closed_form", "find_recurrence"]
 
 
-def find_recurrence(sequence):  # type: ignore[no-untyped-def]
+@dataclass(frozen=True, slots=True)
+class Recurrence:
+    coefficients: tuple[str, ...]
+    order: int
+    status: Literal["FOUND", "NO_FITTING_RECURRENCE"]
+
+
+@dataclass(frozen=True, slots=True)
+class ClosedForm:
+    expression: str
+
+
+def find_recurrence(sequence: tuple[str, ...]) -> Recurrence:
     import sympy
 
-    values = [sympy.Rational(parse_canonical_integer(value)) for value in sequence]
+    from jacobian.math.recurrence_solving._models import RecurrenceFindRequest
+
+    request = RecurrenceFindRequest(sequence=sequence)
+
+    values = [
+        sympy.Rational(parse_canonical_integer(value)) for value in request.sequence
+    ]
     for order in range(1, len(values)):
         coefficient_matrix = sympy.Matrix(
             [
@@ -25,24 +46,32 @@ def find_recurrence(sequence):  # type: ignore[no-untyped-def]
             continue
         if parameters:
             solution = solution.subs(dict.fromkeys(parameters, 0))
-        return {
-            "coefficients": tuple(str(value) for value in solution),
-            "order": order,
-            "status": "FOUND",
-        }
-    return {
-        "coefficients": (),
-        "order": 0,
-        "status": "NO_FITTING_RECURRENCE",
-    }
+        return Recurrence(
+            coefficients=tuple(str(value) for value in solution),
+            order=order,
+            status="FOUND",
+        )
+    return Recurrence(coefficients=(), order=0, status="NO_FITTING_RECURRENCE")
 
 
-def closed_form(char_coeffs, initial_values):  # type: ignore[no-untyped-def]
+def closed_form(
+    char_coeffs: tuple[str, ...], initial_values: tuple[str, ...]
+) -> ClosedForm:
     import sympy
+
+    from jacobian.math.recurrence_solving._models import ClosedFormRequest
+
+    request = ClosedFormRequest(
+        characteristic_coefficients=char_coeffs,
+        initial_values=initial_values,
+    )
 
     x = sympy.Symbol("x")
     n = sympy.Symbol("n", integer=True, nonnegative=True)
-    char_poly_coeffs = [sympy.Rational(parse_canonical_integer(c)) for c in char_coeffs]
+    char_poly_coeffs = [
+        sympy.Rational(parse_canonical_integer(c))
+        for c in request.characteristic_coefficients
+    ]
     char_poly = sum(
         c * x ** (len(char_poly_coeffs) - 1 - i) for i, c in enumerate(char_poly_coeffs)
     )
@@ -55,9 +84,9 @@ def closed_form(char_coeffs, initial_values):  # type: ignore[no-untyped-def]
         for root in nonzero_roots
         for power in range(roots.count(root))
     )
-    init = [sympy.Rational(parse_canonical_integer(v)) for v in initial_values]
+    init = [sympy.Rational(parse_canonical_integer(v)) for v in request.initial_values]
     a = sympy.Matrix([[term.subs(n, i) for term in basis] for i in range(len(basis))])
     b = sympy.Matrix(init)
     consts = a.solve(b)
     expr = sum(c * term for c, term in zip(consts, basis, strict=True))
-    return {"expression": str(sympy.simplify(expr))}
+    return ClosedForm(expression=str(sympy.simplify(expr)))

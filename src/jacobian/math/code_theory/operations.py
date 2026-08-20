@@ -3,12 +3,23 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Iterator
 from itertools import product
 
-__all__ = ["covering_radius", "minimum_distance", "weight_distribution"]
+__all__ = [
+    "GeneratorMatrix",
+    "covering_radius",
+    "minimum_distance",
+    "weight_distribution",
+]
 
 
-def _codewords(generator_matrix, field_order):  # type: ignore[no-untyped-def]
+GeneratorMatrix = tuple[tuple[int, ...], ...]
+
+
+def _codewords(
+    generator_matrix: GeneratorMatrix, field_order: int
+) -> Iterator[tuple[int, ...]]:
     from flint import nmod_mat
 
     n_rows = len(generator_matrix)
@@ -16,34 +27,49 @@ def _codewords(generator_matrix, field_order):  # type: ignore[no-untyped-def]
     seen = set()
     for coeffs in product(range(field_order), repeat=n_rows):
         coefficient_row = nmod_mat([list(coeffs)], field_order)
-        codeword = tuple((coefficient_row * generator).tolist()[0])
+        codeword = tuple(
+            int(value) for value in (coefficient_row * generator).tolist()[0]
+        )
         if codeword not in seen:
             seen.add(codeword)
             yield codeword
 
 
-def minimum_distance(generator_matrix, field_order):  # type: ignore[no-untyped-def]
-    if field_order < 2:
-        raise ValueError("field_order must be at least 2")
+def minimum_distance(generator_matrix: GeneratorMatrix, field_order: int) -> int:
+    from jacobian.math.code_theory._models import LinearCodeRequest
+
+    request = LinearCodeRequest(
+        generator_matrix=generator_matrix, field_order=field_order
+    )
     min_dist = float("inf")
-    for codeword in _codewords(generator_matrix, field_order):  # type: ignore[no-untyped-call]
+    for codeword in _codewords(request.generator_matrix, request.field_order):
         weight = sum(1 for c in codeword if c != 0)
         if weight > 0 and weight < min_dist:
             min_dist = weight
     return int(min_dist) if min_dist != float("inf") else 0
 
 
-def weight_distribution(generator_matrix, field_order):  # type: ignore[no-untyped-def]
+def weight_distribution(
+    generator_matrix: GeneratorMatrix, field_order: int
+) -> list[tuple[int, int]]:
     from collections import Counter
 
+    from jacobian.math.code_theory._models import LinearCodeRequest
+
+    request = LinearCodeRequest(
+        generator_matrix=generator_matrix, field_order=field_order
+    )
+
     weights: Counter[int] = Counter()
-    for codeword in _codewords(generator_matrix, field_order):  # type: ignore[no-untyped-call]
+    for codeword in _codewords(request.generator_matrix, request.field_order):
         weight = sum(1 for c in codeword if c != 0)
         weights[weight] += 1
     return sorted(weights.items())
 
 
-def _parity_check_matrix(generator_matrix, field_order):  # type: ignore[no-untyped-def]
+def _parity_check_matrix(
+    generator_matrix: GeneratorMatrix, field_order: int
+) -> list[list[int]]:
     """Return a basis of the generator matrix's right nullspace."""
     rows = [list(row) for row in generator_matrix]
     row_count = len(rows)
@@ -91,7 +117,7 @@ def _parity_check_matrix(generator_matrix, field_order):  # type: ignore[no-unty
     return check_rows
 
 
-def covering_radius(generator_matrix, field_order):  # type: ignore[no-untyped-def]
+def covering_radius(generator_matrix: GeneratorMatrix, field_order: int) -> int:
     """Compute a linear code's covering radius by syndrome-space BFS.
 
     One graph step adds a nonzero scalar multiple of one parity-check column,
@@ -99,9 +125,14 @@ def covering_radius(generator_matrix, field_order):  # type: ignore[no-untyped-d
     Therefore graph distance from the zero syndrome is minimum coset-leader
     weight, and the maximum distance is the covering radius.
     """
-    check_rows = _parity_check_matrix(  # type: ignore[no-untyped-call]
-        generator_matrix,
-        field_order,
+    from jacobian.math.code_theory._models import CoveringRadiusRequest
+
+    request = CoveringRadiusRequest(
+        generator_matrix=generator_matrix, field_order=field_order
+    )
+    check_rows = _parity_check_matrix(
+        request.generator_matrix,
+        request.field_order,
     )
     if not check_rows:
         return 0
@@ -111,11 +142,11 @@ def covering_radius(generator_matrix, field_order):  # type: ignore[no-untyped-d
     zero = (0,) * syndrome_dimension
     move_set = {
         tuple(
-            scalar * check_rows[row][column] % field_order
+            scalar * check_rows[row][column] % request.field_order
             for row in range(syndrome_dimension)
         )
         for column in range(column_count)
-        for scalar in range(1, field_order)
+        for scalar in range(1, request.field_order)
     }
     move_set.discard(zero)
     moves = tuple(sorted(move_set))
@@ -128,7 +159,7 @@ def covering_radius(generator_matrix, field_order):  # type: ignore[no-untyped-d
         next_distance = distances[syndrome] + 1
         for move in moves:
             neighbor = tuple(
-                (left + right) % field_order
+                (left + right) % request.field_order
                 for left, right in zip(syndrome, move, strict=True)
             )
             if neighbor in distances:
@@ -137,7 +168,7 @@ def covering_radius(generator_matrix, field_order):  # type: ignore[no-untyped-d
             radius = max(radius, next_distance)
             queue.append(neighbor)
 
-    expected_states = field_order**syndrome_dimension
+    expected_states = request.field_order**syndrome_dimension
     if len(distances) != expected_states:
         raise ArithmeticError("parity-check columns did not span the syndrome space")
     return radius

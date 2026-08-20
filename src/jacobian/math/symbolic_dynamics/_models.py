@@ -25,6 +25,8 @@ from jacobian.math.symbolic_dynamics.values import (
     ForbiddenBlockShift,
 )
 
+MAX_PERIODIC_PROFILE_DIGITS = 100_000
+
 
 class FiniteTypeShiftRequest(StrictModel):
     shift: ForbiddenBlockShift
@@ -90,6 +92,11 @@ class PeriodicPointProfileRequest(StrictModel):
         states = len(self.shift.matrix)
         if states**3 * self.max_period > 10_000_000:
             raise ValueError("periodic-point matrix powering exceeds the work bound")
+        max_row_sum = max(sum(row) for row in self.shift.matrix)
+        count_bound = states * max(1, max_row_sum) ** self.max_period
+        aggregate_digits = 3 * self.max_period * len(str(count_bound))
+        if aggregate_digits > MAX_PERIODIC_PROFILE_DIGITS:
+            raise ValueError("periodic-point profile exceeds the output digit bound")
         return self
 
 

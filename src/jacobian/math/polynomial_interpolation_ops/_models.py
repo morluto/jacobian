@@ -6,8 +6,16 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
+from jacobian.math.polynomial_interpolation_ops._kernel import (
+    divided_difference_coefficients,
+    evaluate_newton_form,
+)
 
 MAX_POINTS = 32
 _MAX_RATIONAL_DIGITS = 256
@@ -46,6 +54,12 @@ class InterpolationSamples(StrictModel):
         _require_distinct(self.nodes)
         _require_bounded(self.nodes, "interpolation node")
         _require_bounded(self.values, "interpolation value")
+        for coefficient in divided_difference_coefficients(self.nodes, self.values):
+            require_bounded_rational(
+                CanonicalRational.from_fraction(coefficient),
+                max_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                label="derived Newton coefficient",
+            )
         return self
 
 
@@ -75,7 +89,6 @@ class NewtonForm(StrictModel):
             raise ValueError("Newton nodes and coefficients must have the same length")
         _require_distinct(self.nodes)
         _require_bounded(self.nodes, "Newton node")
-        _require_bounded(self.coefficients, "Newton coefficient")
         return self
 
 
@@ -89,6 +102,17 @@ class NewtonEvaluateRequest(StrictModel):
             self.evaluation_point,
             max_digits=_MAX_RATIONAL_DIGITS,
             label="evaluation point",
+        )
+        require_bounded_rational(
+            CanonicalRational.from_fraction(
+                evaluate_newton_form(
+                    self.newton_form.nodes,
+                    self.newton_form.coefficients,
+                    self.evaluation_point,
+                )
+            ),
+            max_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+            label="derived Newton evaluation",
         )
         return self
 

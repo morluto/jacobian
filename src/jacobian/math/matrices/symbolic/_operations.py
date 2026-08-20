@@ -53,11 +53,21 @@ def compute_symbolic_characteristic_polynomial(
 def compute_symbolic_eigenvalues(
     request: SymbolicMatrixRequest,
 ) -> SymbolicEigenvaluesResult:
-    eigenvalues = symbolic_eigenvalues(
-        [list(row) for row in request.matrix.entries],
-        list(request.matrix.variables),
-    )
+    entries = [list(row) for row in request.matrix.entries]
+    variables = list(request.matrix.variables)
+    try:
+        eigenvalues = symbolic_eigenvalues(entries, variables)
+    except Exception:
+        # SymPy raises MatrixError when eigenvalues cannot be represented
+        # in radicals.  Return the exact characteristic polynomial instead.
+        degree, coeffs = symbolic_characteristic_polynomial(entries, variables)
+        return SymbolicEigenvaluesResult(
+            representation="ROOTS_BY_POLYNOMIAL",
+            characteristic_polynomial=tuple(coeffs),
+            degree=degree,
+        )
     return SymbolicEigenvaluesResult(
+        representation="EXPLICIT_ROOTS",
         eigenvalues=tuple(value for value, _ in eigenvalues),
         multiplicities=tuple(mult for _, mult in eigenvalues),
     )

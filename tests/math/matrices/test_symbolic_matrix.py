@@ -118,3 +118,35 @@ def test_symbolic_matrix_rejects_oversized() -> None:
                 }
             }
         )
+
+
+def test_symbolic_eigenvalues_returns_polynomial_for_unrepresentable() -> None:
+    """Parameterized quintic companion matrix returns ROOTS_BY_POLYNOMIAL."""
+    request = SymbolicMatrixRequest.model_validate(
+        {
+            "matrix": {
+                "variables": ["a"],
+                "entries": [
+                    ["0", "0", "0", "0", "a"],
+                    ["1", "0", "0", "0", "1"],
+                    ["0", "1", "0", "0", "0"],
+                    ["0", "0", "1", "0", "0"],
+                    ["0", "0", "0", "1", "0"],
+                ],
+            }
+        }
+    )
+    result = compute_symbolic_eigenvalues(request)
+    assert result.representation == "ROOTS_BY_POLYNOMIAL"
+    assert result.degree == 5
+    assert result.characteristic_polynomial is not None
+    assert result.eigenvalues is None
+
+
+def test_symbolic_eigenvalues_explicit_for_representable() -> None:
+    """Regular 2x2 matrix returns EXPLICIT_ROOTS."""
+    request = _request([["1", "2"], ["3", "4"]], [])
+    result = compute_symbolic_eigenvalues(request)
+    assert result.representation == "EXPLICIT_ROOTS"
+    assert result.eigenvalues is not None
+    assert result.characteristic_polynomial is None

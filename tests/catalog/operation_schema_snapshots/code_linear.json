@@ -1,42 +1,42 @@
 {
-    "catalog_version": "1",
-    "domain": "code_linear",
-    "operations": {
-        "code.linear.codeword.check": {
-            "input_schema": "sha256:a5faeda4e425226a2ed8dc348847eb53f165864a61587034576e384815e712fa",
-            "output_schema": "sha256:cbab62e05dd160b767de10d59ce92fb6403d2a3ddbe424dbaa4b7f1fb11053c2"
-        },
-        "code.linear.dual.compute": {
-            "input_schema": "sha256:62ddef32ed2b1feab8bd6e5ac3595292a111fdd46593fdf434934467ef918839",
-            "output_schema": "sha256:f4d825b819ac7da7598343757215c831e575f2c60dbe7eef5384a1b1e9f1a3e2"
-        },
-        "code.linear.equal.decide": {
-            "input_schema": "sha256:5186c24cd48e3be251a73fdf1c09ed0ff6363d9e66b3dfc7989a2ac2c17c9413",
-            "output_schema": "sha256:68d11c6ca6d30fb2f1619e7c1f1b4ebdac64076289730094a3529339cdbc3600"
-        },
-        "code.linear.from_generator.compute": {
-            "input_schema": "sha256:62ddef32ed2b1feab8bd6e5ac3595292a111fdd46593fdf434934467ef918839",
-            "output_schema": "sha256:3ac2005322cb76123838fefd5860c892d57e51a774c7db5309159e0f6549b7d3"
-        },
-        "code.linear.macwilliams_transform.compute": {
-            "input_schema": "sha256:cf63f009b43b1a101bdee5a23fadd4f4c2b36a3cc8b80e60dc640615ca0d1812",
-            "output_schema": "sha256:62410c3ed89cb6188478f423cb696d4581207694014cc5650ddfdaa558f5478d"
-        },
-        "code.linear.parity_check.compute": {
-            "input_schema": "sha256:2d2be75f6ac8821653650da964c15484445f302ce942ebe1b85afd9b8cd4ac1f",
-            "output_schema": "sha256:9d04ba56404b477e2e517fd1c555dec64b7a11f0b373d6d949c16c5e01337e41"
-        },
-        "code.linear.puncture.compute": {
-            "input_schema": "sha256:c53b6e8bb7984419e8ee8dba558519e660d073f45ae8631516c444c91946da10",
-            "output_schema": "sha256:dacd5ad030b1fa374437dde7c5fb66b02aa2b9425ec83bb5f3fec47a92f8b5f9"
-        },
-        "code.linear.shorten.compute": {
-            "input_schema": "sha256:dd9641c410320a2bf3799b2845911053148920ab6706def5dd2d6f09354565d0",
-            "output_schema": "sha256:dbc782e7717980620d124946c086d0b1bb08bf18d1a6172fb4d06184d2db89ad"
-        },
-        "code.linear.syndrome.compute": {
-            "input_schema": "sha256:050e1111b0d0bb4f98b23be18a92cce90038fdc598b152bec0ee9b741d905c21",
-            "output_schema": "sha256:0e0e5eb222f8afd7f58225792733b16880630f49ee9f2cfb8b28d70b7e118785"
-        }
+  "catalog_version": "1",
+  "domain": "code_linear",
+  "operations": {
+    "code.linear.codeword.check": {
+      "input_schema": "sha256:a5faeda4e425226a2ed8dc348847eb53f165864a61587034576e384815e712fa",
+      "output_schema": "sha256:cbab62e05dd160b767de10d59ce92fb6403d2a3ddbe424dbaa4b7f1fb11053c2"
+    },
+    "code.linear.dual.compute": {
+      "input_schema": "sha256:62ddef32ed2b1feab8bd6e5ac3595292a111fdd46593fdf434934467ef918839",
+      "output_schema": "sha256:f4d825b819ac7da7598343757215c831e575f2c60dbe7eef5384a1b1e9f1a3e2"
+    },
+    "code.linear.equal.decide": {
+      "input_schema": "sha256:5186c24cd48e3be251a73fdf1c09ed0ff6363d9e66b3dfc7989a2ac2c17c9413",
+      "output_schema": "sha256:68d11c6ca6d30fb2f1619e7c1f1b4ebdac64076289730094a3529339cdbc3600"
+    },
+    "code.linear.from_generator.compute": {
+      "input_schema": "sha256:62ddef32ed2b1feab8bd6e5ac3595292a111fdd46593fdf434934467ef918839",
+      "output_schema": "sha256:3ac2005322cb76123838fefd5860c892d57e51a774c7db5309159e0f6549b7d3"
+    },
+    "code.linear.macwilliams_transform.compute": {
+      "input_schema": "sha256:cf63f009b43b1a101bdee5a23fadd4f4c2b36a3cc8b80e60dc640615ca0d1812",
+      "output_schema": "sha256:62410c3ed89cb6188478f423cb696d4581207694014cc5650ddfdaa558f5478d"
+    },
+    "code.linear.parity_check.compute": {
+      "input_schema": "sha256:2d2be75f6ac8821653650da964c15484445f302ce942ebe1b85afd9b8cd4ac1f",
+      "output_schema": "sha256:9d04ba56404b477e2e517fd1c555dec64b7a11f0b373d6d949c16c5e01337e41"
+    },
+    "code.linear.puncture.compute": {
+      "input_schema": "sha256:c53b6e8bb7984419e8ee8dba558519e660d073f45ae8631516c444c91946da10",
+      "output_schema": "sha256:dacd5ad030b1fa374437dde7c5fb66b02aa2b9425ec83bb5f3fec47a92f8b5f9"
+    },
+    "code.linear.shorten.compute": {
+      "input_schema": "sha256:dd9641c410320a2bf3799b2845911053148920ab6706def5dd2d6f09354565d0",
+      "output_schema": "sha256:dbc782e7717980620d124946c086d0b1bb08bf18d1a6172fb4d06184d2db89ad"
+    },
+    "code.linear.syndrome.compute": {
+      "input_schema": "sha256:050e1111b0d0bb4f98b23be18a92cce90038fdc598b152bec0ee9b741d905c21",
+      "output_schema": "sha256:0e0e5eb222f8afd7f58225792733b16880630f49ee9f2cfb8b28d70b7e118785"
     }
+  }
 }

@@ -35,6 +35,16 @@ MCP contract, or mathematical semantics? State "none" when it does not. -->
 - Stable mathematical result:
 - Admission decision:
 
+## Closure matrix
+<!-- Complete when this PR closes a broad parent issue. List each operation the
+parent proposed and its outcome, so deferred or rejected candidates stay
+visible instead of disappearing with the parent. Leave "none" for a single
+admitted operation with no residual surface. -->
+
+| Candidate | Outcome | Operation ID or follow-up issue |
+| --- | --- | --- |
+| <!-- e.g. graphicality with obstruction --> | <!-- delivered / deferred / rejected --> | <!-- operation ID or child issue --> |
+
 ## Checklist
 - [ ] `make check` passes
 - [ ] Explicitly relevant specialist validation is listed above (boundary, Lean, backend, Harbor/Oracle)

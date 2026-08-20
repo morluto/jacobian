@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.additive_combinatorics._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -26,3 +31,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "cheap deterministic projection of additive.representation_profile.compute",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

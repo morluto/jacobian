@@ -15,11 +15,22 @@ from jacobian.catalog.admission import (
 from jacobian.catalog.builtins import (
     _ALL_ADMISSIONS,
     _BUILTIN_CANDIDATES,
+    _BUILTIN_REGISTRATION_MODULES,
     _BUILTIN_REGISTRATIONS,
     BUILTIN_TOOLS,
 )
 
 OPERATION_ADMISSIONS = _ALL_ADMISSIONS
+
+
+def test_registration_discovery_is_deterministic_and_owner_local() -> None:
+    assert tuple(sorted(_BUILTIN_REGISTRATION_MODULES)) == _BUILTIN_REGISTRATION_MODULES
+    assert len(_BUILTIN_REGISTRATION_MODULES) == len(set(_BUILTIN_REGISTRATION_MODULES))
+    assert all(
+        module_name.startswith("jacobian.math.") and module_name.endswith("._admission")
+        for module_name in _BUILTIN_REGISTRATION_MODULES
+    )
+    assert len(_BUILTIN_REGISTRATION_MODULES) == len(_BUILTIN_REGISTRATIONS)
 
 
 def test_every_candidate_has_exactly_one_admission_decision() -> None:

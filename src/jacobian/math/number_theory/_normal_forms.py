@@ -83,37 +83,41 @@ class MaximalPerfectPowerResult(StrictModel):
     @model_validator(mode="after")
     def bind_nonunit_fields(self) -> Self:
         if self.classification == "NONUNIT":
-            if self.base is None or self.exponent is None:
-                raise ValueError(
-                    "nonunit perfect-power profile requires base and exponent"
-                )
-            if self.is_nontrivial_perfect_power is None:
-                raise ValueError("nonunit profile requires is_nontrivial_perfect_power")
-            source = int(self.source)
-            base = int(self.base)
-            if base**self.exponent != source:
-                raise ValueError("base^exponent does not reconstruct the source")
-            if not self.factors:
-                raise ValueError("nonunit profile requires prime-exponent factors")
-            # Verify maximality: the exponent must be the gcd of all
-            # prime exponents (with odd restriction for negative source).
-            from math import gcd
-
-            exps = [row.exponent for row in self.factors]
-            g = exps[0]
-            for e in exps[1:]:
-                g = gcd(g, e)
-            if source < 0:
-                while g % 2 == 0 and g > 1:
-                    g //= 2
-                if g == 0:
-                    g = 1
-            if self.exponent != g:
-                raise ValueError("exponent is not maximal")
+            self._validate_nonunit()
         else:
             if self.base is not None or self.exponent is not None:
                 raise ValueError("unit/zero profiles must not carry base or exponent")
         return self
+
+    def _validate_nonunit(self) -> None:
+        if self.base is None or self.exponent is None:
+            raise ValueError(
+                "nonunit perfect-power profile requires base and exponent"
+            )
+        if self.is_nontrivial_perfect_power is None:
+            raise ValueError("nonunit profile requires is_nontrivial_perfect_power")
+        source = int(self.source)
+        base = int(self.base)
+        if base**self.exponent != source:
+            raise ValueError("base^exponent does not reconstruct the source")
+        if not self.factors:
+            raise ValueError("nonunit profile requires prime-exponent factors")
+        self._validate_exponent_maximality(source)
+
+    def _validate_exponent_maximality(self, source: int) -> None:
+        from math import gcd
+
+        exps = [row.exponent for row in self.factors]
+        g = exps[0]
+        for e in exps[1:]:
+            g = gcd(g, e)
+        if source < 0:
+            while g % 2 == 0 and g > 1:
+                g //= 2
+            if g == 0:
+                g = 1
+        if self.exponent != g:
+            raise ValueError("exponent is not maximal")
 
 
 # ---------------------------------------------------------------------------

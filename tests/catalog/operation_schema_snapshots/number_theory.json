@@ -66,6 +66,18 @@
       "input_schema": "sha256:e4b721c8eff43f8b9b0c0e2bbc8cfaa4e3107f612f6f2e8a83780a8b1d7d2701",
       "output_schema": "sha256:9b2f62d9e5533084179069efaad8c986439414356c414b24a6431aaa42c7fc69"
     },
+    "integer.k_free_decomposition.compute": {
+      "input_schema": "sha256:73d756b48f2a4ab38d9a29d27b08e4e3b022d7ea5dc0680b8bf9d26ce08d989c",
+      "output_schema": "sha256:31b32cf048e15743450da4cb3e6d76a96d72c6024e4114c5023af7517d6e01a4"
+    },
+    "integer.perfect_power.profile.compute": {
+      "input_schema": "sha256:c85a658d7aaf83d7724850efac260304405b6e139e741f401be2f9ac3e58058e",
+      "output_schema": "sha256:87cebc794efc356178407db5022c28015e1214ce5d311e3650236aa0f7d8d535"
+    },
+    "integer.squarefree_decomposition.compute": {
+      "input_schema": "sha256:ccf2be910c626d897f1fffe97e4be52ad9a9f85222e72142eaf8c83bae868b0e",
+      "output_schema": "sha256:12e6fabc047ccad27da6148db73f0a344f2778e4e7269d9902cda846b1dfb3bf"
+    },
     "modular.compute.discrete_logarithm": {
       "input_schema": "sha256:83b89e6c101376613c6ecbc2552572b1f42397ddffd4c6eab2700ba362be9469",
       "output_schema": "sha256:3d7e704bad1ccec1910bc0f650c3a41e9266d897a97d13790325a8c8d88aa995"
@@ -109,18 +121,6 @@
     "number_theory.compute.legendre_symbol": {
       "input_schema": "sha256:eca1fbc54c3d5c72d4711197aae16587172e4c4686055e9ca64222481fa5275a",
       "output_schema": "sha256:7297a74c4f3c5ac3de2f6c77dd3d44fa8690f14affdc3745a09e52dd49bcda60"
-    },
-    "integer.k_free_decomposition.compute": {
-      "input_schema": "sha256:73d756b48f2a4ab38d9a29d27b08e4e3b022d7ea5dc0680b8bf9d26ce08d989c",
-      "output_schema": "sha256:31b32cf048e15743450da4cb3e6d76a96d72c6024e4114c5023af7517d6e01a4"
-    },
-    "integer.perfect_power.profile.compute": {
-      "input_schema": "sha256:c85a658d7aaf83d7724850efac260304405b6e139e741f401be2f9ac3e58058e",
-      "output_schema": "sha256:87cebc794efc356178407db5022c28015e1214ce5d311e3650236aa0f7d8d535"
-    },
-    "integer.squarefree_decomposition.compute": {
-      "input_schema": "sha256:ccf2be910c626d897f1fffe97e4be52ad9a9f85222e72142eaf8c83bae868b0e",
-      "output_schema": "sha256:12e6fabc047ccad27da6148db73f0a344f2778e4e7269d9902cda846b1dfb3bf"
     },
     "quadratic_radical.positive_integer.normalize.compute": {
       "input_schema": "sha256:fd7ab2fb9ad0319b304c02ab4e5c3a66185765e74160b4cec9dc264744174bc0",

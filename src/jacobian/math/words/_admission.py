@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.words._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -21,3 +26,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact incidence matrix of a bounded word morphism",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

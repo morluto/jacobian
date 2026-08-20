@@ -98,7 +98,7 @@ def _next_closure(
         if i in current_set:
             current_set.discard(i)
             continue
-        # Candidate = (current ∩ {0,...,i-1}) ∪ {i}
+        # Candidate = (current intersect {0,...,i-1}) union {i}
         candidate = {a for a in current_set if a < i}
         candidate.add(i)
         # closure = candidate'' (closure under the closure operator)
@@ -109,7 +109,7 @@ def _next_closure(
         # Check lectic condition: closure agrees with current below i,
         # and i is in the closure (candidate is "licit-closed" up to i).
         # The standard condition is:
-        #   closure ∩ {0,...,i-1} == current ∩ {0,...,i-1}  AND  i ∈ closure
+        #   closure intersect {0,...,i-1} == current intersect {0,...,i-1}  AND  i in closure
         if i not in closure_set:
             continue
         if {a for a in closure_set if a < i} != {a for a in current_set if a < i}:

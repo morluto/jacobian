@@ -99,6 +99,11 @@ def test_signature_singular_semidefinite() -> None:
     assert (result.n_positive, result.n_negative, result.n_zero) == (1, 0, 1)
 
 
+def test_signature_counts_negative_root_sharing_square_free_factor_with_zero() -> None:
+    result = compute_signature(SignatureRequest(form={"matrix": [[-1, 0], [0, 0]]}))
+    assert (result.n_positive, result.n_negative, result.n_zero) == (0, 1, 1)
+
+
 def test_non_symmetric_rejected() -> None:
     with pytest.raises(ValidationError, match="symmetric"):
         SignatureRequest(form={"matrix": [[1, 2], [0, 1]]})

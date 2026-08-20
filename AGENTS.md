@@ -1,11 +1,12 @@
 # Jacobian agent guide
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) for contribution workflow, validation,
-documentation, commits, and pull requests. This file states the product choices
-that changes must preserve. Consult the [product model](docs/explanation/product-blueprint.md),
-[architecture](docs/explanation/architecture.md), and
-[operation library reference](docs/reference/domain-operation-library.md) when
-working beyond a small local change.
+This file states the product choices and repository invariants that changes must
+preserve. Follow [CONTRIBUTING.md](CONTRIBUTING.md) when selecting validation,
+changing documentation, preparing commits or pull requests, or working on
+releases and evaluations. Follow the
+[product model](docs/explanation/product-blueprint.md) and
+[architecture](docs/explanation/architecture.md) when changing product scope,
+ownership, or the execution path.
 
 ## What we are building
 
@@ -83,11 +84,12 @@ or check that remains useful as models improve at mathematical reasoning and
 notation. The model chooses what to investigate and how to compose results;
 the operation returns a concrete mathematical value or certificate.
 
-- Prefer a thin typed adapter to maintained backends such as SymPy, FLINT,
-  NetworkX or Z3. They are private implementation details. Do not reimplement
-  their kernels. A public claim may be no broader than the implementation can
-  establish: if the algorithm cannot exhaust the advertised request, shrink the
-  request or do not expose the operation. A fallback, sentinel, or omitted
+- Prefer a thin typed adapter to an appropriate maintained mathematical library.
+  Treat any library, solver, or external tool as a private computational engine;
+  do not reimplement its kernel. Research established options before writing a
+  custom algorithm. A public claim may be no broader than the implementation
+  can establish. If the engine cannot exhaust the advertised request, narrow
+  the request or do not expose the operation. A fallback, sentinel, or omitted
   comparison is not an exact invariant.
 - Use a direct Python binding whenever it can perform the bounded computation.
   A subprocess needs a concrete isolation, killability, or fixed-toolchain
@@ -114,54 +116,36 @@ defining-invariant tests.
 ## Types and transport
 
 - Domain values, request/result models, and declarations live with their owner
-  under `jacobian.math`. The private root model helpers are limited to strict
-  parsing and canonical scalar primitives shared by unrelated owners. Compose
-  operations through their typed mathematical values.
-- Pydantic request/result models are authoritative at operation and wire
-  boundaries. Validate the complete strict request before a backend call; keep
-  cross-field invariants with the owning domain model. The request must encode
-  the advertised mathematical domain—bounds, positivity, completeness,
-  non-degeneracy—not only the JSON shape. A request the model accepts must
-  return a typed domain result; mathematical inapplicability belongs in the
-  request validator or the result, not in a raised backend exception.
-- Canonical decimal strings are wire values, not computation values. Use the
-  canonical parse/format helpers—never direct `int()` or `str()`—and test above
-  4,300 digits whenever the contract permits it.
-- Construct MCP envelopes only at the final boundary. With MCP Python SDK 2.0,
-  return Pydantic result models directly and use `structured_output=True`: the
-  SDK derives structured output and reports request/result validation failures.
-  Use an explicit result only for a deliberate content projection.
-- MCP owns malformed-argument and host-failure reporting. A domain result owns
-  its own timeout, incompleteness, or missing-witness outcome; none is a
-  mathematical conclusion by itself.
+  under `jacobian.math`. Compose operations through typed mathematical values.
+  Follow the [native Python API](docs/reference/python-api.md) when changing
+  exported Python functions or values.
+- Validate the complete mathematical request before invoking a backend. Every
+  accepted request must return a typed result rather than expose a backend or
+  host exception. Follow the
+  [operation library](docs/reference/domain-operation-library.md) when changing
+  an operation contract or implementation.
+- Keep mathematical results separate from transport failures. Timeout,
+  incompleteness, unavailable execution, and missing witnesses do not establish
+  mathematical conclusions. Follow the
+  [tool reference](docs/reference/tools.md) only when changing MCP projection or
+  transport behavior.
 
 ## Service and deployment
 
-Remote requests share one immutable operation library and receive a small
-request-scoped authentication context. Deployment supplies an immutable
-artifact, configuration, and health checks. Platform infrastructure owns
-provisioning, TLS, supervision, rollout, rollback, secrets, configuration, and
-persistence. The checked-in [`deploy/`](deploy/) files are templates; see
-[remote deployment](docs/how-to/deploy-remote-mcp.md).
+Keep mathematical execution stateless and deployment responsibilities outside
+the operation library. Follow the
+[remote deployment guide](docs/how-to/deploy-remote-mcp.md) only when changing
+authentication, configuration, health checks, deployment templates, or remote
+service behavior.
 
 ## Working in this repository
 
-- Run `make check` and the named lane that owns changed behavior. Use
-  `make check-external` for the fixed Lean boundary; direct Python backend work
-  uses its owning domain or unit lane. CI owns the broad matrix.
-- `make check-all` and `make test-full` are deliberate broad reproductions.
-  Only the coordinating agent may run an exhaustive lane in a shared checkout;
-  never run it concurrently with delegated validation.
-- `uv run pytest <path>` is useful for focused debugging, not a substitute for
-  the named lanes. `make test-process`, `make test-mcp`, and `make test-lean`
-  own their specialist boundaries.
-- Lean is optional; absence is a typed unavailable outcome. The ordinary
-  Python backend stack is installed by `make setup`. If a non-login shell
-  cannot find `uv`, add `$HOME/.local/bin` to `PATH`.
-- For Harbor authoring or verifier changes, use the repository-local
-  `harbor-benchmarks` skill. For recent-conjecture reliability probes, use the
-  `recent-conjecture-evaluations` skill.
-- A quick smoke is `uv run jacobian run integer.compute.extended_gcd --json
-  '{"left":"84","right":"30"}'`; use `uv run jacobian-mcp` for local stdio
-  or `uv run jacobian-remote-mcp --host 127.0.0.1 --port 8000
-  --allow-anonymous` only for an explicit local remote test.
+- Preserve unrelated work in a shared checkout. Agents must not concurrently
+  switch branches, stage, commit, clean, rewrite history, or edit overlapping
+  paths.
+- Run `make check` and the named lane that owns changed behavior before
+  handoff. Only the coordinating agent may run exhaustive validation in a
+  shared checkout.
+- Follow [CONTRIBUTING.md](CONTRIBUTING.md) and the
+  [testing strategy](docs/reference/testing-strategy.md) when selecting
+  specialist validation or preparing a contribution.

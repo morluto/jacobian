@@ -3,8 +3,39 @@
 ## [0.13.0](https://github.com/morluto/jacobian/compare/jacobian-v0.12.0...jacobian-v0.13.0) (2026-08-20)
 
 
+### ⚠ Breaking Changes
+
+* **runtime:** remove stateful commands and APIs, including `jacobian init`,
+  `jacobian update`, `--state-dir`, workspaces, artifacts, value references,
+  and checker/runtime interfaces. The stateless kernel now accepts one complete
+  request per `math.run` call; callers own composition and durable state
+  ([0ff90ee](https://github.com/morluto/jacobian/commit/0ff90ee22d2edd1b78a38041c5a92a0baf13dade),
+  [62ce9d3](https://github.com/morluto/jacobian/commit/62ce9d371fc5501c0eb7a0843c4d757048a8e974)).
+* **catalog:** curate the public operation basis and remove legacy operation
+  IDs. Compatibility aliases are not provided; use `math.find` to locate a
+  retained operation before replacing an old `math.run` call
+  ([dd341af](https://github.com/morluto/jacobian/commit/dd341afbdba42186a4b511b830335ac62f21d05d)).
+
+
 ### Features
 
+* **math:** add permanent, Kronecker product, partial trace, Walsh transform,
+  and symbolic matrix operations ([#1651](https://github.com/morluto/jacobian/issues/1651))
+  ([1ca7143](https://github.com/morluto/jacobian/commit/1ca7143be800e3973507b472e3dab0b15eeff44c)).
+* **math:** add exact bounded operations across code theory, graph coloring,
+  flows and spectra, groups, Markov chains, number fields, recurrence solving,
+  and root isolation ([#1683](https://github.com/morluto/jacobian/issues/1683))
+  ([a6adff8](https://github.com/morluto/jacobian/commit/a6adff87a2be8711fe0062b143bdc7af9add2af8)).
+* **math:** add bounded composable operations across arithmetic, combinatorics,
+  geometry, graphs, matrices, polynomials, and finite structures
+  ([#1817](https://github.com/morluto/jacobian/issues/1817))
+  ([68df662](https://github.com/morluto/jacobian/commit/68df66239fcce898a0087d72bae795904b126b00)).
+* **graph:** add an exact maximal independent-set decision
+  ([#1774](https://github.com/morluto/jacobian/issues/1774))
+  ([7c84d1e](https://github.com/morluto/jacobian/commit/7c84d1e501e91e9438a418a96be47b52a6b3ee37)).
+* **code-theory:** add a bounded exact code-covering radius operation
+  ([#1721](https://github.com/morluto/jacobian/issues/1721))
+  ([5d73f35](https://github.com/morluto/jacobian/commit/5d73f35c049d99fc2f58d19a65d488717b060c79)).
 * **analysis:** add bounded Arb expression enclosures ([#2098](https://github.com/morluto/jacobian/issues/2098)) ([8a0c635](https://github.com/morluto/jacobian/commit/8a0c635b39af653f643ada288e20b860027d5037))
 * **markov-chain:** add exact bounded mixing time ([#2100](https://github.com/morluto/jacobian/issues/2100)) ([f2fcd06](https://github.com/morluto/jacobian/commit/f2fcd0693c4c3ec61b31d9d66cd4d25cced83895))
 * **math:** add algebraic topology operations ([#1878](https://github.com/morluto/jacobian/issues/1878)) ([#2061](https://github.com/morluto/jacobian/issues/2061)) ([213c37a](https://github.com/morluto/jacobian/commit/213c37a368e581379447202fd148681bf7ba75dc))
@@ -59,39 +90,20 @@
 
 ### Bug Fixes
 
-* **benchmark:** add frozen input binding to 6 verifiers that lack it ([#1606](https://github.com/morluto/jacobian/issues/1606)) ([#1648](https://github.com/morluto/jacobian/issues/1648)) ([74e944b](https://github.com/morluto/jacobian/commit/74e944b7f3232f0b276c0ae7d7cac29218ebe83e))
-* **benchmark:** bind gold witness descriptors to hidden solution artifacts ([#1625](https://github.com/morluto/jacobian/issues/1625)) ([#1645](https://github.com/morluto/jacobian/issues/1645)) ([fe31c6f](https://github.com/morluto/jacobian/commit/fe31c6fa9c727baa3bd714d0c004e418e1f214a5))
-* **benchmark:** enforce public-contract drift and fixture_digest for all datasets ([#1592](https://github.com/morluto/jacobian/issues/1592), [#1593](https://github.com/morluto/jacobian/issues/1593)) ([#1644](https://github.com/morluto/jacobian/issues/1644)) ([be78a4d](https://github.com/morluto/jacobian/commit/be78a4d471ec1152670669daf87ea23126674c30))
-* **benchmark:** make task declarations the source of truth ([#1621](https://github.com/morluto/jacobian/issues/1621), [#1594](https://github.com/morluto/jacobian/issues/1594)) ([#1649](https://github.com/morluto/jacobian/issues/1649)) ([ce15c04](https://github.com/morluto/jacobian/commit/ce15c04e6aab22fce267ff6b6097ef7e751a2362))
-* **benchmark:** model proof modes as closed result variants ([#1618](https://github.com/morluto/jacobian/issues/1618)) ([#1635](https://github.com/morluto/jacobian/issues/1635)) ([444d599](https://github.com/morluto/jacobian/commit/444d599757fb72ec3b521357bcd3d3874fb8d076))
-* **benchmark:** model SAT and UNSAT as distinct result variants ([#1622](https://github.com/morluto/jacobian/issues/1622)) ([#1634](https://github.com/morluto/jacobian/issues/1634)) ([7f901d1](https://github.com/morluto/jacobian/commit/7f901d14e1375e36466cca3b9faeeb4cc89f4ec8))
-* **benchmark:** remove dead verification records, stale witness_validity, and assurance language ([#1642](https://github.com/morluto/jacobian/issues/1642)) ([fa3bbbc](https://github.com/morluto/jacobian/commit/fa3bbbcc18ba82b24812fed15376c47b127a3989))
-* **benchmark:** remove deterministic duplicate projections from results ([#1630](https://github.com/morluto/jacobian/issues/1630)) ([#1639](https://github.com/morluto/jacobian/issues/1639)) ([fe43092](https://github.com/morluto/jacobian/commit/fe430928e4fb4b7487ae8ea25eaebe55e1a68e33))
-* **benchmark:** remove leaked answer constants from submission schemas ([#1615](https://github.com/morluto/jacobian/issues/1615)) ([#1637](https://github.com/morluto/jacobian/issues/1637)) ([b3c7ec8](https://github.com/morluto/jacobian/commit/b3c7ec8cae66e78c196bab23c33d7349aaf904e6))
-* **benchmark:** remove redundant truth-value from calendar-good-days-audit ([#1612](https://github.com/morluto/jacobian/issues/1612)) ([#1631](https://github.com/morluto/jacobian/issues/1631)) ([e9d0d77](https://github.com/morluto/jacobian/commit/e9d0d77c43cc9eb51c400dfb24fbea9608399a26))
-* **benchmark:** remove stale limitations/evidence references from instructions ([#1602](https://github.com/morluto/jacobian/issues/1602)) ([#1638](https://github.com/morluto/jacobian/issues/1638)) ([d3c78eb](https://github.com/morluto/jacobian/commit/d3c78ebdf087545c345bf279bbc0526be66d06d8))
-* **benchmark:** remove witness_validity from result-only tasks and add bool guards ([#1605](https://github.com/morluto/jacobian/issues/1605), [#1620](https://github.com/morluto/jacobian/issues/1620)) ([#1647](https://github.com/morluto/jacobian/issues/1647)) ([82eb2bf](https://github.com/morluto/jacobian/commit/82eb2bfcf6a1cea0e9ae30120bc637dc15274f58))
-* **benchmarks:** align oracle generators with result-only contracts ([6cef427](https://github.com/morluto/jacobian/commit/6cef42775b632269bfea70776a26a284cabf181c))
-* **benchmarks:** align oracle generators with result-only contracts ([ba89c1d](https://github.com/morluto/jacobian/commit/ba89c1de7bf72ef0dd88fba3ba1f1fe9b96f9ae6))
-* **benchmarks:** bind sharp Cauchy evidence strictly ([#1507](https://github.com/morluto/jacobian/issues/1507)) ([cd2544b](https://github.com/morluto/jacobian/commit/cd2544ba9cb7ef8f66fd6cb2e3ad70b67b47f719))
-* **benchmarks:** decouple local MCP from egress proxy ([309792d](https://github.com/morluto/jacobian/commit/309792da6586659000b9c39180317b3b16950b96))
-* **benchmark:** separate assurance policy from mathematical answer ([#1613](https://github.com/morluto/jacobian/issues/1613)) ([#1636](https://github.com/morluto/jacobian/issues/1636)) ([aa0ec27](https://github.com/morluto/jacobian/commit/aa0ec27e93f371db835d942bd218bb9a6323f417))
-* **benchmarks:** mount the complete Codex runtime ([3a2c2b9](https://github.com/morluto/jacobian/commit/3a2c2b9bb77f653ce79bc764fd3764070d74e67e))
-* **benchmarks:** mount the complete Codex runtime ([5f450dd](https://github.com/morluto/jacobian/commit/5f450dd926894b3434adb1294a82d7a39a479feb))
-* **benchmark:** specify triangular-tent function for continuous-spike-integral-separation ([#1596](https://github.com/morluto/jacobian/issues/1596)) ([#1643](https://github.com/morluto/jacobian/issues/1643)) ([b291939](https://github.com/morluto/jacobian/commit/b29193970a53785863f3e3edf1c777e208b75827))
-* **benchmarks:** resolve evaluation image automatically ([ef298fc](https://github.com/morluto/jacobian/commit/ef298fc245c9d0a0a8156a2b64d048f8a90aaa87))
-* **benchmarks:** run selected host tests as modules ([40f3586](https://github.com/morluto/jacobian/commit/40f3586cbfe0cb4022aa22c6b9c41a53662416ac))
-* **benchmarks:** stop polynomial-precedence oracle from crashing on missing input ([e4b2927](https://github.com/morluto/jacobian/commit/e4b29279771b802d988b95f84f040e028619c6c5))
-* **benchmarks:** stop polynomial-precedence oracle from crashing on missing input ([71d43ee](https://github.com/morluto/jacobian/commit/71d43eed4836cc959a15e06c674b36c81355bb0d))
-* **benchmark:** submit collision witness in jacobian-negative-control ([#1577](https://github.com/morluto/jacobian/issues/1577)) ([#1633](https://github.com/morluto/jacobian/issues/1633)) ([928b25a](https://github.com/morluto/jacobian/commit/928b25a7ad964025c5a792dcb190d828fdba04ef))
+* **math:** fix sequence signs, polygon areas, finite-game Nash supports, SMT
+  behavior, discrete logarithms, and request-boundary validation
+  ([#1948](https://github.com/morluto/jacobian/issues/1948))
+  ([c02e53e](https://github.com/morluto/jacobian/commit/c02e53ebca172146a70f7d1a7d01f2f2772eb7e5)).
+* **math:** accept canonical integers beyond Python's string-conversion limit
+  and fix valuation primality and discrete-logarithm edge cases
+  ([#1949](https://github.com/morluto/jacobian/issues/1949))
+  ([89c0a1f](https://github.com/morluto/jacobian/commit/89c0a1fb4a993f6d0730fa703d7195848303a47b)).
+* **math:** reject oversized algebraic comparisons and return typed outcomes for
+  singular and non-unique linear solves
+  ([#2097](https://github.com/morluto/jacobian/issues/2097))
+  ([cf5d325](https://github.com/morluto/jacobian/commit/cf5d3258b8a9f31cd6499539d7eff08766f50f4b)).
 * **boolean:** compute Walsh spectrum from the Boolean sign function ([#2083](https://github.com/morluto/jacobian/issues/2083)) ([2056dd0](https://github.com/morluto/jacobian/commit/2056dd045eee9a9534239b9b357e3891acfcabef))
 * **ci:** route Harbor job tests through bounded runner ([9f2a0c0](https://github.com/morluto/jacobian/commit/9f2a0c0bc55d5c1092bda635ab3b47b2404dec25))
-* **eval:** add opt-in proxy builder ([e800572](https://github.com/morluto/jacobian/commit/e80057258dc8df57122467ca0b3a64a206c41175))
-* **eval:** mount Codex Code Mode host beside npm launcher ([420572a](https://github.com/morluto/jacobian/commit/420572a420eb5aafd365bfd4eb5eee940e58d6db))
-* **eval:** support both Codex Code Mode host layouts ([006f1ad](https://github.com/morluto/jacobian/commit/006f1addb858df6778cf3ad6ab2cf7d273819f66))
-* **eval:** use Harbor Codex runtime with proxy egress ([f5ef685](https://github.com/morluto/jacobian/commit/f5ef68527acfa0fcc3471568b7a988afa6485d37))
-* **eval:** warn when direct runs ignore a proxy ([7716424](https://github.com/morluto/jacobian/commit/77164242696c7974e9983a9fb24ac11b263d71e6))
-* follow moved agent evaluation guide ([#2029](https://github.com/morluto/jacobian/issues/2029)) ([2e54684](https://github.com/morluto/jacobian/commit/2e54684a6a0af5241fed4fd42f211a49cc024bdb))
 * **graph6:** validate graph6 format at the request boundary ([#2087](https://github.com/morluto/jacobian/issues/2087)) ([c0e2ef1](https://github.com/morluto/jacobian/commit/c0e2ef126554cd0920d84d1be826519d8a2d1d22))
 * **math:** bind distance-matrix rows to labelled vertices ([#930](https://github.com/morluto/jacobian/issues/930)) ([#2008](https://github.com/morluto/jacobian/issues/2008)) ([c254f00](https://github.com/morluto/jacobian/commit/c254f00af0a093f212a6036ac5217a15bafa36fe))
 * **math:** validate exact rational growth before execution ([#2101](https://github.com/morluto/jacobian/issues/2101)) ([11b556a](https://github.com/morluto/jacobian/commit/11b556aba454846fe178a03fc47f78da18e45332))
@@ -124,7 +136,6 @@
 
 * add public operation preflight ([#1694](https://github.com/morluto/jacobian/issues/1694)) ([e96fbf8](https://github.com/morluto/jacobian/commit/e96fbf808c14fad282f3ff36c47b2145d5429af3))
 * align state migration references ([a06671f](https://github.com/morluto/jacobian/commit/a06671f3c703588f4246367352abec4ce179fe31))
-* **benchmarks:** define semantic result contracts ([5c5e4f7](https://github.com/morluto/jacobian/commit/5c5e4f7f2ca94806ecbb66302721665807970aed))
 * clarify executable vocabulary and admission ([#2072](https://github.com/morluto/jacobian/issues/2072)) ([e3ca01d](https://github.com/morluto/jacobian/commit/e3ca01d52937b0d4a0e347866e156575203babfd))
 * clarify public operation adapter semantics ([2645e7e](https://github.com/morluto/jacobian/commit/2645e7eb7d55e44bb52e118299da7324fc4fbb5c))
 * define the durable operation criterion ([1c9095a](https://github.com/morluto/jacobian/commit/1c9095a3a860812d9ddcb4d02ee89191ca9c28a8))
@@ -141,11 +152,9 @@
 * **readme:** add Chinese README ([0ed7a8c](https://github.com/morluto/jacobian/commit/0ed7a8c99bc299d7f05313a42d6f8854dcf41fa4))
 * **readme:** add Chinese translation link ([80d1031](https://github.com/morluto/jacobian/commit/80d1031a75d78a4e56bfde7e3823a5d71c495eeb))
 * **readme:** refresh product description and version ([3a5acc7](https://github.com/morluto/jacobian/commit/3a5acc75a62cc20209ed1bae667f852fab62ad19))
-* record Harbor protocol cutover rules in skills and authoring docs ([#1650](https://github.com/morluto/jacobian/issues/1650)) ([04d17ec](https://github.com/morluto/jacobian/commit/04d17eccf7a9d60ddda87277e8bff1d6fed0119b))
 * require closure matrix when closing a broad operation parent ([9bda56a](https://github.com/morluto/jacobian/commit/9bda56a4e1ab6aa315c87a673dfa315d7c5e951e))
 * separate benchmark material from product docs ([#2019](https://github.com/morluto/jacobian/issues/2019)) ([7ab1d47](https://github.com/morluto/jacobian/commit/7ab1d4746a94e233c97b1fcc175564c871dcc850))
 * **skills:** add Jacobian math workflow ([134d98b](https://github.com/morluto/jacobian/commit/134d98b4fe5ac4cba5994816232f4713d2eac607))
-* **skills:** add MCP tool-adoption evaluation guide ([3916ec7](https://github.com/morluto/jacobian/commit/3916ec7fecfe51271c20fc4730d62791cf8509de))
 * **skills:** clarify operation discovery modes ([cffda53](https://github.com/morluto/jacobian/commit/cffda53b6dfe03365451c055c56797859a468bab))
 * split issue forms into gap diagnosis and admitted operation ([bd50e85](https://github.com/morluto/jacobian/commit/bd50e858319c9cc035719bc8f028e4bb818699d9))
 

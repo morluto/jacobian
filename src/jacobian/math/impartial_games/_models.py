@@ -14,6 +14,8 @@ from jacobian.math.impartial_games.operations import (
 )
 from jacobian.math.impartial_games.values import (
     MAX_HEAP_BOUND,
+    MAX_HEAP_SIZE,
+    MAX_HEAPS,
     MAX_SUBTRACTION_VALUE,
     MAX_SUBTRACTION_WORK,
     ImpartialGame,
@@ -137,3 +139,45 @@ __all__ = [
     "SubtractionGrundyPrefixRequest",
     "SubtractionGrundyPrefixResult",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Nim sum operations
+# ---------------------------------------------------------------------------
+
+
+class NimSumRequest(StrictModel):
+    """A finite Nim position: a bounded list of nonnegative heap sizes."""
+
+    heaps: tuple[int, ...] = Field(min_length=0, max_length=MAX_HEAPS)
+
+    @model_validator(mode="after")
+    def require_bounded_heaps(self) -> Self:
+        if any(heap < 0 for heap in self.heaps):
+            raise ValueError("heap sizes must be nonnegative")
+        if any(heap > MAX_HEAP_SIZE for heap in self.heaps):
+            raise ValueError(f"heap sizes must be at most {MAX_HEAP_SIZE}")
+        return self
+
+
+class NimSumResult(StrictModel):
+    """The exact nim sum (bitwise xor) of a Nim position."""
+
+    nim_sum: int = Field(ge=0)
+    is_p_position: bool
+    heaps: tuple[int, ...]
+
+
+class OutcomeProfileRequest(StrictModel):
+    """Request the P/N outcome partition of an impartial game."""
+
+    game: ImpartialGame
+
+
+class OutcomeProfileResult(StrictModel):
+    """The complete P/N position partition with Grundy values."""
+
+    p_positions: tuple[str, ...]
+    n_positions: tuple[str, ...]
+    grundy_values: tuple[tuple[str, int], ...]
+    terminal_positions: tuple[str, ...]

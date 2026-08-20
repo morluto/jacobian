@@ -5,6 +5,7 @@ from __future__ import annotations
 from jacobian.math.context_free_languages_ops._models import (
     DependencyGraphRequest,
     DependencyGraphResult,
+    FiniteCFGO,
     FirstSetsRequest,
     FirstSetsResult,
     SymbolProfilesRequest,
@@ -12,11 +13,9 @@ from jacobian.math.context_free_languages_ops._models import (
 )
 
 
-def compute_symbol_profiles(request: SymbolProfilesRequest) -> SymbolProfilesResult:
-    """Compute nullable nonterminals via fixed-point iteration."""
-    grammar = request.grammar
+def _compute_nullable(grammar: FiniteCFGO, terminal_set: set[str]) -> dict[str, bool]:
+    """Return a map from nonterminal to its nullability via fixed-point iteration."""
     nullable = dict.fromkeys(grammar.nonterminals, False)
-    terminal_set = set(grammar.terminals)
     changed = True
     while changed:
         changed = False
@@ -34,6 +33,14 @@ def compute_symbol_profiles(request: SymbolProfilesRequest) -> SymbolProfilesRes
             if all_nullable:
                 nullable[rule.head] = True
                 changed = True
+    return nullable
+
+
+def compute_symbol_profiles(request: SymbolProfilesRequest) -> SymbolProfilesResult:
+    """Compute nullable nonterminals via fixed-point iteration."""
+    grammar = request.grammar
+    terminal_set = set(grammar.terminals)
+    nullable = _compute_nullable(grammar, terminal_set)
     return SymbolProfilesResult(
         nullable=tuple(nullable[nt] for nt in grammar.nonterminals)
     )
@@ -55,6 +62,7 @@ def compute_first_sets(request: FirstSetsRequest) -> FirstSetsResult:
     grammar = request.grammar
     terminals = set(grammar.terminals)
     nonterminals = set(grammar.nonterminals)
+    nullable = _compute_nullable(grammar, terminals)
     first: dict[str, set[str]] = {nt: set() for nt in grammar.nonterminals}
     for _ in range(256):
         changed = False
@@ -71,11 +79,8 @@ def compute_first_sets(request: FirstSetsRequest) -> FirstSetsResult:
                     if new:
                         first[head] |= new
                         changed = True
-                    if symbol not in first and not all(
-                        first.get(s) for s in rule.body if s in nonterminals
-                    ):
-                        pass
-                    break
+                    if not nullable[symbol]:
+                        break
                 else:
                     break
         if not changed:

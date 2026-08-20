@@ -8,6 +8,11 @@
       "complexity": 12
     },
     {
+      "path": "src/jacobian/math/graphs/tree_decompositions/operations.py",
+      "symbol": "restrict",
+      "complexity": 13
+    },
+    {
       "path": "tests/math/graphs/test_graph_isomorphism.py",
       "symbol": "_is_mapping_valid_isomorphism",
       "complexity": 13

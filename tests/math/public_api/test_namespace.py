@@ -20,6 +20,7 @@ ROOT_MATH_DOMAINS = (
     "arithmetic",
     "arithmetic_dynamics",
     "combinatorial_maps",
+    "combinatorial_matrices",
     "combinatorics",
     "diophantine_approximation",
     "finite_abelian_groups",
@@ -27,9 +28,11 @@ ROOT_MATH_DOMAINS = (
     "finite_metric_spaces",
     "finite_state_transducers",
     "finite_topology",
+    "formal_concept_analysis",
     "formal_power_series",
     "graphical_models",
     "graphs",
+    "greedoids",
     "impartial_games",
     "matrices",
     "numerical_semigroups",
@@ -41,6 +44,7 @@ ROOT_MATH_DOMAINS = (
     "symbolic_dynamics",
     "term_rewriting",
     "tree_automata",
+    "universal_algebra",
     "words",
 )
 

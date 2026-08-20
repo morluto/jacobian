@@ -30,6 +30,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
+    OperationAdmission(
+        "topology.simplicial_complex.f_vector.compute",
+        AdmissionDecision.KEEP,
+        "exact f-vector, h-vector, and Euler characteristic of a simplicial complex",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

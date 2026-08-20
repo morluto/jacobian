@@ -23,6 +23,8 @@ from jacobian.math.topology._models import (
     ChainComplexResult,
     FacesInDimension,
     FiniteSimplicialComplex,
+    FVectorRequest,
+    FVectorResult,
     HomologyConvention,
     HomologyGroupResult,
     IntegralFreeGenerator,
@@ -682,3 +684,48 @@ TOPOLOGY_OPERATIONS: tuple[TopologyOperation, ...] = (
 )
 
 __all__ = ["TOPOLOGY_OPERATIONS"]
+
+
+def compute_f_vector(request: FVectorRequest) -> FVectorResult:
+    """Compute the f-vector and h-vector of a simplicial complex."""
+    facets = request.complex.facets
+
+    # Build all simplices from facets
+    from itertools import combinations as _comb
+
+    all_simplices: set[tuple[str, ...]] = set()
+    for facet in facets:
+        n = len(facet)
+        for r in range(1, n + 1):
+            for subset in _comb(facet, r):
+                all_simplices.add(tuple(sorted(subset)))
+
+    # Count by dimension
+    max_dim = 0
+    counts_by_dim: dict[int, int] = {}
+    for simplex in all_simplices:
+        dim = len(simplex) - 1
+        counts_by_dim[dim] = counts_by_dim.get(dim, 0) + 1
+        max_dim = max(max_dim, dim)
+
+    f_vector = tuple(counts_by_dim.get(d, 0) for d in range(max_dim + 1))
+    euler = sum((-1) ** d * counts_by_dim.get(d, 0) for d in range(max_dim + 1))
+
+    # Compute h-vector from f-vector
+    from math import comb as _comb_func
+
+    n = max_dim + 1
+    f_with_empty: list[int] = [1, *list(f_vector)]
+    h_vector: list[int] = []
+    for k in range(n + 1):
+        h = 0
+        for i in range(k + 1):
+            h += ((-1) ** (k - i)) * _comb_func(n - i, k - i) * f_with_empty[i]
+        h_vector.append(h)
+
+    return FVectorResult(
+        f_vector=f_vector,
+        h_vector=tuple(h_vector),
+        euler_characteristic=euler,
+        dimension=max_dim,
+    )

@@ -785,3 +785,21 @@ __all__ = [
     "face_closure",
     "simplicial_complex_digest",
 ]
+
+
+class FVectorRequest(StrictModel):
+    """Request the f-vector and h-vector of a simplicial complex."""
+
+    complex: SimplicialComplexRequest
+
+
+class FVectorResult(TopologyExactResult):
+    """The f-vector and h-vector of a simplicial complex."""
+
+    f_vector: tuple[int, ...]
+    h_vector: tuple[int, ...]
+    euler_characteristic: int
+    dimension: int
+
+
+__all__.extend(["FVectorRequest", "FVectorResult"])

@@ -12,10 +12,13 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.math.graphs.flow._models import (
     EdgeDisjointPathsRequest,
     EdgeDisjointPathsResult,
+    FlowEdgeResult,
     FlowEdgeValue,
     FlowGraph,
     MaxFlowRequest,
     MaxFlowResult,
+    MinCostFlowRequest,
+    MinCostFlowResult,
     MinCutRequest,
     MinCutResult,
 )
@@ -106,4 +109,66 @@ def compute_edge_disjoint_paths(
         paths=tuple(tuple(path) for path in paths),
         source=request.source,
         sink=request.sink,
+    )
+
+
+def compute_min_cost_flow(request: MinCostFlowRequest) -> MinCostFlowResult:
+    """Compute minimum-cost flow with demands using exact integer arithmetic.
+
+    All rational capacities and costs are scaled to integers by a common
+    denominator before calling NetworkX's network simplex.  The integer
+    results are then divided back to exact rationals.
+    """
+    edges = request.graph.edges
+    capacities = [e.capacity.as_fraction() for e in edges]
+    costs = [e.cost.as_fraction() for e in edges]
+
+    # Compute the least common multiple of all denominators so that
+    # scaling produces integers.
+    from math import lcm
+
+    scale = 1
+    for frac in capacities + costs:
+        scale = lcm(scale, frac.denominator)
+
+    # Build graph with integer capacities and costs.
+    g: nx.DiGraph[Any] = nx.DiGraph()
+    g.add_nodes_from(range(request.graph.vertex_count))
+    for node in range(request.graph.vertex_count):
+        g.nodes[node]["demand"] = request.demands[node]
+    for edge, cap, cost in zip(edges, capacities, costs, strict=True):
+        g.add_edge(
+            edge.source,
+            edge.target,
+            capacity=int(cap * scale),
+            weight=int(cost * scale),
+        )
+    try:
+        flow_cost_int, flow_dict = nx.network_simplex(g)
+    except (nx.NetworkXUnfeasible, nx.NetworkXError):
+        return MinCostFlowResult(
+            total_cost=_rational(0),
+            feasible=False,
+            flow_edges=(),
+        )
+
+    flow_edges: list[FlowEdgeResult] = []
+    for source_node, targets in flow_dict.items():
+        for target_node, flow_amount in targets.items():
+            if flow_amount != 0:
+                flow_edges.append(
+                    FlowEdgeResult(
+                        source=source_node,
+                        target=target_node,
+                        flow=_rational(int(flow_amount)),
+                    )
+                )
+    # The integer flow cost is sum(scaled_weight * flow) = sum((cost * scale) * flow)
+    # = scale * sum(cost * flow) = scale * total_cost.
+    # Therefore total_cost = flow_cost_int / scale.
+    total_cost = Fraction(int(flow_cost_int), scale)
+    return MinCostFlowResult(
+        total_cost=_rational(total_cost),
+        feasible=True,
+        flow_edges=tuple(flow_edges),
     )

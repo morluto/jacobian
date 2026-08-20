@@ -112,7 +112,7 @@ def _request(
         executable=str(executable.resolve(strict=True)),
         arguments=tuple(arguments),
         environment=environment,
-        cwd=str(cwd.resolve(strict=True)),
+        cwd=str(cwd.resolve()),
         timeout_seconds=timeout_seconds,
         stdin_bytes=stdin_bytes,
         stdout_limit_bytes=stdout_limit_bytes,

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import replace
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
+from benchmarks.tooling.providers import cddlib, cgal, gudhi, nauty, regina
+from benchmarks.tooling.spike_utils import default_runner
 from tests.process.providers._spike_support import _request, _result, _runner
 
 
@@ -64,3 +68,33 @@ def test_strict_runner_rejects_unconsumed_expectations(tmp_path: Path) -> None:
 
     with pytest.raises(AssertionError, match="1 expected provider command"):
         runner.assert_finished()
+
+
+@pytest.mark.parametrize(
+    ("module", "error_type", "extra_arguments"),
+    [
+        (cddlib, cddlib.CddlibSpikeError, {}),
+        (cgal, cgal.CgalSpikeError, {}),
+        (gudhi, gudhi.GudhiSpikeError, {}),
+        (nauty, nauty.NautySpikeError, {"input_bytes": b"", "stdout_limit": 4096}),
+        (regina, regina.ReginaSpikeError, {}),
+    ],
+)
+def test_provider_runner_translates_an_absent_working_directory(
+    tmp_path: Path,
+    module: Any,
+    error_type: type[Exception],
+    extra_arguments: dict[str, Any],
+) -> None:
+    absent_cwd = tmp_path / "absent"
+
+    with pytest.raises(error_type) as caught:
+        module._run_checked(
+            default_runner,
+            (sys.executable, "-c", "pass"),
+            cwd=absent_cwd,
+            timeout_seconds=1,
+            **extra_arguments,
+        )
+
+    assert cast(Any, caught.value).code == "PROVIDER_LAUNCH_ERROR"

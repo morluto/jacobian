@@ -702,7 +702,7 @@ def _run_checked(
             stdin_bytes=b"",
             timeout_seconds=timeout_seconds,
             environment=_ENVIRONMENT,
-            cwd=str(cwd.resolve(strict=True)),
+            cwd=str(cwd.resolve()),
             stdout_limit_bytes=128 * 1024,
             stderr_limit_bytes=16 * 1024,
         )

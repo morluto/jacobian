@@ -20,17 +20,18 @@ def _element_power(
     element: str,
     exponent: int,
 ) -> str:
-    """Compute ``element^exponent`` by iterated multiplication.
+    """Compute ``element^exponent`` using its bounded eventual period.
 
     ``exponent`` must be at least 1; the semigroup may have no identity, so
     ``a^0`` is undefined and rejected at the request boundary.
     """
 
-    idx = {label: i for i, label in enumerate(elements)}
-    power = element
-    for _ in range(exponent - 1):
-        power = multiplication[idx[power]][idx[element]]
-    return power
+    powers, index, period, _, _ = _power_profile_data(
+        elements, multiplication, element
+    )
+    if exponent < index:
+        return powers[exponent - 1]
+    return powers[index - 1 + (exponent - index) % period]
 
 
 def _idempotents(
@@ -50,9 +51,9 @@ def _principal_ideals(
 ) -> tuple[tuple[str, ...], ...]:
     """Return the principal ideal of each requested element.
 
-    The principal ideal of ``a`` is ``{a} union {x*a : x in S} union
-    {a*x : x in S}``.  Ideals are returned in declared element order with
-    each ideal's elements in declared semigroup order.
+    The principal two-sided ideal of ``a`` is ``S^1 a S^1``. Ideals are
+    returned in declared element order with each ideal's elements in declared
+    semigroup order.
     """
 
     idx = {label: i for i, label in enumerate(elements)}
@@ -61,9 +62,12 @@ def _principal_ideals(
     for element in requested:
         ideal = {element}
         i = idx[element]
-        for j in range(n):
-            ideal.add(multiplication[j][i])
-            ideal.add(multiplication[i][j])
+        for left in range(n):
+            left_product = multiplication[left][i]
+            ideal.add(left_product)
+            ideal.add(multiplication[i][left])
+            for right in range(n):
+                ideal.add(multiplication[idx[left_product]][right])
         ideals.append(tuple(e for e in elements if e in ideal))
     return tuple(ideals)
 

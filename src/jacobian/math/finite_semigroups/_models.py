@@ -197,7 +197,7 @@ class PrincipalIdealsRequest(StrictModel):
     """Request the principal ideal of each listed element."""
 
     semigroup: FiniteSemigroup
-    elements: tuple[str, ...] = Field(min_length=1)
+    elements: tuple[str, ...] = Field(min_length=1, max_length=MAX_ELEMENTS)
 
     @model_validator(mode="after")
     def require_elements_exist(self) -> Self:
@@ -205,14 +205,20 @@ class PrincipalIdealsRequest(StrictModel):
         for element in self.elements:
             if element not in labels:
                 raise ValueError("every element must be in the semigroup")
+        if len(set(self.elements)) != len(self.elements):
+            raise ValueError("requested elements must be distinct")
+        declared_order = tuple(
+            element for element in self.semigroup.elements if element in self.elements
+        )
+        if self.elements != declared_order:
+            raise ValueError("requested elements must use declared semigroup order")
         return self
 
 
 class PrincipalIdealsResult(StrictModel):
     """The principal ideals of the requested elements.
 
-    The principal ideal of ``a`` is ``{a} union {x*a : x in S} union
-    {a*x : x in S}``.
+    The principal two-sided ideal of ``a`` is ``S^1 a S^1``.
     """
 
     semigroup: FiniteSemigroup

@@ -11,7 +11,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "semigroup.element.power.compute",
         AdmissionDecision.KEEP,
-        "exact iterated power of one element with a positive exponent",
+        "exact positive power reduced through the finite power profile",
     ),
     OperationAdmission(
         "semigroup.element.power_profile.compute",
@@ -31,7 +31,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "semigroup.principal_ideals.compute",
         AdmissionDecision.KEEP,
-        "exact principal ideals {a} union {x*a, a*x : x in S} of requested elements",
+        "exact principal two-sided ideals S^1 a S^1 of requested elements",
     ),
 )
 

@@ -118,7 +118,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "semigroup.element.power.compute",
         "Compute the power of a semigroup element",
         "Compute the exact iterated product element^exponent for a positive "
-        "exponent in a finite semigroup.",
+        "exponent in a finite semigroup using its finite eventual period.",
         ElementPowerRequest,
         ElementPowerResult,
         compute_element_power,
@@ -160,8 +160,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "semigroup.principal_ideals.compute",
         "Compute principal ideals in a finite semigroup",
-        "For each requested element compute its principal ideal "
-        "{a} union {x*a, a*x : x in S}.",
+        "For each requested element compute its principal two-sided ideal "
+        "S^1 a S^1.",
         PrincipalIdealsRequest,
         PrincipalIdealsResult,
         compute_principal_ideals,

@@ -58,6 +58,18 @@ CYCLIC_TAIL = {
     ],
 }
 
+# The five matrix units of the 2x2 Brandt semigroup, with zero.
+MATRIX_UNITS = {
+    "elements": ["0", "e11", "e12", "e21", "e22"],
+    "multiplication": [
+        ["0", "0", "0", "0", "0"],
+        ["0", "e11", "e12", "0", "0"],
+        ["0", "0", "0", "e11", "e12"],
+        ["0", "e21", "e22", "0", "0"],
+        ["0", "0", "0", "e21", "e22"],
+    ],
+}
+
 
 class TestFiniteSemigroup:
     def test_z3_is_valid(self) -> None:
@@ -256,6 +268,12 @@ class TestElementPower:
             running = mult[idx[running]][idx["1"]]
         assert result.power == running
 
+    def test_huge_exponent_uses_the_finite_power_profile(self) -> None:
+        result = compute_element_power(
+            ElementPowerRequest(semigroup=Z3, element="1", exponent=10**100)
+        )
+        assert result.power == "1"
+
 
 class TestIdempotents:
     def test_z3_only_zero(self) -> None:
@@ -305,6 +323,31 @@ class TestPrincipalIdeals:
                 PrincipalIdealsRequest(semigroup=sg, elements=[element])
             )
             assert element in result.ideals[0]
+
+    def test_principal_two_sided_ideal_contains_triple_products(self) -> None:
+        result = compute_principal_ideals(
+            PrincipalIdealsRequest(semigroup=MATRIX_UNITS, elements=["e11"])
+        )
+        assert result.ideals == (("0", "e11", "e12", "e21", "e22"),)
+
+    def test_principal_two_sided_ideal_is_closed_on_both_sides(self) -> None:
+        for element in MATRIX_UNITS["elements"]:
+            ideal = compute_principal_ideals(
+                PrincipalIdealsRequest(semigroup=MATRIX_UNITS, elements=[element])
+            ).ideals[0]
+            labels = MATRIX_UNITS["elements"]
+            table = MATRIX_UNITS["multiplication"]
+            index = {label: i for i, label in enumerate(labels)}
+            for member in ideal:
+                for multiplier in labels:
+                    assert table[index[multiplier]][index[member]] in ideal
+                    assert table[index[member]][index[multiplier]] in ideal
+
+    def test_duplicate_or_out_of_order_elements_are_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="distinct"):
+            PrincipalIdealsRequest(semigroup=Z3, elements=["1", "1"])
+        with pytest.raises(ValidationError, match="declared semigroup order"):
+            PrincipalIdealsRequest(semigroup=Z3, elements=["2", "1"])
 
     def test_missing_element_rejected(self) -> None:
         with pytest.raises(

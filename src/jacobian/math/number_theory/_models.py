@@ -102,7 +102,7 @@ class IntegerValueRequest(StrictModel):
 class FactorizationRequest(StrictModel):
     """One small integer for direct exact factorization in the server process."""
 
-    value: BudgetedFactorizationInteger
+    value: FactorizationInteger
 
 
 class NonzeroFactorizationRequest(FactorizationRequest):
@@ -503,8 +503,9 @@ class BudgetedFactorizationResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_decomposition(self) -> Self:
-        from jacobian.canonical import parse_canonical_integer
         from flint import fmpz
+
+        from jacobian.canonical import parse_canonical_integer
 
         product = math.prod(
             parse_canonical_integer(item.value) ** item.exponent

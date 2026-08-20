@@ -160,8 +160,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "semigroup.principal_ideals.compute",
         "Compute principal ideals in a finite semigroup",
-        "For each requested element compute its principal two-sided ideal "
-        "S^1 a S^1.",
+        "For each requested element compute its principal two-sided ideal S^1 a S^1.",
         PrincipalIdealsRequest,
         PrincipalIdealsResult,
         compute_principal_ideals,

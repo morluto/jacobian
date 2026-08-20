@@ -26,9 +26,7 @@ def _element_power(
     ``a^0`` is undefined and rejected at the request boundary.
     """
 
-    powers, index, period, _, _ = _power_profile_data(
-        elements, multiplication, element
-    )
+    powers, index, period, _, _ = _power_profile_data(elements, multiplication, element)
     if exponent < index:
         return powers[exponent - 1]
     return powers[index - 1 + (exponent - index) % period]

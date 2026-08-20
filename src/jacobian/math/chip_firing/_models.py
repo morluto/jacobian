@@ -10,6 +10,24 @@ from jacobian._models import StrictModel
 
 MAX_VERTICES = 50
 MAX_DEGREE = 100
+MAX_COEFFICIENT_DIGITS = 1_000
+
+
+def _validate_divisor(
+    vertices: tuple[str, ...],
+    divisor: tuple[int, ...],
+    *,
+    label: str = "divisor",
+) -> None:
+    if len(divisor) != len(vertices):
+        raise ValueError(f"{label} length must match vertex count")
+    if any(abs(c) >= 10 ** MAX_COEFFICIENT_DIGITS for c in divisor):
+        raise ValueError(f"{label} coefficients exceed the digit bound")
+
+
+def _validate_sink(vertices: tuple[str, ...], sink: str) -> None:
+    if sink not in set(vertices):
+        raise ValueError("sink vertex must be in the graph")
 
 
 class LabelledGraph(StrictModel):
@@ -57,6 +75,26 @@ class LaplacianResult(StrictModel):
     degrees: tuple[int, ...]
 
 
+class ReducedLaplacianRequest(StrictModel):
+    """Request the reduced Laplacian (sink row/column deleted)."""
+
+    graph: LabelledGraph
+    sink: str
+
+    @model_validator(mode="after")
+    def require_valid_request(self) -> Self:
+        _validate_sink(self.graph.vertices, self.sink)
+        return self
+
+
+class ReducedLaplacianResult(StrictModel):
+    """The reduced Laplacian with nonsink vertex labels."""
+
+    vertices: tuple[str, ...]
+    sink: str
+    reduced_laplacian: tuple[tuple[int, ...], ...]
+
+
 class FiringRequest(StrictModel):
     """Fire a vertex: transfer one chip to each neighbor."""
 
@@ -80,7 +118,168 @@ class FiringResult(StrictModel):
     fired_divisor: tuple[int, ...]
 
 
+class FireVectorRequest(StrictModel):
+    """Fire a vector: D' = D - L f."""
+
+    graph: LabelledGraph
+    divisor: tuple[int, ...] = Field(min_length=1)
+    firing_vector: tuple[int, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_valid_request(self) -> Self:
+        n = len(self.graph.vertices)
+        if len(self.divisor) != n:
+            raise ValueError("divisor length must match vertex count")
+        if len(self.firing_vector) != n:
+            raise ValueError("firing vector length must match vertex count")
+        if any(abs(c) >= 10 ** MAX_COEFFICIENT_DIGITS for c in self.firing_vector):
+            raise ValueError("firing vector coefficients exceed the digit bound")
+        return self
+
+
+class FireVectorResult(StrictModel):
+    """Result of firing a vector."""
+
+    fired_divisor: tuple[int, ...]
+    degree_preserved: bool
+
+
+class SinkConfiguration(StrictModel):
+    """A sink configuration for chip-firing stabilization."""
+
+    graph: LabelledGraph
+    sink: str
+    configuration: tuple[int, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_valid_request(self) -> Self:
+        vertices = self.graph.vertices
+        _validate_sink(vertices, self.sink)
+        if len(self.configuration) != len(vertices):
+            raise ValueError("configuration length must match vertex count")
+        nonsink = [i for i, v in enumerate(vertices) if v != self.sink]
+        if any(self.configuration[i] < 0 for i in nonsink):
+            raise ValueError("nonsink configuration must be nonnegative")
+        return self
+
+
+class StabilizeRequest(StrictModel):
+    """Stabilize a sink configuration."""
+
+    configuration: SinkConfiguration
+
+
+class StabilizeResult(StrictModel):
+    """The stable configuration and odometer vector."""
+
+    stable: tuple[int, ...]
+    odometer: tuple[int, ...]
+    total_firings: int
+
+
+class ParallelStepRequest(StrictModel):
+    """One parallel firing step."""
+
+    configuration: SinkConfiguration
+
+
+class ParallelStepResult(StrictModel):
+    """The next configuration and the set of vertices that fired."""
+
+    next_configuration: tuple[int, ...]
+    fired_vertices: tuple[str, ...]
+
+
+class QReducedRequest(StrictModel):
+    """Compute the q-reduced normal form of a divisor."""
+
+    graph: LabelledGraph
+    divisor: tuple[int, ...] = Field(min_length=1)
+    sink: str
+
+    @model_validator(mode="after")
+    def require_valid_request(self) -> Self:
+        n = len(self.graph.vertices)
+        _validate_sink(self.graph.vertices, self.sink)
+        if len(self.divisor) != n:
+            raise ValueError("divisor length must match vertex count")
+        return self
+
+
+class QReducedResult(StrictModel):
+    """The q-reduced divisor and the exact firing vector."""
+
+    reduced_divisor: tuple[int, ...]
+    firing_vector: tuple[int, ...]
+
+
+class DegreeRequest(StrictModel):
+    """Compute the degree of a graph divisor."""
+
+    divisor: tuple[int, ...] = Field(min_length=1)
+
+
+class DegreeResult(StrictModel):
+    """The degree of the divisor."""
+
+    degree: int
+
+
+class CanonicalDivisorRequest(StrictModel):
+    """Compute the graph canonical divisor K(v) = deg(v) - 2."""
+
+    graph: LabelledGraph
+
+
+class CanonicalDivisorResult(StrictModel):
+    """The canonical divisor and its degree."""
+
+    vertices: tuple[str, ...]
+    divisor: tuple[int, ...]
+    degree: int
+
+
 class CriticalGroupRequest(StrictModel):
     """Request the critical group (sandpile group) of a graph."""
 
     graph: LabelledGraph
+    sink: str
+
+    @model_validator(mode="after")
+    def require_valid_request(self) -> Self:
+        _validate_sink(self.graph.vertices, self.sink)
+        return self
+
+
+class CriticalGroupResult(StrictModel):
+    """The critical group invariant factors and order."""
+
+    sink: str
+    nonsink_vertices: tuple[str, ...]
+    invariant_factors: tuple[int, ...]
+    order: int
+
+
+class AbelJacobiRequest(StrictModel):
+    """Map a degree-zero divisor into the critical group."""
+
+    graph: LabelledGraph
+    divisor: tuple[int, ...] = Field(min_length=1)
+    sink: str
+
+    @model_validator(mode="after")
+    def require_valid_request(self) -> Self:
+        n = len(self.graph.vertices)
+        _validate_sink(self.graph.vertices, self.sink)
+        if len(self.divisor) != n:
+            raise ValueError("divisor length must match vertex count")
+        return self
+
+
+class AbelJacobiResult(StrictModel):
+    """The critical-group coordinates of a degree-zero divisor."""
+
+    sink: str
+    nonsink_vertices: tuple[str, ...]
+    coordinates: tuple[int, ...]
+    invariant_factors: tuple[int, ...]

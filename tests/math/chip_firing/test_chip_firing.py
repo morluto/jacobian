@@ -4,12 +4,35 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.chip_firing._models import (
+    AbelJacobiRequest,
+    CanonicalDivisorRequest,
+    CriticalGroupRequest,
+    DegreeRequest,
+    FireVectorRequest,
     FiringRequest,
     LaplacianRequest,
+    ParallelStepRequest,
+    QReducedRequest,
+    ReducedLaplacianRequest,
+    SinkConfiguration,
+    StabilizeRequest,
 )
-from jacobian.math.chip_firing._operations import compute_firing, compute_laplacian
+from jacobian.math.chip_firing._operations import (
+    compute_abel_jacobi,
+    compute_canonical_divisor,
+    compute_critical_group,
+    compute_degree,
+    compute_fire_vector,
+    compute_firing,
+    compute_laplacian,
+    compute_parallel_step,
+    compute_q_reduced,
+    compute_reduced_laplacian,
+    compute_stabilize,
+)
 
 GRAPH = {"vertices": ["a", "b", "c"], "edges": [["a", "b"], ["b", "c"]]}
+C3 = {"vertices": ["a", "b", "c"], "edges": [["a", "b"], ["b", "c"], ["a", "c"]]}
 
 
 class TestLaplacian:
@@ -26,16 +49,28 @@ class TestLaplacian:
         assert result.laplacian == ((0,),)
 
     def test_triangle(self) -> None:
-        result = compute_laplacian(
-            LaplacianRequest(
-                graph={
-                    "vertices": ["a", "b", "c"],
-                    "edges": [["a", "b"], ["b", "c"], ["a", "c"]],
-                }
-            )
-        )
+        result = compute_laplacian(LaplacianRequest(graph=C3))
         assert result.degrees == (2, 2, 2)
         assert result.laplacian == ((2, -1, -1), (-1, 2, -1), (-1, -1, 2))
+
+
+class TestReducedLaplacian:
+    def test_path_graph_sink_a(self) -> None:
+        result = compute_reduced_laplacian(
+            ReducedLaplacianRequest(graph=GRAPH, sink="a")
+        )
+        assert result.sink == "a"
+        assert result.reduced_laplacian == ((2, -1), (-1, 1))
+
+    def test_triangle_sink_b(self) -> None:
+        result = compute_reduced_laplacian(
+            ReducedLaplacianRequest(graph=C3, sink="b")
+        )
+        assert result.reduced_laplacian == ((2, -1), (-1, 2))
+
+    def test_invalid_sink(self) -> None:
+        with pytest.raises(ValidationError, match="sink vertex"):
+            ReducedLaplacianRequest(graph=GRAPH, sink="x")
 
 
 class TestFiring:
@@ -43,14 +78,12 @@ class TestFiring:
         result = compute_firing(
             FiringRequest(graph=GRAPH, divisor=[3, 0, 1], firing_vertex="b")
         )
-        # b has degree 2, loses 2 chips: 0-2=-2, each neighbor gains 1: a+1, c+1
         assert result.fired_divisor == (4, -2, 2)
 
     def test_fire_leaf(self) -> None:
         result = compute_firing(
             FiringRequest(graph=GRAPH, divisor=[3, 0, 1], firing_vertex="a")
         )
-        # a has degree 1, loses 1 chip: 3-1=2, neighbor b gains 1: 0+1=1
         assert result.fired_divisor == (2, 1, 1)
 
     def test_invalid_vertex(self) -> None:
@@ -60,3 +93,285 @@ class TestFiring:
     def test_wrong_divisor_length(self) -> None:
         with pytest.raises(ValidationError, match="divisor length"):
             FiringRequest(graph=GRAPH, divisor=[0, 0], firing_vertex="a")
+
+
+class TestFireVector:
+    def test_fire_unit_vector_e_a(self) -> None:
+        result = compute_fire_vector(
+            FireVectorRequest(graph=GRAPH, divisor=[3, 0, 1], firing_vector=[1, 0, 0])
+        )
+        assert result.fired_divisor == (2, 1, 1)
+        assert result.degree_preserved is True
+
+    def test_fire_vertex_b_is_unit_vector(self) -> None:
+        fire_vertex = compute_firing(
+            FiringRequest(graph=GRAPH, divisor=[3, 0, 1], firing_vertex="b")
+        )
+        fire_vector = compute_fire_vector(
+            FireVectorRequest(graph=GRAPH, divisor=[3, 0, 1], firing_vector=[0, 1, 0])
+        )
+        assert fire_vertex.fired_divisor == fire_vector.fired_divisor
+
+    def test_degree_preservation(self) -> None:
+        result = compute_fire_vector(
+            FireVectorRequest(graph=GRAPH, divisor=[5, 3, 2], firing_vector=[2, 1, 3])
+        )
+        assert result.degree_preserved is True
+        assert sum(result.fired_divisor) == sum([5, 3, 2])
+
+    def test_firing_vector_composition(self) -> None:
+        div = [5, 3, 2]
+        f1 = [1, 0, 0]
+        f2 = [0, 1, 0]
+        r1 = compute_fire_vector(
+            FireVectorRequest(graph=GRAPH, divisor=div, firing_vector=f1)
+        )
+        r2 = compute_fire_vector(
+            FireVectorRequest(
+                graph=GRAPH, divisor=list(r1.fired_divisor), firing_vector=f2
+            )
+        )
+        composed = compute_fire_vector(
+            FireVectorRequest(
+                graph=GRAPH, divisor=div, firing_vector=[f1[i] + f2[i] for i in range(3)]
+            )
+        )
+        assert r2.fired_divisor == composed.fired_divisor
+
+    def test_wrong_vector_length(self) -> None:
+        with pytest.raises(ValidationError, match="firing vector length"):
+            FireVectorRequest(graph=GRAPH, divisor=[0, 0, 0], firing_vector=[0, 0])
+
+
+class TestStabilize:
+    def test_stabilize_path_graph(self) -> None:
+        sc = SinkConfiguration(graph=GRAPH, sink="a", configuration=[0, 3, 0])
+        result = compute_stabilize(StabilizeRequest(configuration=sc))
+        assert result.stable == (2, 1, 0)
+        assert result.odometer == (0, 2, 2)
+        assert result.total_firings == 4
+
+    def test_stabilization_is_stable(self) -> None:
+        sc = SinkConfiguration(graph=GRAPH, sink="a", configuration=[0, 5, 0])
+        result = compute_stabilize(StabilizeRequest(configuration=sc))
+        degrees = compute_laplacian(LaplacianRequest(graph=GRAPH)).degrees
+        for i, v in enumerate(GRAPH["vertices"]):
+            if v != sc.sink:
+                assert 0 <= result.stable[i] < degrees[i]
+
+    def test_stabilization_idempotence(self) -> None:
+        sc = SinkConfiguration(graph=GRAPH, sink="a", configuration=[0, 5, 0])
+        r1 = compute_stabilize(StabilizeRequest(configuration=sc))
+        sc2 = SinkConfiguration(
+            graph=GRAPH, sink="a", configuration=list(r1.stable)
+        )
+        r2 = compute_stabilize(StabilizeRequest(configuration=sc2))
+        assert r1.stable == r2.stable
+        assert r2.total_firings == 0
+
+    def test_nontrivial_odometer(self) -> None:
+        sc = SinkConfiguration(graph=GRAPH, sink="a", configuration=[0, 10, 0])
+        result = compute_stabilize(StabilizeRequest(configuration=sc))
+        assert sum(result.odometer) > 0
+
+    def test_negative_nonsink_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="nonsink configuration"):
+            SinkConfiguration(graph=GRAPH, sink="a", configuration=[0, -1, 0])
+
+
+class TestParallelStep:
+    def test_one_step(self) -> None:
+        sc = SinkConfiguration(graph=GRAPH, sink="a", configuration=[0, 3, 0])
+        result = compute_parallel_step(ParallelStepRequest(configuration=sc))
+        assert result.fired_vertices == ("b",)
+        assert result.next_configuration[1] == 3 - 2
+
+    def test_parallel_step_agrees_with_stabilization(self) -> None:
+        sc = SinkConfiguration(graph=GRAPH, sink="a", configuration=[0, 5, 0])
+        config = list(sc.configuration)
+        for _ in range(20):
+            result = compute_parallel_step(
+                ParallelStepRequest(
+                    configuration=SinkConfiguration(
+                        graph=GRAPH, sink="a", configuration=list(config)
+                    )
+                )
+            )
+            config = list(result.next_configuration)
+        stable = compute_stabilize(StabilizeRequest(configuration=sc))
+        assert tuple(config) == stable.stable
+
+
+class TestQReduced:
+    def test_triangle_q_reduced(self) -> None:
+        result = compute_q_reduced(
+            QReducedRequest(graph=C3, divisor=[5, 0, 0], sink="a")
+        )
+        assert result.reduced_divisor[0] == 5
+        assert all(c >= 0 for i, c in enumerate(result.reduced_divisor) if i > 0)
+
+    def test_q_reduced_idempotence(self) -> None:
+        r1 = compute_q_reduced(QReducedRequest(graph=C3, divisor=[10, 5, 3], sink="a"))
+        r2 = compute_q_reduced(
+            QReducedRequest(graph=C3, divisor=list(r1.reduced_divisor), sink="a")
+        )
+        assert r1.reduced_divisor == r2.reduced_divisor
+
+    def test_q_reduced_nonnegative_nonsink(self) -> None:
+        result = compute_q_reduced(
+            QReducedRequest(graph=C3, divisor=[10, 5, 3], sink="a")
+        )
+        assert result.reduced_divisor[1] >= 0
+        assert result.reduced_divisor[2] >= 0
+
+    def test_q_reduced_firing_vector(self) -> None:
+        result = compute_q_reduced(
+            QReducedRequest(graph=C3, divisor=[10, 5, 3], sink="a")
+        )
+        lap = compute_laplacian(LaplacianRequest(graph=C3)).laplacian
+        f = result.firing_vector
+        reconstructed = []
+        for i in range(3):
+            delta = sum(lap[i][j] * f[j] for j in range(3))
+            reconstructed.append([10, 5, 3][i] - delta)
+        assert tuple(reconstructed) == result.reduced_divisor
+
+
+class TestDegree:
+    def test_degree(self) -> None:
+        result = compute_degree(DegreeRequest(divisor=[3, 0, 1]))
+        assert result.degree == 4
+
+    def test_degree_negative(self) -> None:
+        result = compute_degree(DegreeRequest(divisor=[-1, 2, -3]))
+        assert result.degree == -2
+
+
+class TestCanonicalDivisor:
+    def test_path_graph(self) -> None:
+        result = compute_canonical_divisor(CanonicalDivisorRequest(graph=GRAPH))
+        assert result.divisor == (-1, 0, -1)
+        assert result.degree == -2
+
+    def test_triangle(self) -> None:
+        result = compute_canonical_divisor(CanonicalDivisorRequest(graph=C3))
+        assert result.divisor == (0, 0, 0)
+        assert result.degree == 0
+
+    def test_degree_formula(self) -> None:
+        graph = {
+            "vertices": ["a", "b", "c", "d"],
+            "edges": [["a", "b"], ["b", "c"], ["c", "d"], ["d", "a"]],
+        }
+        result = compute_canonical_divisor(CanonicalDivisorRequest(graph=graph))
+        assert result.degree == 2 * len(graph["edges"]) - 2 * len(graph["vertices"])
+
+
+class TestCriticalGroup:
+    def test_triangle(self) -> None:
+        result = compute_critical_group(CriticalGroupRequest(graph=C3, sink="a"))
+        assert result.invariant_factors == (1, 3)
+        assert result.order == 3
+
+    def test_cycle_c4(self) -> None:
+        C4 = {
+            "vertices": ["a", "b", "c", "d"],
+            "edges": [["a", "b"], ["b", "c"], ["c", "d"], ["d", "a"]],
+        }
+        result = compute_critical_group(CriticalGroupRequest(graph=C4, sink="a"))
+        assert result.invariant_factors == (1, 1, 4)
+        assert result.order == 4
+
+    def test_tree_is_trivial(self) -> None:
+        tree = {"vertices": ["a", "b"], "edges": [["a", "b"]]}
+        result = compute_critical_group(CriticalGroupRequest(graph=tree, sink="a"))
+        assert result.order == 1
+
+    def test_complete_k4(self) -> None:
+        K4 = {
+            "vertices": ["a", "b", "c", "d"],
+            "edges": [
+                ["a", "b"], ["a", "c"], ["a", "d"],
+                ["b", "c"], ["b", "d"], ["c", "d"],
+            ],
+        }
+        result = compute_critical_group(CriticalGroupRequest(graph=K4, sink="a"))
+        assert result.order == 16
+
+    def test_order_matches_spanning_tree_count(self) -> None:
+        from sympy import Matrix
+
+        def count_spanning_trees(vertices, edges):
+            n = len(vertices)
+            idx = {v: i for i, v in enumerate(vertices)}
+            lap = [[0] * n for _ in range(n)]
+            for u, v in edges:
+                lap[idx[u]][idx[v]] -= 1
+                lap[idx[v]][idx[u]] -= 1
+            for i in range(n):
+                deg = -sum(lap[i][j] for j in range(n) if j != i)
+                lap[i][i] = deg
+            minor = Matrix([row[: n - 1] for row in lap[: n - 1]])
+            result = compute_critical_group(
+                CriticalGroupRequest(
+                    graph={'vertices': vertices, 'edges': [list(e) for e in edges]},
+                    sink=vertices[0],
+                )
+            )
+            return result, int(minor.det())
+
+        for vertices, edges in [
+            (['a', 'b', 'c'], [('a', 'b'), ('b', 'c'), ('a', 'c')]),
+            (
+                ['a', 'b', 'c', 'd'],
+                [('a', 'b'), ('b', 'c'), ('c', 'd'), ('d', 'a')],
+            ),
+        ]:
+            res, trees = count_spanning_trees(vertices, edges)
+            assert res.order == trees
+
+    def test_sink_change_preserves_order(self) -> None:
+        r1 = compute_critical_group(CriticalGroupRequest(graph=C3, sink="a"))
+        r2 = compute_critical_group(CriticalGroupRequest(graph=C3, sink="b"))
+        r3 = compute_critical_group(CriticalGroupRequest(graph=C3, sink="c"))
+        assert r1.order == r2.order == r3.order
+        assert r1.invariant_factors == r2.invariant_factors == r3.invariant_factors
+
+
+class TestAbelJacobi:
+    def test_degree_zero_mapping(self) -> None:
+        result = compute_abel_jacobi(
+            AbelJacobiRequest(graph=C3, divisor=[1, -1, 0], sink="a")
+        )
+        assert len(result.coordinates) > 0
+        assert result.invariant_factors == (1, 3)
+
+    def test_zero_divisor(self) -> None:
+        result = compute_abel_jacobi(
+            AbelJacobiRequest(graph=C3, divisor=[0, 0, 0], sink="a")
+        )
+        assert all(c == 0 for c in result.coordinates)
+
+    def test_coordinates_in_range(self) -> None:
+        result = compute_abel_jacobi(
+            AbelJacobiRequest(graph=C3, divisor=[5, -3, -2], sink="a")
+        )
+        for c in result.coordinates:
+            assert c >= 0
+
+
+class TestVertexRelabelling:
+    def test_laplacian_equivariance(self) -> None:
+        graph1 = {"vertices": ["a", "b", "c"], "edges": [["a", "b"], ["b", "c"]]}
+        graph2 = {"vertices": ["x", "y", "z"], "edges": [["x", "y"], ["y", "z"]]}
+        r1 = compute_laplacian(LaplacianRequest(graph=graph1))
+        r2 = compute_laplacian(LaplacianRequest(graph=graph2))
+        assert r1.laplacian == r2.laplacian
+
+    def test_critical_group_relabelling(self) -> None:
+        graph1 = {"vertices": ["a", "b", "c"], "edges": [["a", "b"], ["b", "c"], ["a", "c"]]}
+        graph2 = {"vertices": ["x", "y", "z"], "edges": [["x", "y"], ["y", "z"], ["x", "z"]]}
+        r1 = compute_critical_group(CriticalGroupRequest(graph=graph1, sink="a"))
+        r2 = compute_critical_group(CriticalGroupRequest(graph=graph2, sink="x"))
+        assert r1.invariant_factors == r2.invariant_factors
+        assert r1.order == r2.order

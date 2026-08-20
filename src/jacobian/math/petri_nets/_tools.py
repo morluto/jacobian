@@ -15,12 +15,15 @@ from jacobian.math.petri_nets._models import (
     IncidenceMatrixResult,
     ReachabilityRequest,
     ReachabilityResult,
+    SiphonTrapRequest,
+    SiphonTrapResult,
 )
 from jacobian.math.petri_nets._operations import (
     compute_enabled_transitions,
     compute_fire_transition,
     compute_incidence,
     compute_reachability,
+    compute_siphon_trap,
 )
 
 
@@ -158,6 +161,36 @@ PETRI_NET_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     "net": _NET["net"],
                     "initial_marking": {"tokens": [1, 0]},
                     "max_states": 100,
+                },
+            ),
+        ),
+    ),
+
+    _op(
+        "petri_net.siphon_trap.check",
+        "Check for siphons and traps in a Petri net",
+        "Return all minimal siphons and minimal traps of the given Petri net. "
+        "A siphon is a set of places that never gains tokens once it loses "
+        "them; a trap is a set of places that never loses tokens once it has "
+        "them.",
+        SiphonTrapRequest,
+        SiphonTrapResult,
+        compute_siphon_trap,
+        "petri-net",
+        "siphon",
+        "trap",
+        "exact",
+        examples=(
+            example(
+                "cyclic_net",
+                "Siphons and traps of a cyclic 2-place net.",
+                {
+                    "net": {
+ "place_count": 2,
+ "transition_count": 2,
+ "pre": [[1, 0], [0, 1]],
+ "post": [[0, 1], [1, 0]],
+                    },
                 },
             ),
         ),

@@ -96,6 +96,25 @@ class ReachabilityResult(StrictModel):
     truncated: bool
 
 
+
+
+
+class SiphonTrapRequest(StrictModel):
+    """Check for siphons and traps in a Petri net."""
+
+    net: PetriNet
+
+
+class SiphonTrapResult(StrictModel):
+    """Minimal siphons and traps of the net.
+
+    Each siphon/trap is represented as a tuple of place indices.
+    """
+
+    siphons: tuple[tuple[int, ...], ...]
+    traps: tuple[tuple[int, ...], ...]
+
+
 __all__ = [
     "EnabledTransitionsRequest",
     "EnabledTransitionsResult",
@@ -105,4 +124,6 @@ __all__ = [
     "IncidenceMatrixResult",
     "ReachabilityRequest",
     "ReachabilityResult",
+    "SiphonTrapRequest",
+    "SiphonTrapResult",
 ]

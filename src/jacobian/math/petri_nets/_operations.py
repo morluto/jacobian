@@ -11,12 +11,16 @@ from jacobian.math.petri_nets._models import (
     IncidenceMatrixResult,
     ReachabilityRequest,
     ReachabilityResult,
+    SiphonTrapRequest,
+    SiphonTrapResult,
 )
 from jacobian.math.petri_nets.operations import (
     compute_incidence_matrix,
     enabled_transitions,
     fire_transition,
     reachability_graph,
+    find_minimal_siphons,
+    find_minimal_traps,
 )
 
 __all__ = [
@@ -24,6 +28,7 @@ __all__ = [
     "compute_fire_transition",
     "compute_incidence",
     "compute_reachability",
+    "compute_siphon_trap",
 ]
 
 
@@ -56,4 +61,13 @@ def compute_reachability(request: ReachabilityRequest) -> ReachabilityResult:
         states=tuple(states),
         edges=tuple(edges),
         truncated=truncated,
+    )
+
+
+def compute_siphon_trap(request: SiphonTrapRequest) -> SiphonTrapResult:
+    siphons = find_minimal_siphons(request.net)
+    traps = find_minimal_traps(request.net)
+    return SiphonTrapResult(
+        siphons=tuple(tuple(sorted(s)) for s in siphons),
+        traps=tuple(tuple(sorted(t)) for t in traps),
     )

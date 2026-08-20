@@ -11,6 +11,8 @@ __all__ = [
     "enabled_transitions",
     "fire_transition",
     "reachability_graph",
+    "find_minimal_siphons",
+    "find_minimal_traps",
 ]
 
 
@@ -86,3 +88,98 @@ def reachability_graph(
                 queue.append(len(state_list) - 1)
             edges.append((idx, t, state_index[new_tokens]))
     return (state_list, edges, truncated)
+
+
+
+# ---------------------------------------------------------------------------
+# Siphon and trap detection
+# ---------------------------------------------------------------------------
+
+
+def _pre_places(net: PetriNet, t: int) -> frozenset[int]:
+    """Return places that have an input arc to transition t."""
+    return frozenset(p for p in range(net.place_count) if net.pre[p][t] > 0)
+
+
+def _post_places(net: PetriNet, t: int) -> frozenset[int]:
+    """Return places that have an output arc from transition t."""
+    return frozenset(p for p in range(net.place_count) if net.post[p][t] > 0)
+
+
+def find_minimal_siphons(net: PetriNet) -> list[frozenset[int]]:
+    """Find all minimal siphons of a Petri net.
+
+    A siphon is a non-empty set of places S such that every transition
+    that outputs to S also inputs from S.  Formally, for every transition
+    *t*: if ``post(t) ∩ S ≠ ∅`` then ``pre(t) ∩ S ≠ ∅``.
+
+    Once a siphon loses all its tokens no transition can ever produce a
+    token in it again.
+
+    Returns the list of inclusion-minimal siphons.
+    """
+    from itertools import combinations
+
+    n = net.place_count
+    if n == 0:
+        return []
+
+    pre = [_pre_places(net, t) for t in range(net.transition_count)]
+    post = [_post_places(net, t) for t in range(net.transition_count)]
+
+    found: list[frozenset[int]] = []
+
+    for size in range(1, n + 1):
+        for subset in combinations(range(n), size):
+            s = frozenset(subset)
+            is_siphon = True
+            for t in range(net.transition_count):
+                if s & post[t] and not (s & pre[t]):
+                    is_siphon = False
+                    break
+            if not is_siphon:
+                continue
+            if any(prev <= s for prev in found):
+                continue
+            found.append(s)
+
+    return found
+
+
+def find_minimal_traps(net: PetriNet) -> list[frozenset[int]]:
+    """Find all minimal traps of a Petri net.
+
+    A trap is a non-empty set of places S such that every transition
+    that inputs from S also outputs to S.  Formally, for every transition
+    *t*: if ``pre(t) ∩ S ≠ ∅`` then ``post(t) ∩ S ≠ ∅``.
+
+    Once a trap has a token it can never become empty.
+
+    Returns the list of inclusion-minimal traps.
+    """
+    from itertools import combinations
+
+    n = net.place_count
+    if n == 0:
+        return []
+
+    pre = [_pre_places(net, t) for t in range(net.transition_count)]
+    post = [_post_places(net, t) for t in range(net.transition_count)]
+
+    found: list[frozenset[int]] = []
+
+    for size in range(1, n + 1):
+        for subset in combinations(range(n), size):
+            s = frozenset(subset)
+            is_trap = True
+            for t in range(net.transition_count):
+                if s & pre[t] and not (s & post[t]):
+                    is_trap = False
+                    break
+            if not is_trap:
+                continue
+            if any(prev <= s for prev in found):
+                continue
+            found.append(s)
+
+    return found

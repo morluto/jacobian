@@ -190,3 +190,132 @@ class TestValidation:
                 marking=Marking(tokens=(1, 0)),
                 transition=5,
             )
+
+
+
+# ---------------------------------------------------------------------------
+# Siphon and trap detection
+# ---------------------------------------------------------------------------
+
+from jacobian.math.petri_nets._models import SiphonTrapRequest
+from jacobian.math.petri_nets._operations import compute_siphon_trap
+from jacobian.math.petri_nets.operations import (
+    find_minimal_siphons,
+    find_minimal_traps,
+)
+
+
+def _cyclic_net() -> PetriNet:
+    """Net where t0: p0->p1 and t1: p1->p0 (cyclic)."""
+    return PetriNet(
+        place_count=2,
+        transition_count=2,
+        pre=((1, 0), (0, 1)),
+        post=((0, 1), (1, 0)),
+    )
+
+
+def _one_way_net() -> PetriNet:
+    """Net where t0: p0->p1 only (one-way, no cycle)."""
+    return PetriNet(
+        place_count=2,
+        transition_count=1,
+        pre=((1,), (0,)),
+        post=((0,), (1,)),
+    )
+
+
+def _self_loop_net() -> PetriNet:
+    """Net where t0: p0->p0 (self-loop)."""
+    return PetriNet(
+        place_count=1,
+        transition_count=1,
+        pre=((1,),),
+        post=((1,),),
+    )
+
+
+class TestSiphons:
+    def test_cyclic_siphons(self):
+        """In a cyclic net, {0,1} is the minimal siphon."""
+        net = _cyclic_net()
+        siphons = find_minimal_siphons(net)
+        siphon_sets = [frozenset(s) for s in siphons]
+        assert frozenset({0, 1}) in siphon_sets
+
+    def test_self_loop_siphon(self):
+        """A self-loop place {0} is a siphon."""
+        net = _self_loop_net()
+        siphons = find_minimal_siphons(net)
+        siphon_sets = [frozenset(s) for s in siphons]
+        assert frozenset({0}) in siphon_sets
+
+    def test_one_way_siphon(self):
+        """In the one-way net, {0} is a siphon.
+
+        t0 outputs to p1, not p0, so {0} satisfies the siphon condition
+        vacuously (post(t0) intersection {0} = empty set).
+        """
+        net = _one_way_net()
+        siphons = find_minimal_siphons(net)
+        siphon_sets = [frozenset(s) for s in siphons]
+        assert frozenset({0}) in siphon_sets
+
+
+class TestTraps:
+    def test_cyclic_traps(self):
+        """In a cyclic net, {0,1} is the minimal trap."""
+        net = _cyclic_net()
+        traps = find_minimal_traps(net)
+        trap_sets = [frozenset(t) for t in traps]
+        assert frozenset({0, 1}) in trap_sets
+
+    def test_self_loop_trap(self):
+        """A self-loop place {0} is a trap."""
+        net = _self_loop_net()
+        traps = find_minimal_traps(net)
+        trap_sets = [frozenset(t) for t in traps]
+        assert frozenset({0}) in trap_sets
+
+    def test_one_way_no_trap_p0(self):
+        """In the one-way net, {0} is NOT a trap.
+
+        t0 inputs from p0 and outputs to p1, so {0} is not a trap.
+        {1} IS a trap (vacuously, no transition inputs from {1}).
+        """
+        net = _one_way_net()
+        traps = find_minimal_traps(net)
+        trap_sets = [frozenset(t) for t in traps]
+        assert frozenset({0}) not in trap_sets
+        assert frozenset({1}) in trap_sets
+
+
+class TestSiphonTrapAdapter:
+    def test_siphon_trap_check(self):
+        net = _cyclic_net()
+        result = compute_siphon_trap(SiphonTrapRequest(net=net))
+        assert len(result.siphons) >= 1
+        assert len(result.traps) >= 1
+        for s in result.siphons:
+            assert all(0 <= p < 2 for p in s)
+        for t in result.traps:
+            assert all(0 <= p < 2 for p in t)
+
+    def test_siphon_trap_sorted(self):
+        """Siphons and traps should be sorted tuples."""
+        net = _cyclic_net()
+        result = compute_siphon_trap(SiphonTrapRequest(net=net))
+        for s in result.siphons:
+            assert list(s) == sorted(s)
+        for t in result.traps:
+            assert list(t) == sorted(t)
+
+    def test_siphon_trap_one_way(self):
+        """One-way net: {0} is a siphon (not a trap), {1} is a trap."""
+        net = _one_way_net()
+        result = compute_siphon_trap(SiphonTrapRequest(net=net))
+        siphon_sets = [frozenset(s) for s in result.siphons]
+        trap_sets = [frozenset(t) for t in result.traps]
+        assert frozenset({0}) in siphon_sets
+        assert frozenset({0}) not in trap_sets
+        assert frozenset({1}) in trap_sets

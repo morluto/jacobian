@@ -1,18 +1,18 @@
 {
-    "catalog_version": "1",
-    "domain": "latin_squares_ops",
-    "operations": {
-        "latin_square.check": {
-            "input_schema": "sha256:59ca806a02fcdf709c1d356e67e767fe50d825270a4231ef7b23c3722b915107",
-            "output_schema": "sha256:d15c5c9d2c54f60418b60ea8015e174603b627b803c244d946b48276d70a703d"
-        },
-        "latin_square.orthogonality.check": {
-            "input_schema": "sha256:595c651ee68bc30d9a7f7aada49dcfa6d8f94e9af2ae05fe91eec877d0f490c1",
-            "output_schema": "sha256:82729ec18eee98eae447f61a0099751476a72fcd056b1a2f2aa5bc8fba6fd186"
-        },
-        "latin_square.transpose.compute": {
-            "input_schema": "sha256:59ca806a02fcdf709c1d356e67e767fe50d825270a4231ef7b23c3722b915107",
-            "output_schema": "sha256:f3e5e3a172846ac5c250efe7fc525ccf15457ba605a0987f3ccaf2ed0235d5a4"
-        }
+  "catalog_version": "1",
+  "domain": "latin_squares_ops",
+  "operations": {
+    "latin_square.check": {
+      "input_schema": "sha256:b1195d9c209455b1975db552682c8beb1539b11c3defcc380d2f634060db1ce5",
+      "output_schema": "sha256:d15c5c9d2c54f60418b60ea8015e174603b627b803c244d946b48276d70a703d"
+    },
+    "latin_square.orthogonality.check": {
+      "input_schema": "sha256:b0b43434c984acc9491fbfa38a03f9f9604b6f94f7fd85292040dc4aaa80a20f",
+      "output_schema": "sha256:82729ec18eee98eae447f61a0099751476a72fcd056b1a2f2aa5bc8fba6fd186"
+    },
+    "latin_square.transpose.compute": {
+      "input_schema": "sha256:6da291d4b386f4370fed52f847b498da3005cd14e5fb4d12d91454285cb5cab1",
+      "output_schema": "sha256:f3e5e3a172846ac5c250efe7fc525ccf15457ba605a0987f3ccaf2ed0235d5a4"
     }
+  }
 }

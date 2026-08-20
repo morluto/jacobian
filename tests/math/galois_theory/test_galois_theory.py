@@ -1,8 +1,13 @@
-"""Tests for Galois theory operations."""
+"""Contract and mathematical-property tests for Galois operations."""
+
+import pytest
+from pydantic import ValidationError
+from sympy.combinatorics import Permutation, PermutationGroup
 
 from jacobian.math.galois_theory._models import (
     FrobeniusCycleRequest,
     GaloisFactorRequest,
+    GaloisFactorResult,
     GaloisGroupRequest,
     SolvableRequest,
 )
@@ -24,72 +29,191 @@ def test_catalog_contains_only_audited_operations() -> None:
     }
 
 
-def test_factor_x2_plus_1_over_f5() -> None:
-    request = GaloisFactorRequest(field_order=5, coefficients=(1, 0, 1))
-    result = compute_galois_factor(request)
+def _multiply_mod(
+    left: tuple[int, ...], right: tuple[int, ...], prime: int
+) -> tuple[int, ...]:
+    result = [0] * (len(left) + len(right) - 1)
+    for i, left_coefficient in enumerate(left):
+        for j, right_coefficient in enumerate(right):
+            result[i + j] = (
+                result[i + j] + left_coefficient * right_coefficient
+            ) % prime
+    return tuple(result)
+
+
+def _reconstruct(result: GaloisFactorResult) -> tuple[int, ...]:
+    polynomial = (result.unit,)
+    for factor in result.factors:
+        for _ in range(factor.multiplicity):
+            polynomial = _multiply_mod(
+                polynomial, factor.coefficients, result.field_order
+            )
+    return polynomial
+
+
+@pytest.mark.parametrize(
+    ("prime", "coefficients"),
+    [
+        (5, (1, 0, 1)),
+        (3, (0, 0, 1)),
+        (3, (2, 2)),
+        (7, (6, 0, 0, 1)),
+        (2, (1, 1, 1, 1, 1)),
+    ],
+)
+def test_factorization_reconstructs_source(
+    prime: int, coefficients: tuple[int, ...]
+) -> None:
+    result = compute_galois_factor(
+        GaloisFactorRequest(field_order=prime, coefficients=coefficients)
+    )
+    assert _reconstruct(result) == coefficients
+    assert result.factor_count == sum(factor.multiplicity for factor in result.factors)
+    assert all(
+        0 <= coefficient < prime
+        for factor in result.factors
+        for coefficient in factor.coefficients
+    )
+
+
+def test_repeated_factor_is_not_reported_irreducible() -> None:
+    result = compute_galois_factor(
+        GaloisFactorRequest(field_order=3, coefficients=(0, 0, 1))
+    )
+    assert result.unit == 1
+    assert result.factors[0].coefficients == (0, 1)
+    assert result.factors[0].multiplicity == 2
+    assert result.distinct_factor_count == 1
     assert result.factor_count == 2
-    assert not result.is_irreducible
-
-
-def test_frobenius_cycle_irreducible() -> None:
-    request = FrobeniusCycleRequest(
-        field_order=3, polynomial_degree=2, factorization_degrees=(2,)
-    )
-    result = compute_frobenius_cycle(request)
-    assert result.cycle_type == (2,)
-    assert result.is_irreducible is True
-
-
-def test_frobenius_cycle_split() -> None:
-    request = FrobeniusCycleRequest(
-        field_order=5, polynomial_degree=2, factorization_degrees=(1, 1)
-    )
-    result = compute_frobenius_cycle(request)
-    assert result.cycle_type == (1, 1)
     assert result.is_irreducible is False
 
 
-# --- Issue 1: galois_group() second return value is not solvability ---
+def test_nonmonic_factorization_retains_unit() -> None:
+    result = compute_galois_factor(
+        GaloisFactorRequest(field_order=3, coefficients=(2, 2))
+    )
+    assert result.unit == 2
+    assert result.factors[0].coefficients == (1, 1)
+    assert _reconstruct(result) == (2, 2)
 
 
-def test_galois_group_solvable_quintic() -> None:
-    """x^5 - 2 has a solvable Galois group (Frobenius group of order 20)."""
-    # coefficients in ascending order: (-2, 0, 0, 0, 0, 1) = -2 + x^5
-    request = GaloisGroupRequest(coefficients=(-2, 0, 0, 0, 0, 1))
-    result = compute_galois_group(request)
+@pytest.mark.parametrize(
+    ("prime", "coefficients"),
+    [
+        (3, (1, 0, 1)),
+        (5, (2, 1, 0, 1)),
+        (7, (6, 0, 1, 1)),
+    ],
+)
+def test_multiplying_by_every_field_unit_preserves_monic_factors(
+    prime: int, coefficients: tuple[int, ...]
+) -> None:
+    base = compute_galois_factor(
+        GaloisFactorRequest(field_order=prime, coefficients=coefficients)
+    )
+
+    for scalar in range(1, prime):
+        scaled_coefficients = tuple(
+            scalar * coefficient % prime for coefficient in coefficients
+        )
+        scaled = compute_galois_factor(
+            GaloisFactorRequest(
+                field_order=prime,
+                coefficients=scaled_coefficients,
+            )
+        )
+
+        assert scaled.factors == base.factors
+        assert scaled.unit == scalar * base.unit % prime
+        assert _reconstruct(scaled) == scaled_coefficients
+
+
+def test_zero_and_noncanonical_degree_are_rejected_before_sympy() -> None:
+    with pytest.raises(ValidationError, match="nonzero polynomial"):
+        GaloisFactorRequest(field_order=3, coefficients=(0, 0))
+    with pytest.raises(ValidationError, match="nonzero polynomial"):
+        GaloisFactorRequest(field_order=3, coefficients=(1, 0))
+
+
+def test_factorization_result_rejects_a_forged_certificate() -> None:
+    result = compute_galois_factor(
+        GaloisFactorRequest(field_order=5, coefficients=(1, 0, 1))
+    )
+    payload = result.model_dump()
+    payload["unit"] = 2
+    with pytest.raises(ValidationError, match="reconstruct"):
+        GaloisFactorResult.model_validate(payload)
+
+    payload = result.model_dump()
+    payload["field_order"] = 4
+    with pytest.raises(ValidationError, match="prime"):
+        GaloisFactorResult.model_validate(payload)
+
+
+def test_frobenius_cycle_is_canonical_positive_partition() -> None:
+    result = compute_frobenius_cycle(
+        FrobeniusCycleRequest(
+            field_order=5,
+            polynomial_degree=4,
+            factorization_degrees=(1, 3),
+        )
+    )
+    assert result.cycle_type == (3, 1)
+    assert result.is_irreducible is False
+    irreducible = compute_frobenius_cycle(
+        FrobeniusCycleRequest(
+            field_order=3,
+            polynomial_degree=2,
+            factorization_degrees=(2,),
+        )
+    )
+    assert irreducible.cycle_type == (2,)
+    assert irreducible.is_irreducible is True
+
+
+@pytest.mark.parametrize("degrees", [(2, 0), (3, -1)])
+def test_frobenius_rejects_nonpositive_factor_degrees(
+    degrees: tuple[int, ...],
+) -> None:
+    with pytest.raises(ValidationError):
+        FrobeniusCycleRequest(
+            field_order=3,
+            polynomial_degree=2,
+            factorization_degrees=degrees,
+        )
+
+
+@pytest.mark.parametrize("request_type", [GaloisGroupRequest, SolvableRequest])
+def test_galois_backend_domain_is_enforced_before_execution(request_type: type) -> None:
+    with pytest.raises(ValidationError, match="irreducible"):
+        request_type(coefficients=(0, 0, 0, 0, 1))
+    with pytest.raises(ValidationError, match="at most 7 items"):
+        request_type(coefficients=(-2, 0, 0, 0, 0, 0, 0, 1))
+
+
+def _group_from_result(result: object) -> PermutationGroup:
+    group = result.group  # type: ignore[attr-defined]
+    return PermutationGroup(
+        *(Permutation(list(generator)) for generator in group.generators)
+    )
+
+
+def test_galois_group_returns_composable_generators() -> None:
+    result = compute_galois_group(GaloisGroupRequest(coefficients=(-1, -1, 0, 0, 0, 1)))
     assert result.degree == 5
-    assert result.is_solvable is True
-    assert result.order == 20
-
-
-def test_galois_group_unsolvable_quintic() -> None:
-    """x^5 - x - 1 has Galois group S_5 (not solvable)."""
-    # coefficients in ascending order: (-1, -1, 0, 0, 0, 1) = -1 - x + x^5
-    request = GaloisGroupRequest(coefficients=(-1, -1, 0, 0, 0, 1))
-    result = compute_galois_group(request)
-    assert result.degree == 5
+    assert result.order == 120
     assert result.is_solvable is False
-    assert result.order == 120  # |S_5| = 120
+    assert result.group.root_axis == tuple(f"root_{index}" for index in range(5))
+    assert _group_from_result(result).order() == result.order
 
 
-# --- Issue 2: radical solvability must use actual Galois group, not degree ---
-
-
-def test_solvable_cubic() -> None:
-    request = SolvableRequest(coefficients=(-2, 0, 0, 1))
-    result = compute_solvable(request)
+def test_solvable_quintic_returns_the_group_certificate() -> None:
+    result = compute_solvable(SolvableRequest(coefficients=(-2, 0, 0, 0, 0, 1)))
     assert result.solvable_by_radicals is True
+    assert _group_from_result(result).order() == 20
 
 
-def test_solvable_quintic_x5_minus_2() -> None:
-    """x^5 - 2 is solvable by radicals even though degree is 5."""
-    request = SolvableRequest(coefficients=(-2, 0, 0, 0, 0, 1))
-    result = compute_solvable(request)
-    assert result.solvable_by_radicals is True
-
-
-def test_not_solvable_quintic_s5() -> None:
-    """x^5 - x - 1 has Galois group S_5, not solvable by radicals."""
-    request = SolvableRequest(coefficients=(-1, -1, 0, 0, 0, 1))
-    result = compute_solvable(request)
+def test_unsolvable_quintic_uses_actual_group() -> None:
+    result = compute_solvable(SolvableRequest(coefficients=(-1, -1, 0, 0, 0, 1)))
     assert result.solvable_by_radicals is False
+    assert _group_from_result(result).order() == 120

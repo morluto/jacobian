@@ -35,6 +35,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "complete P/N position partition with Grundy values and terminal positions",
     ),
+    OperationAdmission(
+        "game.impartial.disjunctive_sum.compute",
+        AdmissionDecision.KEEP,
+        "exact Grundy value of a disjunctive sum by XOR of component Grundy values",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

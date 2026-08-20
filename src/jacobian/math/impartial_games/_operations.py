@@ -1,6 +1,8 @@
 """Wire adapters for exact bounded impartial-game operations."""
 
 from jacobian.math.impartial_games._models import (
+    DisjunctiveSumRequest,
+    DisjunctiveSumResult,
     BirthdayRequest,
     BirthdayResult,
     GrundyEntry,
@@ -65,6 +67,7 @@ def compute_subtraction_grundy_prefix(
 
 
 __all__ = [
+    "compute_disjunctive_sum",
     "compute_birthday",
     "compute_grundy_table",
     "compute_subtraction_grundy_prefix",
@@ -108,4 +111,30 @@ def compute_outcome_profile(
         n_positions=n_positions,
         grundy_values=analysis.values,
         terminal_positions=terminal_positions,
+    )
+
+
+def compute_disjunctive_sum(
+    request: "DisjunctiveSumRequest",
+) -> "DisjunctiveSumResult":
+    """Compute the Grundy value of a disjunctive sum of impartial games.
+
+    The Grundy value of the disjunctive sum is the bitwise XOR of the
+    component Grundy values (the Grundy value of each component's
+    start position).
+    """
+    from functools import reduce
+    from operator import xor
+
+    component_grundy_values = []
+    for game, start in zip(request.components, request.start_positions, strict=True):
+        analysis = grundy_table(game)
+        grundy_map = dict(analysis.values)
+        component_grundy_values.append(grundy_map[start])
+    nim_sum = reduce(xor, component_grundy_values, 0)
+    return DisjunctiveSumResult(
+        grundy_value=nim_sum,
+        component_grundy_values=tuple(component_grundy_values),
+        is_p_position=(nim_sum == 0),
+        component_count=len(request.components),
     )

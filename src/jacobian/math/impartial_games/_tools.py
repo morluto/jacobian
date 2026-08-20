@@ -9,6 +9,8 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.impartial_games._models import (
     BirthdayRequest,
     BirthdayResult,
+    DisjunctiveSumRequest,
+    DisjunctiveSumResult,
     GrundyTableRequest,
     GrundyTableResult,
     NimSumRequest,
@@ -20,6 +22,7 @@ from jacobian.math.impartial_games._models import (
 )
 from jacobian.math.impartial_games._operations import (
     compute_birthday,
+    compute_disjunctive_sum,
     compute_grundy_table,
     compute_nim_sum,
     compute_outcome_profile,
@@ -61,6 +64,19 @@ _GAME = {
         {"source": "2", "target": "1"},
         {"source": "2", "target": "0"},
         {"source": "1", "target": "0"},
+    ],
+}
+
+_GAME_A = {
+    "positions": ["a", "b"],
+    "moves": [{"source": "a", "target": "b"}],
+}
+
+_GAME_B = {
+    "positions": ["c", "d", "e"],
+    "moves": [
+        {"source": "c", "target": "d"},
+        {"source": "d", "target": "e"},
     ],
 }
 
@@ -163,6 +179,29 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "four_position_outcome",
                 "Compute the P/N outcome partition of a four-position DAG.",
                 {"game": _GAME},
+            ),
+        ),
+    ),
+    _op(
+        "game.impartial.disjunctive_sum.compute",
+        "Compute the Grundy value of a disjunctive sum",
+        "Compute the exact Grundy value of a disjunctive sum of finite "
+        "impartial game components by XOR of their component Grundy values.",
+        DisjunctiveSumRequest,
+        DisjunctiveSumResult,
+        compute_disjunctive_sum,
+        "game-theory",
+        "impartial",
+        "disjunctive-sum",
+        "exact",
+        examples=(
+            example(
+                "two_component_sum",
+                "Compute the disjunctive sum of two game components.",
+                {
+                    "components": [_GAME_A, _GAME_B],
+                    "start_positions": ["a", "c"],
+                },
             ),
         ),
     ),

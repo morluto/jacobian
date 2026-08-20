@@ -181,3 +181,43 @@ class OutcomeProfileResult(StrictModel):
     n_positions: tuple[str, ...]
     grundy_values: tuple[tuple[str, int], ...]
     terminal_positions: tuple[str, ...]
+
+
+# ---------------------------------------------------------------------------
+# Disjunctive sum operation
+# ---------------------------------------------------------------------------
+
+
+class DisjunctiveSumRequest(StrictModel):
+    """A disjunctive sum of finite impartial game components.
+
+    Each component specifies a game DAG and the label of the starting
+    position whose Grundy value represents that component in the sum.
+    The Grundy value of the disjunctive sum is the bitwise XOR of the
+    component Grundy values.
+    """
+
+    components: tuple[ImpartialGame, ...] = Field(min_length=1, max_length=MAX_HEAPS)
+    start_positions: tuple[str, ...] = Field(min_length=1, max_length=MAX_HEAPS)
+
+    @model_validator(mode="after")
+    def require_matching_bounded(self) -> Self:
+        if len(self.components) != len(self.start_positions):
+            raise ValueError("components and start_positions must have equal length")
+        for index, (game, start) in enumerate(
+            zip(self.components, self.start_positions, strict=True)
+        ):
+            if start not in game.positions:
+                raise ValueError(
+                    f"start position {index!r} is not in component {index}'s positions"
+                )
+        return self
+
+
+class DisjunctiveSumResult(StrictModel):
+    """The exact Grundy value of a disjunctive sum of impartial games."""
+
+    grundy_value: int = Field(ge=0)
+    component_grundy_values: tuple[int, ...]
+    is_p_position: bool
+    component_count: int = Field(ge=1)

@@ -34,14 +34,10 @@ def _validate_latin_property(
     expected = set(range(order))
     for i in range(order):
         if set(cells[i]) != expected:
-            raise ValueError(
-                f"row {i} does not contain each symbol exactly once"
-            )
+            raise ValueError(f"row {i} does not contain each symbol exactly once")
     for j in range(order):
         if {cells[i][j] for i in range(order)} != expected:
-            raise ValueError(
-                f"column {j} does not contain each symbol exactly once"
-            )
+            raise ValueError(f"column {j} does not contain each symbol exactly once")
 
 
 class LatinSquare(StrictModel):
@@ -110,4 +106,3 @@ class OrthogonalityResult(StrictModel):
 class LatinSquareTransposeResult(StrictModel):
     transposed: tuple[tuple[int, ...], ...]
     method: str = "MATRIX_TRANSPOSE"
-

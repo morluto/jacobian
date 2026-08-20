@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from jacobian.math.latin_squares_ops._models import (
-    LatinSquareRequest,
     LatinSquareCheckResult,
+    LatinSquareRequest,
     LatinSquareTransposeResult,
     OrthogonalityRequest,
     OrthogonalityResult,

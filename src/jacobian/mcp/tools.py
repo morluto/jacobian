@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.mcpserver import Context
 from mcp.shared.exceptions import MCPError
-from mcp_types import INVALID_PARAMS
+from mcp.types import INVALID_PARAMS
 
 from jacobian.catalog.models import OperationId, OperationResult
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation

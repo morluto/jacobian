@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import Annotated, Self
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 
 MAX_MODEL_VARS = 16
@@ -17,25 +17,6 @@ MAX_RATIONAL_DIGITS = 256
 
 DomainSize = Annotated[int, Field(ge=1, le=MAX_VAR_DOMAIN)]
 Variable = Annotated[int, Field(ge=0, lt=MAX_MODEL_VARS)]
-
-
-def parse_canonical_rational(value: str) -> Fraction:
-    """Parse one bounded reduced rational string."""
-
-    if len(value) > 2 * MAX_RATIONAL_DIGITS + 2:
-        raise ValueError("factor entry exceeds the rational digit bound")
-    try:
-        parsed = Fraction(value)
-    except (ValueError, ZeroDivisionError):
-        raise ValueError("factor entries must be canonical rationals") from None
-    if str(parsed) != value:
-        raise ValueError("factor entries must be reduced canonical rationals")
-    if (
-        len(str(abs(parsed.numerator))) > MAX_RATIONAL_DIGITS
-        or len(str(parsed.denominator)) > MAX_RATIONAL_DIGITS
-    ):
-        raise ValueError("factor entry exceeds the rational digit bound")
-    return parsed
 
 
 def scope_size(variables: tuple[int, ...], domain_sizes: tuple[int, ...]) -> int:
@@ -62,7 +43,9 @@ class Factor(StrictModel):
     domain_sizes: tuple[DomainSize, ...] = Field(
         min_length=1, max_length=MAX_MODEL_VARS
     )
-    table: tuple[str, ...] = Field(min_length=1, max_length=MAX_FACTOR_TABLE_SIZE)
+    table: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_FACTOR_TABLE_SIZE
+    )
 
     @model_validator(mode="after")
     def require_valid_factor(self) -> Self:
@@ -74,7 +57,11 @@ class Factor(StrictModel):
                 f"table size {len(self.table)} does not match expected {expected_size}"
             )
         for value in self.table:
-            parse_canonical_rational(value)
+            require_bounded_rational(
+                value,
+                max_digits=MAX_RATIONAL_DIGITS,
+                label="factor entry",
+            )
         return self
 
 
@@ -85,6 +72,5 @@ __all__ = [
     "MAX_RATIONAL_DIGITS",
     "MAX_VAR_DOMAIN",
     "Factor",
-    "parse_canonical_rational",
     "scope_size",
 ]

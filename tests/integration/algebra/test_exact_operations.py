@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.number_field import ring_of_integers
 from jacobian.math.number_field._models import NumberFieldRequest
 from jacobian.math.number_field._operations import compute_nf_discriminant
@@ -30,6 +31,10 @@ def _quadratic(constant: str) -> list[dict[str, str]]:
         {"num": "0", "den": "1"},
         {"num": constant, "den": "1"},
     ]
+
+
+def _r(value: int) -> CanonicalRational:
+    return CanonicalRational(num=str(value), den="1")
 
 
 def test_root_isolation_returns_intervals_aligned_with_multiplicities() -> None:
@@ -150,30 +155,30 @@ def test_number_field_requires_a_monic_irreducible_integer_polynomial() -> None:
 
 def test_recurrence_finder_solves_for_coefficients() -> None:
     result = compute_find_recurrence(
-        RecurrenceFindRequest(sequence=("3", "6", "12", "24"))
+        RecurrenceFindRequest(sequence=tuple(_r(value) for value in (3, 6, 12, 24)))
     )
 
     assert result.order == 1
-    assert result.coefficients == ("2",)
+    assert result.coefficients == (_r(2),)
 
 
 def test_native_recurrence_api_enforces_the_sequence_contract() -> None:
     from jacobian.math.recurrence_solving import closed_form, find_recurrence
 
-    recurrence = find_recurrence(("3", "6", "12", "24"))
+    recurrence = find_recurrence(tuple(_r(value) for value in (3, 6, 12, 24)))
     assert recurrence.status == "FOUND"
-    assert recurrence.coefficients == ("2",)
-    assert closed_form(("1", "-2"), ("3",)).expression == "3*2**n"
+    assert recurrence.coefficients == (_r(2),)
+    assert closed_form((_r(1), _r(-2)), (_r(3),)).expression == "3*2**n"
 
     with pytest.raises(ValidationError, match="at least 2"):
-        find_recurrence(("1",))
+        find_recurrence((_r(1),))
 
     with pytest.raises(ValidationError, match="initial value count"):
-        closed_form(("1", "-1", "-1"), ("1",))
+        closed_form((_r(1), _r(-1), _r(-1)), (_r(1),))
 
 
 def test_recurrence_finder_reports_a_missing_nonvacuous_fit() -> None:
-    result = compute_find_recurrence(RecurrenceFindRequest(sequence=("0", "1")))
+    result = compute_find_recurrence(RecurrenceFindRequest(sequence=(_r(0), _r(1))))
 
     assert result.status == "NO_FITTING_RECURRENCE"
     assert result.order == 0
@@ -183,8 +188,8 @@ def test_recurrence_finder_reports_a_missing_nonvacuous_fit() -> None:
 def test_repeated_root_closed_form_preserves_polynomial_factor() -> None:
     result = compute_closed_form(
         ClosedFormRequest(
-            characteristic_coefficients=("1", "-2", "1"),
-            initial_values=("2", "5"),
+            characteristic_coefficients=(_r(1), _r(-2), _r(1)),
+            initial_values=(_r(2), _r(5)),
         )
     )
 
@@ -194,8 +199,8 @@ def test_repeated_root_closed_form_preserves_polynomial_factor() -> None:
 def test_closed_form_handles_repeated_zero_characteristic_roots() -> None:
     result = compute_closed_form(
         ClosedFormRequest(
-            characteristic_coefficients=("1", "0", "0"),
-            initial_values=("2", "5"),
+            characteristic_coefficients=(_r(1), _r(0), _r(0)),
+            initial_values=(_r(2), _r(5)),
         )
     )
 
@@ -207,13 +212,16 @@ def test_closed_form_contract_rejects_characteristic_polynomials_above_degree_fo
 ):
     with pytest.raises(ValidationError):
         ClosedFormRequest(
-            characteristic_coefficients=("1", "0", "0", "0", "-1", "-1"),
-            initial_values=("0", "0", "0", "0", "0"),
+            characteristic_coefficients=tuple(
+                _r(value) for value in (1, 0, 0, 0, -1, -1)
+            ),
+            initial_values=tuple(_r(0) for _ in range(5)),
         )
 
 
 def test_closed_form_contract_requires_every_initial_value() -> None:
     with pytest.raises(ValidationError, match="initial value count"):
         ClosedFormRequest(
-            characteristic_coefficients=("1", "-1", "-1"), initial_values=("1",)
+            characteristic_coefficients=(_r(1), _r(-1), _r(-1)),
+            initial_values=(_r(1),),
         )

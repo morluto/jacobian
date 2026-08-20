@@ -40,16 +40,16 @@ class ZeroSumGameRequest(StrictModel):
 class BestResponseResult(StrictModel):
     """Best response values for the row player."""
 
-    value: str
+    value: CanonicalRational
     best_row: int = Field(ge=0)
 
 
 class NashEquilibriumResult(StrictModel):
     """Nash equilibrium of a 2-player zero-sum game."""
 
-    row_strategy: tuple[str, ...]
-    col_strategy: tuple[str, ...]
-    value: str
+    row_strategy: tuple[CanonicalRational, ...]
+    col_strategy: tuple[CanonicalRational, ...]
+    value: CanonicalRational
 
 
 __all__ = [

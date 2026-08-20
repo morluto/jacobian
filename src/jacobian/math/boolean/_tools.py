@@ -68,6 +68,7 @@ BOOLEAN_OPERATIONS = (
                 {"truth_table": [0, 1]},
             ),
         ),
+        version="2",
     ),
 )
 

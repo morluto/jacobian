@@ -15,6 +15,18 @@ def _request(truth_table: list[int]) -> BooleanTruthTableRequest:
     return BooleanTruthTableRequest(truth_table=tuple(truth_table))
 
 
+def _character_sum_spectrum(truth_table: list[int]) -> tuple[int, ...]:
+    """Compute the Walsh spectrum directly from its defining character sum."""
+
+    return tuple(
+        sum(
+            (-1) ** (truth_table[x] + ((u & x).bit_count() & 1))
+            for x in range(len(truth_table))
+        )
+        for u in range(len(truth_table))
+    )
+
+
 def test_walsh_transform_of_constant_zero_on_one_bit() -> None:
     # f=[0,0] -> sign=[1,1] -> spectrum=[2,0]
     result = compute_walsh_hadamard_transform(_request([0, 0]))
@@ -94,13 +106,29 @@ def test_walsh_constant_one_spectrum() -> None:
 
 def test_walsh_affine_has_one_nonzero() -> None:
     """Affine functions have exactly one nonzero spectral coefficient of magnitude 2^n."""
-    # f(x) = x_0 (linear) on 2 variables: truth table [0,0,1,1] (index 0->0, 1->0, 2->1, 3->1)
-    # Actually for f(x) = x_0: f(0)=0, f(1)=0, f(2)=1, f(3)=1 in natural order where x=(x0,x1), index=x0+2*x1
-    # Wait, let's use f(x)=x0 on 1 variable: [0,1] -> sign=[1,-1] -> [0,2]
+    # Use f(x)=x_0 on one variable: [0,1] -> sign=[1,-1] -> [0,2].
     result = compute_walsh_hadamard_transform(_request([0, 1]))
     nonzero = [int(v) for v in result.spectrum if int(v) != 0]
     assert len(nonzero) == 1
     assert abs(nonzero[0]) == 2
+
+
+@pytest.mark.parametrize(
+    "truth_table",
+    (
+        [0],
+        [0, 1],
+        [1, 0, 1, 1],
+        [0, 1, 1, 0, 1, 0, 0, 1],
+    ),
+)
+def test_walsh_transform_agrees_with_direct_character_sum(
+    truth_table: list[int],
+) -> None:
+    result = compute_walsh_hadamard_transform(_request(truth_table))
+    assert tuple(int(value) for value in result.spectrum) == _character_sum_spectrum(
+        truth_table
+    )
 
 
 def test_walsh_transform_rejects_non_power_of_two_length() -> None:

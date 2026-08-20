@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool
+from jacobian.dispatch import invoke_operation
 
 MAX_MUTATIONS_PER_EXAMPLE = 256
 
@@ -145,3 +146,12 @@ def test_every_accepted_boundary_mutation_returns_the_declared_result(
                 type(result),
                 operation.result_type,
             )
+
+
+def test_large_periodic_profile_survives_public_result_wrapping() -> None:
+    result = invoke_operation(
+        "symbolic_dynamics.periodic_point_profile.compute",
+        {"shift": {"matrix": [[1_000_000]], "two_sided": True}, "max_period": 3},
+        Catalog.open(),
+    )
+    assert result.output["fixed_point_counts"][-1] == "1000000000000000000"

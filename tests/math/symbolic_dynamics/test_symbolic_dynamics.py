@@ -276,15 +276,3 @@ def test_periodic_profile_returns_large_counts_as_canonical_integers() -> None:
         )
     )
     assert result.fixed_point_counts[-1] == "1000000000000000000"
-
-
-def test_large_periodic_profile_survives_public_result_wrapping() -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-
-    result = invoke_operation(
-        "symbolic_dynamics.periodic_point_profile.compute",
-        {"shift": {"matrix": [[1_000_000]], "two_sided": True}, "max_period": 3},
-        Catalog.open(),
-    )
-    assert result.output["fixed_point_counts"][-1] == "1000000000000000000"

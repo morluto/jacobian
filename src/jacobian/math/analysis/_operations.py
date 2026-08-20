@@ -9,6 +9,7 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
 from jacobian.math.analysis._models import (
+    MAX_DYADIC_EXPONENT,
     ArbPointEnclosureRequest,
     ArbPointEnclosureResult,
     ExactDyadic,
@@ -22,6 +23,31 @@ class _EvaluationFailure(StrEnum):
     DOMAIN_ERROR = "DOMAIN_ERROR"
     NONFINITE = "NONFINITE"
     PRECISION_INSUFFICIENT = "PRECISION_INSUFFICIENT"
+
+
+def _dyadic_endpoints(
+    lower_mantissa: Any,
+    lower_exponent: Any,
+    upper_mantissa: Any,
+    upper_exponent: Any,
+) -> tuple[ExactDyadic, ExactDyadic] | None:
+    """Serialize Arb endpoints only when their exponents fit the wire contract."""
+
+    if (
+        abs(lower_exponent) > MAX_DYADIC_EXPONENT
+        or abs(upper_exponent) > MAX_DYADIC_EXPONENT
+    ):
+        return None
+    return (
+        ExactDyadic(
+            mantissa=format_canonical_integer(int(lower_mantissa)),
+            exponent=int(lower_exponent),
+        ),
+        ExactDyadic(
+            mantissa=format_canonical_integer(int(upper_mantissa)),
+            exponent=int(upper_exponent),
+        ),
+    )
 
 
 def _apply_binary(node: IntervalExpressionNode, left: Any, right: Any) -> Any:
@@ -122,17 +148,20 @@ def _expression_enclosure(
         lower_mantissa, lower_exponent = result.lower().man_exp()
         upper_mantissa, upper_exponent = result.upper().man_exp()
         exact = bool(result.is_exact())
+        endpoints = _dyadic_endpoints(
+            lower_mantissa, lower_exponent, upper_mantissa, upper_exponent
+        )
+    if endpoints is None:
+        return IntervalExpressionEnclosureResult(
+            status="OUTPUT_MAGNITUDE_EXCEEDED",
+            precision_bits=request.precision_bits,
+            detail="Arb produced finite endpoints outside the interoperable dyadic exponent range.",
+        )
     return IntervalExpressionEnclosureResult(
         status="ENCLOSED",
         precision_bits=request.precision_bits,
-        lower=ExactDyadic(
-            mantissa=format_canonical_integer(int(lower_mantissa)),
-            exponent=int(lower_exponent),
-        ),
-        upper=ExactDyadic(
-            mantissa=format_canonical_integer(int(upper_mantissa)),
-            exponent=int(upper_exponent),
-        ),
+        lower=endpoints[0],
+        upper=endpoints[1],
         relative_accuracy_bits=None if exact else int(result.rel_accuracy_bits()),
         exact=exact,
         detail="Arb returned an outward-rounded enclosure with exact dyadic endpoints.",
@@ -159,19 +188,24 @@ def _point_enclosure(
         lower_mantissa, lower_exponent = result.lower().man_exp()
         upper_mantissa, upper_exponent = result.upper().man_exp()
         exact = bool(result.is_exact())
+        endpoints = _dyadic_endpoints(
+            lower_mantissa, lower_exponent, upper_mantissa, upper_exponent
+        )
+    if endpoints is None:
+        return ArbPointEnclosureResult(
+            status="OUTPUT_MAGNITUDE_EXCEEDED",
+            function=request.function,
+            argument=request.argument,
+            precision_bits=request.precision_bits,
+            detail="Arb produced finite endpoints outside the interoperable dyadic exponent range.",
+        )
     return ArbPointEnclosureResult(
         status="ENCLOSED",
         function=request.function,
         argument=request.argument,
         precision_bits=request.precision_bits,
-        lower=ExactDyadic(
-            mantissa=format_canonical_integer(int(lower_mantissa)),
-            exponent=int(lower_exponent),
-        ),
-        upper=ExactDyadic(
-            mantissa=format_canonical_integer(int(upper_mantissa)),
-            exponent=int(upper_exponent),
-        ),
+        lower=endpoints[0],
+        upper=endpoints[1],
         relative_accuracy_bits=None if exact else int(result.rel_accuracy_bits()),
         exact=exact,
         detail="Pinned Arb ball arithmetic returned an outward-rounded enclosure with exact dyadic endpoints.",

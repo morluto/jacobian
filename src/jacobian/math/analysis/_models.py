@@ -15,7 +15,7 @@ MAX_RATIONAL_DIGITS = 128
 MAX_EXPRESSION_DEPTH = 16
 MAX_EXPRESSION_NODES = 64
 MAX_INTEGER_EXPONENT = 64
-MAX_DYADIC_EXPONENT = 10**128 - 1
+MAX_DYADIC_EXPONENT = 2**53 - 1
 MAX_DYADIC_MANTISSA_DIGITS = 1_235
 
 type IntervalExpressionOp = Literal[
@@ -112,7 +112,13 @@ class IntervalExpressionEnclosureRequest(StrictModel):
 
 
 class IntervalExpressionEnclosureResult(StrictModel):
-    status: Literal["ENCLOSED", "DOMAIN_ERROR", "PRECISION_INSUFFICIENT", "NONFINITE"]
+    status: Literal[
+        "ENCLOSED",
+        "DOMAIN_ERROR",
+        "PRECISION_INSUFFICIENT",
+        "NONFINITE",
+        "OUTPUT_MAGNITUDE_EXCEEDED",
+    ]
     precision_bits: StrictInt = Field(ge=32, le=4096)
     lower: ExactDyadic | None = None
     upper: ExactDyadic | None = None
@@ -212,7 +218,9 @@ class ExactDyadic(StrictModel):
 
 
 class ArbPointEnclosureResult(StrictModel):
-    status: Literal["ENCLOSED", "NONFINITE", "TIMEOUT", "BACKEND_ERROR"]
+    status: Literal[
+        "ENCLOSED", "NONFINITE", "TIMEOUT", "BACKEND_ERROR", "OUTPUT_MAGNITUDE_EXCEEDED"
+    ]
     function: RealUnaryFunction
     argument: CanonicalRational
     precision_bits: StrictInt = Field(ge=32, le=4096)

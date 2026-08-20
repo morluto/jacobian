@@ -6,11 +6,12 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.analysis._models import (
+    MAX_DYADIC_EXPONENT,
     ExactDyadic,
     IntervalExpressionEnclosureRequest,
     IntervalExpressionEnclosureResult,
 )
-from jacobian.math.analysis._operations import _expression_enclosure
+from jacobian.math.analysis._operations import _dyadic_endpoints, _expression_enclosure
 
 
 def _run(expression: dict[str, object], argument: str = "0"):
@@ -200,9 +201,13 @@ def test_dyadic_enclosure_order_avoids_expanding_huge_binary_exponents(
     result = IntervalExpressionEnclosureResult(
         status="ENCLOSED",
         precision_bits=128,
-        lower=ExactDyadic(mantissa="1", exponent=10**100),
-        upper=ExactDyadic(mantissa="3", exponent=10**100 - 1),
+        lower=ExactDyadic(mantissa="1", exponent=MAX_DYADIC_EXPONENT),
+        upper=ExactDyadic(mantissa="3", exponent=MAX_DYADIC_EXPONENT - 1),
         relative_accuracy_bits=100,
         detail="synthetic compact dyadic enclosure",
     )
     assert result.lower is not None and result.upper is not None
+
+
+def test_non_interoperable_dyadic_exponents_have_a_typed_outcome() -> None:
+    assert _dyadic_endpoints(1, MAX_DYADIC_EXPONENT + 1, 3, 0) is None

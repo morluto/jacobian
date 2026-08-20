@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+import sympy
 
 from jacobian.math.matrices._operation_models import (
     RationalLinearSolveRequest,
@@ -29,7 +30,14 @@ def test_unique_solution() -> None:
     result = compute_rational_linear_solve(request)
     assert result.outcome == "UNIQUE"
     assert result.solution is not None
-    assert len(result.solution) == 2
+    assert tuple((value.num, value.den) for value in result.solution) == (
+        ("2", "1"),
+        ("3", "1"),
+    )
+    assert result.convention == "LINEAR_SYSTEM_CLASSIFICATION_OVER_QQ"
+    assert sympy.Matrix([[1, 0], [0, 1]]) * sympy.Matrix([2, 3]) == sympy.Matrix(
+        [2, 3]
+    )
 
 
 def test_inconsistent_system_returns_typed_outcome() -> None:
@@ -43,6 +51,10 @@ def test_inconsistent_system_returns_typed_outcome() -> None:
     result = compute_rational_linear_solve(request)
     assert result.outcome == "INCONSISTENT"
     assert result.solution is None
+    assert result.convention == "LINEAR_SYSTEM_CLASSIFICATION_OVER_QQ"
+    assert sympy.Matrix([[1, 1], [1, 1]]).rank() < sympy.Matrix(
+        [[1, 1, 0], [1, 1, 1]]
+    ).rank()
 
 
 def test_non_unique_system_returns_typed_outcome() -> None:
@@ -56,6 +68,10 @@ def test_non_unique_system_returns_typed_outcome() -> None:
     result = compute_rational_linear_solve(request)
     assert result.outcome == "NON_UNIQUE"
     assert result.solution is None
+    assert result.convention == "LINEAR_SYSTEM_CLASSIFICATION_OVER_QQ"
+    assert sympy.Matrix([[1, 1], [1, 1]]).rank() == sympy.Matrix(
+        [[1, 1, 1], [1, 1, 1]]
+    ).rank() < 2
 
 
 def test_singular_inverse_rejected() -> None:

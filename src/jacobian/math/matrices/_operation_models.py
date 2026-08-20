@@ -311,7 +311,9 @@ class RationalLinearSolveResult(StrictModel):
         min_length=1,
         max_length=MAX_MATRIX_DIMENSION,
     )
-    convention: Literal["UNIQUE_SOLUTION_OVER_QQ"] = "UNIQUE_SOLUTION_OVER_QQ"
+    convention: Literal["LINEAR_SYSTEM_CLASSIFICATION_OVER_QQ"] = (
+        "LINEAR_SYSTEM_CLASSIFICATION_OVER_QQ"
+    )
 
     @model_validator(mode="after")
     def require_outcome_solution_consistency(self) -> Self:

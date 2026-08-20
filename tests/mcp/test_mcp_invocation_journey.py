@@ -94,12 +94,18 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                 "math.run",
                 {
                     "operation_id": "integer.compute.extended_gcd",
-                    "payload": {"left": "84", "unexpected": "30"},
+                    "payload": {
+                        "left": "84",
+                        "right": "30",
+                        "private": "reject-this-private-value",
+                    },
                 },
             )
             assert invalid.is_error is True
             assert invalid.structured_content is None
-            assert "Extra inputs are not permitted" in invalid.content[0].text
+            assert "operation payload failed validation" in invalid.content[0].text
+            assert "reject-this-private-value" not in invalid.content[0].text
+            assert len(invalid.content[0].text.encode("utf-8")) < 2_048
 
             matching_description = await client.call_tool(
                 "math.find",

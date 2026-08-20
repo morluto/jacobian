@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp.server.mcpserver import Context
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationId, OperationResult
 from jacobian.dispatch import invoke_operation
@@ -79,8 +80,11 @@ def math_run(
     """Run one math tool. Role comes from the tool ID."""
     _authorize(ctx)
     catalog = _catalog(ctx)
-    return invoke_operation(
-        operation_id,
-        payload,
-        catalog,
-    )
+    try:
+        return invoke_operation(
+            operation_id,
+            payload,
+            catalog,
+        )
+    except ValidationError as exc:
+        raise ValueError("operation payload failed validation") from exc

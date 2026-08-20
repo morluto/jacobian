@@ -107,7 +107,9 @@ def test_relative_path_backend_is_resolved_before_entering_worker_directory(
     )
 
     assert result.outcome == "ERROR"
-    assert result.detail == "Singular returned an invalid or unsupported result encoding."
+    assert (
+        result.detail == "Singular returned an invalid or unsupported result encoding."
+    )
 
 
 def test_nonzero_exit_is_a_typed_execution_error(

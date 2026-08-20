@@ -225,13 +225,10 @@ source_modules = ["jacobian.dispatch"]
 forbidden_modules = ["jacobian.cli", "jacobian.mcp"]
 
 [[tool.importlinter.contracts]]
-name = "Finite-field values do not import private backends"
+name = "Finite-field values do not import the optional FLINT backend"
 type = "forbidden"
 source_modules = ["jacobian.math.finite_fields.values"]
-forbidden_modules = [
-    "jacobian.math.finite_fields._flint",
-    "jacobian.math.finite_fields._sympy",
-]
+forbidden_modules = ["jacobian.math.finite_fields._flint"]
 
 [tool.coverage.run]
 branch = true

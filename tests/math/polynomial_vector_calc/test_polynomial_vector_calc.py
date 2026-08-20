@@ -82,14 +82,10 @@ class TestVectorFieldValidation:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError, match="one component per variable"):
-            VectorFieldRequest(
-                variables=("x", "y"), components=("x", "y", "x*y")
-            )
+            VectorFieldRequest(variables=("x", "y"), components=("x", "y", "x*y"))
 
     def test_correct_component_count_accepted(self) -> None:
-        vf = VectorFieldRequest(
-            variables=("x", "y", "z"), components=("x", "y", "z")
-        )
+        vf = VectorFieldRequest(variables=("x", "y", "z"), components=("x", "y", "z"))
         assert len(vf.components) == 3
 
     def test_non_polynomial_rejected(self) -> None:
@@ -97,18 +93,14 @@ class TestVectorFieldValidation:
         import pytest
 
         with pytest.raises((ValueError, TypeError)):
-            compute_gradient(
-                ScalarFieldRequest(variables=("x",), polynomial="1/x")
-            )
+            compute_gradient(ScalarFieldRequest(variables=("x",), polynomial="1/x"))
 
     def test_foreign_symbol_rejected(self) -> None:
         """The parser should reject symbols not in the declared variables."""
         import pytest
 
         with pytest.raises(ValueError, match="undeclared symbols"):
-            compute_gradient(
-                ScalarFieldRequest(variables=("x",), polynomial="y + x")
-            )
+            compute_gradient(ScalarFieldRequest(variables=("x",), polynomial="y + x"))
 
     def test_distinct_variables_required(self) -> None:
         import pytest
@@ -116,7 +108,6 @@ class TestVectorFieldValidation:
 
         with pytest.raises(ValidationError, match="distinct"):
             ScalarFieldRequest(variables=("x", "x"), polynomial="x")
-
 
 
 def test_gradient_single_variable() -> None:

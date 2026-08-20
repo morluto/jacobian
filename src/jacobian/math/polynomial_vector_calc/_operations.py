@@ -28,9 +28,7 @@ def _parse_poly(expr_str: str, variables: tuple[str, ...]) -> sympy.Expr:
             expr_str, locals=dict(zip(variables, var_symbols, strict=True))
         )
     except Exception as exc:
-        raise ValueError(
-            f"failed to parse expression: {expr_str}"
-        ) from exc
+        raise ValueError(f"failed to parse expression: {expr_str}") from exc
     # is_polynomial returns True, False, or None (unknown); treat None as False
     if expr.is_polynomial(*var_symbols) is not True:
         raise ValueError(

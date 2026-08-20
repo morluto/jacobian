@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.finite_fields import (
     CollisionResult,
@@ -116,18 +117,11 @@ def test_certificates_reject_values_not_bound_to_the_exact_table() -> None:
 def test_table_consumers_reject_unevaluated_targets() -> None:
     identity_table = finite_map_table(_map(1))
     zero = identity_table.entries[0][1]
-    forged = FiniteMapTable(
-        map=identity_table.map,
-        entries=tuple((source, zero) for source, _ in identity_table.entries),
-    )
-
-    for consumer in (
-        fiber_partition,
-        analyze_collisions,
-        analyze_permutation,
-    ):
-        with pytest.raises(ValueError, match="bound polynomial"):
-            consumer(forged)
+    with pytest.raises(ValidationError, match="bound polynomial"):
+        FiniteMapTable(
+            map=identity_table.map,
+            entries=tuple((source, zero) for source, _ in identity_table.entries),
+        )
 
 
 def test_slice_b_reuses_one_table_for_fiber_and_certificate_handoff() -> None:

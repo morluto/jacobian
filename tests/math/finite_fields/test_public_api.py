@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from flint import nmod_mat
+from pydantic import ValidationError
 
 from jacobian.math import finite_fields
 from jacobian.math.finite_fields import (
@@ -177,10 +178,8 @@ def test_orbit_distribution_rejects_a_forged_in_range_rank() -> None:
     subspace, directions = _slice_a_values()
     ledger_payload = direction_rank_ledger(subspace, directions).model_dump(mode="json")
     ledger_payload["entries"][0]["rank"] = 0
-    forged = DirectionRankLedger.model_validate(ledger_payload)
-
-    with pytest.raises(ValueError, match="rank does not match"):
-        orbit_distribution(forged)
+    with pytest.raises(ValidationError, match="rank must match"):
+        DirectionRankLedger.model_validate(ledger_payload)
 
 
 def test_slice_a_composes_restriction_into_rank_without_wire_conversion() -> None:
@@ -253,6 +252,52 @@ def test_slice_a_rejects_wrong_presentation_and_axis() -> None:
         restrict_scalars(subspace, wrong_parent_direction)
     with pytest.raises(ValueError, match="axis"):
         restrict_scalars(subspace, wrong_axis_direction)
+
+
+def test_permuting_a_declared_row_axis_preserves_restriction_ranks() -> None:
+    subspace, directions = _slice_a_values()
+    permuted_axis = Axis(
+        name=subspace.row_axis.name,
+        labels=tuple(reversed(subspace.row_axis.labels)),
+    )
+    permuted_subspace = FiniteDimensionalSubspace(
+        presentation=subspace.presentation,
+        basis_axis=subspace.basis_axis,
+        basis=tuple(
+            AxisBoundMatrix(
+                presentation=matrix.presentation,
+                row_axis=permuted_axis,
+                column_axis=matrix.column_axis,
+                entries=tuple(reversed(matrix.entries)),
+            )
+            for matrix in subspace.basis
+        ),
+    )
+    for direction in directions.points:
+        original = restrict_scalars(subspace, direction)
+        permuted_direction = projective_point(
+            subspace.presentation,
+            permuted_axis,
+            tuple(reversed(direction.coordinates)),
+        )
+        transported = restrict_scalars(permuted_subspace, permuted_direction)
+
+        assert transported.source_axis == original.source_axis
+        assert transported.target_axis == original.target_axis
+        assert rank(transported.matrix) == rank(original.matrix)
+
+    fixed_direction = directions.points[2]
+    assert fixed_direction.coordinates == tuple(reversed(fixed_direction.coordinates))
+    fixed_original = restrict_scalars(subspace, fixed_direction)
+    fixed_transport = restrict_scalars(
+        permuted_subspace,
+        projective_point(
+            subspace.presentation,
+            permuted_axis,
+            tuple(reversed(fixed_direction.coordinates)),
+        ),
+    )
+    assert fixed_transport.matrix == fixed_original.matrix
 
 
 def test_exact_public_api_symbols() -> None:

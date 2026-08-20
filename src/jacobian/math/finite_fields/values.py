@@ -15,6 +15,7 @@ _MAX_FIELD_ORDER = 4096
 _MIN_MODULUS_COEFFICIENTS = 3
 _MAX_MODULUS_COEFFICIENTS = 17
 _MAX_AXIS_LABELS = 256
+_MAX_DERIVATION_WORK = 1_000_000
 
 
 def _digest(payload: dict[str, Any]) -> str:
@@ -441,6 +442,8 @@ class RankResult(StrictModel):
         )
         if type(self.rank) is not int or not 0 <= self.rank <= maximum_rank:
             raise ValueError("rank is outside the linear-map dimensions")
+        if self.rank != rank(self.linear_map.matrix):
+            raise ValueError("rank must match the exact bound linear map")
         return self
 
     @property
@@ -455,17 +458,35 @@ class RankResult(StrictModel):
         )
 
 
+def _direction_rank_work(
+    subspace: FiniteDimensionalSubspace,
+    direction_count: int,
+) -> int:
+    source_dimension = len(subspace.basis)
+    target_dimension = len(subspace.column_axis.labels) * subspace.presentation.degree
+    restriction = source_dimension * len(subspace.row_axis.labels) * target_dimension
+    rank_work = (
+        target_dimension * source_dimension * min(target_dimension, source_dimension)
+    )
+    return direction_count * (restriction + rank_work)
+
+
 class DirectionRankLedger(StrictModel):
     """An ordered, exact binding from projective directions to rank results."""
 
     subspace: FiniteDimensionalSubspace
-    entries: tuple[RankResult, ...]
+    entries: tuple[RankResult, ...] = Field(min_length=1, max_length=_MAX_FIELD_ORDER)
 
     @model_validator(mode="after")
     def validate_ledger(self) -> Self:
-        if not self.entries:
-            raise ValueError("direction-rank ledger must be nonempty")
         first = self.entries[0]
+        expected_directions = (
+            self.subspace.presentation.order ** len(self.subspace.row_axis.labels) - 1
+        ) // (self.subspace.presentation.order - 1)
+        if len(self.entries) != expected_directions:
+            raise ValueError(
+                "direction-rank ledger must contain every projective direction"
+            )
         if len({entry.direction.digest for entry in self.entries}) != len(self.entries):
             raise ValueError("direction-rank ledger cannot repeat a direction")
         if any(
@@ -483,6 +504,18 @@ class DirectionRankLedger(StrictModel):
             raise ValueError("ledger directions must use the subspace row axis")
         if first.linear_map.source_axis != self.subspace.basis_axis:
             raise ValueError("ledger maps must use the subspace basis axis")
+        work = _direction_rank_work(self.subspace, len(self.entries))
+        if work > _MAX_DERIVATION_WORK:
+            raise ValueError("direction-rank ledger exceeds its derivation work budget")
+        from jacobian.math.finite_fields import _sympy
+
+        for entry in self.entries:
+            if entry.linear_map != _sympy.restrict_scalars(
+                self.subspace, entry.direction
+            ):
+                raise ValueError(
+                    "direction-rank ledger map does not match the bound subspace"
+                )
         return self
 
     @property
@@ -594,7 +627,10 @@ class FiniteMapTable(StrictModel):
     """A complete ordered evaluation table for one exact finite map."""
 
     map: FinitePolynomialMap
-    entries: tuple[tuple[FiniteFieldElement, FiniteFieldElement], ...]
+    entries: tuple[tuple[FiniteFieldElement, FiniteFieldElement], ...] = Field(
+        min_length=1,
+        max_length=_MAX_FIELD_ORDER,
+    )
 
     @model_validator(mode="after")
     def validate_table(self) -> Self:
@@ -613,6 +649,21 @@ class FiniteMapTable(StrictModel):
             raise ValueError("finite map table inputs must use canonical domain order")
         if any(value.presentation != self.map.codomain for _, value in self.entries):
             raise ValueError("finite map table outputs must use the exact codomain")
+        work = (
+            len(self.entries)
+            * len(self.map.polynomial.coefficients)
+            * self.map.domain.degree
+        )
+        if work > _MAX_DERIVATION_WORK:
+            raise ValueError("finite map table exceeds its derivation work budget")
+        from jacobian.math.finite_fields import _sympy
+
+        expected = _sympy.evaluate_polynomial_values(self.map.polynomial, inputs)
+        if any(
+            target.coordinates != coordinates
+            for (_, target), coordinates in zip(self.entries, expected, strict=True)
+        ):
+            raise ValueError("finite map table targets must match the bound polynomial")
         return self
 
     @property

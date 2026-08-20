@@ -208,27 +208,9 @@ def direction_rank_ledger(
     )
 
 
-class _InvalidDirectionRankLedgerError(ValueError):
-    """A ledger entry was not derived from its bound subspace and direction."""
-
-
-def _validate_direction_rank_ledger(ledger: DirectionRankLedger) -> None:
-    for entry in ledger.entries:
-        expected_map = restrict_scalars(ledger.subspace, entry.direction)
-        if entry.linear_map != expected_map:
-            raise _InvalidDirectionRankLedgerError(
-                "direction-rank ledger map does not match the bound subspace"
-            )
-        if entry.rank != linear_map_rank(entry.direction, expected_map).rank:
-            raise _InvalidDirectionRankLedgerError(
-                "direction-rank ledger rank does not match the bound linear map"
-            )
-
-
 def orbit_distribution(ledger: DirectionRankLedger) -> OrbitDistribution:
     """Aggregate projective orbit counts from a complete direction-rank ledger."""
 
-    _validate_direction_rank_ledger(ledger)
     return OrbitDistribution.from_ledger(ledger)
 
 
@@ -302,37 +284,15 @@ def finite_map_table(polynomial_map: FinitePolynomialMap) -> FiniteMapTable:
     )
 
 
-class _InvalidFiniteMapTableError(ValueError):
-    """The table does not evaluate its bound polynomial."""
-
-
-def _validate_finite_map_table(table: FiniteMapTable) -> None:
-    """Require every table target to be the bound polynomial's exact image."""
-
-    from jacobian.math.finite_fields import _sympy
-
-    targets = _sympy.evaluate_polynomial_values(
-        table.map.polynomial,
-        tuple(source for source, _ in table.entries),
-    )
-    for (_, target), coordinates in zip(table.entries, targets, strict=True):
-        if target.coordinates != coordinates:
-            raise _InvalidFiniteMapTableError(
-                "finite map table targets must match the bound polynomial"
-            )
-
-
 def fiber_partition(table: FiniteMapTable) -> FiberPartition:
     """Partition the complete domain by exact map image."""
 
-    _validate_finite_map_table(table)
     return FiberPartition.from_table(table)
 
 
 def analyze_collisions(table: FiniteMapTable) -> CollisionResult:
     """Return either the first canonical collision or an injectivity result."""
 
-    _validate_finite_map_table(table)
     seen: dict[str, tuple[FiniteFieldElement, FiniteFieldElement]] = {}
     for source, target in table.entries:
         previous = seen.get(target.digest)
@@ -351,7 +311,6 @@ def analyze_collisions(table: FiniteMapTable) -> CollisionResult:
 def analyze_permutation(table: FiniteMapTable) -> PermutationResult:
     """Return either an inverse table or a non-permutation result."""
 
-    _validate_finite_map_table(table)
     inverse_entries = tuple(
         sorted(
             ((target, source) for source, target in table.entries),

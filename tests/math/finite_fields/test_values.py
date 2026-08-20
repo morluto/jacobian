@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.finite_fields import (
     Axis,
@@ -90,6 +91,28 @@ def test_values_reject_same_shape_substitutions_with_wrong_parent_or_axis() -> N
         coordinates=(one, zero),
     )
     assert RankResult(direction=point, linear_map=matrix, rank=2).rank == 2
+
+
+def test_malformed_prime_field_matrix_reports_nested_validation_error() -> None:
+    with pytest.raises(ValidationError) as error:
+        FiniteLinearMap.model_validate(
+            {
+                "source_axis": {"name": "source", "labels": ["x", "y"]},
+                "target_axis": {"name": "target", "labels": ["z"]},
+                "matrix": {"prime": 2, "entries": [[1]], "columns": 2},
+            }
+        )
+
+    assert error.value.errors(include_url=False, include_context=False) == [
+        {
+            "type": "value_error",
+            "loc": ("matrix",),
+            "msg": (
+                "Value error, every matrix row must match the declared column count"
+            ),
+            "input": {"prime": 2, "entries": [[1]], "columns": 2},
+        }
+    ]
 
 
 def test_subspace_rejects_dependent_basis_matrices() -> None:

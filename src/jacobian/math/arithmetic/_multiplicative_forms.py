@@ -61,17 +61,13 @@ class PerfectPowerProfileResult(StrictModel):
                 or self.exponent is None
                 or self.reconstruction is None
             ):
-                raise ValueError(
-                    "NONUNIT requires base, exponent, and reconstruction"
-                )
+                raise ValueError("NONUNIT requires base, exponent, and reconstruction")
             if self.exponent < 1:
                 raise ValueError("NONUNIT exponent must be >= 1")
         else:
             # ZERO, POSITIVE_UNIT, NEGATIVE_UNIT must not carry NONUNIT fields
             if self.base is not None or self.exponent is not None:
-                raise ValueError(
-                    f"{self.kind} must not carry base or exponent"
-                )
+                raise ValueError(f"{self.kind} must not carry base or exponent")
             if self.factors:
                 raise ValueError(f"{self.kind} must not carry factors")
             if self.is_nontrivial_perfect_power:
@@ -98,9 +94,7 @@ class KFreeDecompositionResult(StrictModel):
                 or self.cofactor is None
                 or self.reconstruction is None
             ):
-                raise ValueError(
-                    "NONUNIT requires base, cofactor, and reconstruction"
-                )
+                raise ValueError("NONUNIT requires base, cofactor, and reconstruction")
         elif self.kind == "UNIT":
             if self.base is not None or self.cofactor is not None:
                 raise ValueError("UNIT must not carry base or cofactor")
@@ -141,9 +135,7 @@ class SquarefreeDecompositionResult(StrictModel):
                 raise ValueError("UNIT must not carry factors")
         else:  # ZERO
             if self.square_factor is not None or self.squarefree_part is not None:
-                raise ValueError(
-                    "ZERO must not carry square_factor or squarefree_part"
-                )
+                raise ValueError("ZERO must not carry square_factor or squarefree_part")
             if self.factors:
                 raise ValueError("ZERO must not carry factors")
         return self

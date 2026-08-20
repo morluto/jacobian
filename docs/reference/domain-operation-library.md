@@ -194,6 +194,28 @@ through the consumer's typed boundary. Do not introduce a generic value
 registry or universal mathematical-object base class for this purpose; reuse
 the owner domain's concrete value type.
 
+Classify public outputs before choosing their schema:
+
+| Output kind | Contract |
+| --- | --- |
+| Canonical value | A complete reusable mathematical object accepted by its downstream consumers. |
+| Source-bound result | A source value plus a conclusion or certificate whose defining relation is validated. |
+| Display projection | A human-readable summary that is not accepted as a composable mathematical value. |
+
+For every producer or materially changed consumer, answer all of the following
+in the producer/consumer closure field of the review artifact:
+
+- What domain-owned canonical type does the producer return?
+- Which downstream operations consume that type?
+- Can its serialized value be supplied to each consumer unchanged?
+- Does it retain its parent, presentation, ordered axes, ambient dimension, and
+  normalization where those determine its meaning?
+- What mathematical context remains present for empty, zero, identity, or
+  otherwise degenerate values?
+- Is each decision or certificate bound to the source value it concerns?
+- Can result validation replay the defining relation within the declared work
+  bound?
+
 Decision and profile results are relations, not detached booleans or numbers.
 Retain the source values needed to state the relation and replay its defining
 equation in result validation. A compact result may omit a large derivation

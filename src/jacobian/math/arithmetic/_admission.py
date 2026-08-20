@@ -120,6 +120,31 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.DROP,
         "ordinary Fraction operation without catalog-level leverage",
     ),
+    OperationAdmission(
+        "integer.perfect_power.profile.compute",
+        AdmissionDecision.KEEP,
+        "maximal perfect-power profile with signed base/exponent and exact reconstruction",
+    ),
+    OperationAdmission(
+        "integer.k_free_decomposition.compute",
+        AdmissionDecision.KEEP,
+        "unique k-free decomposition with signed cofactor and per-prime exponent rows",
+    ),
+    OperationAdmission(
+        "integer.squarefree_decomposition.compute",
+        AdmissionDecision.KEEP,
+        "unique squarefree decomposition with signed squarefree part and per-prime parity rows",
+    ),
+    OperationAdmission(
+        "integer.squarefree_part.compute",
+        AdmissionDecision.KEEP,
+        "compact squarefree-part projection with square factor",
+    ),
+    OperationAdmission(
+        "quadratic_radical.positive_integer.normalize.compute",
+        AdmissionDecision.KEEP,
+        "canonical positive sqrt(n) = s*sqrt(d) normalization with squarefree d",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

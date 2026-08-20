@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.petri_nets._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -16,3 +21,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "bounded reachability construction with an explicit typed completeness frontier after the #1978 contract repair",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

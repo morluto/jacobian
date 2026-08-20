@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.code_theory._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -31,3 +36,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact syndrome vector H*r^T mod p for received word decoding",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

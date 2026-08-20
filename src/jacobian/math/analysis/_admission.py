@@ -15,6 +15,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
+    OperationAdmission(
+        "interval.compute.enclosure",
+        AdmissionDecision.KEEP,
+        "distinct rigorous bounded enclosure for composable user-defined expressions",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

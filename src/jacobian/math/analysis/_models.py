@@ -12,6 +12,128 @@ from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 
 MAX_RATIONAL_DIGITS = 128
+MAX_EXPRESSION_DEPTH = 16
+MAX_EXPRESSION_NODES = 64
+MAX_INTEGER_EXPONENT = 64
+
+type IntervalExpressionOp = Literal[
+    "const",
+    "var",
+    "add",
+    "sub",
+    "mul",
+    "div",
+    "pow",
+    "neg",
+    "exp",
+    "log",
+    "sqrt",
+    "sin",
+    "cos",
+]
+
+
+class IntervalExpressionNode(StrictModel):
+    """One node in a bounded univariate expression tree."""
+
+    op: IntervalExpressionOp
+    value: CanonicalRational | None = None
+    exponent: StrictInt | None = Field(
+        default=None, ge=-MAX_INTEGER_EXPONENT, le=MAX_INTEGER_EXPONENT
+    )
+    children: tuple[IntervalExpressionNode, ...] = Field(default=(), max_length=2)
+
+    @model_validator(mode="after")
+    def require_operation_shape(self) -> Self:
+        arity = {
+            "const": 0,
+            "var": 0,
+            "neg": 1,
+            "pow": 1,
+            "exp": 1,
+            "log": 1,
+            "sqrt": 1,
+            "sin": 1,
+            "cos": 1,
+            "add": 2,
+            "sub": 2,
+            "mul": 2,
+            "div": 2,
+        }[self.op]
+        if len(self.children) != arity:
+            raise ValueError(f"{self.op} node requires exactly {arity} children")
+        if self.op == "const":
+            if self.value is None:
+                raise ValueError("const node requires a value")
+            require_bounded_rational(
+                self.value,
+                max_digits=MAX_RATIONAL_DIGITS,
+                label="interval-expression rational",
+            )
+        elif self.value is not None:
+            raise ValueError("only a const node may carry a value")
+        if self.op == "pow":
+            if self.exponent is None or self.exponent == 0:
+                raise ValueError("pow node requires a nonzero bounded integer exponent")
+        elif self.exponent is not None:
+            raise ValueError("only a pow node may carry an exponent")
+        return self
+
+
+class IntervalExpressionEnclosureRequest(StrictModel):
+    """Evaluate a bounded expression at one exact rational argument using Arb."""
+
+    expression: IntervalExpressionNode
+    argument: CanonicalRational
+    precision_bits: StrictInt = Field(default=128, ge=32, le=4096)
+
+    @model_validator(mode="after")
+    def require_bounded_tree(self) -> Self:
+        require_bounded_rational(
+            self.argument,
+            max_digits=MAX_RATIONAL_DIGITS,
+            label="interval-enclosure argument",
+        )
+        stack = [(self.expression, 1)]
+        count = 0
+        while stack:
+            node, depth = stack.pop()
+            count += 1
+            if depth > MAX_EXPRESSION_DEPTH:
+                raise ValueError(f"expression depth exceeds {MAX_EXPRESSION_DEPTH}")
+            if count > MAX_EXPRESSION_NODES:
+                raise ValueError(
+                    f"expression node count exceeds {MAX_EXPRESSION_NODES}"
+                )
+            stack.extend((child, depth + 1) for child in node.children)
+        return self
+
+
+class IntervalExpressionEnclosureResult(StrictModel):
+    status: Literal["ENCLOSED", "DOMAIN_ERROR", "PRECISION_INSUFFICIENT", "NONFINITE"]
+    precision_bits: StrictInt = Field(ge=32, le=4096)
+    lower: ExactDyadic | None = None
+    upper: ExactDyadic | None = None
+    relative_accuracy_bits: StrictInt | None = None
+    exact: bool = False
+    detail: str = Field(min_length=1, max_length=1024)
+
+    @model_validator(mode="after")
+    def bind_enclosure_to_status(self) -> Self:
+        enclosed = self.status == "ENCLOSED"
+        if enclosed != (self.lower is not None and self.upper is not None):
+            raise ValueError("only an enclosed result may carry dyadic endpoints")
+        if not enclosed and (self.relative_accuracy_bits is not None or self.exact):
+            raise ValueError("a non-enclosure cannot claim accuracy or exactness")
+        if enclosed:
+            assert self.lower is not None and self.upper is not None
+            if self.lower.as_fraction() > self.upper.as_fraction():
+                raise ValueError("enclosure lower endpoint exceeds upper endpoint")
+            if self.exact != (self.relative_accuracy_bits is None):
+                raise ValueError(
+                    "exact enclosures omit relative accuracy; inexact ones report it"
+                )
+        return self
 
 
 class RealUnaryFunction(StrEnum):

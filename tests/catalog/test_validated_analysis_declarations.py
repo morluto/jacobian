@@ -14,7 +14,10 @@ def test_subject_operation_groups_preserve_wire_contracts() -> None:
             OPTIMIZATION_TOOLS,
         )
     ) == (
-        ("analysis.real_function.point_enclosure.compute",),
+        (
+            "analysis.real_function.point_enclosure.compute",
+            "interval.compute.enclosure",
+        ),
         (
             "probability.joint.mutual_information.compute",
             "probability.finite_distribution.raw_moment.compute",

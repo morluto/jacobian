@@ -5,6 +5,10 @@
     "analysis.real_function.point_enclosure.compute": {
       "input_schema": "sha256:03cdc2f995da8340bfdd0d67ac79cd15aa881aec2d606d9be6ea970c8cc43d94",
       "output_schema": "sha256:249702364339f3a57c3426c7360e4655f3ff60feb827c0b3601206dc98f543db"
+    },
+    "interval.compute.enclosure": {
+      "input_schema": "sha256:8346401b3b8c5c1795fdcb2e078280f5aa9614ac73fcd05609c2703812e1e2b9",
+      "output_schema": "sha256:c416bb7ed69f56d3858e84ee10d8f7e3d103964999d17c5c8080432f443594fa"
     }
   }
 }

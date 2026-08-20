@@ -10,7 +10,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Literal
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.math.commutative_algebra_ops._models import IdealComputationBudget
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -29,7 +29,6 @@ _PROTOCOL_HEADER = "JACOBIAN_SINGULAR_IDEAL_V1"
 _SUPPORTED_VERSION_MIN = 44000
 _SUPPORTED_VERSION_MAX = 45000
 _COEFFICIENT = re.compile(r"^(0|-?[1-9][0-9]*)(?:/([1-9][0-9]*))?$")
-_MAX_COEFFICIENT_DIGITS = 256
 _STDOUT_LIMIT = 512 * 1024
 _STDERR_LIMIT = 64 * 1024
 
@@ -154,10 +153,13 @@ def _parse_coefficient(text: str) -> CanonicalRational:
     if match is None:
         raise ValueError("Singular returned a non-rational coefficient")
     numerator_text, denominator_text = match.groups()
-    if len(numerator_text.lstrip("-")) > _MAX_COEFFICIENT_DIGITS or (
-        denominator_text is not None and len(denominator_text) > _MAX_COEFFICIENT_DIGITS
+    if len(numerator_text.lstrip("-")) > MAX_CANONICAL_RATIONAL_DIGITS or (
+        denominator_text is not None
+        and len(denominator_text) > MAX_CANONICAL_RATIONAL_DIGITS
     ):
-        raise ValueError("Singular coefficient exceeds the exact-result digit limit")
+        raise _ResultLimitExceededError(
+            "Singular coefficient exceeds the canonical exact-result digit limit"
+        )
     return CanonicalRational.from_fraction(
         Fraction(int(numerator_text), int(denominator_text or "1"))
     )
@@ -315,8 +317,12 @@ def run_singular_ideal_operation(
         )
     if completed.stdout_exceeded or completed.stderr_exceeded:
         return SingularIdealResult(
-            outcome="ERROR",
-            detail="Singular exceeded a process-output limit.",
+            outcome="LIMIT_EXCEEDED" if completed.stdout_exceeded else "ERROR",
+            detail=(
+                "The exact Singular ideal exceeds the declared result bound."
+                if completed.stdout_exceeded
+                else "Singular exceeded the diagnostic-output limit."
+            ),
         )
     if completed.returncode != 0 or completed.stderr:
         return SingularIdealResult(

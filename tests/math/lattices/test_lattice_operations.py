@@ -243,9 +243,7 @@ def test_discriminant_group_of_2z_squared() -> None:
 
 def test_discriminant_group_order_matches_gram_det() -> None:
     """discriminant_order equals |det(B B^T)|."""
-    rg = compute_rank_gram(
-        RankGramRequest(lattice=_lattice(2, [[3, 1], [1, 2]]))
-    )
+    rg = compute_rank_gram(RankGramRequest(lattice=_lattice(2, [[3, 1], [1, 2]])))
     dg = compute_discriminant_group(
         DiscriminantGroupRequest(lattice=_lattice(2, [[3, 1], [1, 2]]))
     )
@@ -275,9 +273,7 @@ def test_orthogonal_complement_of_full_rank_is_zero() -> None:
 def test_orthogonal_complement_of_plane_in_3d() -> None:
     """Complement of <(1,0,0),(0,1,0)> in QQ^3 is <(0,0,1)>."""
     result = compute_orthogonal_complement(
-        OrthogonalComplementRequest(
-            lattice=_lattice(3, [[1, 0, 0], [0, 1, 0]])
-        )
+        OrthogonalComplementRequest(lattice=_lattice(3, [[1, 0, 0], [0, 1, 0]]))
     )
     assert result.complement_rank == 1
 

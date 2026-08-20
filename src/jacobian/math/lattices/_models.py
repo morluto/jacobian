@@ -127,6 +127,7 @@ class IntegerLattice(StrictModel):
         # model-construction time.
         return self
 
+
 class RankGramRequest(StrictModel):
     """One integer lattice for rank, Gram matrix, and covolume."""
 

@@ -53,10 +53,7 @@ def _sympy_integer_matrix(entries: list[list[int]]) -> Any:
 def _entries_to_int(matrix: Any) -> list[list[int]]:
     rows = matrix.rows if hasattr(matrix, "rows") else len(matrix)
     cols = matrix.cols if hasattr(matrix, "cols") else len(matrix[0])
-    return [
-        [int(matrix[i, j]) for j in range(cols)]
-        for i in range(rows)
-    ]
+    return [[int(matrix[i, j]) for j in range(cols)] for i in range(rows)]
 
 
 def integer_rank(entries: list[list[str | int]]) -> int:
@@ -101,8 +98,7 @@ def hermite_basis(entries: list[list[int]]) -> tuple[list[list[int]], list[list[
     t_rows = transform.nrows()
     t_cols = transform.ncols()
     transform_list = [
-        [int(transform[i, j]) for j in range(t_cols)]
-        for i in range(t_rows)
+        [int(transform[i, j]) for j in range(t_cols)] for i in range(t_rows)
     ]
     return hnf_list, transform_list
 
@@ -164,7 +160,9 @@ def dual_basis(entries: list[list[int]]) -> list[list[Fraction]]:
     return result
 
 
-def saturate_lattice(entries: list[list[int]]) -> tuple[list[list[int]], list[list[int]], int]:
+def saturate_lattice(
+    entries: list[list[int]],
+) -> tuple[list[list[int]], list[list[int]], int]:
     """Return ``(saturated_basis, inclusion, index)`` for the lattice.
 
     ``saturated_basis`` spans ``sat(L) = span_Q(L) cap ZZ^n`` in HNF canonical
@@ -192,9 +190,7 @@ def saturate_lattice(entries: list[list[int]]) -> tuple[list[list[int]], list[li
         rational_kernel = Matrix(kernel_rows)
         # Clear denominators to obtain an integer matrix.
         denominators = [
-            rational_kernel[i, j].q
- if hasattr(rational_kernel[i, j], "q")
-            else 1
+            rational_kernel[i, j].q if hasattr(rational_kernel[i, j], "q") else 1
             for i in range(rational_kernel.rows)
             for j in range(rational_kernel.cols)
             if rational_kernel[i, j] != 0
@@ -313,9 +309,7 @@ def orthogonal_complement(entries: list[list[int]]) -> list[list[Fraction]]:
     return rows
 
 
-def direct_sum(
-    first: list[list[int]], second: list[list[int]]
-) -> list[list[int]]:
+def direct_sum(first: list[list[int]], second: list[list[int]]) -> list[list[int]]:
     """Return the block-diagonal direct-sum basis."""
     rows_first = len(first)
     cols_first = len(first[0]) if rows_first else 0
@@ -335,9 +329,7 @@ def direct_sum(
     return result
 
 
-def orthogonal_sum(
-    first: list[list[int]], second: list[list[int]]
-) -> list[list[int]]:
+def orthogonal_sum(first: list[list[int]], second: list[list[int]]) -> list[list[int]]:
     """Return the orthogonal-sum basis (block-diagonal under standard form).
 
     For the standard bilinear form the orthogonal sum embedding is the same

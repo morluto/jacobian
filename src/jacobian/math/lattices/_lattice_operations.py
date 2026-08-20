@@ -82,15 +82,10 @@ __all__ = [
 
 
 def _basis_int_list(lattice: IntegerLattice) -> list[list[int]]:
-    return [
-        [parse_canonical_integer(v) for v in row]
-        for row in lattice.basis.entries
-    ]
+    return [[parse_canonical_integer(v) for v in row] for row in lattice.basis.entries]
 
 
-def _require_full_row_rank(
-    lattice: IntegerLattice, *, label: str
-) -> list[list[int]]:
+def _require_full_row_rank(lattice: IntegerLattice, *, label: str) -> list[list[int]]:
     entries = _basis_int_list(lattice)
     rows = len(entries)
     if integer_rank(lattice.basis.entries) != rows:
@@ -194,8 +189,7 @@ def compute_sublattice_index(request: SublatticeIndexRequest) -> SublatticeIndex
     parent_basis = _require_full_row_rank(request.parent, label="parent")
     del sub_basis, parent_basis
     embedding = [
-        [parse_canonical_integer(v) for v in row]
-        for row in request.embedding.entries
+        [parse_canonical_integer(v) for v in row] for row in request.embedding.entries
     ]
     parent_rank = len(request.parent.basis.entries)
     index, factors, free_rank = _sublattice_index(

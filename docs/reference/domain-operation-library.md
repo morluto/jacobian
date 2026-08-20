@@ -178,6 +178,21 @@ variables to zero. Backend generator inference, ambient rings, and automatic
 coercion are private conveniences and do not define Jacobian's public
 semantics.
 
+Producer and consumer contracts must close over the same canonical value. A
+constructor for a projective point, subspace, code presentation, automaton, or
+other mathematical object returns the concrete value accepted by downstream
+operations; callers must not have to remember and reattach its field, ordered
+axis, ranked signature, or ambient dimension. Valid empty representations must
+retain that parent information explicitly—for example, a zero-row matrix still
+has a declared column axis.
+
+Decision and profile results are relations, not detached booleans or numbers.
+Retain the source values needed to state the relation and replay its defining
+equation in result validation. A compact result may omit a large derivation
+ledger when bounded replay from the retained source is deterministic, but it
+must not accept an authored conclusion merely because its scalar fields have
+the right shape.
+
 Backend integration follows the reusable
 [mathematical backend contract](mathematical-backends.md).
 

@@ -35,6 +35,10 @@ For an operation, test the typed request boundary, the domain result, and a
 real caller-visible invocation when the MCP projection changed. The integration
 catalog test executes every advertised invocation example. When one result feeds
 another operation, test that composition through the next typed payload.
+Include the degenerate producer case most likely to erase ambient information,
+such as an empty basis, zero-row matrix, empty trace, or zero count. For
+source-bound decisions, mutate the source and conclusion independently and
+require result validation to reject both forgeries.
 
 Use property tests for canonicalization and algebraic invariants when they
 state the contract more directly than examples. Use maintained libraries in

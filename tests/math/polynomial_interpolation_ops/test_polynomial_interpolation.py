@@ -126,7 +126,7 @@ def test_interpolation_passes_through_sample_points() -> None:
     """Newton evaluation at every node must return the corresponding value."""
     nodes = ("0", "1", "2", "3")
     values = ("1", "2", "5", "10")
-    for i, (n, v) in enumerate(zip(nodes, values)):
+    for i, (n, v) in enumerate(zip(nodes, values, strict=True)):
         request = NewtonEvaluateRequest(nodes=nodes, values=values, evaluation_point=n)
         result = compute_newton_evaluate(request)
         assert result.result == v, (

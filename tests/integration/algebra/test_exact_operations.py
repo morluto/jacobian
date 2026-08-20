@@ -85,6 +85,34 @@ def test_algebraic_comparison_parses_canonical_interval_endpoints() -> None:
     assert result.order == "LT"
 
 
+def test_algebraic_comparison_accepts_coefficients_above_python_digit_limit() -> None:
+    oversized_coefficient = "1" + "0" * 5_000
+    result = compute_algebraic_compare(
+        AlgebraicCompareRequest.model_validate(
+            {
+                "left": {
+                    "polynomial": [
+                        {"num": oversized_coefficient, "den": "1"},
+                        {"num": "0", "den": "1"},
+                    ],
+                    "isolating_interval_lower": {"num": "-1", "den": "1"},
+                    "isolating_interval_upper": {"num": "1", "den": "1"},
+                },
+                "right": {
+                    "polynomial": [
+                        {"num": "1", "den": "1"},
+                        {"num": "0", "den": "1"},
+                    ],
+                    "isolating_interval_lower": {"num": "-1", "den": "1"},
+                    "isolating_interval_upper": {"num": "1", "den": "1"},
+                },
+            }
+        )
+    )
+
+    assert result.order == "EQ"
+
+
 def test_algebraic_comparison_contract_rejects_a_nonisolating_interval() -> None:
     with pytest.raises(ValidationError, match="exactly one real root"):
         AlgebraicCompareRequest.model_validate(

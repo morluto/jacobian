@@ -18,6 +18,7 @@ from jacobian.math.matrices.symbolic._operations import (
     compute_symbolic_eigenvalues,
     compute_symbolic_rank,
 )
+from jacobian.math.matrices.symbolic._tools import TOOLS
 
 
 def _request(
@@ -146,6 +147,16 @@ def test_square_request_accepts_32x32() -> None:
     SquareSymbolicMatrixRequest.model_validate(
         {"matrix": {"variables": [], "entries": entries}}
     )
+
+
+def test_symbolic_descriptors_publish_their_actual_request_boundaries() -> None:
+    request_types = {tool.operation_id: tool.request_type for tool in TOOLS}
+    assert request_types == {
+        "matrix.symbolic.determinant.compute": SquareSymbolicMatrixRequest,
+        "matrix.symbolic.rank.compute": SymbolicMatrixRequest,
+        "matrix.symbolic.characteristic_polynomial.compute": SquareSymbolicMatrixRequest,
+        "matrix.symbolic.eigenvalues.compute": SquareSymbolicMatrixRequest,
+    }
 
 
 def test_symbolic_matrix_rejects_non_rectangular() -> None:

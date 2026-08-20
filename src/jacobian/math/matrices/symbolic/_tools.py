@@ -73,6 +73,7 @@ SYMBOLIC_MATRIX_OPERATIONS = (
                 },
             ),
         ),
+        version="2",
     ),
     symbolic_matrix_operation(
         "matrix.symbolic.rank.compute",
@@ -123,6 +124,7 @@ SYMBOLIC_MATRIX_OPERATIONS = (
                 },
             ),
         ),
+        version="2",
     ),
     symbolic_matrix_operation(
         "matrix.symbolic.eigenvalues.compute",
@@ -148,6 +150,7 @@ SYMBOLIC_MATRIX_OPERATIONS = (
                 },
             ),
         ),
+        version="2",
     ),
 )
 

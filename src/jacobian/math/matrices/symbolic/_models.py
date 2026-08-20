@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import combinations, permutations
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -12,6 +13,87 @@ from jacobian.math.polynomials.values import PolynomialVariable, RationalFunctio
 MAX_SYMBOLIC_MATRIX_DIMENSION = 8
 MAX_SYMBOLIC_VARIABLES = 8
 MAX_SYMBOLIC_MATRIX_TERMS = 512
+MAX_SYMBOLIC_RESULT_TERMS = 256
+MAX_SYMBOLIC_RESULT_EXPONENT = 64
+MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS = 128
+
+
+def _is_polynomial_entry(value: RationalFunction) -> bool:
+    terms = value.denominator.terms
+    return (
+        len(terms) == 1
+        and terms[0].coefficient.num == "1"
+        and terms[0].coefficient.den == "1"
+        and all(exponent == 0 for exponent in terms[0].exponents)
+    )
+
+
+def _principal_minor_term_bounds(
+    entries: tuple[tuple[RationalFunction, ...], ...],
+) -> tuple[int, ...]:
+    """Bound raw terms in each characteristic coefficient by Leibniz expansion."""
+
+    dimension = len(entries)
+    bounds = [1]
+    for size in range(1, dimension + 1):
+        coefficient_terms = 0
+        for axes in combinations(range(dimension), size):
+            for columns in permutations(axes):
+                product_terms = 1
+                for row, column in zip(axes, columns, strict=True):
+                    product_terms *= len(entries[row][column].numerator.terms)
+                coefficient_terms += product_terms
+        bounds.append(coefficient_terms)
+    return tuple(bounds)
+
+
+def _require_determinant_family_result_budget(
+    matrix: SymbolicMatrix,
+    *,
+    characteristic_polynomial: bool,
+) -> None:
+    dimension = len(matrix.entries)
+    if dimension == 1:
+        return
+    values = tuple(value for row in matrix.entries for value in row)
+    if any(not _is_polynomial_entry(value) for value in values):
+        raise ValueError(
+            "multi-dimensional determinant-family requests require polynomial entries"
+        )
+    term_bounds = _principal_minor_term_bounds(matrix.entries)
+    relevant_bounds = term_bounds[1:] if characteristic_polynomial else term_bounds[-1:]
+    if any(bound > MAX_SYMBOLIC_RESULT_TERMS for bound in relevant_bounds):
+        raise ValueError("determinant-family expansion exceeds the result term budget")
+    maximum_exponent = max(
+        (
+            exponent
+            for value in values
+            for term in value.numerator.terms
+            for exponent in term.exponents
+        ),
+        default=0,
+    )
+    if dimension * maximum_exponent > MAX_SYMBOLIC_RESULT_EXPONENT:
+        raise ValueError(
+            "determinant-family expansion exceeds the result exponent budget"
+        )
+    coefficient_digits = max(
+        (
+            len(component.lstrip("-"))
+            for value in values
+            for term in value.numerator.terms
+            for component in (term.coefficient.num, term.coefficient.den)
+        ),
+        default=1,
+    )
+    if any(
+        bound * dimension * coefficient_digits + len(str(max(bound, 1)))
+        > MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS
+        for bound in relevant_bounds
+    ):
+        raise ValueError(
+            "determinant-family expansion exceeds the result coefficient budget"
+        )
 
 
 class SymbolicMatrix(StrictModel):
@@ -92,28 +174,41 @@ class SquareSymbolicMatrixRequest(SymbolicMatrixRequest):
 class SymbolicDeterminantRequest(SquareSymbolicMatrixRequest):
     """A square matrix whose exact determinant fits the public result type."""
 
+    matrix: SymbolicMatrix = Field(
+        description=(
+            "A square symbolic matrix. One-dimensional matrices may contain any "
+            "accepted rational function; larger matrices require polynomial "
+            "entries whose derived determinant expansion has at most 256 terms, "
+            "exponent 64, and 128-digit coefficient components."
+        )
+    )
+
     @model_validator(mode="after")
     def require_representable_determinant(self) -> Self:
-        # The input sparsity budget bounds backend work, but rational-function
-        # expansion can still exceed the canonical result representation.  Run
-        # the bounded exact kernel at admission so an accepted request cannot
-        # fail later while constructing its typed result.
-        from jacobian.math.matrices.symbolic import symbolic_determinant
-
-        symbolic_determinant(self.matrix.entries, self.matrix.variables)
+        _require_determinant_family_result_budget(
+            self.matrix,
+            characteristic_polynomial=False,
+        )
         return self
 
 
 class SymbolicCharacteristicPolynomialRequest(SquareSymbolicMatrixRequest):
     """A square matrix whose characteristic polynomial fits the result type."""
 
+    matrix: SymbolicMatrix = Field(
+        description=(
+            "A square symbolic matrix. One-dimensional matrices may contain any "
+            "accepted rational function; larger matrices require polynomial "
+            "entries whose derived principal-minor expansions each have at most "
+            "256 terms, exponent 64, and 128-digit coefficient components."
+        )
+    )
+
     @model_validator(mode="after")
     def require_representable_characteristic_polynomial(self) -> Self:
-        from jacobian.math.matrices.symbolic import symbolic_characteristic_polynomial
-
-        symbolic_characteristic_polynomial(
-            self.matrix.entries,
-            self.matrix.variables,
+        _require_determinant_family_result_budget(
+            self.matrix,
+            characteristic_polynomial=True,
         )
         return self
 

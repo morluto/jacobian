@@ -148,10 +148,23 @@ def test_determinant_request_rejects_unrepresentable_expansion() -> None:
         for row in range(8)
     )
 
-    with pytest.raises(ValidationError, match="term operation budget"):
+    with pytest.raises(ValidationError, match="result term budget"):
         SymbolicDeterminantRequest(
             matrix=SymbolicMatrix(variables=variables, entries=entries)
         )
+
+
+def test_determinant_request_admission_does_not_execute_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.matrices.symbolic as symbolic
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("determinant kernel ran during request validation")
+
+    monkeypatch.setattr(symbolic, "symbolic_determinant", fail_if_called)
+
+    assert isinstance(_generic_two_by_two(), SymbolicDeterminantRequest)
 
 
 def test_symbolic_rank_of_full_and_singular_matrices() -> None:

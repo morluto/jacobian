@@ -23,7 +23,7 @@ from jacobian.math.number_theory._models import (
 def factorize_with_budget(
     request: BudgetedFactorizationRequest,
 ) -> BudgetedFactorizationResult:
-    """Return SymPy's bounded decomposition, marking residual composites explicitly."""
+    """Factor a small integer and classify each bounded component exactly."""
     from flint import fmpz
     from sympy import factorint
 
@@ -35,7 +35,11 @@ def factorize_with_budget(
         CertifiedFactorComponent(
             value=format_canonical_integer(int(factor)),
             exponent=int(exponent),
-            status="CERTIFIED_PRIME" if fmpz(int(factor)).is_prime() else "UNRESOLVED",
+            status=(
+                "CERTIFIED_PRIME"
+                if fmpz(int(factor)).is_prime()
+                else "UNFACTORED_COMPOSITE"
+            ),
         )
         for factor, exponent in decomposition
     )

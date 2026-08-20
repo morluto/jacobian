@@ -82,10 +82,11 @@ def _operation[RequestT: StrictModel, ResultT: StrictModel](
     implementation: Callable[[RequestT], ResultT],
     tags: tuple[str, ...],
     examples: tuple[OperationExample, ...] = (),
+    version: str = "2",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version="2",
+        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -100,7 +101,7 @@ FACTORIZATION_OPERATIONS = (
     _operation(
         operation_id="integer.factor.certified_compute",
         title="Compute a budgeted integer factorization",
-        description="Use SymPy's bounded factoring algorithms to return certified prime factors and any explicitly unresolved composite cofactor.",
+        description="Factor one bounded 15-digit integer with an explicit search limit, returning certified prime factors and any explicitly unfactored composite cofactor.",
         request_model=BudgetedFactorizationRequest,
         result_model=BudgetedFactorizationResult,
         implementation=_compute_budgeted_factorization,
@@ -108,10 +109,11 @@ FACTORIZATION_OPERATIONS = (
         examples=(
             example(
                 "semiprime_10403",
-                "Factor 10403 within a declared search limit; unresolved composite cofactors remain explicit.",
+                "Factor 10403 within a declared search limit; unfactored composite cofactors remain explicit.",
                 {"value": "10403", "factor_limit": 1000},
             ),
         ),
+        version="3",
     ),
     _operation(
         operation_id="integer.compute.divisors",

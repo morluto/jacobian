@@ -1,6 +1,11 @@
 """Owner-local admission decisions for built-in math operations."""
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.finite_semigroups._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -14,3 +19,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "complete closure of generators under semigroup multiplication",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

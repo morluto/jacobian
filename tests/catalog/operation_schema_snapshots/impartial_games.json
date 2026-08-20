@@ -10,6 +10,14 @@
       "input_schema": "sha256:3c346097fe1d909f964a5e372f9b91811aa626380659e3ce196810f78656a21a",
       "output_schema": "sha256:3c7e03c4a0196a97f8bef785640deb36ecc923cdc7f121c6746bf79a8a24b8c3"
     },
+    "game.impartial.outcome_profile.compute": {
+      "input_schema": "sha256:cd5ed438322d9ba852ed7b26aa9becf5c6cdb488d80cc58c1e61a714f0429cf0",
+      "output_schema": "sha256:b7ec26f6e71399c2cdf0319b5d0bd8deec4cd59e42d8c28fa3a0f103a9bc59db"
+    },
+    "game.nim.nim_sum.compute": {
+      "input_schema": "sha256:f96f04ff31737e9a3cf014889858b85735150def5bae24fb4e9b087defe32e61",
+      "output_schema": "sha256:e47767f5171d1218166d61c498c8a055c8e37b966c7d80cb34728727cd389fad"
+    },
     "game.subtraction.grundy_prefix.compute": {
       "input_schema": "sha256:95f79e6ad73fe029c3f8945a3438dbd8d8413575c727e0a7e531bf1ab31131e6",
       "output_schema": "sha256:0d1653a50b7bf7441da2fd64ff942fc5e40627aa4a7d97f1c735e5d862d6eb2d"

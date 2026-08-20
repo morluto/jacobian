@@ -264,7 +264,7 @@ def test_stderr_on_zero_exit_fails_closed(
     assert result.ideal is None
 
 
-def test_oversized_stdout_is_a_typed_execution_error(
+def test_oversized_stdout_is_a_typed_result_limit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -278,9 +278,11 @@ def test_oversized_stdout_is_a_typed_execution_error(
         IdealComputationBudget(),
     )
 
-    assert result.outcome == "ERROR"
+    assert result.outcome == "LIMIT_EXCEEDED"
     assert result.ideal is None
-    assert result.detail == "Singular exceeded a process-output limit."
+    assert (
+        result.detail == "The exact Singular ideal exceeds the declared result bound."
+    )
 
 
 def test_request_scoped_directory_is_removed_after_execution(

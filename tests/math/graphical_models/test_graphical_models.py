@@ -227,6 +227,7 @@ class TestVariableElimination:
             tool.operation_id for tool in TOOLS
         }
 
+
 class TestDSeparation:
     @pytest.mark.parametrize(
         ("edges", "set_c", "expected"),

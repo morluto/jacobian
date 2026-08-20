@@ -92,8 +92,20 @@ class IdealRadicalRequest(StrictModel):
 class IdealRadicalMembershipRequest(StrictModel):
     """Check membership of one polynomial in the radical of a bounded ideal."""
 
-    ideal: RationalPolynomialIdeal
-    polynomial: RationalPolynomial
+    ideal: RationalPolynomialIdeal = Field(
+        description=(
+            "An ideal in at most 6 variables with at most 16 generators and "
+            "256 aggregate terms; generator total degree is at most 12 and "
+            "coefficient components are at most 128 digits."
+        )
+    )
+    polynomial: RationalPolynomial = Field(
+        description=(
+            "A polynomial in the ideal's exact ordered ring, with at most 256 "
+            "terms, total degree at most 12, and coefficient components at most "
+            "128 digits."
+        )
+    )
 
     @model_validator(mode="after")
     def require_backend_domain(self) -> Self:

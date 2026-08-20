@@ -165,6 +165,26 @@ def test_singular_protocol_parser_rejects_trailing_output() -> None:
         )
 
 
+def test_singular_protocol_accepts_coefficients_beyond_input_budget() -> None:
+    coefficient = "1" + "0" * 256
+
+    assert _singular._parse_coefficient(coefficient).num == coefficient
+
+
+def test_singular_protocol_classifies_unrepresentable_coefficients_as_a_limit() -> None:
+    coefficient = "1" + "0" * 32_768
+
+    with pytest.raises(ValueError, match="canonical exact-result digit limit"):
+        _singular._parse_coefficient(coefficient)
+
+
+def test_radical_membership_schema_publishes_operation_bounds() -> None:
+    properties = IdealRadicalMembershipRequest.model_json_schema()["properties"]
+
+    assert "at most 6 variables" in properties["ideal"]["description"]
+    assert "total degree at most 12" in properties["polynomial"]["description"]
+
+
 def test_singular_script_uses_internal_identifiers_not_caller_names() -> None:
     source = _singular._script(
         "radical",

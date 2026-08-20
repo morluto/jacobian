@@ -1,6 +1,11 @@
 """Owner-local admission decisions for built-in math operations."""
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.chip_firing._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -14,3 +19,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact chip-firing action with vertex degree transfer",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

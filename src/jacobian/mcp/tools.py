@@ -7,10 +7,9 @@ from typing import Any
 from mcp.server.mcpserver import Context
 from mcp.shared.exceptions import MCPError
 from mcp_types import INVALID_PARAMS
-from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationId, OperationResult
-from jacobian.dispatch import invoke_operation
+from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.mcp.models import (
     OperationBrowseRequest,
     OperationFindRequest,
@@ -90,7 +89,8 @@ def math_run(
             payload,
             catalog,
         )
-    except ValidationError as exc:
+    except OperationRequestValidationError as exc:
+        validation_error = exc.validation_error
         errors = tuple(
             OperationValidationIssue(
                 location=tuple(
@@ -100,7 +100,7 @@ def math_run(
                 message=_bounded_validation_message(error["msg"]),
                 input=_recoverable_error_input(error.get("input")),
             )
-            for error in exc.errors(
+            for error in validation_error.errors(
                 include_url=False,
                 include_context=False,
                 include_input=True,

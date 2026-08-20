@@ -5,12 +5,20 @@ from __future__ import annotations
 import time
 from typing import Any, cast
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalizationError, encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationId, OperationResult
+
+
+class OperationRequestValidationError(ValueError):
+    """A selected operation rejected its caller-supplied request payload."""
+
+    def __init__(self, validation_error: ValidationError) -> None:
+        self.validation_error = validation_error
+        super().__init__("operation payload failed validation")
 
 
 def parse_operation_input[ModelT: BaseModel](
@@ -36,10 +44,13 @@ def invoke_operation(
     operation = catalog.operation(operation_id)
     if operation is None:
         raise ValueError(f"unknown operation: {operation_id}")
-    parsed = cast(
-        StrictModel,
-        parse_operation_input(operation.request_type, payload),
-    )
+    try:
+        parsed = cast(
+            StrictModel,
+            parse_operation_input(operation.request_type, payload),
+        )
+    except ValidationError as exc:
+        raise OperationRequestValidationError(exc) from exc
     result = operation.run(parsed)
 
     return OperationResult(
@@ -51,6 +62,7 @@ def invoke_operation(
 
 
 __all__ = [
+    "OperationRequestValidationError",
     "invoke_operation",
     "parse_operation_input",
 ]

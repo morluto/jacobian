@@ -28,11 +28,13 @@ external isolation is required.
 
 Each mathematical owner keeps its public values and functions in ordinary
 semantic modules, private Pydantic wire models in `_models.py` where needed,
-and its immutable `TOOLS` tuple in `_tools.py`. `jacobian.catalog` owns
-declaration models, explicit built-in imports, search, and immutable lookup;
-`jacobian.dispatch` owns strict invocation; `jacobian.mcp` and the CLI are
-delivery boundaries. The private root model and exact-scalar helpers contain
-only behavior genuinely shared by unrelated owners.
+and its immutable `TOOLS` tuple in `_tools.py`. Its `_admission.py` binds those
+tools and their decisions into one owner-local `REGISTRATION`; the catalog's
+explicit built-in inventory composes those registrations without separately
+owning either list. `jacobian.catalog` owns declaration models, search, and
+immutable lookup; `jacobian.dispatch` owns strict invocation; `jacobian.mcp`
+and the CLI are delivery boundaries. The private root model and exact-scalar
+helpers contain only behavior genuinely shared by unrelated owners.
 
 ## Package organization and family folding
 

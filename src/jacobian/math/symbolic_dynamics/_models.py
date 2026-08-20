@@ -10,6 +10,9 @@ from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.symbolic_dynamics.operations import (
+    _presentation_memory,
+    _require_bounded_presentation,
+    _require_bounded_support,
     block_language,
     enumeration_size,
     finite_type_presentation,
@@ -33,9 +36,8 @@ class FiniteTypeShiftRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_presentation(self) -> Self:
-        forbidden = normalize_forbidden_blocks(self.shift)
-        memory = max(0, max((len(block) - 1 for block in forbidden), default=0))
-        enumeration_size(len(self.shift.alphabet), memory + 1)
+        memory = _presentation_memory(self.shift)
+        _require_bounded_presentation(self.shift, memory)
         return self
 
 
@@ -61,6 +63,7 @@ class BlockLanguageRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_enumeration(self) -> Self:
         enumeration_size(len(self.shift.alphabet), self.block_length)
+        _require_bounded_support(self.shift)
         return self
 
 
@@ -133,15 +136,12 @@ class HigherBlockRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_exact_bounded_presentation(self) -> Self:
-        forbidden = normalize_forbidden_blocks(self.shift)
-        required_memory = max(
-            0, max((len(block) - 1 for block in forbidden), default=0)
-        )
+        required_memory = _presentation_memory(self.shift)
         if self.block_length < required_memory:
             raise ValueError(
                 "block_length must be at least the SFT presentation memory"
             )
-        enumeration_size(len(self.shift.alphabet), self.block_length + 1)
+        _require_bounded_presentation(self.shift, self.block_length)
         return self
 
 

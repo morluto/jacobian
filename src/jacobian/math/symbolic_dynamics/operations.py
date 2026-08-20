@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 from jacobian.math.symbolic_dynamics.values import (
     MAX_ENUMERATED_BLOCKS,
+    MAX_PRESENTATION_CELLS,
     AdjacencyShift,
     BlockPresentation,
     ForbiddenBlockShift,
@@ -50,19 +51,40 @@ def normalize_forbidden_blocks(
     return tuple(minimal)
 
 
+def _presentation_memory(shift: ForbiddenBlockShift) -> int:
+    return max(
+        0,
+        max(
+            (len(block) - 1 for block in normalize_forbidden_blocks(shift)),
+            default=0,
+        ),
+    )
+
+
+def _require_bounded_support(shift: ForbiddenBlockShift) -> int:
+    memory = _presentation_memory(shift)
+    enumeration_size(len(shift.alphabet), memory + 1)
+    return memory
+
+
+def _require_bounded_presentation(shift: ForbiddenBlockShift, memory: int) -> None:
+    state_count = enumeration_size(len(shift.alphabet), memory)
+    enumeration_size(len(shift.alphabet), memory + 1)
+    if state_count * state_count > MAX_PRESENTATION_CELLS:
+        raise ValueError("presentation adjacency exceeds the result bound")
+
+
 def block_language(
     shift: ForbiddenBlockShift, block_length: int
 ) -> tuple[tuple[str, ...], ...]:
-    import networkx as nx
-
     if block_length < 0:
         raise ValueError("block length must be nonnegative")
     enumeration_size(len(shift.alphabet), block_length)
     forbidden = normalize_forbidden_blocks(shift)
     if () in forbidden:
         return ()
-    memory = max(0, max((len(block) - 1 for block in forbidden), default=0))
-    states, graph, left_infinite, right_infinite = _presentation_support(shift, memory)
+    memory = _require_bounded_support(shift)
+    states, _, left_infinite, right_infinite = _presentation_support(shift, memory)
     if block_length == 0:
         return (
             ((),)
@@ -73,22 +95,21 @@ def block_language(
     candidates = _locally_allowed_words(shift, block_length)
     if memory == 0:
         return candidates if right_infinite else ()
+    if block_length < memory:
+        supported_states = (
+            left_infinite & right_infinite if shift.two_sided else right_infinite
+        )
+        supported_prefixes = {state[:block_length] for state in supported_states}
+        return tuple(word for word in candidates if word in supported_prefixes)
     state_index = set(states)
     occurring = []
     for word in candidates:
-        starts: tuple[tuple[str, ...], ...]
-        ends: tuple[tuple[str, ...], ...]
-        if len(word) >= memory:
-            starts = (word[:memory],)
-            ends = (word[-memory:],)
-        else:
-            starts = tuple(state for state in states if state[: len(word)] == word)
-            ends = starts
+        starts = (word[:memory],)
+        ends = (word[-memory:],)
         if any(
             start in state_index
             and end in right_infinite
             and (not shift.two_sided or start in left_infinite)
-            and (len(word) >= memory or nx.has_path(graph, start, end))
             for start in starts
             for end in ends
         ):
@@ -132,17 +153,27 @@ def _presentation_support(
         for node in component
         if len(component) > 1 or graph.has_edge(node, node)
     }
-    right_infinite = {
-        node
-        for node in graph
-        if any(nx.has_path(graph, node, cycle) for cycle in cyclic)
-    }
-    left_infinite = {
-        node
-        for node in graph
-        if any(nx.has_path(graph, cycle, node) for cycle in cyclic)
-    }
+    right_infinite = _reachable_from(graph, cyclic, reverse=True)
+    left_infinite = _reachable_from(graph, cyclic, reverse=False)
     return states, graph, left_infinite, right_infinite
+
+
+def _reachable_from(
+    graph: nx.DiGraph[tuple[str, ...]],
+    starts: set[tuple[str, ...]],
+    *,
+    reverse: bool,
+) -> set[tuple[str, ...]]:
+    reached = set(starts)
+    pending = list(starts)
+    while pending:
+        node = pending.pop()
+        neighbors = graph.predecessors(node) if reverse else graph.successors(node)
+        for neighbor in neighbors:
+            if neighbor not in reached:
+                reached.add(neighbor)
+                pending.append(neighbor)
+    return reached
 
 
 def _presentation_from_states_and_words(
@@ -181,9 +212,8 @@ def _presentation_from_states_and_words(
 
 
 def finite_type_presentation(shift: ForbiddenBlockShift) -> BlockPresentation:
-    forbidden = normalize_forbidden_blocks(shift)
-    memory = max(0, max((len(block) - 1 for block in forbidden), default=0))
-    enumeration_size(len(shift.alphabet), memory + 1)
+    memory = _presentation_memory(shift)
+    _require_bounded_presentation(shift, memory)
     states = block_language(shift, memory)
     extensions = block_language(shift, memory + 1)
     return _presentation_from_states_and_words(shift, memory, states, extensions)
@@ -194,16 +224,10 @@ def higher_block_presentation(
 ) -> BlockPresentation:
     if block_length < 1:
         raise ValueError("higher-block length must be positive")
-    required_memory = max(
-        0,
-        max(
-            (len(block) - 1 for block in normalize_forbidden_blocks(shift)),
-            default=0,
-        ),
-    )
+    required_memory = _presentation_memory(shift)
     if block_length < required_memory:
         raise ValueError("higher-block length is below the presentation memory")
-    enumeration_size(len(shift.alphabet), block_length + 1)
+    _require_bounded_presentation(shift, block_length)
     states = block_language(shift, block_length)
     extensions = block_language(shift, block_length + 1)
     return _presentation_from_states_and_words(shift, block_length, states, extensions)

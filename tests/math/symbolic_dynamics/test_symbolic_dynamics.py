@@ -137,6 +137,30 @@ def test_oversized_enumerations_fail_before_computation() -> None:
                 forbidden_blocks=(("a", "a", "a", "a", "a"),),
             )
         )
+    ten_symbols = alphabet[:10]
+    with pytest.raises(ValidationError, match="result bound"):
+        FiniteTypeShiftRequest(
+            shift=ForbiddenBlockShift(
+                alphabet=ten_symbols,
+                forbidden_blocks=(("a", "a", "a", "a", "a"),),
+            )
+        )
+    with pytest.raises(ValidationError, match="result bound"):
+        HigherBlockRequest(
+            shift=ForbiddenBlockShift(
+                alphabet=ten_symbols,
+                forbidden_blocks=(),
+            ),
+            block_length=4,
+        )
+    oversized_support = ForbiddenBlockShift(
+        alphabet=alphabet,
+        forbidden_blocks=(("a",) * 20,),
+    )
+    with pytest.raises(ValidationError, match="work bound"):
+        BlockLanguageRequest(shift=oversized_support, block_length=1)
+    with pytest.raises(ValueError, match="work bound"):
+        block_language(oversized_support, 1)
 
 
 def test_higher_block_presentation_uses_allowed_overlap_edges() -> None:

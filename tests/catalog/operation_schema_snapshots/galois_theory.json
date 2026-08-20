@@ -1,22 +1,22 @@
 {
-    "catalog_version": "1",
-    "domain": "galois_theory",
-    "operations": {
-        "polynomial.galois.factor_mod_p.compute": {
-            "input_schema": "sha256:525ac8b462c8f39238629e6a16ba93e1fdb214e8ab7cc9b6ed62b109e2aa485c",
-            "output_schema": "sha256:4e641a3506f95bc3a837668ba925bf23dfeb7fbec80a82aaab3d7363faf971e5"
-        },
-        "polynomial.galois.frobenius_cycle.compute": {
-            "input_schema": "sha256:2230c25314c72f632b86bcd554bbc995eb452192cfb3da092d58209532e8cb9f",
-            "output_schema": "sha256:6250202e5117aae3b5c594d0299b3ce6dd5efceff39fc47ec56a6342cf18eda9"
-        },
-        "polynomial.galois_group.compute": {
-            "input_schema": "sha256:60c3d0a85d88d78b9be4da5c14eb0962a78b87fbce53d5064bf8d639f951cf1a",
-            "output_schema": "sha256:5f0f08470e77691eb0eed18cadde56703f8d1c94ef8b8a57ae6acee8de5dc041"
-        },
-        "polynomial.solvable_by_radicals.decide": {
-            "input_schema": "sha256:18e04796b3655795ee412fe7d63cc627cdceef430d95831ccb05b8e4870b40bd",
-            "output_schema": "sha256:3e3d3998248221309d17de6774778cbd8a23a121e19e7ce30bbd71c36d7d7f08"
-        }
+  "catalog_version": "1",
+  "domain": "galois_theory",
+  "operations": {
+    "polynomial.galois.factor_mod_p.compute": {
+      "input_schema": "sha256:525ac8b462c8f39238629e6a16ba93e1fdb214e8ab7cc9b6ed62b109e2aa485c",
+      "output_schema": "sha256:4e641a3506f95bc3a837668ba925bf23dfeb7fbec80a82aaab3d7363faf971e5"
+    },
+    "polynomial.galois.frobenius_cycle.compute": {
+      "input_schema": "sha256:2230c25314c72f632b86bcd554bbc995eb452192cfb3da092d58209532e8cb9f",
+      "output_schema": "sha256:6250202e5117aae3b5c594d0299b3ce6dd5efceff39fc47ec56a6342cf18eda9"
+    },
+    "polynomial.galois_group.compute": {
+      "input_schema": "sha256:60c3d0a85d88d78b9be4da5c14eb0962a78b87fbce53d5064bf8d639f951cf1a",
+      "output_schema": "sha256:4408f319a9b9bff8cd88a5f65102d19bceb2ed498980222d0c6be4d2f8d1072a"
+    },
+    "polynomial.solvable_by_radicals.decide": {
+      "input_schema": "sha256:18e04796b3655795ee412fe7d63cc627cdceef430d95831ccb05b8e4870b40bd",
+      "output_schema": "sha256:b08de379915350e487e20033285b5f1db589c136287c936b35ee84f99dbe2f03"
     }
+  }
 }

@@ -5,7 +5,11 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.analysis._models import IntervalExpressionEnclosureRequest
+from jacobian.math.analysis._models import (
+    ExactDyadic,
+    IntervalExpressionEnclosureRequest,
+    IntervalExpressionEnclosureResult,
+)
 from jacobian.math.analysis._operations import _expression_enclosure
 
 
@@ -184,3 +188,21 @@ def test_operation_payloads_are_structurally_typed() -> None:
                 "argument": {"num": "0", "den": "1"},
             }
         )
+
+
+def test_dyadic_enclosure_order_avoids_expanding_huge_binary_exponents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_expanded(self: ExactDyadic) -> Fraction:
+        raise AssertionError("endpoint comparison must not materialize a power of two")
+
+    monkeypatch.setattr(ExactDyadic, "as_fraction", fail_if_expanded)
+    result = IntervalExpressionEnclosureResult(
+        status="ENCLOSED",
+        precision_bits=128,
+        lower=ExactDyadic(mantissa="1", exponent=10**100),
+        upper=ExactDyadic(mantissa="3", exponent=10**100 - 1),
+        relative_accuracy_bits=100,
+        detail="synthetic compact dyadic enclosure",
+    )
+    assert result.lower is not None and result.upper is not None

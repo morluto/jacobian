@@ -15,6 +15,8 @@ MAX_RATIONAL_DIGITS = 128
 MAX_EXPRESSION_DEPTH = 16
 MAX_EXPRESSION_NODES = 64
 MAX_INTEGER_EXPONENT = 64
+MAX_DYADIC_EXPONENT = 10**128 - 1
+MAX_DYADIC_MANTISSA_DIGITS = 1_235
 
 type IntervalExpressionOp = Literal[
     "const",
@@ -127,7 +129,7 @@ class IntervalExpressionEnclosureResult(StrictModel):
             raise ValueError("a non-enclosure cannot claim accuracy or exactness")
         if enclosed:
             assert self.lower is not None and self.upper is not None
-            if self.lower.as_fraction() > self.upper.as_fraction():
+            if self.lower.compare(self.upper) > 0:
                 raise ValueError("enclosure lower endpoint exceeds upper endpoint")
             if self.exact != (self.relative_accuracy_bits is None):
                 raise ValueError(
@@ -162,8 +164,10 @@ class ArbPointEnclosureRequest(StrictModel):
 class ExactDyadic(StrictModel):
     """The exact value ``mantissa * 2**exponent``."""
 
-    mantissa: str = Field(pattern=r"^-?(?:0|[1-9][0-9]*)$")
-    exponent: StrictInt
+    mantissa: str = Field(
+        pattern=r"^-?(?:0|[1-9][0-9]*)$", max_length=MAX_DYADIC_MANTISSA_DIGITS
+    )
+    exponent: StrictInt = Field(ge=-MAX_DYADIC_EXPONENT, le=MAX_DYADIC_EXPONENT)
 
     @model_validator(mode="after")
     def require_canonical_binary_form(self) -> Self:
@@ -179,6 +183,32 @@ class ExactDyadic(StrictModel):
         if self.exponent >= 0:
             return mantissa * Fraction(2**self.exponent, 1)
         return mantissa / Fraction(2 ** (-self.exponent), 1)
+
+    def compare(self, other: ExactDyadic) -> int:
+        """Compare two dyadics without materializing either power of two."""
+
+        left = int(self.mantissa)
+        right = int(other.mantissa)
+        if left == 0 or right == 0 or (left < 0) != (right < 0):
+            return (left > right) - (left < right)
+
+        left_magnitude = abs(left)
+        right_magnitude = abs(right)
+        left_top_bit = left_magnitude.bit_length() + self.exponent
+        right_top_bit = right_magnitude.bit_length() + other.exponent
+        if left_top_bit != right_top_bit:
+            magnitude_order = (left_top_bit > right_top_bit) - (
+                left_top_bit < right_top_bit
+            )
+        elif self.exponent >= other.exponent:
+            magnitude_order = (
+                (left_magnitude << (self.exponent - other.exponent)) > right_magnitude
+            ) - ((left_magnitude << (self.exponent - other.exponent)) < right_magnitude)
+        else:
+            magnitude_order = (
+                left_magnitude > (right_magnitude << (other.exponent - self.exponent))
+            ) - (left_magnitude < (right_magnitude << (other.exponent - self.exponent)))
+        return magnitude_order if left > 0 else -magnitude_order
 
 
 class ArbPointEnclosureResult(StrictModel):
@@ -204,7 +234,7 @@ class ArbPointEnclosureResult(StrictModel):
             upper = self.upper
             if lower is None or upper is None:
                 raise ValueError("only an enclosed result may carry dyadic endpoints")
-            if lower.as_fraction() > upper.as_fraction():
+            if lower.compare(upper) > 0:
                 raise ValueError("enclosure lower endpoint exceeds upper endpoint")
             if self.exact != (self.relative_accuracy_bits is None):
                 raise ValueError(

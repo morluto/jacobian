@@ -121,6 +121,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
+            make \
             "singular=${SINGULAR_DEBIAN_VERSION}"
           test "$(Singular -q --execute 'system("version");quit;' \
             | tr -d '[:space:]')" = "44100"

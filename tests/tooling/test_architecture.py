@@ -41,6 +41,11 @@ def test_bounded_process_gateway_requires_external_tool_owner(tmp_path: Path) ->
         "run_bounded_process(['tool'])\n"
     )
     _write(tmp_path, "src/jacobian/math/logic/_operations.py", source)
+    _write(
+        tmp_path,
+        "src/jacobian/math/commutative_algebra_ops/_singular.py",
+        source,
+    )
     _write(tmp_path, "src/jacobian/math/example/_operations.py", source)
 
     assert _violations(tmp_path, "bounded-process-gateway") == [

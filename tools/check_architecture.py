@@ -16,7 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 _PRODUCT_ROOT = PurePosixPath("src/jacobian")
 _PROCESS_OWNER = PurePosixPath("src/jacobian/process.py")
 _EXTERNAL_OPERATION_OWNERS = frozenset(
-    {_PROCESS_OWNER, PurePosixPath("src/jacobian/math/logic/_operations.py")}
+    {
+        _PROCESS_OWNER,
+        PurePosixPath("src/jacobian/math/commutative_algebra_ops/_singular.py"),
+        PurePosixPath("src/jacobian/math/logic/_operations.py"),
+    }
 )
 _GENERATED_DIRECTORIES = frozenset(
     {"__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv"}
@@ -108,9 +112,10 @@ def _process_violations(
         return ()
     violations: list[Violation] = []
     for node in _walk(tree):
-        if (isinstance(node, ast.Import) and any(
-            alias.name == "subprocess" for alias in node.names
-        )) or (isinstance(node, ast.ImportFrom) and node.module == "subprocess"):
+        if (
+            isinstance(node, ast.Import)
+            and any(alias.name == "subprocess" for alias in node.names)
+        ) or (isinstance(node, ast.ImportFrom) and node.module == "subprocess"):
             violations.append(
                 _violation(
                     relative,
@@ -161,10 +166,14 @@ def _bounded_process_violations(
         ) or (
             isinstance(node, ast.Call)
             and (
-                (isinstance(node.func, ast.Name)
-                and node.func.id == "run_bounded_process")
-                or (isinstance(node.func, ast.Attribute)
-                and node.func.attr == "run_bounded_process")
+                (
+                    isinstance(node.func, ast.Name)
+                    and node.func.id == "run_bounded_process"
+                )
+                or (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "run_bounded_process"
+                )
             )
         ):
             violations.append(

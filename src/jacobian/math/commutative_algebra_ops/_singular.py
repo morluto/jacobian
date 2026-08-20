@@ -278,6 +278,9 @@ def run_singular_ideal_operation(
             detail="The supported Singular 4.4 backend is not installed.",
         )
     resolved = str(Path(resolved).resolve())
+    prlimit = shutil.which("prlimit")
+    if prlimit is not None:
+        prlimit = str(Path(prlimit).resolve())
     try:
         with tempfile.TemporaryDirectory(prefix="jacobian-singular-") as directory:
             completed = run_bounded_process(
@@ -292,9 +295,7 @@ def run_singular_ideal_operation(
                     address_space_bytes=1024 * 1024 * 1024,
                     file_size_bytes=1024 * 1024,
                 ),
-                platform_tools=ProcessPlatformTools(
-                    prlimit_executable=shutil.which("prlimit")
-                ),
+                platform_tools=ProcessPlatformTools(prlimit_executable=prlimit),
                 cwd=directory,
             )
     except OSError:

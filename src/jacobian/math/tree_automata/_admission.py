@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.tree_automata._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -16,3 +21,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "typed bottom-up tree automaton run with a complete accepted or rejected verdict",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

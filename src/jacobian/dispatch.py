@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
 from pydantic import BaseModel, ValidationError
@@ -16,9 +17,28 @@ from jacobian.catalog.models import OperationId, OperationResult
 class OperationRequestValidationError(ValueError):
     """A selected operation rejected its caller-supplied request payload."""
 
-    def __init__(self, validation_error: ValidationError) -> None:
-        self.validation_error = validation_error
+    def __init__(
+        self,
+        cause: ValidationError | CanonicalizationError,
+    ) -> None:
+        self.cause = cause
         super().__init__("operation payload failed validation")
+
+    def errors(self) -> Sequence[Mapping[str, Any]]:
+        if isinstance(self.cause, ValidationError):
+            return self.cause.errors(
+                include_url=False,
+                include_context=False,
+                include_input=True,
+            )
+        return [
+            {
+                "loc": (),
+                "type": "canonicalization_error",
+                "msg": str(self.cause),
+                "input": None,
+            }
+        ]
 
 
 def parse_operation_input[ModelT: BaseModel](
@@ -26,10 +46,7 @@ def parse_operation_input[ModelT: BaseModel](
 ) -> ModelT:
     """Parse one bounded request once into its owning strict model."""
 
-    try:
-        encoded = encode_strict_json(payload)
-    except CanonicalizationError as exc:
-        raise ValueError("operation request is not valid bounded JSON") from exc
+    encoded = encode_strict_json(payload)
     return model.model_validate_json(encoded, strict=True)
 
 
@@ -49,7 +66,7 @@ def invoke_operation(
             StrictModel,
             parse_operation_input(operation.request_type, payload),
         )
-    except ValidationError as exc:
+    except (CanonicalizationError, ValidationError) as exc:
         raise OperationRequestValidationError(exc) from exc
     result = operation.run(parsed)
 

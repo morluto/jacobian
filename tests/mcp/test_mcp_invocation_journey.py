@@ -124,6 +124,24 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
             }
             assert "reject-this-private-value" not in invalid_error.value.message
 
+            with pytest.raises(MCPError) as noncanonical_error:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": "integer.compute.extended_gcd",
+                        "payload": {"left": 1.5, "right": "30"},
+                    },
+                )
+            assert noncanonical_error.value.code == -32602
+            assert noncanonical_error.value.data["errors"] == [
+                {
+                    "location": [],
+                    "code": "canonicalization_error",
+                    "message": "JSON floating-point numbers are not allowed",
+                    "input": None,
+                }
+            ]
+
             with pytest.raises(MCPError) as oversized_error:
                 await client.call_tool(
                     "math.run",

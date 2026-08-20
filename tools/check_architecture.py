@@ -288,15 +288,14 @@ def _evaluator_aliases(tree: ast.AST) -> tuple[set[str], set[str]]:
     while changed:
         changed = False
         for node in _walk(tree):
-            binding = _simple_assignment(node)
-            if (
-                binding is not None
-                and binding[0] not in direct_names
-                and _evaluator_reference_name(binding[1], direct_names, builtin_modules)
-                is not None
-            ):
-                direct_names.add(binding[0])
-                changed = True
+            for target, value in _simple_assignments(node):
+                if (
+                    target not in direct_names
+                    and _evaluator_reference_name(value, direct_names, builtin_modules)
+                    is not None
+                ):
+                    direct_names.add(target)
+                    changed = True
     return direct_names, builtin_modules
 
 
@@ -319,20 +318,20 @@ def _imported_evaluator_aliases(tree: ast.AST) -> tuple[set[str], set[str]]:
     return direct_names, builtin_modules
 
 
-def _simple_assignment(node: ast.AST) -> tuple[str, ast.expr] | None:
-    if (
-        isinstance(node, ast.Assign)
-        and len(node.targets) == 1
-        and isinstance(node.targets[0], ast.Name)
-    ):
-        return node.targets[0].id, node.value
+def _simple_assignments(node: ast.AST) -> tuple[tuple[str, ast.expr], ...]:
+    if isinstance(node, ast.Assign):
+        return tuple(
+            (target.id, node.value)
+            for target in node.targets
+            if isinstance(target, ast.Name)
+        )
     if (
         isinstance(node, ast.AnnAssign)
         and isinstance(node.target, ast.Name)
         and node.value is not None
     ):
-        return node.target.id, node.value
-    return None
+        return ((node.target.id, node.value),)
+    return ()
 
 
 def _evaluator_reference_name(

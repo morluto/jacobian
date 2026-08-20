@@ -96,14 +96,7 @@ def math_run(
             catalog,
         )
     except OperationRequestValidationError as exc:
-        validation_error = exc.validation_error
-        errors = _bounded_validation_issues(
-            validation_error.errors(
-                include_url=False,
-                include_context=False,
-                include_input=True,
-            )
-        )
+        errors = _bounded_validation_issues(exc.errors())
         data = OperationInvalidRequestData(
             operation_id=operation_id,
             errors=errors,

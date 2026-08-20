@@ -73,3 +73,12 @@ def test_dispatch_distinguishes_request_and_result_validation() -> None:
         invoke_operation("test.invalid-result", {"value": "bad"}, catalog)  # type: ignore[arg-type]
     with pytest.raises(ValidationError):
         invoke_operation("test.invalid-result", {"value": 1}, catalog)  # type: ignore[arg-type]
+
+
+def test_dispatch_classifies_noncanonical_json_as_request_validation() -> None:
+    catalog = _CatalogWithInvalidResult()
+
+    with pytest.raises(OperationRequestValidationError) as error:
+        invoke_operation("test.invalid-result", {"value": 1.5}, catalog)  # type: ignore[arg-type]
+
+    assert error.value.errors()[0]["type"] == "canonicalization_error"

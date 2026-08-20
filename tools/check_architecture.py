@@ -283,6 +283,24 @@ def _unsafe_wire_conversion_violations(
 
 
 def _evaluator_aliases(tree: ast.AST) -> tuple[set[str], set[str]]:
+    direct_names, builtin_modules = _imported_evaluator_aliases(tree)
+    changed = True
+    while changed:
+        changed = False
+        for node in _walk(tree):
+            binding = _simple_assignment(node)
+            if (
+                binding is not None
+                and binding[0] not in direct_names
+                and _evaluator_reference_name(binding[1], direct_names, builtin_modules)
+                is not None
+            ):
+                direct_names.add(binding[0])
+                changed = True
+    return direct_names, builtin_modules
+
+
+def _imported_evaluator_aliases(tree: ast.AST) -> tuple[set[str], set[str]]:
     direct_names = set(_EVALUATOR_CAPABLE_FUNCTIONS)
     builtin_modules = {"builtins"}
     for node in _walk(tree):
@@ -292,38 +310,47 @@ def _evaluator_aliases(tree: ast.AST) -> tuple[set[str], set[str]]:
                     builtin_modules.add(alias.asname or alias.name)
         elif isinstance(node, ast.ImportFrom):
             for alias in node.names:
-                if (
-                    node.module == "builtins" and alias.name in {"eval", "exec"}
-                ) or (
+                if (node.module == "builtins" and alias.name in {"eval", "exec"}) or (
                     node.module is not None
-                    and (
-                        node.module == "sympy" or node.module.startswith("sympy.")
-                    )
+                    and (node.module == "sympy" or node.module.startswith("sympy."))
                     and alias.name in _EVALUATOR_CAPABLE_FUNCTIONS
                 ):
                     direct_names.add(alias.asname or alias.name)
     return direct_names, builtin_modules
 
 
-def _evaluator_call_name(
-    node: ast.Call,
+def _simple_assignment(node: ast.AST) -> tuple[str, ast.expr] | None:
+    if (
+        isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+    ):
+        return node.targets[0].id, node.value
+    if (
+        isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and node.value is not None
+    ):
+        return node.target.id, node.value
+    return None
+
+
+def _evaluator_reference_name(
+    node: ast.expr,
     direct_names: set[str],
     builtin_modules: set[str],
 ) -> str | None:
-    if isinstance(node.func, ast.Name):
-        return node.func.id if node.func.id in direct_names else None
+    if isinstance(node, ast.Name):
+        return node.id if node.id in direct_names else None
     if (
-        isinstance(node.func, ast.Attribute)
-        and node.func.attr in _EVALUATOR_CAPABLE_FUNCTIONS
+        isinstance(node, ast.Attribute)
+        and node.attr in _EVALUATOR_CAPABLE_FUNCTIONS
         and (
-            node.func.attr not in {"eval", "exec"}
-            or (
-                isinstance(node.func.value, ast.Name)
-                and node.func.value.id in builtin_modules
-            )
+            node.attr not in {"eval", "exec"}
+            or (isinstance(node.value, ast.Name) and node.value.id in builtin_modules)
         )
     ):
-        return node.func.attr
+        return node.attr
     return None
 
 
@@ -339,7 +366,7 @@ def _evaluator_parser_violations(
     for node in _walk(tree):
         if not isinstance(node, ast.Call):
             continue
-        name = _evaluator_call_name(node, direct_names, builtin_modules)
+        name = _evaluator_reference_name(node.func, direct_names, builtin_modules)
         if name is not None:
             violations.append(
                 _violation(

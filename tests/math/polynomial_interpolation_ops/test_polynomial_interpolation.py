@@ -62,9 +62,7 @@ def test_newton_evaluate_at_node() -> None:
 
 def test_divided_differences_rejects_repeated_nodes() -> None:
     with pytest.raises(ValidationError):
-        DividedDifferencesRequest(
-            nodes=("0", "1", "1"), values=("1", "2", "5")
-        )
+        DividedDifferencesRequest(nodes=("0", "1", "1"), values=("1", "2", "5"))
 
 
 def test_newton_form_rejects_repeated_nodes() -> None:
@@ -106,9 +104,7 @@ def test_divided_differences_with_rationals() -> None:
 
 
 def test_newton_form_with_rationals() -> None:
-    request = NewtonFormRequest(
-        nodes=("0", "1/2", "1"), values=("1", "3/2", "2")
-    )
+    request = NewtonFormRequest(nodes=("0", "1/2", "1"), values=("1", "3/2", "2"))
     result = compute_newton_form(request)
     assert result.coefficients == ("1", "1", "0")
 
@@ -131,8 +127,8 @@ def test_interpolation_passes_through_sample_points() -> None:
     nodes = ("0", "1", "2", "3")
     values = ("1", "2", "5", "10")
     for i, (n, v) in enumerate(zip(nodes, values)):
-        request = NewtonEvaluateRequest(
-            nodes=nodes, values=values, evaluation_point=n
-        )
+        request = NewtonEvaluateRequest(nodes=nodes, values=values, evaluation_point=n)
         result = compute_newton_evaluate(request)
-        assert result.result == v, f"interpolation mismatch at node {i}: expected {v}, got {result.result}"
+        assert result.result == v, (
+            f"interpolation mismatch at node {i}: expected {v}, got {result.result}"
+        )

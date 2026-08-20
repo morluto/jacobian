@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from mcp.server.mcpserver import Context
+from mcp.shared.exceptions import MCPError
+from mcp_types import INVALID_PARAMS
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationId, OperationResult
@@ -14,7 +16,9 @@ from jacobian.mcp.models import (
     OperationFindRequest,
     OperationFindResponse,
     OperationInspectionResult,
+    OperationInvalidRequestData,
     OperationSearchRequest,
+    OperationValidationIssue,
 )
 from jacobian.mcp.projections import (
     _operation_browse_response,
@@ -87,4 +91,39 @@ def math_run(
             catalog,
         )
     except ValidationError as exc:
-        raise ValueError("operation payload failed validation") from exc
+        errors = tuple(
+            OperationValidationIssue(
+                location=tuple(
+                    item for item in error["loc"] if isinstance(item, (str, int))
+                ),
+                code=str(error["type"]),
+                message=str(error["msg"]),
+                input=_recoverable_error_input(error.get("input")),
+            )
+            for error in exc.errors(
+                include_url=False,
+                include_context=False,
+                include_input=True,
+            )[:64]
+        )
+        data = OperationInvalidRequestData(
+            operation_id=operation_id,
+            errors=errors,
+        )
+        raise MCPError(
+            code=INVALID_PARAMS,
+            message="operation payload failed validation",
+            data=data.model_dump(mode="json"),
+        ) from exc
+
+
+def _recoverable_error_input(value: Any) -> Any | None:
+    """Return bounded JSON error input without rendering it into error text."""
+
+    from jacobian.canonical import CanonicalizationError, encode_strict_json
+
+    try:
+        encoded = encode_strict_json(value)
+    except CanonicalizationError:
+        return None
+    return value if len(encoded) <= 2_048 else None

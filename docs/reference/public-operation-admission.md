@@ -62,10 +62,13 @@ The ledger uses five decisions:
 
 Each mathematical domain's `_admission.py` module is the authority for its
 current decisions and exports one `REGISTRATION` binding its candidate `TOOLS`
-to those decisions. `src/jacobian/catalog/admission.py` owns the shared policy
-types and fail-closed validation. A renamed or materially changed candidate
-needs a fresh decision; do not preserve a public operation solely because an
-earlier version was admitted.
+to those decisions. The packaged `_admission.py` path is the explicit
+publication marker; catalog construction discovers those owner modules in
+deterministic path order and does not load external entry points or plugins.
+`src/jacobian/catalog/admission.py` owns the shared policy types and fail-closed
+validation. A renamed or materially changed candidate needs a fresh decision;
+do not preserve a public operation solely because an earlier version was
+admitted.
 
 Consumers should discover against the current catalog. A `NATIVE_ONLY` row's
 `native_symbol` names its supported `jacobian.math` replacement; a `DROP` row

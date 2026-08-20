@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.markov_chain._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -16,3 +21,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "returns every canonical extreme point of the complete stationary-distribution simplex",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

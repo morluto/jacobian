@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.graphs.isomorphism._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -11,3 +16,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded predicate or candidate check with typed semantics",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

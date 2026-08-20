@@ -11,12 +11,15 @@ from jacobian.math.algebraic_combinatorics._models import (
     ConjugatePartitionResult,
     HookLengthRequest,
     HookLengthResult,
+    RSKPermutationRequest,
+    RSKResult,
     StandardYoungTableauCountRequest,
     StandardYoungTableauCountResult,
 )
 from jacobian.math.algebraic_combinatorics._operations import (
     compute_conjugate_partition,
     compute_hook_lengths,
+    compute_rsk_permutation,
     compute_syt_count,
 )
 
@@ -102,6 +105,28 @@ ALGEBRAIC_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "partition_321",
                 "Conjugate of partition (3, 2, 1) is (3, 2, 1).",
                 _PARTITION_321,
+            ),
+        ),
+    ),
+    ac_operation(
+        "combinatorics.rsk.permutation.compute",
+        "Compute RSK correspondence for a permutation",
+        "Compute the Robinson-Schensted-Knuth correspondence for one "
+        "permutation of 1..n, returning the P (insertion) tableau, "
+        "Q (recording) tableau, shape, and LIS/LDS lengths. "
+        "Uses standard row insertion.",
+        RSKPermutationRequest,
+        RSKResult,
+        compute_rsk_permutation,
+        "combinatorics",
+        "rsk",
+        "exact",
+        examples=(
+            example(
+                "rsk_permutation_132",
+                "Compute RSK of permutation (1, 3, 2); "
+                "input must be a permutation of 1..n.",
+                {"permutation": [1, 3, 2]},
             ),
         ),
     ),

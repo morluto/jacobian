@@ -63,20 +63,14 @@ class AlgebraicNumberInput(StrictModel):
         x = symbols("x")
         polynomial = Poly(
             sum(
-                Rational(coefficient.num, coefficient.den)
+                Rational(*coefficient.as_integer_ratio())
                 * x ** (len(self.polynomial) - 1 - index)
                 for index, coefficient in enumerate(self.polynomial)
             ),
             x,
         )
-        lower = Rational(
-            self.isolating_interval_lower.num,
-            self.isolating_interval_lower.den,
-        )
-        upper = Rational(
-            self.isolating_interval_upper.num,
-            self.isolating_interval_upper.den,
-        )
+        lower = Rational(*self.isolating_interval_lower.as_integer_ratio())
+        upper = Rational(*self.isolating_interval_upper.as_integer_ratio())
         roots = {
             root
             for root in polynomial.all_roots()

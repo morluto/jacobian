@@ -86,20 +86,61 @@ class SymbolicCharacteristicPolynomialResult(StrictModel):
 
 
 class SymbolicEigenvaluesResult(StrictModel):
-    """The exact eigenvalues with algebraic multiplicities."""
+    """The exact eigenvalues with algebraic multiplicities.
 
-    eigenvalues: tuple[str, ...] = Field(
+    The representation discriminates between:
+    - EXPLICIT_ROOTS: individual eigenvalue expressions are returned
+    - ROOTS_BY_POLYNOMIAL: eigenvalues are the roots of the returned
+      characteristic polynomial over QQ(t_1, ..., t_n); individual root
+      expressions are not materialized because the backend cannot
+      represent them in radicals.
+    """
+
+    representation: Literal["EXPLICIT_ROOTS", "ROOTS_BY_POLYNOMIAL"] = "EXPLICIT_ROOTS"
+    eigenvalues: tuple[str, ...] | None = Field(
+        default=None,
         min_length=1,
         max_length=MAX_SYMBOLIC_MATRIX_DIMENSION,
     )
-    multiplicities: tuple[int, ...] = Field(
+    multiplicities: tuple[int, ...] | None = Field(
+        default=None,
         min_length=1,
         max_length=MAX_SYMBOLIC_MATRIX_DIMENSION,
     )
+    characteristic_polynomial: tuple[str, ...] | None = Field(
+        default=None,
+        min_length=2,
+        max_length=MAX_SYMBOLIC_MATRIX_DIMENSION + 1,
+    )
+    degree: int | None = Field(default=None, ge=1, le=MAX_SYMBOLIC_MATRIX_DIMENSION)
     convention: Literal["SYMPY_EIGENVALS"] = "SYMPY_EIGENVALS"
 
     @model_validator(mode="after")
-    def require_matching_lengths(self) -> Self:
-        if len(self.eigenvalues) != len(self.multiplicities):
-            raise ValueError("eigenvalues and multiplicities must have the same length")
+    def require_representation_consistency(self) -> Self:
+        if self.representation == "EXPLICIT_ROOTS":
+            if self.eigenvalues is None or self.multiplicities is None:
+                raise ValueError(
+                    "EXPLICIT_ROOTS must populate eigenvalues and multiplicities"
+                )
+            if len(self.eigenvalues) != len(self.multiplicities):
+                raise ValueError(
+                    "eigenvalues and multiplicities must have the same length"
+                )
+            if self.characteristic_polynomial is not None or self.degree is not None:
+                raise ValueError(
+                    "EXPLICIT_ROOTS must not populate characteristic_polynomial or degree"
+                )
+        else:  # ROOTS_BY_POLYNOMIAL
+            if self.eigenvalues is not None or self.multiplicities is not None:
+                raise ValueError(
+                    "ROOTS_BY_POLYNOMIAL must not populate eigenvalues or multiplicities"
+                )
+            if self.characteristic_polynomial is None or self.degree is None:
+                raise ValueError(
+                    "ROOTS_BY_POLYNOMIAL must populate characteristic_polynomial and degree"
+                )
+            if len(self.characteristic_polynomial) != self.degree + 1:
+                raise ValueError(
+                    "characteristic polynomial coefficients must equal degree plus one"
+                )
         return self

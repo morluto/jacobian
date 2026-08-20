@@ -71,7 +71,7 @@
       "output_schema": "sha256:38e8dfeb665530af389e56988258c5efcf7089e55e476d6b5c277fe6c08957a8"
     },
     "matrix.rational_linear_system.solve": {
-      "input_schema": "sha256:9b80937cd45ba3845521f275a762565ccdf701954d9ff8e5ec0c1e8122b5f270",
+      "input_schema": "sha256:bdb3789f228378263dfc131d259e3c715df4345900b46c4fa02a3473c54c490b",
       "output_schema": "sha256:b0064eded4a3a9d3e9dfc573396b1abe8c7a04c87a6237d2da825d36fb94eee5"
     },
     "matrix.symbolic.characteristic_polynomial.compute": {

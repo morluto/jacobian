@@ -106,6 +106,16 @@ Before declaring the operation, provide tests for:
 - request validation proving a schema-valid input either returns a typed
   result or is rejected by the request model—never a host exception.
 
+Apply these adapter and request-boundary rules:
+
+- Canonical integer and rational strings must reach backends only through
+  `parse_canonical_integer()`, `as_integer_ratio()`, or an owner conversion
+  helper. When the contract permits values above CPython's 4,300-digit integer
+  string conversion limit, every adapter must include a test above that limit.
+- For operations with mathematical preconditions such as nonsingularity,
+  uniqueness, irreducibility, or nondegeneracy, tests must cover each excluded
+  class and prove rejection occurs during request validation.
+
 Before publication, record one owner-local admission decision in the
 mathematical domain's `_admission.py` module. `jacobian.catalog.admission` owns
 the shared policy types and fail-closed validation (see the

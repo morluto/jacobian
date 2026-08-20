@@ -122,7 +122,6 @@ def test_retraction_check_p3_to_edge() -> None:
     assert result.is_retraction is True
 
 
-
 def test_core_check_c5_is_core() -> None:
     """C5 (5-cycle, odd) is a core: every endomorphism is an automorphism."""
     request = CoreCheckRequest(
@@ -149,9 +148,7 @@ def test_core_check_k4_is_core() -> None:
 def test_retraction_check_c4_to_edge() -> None:
     """C4 retracts onto any of its edges: vertex 2 maps to 0, vertex 3 maps to 1."""
     request = RetractionCheckRequest(
-        graph=SimpleGraph(
-            vertex_count=4, edges=((0, 1), (1, 2), (2, 3), (0, 3))
-        ),
+        graph=SimpleGraph(vertex_count=4, edges=((0, 1), (1, 2), (2, 3), (0, 3))),
         subgraph_vertices=(0, 1),
     )
     result = compute_retraction_check(request)

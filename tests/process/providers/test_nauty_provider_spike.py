@@ -105,7 +105,7 @@ def RUN_SPIKE(**kwargs: Any) -> dict[str, Any]:  # noqa: N802
     )
 
 
-def _source_archive(tmp_path: Path, *, pin_digest: bool = True) -> Path:
+def _source_archive(tmp_path: Path) -> Path:
     archive_path = tmp_path / "nauty2_9_3.tar.gz"
     copyright_notice = b"Licensed under the Apache License, Version 2.0 (the License)\n"
     version_header = b"/* nauty version 2.9.3 */\n"
@@ -206,7 +206,7 @@ def test_absent_explicit_executable_is_an_isolated_non_conclusion(
 def test_source_version_mismatch_fails_closed_before_execution(
     tmp_path: Path,
 ) -> None:
-    archive = _source_archive(tmp_path, pin_digest=False)
+    archive = _source_archive(tmp_path)
     geng, labelg = _files(tmp_path)
 
     report = RUN_SPIKE(

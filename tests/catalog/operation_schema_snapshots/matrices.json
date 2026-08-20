@@ -71,7 +71,7 @@
       "output_schema": "sha256:38e8dfeb665530af389e56988258c5efcf7089e55e476d6b5c277fe6c08957a8"
     },
     "matrix.rational_linear_system.solve": {
-      "input_schema": "sha256:9b80937cd45ba3845521f275a762565ccdf701954d9ff8e5ec0c1e8122b5f270",
+      "input_schema": "sha256:bdb3789f228378263dfc131d259e3c715df4345900b46c4fa02a3473c54c490b",
       "output_schema": "sha256:b0064eded4a3a9d3e9dfc573396b1abe8c7a04c87a6237d2da825d36fb94eee5"
     },
     "matrix.symbolic.characteristic_polynomial.compute": {
@@ -84,7 +84,7 @@
     },
     "matrix.symbolic.eigenvalues.compute": {
       "input_schema": "sha256:8502be50e208cfe80c0054273e4f96555cacf1acfb8e8e430b9d3ad0789a4d5e",
-      "output_schema": "sha256:e74363168b36c1d637f1d33b58b0d20aa78e611212e13ceeb92b0152a4094859"
+      "output_schema": "sha256:66501a5a7405a077368e5d9d88ca91bb817adbad45de6f0a9ac13874a22175e1"
     },
     "matrix.symbolic.rank.compute": {
       "input_schema": "sha256:ac00e4bb995206d5fe1f385a9a267b08b5d9359f5a5e8583f6225cb9ea8ccef1",

@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.impartial_games._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -20,4 +25,16 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "complete Grundy prefix with periodic tail certificate for a bounded subtraction game",
     ),
+    OperationAdmission(
+        "game.nim.nim_sum.compute",
+        AdmissionDecision.KEEP,
+        "exact bitwise xor nim sum determining the P/N outcome of a Nim position",
+    ),
+    OperationAdmission(
+        "game.impartial.outcome_profile.compute",
+        AdmissionDecision.KEEP,
+        "complete P/N position partition with Grundy values and terminal positions",
+    ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

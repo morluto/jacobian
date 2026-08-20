@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.arithmetic._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -141,3 +146,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "canonical positive sqrt(n) = s*sqrt(d) normalization with squarefree d",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

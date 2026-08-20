@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -68,6 +69,14 @@ class EvalRequest(StrictModel):
             raise ValueError(
                 "evaluation point must use the polynomial's complete ordered axis"
             )
+        value = Fraction(0)
+        coordinates = tuple(item.as_fraction() for item in self.point.values)
+        for term in self.polynomial.polynomial.terms:
+            monomial = term.coefficient.as_fraction()
+            for coordinate, exponent in zip(coordinates, term.exponents, strict=True):
+                monomial *= coordinate**exponent
+            value += monomial
+        CanonicalRational.from_fraction(value)
         return self
 
 

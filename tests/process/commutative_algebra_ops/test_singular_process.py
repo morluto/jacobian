@@ -91,6 +91,33 @@ def test_missing_backend_is_a_typed_unavailable_outcome(
     assert result.ideal is None
 
 
+def test_caller_cannot_narrow_the_exact_result_contract() -> None:
+    with pytest.raises(ValueError, match="greater than or equal to 1024"):
+        IdealComputationBudget(maximum_output_terms=1)
+
+
+def test_temporary_directory_failure_is_a_typed_unavailable_outcome(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _executable(tmp_path, 'print("not reached")')
+    _select_executable(monkeypatch, executable)
+
+    def unavailable_directory(*args: object, **kwargs: object) -> None:
+        raise OSError("temporary storage unavailable")
+
+    monkeypatch.setattr(
+        "jacobian.math.commutative_algebra_ops._singular.tempfile.TemporaryDirectory",
+        unavailable_directory,
+    )
+
+    result = run_singular_ideal_operation(
+        "radical", _ideal(), None, IdealComputationBudget()
+    )
+
+    assert result.outcome == "UNAVAILABLE"
+
+
 def test_relative_path_backend_is_resolved_before_entering_worker_directory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -172,6 +199,30 @@ def test_unsupported_backend_version_is_a_typed_execution_error(
     assert (
         result.detail == "Singular returned an invalid or unsupported result encoding."
     )
+
+
+def test_exact_result_limit_is_not_reported_as_invalid_backend_encoding(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    records = [
+        "JACOBIAN_SINGULAR_IDEAL_V1",
+        "44000",
+        "1",
+        "GENERATOR",
+        *(f"1|{exponent}" for exponent in range(1_025)),
+        "END_GENERATOR",
+        "END",
+    ]
+    executable = _executable(tmp_path, f"print({chr(10).join(records)!r})")
+    _select_executable(monkeypatch, executable)
+
+    result = run_singular_ideal_operation(
+        "radical", _ideal(), None, IdealComputationBudget()
+    )
+
+    assert result.outcome == "LIMIT_EXCEEDED"
+    assert result.detail == "The exact Singular ideal exceeds the declared result bound."
 
 
 def test_stderr_on_zero_exit_fails_closed(

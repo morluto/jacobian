@@ -34,7 +34,13 @@ _STDOUT_LIMIT = 512 * 1024
 _STDERR_LIMIT = 64 * 1024
 
 SingularOperation = Literal["radical", "quotient"]
-SingularOutcome = Literal["COMPUTED", "UNAVAILABLE", "TIMEOUT", "ERROR"]
+SingularOutcome = Literal[
+    "COMPUTED", "UNAVAILABLE", "TIMEOUT", "LIMIT_EXCEEDED", "ERROR"
+]
+
+
+class _ResultLimitExceededError(ValueError):
+    """The backend returned an exact ideal outside the declared result bound."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -227,7 +233,9 @@ def _parse_output(
     if not _SUPPORTED_VERSION_MIN <= version_number < _SUPPORTED_VERSION_MAX:
         raise ValueError("Singular backend version is unsupported")
     if not 0 <= generator_count <= budget.maximum_output_generators:
-        raise ValueError("Singular generator count exceeds the exact-result limit")
+        raise _ResultLimitExceededError(
+            "Singular generator count exceeds the exact-result limit"
+        )
 
     total_terms = 0
     generators: list[RationalPolynomial] = []
@@ -236,7 +244,9 @@ def _parse_output(
         generators.append(generator)
         total_terms += term_count
         if total_terms > budget.maximum_output_terms:
-            raise ValueError("Singular terms exceed the exact-result limit")
+            raise _ResultLimitExceededError(
+                "Singular terms exceed the exact-result limit"
+            )
     if not generators:
         generators.append(
             RationalPolynomial(
@@ -268,8 +278,8 @@ def run_singular_ideal_operation(
             detail="The supported Singular 4.4 backend is not installed.",
         )
     resolved = str(Path(resolved).resolve())
-    with tempfile.TemporaryDirectory(prefix="jacobian-singular-") as directory:
-        try:
+    try:
+        with tempfile.TemporaryDirectory(prefix="jacobian-singular-") as directory:
             completed = run_bounded_process(
                 [resolved, "-q"],
                 input_bytes=_script(operation, left, right),
@@ -287,11 +297,11 @@ def run_singular_ideal_operation(
                 ),
                 cwd=directory,
             )
-        except OSError:
-            return SingularIdealResult(
-                outcome="UNAVAILABLE",
-                detail="The supported Singular backend could not be started.",
-            )
+    except OSError:
+        return SingularIdealResult(
+            outcome="UNAVAILABLE",
+            detail="The supported Singular backend could not be started.",
+        )
     if completed.timed_out:
         return SingularIdealResult(
             outcome="TIMEOUT",
@@ -317,6 +327,11 @@ def run_singular_ideal_operation(
             completed.stdout,
             variables=left.variables,
             budget=budget,
+        )
+    except _ResultLimitExceededError:
+        return SingularIdealResult(
+            outcome="LIMIT_EXCEEDED",
+            detail="The exact Singular ideal exceeds the declared result bound.",
         )
     except ValueError:
         return SingularIdealResult(

@@ -70,6 +70,17 @@ def test_evaluation_requires_the_complete_ordered_axis() -> None:
         )
 
 
+def test_evaluation_rejects_a_point_whose_exact_value_exceeds_result_bound() -> None:
+    with pytest.raises(ValidationError, match="32,768-digit"):
+        EvalRequest(
+            polynomial=_polynomial(("x",), {(64,): 1}),
+            point=VariablePoint(
+                variables=("x",),
+                values=(CanonicalRational(num="1" + "0" * 600, den="1"),),
+            ),
+        )
+
+
 def test_jacobian_entries_are_directly_composable_polynomials() -> None:
     request = JacobianRequest(
         input_variables=("x", "y"),

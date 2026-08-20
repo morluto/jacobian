@@ -27,10 +27,14 @@ class IdealComputationBudget(StrictModel):
 
     wall_seconds: StrictInt = Field(default=10, ge=1, le=60)
     maximum_output_generators: StrictInt = Field(
-        default=MAX_OUTPUT_GENERATORS, ge=1, le=MAX_OUTPUT_GENERATORS
+        default=MAX_OUTPUT_GENERATORS,
+        ge=MAX_OUTPUT_GENERATORS,
+        le=MAX_OUTPUT_GENERATORS,
     )
     maximum_output_terms: StrictInt = Field(
-        default=MAX_OUTPUT_TERMS, ge=1, le=MAX_OUTPUT_TERMS
+        default=MAX_OUTPUT_TERMS,
+        ge=MAX_OUTPUT_TERMS,
+        le=MAX_OUTPUT_TERMS,
     )
 
 
@@ -125,7 +129,9 @@ class IdealQuotientRequest(StrictModel):
         return self
 
 
-IdealExecutionOutcome = Literal["COMPUTED", "UNAVAILABLE", "TIMEOUT", "ERROR"]
+IdealExecutionOutcome = Literal[
+    "COMPUTED", "UNAVAILABLE", "TIMEOUT", "LIMIT_EXCEEDED", "ERROR"
+]
 
 
 class IdealRadicalResult(StrictModel):

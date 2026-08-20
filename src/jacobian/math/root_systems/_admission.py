@@ -1,5 +1,7 @@
 """Owner-local admission decisions for built-in math operations."""
 
+from __future__ import annotations
+
 from jacobian.catalog.admission import (
     AdmissionDecision,
     OperationAdmission,
@@ -12,6 +14,16 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "root_system.positive_roots.compute",
         AdmissionDecision.KEEP,
         "complete positive roots, highest root, and Coxeter number from a Cartan matrix",
+    ),
+    OperationAdmission(
+        "root_system.simple_reflection.compute",
+        AdmissionDecision.KEEP,
+        "exact simple reflection s_i on a root lattice vector",
+    ),
+    OperationAdmission(
+        "root_system.weyl_group_data.compute",
+        AdmissionDecision.KEEP,
+        "exact Weyl group order, longest element, Coxeter number from Cartan matrix",
     ),
 )
 

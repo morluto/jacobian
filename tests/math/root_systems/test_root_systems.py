@@ -59,3 +59,69 @@ class TestRootSystemData:
     def test_simple_roots(self) -> None:
         result = compute_root_system_data(CartanMatrixRequest(matrix=A2))
         assert result.simple_roots == ((1, 0), (0, 1))
+
+
+class TestSimpleReflection:
+    """Tests for simple reflection operation."""
+
+    def test_reflect_onto_itself(self) -> None:
+        """s_i(alpha_i) = -alpha_i."""
+        from jacobian.math.root_systems._models import SimpleReflectionRequest
+        from jacobian.math.root_systems._operations import compute_simple_reflection
+
+        result = compute_simple_reflection(
+            SimpleReflectionRequest(matrix=A2, vector=(1, 0), simple_index=0)
+        )
+        assert result.reflected_vector == (-1, 0)
+
+    def test_reflect_other_simple_root(self) -> None:
+        """s_0(alpha_1) = alpha_1 - A[0][1]*alpha_0 = alpha_1 + alpha_0."""
+        from jacobian.math.root_systems._models import SimpleReflectionRequest
+        from jacobian.math.root_systems._operations import compute_simple_reflection
+
+        result = compute_simple_reflection(
+            SimpleReflectionRequest(matrix=A2, vector=(0, 1), simple_index=0)
+        )
+        assert result.reflected_vector == (1, 1)
+
+    def test_reflect_in_a3(self) -> None:
+        """s_1(alpha_0) in A3."""
+        from jacobian.math.root_systems._models import SimpleReflectionRequest
+        from jacobian.math.root_systems._operations import compute_simple_reflection
+
+        # s_1(alpha_0) = alpha_0 - A[1][0]*alpha_1 = alpha_0 + alpha_1
+        result = compute_simple_reflection(
+            SimpleReflectionRequest(matrix=A3, vector=(1, 0, 0), simple_index=1)
+        )
+        assert result.reflected_vector == (1, 1, 0)
+
+
+class TestWeylGroupData:
+    """Tests for Weyl group data computation."""
+
+    def test_a2_weyl_group(self) -> None:
+        """|W(A2)| = 6, h = 3."""
+        from jacobian.math.root_systems._models import WeylGroupDataRequest
+        from jacobian.math.root_systems._operations import compute_weyl_group_data
+
+        result = compute_weyl_group_data(WeylGroupDataRequest(matrix=A2))
+        assert result.group_order == 6
+        assert result.coxeter_number == 3
+
+    def test_a3_weyl_group(self) -> None:
+        """|W(A3)| = 24, h = 4."""
+        from jacobian.math.root_systems._models import WeylGroupDataRequest
+        from jacobian.math.root_systems._operations import compute_weyl_group_data
+
+        result = compute_weyl_group_data(WeylGroupDataRequest(matrix=A3))
+        assert result.group_order == 24
+        assert result.coxeter_number == 4
+
+    def test_g2_weyl_group(self) -> None:
+        """|W(G2)| = 12, h = 6."""
+        from jacobian.math.root_systems._models import WeylGroupDataRequest
+        from jacobian.math.root_systems._operations import compute_weyl_group_data
+
+        result = compute_weyl_group_data(WeylGroupDataRequest(matrix=G2))
+        assert result.group_order == 12
+        assert result.coxeter_number == 6

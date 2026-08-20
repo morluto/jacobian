@@ -9,8 +9,16 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.root_systems._models import (
     CartanMatrixRequest,
     RootSystemDataResult,
+    SimpleReflectionRequest,
+    SimpleReflectionResult,
+    WeylGroupDataRequest,
+    WeylGroupDataResult,
 )
-from jacobian.math.root_systems._operations import compute_root_system_data
+from jacobian.math.root_systems._operations import (
+    compute_root_system_data,
+    compute_simple_reflection,
+    compute_weyl_group_data,
+)
 
 
 def _op[
@@ -39,9 +47,7 @@ def _op[
     )
 
 
-# A2 Cartan matrix: [[2, -1], [-1, 2]]
 _A2 = {"matrix": [[2, -1], [-1, 2]]}
-
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
@@ -62,6 +68,45 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "a2_cartan",
                 "Compute root system data for A2; "
                 "the matrix must be a valid finite-type Cartan matrix.",
+                {"matrix": _A2["matrix"]},
+            ),
+        ),
+    ),
+    _op(
+        "root_system.simple_reflection.compute",
+        "Apply a simple reflection to a root lattice vector",
+        "Apply the simple reflection s_i to a vector in the root lattice "
+        "of a finite crystallographic root system defined by its Cartan "
+        "matrix.",
+        SimpleReflectionRequest,
+        SimpleReflectionResult,
+        compute_simple_reflection,
+        "algebra",
+        "root-system",
+        "exact",
+        examples=(
+            example(
+                "a2_reflection",
+                "Apply s_0 to the simple root alpha_0 in A2.",
+                {"matrix": _A2["matrix"], "vector": [1, 0], "simple_index": 0},
+            ),
+        ),
+    ),
+    _op(
+        "root_system.weyl_group_data.compute",
+        "Compute Weyl group order and Coxeter number",
+        "Compute the Weyl group order, longest element, and Coxeter number "
+        "of a finite crystallographic root system from its Cartan matrix.",
+        WeylGroupDataRequest,
+        WeylGroupDataResult,
+        compute_weyl_group_data,
+        "algebra",
+        "root-system",
+        "exact",
+        examples=(
+            example(
+                "a2_weyl_group",
+                "Compute Weyl group data for A2 (order 6, h=3).",
                 {"matrix": _A2["matrix"]},
             ),
         ),

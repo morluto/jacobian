@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from itertools import product as iproduct
 
-from .values import FiniteAlgebra, FlatTerm, OperationSymbol
+from .values import (
+    ApplicationTerm,
+    FiniteAlgebra,
+    FlatTerm,
+    OperationSymbol,
+    VariableTerm,
+    require_term_for_algebra,
+)
 
 __all__ = [
     "congruence_check",
@@ -23,26 +30,17 @@ def _evaluate_node(
     index: int,
 ) -> int:
     node = term.nodes[index]
-    if node.kind == "variable":
-        if node.variable_id is None:
-            raise ValueError("variable node missing variable_id")
+    if isinstance(node, VariableTerm):
         if node.variable_id not in assignment:
             raise ValueError("incomplete assignment")
         return assignment[node.variable_id]
-    if node.kind == "application":
-        if node.operation is None:
-            raise ValueError("application node missing operation index")
-        if node.operation < 0 or node.operation >= len(algebra.operations):
-            raise ValueError("operation index out of range")
-        arity = algebra.operations[node.operation].arity
-        if len(node.children) != arity:
-            raise ValueError("application arity mismatch")
+    if isinstance(node, ApplicationTerm):
         args = [_evaluate_node(algebra, term, assignment, n, c) for c in node.children]
         cell_index = 0
         for arg in args:
             cell_index = cell_index * n + arg
         return algebra.tables[node.operation][cell_index]
-    raise ValueError(f"unknown node kind: {node.kind}")
+    raise AssertionError("closed term union admitted an unknown node")
 
 
 def evaluate_term(
@@ -53,6 +51,7 @@ def evaluate_term(
     Return the exact carrier value ``t^A(alpha)``.
     """
     n = len(algebra.carrier)
+    require_term_for_algebra(term, algebra)
     if any(not 0 <= v < n for v in assignment.values()):
         raise ValueError("assignment value out of carrier range")
     return _evaluate_node(algebra, term, assignment, n, term.root)
@@ -213,7 +212,7 @@ def congruence_check(
 
 def quotient(
     algebra: FiniteAlgebra, partition: tuple[tuple[int, ...], ...]
-) -> dict[str, object]:
+) -> tuple[FiniteAlgebra, tuple[int, ...]]:
     """Return the quotient algebra ``A/theta`` induced by a congruence."""
     check = congruence_check(algebra, partition)
     if not check["is_congruence"]:
@@ -242,10 +241,10 @@ def quotient(
                 output = algebra.tables[op_idx][cell_index]
                 table.append(block_of[output])
             quotient_tables.append(tuple(table))
-    return {
-        "carrier": quotient_carrier,
-        "operations": tuple(
-            (sym.operation_id, sym.arity) for sym in algebra.operations
-        ),
-        "tables": tuple(quotient_tables),
-    }
+    quotient_algebra = FiniteAlgebra(
+        carrier=quotient_carrier,
+        operations=algebra.operations,
+        tables=tuple(quotient_tables),
+    )
+    quotient_map = tuple(block_of[element] for element in range(n))
+    return quotient_algebra, quotient_map

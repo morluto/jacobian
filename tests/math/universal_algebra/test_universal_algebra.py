@@ -6,10 +6,11 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.universal_algebra import (
+    ApplicationTerm,
     FiniteAlgebra,
     FlatTerm,
     OperationSymbol,
-    Term,
+    VariableTerm,
 )
 from jacobian.math.universal_algebra._models import (
     CongruenceRequest,
@@ -44,15 +45,17 @@ def _boolean_algebra() -> FiniteAlgebra:
 
 
 def _variable_term(variable_id: int) -> FlatTerm:
-    return FlatTerm(nodes=(Term(kind="variable", variable_id=variable_id),), root=0)
+    return FlatTerm(
+        nodes=(VariableTerm(kind="variable", variable_id=variable_id),), root=0
+    )
 
 
 def _and_term() -> FlatTerm:
     return FlatTerm(
         nodes=(
-            Term(kind="variable", variable_id=0),
-            Term(kind="variable", variable_id=1),
-            Term(kind="application", operation=0, children=(0, 1)),
+            VariableTerm(kind="variable", variable_id=0),
+            VariableTerm(kind="variable", variable_id=1),
+            ApplicationTerm(kind="application", operation=0, children=(0, 1)),
         ),
         root=2,
     )
@@ -107,11 +110,10 @@ class TestEquationProfile:
         # Term: AND(x0, x0) — application of operation 0 (and) with children (0, 0).
         left = FlatTerm(
             nodes=(
-                Term(kind="variable", variable_id=0),
-                Term(kind="variable", variable_id=0),
-                Term(kind="application", operation=0, children=(0, 0)),
+                VariableTerm(kind="variable", variable_id=0),
+                ApplicationTerm(kind="application", operation=0, children=(0, 0)),
             ),
-            root=2,
+            root=1,
         )
         right = _variable_term(0)
         result = compute_equation_profile(
@@ -186,8 +188,10 @@ class TestQuotient:
         result = compute_quotient(
             QuotientRequest(algebra=_boolean_algebra(), partition=((0, 1),))
         )
-        assert result.carrier == ("B0",)
-        assert len(result.operations) == 2
+        assert result.algebra.carrier == ("B0",)
+        assert len(result.algebra.operations) == 2
+        assert result.quotient_map == (0, 0)
+        SubalgebraRequest(algebra=result.algebra, generators=(0,))
 
 
 # ---------------------------------------------------------------------------
@@ -218,4 +222,67 @@ class TestValidation:
                 carrier=("a", "b"),
                 operations=(OperationSymbol(operation_id="f", arity=1),),
                 tables=((0, 2),),  # 2 is out of range
+            )
+
+    @pytest.mark.parametrize("kind", ["", "VARIABLE", "arbitrary"])
+    def test_term_node_kind_is_closed(self, kind: str) -> None:
+        with pytest.raises(ValidationError):
+            FlatTerm.model_validate(
+                {"nodes": [{"kind": kind, "variable_id": 0}], "root": 0}
+            )
+
+    def test_term_rejects_cycles_forward_edges_and_unreachable_nodes(self) -> None:
+        with pytest.raises(ValidationError, match="earlier nodes"):
+            FlatTerm.model_validate(
+                {
+                    "nodes": [{"kind": "application", "operation": 0, "children": [0]}],
+                    "root": 0,
+                }
+            )
+        with pytest.raises(ValidationError, match="reachable"):
+            FlatTerm(
+                nodes=(
+                    VariableTerm(kind="variable", variable_id=0),
+                    VariableTerm(kind="variable", variable_id=1),
+                ),
+                root=1,
+            )
+
+    def test_term_signature_and_assignment_are_checked_in_request(self) -> None:
+        wrong_arity = FlatTerm(
+            nodes=(
+                VariableTerm(kind="variable", variable_id=0),
+                ApplicationTerm(kind="application", operation=0, children=(0,)),
+            ),
+            root=1,
+        )
+        with pytest.raises(ValidationError, match="arity"):
+            EvaluateRequest(
+                algebra=_boolean_algebra(), term=wrong_arity, assignment=(0,)
+            )
+        with pytest.raises(ValidationError, match="cover exactly"):
+            EvaluateRequest(
+                algebra=_boolean_algebra(), term=_and_term(), assignment=(0,)
+            )
+
+    @pytest.mark.parametrize("partition", [((0,),), ((), (0, 1)), ((0, 1), (1,))])
+    def test_partition_must_be_nonempty_disjoint_exact_cover(
+        self, partition: tuple[tuple[int, ...], ...]
+    ) -> None:
+        with pytest.raises(ValidationError):
+            CongruenceRequest(algebra=_boolean_algebra(), partition=partition)
+
+    def test_equation_profile_rejects_work_before_enumeration(self) -> None:
+        algebra = FiniteAlgebra(
+            carrier=tuple(str(index) for index in range(10)),
+            operations=(),
+            tables=(),
+        )
+        term = _variable_term(0)
+        with pytest.raises(ValidationError, match="work budget"):
+            EquationProfileRequest(
+                algebra=algebra,
+                left=term,
+                right=term,
+                variable_count=7,
             )

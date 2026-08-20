@@ -5,6 +5,7 @@ from __future__ import annotations
 from jacobian.math.universal_algebra._models import (
     CongruenceRequest,
     CongruenceResult,
+    EquationCounterexample,
     EquationProfileRequest,
     EquationProfileResult,
     EvaluateRequest,
@@ -49,7 +50,9 @@ def compute_equation_profile(request: EquationProfileRequest) -> EquationProfile
     return EquationProfileResult(
         status="FAILS",
         satisfying_count=result["satisfying_count"],  # type: ignore[arg-type]
-        first_counterassignment=result.get("first_counterassignment"),  # type: ignore[arg-type]
+        first_counterassignment=EquationCounterexample.model_validate(
+            result["first_counterassignment"]
+        ),
     )
 
 
@@ -71,9 +74,8 @@ def compute_congruence(request: CongruenceRequest) -> CongruenceResult:
 
 
 def compute_quotient(request: QuotientRequest) -> QuotientResult:
-    result = quotient(request.algebra, request.partition)
+    algebra, quotient_map = quotient(request.algebra, request.partition)
     return QuotientResult(
-        carrier=result["carrier"],  # type: ignore[arg-type]
-        operations=result["operations"],  # type: ignore[arg-type]
-        tables=result["tables"],  # type: ignore[arg-type]
+        algebra=algebra,
+        quotient_map=quotient_map,
     )

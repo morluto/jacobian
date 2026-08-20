@@ -161,6 +161,22 @@ def test_vector_components_must_share_the_same_ring() -> None:
         )
 
 
+def test_vector_field_rejects_aggregate_result_term_growth() -> None:
+    variables = ("x", "y")
+    monomials = [
+        (left, right) for left in range(1, 64) for right in range(1, 64 - left)
+    ]
+    first = dict.fromkeys(monomials[:128], 1)
+    second = dict.fromkeys(monomials[128:257], 1)
+    with pytest.raises(ValidationError, match="result-term budget"):
+        VectorFieldRequest(
+            components=(
+                _polynomial(variables, first),
+                _polynomial(variables, second),
+            )
+        )
+
+
 def test_direction_length_must_match_polynomial_axis() -> None:
     with pytest.raises(ValidationError, match="length must match"):
         DirectionalDerivativeRequest(

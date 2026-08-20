@@ -46,6 +46,11 @@ class ScalarFieldRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_field(self) -> Self:
         _require_field_polynomial(self.polynomial, label="scalar field")
+        if (
+            len(self.polynomial.polynomial.terms) * len(self.polynomial.variables)
+            > _MAX_TERMS
+        ):
+            raise ValueError("scalar-field derivatives exceed the result-term budget")
         return self
 
 
@@ -65,6 +70,8 @@ class VectorFieldRequest(StrictModel):
             _require_field_polynomial(component, label="vector-field component")
             if component.variables != variables:
                 raise ValueError("vector-field components must use one ordered ring")
+        if sum(len(item.polynomial.terms) for item in self.components) > _MAX_TERMS:
+            raise ValueError("vector-field derivatives exceed the result-term budget")
         return self
 
 
@@ -95,6 +102,11 @@ class DirectionalDerivativeRequest(StrictModel):
                 max_digits=_MAX_COEFFICIENT_DIGITS,
                 label="direction coordinate",
             )
+        if (
+            len(self.polynomial.polynomial.terms) * len(self.polynomial.variables)
+            > _MAX_TERMS
+        ):
+            raise ValueError("directional derivative exceeds the result-term budget")
         return self
 
 

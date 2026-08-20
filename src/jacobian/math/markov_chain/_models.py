@@ -5,7 +5,7 @@ from __future__ import annotations
 from math import factorial
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
@@ -111,3 +111,70 @@ class ErgodicDecisionResult(StrictModel):
     is_ergodic: bool
     is_irreducible: bool
     is_aperiodic: bool
+
+
+class MixingTimeRequest(TransitionMatrixRequest):
+    """A bounded exact search for worst-case total-variation mixing time."""
+
+    epsilon: CanonicalRational
+    max_steps: StrictInt = Field(default=64, ge=1, le=256)
+
+    @model_validator(mode="after")
+    def require_bounded_search(self) -> Self:
+        if len(self.matrix) > 8:
+            raise ValueError("mixing-time search supports at most 8 states")
+        if not 0 < self.epsilon.as_fraction() <= 1:
+            raise ValueError("epsilon must lie in (0, 1]")
+        for value in (self.epsilon, *(item for row in self.matrix for item in row)):
+            if max(len(value.num.lstrip("-")), len(value.den)) > 32:
+                raise ValueError(
+                    "mixing-time rational components support at most 32 digits"
+                )
+        return self
+
+
+class MixingTimeResult(StrictModel):
+    status: Literal["FOUND", "NOT_ERGODIC", "BOUND_EXCEEDED"]
+    epsilon: CanonicalRational
+    max_steps: StrictInt = Field(ge=1, le=256)
+    steps_examined: StrictInt = Field(ge=0, le=256)
+    mixing_time: StrictInt | None = Field(default=None, ge=0, le=256)
+    max_total_variation_distance: CanonicalRational | None = None
+    method: Literal["SYMPY_EXACT_MATRIX_POWERS"] = "SYMPY_EXACT_MATRIX_POWERS"
+
+    @model_validator(mode="after")
+    def bind_search_result(self) -> Self:
+        distance = (
+            None
+            if self.max_total_variation_distance is None
+            else self.max_total_variation_distance.as_fraction()
+        )
+        if distance is not None and not 0 <= distance <= 1:
+            raise ValueError("total-variation distance must lie in [0, 1]")
+        if self.status == "FOUND":
+            if (
+                self.mixing_time is None
+                or distance is None
+                or distance > self.epsilon.as_fraction()
+                or self.steps_examined != self.mixing_time
+            ):
+                raise ValueError(
+                    "a found result requires its first satisfactory step and distance"
+                )
+        elif self.status == "BOUND_EXCEEDED":
+            if (
+                self.mixing_time is not None
+                or distance is None
+                or distance <= self.epsilon.as_fraction()
+                or self.steps_examined != self.max_steps
+            ):
+                raise ValueError(
+                    "a bound-exceeded result requires the terminal unsatisfactory distance"
+                )
+        elif (
+            self.mixing_time is not None
+            or distance is not None
+            or self.steps_examined != 0
+        ):
+            raise ValueError("a non-ergodic result has no mixing-time search value")
+        return self

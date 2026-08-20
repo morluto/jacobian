@@ -11,6 +11,11 @@ from jacobian.math.markov_chain._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "probability.markov_chain.mixing_time.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact bounded invariant with an explicit incomplete search outcome",
+    ),
+    OperationAdmission(
         "probability.markov_chain.ergodic.decide",
         AdmissionDecision.KEEP,
         "distinct exact bounded predicate or candidate check with typed semantics",

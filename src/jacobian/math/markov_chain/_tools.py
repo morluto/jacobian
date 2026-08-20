@@ -8,12 +8,15 @@ from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.markov_chain._models import (
     ErgodicDecisionResult,
+    MixingTimeRequest,
+    MixingTimeResult,
     StationaryDistributionRequest,
     StationaryDistributionResult,
     TransitionMatrixRequest,
 )
 from jacobian.math.markov_chain._operations import (
     compute_ergodic_decision,
+    compute_mixing_time,
     compute_stationary_distribution,
 )
 
@@ -43,6 +46,34 @@ def mc_operation[RequestT: StrictModel, ResultT: StrictModel](
 
 
 MARKOV_CHAIN_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
+    mc_operation(
+        "probability.markov_chain.mixing_time.compute",
+        "Compute an exact bounded Markov-chain mixing time",
+        "Search exact rational matrix powers for the first step whose worst-case total-variation distance is at most epsilon; the chain must have at most eight states.",
+        MixingTimeRequest,
+        MixingTimeResult,
+        compute_mixing_time,
+        "probability",
+        "markov-chain",
+        "mixing-time",
+        "total-variation",
+        "exact",
+        "bounded",
+        examples=(
+            example(
+                "two_state_chain",
+                "Compute the 1/100 mixing time of a two-state ergodic chain; max_steps bounds the exact search.",
+                {
+                    "matrix": [
+                        [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
+                        [{"num": "1", "den": "4"}, {"num": "3", "den": "4"}],
+                    ],
+                    "epsilon": {"num": "1", "den": "100"},
+                    "max_steps": 8,
+                },
+            ),
+        ),
+    ),
     mc_operation(
         "probability.markov_chain.stationary_distribution.compute",
         "Compute the stationary-distribution family of a Markov chain",

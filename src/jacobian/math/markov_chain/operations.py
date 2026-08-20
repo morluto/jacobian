@@ -2,13 +2,59 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from fractions import Fraction
+
 from jacobian.canonical import parse_canonical_integer
 
 __all__ = [
+    "MixingTimeSearchResult",
     "ergodic_properties",
+    "mixing_time",
     "stationary_distribution",
     "stationary_distribution_extremes",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class MixingTimeSearchResult:
+    mixing_time: int | None
+    steps_examined: int
+    max_total_variation_distance: Fraction
+
+
+def mixing_time(
+    matrix: tuple[tuple[Fraction, ...], ...],
+    stationary: tuple[Fraction, ...],
+    epsilon: Fraction,
+    max_steps: int,
+) -> MixingTimeSearchResult:
+    """Return the first exact worst-case epsilon-mixing step within the bound."""
+    import sympy
+
+    transition = sympy.Matrix(
+        [[sympy.Rational(v.numerator, v.denominator) for v in row] for row in matrix]
+    )
+    target = tuple(sympy.Rational(v.numerator, v.denominator) for v in stationary)
+    threshold = sympy.Rational(epsilon.numerator, epsilon.denominator)
+    power = sympy.eye(len(matrix))
+    terminal = sympy.S.One
+    for step in range(max_steps + 1):
+        terminal = max(
+            sum(
+                abs(power[source, target_index] - target[target_index])
+                for target_index in range(len(matrix))
+            )
+            / 2
+            for source in range(len(matrix))
+        )
+        distance = Fraction(int(terminal.p), int(terminal.q))
+        if terminal <= threshold:
+            return MixingTimeSearchResult(step, step, distance)
+        power *= transition
+    return MixingTimeSearchResult(
+        None, max_steps, Fraction(int(terminal.p), int(terminal.q))
+    )
 
 
 def stationary_distribution_extremes(matrix):  # type: ignore[no-untyped-def]

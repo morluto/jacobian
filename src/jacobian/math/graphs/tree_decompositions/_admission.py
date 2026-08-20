@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.graphs.tree_decompositions._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -36,3 +41,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact weighted bag-intersection graph projection",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

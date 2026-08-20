@@ -7,13 +7,37 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.incidence_structures._models import (
+    ComplementRequest,
+    ComplementResult,
+    ContainmentProfileRequest,
+    ContainmentProfileResult,
     DegreeProfileResult,
+    DerivedResidualRequest,
+    DerivedResidualResult,
+    DualRequest,
+    DualResult,
+    GramRequest,
+    GramResult,
     IncidenceMatrixRequest,
     IncidenceMatrixResult,
+    IntersectionsRequest,
+    IntersectionsResult,
+    LeviGraphRequest,
+    LeviGraphResult,
+    RestrictionRequest,
+    RestrictionResult,
 )
 from jacobian.math.incidence_structures._operations import (
+    compute_complement,
+    compute_containment_profile,
     compute_degree_profile,
+    compute_derived_residual,
+    compute_dual,
+    compute_gram,
     compute_incidence_matrix,
+    compute_intersections,
+    compute_levi_graph,
+    compute_restriction,
 )
 
 
@@ -85,6 +109,173 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "Compute degree profiles for a 3-point, 2-block structure; "
                 "every block member must be a declared point.",
                 {"incidence": _STRUCTURE},
+            ),
+        ),
+    ),
+    _op(
+        "incidence.containment_profiles.compute",
+        "Compute t-subset containment multiplicity profiles",
+        "For a bounded order t, return the finite map from every t-subset "
+        "of points to the number of blocks containing it, plus the "
+        "multiplicity histogram and whether the profile is constant.",
+        ContainmentProfileRequest,
+        ContainmentProfileResult,
+        compute_containment_profile,
+        "combinatorics",
+        "incidence",
+        "exact",
+        examples=(
+            example(
+                "triangle_t1",
+                "Compute containment profiles at t=1 for a 3-point, 2-block "
+                "structure; returns per-point multiplicities.",
+                {"incidence": _STRUCTURE, "t": 1},
+            ),
+        ),
+    ),
+    _op(
+        "incidence.intersections.compute",
+        "Compute block intersection profiles",
+        "For every unordered pair of indexed blocks, return the intersection "
+        "subset and cardinality, plus the intersection-size histogram.",
+        IntersectionsRequest,
+        IntersectionsResult,
+        compute_intersections,
+        "combinatorics",
+        "incidence",
+        "exact",
+        examples=(
+            example(
+                "triangle_intersections",
+                "Compute pairwise block intersections for a 3-point, 2-block "
+                "structure.",
+                {"incidence": _STRUCTURE},
+            ),
+        ),
+    ),
+    _op(
+        "incidence.dual.compute",
+        "Compute the dual incidence structure",
+        "Swap the point and indexed-block domains: dual points are the "
+        "original block IDs and dual blocks are one per original point.",
+        DualRequest,
+        DualResult,
+        compute_dual,
+        "combinatorics",
+        "incidence",
+        "exact",
+        examples=(
+            example(
+                "triangle_dual",
+                "Compute the dual of a 3-point, 2-block structure; dual "
+                "points are the original block IDs.",
+                {"incidence": _STRUCTURE},
+            ),
+        ),
+    ),
+    _op(
+        "incidence.complement.compute",
+        "Compute the complement incidence structure",
+        "Replace every block by its complement in the same point domain, "
+        "preserving block IDs and returning the exact old/new correspondence.",
+        ComplementRequest,
+        ComplementResult,
+        compute_complement,
+        "combinatorics",
+        "incidence",
+        "exact",
+        examples=(
+            example(
+                "triangle_complement",
+                "Compute the block complement of a 3-point, 2-block "
+                "structure; each block maps to its point complement.",
+                {"incidence": _STRUCTURE},
+            ),
+        ),
+    ),
+    _op(
+        "incidence.restriction.compute",
+        "Compute point/block deletion and restriction",
+        "Restrict to a supplied point subset and/or block subset.  Each "
+        "block is intersected with the retained point domain; block IDs "
+        "are preserved.",
+        RestrictionRequest,
+        RestrictionResult,
+        compute_restriction,
+        "combinatorics",
+        "incidence",
+        "exact",
+        examples=(
+            example(
+                "triangle_restriction",
+                "Restrict a 3-point, 2-block structure to two points; "
+                "blocks are intersected with the retained domain.",
+                {
+                    "incidence": _STRUCTURE,
+                    "points": ["p1", "p2"],
+                },
+            ),
+        ),
+    ),
+    _op(
+        "incidence.derived_residual.compute",
+        "Compute derived and residual incidence structures",
+        "At a selected point p, return the derived structure (blocks "
+        "containing p, with p removed) or the residual structure (blocks "
+        "not containing p) on P \\ {p}.",
+        DerivedResidualRequest,
+        DerivedResidualResult,
+        compute_derived_residual,
+        "combinatorics",
+        "incidence",
+        "exact",
+        examples=(
+            example(
+                "triangle_derived",
+                "Compute the derived incidence structure at point p2 of a "
+                "3-point, 2-block structure.",
+                {"incidence": _STRUCTURE, "point": "p2"},
+            ),
+        ),
+    ),
+    _op(
+        "incidence.levi_graph.compute",
+        "Compute the Levi graph",
+        "Return the labelled bipartite incidence graph: left vertices are "
+        "tagged point IDs and right vertices are tagged block IDs, with an "
+        "edge for each incidence.",
+        LeviGraphRequest,
+        LeviGraphResult,
+        compute_levi_graph,
+        "combinatorics",
+        "incidence",
+        "exact",
+        examples=(
+            example(
+                "triangle_levi",
+                "Compute the Levi graph of a 3-point, 2-block structure; "
+                "point and block labels use distinct tagged namespaces.",
+                {"incidence": _STRUCTURE},
+            ),
+        ),
+    ),
+    _op(
+        "incidence.gram.compute",
+        "Compute the Gram / concordance matrix",
+        "From the labelled incidence matrix N, return the exact labelled "
+        "integer Gram matrix N N^T (point axis) or N^T N (block axis).",
+        GramRequest,
+        GramResult,
+        compute_gram,
+        "combinatorics",
+        "incidence",
+        "exact",
+        examples=(
+            example(
+                "triangle_gram",
+                "Compute the point-axis Gram matrix N N^T of a 3-point, "
+                "2-block structure.",
+                {"incidence": _STRUCTURE, "axis": "point"},
             ),
         ),
     ),

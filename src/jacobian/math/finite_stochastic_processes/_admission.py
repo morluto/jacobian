@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.finite_stochastic_processes._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -31,3 +36,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact Doob martingale M_t = E[payoff | F_t] with rational-valued conditional expectations",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

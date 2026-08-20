@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.graphs.transforms._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -30,3 +35,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         native_symbol="jacobian.math.graphs.graph_power",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

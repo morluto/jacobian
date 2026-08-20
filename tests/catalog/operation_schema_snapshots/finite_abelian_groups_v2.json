@@ -1,30 +1,30 @@
 {
-    "catalog_version": "1",
-    "domain": "finite_abelian_groups_v2",
-    "operations": {
-        "abelian_group.element.equal.decide": {
-            "input_schema": "sha256:9d722209e92624eec3280a27c4d81fc71c42af4d8fbb19a9e1bb3f6e35244af7",
-            "output_schema": "sha256:28cb9c007997675180b3d2b834f0f9dce95a9ab5f4dbc27688ab675267e9be65"
-        },
-        "abelian_group.element.order.compute": {
-            "input_schema": "sha256:1512b40c8eb45bfe1083adfa373250fe74335e644c3b2ab2484c1b5dc3abfad9",
-            "output_schema": "sha256:845ac4cfeb080e277996043c141d5cc515b216710c9f0de2c45cec369fc06705"
-        },
-        "abelian_group.element.reduce": {
-            "input_schema": "sha256:399eed945f5659aab0c81ec13ca0458e9edcf7cab3fdb8cb95f4b2b4485ea5f3",
-            "output_schema": "sha256:b986e6cc56f649954a6373a33d67966efcf3f0a3c3a8de747e2804604909b21b"
-        },
-        "abelian_group.presentation.normalize": {
-            "input_schema": "sha256:99aa8403697750793111dc060ea8301b7c7ee158dd9e81927b72efc7cf6c8bdc",
-            "output_schema": "sha256:d8f76df331446ba5174db3139a580b56a9bf3e31606b01ad6c39808e6b8559d3"
-        },
-        "abelian_group.quotient.compute": {
-            "input_schema": "sha256:b822ed48c2f0c5ba1cc0b31484caf3a455c49f11fa87bacf76279882cb161746",
-            "output_schema": "sha256:c1dbfbd58f7d59cade07c51af647f44e82c472eb425148a501c0ad2341821b65"
-        },
-        "abelian_group.subgroup.generated.compute": {
-            "input_schema": "sha256:217075e0cf2ec5843d48dd45b08fd63011404ba97f2f39189a4712429499dd91",
-            "output_schema": "sha256:6d29871cd292c0a09ed1156da8ed57ad03edbec482660ea48699c44acb1b415b"
-        }
+  "catalog_version": "1",
+  "domain": "finite_abelian_groups_v2",
+  "operations": {
+    "abelian_group.element.equal.decide": {
+      "input_schema": "sha256:9d722209e92624eec3280a27c4d81fc71c42af4d8fbb19a9e1bb3f6e35244af7",
+      "output_schema": "sha256:28cb9c007997675180b3d2b834f0f9dce95a9ab5f4dbc27688ab675267e9be65"
+    },
+    "abelian_group.element.order.compute": {
+      "input_schema": "sha256:1512b40c8eb45bfe1083adfa373250fe74335e644c3b2ab2484c1b5dc3abfad9",
+      "output_schema": "sha256:845ac4cfeb080e277996043c141d5cc515b216710c9f0de2c45cec369fc06705"
+    },
+    "abelian_group.element.reduce": {
+      "input_schema": "sha256:399eed945f5659aab0c81ec13ca0458e9edcf7cab3fdb8cb95f4b2b4485ea5f3",
+      "output_schema": "sha256:b986e6cc56f649954a6373a33d67966efcf3f0a3c3a8de747e2804604909b21b"
+    },
+    "abelian_group.presentation.normalize": {
+      "input_schema": "sha256:99aa8403697750793111dc060ea8301b7c7ee158dd9e81927b72efc7cf6c8bdc",
+      "output_schema": "sha256:d8f76df331446ba5174db3139a580b56a9bf3e31606b01ad6c39808e6b8559d3"
+    },
+    "abelian_group.quotient.compute": {
+      "input_schema": "sha256:b822ed48c2f0c5ba1cc0b31484caf3a455c49f11fa87bacf76279882cb161746",
+      "output_schema": "sha256:c1dbfbd58f7d59cade07c51af647f44e82c472eb425148a501c0ad2341821b65"
+    },
+    "abelian_group.subgroup.generated.compute": {
+      "input_schema": "sha256:217075e0cf2ec5843d48dd45b08fd63011404ba97f2f39189a4712429499dd91",
+      "output_schema": "sha256:6d29871cd292c0a09ed1156da8ed57ad03edbec482660ea48699c44acb1b415b"
     }
+  }
 }

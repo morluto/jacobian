@@ -54,9 +54,7 @@ def _parse_polynomial(raw: str, variables: tuple[str, ...]) -> sympy.Basic:
     try:
         poly = sympy.Poly(expression, *var_symbols, domain=sympy.QQ)
     except sympy.CoercionFailed as exc:
-        raise ValueError(
-            "polynomial coefficients must be rational"
-        ) from exc
+        raise ValueError("polynomial coefficients must be rational") from exc
     if poly.domain != sympy.QQ:
         raise ValueError(
             f"polynomial coefficients must be rational, got domain {poly.domain}"

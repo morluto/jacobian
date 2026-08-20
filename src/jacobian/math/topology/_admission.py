@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.topology._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -36,3 +41,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact link of a simplex with maximal facets of the link complex",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

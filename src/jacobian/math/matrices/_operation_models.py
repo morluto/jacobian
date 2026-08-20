@@ -177,6 +177,8 @@ class SquareIntegerMatrixRequest(StrictModel):
 
 
 class RationalLinearSolveRequest(StrictModel):
+    """A square rational system whose coefficient matrix is nonsingular."""
+
     matrix: RationalMatrix
     rhs: tuple[CanonicalRational, ...] = Field(
         min_length=1,
@@ -194,6 +196,16 @@ class RationalLinearSolveRequest(StrictModel):
         for value in self.rhs:
             _check_integer_digits(value.num)
             _check_integer_digits(value.den)
+        from sympy import Matrix, Rational
+
+        raw = Matrix(
+            [
+                [Rational(*value.as_integer_ratio()) for value in row]
+                for row in self.matrix.entries
+            ]
+        )
+        if raw.det() == 0:
+            raise ValueError("matrix is singular; unique solution does not exist")
         return self
 
 

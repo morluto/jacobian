@@ -6,6 +6,10 @@ from jacobian.math.impartial_games._models import (
     GrundyEntry,
     GrundyTableRequest,
     GrundyTableResult,
+    NimSumRequest,
+    NimSumResult,
+    OutcomeProfileRequest,
+    OutcomeProfileResult,
     SubtractionGrundyPrefixRequest,
     SubtractionGrundyPrefixResult,
 )
@@ -65,3 +69,43 @@ __all__ = [
     "compute_grundy_table",
     "compute_subtraction_grundy_prefix",
 ]
+
+
+def compute_nim_sum(
+    request: NimSumRequest,
+) -> NimSumResult:
+    """Compute the exact nim sum (bitwise xor) of heap sizes."""
+
+    from functools import reduce
+    from operator import xor
+
+    heaps = request.heaps
+    nim_sum = 0 if not heaps else reduce(xor, heaps)
+    return NimSumResult(
+        nim_sum=nim_sum,
+        is_p_position=(nim_sum == 0),
+        heaps=heaps,
+    )
+
+
+def compute_outcome_profile(
+    request: OutcomeProfileRequest,
+) -> OutcomeProfileResult:
+    """Compute the P/N outcome partition of an impartial game."""
+
+    from jacobian.math.impartial_games.operations import grundy_table
+
+    analysis = grundy_table(request.game)
+    p_positions = tuple(pos for pos, g in analysis.values if g == 0)
+    n_positions = tuple(pos for pos, g in analysis.values if g > 0)
+    terminal_positions = tuple(
+        pos
+        for pos in request.game.positions
+        if not any(m.source == pos for m in request.game.moves)
+    )
+    return OutcomeProfileResult(
+        p_positions=p_positions,
+        n_positions=n_positions,
+        grundy_values=analysis.values,
+        terminal_positions=terminal_positions,
+    )

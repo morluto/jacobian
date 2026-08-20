@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.logic._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -31,3 +36,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact or explicitly bounded search outcome with material computational leverage",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.multiple_testing._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -16,3 +21,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "cheap deterministic projection of two caller-supplied finite sets",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

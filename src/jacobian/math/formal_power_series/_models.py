@@ -20,9 +20,89 @@ MAX_RESULT_RATIONAL_DIGITS = 4_096
 MAX_RESULT_BYTES = 10 * 1024 * 1024
 MAX_POWER_EXPONENT = 1_000
 
+CoefficientHeight = RationalHeight | None
+
 
 def _height(value: CanonicalRational) -> RationalHeight:
     return RationalHeight.from_canonical(value)
+
+
+def _coefficient_height(value: CanonicalRational) -> CoefficientHeight:
+    return None if value.num == "0" else _height(value)
+
+
+def _add_height(left: CoefficientHeight, right: CoefficientHeight) -> CoefficientHeight:
+    if left is None:
+        return right
+    if right is None:
+        return left
+    return sum_heights((left, right))
+
+
+def _height_vector(
+    coefficients: tuple[CanonicalRational, ...],
+) -> tuple[CoefficientHeight, ...]:
+    return tuple(_coefficient_height(value) for value in coefficients)
+
+
+def _require_height_vector(
+    coefficients: tuple[CoefficientHeight, ...], operation: str
+) -> None:
+    if any(
+        height is not None and height.exceeds(MAX_RESULT_RATIONAL_DIGITS)
+        for height in coefficients
+    ):
+        raise ValueError(
+            f"{operation} coefficient growth exceeds the "
+            f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
+        )
+
+
+def _convolve_height_vectors(
+    left: tuple[CoefficientHeight, ...],
+    right: tuple[CoefficientHeight, ...],
+    order: int,
+    operation: str,
+) -> tuple[CoefficientHeight, ...]:
+    result: list[CoefficientHeight] = []
+    for degree in range(order):
+        terms: list[RationalHeight] = []
+        for index in range(degree + 1):
+            if index >= len(left) or degree - index >= len(right):
+                continue
+            left_height = left[index]
+            right_height = right[degree - index]
+            if left_height is not None and right_height is not None:
+                terms.append(left_height.product(right_height))
+        result.append(sum_heights(terms) if terms else None)
+    coefficients = tuple(result)
+    _require_height_vector(coefficients, operation)
+    return coefficients
+
+
+def _composition_height_vector(
+    outer: tuple[CoefficientHeight, ...],
+    inner: tuple[CoefficientHeight, ...],
+    order: int,
+    operation: str,
+) -> tuple[CoefficientHeight, ...]:
+    powers: tuple[CoefficientHeight, ...] = (
+        RationalHeight(1, 1),
+        *([None] * (order - 1)),
+    )
+    result: list[CoefficientHeight] = [None] * order
+    for outer_degree in range(order):
+        coefficient = outer[outer_degree]
+        if coefficient is not None:
+            for degree, power in enumerate(powers):
+                if power is not None:
+                    result[degree] = _add_height(
+                        result[degree], coefficient.product(power)
+                    )
+            _require_height_vector(tuple(result), operation)
+        if outer_degree + 1 < order:
+            powers = _convolve_height_vectors(powers, inner, order, operation)
+    return tuple(result)
 
 
 def _max_height(values: tuple[CanonicalRational, ...]) -> RationalHeight:
@@ -383,9 +463,12 @@ class SeriesComposeRequest(StrictModel):
             raise ValueError(
                 "inner series must have zero constant term for composition with a finite prefix"
             )
-        outer = _max_height(self.outer.coefficients)
-        inner = _max_height(self.inner.coefficients)
-        _composition_height(outer, inner, self.outer.truncation_order, "composition")
+        _composition_height_vector(
+            _height_vector(self.outer.coefficients),
+            _height_vector(self.inner.coefficients),
+            self.outer.truncation_order,
+            "composition",
+        )
         return self
 
 
@@ -418,22 +501,34 @@ class SeriesReversionRequest(StrictModel):
             raise ValueError("reversion requires zero constant term")
         if series.coefficients[1].as_fraction() == 0:
             raise ValueError("reversion requires nonzero linear coefficient")
-        source = _max_height(series.coefficients)
+        source = _height_vector(series.coefficients)
         linear = _height(series.coefficients[1])
-        result = RationalHeight(1, 1).quotient(linear)
-        _require_height(result, "reversion")
+        result: list[CoefficientHeight] = [
+            None,
+            RationalHeight(1, 1).quotient(linear),
+        ]
+        _require_height_vector(tuple(result), "reversion")
         for degree in range(2, self.truncation_order):
-            powers: list[RationalHeight] = []
-            power = result
-            for _ in range(2, degree + 1):
-                power = _convolution_height(power, result, degree + 1)
-                powers.append(power)
-            known = sum_heights(source.product(power) for power in powers)
+            padded = (*result, None)
+            power = padded
+            terms: list[RationalHeight] = []
+            for source_degree in range(2, degree + 1):
+                power = _convolve_height_vectors(power, padded, degree + 1, "reversion")
+                source_height = source[source_degree]
+                power_height = power[degree]
+                if source_height is not None and power_height is not None:
+                    terms.append(source_height.product(power_height))
+            known = sum_heights(terms)
             coefficient = known.quotient(linear)
             _require_height(coefficient, "reversion")
-            result = _merge_max(result, coefficient)
-        _composition_height(source, result, self.truncation_order, "reversion residual")
-        _composition_height(result, source, self.truncation_order, "reversion residual")
+            result.append(coefficient)
+        result_vector = tuple(result)
+        _composition_height_vector(
+            source, result_vector, self.truncation_order, "reversion residual"
+        )
+        _composition_height_vector(
+            result_vector, source, self.truncation_order, "reversion residual"
+        )
         return self
 
     def as_series(self) -> InputTruncatedSeries:

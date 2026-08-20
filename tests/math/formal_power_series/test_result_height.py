@@ -73,6 +73,22 @@ def test_reversion_propagates_linear_coefficient_division() -> None:
         SeriesReversionRequest.model_validate(_series(order, coefficients))
 
 
+def test_sparse_linear_reversion_remains_admitted() -> None:
+    request = SeriesReversionRequest.model_validate(
+        _series(
+            4,
+            [
+                _coefficient("0"),
+                _coefficient("2"),
+                _coefficient("0"),
+                _coefficient("0"),
+            ],
+        )
+    )
+
+    assert request.coefficients[1].num == "2"
+
+
 def test_small_requests_remain_admitted() -> None:
     series = InputTruncatedSeries.model_validate(
         _series(2, [_coefficient("1"), _coefficient("1")])

@@ -130,6 +130,23 @@ class MixingTimeRequest(TransitionMatrixRequest):
                 raise ValueError(
                     "mixing-time rational components support at most 32 digits"
                 )
+        matrix_digits = max(
+            max(len(value.num.lstrip("-")), len(value.den))
+            for row in self.matrix
+            for value in row
+        )
+        state_count = len(self.matrix)
+        # A common denominator for the transition matrix has at most n**2 * d
+        # digits. Exact powers contribute one such denominator per step, while
+        # Cramer's rule bounds the stationary denominator by n times that size.
+        rational_height_digits = matrix_digits * (
+            state_count**3 + self.max_steps * state_count**2
+        )
+        if rational_height_digits > MAX_CANONICAL_RATIONAL_DIGITS - 1_024:
+            raise ValueError(
+                "mixing-time matrix height and max_steps can exceed the exact "
+                "rational result bound"
+            )
         return self
 
 
@@ -137,7 +154,7 @@ class MixingTimeResult(StrictModel):
     status: Literal["FOUND", "NOT_ERGODIC", "BOUND_EXCEEDED"]
     epsilon: CanonicalRational
     max_steps: StrictInt = Field(ge=1, le=256)
-    steps_examined: StrictInt = Field(ge=0, le=256)
+    steps_examined: StrictInt = Field(ge=0, le=257)
     mixing_time: StrictInt | None = Field(default=None, ge=0, le=256)
     max_total_variation_distance: CanonicalRational | None = None
     method: Literal["SYMPY_EXACT_MATRIX_POWERS"] = "SYMPY_EXACT_MATRIX_POWERS"
@@ -156,7 +173,7 @@ class MixingTimeResult(StrictModel):
                 self.mixing_time is None
                 or distance is None
                 or distance > self.epsilon.as_fraction()
-                or self.steps_examined != self.mixing_time
+                or self.steps_examined != self.mixing_time + 1
             ):
                 raise ValueError(
                     "a found result requires its first satisfactory step and distance"
@@ -166,7 +183,7 @@ class MixingTimeResult(StrictModel):
                 self.mixing_time is not None
                 or distance is None
                 or distance <= self.epsilon.as_fraction()
-                or self.steps_examined != self.max_steps
+                or self.steps_examined != self.max_steps + 1
             ):
                 raise ValueError(
                     "a bound-exceeded result requires the terminal unsatisfactory distance"

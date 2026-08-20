@@ -32,14 +32,18 @@ def test_exact_two_state_mixing_time_and_distance() -> None:
     assert result.mixing_time == 4
     assert result.max_total_variation_distance is not None
     assert result.max_total_variation_distance.as_fraction() == Fraction(1, 384)
+    assert result.steps_examined == 5
 
 
 def test_search_checks_time_zero_and_boundary_equality() -> None:
-    assert compute_mixing_time(_request(epsilon=(1, 1))).mixing_time == 0
+    time_zero = compute_mixing_time(_request(epsilon=(1, 1)))
+    assert time_zero.mixing_time == 0
+    assert time_zero.steps_examined == 1
     equality = compute_mixing_time(_request(epsilon=(1, 6)))
     assert equality.mixing_time == 1
     assert equality.max_total_variation_distance is not None
     assert equality.max_total_variation_distance.as_fraction() == Fraction(1, 6)
+    assert equality.steps_examined == 2
 
 
 def test_bound_exceeded_returns_terminal_exact_distance() -> None:
@@ -47,6 +51,16 @@ def test_bound_exceeded_returns_terminal_exact_distance() -> None:
     assert result.status == "BOUND_EXCEEDED"
     assert result.max_total_variation_distance is not None
     assert result.max_total_variation_distance.as_fraction() == Fraction(1, 96)
+    assert result.steps_examined == 4
+
+
+def test_found_mixing_time_is_the_first_satisfactory_step() -> None:
+    result = compute_mixing_time(_request())
+    assert result.mixing_time is not None and result.mixing_time > 0
+    previous = compute_mixing_time(_request(max_steps=result.mixing_time - 1))
+    assert previous.status == "BOUND_EXCEEDED"
+    assert previous.max_total_variation_distance is not None
+    assert previous.max_total_variation_distance.as_fraction() > Fraction(1, 100)
 
 
 @pytest.mark.parametrize(
@@ -74,3 +88,22 @@ def test_search_bounds_reject_before_exact_matrix_powers() -> None:
         )
     with pytest.raises(ValidationError, match=r"\(0, 1\]"):
         _request(epsilon=(0, 1))
+
+
+def test_search_rejects_a_rational_height_that_cannot_fit_the_result() -> None:
+    denominator = 10**31
+    matrix = [
+        [
+            _r(denominator - 1, denominator)
+            if row == column
+            else _r(1, denominator)
+            if column == (row + 1) % 8
+            else _r(0)
+            for column in range(8)
+        ]
+        for row in range(8)
+    ]
+    with pytest.raises(ValidationError, match="exact rational result bound"):
+        MixingTimeRequest.model_validate(
+            {"matrix": matrix, "epsilon": _r(1, 10), "max_steps": 256}
+        )

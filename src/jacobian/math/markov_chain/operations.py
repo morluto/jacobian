@@ -50,10 +50,11 @@ def mixing_time(
         )
         distance = Fraction(int(terminal.p), int(terminal.q))
         if terminal <= threshold:
-            return MixingTimeSearchResult(step, step, distance)
-        power *= transition
+            return MixingTimeSearchResult(step, step + 1, distance)
+        if step < max_steps:
+            power *= transition
     return MixingTimeSearchResult(
-        None, max_steps, Fraction(int(terminal.p), int(terminal.q))
+        None, max_steps + 1, Fraction(int(terminal.p), int(terminal.q))
     )
 
 

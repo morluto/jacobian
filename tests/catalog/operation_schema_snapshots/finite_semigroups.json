@@ -1,14 +1,14 @@
 {
-    "catalog_version": "1",
-    "domain": "finite_semigroups",
-    "operations": {
-        "semigroup.element.power_profile.compute": {
-            "input_schema": "sha256:ba87a8d64931bd1bc95c71fcf8dd626219ed6400f1f66254cac07f61cc3aa800",
-            "output_schema": "sha256:e31dd318c1e001b15ca5d4fb7aa348d81f3ae1499e0534e9ceaf8f59ea5d90d7"
-        },
-        "semigroup.generated_subsemigroup.compute": {
-            "input_schema": "sha256:fd25734a1cdf4cbe9db71a6d7461bf8c948540c841bb8415f260893be5492957",
-            "output_schema": "sha256:a3f82c056ee2dfb1b989c2f058b75230e3dac1495c1988a59ad8b4f315daee80"
-        }
+  "catalog_version": "1",
+  "domain": "finite_semigroups",
+  "operations": {
+    "semigroup.element.power_profile.compute": {
+      "input_schema": "sha256:ba87a8d64931bd1bc95c71fcf8dd626219ed6400f1f66254cac07f61cc3aa800",
+      "output_schema": "sha256:e31dd318c1e001b15ca5d4fb7aa348d81f3ae1499e0534e9ceaf8f59ea5d90d7"
+    },
+    "semigroup.generated_subsemigroup.compute": {
+      "input_schema": "sha256:fd25734a1cdf4cbe9db71a6d7461bf8c948540c841bb8415f260893be5492957",
+      "output_schema": "sha256:a3f82c056ee2dfb1b989c2f058b75230e3dac1495c1988a59ad8b4f315daee80"
     }
+  }
 }

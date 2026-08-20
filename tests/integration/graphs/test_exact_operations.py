@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDiscoveryRequest
+from jacobian.math.graphs.coloring._admission import ADMISSIONS
 from jacobian.math.graphs.coloring._models import (
     KColorabilityRequest,
 )
@@ -13,12 +14,12 @@ from jacobian.math.graphs.coloring._operations import (
 )
 from jacobian.math.graphs.flow._models import MaxFlowRequest
 from jacobian.math.graphs.flow._operations import compute_max_flow
-from jacobian.math.graphs.spectral._models import GraphSpectrumRequest
-from jacobian.math.graphs.spectral._operations import compute_laplacian_spectrum
 from jacobian.math.graphs.independence import (
     IndependenceNumberRequest,
     independence_number,
 )
+from jacobian.math.graphs.spectral._models import GraphSpectrumRequest
+from jacobian.math.graphs.spectral._operations import compute_laplacian_spectrum
 
 
 def test_k_colorability_uses_an_exact_decision_procedure() -> None:
@@ -117,15 +118,25 @@ def test_laplacian_spectrum_uses_normalized_simple_graph_degree() -> None:
 
 
 def test_catalog_retires_the_duplicate_and_discovers_independence_number() -> None:
+    retired_operation_id = "graph.independent_set.maximum.compute"
     catalog = Catalog.open()
-    assert catalog.operation("graph.independent_set.maximum.compute") is None
+    assert catalog.operation(retired_operation_id) is None
+    assert retired_operation_id not in {
+        operation.operation_id
+        for operation in catalog.browse(
+            domain="graph", limit=20, cursor=None
+        ).operations
+    }
+    assert retired_operation_id not in {
+        admission.operation_id for admission in ADMISSIONS
+    }
 
     discovered = catalog.search(
         OperationDiscoveryRequest(query="maximum independent set", limit=5)
     )
-    assert "graph.invariant.independence_number.compute" in {
-        match.operation_id for match in discovered.matches
-    }
+    discovered_ids = {match.operation_id for match in discovered.matches}
+    assert retired_operation_id not in discovered_ids
+    assert "graph.invariant.independence_number.compute" in discovered_ids
 
 
 def test_exact_independence_witness_is_independent_and_binds_its_bounds() -> None:

@@ -84,3 +84,81 @@ def test_signature_negative_definite() -> None:
 def test_non_symmetric_rejected() -> None:
     with pytest.raises(ValidationError, match="symmetric"):
         SignatureRequest(form={"matrix": [[1, 2], [0, 1]]})
+
+
+class TestRepresentationNumbers:
+    """Tests for representation numbers."""
+
+    def test_identity_1d(self) -> None:
+        """q(x) = x^2: r(0)=2, r(1)=2, r(2)=0, r(4)=2."""
+        from jacobian.math.quadratic_forms._models import (
+            RepresentationNumbersRequest,
+            SymmetricMatrix,
+        )
+        from jacobian.math.quadratic_forms._operations import compute_representation_numbers
+
+        form = SymmetricMatrix(matrix=((1,),))
+        result = compute_representation_numbers(
+            RepresentationNumbersRequest(form=form, bound=5)
+        )
+        # r(0) = 1 (x=0), r(1) = 2 (x=±1), r(4) = 2 (x=±2)
+        assert result.counts[0] == 1
+        assert result.counts[1] == 2
+        assert result.counts[4] == 2
+        assert result.counts[5] == 0
+
+    def test_identity_2d(self) -> None:
+        """q(x,y) = x^2 + y^2: r(0)=1, r(1)=4, r(2)=4."""
+        from jacobian.math.quadratic_forms._models import (
+            RepresentationNumbersRequest,
+            SymmetricMatrix,
+        )
+        from jacobian.math.quadratic_forms._operations import compute_representation_numbers
+
+        form = SymmetricMatrix(matrix=((1, 0), (0, 1)))
+        result = compute_representation_numbers(
+            RepresentationNumbersRequest(form=form, bound=5)
+        )
+        assert result.counts[0] == 1  # (0,0)
+        assert result.counts[1] == 4  # (±1,0), (0,±1)
+        assert result.counts[2] == 4  # (±1,±1)
+
+
+class TestScaling:
+    """Tests for form scaling."""
+
+    def test_scale_identity(self) -> None:
+        from jacobian.math.quadratic_forms._models import ScalingRequest, SymmetricMatrix
+        from jacobian.math.quadratic_forms._operations import compute_scaling
+
+        form = SymmetricMatrix(matrix=((1, 0), (0, 1)))
+        result = compute_scaling(ScalingRequest(form=form, factor=3))
+        assert result.scaled_form.matrix == ((3, 0), (0, 3))
+
+
+class TestDirectSum:
+    """Tests for direct sum."""
+
+    def test_direct_sum_1d_1d(self) -> None:
+        from jacobian.math.quadratic_forms._models import (
+            DirectSumRequest,
+            SymmetricMatrix,
+        )
+        from jacobian.math.quadratic_forms._operations import compute_direct_sum
+
+        form1 = SymmetricMatrix(matrix=((1,),))
+        form2 = SymmetricMatrix(matrix=((2,),))
+        result = compute_direct_sum(DirectSumRequest(form1=form1, form2=form2))
+        assert result.direct_sum.matrix == ((1, 0), (0, 2))
+
+    def test_direct_sum_2d_1d(self) -> None:
+        from jacobian.math.quadratic_forms._models import (
+            DirectSumRequest,
+            SymmetricMatrix,
+        )
+        from jacobian.math.quadratic_forms._operations import compute_direct_sum
+
+        form1 = SymmetricMatrix(matrix=((1, 0), (0, 1)))
+        form2 = SymmetricMatrix(matrix=((5,),))
+        result = compute_direct_sum(DirectSumRequest(form1=form1, form2=form2))
+        assert result.direct_sum.matrix == ((1, 0, 0), (0, 1, 0), (0, 0, 5))

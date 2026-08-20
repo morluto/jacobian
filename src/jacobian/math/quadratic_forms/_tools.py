@@ -7,6 +7,14 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.quadratic_forms._models import (
+    DirectSumRequest,
+    DirectSumResult,
+    RepresentationNumbersRequest,
+    RepresentationNumbersResult,
+    ScalingRequest,
+    ScalingResult,
+    ThetaSeriesPrefixRequest,
+    ThetaSeriesPrefixResult,
     DiscriminantRequest,
     DiscriminantResult,
     EvaluationRequest,
@@ -15,6 +23,10 @@ from jacobian.math.quadratic_forms._models import (
     SignatureResult,
 )
 from jacobian.math.quadratic_forms._operations import (
+    compute_direct_sum,
+    compute_representation_numbers,
+    compute_scaling,
+    compute_theta_series_prefix,
     compute_discriminant,
     compute_signature,
     evaluate_form,
@@ -106,6 +118,46 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {"form": _FORM_2D},
             ),
         ),
+    ),
+    _op(
+        "quadratic_form.representation_numbers.compute",
+        "Compute representation numbers r(0), ..., r(bound)",
+        "Compute the exact representation numbers r(n) for n = 0, 1, ..., bound by brute-force enumeration over a bounded integer box.",
+        RepresentationNumbersRequest,
+        RepresentationNumbersResult,
+        compute_representation_numbers,
+        "quadratic-form",
+        "exact",
+    ),
+    _op(
+        "quadratic_form.theta_series_prefix.compute",
+        "Compute the theta series prefix",
+        "Compute the theta series prefix coefficients r(0), ..., r(bound) where r(n) is the number of representations of n by the quadratic form.",
+        ThetaSeriesPrefixRequest,
+        ThetaSeriesPrefixResult,
+        compute_theta_series_prefix,
+        "quadratic-form",
+        "exact",
+    ),
+    _op(
+        "quadratic_form.scale.compute",
+        "Scale a quadratic form by an integer factor",
+        "Scale the symmetric matrix A by an integer factor, returning factor * A.",
+        ScalingRequest,
+        ScalingResult,
+        compute_scaling,
+        "quadratic-form",
+        "exact",
+    ),
+    _op(
+        "quadratic_form.direct_sum.compute",
+        "Compute the direct sum of two quadratic forms",
+        "Compute the block diagonal direct sum A ⊕ B of two quadratic forms.",
+        DirectSumRequest,
+        DirectSumResult,
+        compute_direct_sum,
+        "quadratic-form",
+        "exact",
     ),
 )
 

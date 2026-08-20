@@ -85,3 +85,105 @@ class SignatureResult(StrictModel):
     is_positive_definite: bool
     is_negative_definite: bool
     is_indefinite: bool
+
+
+class RepresentationNumbersRequest(StrictModel):
+    """Request the representation numbers r(n) for n = 0, 1, ..., bound."""
+
+    form: SymmetricMatrix
+    bound: int = Field(ge=0, le=1000)
+
+    @model_validator(mode="after")
+    def require_valid_bound(self) -> Self:
+        if self.bound > 1000:
+            raise ValueError("bound must not exceed 1000")
+        return self
+
+
+class RepresentationNumbersResult(StrictModel):
+    """The representation numbers r(0), r(1), ..., r(bound)."""
+
+    form: SymmetricMatrix
+    bound: int
+    counts: tuple[int, ...]
+
+    @model_validator(mode="after")
+    def bind_counts(self) -> Self:
+        from jacobian.math.quadratic_forms._operations import _representation_numbers
+
+        counts = _representation_numbers(self.form.matrix, self.bound)
+        if self.counts != counts:
+            raise ValueError("counts must be the exact representation numbers")
+        return self
+
+
+class ThetaSeriesPrefixRequest(StrictModel):
+    """Request the theta series prefix q^0 through q^bound."""
+
+    form: SymmetricMatrix
+    bound: int = Field(ge=0, le=1000)
+
+
+class ThetaSeriesPrefixResult(StrictModel):
+    """The theta series prefix coefficients r(0), ..., r(bound)."""
+
+    form: SymmetricMatrix
+    bound: int
+    coefficients: tuple[int, ...]
+
+    @model_validator(mode="after")
+    def bind_coefficients(self) -> Self:
+        from jacobian.math.quadratic_forms._operations import _representation_numbers
+
+        coeffs = _representation_numbers(self.form.matrix, self.bound)
+        if self.coefficients != coeffs:
+            raise ValueError("coefficients must be the exact theta series prefix")
+        return self
+
+
+class ScalingRequest(StrictModel):
+    """Request scaling of a quadratic form by an integer factor."""
+
+    form: SymmetricMatrix
+    factor: int = Field(ge=1, le=1000)
+
+
+class ScalingResult(StrictModel):
+    """The scaled quadratic form factor * A."""
+
+    form: SymmetricMatrix
+    factor: int
+    scaled_form: SymmetricMatrix
+
+    @model_validator(mode="after")
+    def bind_scaled(self) -> Self:
+        from jacobian.math.quadratic_forms._operations import _scale_form
+
+        expected = _scale_form(self.form.matrix, self.factor)
+        if self.scaled_form.matrix != expected:
+            raise ValueError("scaled_form must be factor * A")
+        return self
+
+
+class DirectSumRequest(StrictModel):
+    """Request the direct sum of two quadratic forms."""
+
+    form1: SymmetricMatrix
+    form2: SymmetricMatrix
+
+
+class DirectSumResult(StrictModel):
+    """The block diagonal direct sum A ⊕ B."""
+
+    form1: SymmetricMatrix
+    form2: SymmetricMatrix
+    direct_sum: SymmetricMatrix
+
+    @model_validator(mode="after")
+    def bind_direct_sum(self) -> Self:
+        from jacobian.math.quadratic_forms._operations import _direct_sum
+
+        expected = _direct_sum(self.form1.matrix, self.form2.matrix)
+        if self.direct_sum.matrix != expected:
+            raise ValueError("direct_sum must be the block diagonal A ⊕ B")
+        return self

@@ -23,6 +23,25 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "exact inertia and definiteness classification via SymPy eigenvalues",
     ),
-)
+    OperationAdmission(
+        "quadratic_form.representation_numbers.compute",
+        AdmissionDecision.KEEP,
+        "exact representation numbers r(n) by brute-force enumeration",
+    ),
+    OperationAdmission(
+        "quadratic_form.theta_series_prefix.compute",
+        AdmissionDecision.KEEP,
+        "exact theta series prefix coefficients",
+    ),
+    OperationAdmission(
+        "quadratic_form.scale.compute",
+        AdmissionDecision.KEEP,
+        "exact integer scaling of a quadratic form",
+    ),
+    OperationAdmission(
+        "quadratic_form.direct_sum.compute",
+        AdmissionDecision.KEEP,
+        "exact block diagonal direct sum of two quadratic forms",
+    ),)
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

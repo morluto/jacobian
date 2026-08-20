@@ -91,9 +91,7 @@ class MaximalPerfectPowerResult(StrictModel):
 
     def _validate_nonunit(self) -> None:
         if self.base is None or self.exponent is None:
-            raise ValueError(
-                "nonunit perfect-power profile requires base and exponent"
-            )
+            raise ValueError("nonunit perfect-power profile requires base and exponent")
         if self.is_nontrivial_perfect_power is None:
             raise ValueError("nonunit profile requires is_nontrivial_perfect_power")
         source = int(self.source)

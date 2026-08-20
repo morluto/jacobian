@@ -162,6 +162,8 @@ class GaloisFactorResult(StrictModel):
 
 
 def _require_factor_residues(result: GaloisFactorResult) -> None:
+    from sympy import GF, Poly, Symbol
+
     prime = result.field_order
     if result.unit >= prime:
         raise ValueError("factorization unit must be a canonical nonzero residue")
@@ -172,6 +174,13 @@ def _require_factor_residues(result: GaloisFactorResult) -> None:
             raise ValueError("factor coefficients must be canonical field residues")
         if factor.coefficients[-1] != 1:
             raise ValueError("finite-field factors must be monic")
+        polynomial = Poly(
+            list(reversed(factor.coefficients)),
+            Symbol("x"),
+            domain=GF(prime),
+        )
+        if not polynomial.is_irreducible:
+            raise ValueError("every finite-field factor must be irreducible")
 
 
 def _reconstruct_factorization(result: GaloisFactorResult) -> tuple[int, ...]:

@@ -123,6 +123,20 @@ class TestConditionalExpectation:
         # E[X | {H}] = 1, E[X | {T}] = 0
         assert result.values == (_q(1), _q(0))
 
+    def test_exact_result_may_grow_beyond_input_digit_bound(self) -> None:
+        left = 10**255 + 19
+        right = 10**255 + 21
+        rv = FiniteRandomVariable(
+            space=_coin_space(), values=(_q(1, left), _q(1, right))
+        )
+        sigma = FiniteSigmaAlgebra(space=_coin_space(), blocks=(("H", "T"),))
+
+        result = compute_conditional_expectation(
+            ConditionalExpectationRequest(rv=rv, sigma=sigma)
+        )
+
+        assert len(result.values[0].den) > 256
+
 
 # ---------------------------------------------------------------------------
 # Filtration

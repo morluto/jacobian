@@ -53,6 +53,12 @@ class ConditionalExpectationRequest(StrictModel):
             raise ValueError(
                 "random variable and sigma algebra must share the same probability space"
             )
+        for value in self.rv.values:
+            require_bounded_rational(
+                value,
+                max_digits=256,
+                label="random-variable value",
+            )
         return self
 
 

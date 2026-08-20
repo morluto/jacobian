@@ -89,6 +89,35 @@ class SquareSymbolicMatrixRequest(SymbolicMatrixRequest):
         return self
 
 
+class SymbolicDeterminantRequest(SquareSymbolicMatrixRequest):
+    """A square matrix whose exact determinant fits the public result type."""
+
+    @model_validator(mode="after")
+    def require_representable_determinant(self) -> Self:
+        # The input sparsity budget bounds backend work, but rational-function
+        # expansion can still exceed the canonical result representation.  Run
+        # the bounded exact kernel at admission so an accepted request cannot
+        # fail later while constructing its typed result.
+        from jacobian.math.matrices.symbolic import symbolic_determinant
+
+        symbolic_determinant(self.matrix.entries, self.matrix.variables)
+        return self
+
+
+class SymbolicCharacteristicPolynomialRequest(SquareSymbolicMatrixRequest):
+    """A square matrix whose characteristic polynomial fits the result type."""
+
+    @model_validator(mode="after")
+    def require_representable_characteristic_polynomial(self) -> Self:
+        from jacobian.math.matrices.symbolic import symbolic_characteristic_polynomial
+
+        symbolic_characteristic_polynomial(
+            self.matrix.entries,
+            self.matrix.variables,
+        )
+        return self
+
+
 class SymbolicDeterminantResult(StrictModel):
     """The exact determinant in the matrix's rational-function field."""
 

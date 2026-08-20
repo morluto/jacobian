@@ -77,6 +77,21 @@ def test_rational_interpolation_has_exact_coefficients_and_evaluation() -> None:
     assert result.result == _q(7, 4)
 
 
+def test_newton_coefficients_may_grow_beyond_input_digit_bound() -> None:
+    left = 10**255 + 19
+    right = 10**255 + 21
+    form = compute_newton_form(
+        NewtonFormRequest(
+            samples=_samples(
+                nodes=(_q(0), _q(1)),
+                values=(_q(1, left), _q(1, right)),
+            )
+        )
+    )
+
+    assert len(form.coefficients[1].den) > 256
+
+
 def test_equal_rational_nodes_are_rejected_before_division() -> None:
     with pytest.raises(ValidationError, match="pairwise distinct"):
         InterpolationSamples(

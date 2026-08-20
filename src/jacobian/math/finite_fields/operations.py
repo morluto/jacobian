@@ -179,14 +179,16 @@ def restrict_scalars(
 
 
 def linear_map_rank(
+    subspace: FiniteDimensionalSubspace,
     direction: ProjectivePoint,
-    linear_map: FiniteLinearMap,
 ) -> RankResult:
-    """Compute FLINT rank while retaining the exact direction and map."""
+    """Derive and rank the direction-bound prime-field map."""
 
     from jacobian.math.finite_fields import _flint
 
+    linear_map = restrict_scalars(subspace, direction)
     return RankResult(
+        subspace=subspace,
         direction=direction,
         linear_map=linear_map,
         rank=_flint.matrix_rank(linear_map.matrix),
@@ -202,8 +204,7 @@ def direction_rank_ledger(
     return DirectionRankLedger(
         subspace=subspace,
         entries=tuple(
-            linear_map_rank(direction, restrict_scalars(subspace, direction))
-            for direction in directions.points
+            linear_map_rank(subspace, direction) for direction in directions.points
         ),
     )
 

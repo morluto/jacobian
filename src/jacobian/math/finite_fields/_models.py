@@ -10,7 +10,6 @@ from jacobian.math.finite_fields import (
     DirectionRankLedger,
     FiniteDimensionalSubspace,
     FiniteFieldPresentation,
-    FiniteLinearMap,
     FiniteMapTable,
     FinitePolynomialMap,
     ProjectiveLine,
@@ -39,15 +38,17 @@ class RestrictScalarsRequest(StrictModel):
 
 
 class LinearMapRankRequest(StrictModel):
+    subspace: FiniteDimensionalSubspace
     direction: ProjectivePoint
-    linear_map: FiniteLinearMap
 
     @model_validator(mode="after")
-    def require_shared_prime_field(self) -> Self:
-        if self.direction.presentation.characteristic != self.linear_map.matrix.prime:
-            raise ValueError(
-                "direction characteristic must match the linear-map matrix prime"
-            )
+    def require_bound_direction(self) -> Self:
+        if self.direction.presentation != self.subspace.presentation:
+            raise ValueError("direction and subspace must share their presentation")
+        if self.direction.axis != self.subspace.row_axis:
+            raise ValueError("direction axis must match the subspace row axis")
+        if _direction_rank_work(self.subspace, 1) > _MAX_DIRECTION_RANK_WORK:
+            raise ValueError("rank derivation exceeds the operation work budget")
         return self
 
 

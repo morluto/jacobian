@@ -76,9 +76,26 @@ class FrobeniusCycleRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_positive_partition(self) -> Self:
+        from collections import Counter
+
+        from sympy import divisors, mobius
+
         _require_prime(self.field_order)
         if sum(self.factorization_degrees) != self.polynomial_degree:
             raise ValueError("factorization degrees must sum to polynomial degree")
+        for degree, count in Counter(self.factorization_degrees).items():
+            available = (
+                sum(
+                    int(mobius(divisor)) * self.field_order ** (degree // divisor)
+                    for divisor in divisors(degree)
+                )
+                // degree
+            )
+            if count > available:
+                raise ValueError(
+                    "factorization pattern exceeds the available distinct "
+                    f"degree-{degree} irreducible factors over the field"
+                )
         return self
 
 

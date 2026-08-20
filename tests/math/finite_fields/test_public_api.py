@@ -182,26 +182,20 @@ def test_orbit_distribution_rejects_a_forged_in_range_rank() -> None:
         DirectionRankLedger.model_validate(ledger_payload)
 
 
-def test_slice_a_composes_restriction_into_rank_without_wire_conversion() -> None:
+def test_slice_a_rank_derives_the_restriction_from_its_source() -> None:
     subspace, directions = _slice_a_values()
     direction = directions.points[0]
-    _, restrict_operation, rank_operation, *_ = TOOLS
+    _, _, rank_operation, *_ = TOOLS
 
-    linear_map = restrict_operation.run(
-        restrict_operation.request_type.model_validate(
+    result = rank_operation.run(
+        rank_operation.request_type.model_validate(
             {"subspace": subspace, "direction": direction}
         )
     )
 
-    result = rank_operation.run(
-        rank_operation.request_type.model_validate(
-            {"direction": direction, "linear_map": linear_map}
-        )
-    )
-
     assert result.rank == 3
+    assert result.subspace is subspace
     assert result.direction is direction
-    assert result.linear_map is linear_map
 
 
 def test_slice_a_composes_projective_line_into_orbit_distribution() -> None:

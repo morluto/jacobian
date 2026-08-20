@@ -61,7 +61,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "vertex_count": 3,
                     "edges": [[0, 1], [1, 2], [2, 0]],
-                    "path": [0, 1, 2],
+                    "start_vertex": 0,
+                    "path": [
+                        {"edge_index": 0, "orientation": 1},
+                        {"edge_index": 1, "orientation": 1},
+                    ],
                 },
             ),
         ),

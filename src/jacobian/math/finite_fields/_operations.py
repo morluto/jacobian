@@ -132,7 +132,7 @@ def _restrict(request: RestrictScalarsRequest) -> FiniteLinearMap:
 
 
 def _rank(request: LinearMapRankRequest) -> RankResult:
-    return linear_map_rank(request.direction, request.linear_map)
+    return linear_map_rank(request.subspace, request.direction)
 
 
 def _ledger(request: DirectionRankLedgerRequest) -> DirectionRankLedger:
@@ -207,7 +207,7 @@ def finite_field_operations() -> MathTools:
             example(
                 "restricted_map_rank",
                 "Compute the rank of a restricted GF(4) map over GF(2).",
-                {"direction": _DIRECTIONS[0], "linear_map": _LINEAR_MAPS[0]},
+                {"subspace": _SUBSPACE, "direction": _DIRECTIONS[0]},
             ),
         ),
     )

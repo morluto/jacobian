@@ -187,6 +187,15 @@ def test_frobenius_cycle_is_canonical_positive_partition() -> None:
     assert irreducible.is_irreducible is True
 
 
+def test_frobenius_cycle_rejects_unrealizable_distinct_factor_pattern() -> None:
+    with pytest.raises(ValidationError, match="available distinct"):
+        FrobeniusCycleRequest(
+            field_order=2,
+            polynomial_degree=3,
+            factorization_degrees=(1, 1, 1),
+        )
+
+
 @pytest.mark.parametrize("degrees", [(2, 0), (3, -1)])
 def test_frobenius_rejects_nonpositive_factor_degrees(
     degrees: tuple[int, ...],

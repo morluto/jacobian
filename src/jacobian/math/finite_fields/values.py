@@ -428,6 +428,7 @@ class FiniteLinearMap(StrictModel):
 class RankResult(StrictModel):
     """The exact rank of a direction-bound finite linear map."""
 
+    subspace: FiniteDimensionalSubspace
     direction: ProjectivePoint
     linear_map: FiniteLinearMap
     rank: int
@@ -444,6 +445,14 @@ class RankResult(StrictModel):
             raise ValueError("rank is outside the linear-map dimensions")
         if self.rank != rank(self.linear_map.matrix):
             raise ValueError("rank must match the exact bound linear map")
+        from jacobian.math.finite_fields import _sympy
+
+        if self.direction.presentation != self.subspace.presentation:
+            raise ValueError("rank direction must use the subspace presentation")
+        if self.direction.axis != self.subspace.row_axis:
+            raise ValueError("rank direction must use the subspace row axis")
+        if self.linear_map != _sympy.restrict_scalars(self.subspace, self.direction):
+            raise ValueError("rank map must be derived from its subspace and direction")
         return self
 
     @property
@@ -453,6 +462,7 @@ class RankResult(StrictModel):
                 "direction": self.direction.digest,
                 "linear_map": self.linear_map.digest,
                 "rank": self.rank,
+                "subspace": self.subspace.digest,
                 "value_type": "rank-result-v1",
             }
         )

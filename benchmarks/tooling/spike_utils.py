@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from tools.command_runner import (
@@ -22,30 +21,28 @@ from tools.command_runner import (
 __all__ = [
     "canonical_json",
     "default_runner",
+    "owned_fixture_path",
     "sha256_bytes",
 ]
 
 
 def default_runner(
-    command: Sequence[str],
-    *,
-    input_bytes: bytes,
-    timeout_seconds: float,
-    environment: Mapping[str, str],
-    stdout_limit: int,
-    stderr_limit: int,
+    request: ToolCommandRequest,
 ) -> ToolCommandResult:
-    request = ToolCommandRequest(
-        executable=command[0],
-        arguments=tuple(command[1:]),
-        environment=environment,
-        cwd=str(Path.cwd()),
-        timeout_seconds=timeout_seconds,
-        stdin_bytes=input_bytes,
-        stdout_limit_bytes=stdout_limit,
-        stderr_limit_bytes=stderr_limit,
-    )
     return run_tool_command(request)
+
+
+def owned_fixture_path(
+    module_file: str, repository_relative: str, container_name: str
+) -> Path:
+    """Select a passive fixture in a checkout or beside a copied container script."""
+
+    module_path = Path(module_file).resolve()
+    if len(module_path.parents) > 3:
+        checkout_candidate = module_path.parents[3] / repository_relative
+        if checkout_candidate.is_file():
+            return checkout_candidate
+    return module_path.with_name(container_name)
 
 
 def sha256_bytes(payload: bytes) -> str:

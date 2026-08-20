@@ -15,17 +15,22 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from benchmarks.tooling.spike_utils import (
-    canonical_json,
-    default_runner,
-    sha256_bytes,
-)
 from tools.command_runner import (
+    ToolCommandRequest,
     ToolCommandResult,
     ToolCommandStatus,
 )
 
-PIN_PATH = Path(__file__).with_name("pin.json")
+from benchmarks.tooling.spike_utils import (
+    canonical_json,
+    default_runner,
+    owned_fixture_path,
+    sha256_bytes,
+)
+
+PIN_PATH = owned_fixture_path(
+    __file__, "tests/fixtures/providers/gudhi/pin.json", "pin.json"
+)
 ADAPTER_SOURCE = Path(__file__)
 _SOURCE_ROOT = "gudhi-devel-tags-gudhi-release-3.13.0"
 _SOURCE_MEMBERS = {
@@ -43,7 +48,7 @@ _ENVIRONMENT = {
     "TZ": "UTC",
     "PYTHONPATH": "/opt",
 }
-ProcessRunner = Callable[..., ToolCommandResult]
+ProcessRunner = Callable[[ToolCommandRequest], ToolCommandResult]
 _WORKER_ERROR_PREFIX = b"JACOBIAN_SPIKE_ERROR "
 
 
@@ -339,15 +344,20 @@ def _run_checked(
     runner: ProcessRunner,
     command: Sequence[str],
     *,
+    cwd: Path,
     timeout_seconds: float,
 ) -> bytes:
     completed = runner(
-        command,
-        input_bytes=b"",
-        timeout_seconds=timeout_seconds,
-        environment=_ENVIRONMENT,
-        stdout_limit=64 * 1024,
-        stderr_limit=16 * 1024,
+        ToolCommandRequest(
+            executable=command[0],
+            arguments=tuple(command[1:]),
+            stdin_bytes=b"",
+            timeout_seconds=timeout_seconds,
+            environment=_ENVIRONMENT,
+            cwd=str(cwd.resolve(strict=True)),
+            stdout_limit_bytes=64 * 1024,
+            stderr_limit_bytes=16 * 1024,
+        )
     )
     if completed.status is ToolCommandStatus.START_FAILED:
         raise GudhiSpikeError(
@@ -476,15 +486,17 @@ def _reduce_columns(
                     column[row] = updated
                 else:
                     column.pop(row, None)
-        pivot = max(column) if column else None
-        if pivot is not None:
-            pivot_to_column[pivot] = column_index
+        column_pivot: int | None = max(column) if column else None
+        if column_pivot is not None:
+            pivot_to_column[column_pivot] = column_index
         reduced_columns.append(column)
         ledger.append(
             {
                 "column_simplex_id": item["simplex_id"],
                 "pivot_simplex_id": (
-                    simplices[pivot]["simplex_id"] if pivot is not None else None
+                    simplices[column_pivot]["simplex_id"]
+                    if column_pivot is not None
+                    else None
                 ),
                 "reduced_entries": [
                     {
@@ -558,6 +570,7 @@ def run_spike(
     python_executable: Path,
     wheel: Path,
     source_archive: Path,
+    cwd: Path,
     timeout_seconds: float = 10,
     runner: ProcessRunner = default_runner,
     pin_path: Path = PIN_PATH,
@@ -594,6 +607,7 @@ def run_spike(
                 str(pin_path.resolve()),
             ],
             timeout_seconds=timeout_seconds,
+            cwd=cwd,
         )
         provider_output = _parse_provider_output(output, pin)
         mathematical_output = {
@@ -675,7 +689,9 @@ def _worker(pin_path: Path) -> int:
     pin = _load_pin(pin_path)
     simplices = _validate_reproduction(pin)
     try:
-        import gudhi
+        import importlib
+
+        gudhi = importlib.import_module("gudhi")
         import numpy
     except ImportError as exc:
         raise GudhiSpikeError(
@@ -697,11 +713,11 @@ def _worker(pin_path: Path) -> int:
     by_vertices = {tuple(item["vertices"]): item for item in simplices}
     for vertices, rank_as_float in tree.get_filtration():
         canonical = tuple(sorted(vertices))
-        item = by_vertices.get(canonical)
+        observed_item = by_vertices.get(canonical)
         if (
-            item is None
+            observed_item is None
             or not rank_as_float.is_integer()
-            or int(rank_as_float) != item["rank"]
+            or int(rank_as_float) != observed_item["rank"]
         ):
             raise GudhiSpikeError(
                 "REJECTED",
@@ -764,6 +780,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--wheel", type=Path)
     parser.add_argument("--source-archive", type=Path)
     parser.add_argument("--pin", type=Path, default=PIN_PATH)
+    parser.add_argument("--cwd", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--worker", action="store_true")
     args = parser.parse_args(argv)
@@ -782,15 +799,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.python_executable is None
         or args.wheel is None
         or args.source_archive is None
+        or args.cwd is None
         or args.output is None
     ):
         parser.error(
-            "--python-executable, --wheel, --source-archive, and --output are required"
+            "--python-executable, --wheel, --source-archive, --cwd, and --output are required"
         )
     report = run_spike(
         python_executable=args.python_executable,
         wheel=args.wheel,
         source_archive=args.source_archive,
+        cwd=args.cwd,
         pin_path=args.pin,
     )
     args.output.write_text(

@@ -13,23 +13,34 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from benchmarks.tooling.spike_utils import (
-    default_runner,
-    sha256_bytes,
-)
 from tools.command_runner import (
+    ToolCommandRequest,
     ToolCommandResult,
     ToolCommandStatus,
 )
 
-PIN_PATH = Path(__file__).with_name("cgal_delaunay_pin.json")
-ADAPTER_SOURCE = Path(__file__).with_name("cgal_delaunay_spike.cpp")
+from benchmarks.tooling.spike_utils import (
+    default_runner,
+    owned_fixture_path,
+    sha256_bytes,
+)
+
+PIN_PATH = owned_fixture_path(
+    __file__,
+    "tests/fixtures/providers/cgal/cgal_delaunay_pin.json",
+    "cgal_delaunay_pin.json",
+)
+ADAPTER_SOURCE = owned_fixture_path(
+    __file__,
+    "tests/fixtures/providers/cgal/cgal_delaunay_spike.cpp",
+    "cgal_delaunay_spike.cpp",
+)
 _SOURCE_MEMBERS = (
     "CGAL-6.2/include/CGAL/version.h",
     "CGAL-6.2/include/CGAL/Delaunay_triangulation_2.h",
 )
 _ENVIRONMENT = {"LANG": "C", "LC_ALL": "C", "TZ": "UTC"}
-ProcessRunner = Callable[..., ToolCommandResult]
+ProcessRunner = Callable[[ToolCommandRequest], ToolCommandResult]
 
 
 class CgalSpikeError(RuntimeError):
@@ -183,15 +194,20 @@ def _run_checked(
     runner: ProcessRunner,
     command: Sequence[str],
     *,
+    cwd: Path,
     timeout_seconds: float,
 ) -> bytes:
     completed = runner(
-        command,
-        input_bytes=b"",
-        timeout_seconds=timeout_seconds,
-        environment=_ENVIRONMENT,
-        stdout_limit=32_768,
-        stderr_limit=16_384,
+        ToolCommandRequest(
+            executable=command[0],
+            arguments=tuple(command[1:]),
+            stdin_bytes=b"",
+            timeout_seconds=timeout_seconds,
+            environment=_ENVIRONMENT,
+            cwd=str(cwd.resolve(strict=True)),
+            stdout_limit_bytes=32_768,
+            stderr_limit_bytes=16_384,
+        )
     )
     if completed.status is ToolCommandStatus.START_FAILED:
         raise CgalSpikeError(
@@ -254,6 +270,7 @@ def run_spike(
     *,
     executable: Path,
     source_archive: Path,
+    cwd: Path,
     timeout_seconds: float = 5,
     runner: ProcessRunner = default_runner,
     pin_path: Path = PIN_PATH,
@@ -279,6 +296,7 @@ def run_spike(
             _run_checked(
                 runner,
                 [str(resolved), "--version"],
+                cwd=cwd,
                 timeout_seconds=timeout_seconds,
             ),
             pin,
@@ -289,6 +307,7 @@ def run_spike(
             output = _run_checked(
                 runner,
                 [str(resolved), *case["command"]],
+                cwd=cwd,
                 timeout_seconds=timeout_seconds,
             )
             try:
@@ -387,12 +406,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--executable", type=Path, required=True)
     parser.add_argument("--source-archive", type=Path, required=True)
+    parser.add_argument("--cwd", type=Path, required=True)
     parser.add_argument("--timeout-seconds", type=float, default=5)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     report = run_spike(
         executable=args.executable,
         source_archive=args.source_archive,
+        cwd=args.cwd,
         timeout_seconds=args.timeout_seconds,
     )
     encoded = json.dumps(report, indent=2, sort_keys=True) + "\n"

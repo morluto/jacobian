@@ -11,16 +11,23 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from benchmarks.tooling.spike_utils import (
-    default_runner,
-    sha256_bytes,
-)
 from tools.command_runner import (
+    ToolCommandRequest,
     ToolCommandResult,
     ToolCommandStatus,
 )
 
-PIN_PATH = Path(__file__).with_name("nauty_provider_pin.json")
+from benchmarks.tooling.spike_utils import (
+    default_runner,
+    owned_fixture_path,
+    sha256_bytes,
+)
+
+PIN_PATH = owned_fixture_path(
+    __file__,
+    "tests/fixtures/providers/nauty/nauty_provider_pin.json",
+    "nauty_provider_pin.json",
+)
 _HELP_MARKERS = {
     "geng": (
         b"Usage: geng ",
@@ -43,7 +50,7 @@ _SOURCE_MEMBERS = (
     "nauty2_9_3/gtools.h",
 )
 
-ProcessRunner = Callable[..., ToolCommandResult]
+ProcessRunner = Callable[[ToolCommandRequest], ToolCommandResult]
 
 
 class NautySpikeError(RuntimeError):
@@ -259,17 +266,22 @@ def _run_checked(
     runner: ProcessRunner,
     command: Sequence[str],
     *,
+    cwd: Path,
     input_bytes: bytes,
     timeout_seconds: float,
     stdout_limit: int,
 ) -> bytes:
     completed = runner(
-        command,
-        input_bytes=input_bytes,
-        timeout_seconds=timeout_seconds,
-        environment=_ENVIRONMENT,
-        stdout_limit=stdout_limit,
-        stderr_limit=16_384,
+        ToolCommandRequest(
+            executable=command[0],
+            arguments=tuple(command[1:]),
+            stdin_bytes=input_bytes,
+            timeout_seconds=timeout_seconds,
+            environment=_ENVIRONMENT,
+            cwd=str(cwd.resolve(strict=True)),
+            stdout_limit_bytes=stdout_limit,
+            stderr_limit_bytes=16_384,
+        )
     )
     if completed.status is ToolCommandStatus.START_FAILED:
         raise NautySpikeError(
@@ -338,11 +350,13 @@ def _probe_help(
     executable: Path,
     *,
     tool: str,
+    cwd: Path,
     timeout_seconds: float,
 ) -> None:
     output = _run_checked(
         runner,
         [str(executable), "-help"],
+        cwd=cwd,
         input_bytes=b"",
         timeout_seconds=timeout_seconds,
         stdout_limit=16_384,
@@ -463,6 +477,7 @@ def run_spike(
     geng: Path,
     labelg: Path,
     source_archive: Path,
+    cwd: Path,
     timeout_seconds: float = 5,
     runner: ProcessRunner = default_runner,
     pin_path: Path = PIN_PATH,
@@ -485,18 +500,21 @@ def run_spike(
             runner,
             resolved_geng,
             tool="geng",
+            cwd=cwd,
             timeout_seconds=timeout_seconds,
         )
         _probe_help(
             runner,
             resolved_labelg,
             tool="labelg",
+            cwd=cwd,
             timeout_seconds=timeout_seconds,
         )
 
         generated = _run_checked(
             runner,
             [str(resolved_geng), *pin["reproduction"]["command"][1:]],
+            cwd=cwd,
             input_bytes=b"",
             timeout_seconds=timeout_seconds,
             stdout_limit=4096,
@@ -519,6 +537,7 @@ def run_spike(
         canonicalized = _run_checked(
             runner,
             [str(resolved_labelg), *pin["canonicalization"]["command"][1:]],
+            cwd=cwd,
             input_bytes=canonical_input,
             timeout_seconds=timeout_seconds,
             stdout_limit=4096,
@@ -564,6 +583,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--geng", type=Path, required=True)
     parser.add_argument("--labelg", type=Path, required=True)
     parser.add_argument("--source-archive", type=Path, required=True)
+    parser.add_argument("--cwd", type=Path, required=True)
     parser.add_argument("--timeout-seconds", type=float, default=5)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
@@ -571,6 +591,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         geng=args.geng,
         labelg=args.labelg,
         source_archive=args.source_archive,
+        cwd=args.cwd,
         timeout_seconds=args.timeout_seconds,
     )
     encoded = json.dumps(report, indent=2, sort_keys=True) + "\n"

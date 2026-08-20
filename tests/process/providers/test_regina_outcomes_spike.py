@@ -8,23 +8,56 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from tests.fixtures.providers.regina.spike import run_spike
+from benchmarks.tooling.providers.regina import run_spike
 from tests.process.providers._spike_support import (
     _canonical,
+    _ExpectedRunner,
+    _request,
     _result,
+    _run_expected,
     _runner,
     _sha256,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-BASE_PIN = json.loads(
-    (
-        PROJECT_ROOT / "tests" / "fixtures" / "providers" / "regina" / "pin.json"
-    ).read_text(encoding="utf-8")
-)
 
 
-RUN_SPIKE = run_spike
+def _base_pin() -> dict[str, Any]:
+    path = PROJECT_ROOT / "tests/fixtures/providers/regina/pin.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def RUN_SPIKE(**kwargs: Any) -> dict[str, Any]:  # noqa: N802
+    runner = kwargs.get("runner")
+    if not isinstance(runner, _ExpectedRunner):
+        return run_spike(cwd=PROJECT_ROOT, **kwargs)
+    python = Path(kwargs["python_executable"])
+    adapter = Path(
+        kwargs.get(
+            "adapter_source", PROJECT_ROOT / "benchmarks/tooling/providers/regina.py"
+        )
+    )
+    pin = Path(kwargs["pin_path"])
+    wheel = Path(kwargs["wheel"])
+    expected = _request(
+        python,
+        (
+            str(adapter.resolve()),
+            "--worker",
+            "--pin",
+            str(pin.resolve()),
+            "--wheel",
+            str(wheel.resolve()),
+        ),
+        environment={"LANG": "C", "LC_ALL": "C", "TZ": "UTC", "PYTHONPATH": "/opt"},
+        cwd=PROJECT_ROOT,
+        timeout_seconds=float(kwargs.get("timeout_seconds", 20)),
+        stdout_limit_bytes=256 * 1024,
+        stderr_limit_bytes=32 * 1024,
+    )
+    return _run_expected(
+        lambda: run_spike(cwd=PROJECT_ROOT, **kwargs), runner, (expected,)
+    )
 
 
 def _provider_output(
@@ -36,12 +69,12 @@ def _provider_output(
     wheel_sha256: str | None = None,
 ) -> bytes:
     payload = {
-        **(mathematical or BASE_PIN["reproduction"]["expected_provider_output"]),
+        **(mathematical or _base_pin()["reproduction"]["expected_provider_output"]),
         "runtime": {
             "distribution": distribution_version,
             "engine": engine_version,
             "python": python_version,
-            "wheel_sha256": wheel_sha256 or BASE_PIN["wheel"]["sha256"],
+            "wheel_sha256": wheel_sha256 or _base_pin()["wheel"]["sha256"],
             "verified_runtime_files": 1,
         },
     }
@@ -80,16 +113,16 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
         b"Name: regina\nVersion: 7.4.1\nLicense: GPLv2+\nRequires-Python: >=3.6\n"
     )
     wheel_metadata = b"Wheel-Version: 1.0\nTag: cp312-cp312-manylinux_2_28_x86_64\n"
-    wheel = tmp_path / BASE_PIN["wheel"]["filename"]
+    wheel = tmp_path / _base_pin()["wheel"]["filename"]
     with zipfile.ZipFile(wheel, mode="w") as archive:
-        archive.writestr(BASE_PIN["wheel"]["metadata_member"], metadata)
-        archive.writestr(BASE_PIN["wheel"]["wheel_member"], wheel_metadata)
+        archive.writestr(_base_pin()["wheel"]["metadata_member"], metadata)
+        archive.writestr(_base_pin()["wheel"]["wheel_member"], wheel_metadata)
 
     pin = {
-        **BASE_PIN,
+        **_base_pin(),
         "adapter_source_sha256": _sha256(adapter.read_bytes()),
         "source": {
-            **BASE_PIN["source"],
+            **_base_pin()["source"],
             "archive_sha256": _sha256(source.read_bytes()),
             "members": {
                 role: {
@@ -100,7 +133,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
             },
         },
         "wheel": {
-            **BASE_PIN["wheel"],
+            **_base_pin()["wheel"],
             "sha256": _sha256(wheel.read_bytes()),
             "metadata_sha256": _sha256(metadata),
             "wheel_sha256": _sha256(wheel_metadata),
@@ -293,7 +326,9 @@ def test_independent_replay_rejects_a_reciprocal_gluing_forgery(
     tmp_path: Path,
 ) -> None:
     python, wheel, source, adapter, pin_path = _fixture(tmp_path)
-    mathematical = copy.deepcopy(BASE_PIN["reproduction"]["expected_provider_output"])
+    mathematical = copy.deepcopy(
+        _base_pin()["reproduction"]["expected_provider_output"]
+    )
     mathematical["cases"][0]["facet_gluings"][0][0]["tetrahedron"] = 0
     pin = json.loads(pin_path.read_text(encoding="utf-8"))
     pin["reproduction"]["expected_provider_output"] = mathematical

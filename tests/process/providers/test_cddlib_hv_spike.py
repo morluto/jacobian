@@ -6,26 +6,50 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from tests.fixtures.providers.cddlib.spike import _expected_mathematical, run_spike
+from benchmarks.tooling.providers.cddlib import _expected_mathematical, run_spike
 from tests.process.providers._spike_support import (
     _canonical,
+    _ExpectedRunner,
+    _request,
     _result,
+    _run_expected,
     _runner,
     _sha256,
 )
 from tools.command_runner import ToolCommandResult
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-BASE_PIN = json.loads(
-    (
-        PROJECT_ROOT / "tests" / "fixtures" / "providers" / "cddlib" / "pin.json"
-    ).read_text(encoding="utf-8")
-)
-
-EXPECTED_MATHEMATICAL = _expected_mathematical(BASE_PIN)
 
 
-RUN_SPIKE = run_spike
+def _base_pin() -> dict[str, Any]:
+    path = PROJECT_ROOT / "tests/fixtures/providers/cddlib/pin.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def RUN_SPIKE(**kwargs: Any) -> dict[str, Any]:  # noqa: N802
+    runner = kwargs.get("runner")
+    if not isinstance(runner, _ExpectedRunner):
+        return run_spike(cwd=PROJECT_ROOT, **kwargs)
+    python = Path(kwargs["python_executable"])
+    adapter = Path(
+        kwargs.get(
+            "adapter_source", PROJECT_ROOT / "benchmarks/tooling/providers/cddlib.py"
+        )
+    )
+    pin = Path(kwargs["pin_path"])
+    timeout = float(kwargs.get("timeout_seconds", 10))
+    expected = _request(
+        python,
+        (str(adapter.resolve()), "--worker", "--pin", str(pin.resolve())),
+        environment={"LANG": "C", "LC_ALL": "C", "TZ": "UTC", "PYTHONPATH": "/opt"},
+        cwd=PROJECT_ROOT,
+        timeout_seconds=timeout,
+        stdout_limit_bytes=128 * 1024,
+        stderr_limit_bytes=16 * 1024,
+    )
+    return _run_expected(
+        lambda: run_spike(cwd=PROJECT_ROOT, **kwargs), runner, (expected,)
+    )
 
 
 def _provider_output(
@@ -35,7 +59,7 @@ def _provider_output(
     pycddlib_version: str = "3.0.2",
 ) -> bytes:
     payload = {
-        **(mathematical or EXPECTED_MATHEMATICAL),
+        **(mathematical or _expected_mathematical(_base_pin())),
         "runtime": {
             "distribution_record_sha256": "sha256:" + "1" * 64,
             "gmp_module_sha256": "sha256:" + "2" * 64,
@@ -65,11 +89,13 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
 
     cdd_members = {
         name: "\n".join(expected["required_ascii_markers"]).encode("ascii")
-        for name, expected in BASE_PIN["sources"]["cddlib"]["identity_members"].items()
+        for name, expected in _base_pin()["sources"]["cddlib"][
+            "identity_members"
+        ].items()
     }
     pycdd_members = {
         name: "\n".join(expected["required_ascii_markers"]).encode("ascii")
-        for name, expected in BASE_PIN["sources"]["pycddlib"][
+        for name, expected in _base_pin()["sources"]["pycddlib"][
             "identity_members"
         ].items()
     }
@@ -79,26 +105,26 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     _archive(pycdd_source, pycdd_members)
 
     pin = {
-        **BASE_PIN,
+        **_base_pin(),
         "adapter_source_sha256": _sha256(adapter.read_bytes()),
         "sources": {
             "cddlib": {
-                **BASE_PIN["sources"]["cddlib"],
+                **_base_pin()["sources"]["cddlib"],
                 "archive_sha256": _sha256(cdd_source.read_bytes()),
                 "identity_members": {
                     name: {
-                        **BASE_PIN["sources"]["cddlib"]["identity_members"][name],
+                        **_base_pin()["sources"]["cddlib"]["identity_members"][name],
                         "sha256": _sha256(payload),
                     }
                     for name, payload in cdd_members.items()
                 },
             },
             "pycddlib": {
-                **BASE_PIN["sources"]["pycddlib"],
+                **_base_pin()["sources"]["pycddlib"],
                 "archive_sha256": _sha256(pycdd_source.read_bytes()),
                 "identity_members": {
                     name: {
-                        **BASE_PIN["sources"]["pycddlib"]["identity_members"][name],
+                        **_base_pin()["sources"]["pycddlib"]["identity_members"][name],
                         "sha256": _sha256(payload),
                     }
                     for name, payload in pycdd_members.items()
@@ -195,7 +221,7 @@ def test_protocol_runtime_and_malformed_output_fail_closed(tmp_path: Path) -> No
 
     malformed = RUN_SPIKE(runner=_runner([_result(stdout=b"not-json")]), **common)
     wrong_version = {
-        **EXPECTED_MATHEMATICAL,
+        **_expected_mathematical(_base_pin()),
         "versions": {"cddlib": "0.94n", "pycddlib": "9.9.9"},
     }
     version = RUN_SPIKE(

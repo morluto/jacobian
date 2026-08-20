@@ -13,17 +13,22 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from benchmarks.tooling.spike_utils import (
-    canonical_json,
-    default_runner,
-    sha256_bytes,
-)
 from tools.command_runner import (
+    ToolCommandRequest,
     ToolCommandResult,
     ToolCommandStatus,
 )
 
-PIN_PATH = Path(__file__).with_name("pin.json")
+from benchmarks.tooling.spike_utils import (
+    canonical_json,
+    default_runner,
+    owned_fixture_path,
+    sha256_bytes,
+)
+
+PIN_PATH = owned_fixture_path(
+    __file__, "tests/fixtures/providers/cddlib/pin.json", "pin.json"
+)
 ADAPTER_SOURCE = Path(__file__)
 # Worker re-exec replaces the process environment; keep the image PYTHONPATH so
 # `tools.command_runner` remains importable inside --worker mode.
@@ -40,7 +45,7 @@ _KIND_ORDER = {
     "RAY": 3,
     "LINEALITY": 4,
 }
-ProcessRunner = Callable[..., ToolCommandResult]
+ProcessRunner = Callable[[ToolCommandRequest], ToolCommandResult]
 _WORKER_ERROR_PREFIX = b"JACOBIAN_SPIKE_ERROR "
 
 
@@ -105,11 +110,9 @@ def _load_pin(path: Path) -> dict[str, Any]:
         and isinstance(scope.get("covers"), list)
         and all(isinstance(item, str) for item in scope["covers"])
     )
-    sources_valid = isinstance(sources, dict) and set(sources) == {
-        "cddlib",
-        "pycddlib",
-    }
-    if sources_valid:
+    sources_valid = False
+    if isinstance(sources, dict) and set(sources) == {"cddlib", "pycddlib"}:
+        sources_valid = True
         for source in sources.values():
             if (
                 not isinstance(source, dict)
@@ -350,8 +353,8 @@ def _integer_normalize(row: Sequence[Fraction], *, sign_free: bool) -> list[Frac
         value.numerator * (denominator_lcm // value.denominator) for value in row
     ]
     divisor = 0
-    for value in integers:
-        divisor = math.gcd(divisor, abs(value))
+    for integer in integers:
+        divisor = math.gcd(divisor, abs(integer))
     if divisor == 0:
         return [Fraction(0) for _ in row]
     integers = [value // divisor for value in integers]
@@ -689,15 +692,20 @@ def _run_checked(
     runner: ProcessRunner,
     command: Sequence[str],
     *,
+    cwd: Path,
     timeout_seconds: float,
 ) -> bytes:
     completed = runner(
-        command,
-        input_bytes=b"",
-        timeout_seconds=timeout_seconds,
-        environment=_ENVIRONMENT,
-        stdout_limit=128 * 1024,
-        stderr_limit=16 * 1024,
+        ToolCommandRequest(
+            executable=command[0],
+            arguments=tuple(command[1:]),
+            stdin_bytes=b"",
+            timeout_seconds=timeout_seconds,
+            environment=_ENVIRONMENT,
+            cwd=str(cwd.resolve(strict=True)),
+            stdout_limit_bytes=128 * 1024,
+            stderr_limit_bytes=16 * 1024,
+        )
     )
     if completed.status is ToolCommandStatus.START_FAILED:
         raise CddlibSpikeError(
@@ -803,6 +811,7 @@ def run_spike(
     python_executable: Path,
     cddlib_source_archive: Path,
     pycddlib_source_archive: Path,
+    cwd: Path,
     timeout_seconds: float = 10,
     runner: ProcessRunner = default_runner,
     pin_path: Path = PIN_PATH,
@@ -841,6 +850,7 @@ def run_spike(
                 str(pin_path.resolve()),
             ],
             timeout_seconds=timeout_seconds,
+            cwd=cwd,
         )
         provider_output = _parse_provider_output(output, pin)
         by_id = {case["case_id"]: case for case in cases}
@@ -922,9 +932,10 @@ def _worker(pin_path: Path) -> int:
     pin = _load_pin(pin_path)
     cases = _validate_cases(pin)
     try:
+        import importlib
         import importlib.metadata
 
-        import cdd.gmp as cdd
+        cdd = importlib.import_module("cdd.gmp")
     except ImportError as exc:
         raise CddlibSpikeError(
             "UNAVAILABLE",
@@ -1006,11 +1017,16 @@ def _worker(pin_path: Path) -> int:
         rep_type=cdd.RepType.INEQUALITY,
     )
     exact_probe = probe_matrix.array[0][0]
-    gmp_module = Path(cdd.__file__).resolve()
+    module_file = getattr(cdd, "__file__", None)
+    if not isinstance(module_file, str):
+        raise CddlibSpikeError(
+            "UNAVAILABLE", "PROVIDER_IMPORT_ERROR", "cdd.gmp has no module file."
+        )
+    gmp_module = Path(module_file).resolve()
     distribution = importlib.metadata.distribution("pycddlib")
     record_path = next(
         (
-            Path(distribution.locate_file(item))
+            Path(str(distribution.locate_file(item)))
             for item in distribution.files or ()
             if item.name == "RECORD"
         ),
@@ -1052,6 +1068,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--cddlib-source-archive", type=Path)
     parser.add_argument("--pycddlib-source-archive", type=Path)
     parser.add_argument("--pin", type=Path, default=PIN_PATH)
+    parser.add_argument("--cwd", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--worker", action="store_true")
     args = parser.parse_args(argv)
@@ -1070,16 +1087,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.python_executable is None
         or args.cddlib_source_archive is None
         or args.pycddlib_source_archive is None
+        or args.cwd is None
         or args.output is None
     ):
         parser.error(
             "--python-executable, --cddlib-source-archive, "
-            "--pycddlib-source-archive, and --output are required"
+            "--pycddlib-source-archive, --cwd, and --output are required"
         )
     report = run_spike(
         python_executable=args.python_executable,
         cddlib_source_archive=args.cddlib_source_archive,
         pycddlib_source_archive=args.pycddlib_source_archive,
+        cwd=args.cwd,
         pin_path=args.pin,
     )
     args.output.write_text(

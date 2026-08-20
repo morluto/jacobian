@@ -15,19 +15,24 @@ import zlib
 from collections.abc import Callable, Mapping, Sequence
 from itertools import combinations
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from benchmarks.tooling.spike_utils import (
-    canonical_json,
-    default_runner,
-    sha256_bytes,
-)
 from tools.command_runner import (
+    ToolCommandRequest,
     ToolCommandResult,
     ToolCommandStatus,
 )
 
-PIN_PATH = Path(__file__).with_name("pin.json")
+from benchmarks.tooling.spike_utils import (
+    canonical_json,
+    default_runner,
+    owned_fixture_path,
+    sha256_bytes,
+)
+
+PIN_PATH = owned_fixture_path(
+    __file__, "tests/fixtures/providers/regina/pin.json", "pin.json"
+)
 ADAPTER_SOURCE = Path(__file__)
 _SOURCE_ROOT = "regina-7.4.1"
 _SOURCE_MEMBERS = {
@@ -45,7 +50,7 @@ _ENVIRONMENT = {
     "PYTHONPATH": "/opt",
 }
 _INTEGER = re.compile(r"^(?:0|[1-9][0-9]*)$")
-ProcessRunner = Callable[..., ToolCommandResult]
+ProcessRunner = Callable[[ToolCommandRequest], ToolCommandResult]
 _WORKER_ERROR_PREFIX = b"JACOBIAN_SPIKE_ERROR "
 
 
@@ -333,15 +338,20 @@ def _run_checked(
     runner: ProcessRunner,
     command: Sequence[str],
     *,
+    cwd: Path,
     timeout_seconds: float,
 ) -> bytes:
     completed = runner(
-        command,
-        input_bytes=b"",
-        timeout_seconds=timeout_seconds,
-        environment=_ENVIRONMENT,
-        stdout_limit=256 * 1024,
-        stderr_limit=32 * 1024,
+        ToolCommandRequest(
+            executable=command[0],
+            arguments=tuple(command[1:]),
+            stdin_bytes=b"",
+            timeout_seconds=timeout_seconds,
+            environment=_ENVIRONMENT,
+            cwd=str(cwd.resolve(strict=True)),
+            stdout_limit_bytes=256 * 1024,
+            stderr_limit_bytes=32 * 1024,
+        )
     )
     if completed.status is ToolCommandStatus.START_FAILED:
         raise ReginaSpikeError(
@@ -491,12 +501,12 @@ def _gluing_out_of_scope(
 
 
 def _gluing_not_reciprocal(
-    gluings: list,
+    gluings: list[list[Any]],
     source: int,
     facet: int,
     target: int,
     target_facet: int,
-    permutation: list,
+    permutation: list[int],
 ) -> bool:
     reverse = gluings[target][target_facet]
     return (
@@ -510,7 +520,7 @@ def _gluing_not_reciprocal(
     )
 
 
-def _validate_facet_gluings(gluings: list, tetrahedra: int) -> None:
+def _validate_facet_gluings(gluings: list[list[Any]], tetrahedra: int) -> None:
     for source, row in enumerate(gluings):
         for facet, gluing in enumerate(row):
             if gluing is None:
@@ -542,7 +552,7 @@ def _validate_facet_gluings(gluings: list, tetrahedra: int) -> None:
                 )
 
 
-def _compute_f_vector(gluings: list, tetrahedra: int) -> list[int]:
+def _compute_f_vector(gluings: list[list[Any]], tetrahedra: int) -> list[int]:
     nodes = [
         (tetrahedron, dimension, vertices)
         for tetrahedron in range(tetrahedra)
@@ -578,8 +588,10 @@ def _replay_triangulation(case: Mapping[str, Any]) -> dict[str, Any]:
     tetrahedra = case.get("tetrahedra")
     gluings = case.get("facet_gluings")
     _validate_gluing_shape(tetrahedra, gluings)
-    _validate_facet_gluings(gluings, tetrahedra)
-    f_vector = _compute_f_vector(gluings, tetrahedra)
+    checked_tetrahedra = cast(int, tetrahedra)
+    checked_gluings = cast(list[list[Any]], gluings)
+    _validate_facet_gluings(checked_gluings, checked_tetrahedra)
+    f_vector = _compute_f_vector(checked_gluings, checked_tetrahedra)
     if case.get("f_vector") != f_vector:
         raise ReginaSpikeError(
             "REJECTED",
@@ -703,6 +715,7 @@ def run_spike(
     python_executable: Path,
     wheel: Path,
     source_archive: Path,
+    cwd: Path,
     timeout_seconds: float = 20,
     runner: ProcessRunner = default_runner,
     pin_path: Path = PIN_PATH,
@@ -735,6 +748,7 @@ def run_spike(
                 wheel_identity["path"],
             ],
             timeout_seconds=timeout_seconds,
+            cwd=cwd,
         )
         provider_output = _parse_provider_output(output, pin)
         mathematical = {
@@ -857,7 +871,7 @@ def _gluing_payload(triangulation: Any) -> list[list[dict[str, Any] | None]]:
 def _verify_installed_runtime(wheel_path: Path) -> int:
     distribution = importlib.metadata.distribution("regina")
     installed = {
-        str(item).replace("\\", "/"): Path(distribution.locate_file(item))
+        str(item).replace("\\", "/"): Path(str(distribution.locate_file(item)))
         for item in distribution.files or ()
     }
     verified = 0
@@ -902,7 +916,9 @@ def _worker(pin_path: Path, wheel_path: Path) -> int:
     pin = _load_pin(pin_path)
     cases = _validate_reproduction(pin)
     try:
-        import regina
+        import importlib
+
+        regina = importlib.import_module("regina")
     except ImportError as exc:
         raise ReginaSpikeError(
             "UNAVAILABLE", "PROVIDER_IMPORT_ERROR", "Regina is unavailable."
@@ -952,7 +968,7 @@ def _worker(pin_path: Path, wheel_path: Path) -> int:
     )
     surfaces = []
     for surface in normal_list:
-        coordinates = []
+        coordinates: list[str] = []
         for tetrahedron in range(normal_triangulation.size()):
             coordinates.extend(
                 str(surface.triangles(tetrahedron, vertex)) for vertex in range(4)
@@ -1002,6 +1018,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--wheel", type=Path)
     parser.add_argument("--source-archive", type=Path)
     parser.add_argument("--pin", type=Path, default=PIN_PATH)
+    parser.add_argument("--cwd", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--worker", action="store_true")
     args = parser.parse_args(argv)
@@ -1022,15 +1039,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.python_executable is None
         or args.wheel is None
         or args.source_archive is None
+        or args.cwd is None
         or args.output is None
     ):
         parser.error(
-            "--python-executable, --wheel, --source-archive, and --output are required"
+            "--python-executable, --wheel, --source-archive, --cwd, and --output are required"
         )
     report = run_spike(
         python_executable=args.python_executable,
         wheel=args.wheel,
         source_archive=args.source_archive,
+        cwd=args.cwd,
         pin_path=args.pin,
     )
     args.output.write_text(

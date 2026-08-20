@@ -7,23 +7,48 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from tests.fixtures.providers.gudhi.spike import run_spike
+from benchmarks.tooling.providers.gudhi import run_spike
 from tests.process.providers._spike_support import (
     _canonical,
+    _ExpectedRunner,
+    _request,
     _result,
+    _run_expected,
     _runner,
     _sha256,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-BASE_PIN = json.loads(
-    (
-        PROJECT_ROOT / "tests" / "fixtures" / "providers" / "gudhi" / "pin.json"
-    ).read_text(encoding="utf-8")
-)
 
 
-RUN_SPIKE = run_spike
+def _base_pin() -> dict[str, Any]:
+    path = PROJECT_ROOT / "tests/fixtures/providers/gudhi/pin.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def RUN_SPIKE(**kwargs: Any) -> dict[str, Any]:  # noqa: N802
+    runner = kwargs.get("runner")
+    if not isinstance(runner, _ExpectedRunner):
+        return run_spike(cwd=PROJECT_ROOT, **kwargs)
+    python = Path(kwargs["python_executable"])
+    adapter = Path(
+        kwargs.get(
+            "adapter_source", PROJECT_ROOT / "benchmarks/tooling/providers/gudhi.py"
+        )
+    )
+    pin = Path(kwargs["pin_path"])
+    expected = _request(
+        python,
+        (str(adapter.resolve()), "--worker", "--pin", str(pin.resolve())),
+        environment={"LANG": "C", "LC_ALL": "C", "TZ": "UTC", "PYTHONPATH": "/opt"},
+        cwd=PROJECT_ROOT,
+        timeout_seconds=float(kwargs.get("timeout_seconds", 10)),
+        stdout_limit_bytes=64 * 1024,
+        stderr_limit_bytes=16 * 1024,
+    )
+    return _run_expected(
+        lambda: run_spike(cwd=PROJECT_ROOT, **kwargs), runner, (expected,)
+    )
 
 
 def _provider_output(
@@ -33,7 +58,7 @@ def _provider_output(
     python_version: str = "3.12.13",
 ) -> bytes:
     payload = {
-        **(mathematical or BASE_PIN["reproduction"]["expected_provider_output"]),
+        **(mathematical or _base_pin()["reproduction"]["expected_provider_output"]),
         "runtime": {
             "gudhi": gudhi_version,
             "numpy": "2.4.1",
@@ -70,16 +95,16 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
 
     license_payload = b"MIT License\nfixture\n"
     metadata = b"Name: gudhi\nVersion: 3.13.0\nRequires-Python: >=3.10\n"
-    wheel = tmp_path / BASE_PIN["wheel"]["filename"]
+    wheel = tmp_path / _base_pin()["wheel"]["filename"]
     with zipfile.ZipFile(wheel, mode="w") as archive:
-        archive.writestr(BASE_PIN["wheel"]["license_member"], license_payload)
-        archive.writestr(BASE_PIN["wheel"]["metadata_member"], metadata)
+        archive.writestr(_base_pin()["wheel"]["license_member"], license_payload)
+        archive.writestr(_base_pin()["wheel"]["metadata_member"], metadata)
 
     pin = {
-        **BASE_PIN,
+        **_base_pin(),
         "adapter_source_sha256": _sha256(adapter.read_bytes()),
         "source": {
-            **BASE_PIN["source"],
+            **_base_pin()["source"],
             "archive_sha256": _sha256(source.read_bytes()),
             "module_licenses": {
                 "simplex_tree": {
@@ -108,7 +133,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
             },
         },
         "wheel": {
-            **BASE_PIN["wheel"],
+            **_base_pin()["wheel"],
             "sha256": _sha256(wheel.read_bytes()),
             "license_sha256": _sha256(license_payload),
         },
@@ -197,7 +222,7 @@ def test_source_and_wheel_mismatch_fail_before_execution(tmp_path: Path) -> None
 def test_protocol_runtime_and_malformed_output_fail_closed(tmp_path: Path) -> None:
     python, wheel, source, adapter, pin = _fixture(tmp_path)
     wrong_protocol = {
-        **BASE_PIN["reproduction"]["expected_provider_output"],
+        **_base_pin()["reproduction"]["expected_provider_output"],
         "version": "3.12.0",
     }
     version_report = RUN_SPIKE(

@@ -6,25 +6,53 @@ import lzma
 import tarfile
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
-from tests.fixtures.providers.cgal.spike import run_spike
-from tests.process.providers._spike_support import _result, _runner
+from benchmarks.tooling.providers.cgal import run_spike
+from tests.process.providers._spike_support import (
+    _ExpectedRunner,
+    _request,
+    _result,
+    _run_expected,
+    _runner,
+)
 from tools.command_runner import ToolCommandResult
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-BASE_PIN = json.loads(
-    (
-        PROJECT_ROOT
-        / "tests"
-        / "fixtures"
-        / "providers"
-        / "cgal"
-        / "cgal_delaunay_pin.json"
-    ).read_text(encoding="utf-8")
-)
 
 
-RUN_SPIKE = run_spike
+def _base_pin() -> dict[str, object]:
+    path = PROJECT_ROOT / "tests/fixtures/providers/cgal/cgal_delaunay_pin.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def RUN_SPIKE(**kwargs: Any) -> dict[str, Any]:  # noqa: N802
+    runner = kwargs.get("runner")
+    if not isinstance(runner, _ExpectedRunner):
+        return run_spike(cwd=PROJECT_ROOT, **kwargs)
+    executable = Path(kwargs["executable"])
+    pin = json.loads(Path(kwargs["pin_path"]).read_text(encoding="utf-8"))
+    timeout = float(kwargs.get("timeout_seconds", 5))
+    commands = [
+        ("--version",),
+        tuple(pin["reproductions"]["unique"]["command"]),
+        tuple(pin["reproductions"]["cocircular"]["command"]),
+    ]
+    expected = tuple(
+        _request(
+            executable,
+            arguments,
+            environment={"LANG": "C", "LC_ALL": "C", "TZ": "UTC"},
+            cwd=PROJECT_ROOT,
+            timeout_seconds=timeout,
+            stdout_limit_bytes=32_768,
+            stderr_limit_bytes=16_384,
+        )
+        for arguments in commands
+    )
+    return _run_expected(
+        lambda: run_spike(cwd=PROJECT_ROOT, **kwargs), runner, expected
+    )
 
 
 def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
@@ -53,7 +81,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
             info.mtime = 0
             bundle.addfile(info, BytesIO(payload))
     pin = {
-        **BASE_PIN,
+        **_base_pin(),
         "archive_sha256": "sha256:" + hashlib.sha256(archive.read_bytes()).hexdigest(),
         "adapter_source_sha256": (
             "sha256:" + hashlib.sha256(adapter.read_bytes()).hexdigest()
@@ -73,9 +101,13 @@ def _successes() -> list[ToolCommandResult]:
                 b"boost 1_79\n"
             )
         ),
-        _result(stdout=BASE_PIN["reproductions"]["unique"]["expected_output"].encode()),
         _result(
-            stdout=BASE_PIN["reproductions"]["cocircular"]["expected_output"].encode()
+            stdout=_base_pin()["reproductions"]["unique"]["expected_output"].encode()
+        ),
+        _result(
+            stdout=_base_pin()["reproductions"]["cocircular"][
+                "expected_output"
+            ].encode()
         ),
     ]
 
@@ -199,7 +231,7 @@ def test_malformed_xz_archive_does_not_escape_as_an_exception(
     adapter.touch()
     archive.write_bytes(lzma.compress(b"not a tar archive"))
     pin = {
-        **BASE_PIN,
+        **_base_pin(),
         "archive_sha256": "sha256:" + hashlib.sha256(archive.read_bytes()).hexdigest(),
     }
     pin_path = tmp_path / "pin.json"

@@ -1,5 +1,5 @@
 {
-  "adapter_source_sha256": "sha256:2406f703ceafb0bff19cda9210358f75670f9ae2a08f7688f7cf168a8975eb4a",
+  "adapter_source_sha256": "sha256:61717cf9ed7c8a4bd1ee001637bc906fc2b04ae840157207af63995c6e72c594",
   "contract": "jacobian.gudhi-persistence-spike/v1",
   "documentation_url": "https://gudhi.inria.fr/python/3.13.0/simplex_tree_ref.html",
   "licensing_url": "https://gudhi.inria.fr/licensing/",

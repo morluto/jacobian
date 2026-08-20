@@ -465,6 +465,54 @@ class PrimeFactorizationResult(StrictModel):
         return self
 
 
+class BudgetedFactorizationRequest(StrictModel):
+    """One positive canonical integer and an explicit SymPy factoring limit."""
+
+    value: BoundedInteger
+    factor_limit: StrictInt = Field(default=100_000, ge=4, le=1_000_000)
+
+    @model_validator(mode="after")
+    def require_composite_domain(self) -> Self:
+        from jacobian.canonical import parse_canonical_integer
+
+        if parse_canonical_integer(self.value) < 2:
+            raise ValueError("budgeted factorization requires an integer at least 2")
+        return self
+
+
+class CertifiedFactorComponent(StrictModel):
+    value: BoundedInteger
+    exponent: StrictInt = Field(ge=1, le=1024)
+    status: Literal["CERTIFIED_PRIME", "UNRESOLVED"]
+
+
+class BudgetedFactorizationResult(StrictModel):
+    status: Literal["COMPLETE", "INCOMPLETE"]
+    value: BoundedInteger
+    factor_limit: StrictInt = Field(ge=4, le=1_000_000)
+    factors: tuple[CertifiedFactorComponent, ...] = Field(min_length=1, max_length=256)
+
+    @model_validator(mode="after")
+    def bind_decomposition(self) -> Self:
+        from jacobian.canonical import parse_canonical_integer
+
+        product = math.prod(
+            parse_canonical_integer(item.value) ** item.exponent
+            for item in self.factors
+        )
+        if product != parse_canonical_integer(self.value):
+            raise ValueError("factor components must multiply to the requested integer")
+        complete = all(item.status == "CERTIFIED_PRIME" for item in self.factors)
+        if complete != (self.status == "COMPLETE"):
+            raise ValueError(
+                "complete status must match the per-factor primality statuses"
+            )
+        values = [parse_canonical_integer(item.value) for item in self.factors]
+        if values != sorted(values) or len(values) != len(set(values)):
+            raise ValueError("factor components must be unique and ascending")
+        return self
+
+
 class PowerfulNumberResult(StrictModel):
     """A powerful-number decision with its complete factor witness."""
 

@@ -2,6 +2,10 @@
   "catalog_version": "1",
   "domain": "number_theory",
   "operations": {
+    "integer.factor.certified_compute": {
+      "input_schema": "sha256:c428df899038a38ec89f987a758ef6df894c2a9060f5eaa11e5d332b12681ec0",
+      "output_schema": "sha256:4b34867e15d8f3dce59e2703d4acbdcc55949687a224bb2544857083938a3fe4"
+    },
     "finite_abelian_group.exact_factorization.compute": {
       "input_schema": "sha256:1c1af27397f6e871b042146827f184be128cfe6c824877fa796ad191826ffed9",
       "output_schema": "sha256:b5fedde2179445bed43a1bd76b1a295befe124648fbeab54e3fe79dab77a8042"

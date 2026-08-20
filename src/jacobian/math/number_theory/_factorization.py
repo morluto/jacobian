@@ -14,10 +14,13 @@ from jacobian.math.number_theory._factorization_kernels import (
     enumerate_divisors,
     enumerate_proper_divisors,
     factorize_primes,
+    factorize_with_budget,
 )
 from jacobian.math.number_theory._models import (
     ArithmeticFunctionRequest,
     BooleanResult,
+    BudgetedFactorizationRequest,
+    BudgetedFactorizationResult,
     DivisorListResult,
     IntegerValueResult,
     NonzeroFactorizationRequest,
@@ -25,6 +28,12 @@ from jacobian.math.number_theory._models import (
     PowerfulNumberResult,
     PrimeFactorizationResult,
 )
+
+
+def _compute_budgeted_factorization(
+    request: BudgetedFactorizationRequest,
+) -> BudgetedFactorizationResult:
+    return factorize_with_budget(request)
 
 
 def _compute_divisors(
@@ -88,6 +97,22 @@ def _operation[RequestT: StrictModel, ResultT: StrictModel](
 
 
 FACTORIZATION_OPERATIONS = (
+    _operation(
+        operation_id="integer.factor.certified_compute",
+        title="Compute a budgeted integer factorization",
+        description="Use SymPy's bounded factoring algorithms to return certified prime factors and any explicitly unresolved composite cofactor.",
+        request_model=BudgetedFactorizationRequest,
+        result_model=BudgetedFactorizationResult,
+        implementation=_compute_budgeted_factorization,
+        tags=("number-theory", "factorization", "bounded", "partial", "prime"),
+        examples=(
+            example(
+                "semiprime_10403",
+                "Factor 10403 within a declared search limit; unresolved composite cofactors remain explicit.",
+                {"value": "10403", "factor_limit": 1000},
+            ),
+        ),
+    ),
     _operation(
         operation_id="integer.compute.divisors",
         title="Enumerate positive divisors",

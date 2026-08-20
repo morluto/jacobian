@@ -11,6 +11,11 @@ from jacobian.math.number_theory._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "integer.factor.certified_compute",
+        AdmissionDecision.KEEP,
+        "distinct explicitly bounded partial factorization with certified-prime and unresolved outcomes",
+    ),
+    OperationAdmission(
         "finite_abelian_group.exact_factorization.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

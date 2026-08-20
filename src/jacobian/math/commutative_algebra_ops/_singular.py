@@ -267,8 +267,7 @@ def run_singular_ideal_operation(
             outcome="UNAVAILABLE",
             detail="The supported Singular 4.4 backend is not installed.",
         )
-    if not Path(resolved).is_absolute():
-        raise ValueError("Singular executable must resolve to an absolute path")
+    resolved = str(Path(resolved).resolve())
     with tempfile.TemporaryDirectory(prefix="jacobian-singular-") as directory:
         try:
             completed = run_bounded_process(

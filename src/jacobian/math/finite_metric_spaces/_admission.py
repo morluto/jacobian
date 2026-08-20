@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.finite_metric_spaces._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -22,3 +27,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "one complete exact metric profile whose mutually bound fields form a reusable invariant family",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

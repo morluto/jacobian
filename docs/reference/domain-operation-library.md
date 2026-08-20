@@ -8,7 +8,7 @@ validates then executes exactly one of them.
 The ordinary path is: select declaration, parse its Pydantic request once,
 call the domain function, and return its concrete result. A domain function may
 use a maintained library privately for its algorithm; callers see Jacobian's
-typed mathematical values, not backend/provider objects.
+typed mathematical values, not backend objects.
 
 Keep values, codecs, invariants, and backend conversions with their domain.
 Shared contracts are limited to passive cross-domain primitives. A bounded
@@ -69,6 +69,14 @@ process invocation.
 
 ## Operation preflight
 
+First diagnose the gap: a missing operation is only one of several possible
+responses to an observed composition failure. Classify the failure as
+representation, interoperability, discovery, contract, scale/backend, operation,
+or reasoning before designing an implementation (see
+[Executable mathematical vocabulary](../explanation/executable-mathematical-vocabulary.md)).
+Only a genuine operation gap proceeds to the
+[admission contract](public-operation-admission.md).
+
 Do not add a public operation until its stated mathematical claim has a bounded,
 appropriate implementation. A public operation is the `MathTool` contract—its
 identifier, typed request and result, scope, and mathematical claim—not merely
@@ -98,9 +106,19 @@ Before declaring the operation, provide tests for:
 - request validation proving a schema-valid input either returns a typed
   result or is rejected by the request model—never a host exception.
 
-Before publication, record one admission decision for the operation in
-`src/jacobian/catalog/admission.py`; catalog construction fails closed without
-it (see the
+Apply these adapter and request-boundary rules:
+
+- Canonical integer and rational strings must reach backends only through
+  `parse_canonical_integer()`, `as_integer_ratio()`, or an owner conversion
+  helper. When the contract permits values above CPython's 4,300-digit integer
+  string conversion limit, every adapter must include a test above that limit.
+- For operations with mathematical preconditions such as nonsingularity,
+  uniqueness, irreducibility, or nondegeneracy, tests must cover each excluded
+  class and prove rejection occurs during request validation.
+
+Before publication, record one owner-local admission decision in the
+mathematical domain's `_admission.py` module. `jacobian.catalog.admission` owns
+the shared policy types and fail-closed validation (see the
 [public operation admission](public-operation-admission.md) contract).
 
 ### Boundedness proof

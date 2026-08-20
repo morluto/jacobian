@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.finite_game_theory._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -16,3 +21,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact primal-dual linear programming returns a complete equilibrium witness for every bounded finite zero-sum game",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

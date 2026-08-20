@@ -29,6 +29,10 @@
     "combinatorics.recurrence.p_recursive.table_residuals.compute": {
       "input_schema": "sha256:b6b9e07b511abd2b9713e716048ad0b19036e12e1eb8b9946f70b3b8d248e1d0",
       "output_schema": "sha256:49b096a5536634ff98c1544aea60dd748d4d186374274cf90e9e917e2f602624"
+    },
+    "combinatorics.rsk.permutation.compute": {
+      "input_schema": "sha256:09e03cb2debd022cd5c0920c8dc0aa7ad91c249d47fbd792f5795eac20a8446d",
+      "output_schema": "sha256:544ccab81078a3ac29934ee8b044c22aba9816213cc2648481a08eb2ec4d0317"
     }
   }
 }

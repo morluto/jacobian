@@ -312,11 +312,15 @@ def _evaluator_call_name(
 ) -> str | None:
     if isinstance(node.func, ast.Name):
         return node.func.id if node.func.id in direct_names else None
-    if isinstance(node.func, ast.Attribute) and (
-        node.func.attr not in {"eval", "exec"}
-        or (
-            isinstance(node.func.value, ast.Name)
-            and node.func.value.id in builtin_modules
+    if (
+        isinstance(node.func, ast.Attribute)
+        and node.func.attr in _EVALUATOR_CAPABLE_FUNCTIONS
+        and (
+            node.func.attr not in {"eval", "exec"}
+            or (
+                isinstance(node.func.value, ast.Name)
+                and node.func.value.id in builtin_modules
+            )
         )
     ):
         return node.func.attr

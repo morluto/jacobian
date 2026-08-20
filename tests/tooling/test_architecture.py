@@ -120,7 +120,10 @@ def test_backend_eval_methods_are_not_confused_with_python_eval(tmp_path: Path) 
     _write(
         tmp_path,
         "src/jacobian/math/example.py",
-        "value = polynomial.eval(point)\nresult = model.eval(variable)\n",
+        "value = polynomial.eval(point)\n"
+        "result = model.eval(variable)\n"
+        "items.append(value)\n"
+        "mapping.keys()\n",
     )
 
     assert check_architecture(tmp_path).ok

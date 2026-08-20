@@ -56,6 +56,15 @@ algebraic branches, and source hypotheses. When a later exact replay rejects a
 rounded numerical point, distinguish “this reported point is not a witness”
 from “no nearby exact witness exists.”
 
+When a symbolic derivation clears denominators or assumes polynomial factors
+are nonzero, record the equation ideal and the excluded locus separately. A
+Gröbner basis of the cleared numerators describes a closure that may retain
+components supported entirely on forbidden factors; do not treat it as the
+original rational system without saturation or equivalent exclusion evidence.
+Likewise, a rank computed over a rational-function field with algebraically
+independent parameters does not establish the rank after imposing polynomial
+relations among those parameters.
+
 For numerical searches, require enough retained state to reproduce and certify
 the candidate: equations, variable order and normalization, side conditions,
 solver and status, random seeds, full-precision values, residual definition,
@@ -88,10 +97,26 @@ Then inspect the session-visible Jacobian surface when possible:
 4. Was it selected and called with a valid payload?
 5. Was its typed result used within its stated scope?
 
+Select operations against the downstream evidence the trajectory needed, not
+only the operation title or primary scalar value. When neighboring operations
+differ by transformations, bases, representatives, reconstruction data, or
+certificates, determine whether later work needed that stronger result. If a
+certificate-bearing operation was available, rebuilding its missing evidence
+from a lossy sibling is a selection failure rather than an operation gap.
+
 Do not infer use from a generic “called tool” marker. Compare repeated scalar
 calls, manual all-pairs or all-subsets loops, and custom symbolic or solver code
 against available aggregate operations. An N+1 trace can suggest a missing
 profile operation, but verify the catalog before proposing one.
+
+At a SAT, SMT, optimization, or other solver escape, separate the solver engine
+from the mathematical result being sought. A generic bounded solver operation
+may be the correct tool for one investigation, while a repository gap may
+instead be a typed domain result such as a solution family, embedding, or
+factorization with the solver kept private. Do not propose public blocking
+clauses, search sessions, or model-enumeration mechanics merely because the
+scratch implementation used them; also do not reject a solver-backed operation
+when its public postcondition is stable, bounded, and mathematical.
 
 Audit literature work by source quality and theorem fit, not by the number of
 searches or websites. Verify precise hypotheses and dates against primary

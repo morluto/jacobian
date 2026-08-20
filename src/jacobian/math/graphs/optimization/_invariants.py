@@ -243,9 +243,9 @@ def _clique_execute(
 ) -> GraphCliqueNumberResult:
     """Compute the clique number via bounded Z3 threshold search."""
 
-    import networkx as nx
     import z3  # type: ignore[import-untyped]
 
+    started = time.monotonic()
     graph = cast(Any, build_simple_graph(request.graph))
     vertices = tuple(request.graph.vertices)
     if not vertices:
@@ -262,9 +262,8 @@ def _clique_execute(
             detail="the empty graph has optimum zero",
         )
 
-    incumbent = tuple(sorted(nx.approximation.max_clique(graph)))
+    incumbent: tuple[str, ...] = (min(vertices),)
     tested: list[OptimizationSearchStep] = []
-    started = time.monotonic()
     termination: OptimizationTermination = "BOUND_CONVERGENCE"
     upper_bound = len(vertices)
     exact = False

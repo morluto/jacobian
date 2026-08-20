@@ -5,10 +5,8 @@ from __future__ import annotations
 import time
 from typing import Literal
 
-import networkx as nx
 import z3  # type: ignore[import-untyped]
 
-from jacobian.math.graphs import _networkx
 from jacobian.math.graphs.independence import (
     IndependenceNumberRequest,
     IndependenceNumberResult,
@@ -24,7 +22,7 @@ def solve_independence_number(
 ) -> IndependenceNumberResult:
     """Run one wall-clock-bounded exact maximum independent-set optimization."""
 
-    graph = _networkx.graph_from_value(request.graph)
+    started = time.monotonic()
     vertices = request.graph.vertices
     order = len(vertices)
     if not vertices:
@@ -40,8 +38,7 @@ def solve_independence_number(
             detail="the empty graph has independence number zero",
         )
 
-    started = time.monotonic()
-    incumbent = tuple(sorted(nx.approximation.maximum_independent_set(graph)))
+    incumbent: tuple[str, ...] = (min(vertices),)
     remaining_ms = int(
         (request.resource_budget.wall_seconds - (time.monotonic() - started)) * 1000
     )

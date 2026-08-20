@@ -26,11 +26,16 @@ def test_catalog_contains_only_audited_operations() -> None:
 def _make_graph(edges_data):
     edges = tuple(
         CostedFlowEdge(
-            source=s, target=t, capacity=CanonicalRational(num=c, den="1"), cost=CanonicalRational(num=co, den="1")
+            source=s,
+            target=t,
+            capacity=CanonicalRational(num=c, den="1"),
+            cost=CanonicalRational(num=co, den="1"),
         )
         for s, t, c, co in edges_data
     )
-    return CostedFlowGraph(vertex_count=max(max(s, t) for s, t, _, _ in edges_data) + 1, edges=edges)
+    return CostedFlowGraph(
+        vertex_count=max(max(s, t) for s, t, _, _ in edges_data) + 1, edges=edges
+    )
 
 
 def test_min_cost_flow_basic() -> None:
@@ -132,7 +137,9 @@ def test_min_cost_flow_conservation() -> None:
         balance[fe.source] -= fe.flow.as_fraction()
         balance[fe.target] += fe.flow.as_fraction()
     for v, d in enumerate(request.demands):
-        assert balance[v] == d, f"conservation violated at vertex {v}: {balance[v]} != {d}"
+        assert balance[v] == d, (
+            f"conservation violated at vertex {v}: {balance[v]} != {d}"
+        )
 
     # Verify capacity constraints
     edge_map = {}
@@ -140,14 +147,21 @@ def test_min_cost_flow_conservation() -> None:
         edge_map[(e.source, e.target)] = e.capacity.as_fraction()
     for fe in result.flow_edges:
         cap = edge_map.get((fe.source, fe.target), Fraction(0))
-        assert 0 <= fe.flow.as_fraction() <= cap, f"capacity violated on edge {fe.source}->{fe.target}"
+        assert 0 <= fe.flow.as_fraction() <= cap, (
+            f"capacity violated on edge {fe.source}->{fe.target}"
+        )
 
     # Verify total cost
     cost_map = {}
     for e in request.graph.edges:
         cost_map[(e.source, e.target)] = e.cost.as_fraction()
-    total = sum(cost_map[(fe.source, fe.target)] * fe.flow.as_fraction() for fe in result.flow_edges)
-    assert total == result.total_cost.as_fraction(), "reported total cost does not match recomputed cost"
+    total = sum(
+        cost_map[(fe.source, fe.target)] * fe.flow.as_fraction()
+        for fe in result.flow_edges
+    )
+    assert total == result.total_cost.as_fraction(), (
+        "reported total cost does not match recomputed cost"
+    )
 
 
 def test_min_cost_flow_infeasible() -> None:

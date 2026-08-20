@@ -1,0 +1,10 @@
+{
+  "catalog_version": "1",
+  "domain": "root_systems",
+  "operations": {
+    "root_system.positive_roots.compute": {
+      "input_schema": "sha256:18ee922c950b4f57ada577383fe15cfa0effc13312daab98b6975639b4b40f48",
+      "output_schema": "sha256:75a7e5ee0d1318ade5076693e4179453bffa32416b62d379339fc9fbbc4b2359"
+    }
+  }
+}

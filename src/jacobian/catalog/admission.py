@@ -32,6 +32,29 @@ class OperationAdmission:
     native_symbol: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class OperationRegistration:
+    """One domain-owned unit of candidate tools and their admission decisions."""
+
+    candidates: MathTools
+    admissions: tuple[OperationAdmission, ...]
+
+    def __post_init__(self) -> None:
+        candidate_ids = tuple(tool.operation_id for tool in self.candidates)
+        admission_ids = tuple(record.operation_id for record in self.admissions)
+        if len(set(candidate_ids)) != len(candidate_ids):
+            raise ValueError("domain registration candidate IDs must be unique")
+        if len(set(admission_ids)) != len(admission_ids):
+            raise ValueError("domain registration admission IDs must be unique")
+        if set(candidate_ids) != set(admission_ids):
+            missing = sorted(set(candidate_ids) - set(admission_ids))
+            stale = sorted(set(admission_ids) - set(candidate_ids))
+            raise ValueError(
+                "domain registration admissions do not match candidates: "
+                f"missing={missing}, stale={stale}"
+            )
+
+
 def curate_public_tools(
     candidates: MathTools, admissions: tuple[OperationAdmission, ...]
 ) -> MathTools:
@@ -67,6 +90,7 @@ def admission_by_id(
 __all__ = [
     "AdmissionDecision",
     "OperationAdmission",
+    "OperationRegistration",
     "admission_by_id",
     "curate_public_tools",
 ]

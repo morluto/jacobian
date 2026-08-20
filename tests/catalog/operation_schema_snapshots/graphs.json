@@ -6,6 +6,10 @@
       "input_schema": "sha256:0046a0d3920b79f0849d444d74edcb68e73b4a3efee3f679372e22e5abd0f2c9",
       "output_schema": "sha256:818097102f36a887171bb0bc850a12e894f8b46df20f559777ee721f19a929eb"
     },
+    "graph.core.check": {
+      "input_schema": "sha256:8d062837f5a0f53f68758a07980ec104e8788d349e73bb0596356165362ab460",
+      "output_schema": "sha256:60e9d18c2dd7a999fc5b9c2735352c5cb1a3d092b9627f4e500bd76643d29f77"
+    },
     "graph.cut.minimum_st.compute": {
       "input_schema": "sha256:dd40f3a37c1098d8caeb05b125bb7f7684b44e5e3b5a8dffc1d9a09119196261",
       "output_schema": "sha256:137a06454af2fdfb0bed4d877d654c7f595872855a29b28c96ad88e3f7ffbb41"
@@ -53,6 +57,14 @@
     "graph.hamiltonian_path.decide": {
       "input_schema": "sha256:52d0fca020b4be0046bed814ae30c49d4ca3b0168f254c41d376be5b5fd9b15e",
       "output_schema": "sha256:cb028323cbeeb97f15a293d1046aaca35a1fa063cd22c20e0f7383740ca5262f"
+    },
+    "graph.homomorphism.check": {
+      "input_schema": "sha256:41f952ccd0a9c252fbb802923058cc8e10e898046c3dfb472da9bb40c72bd87d",
+      "output_schema": "sha256:88f929b95740eebfb0e7ed06c286f14bf29a38c77b97e05ff7d699027c09468c"
+    },
+    "graph.homomorphism.find": {
+      "input_schema": "sha256:b4ea80a810c9062cc7d5fd5ff3677e700587a83a32154673ed87e69f22ea6f2c",
+      "output_schema": "sha256:611c74c13ffe81ef67e7f8ed0a8c9ab573d36e5b8fac643d0f587008ebb4711f"
     },
     "graph.independent_set.maximal.decide": {
       "input_schema": "sha256:e088f79bec7582eeb573f90a4871bff9717be34f173e067590bd4b9c459dd8b4",
@@ -141,6 +153,10 @@
     "graph.realization.construct.compute": {
       "input_schema": "sha256:6780b4c89db880feeb962908185f221bdf35d52b4865b80a1f436e0a452af5c7",
       "output_schema": "sha256:6ba8a9c51dc83db20ab72ee2a1bdb9b10dddc98b81f21994f3b9737f0f4badb8"
+    },
+    "graph.retraction.check": {
+      "input_schema": "sha256:03d90bd8a775df0e79c3e4276e060c8c4773fee0d450432d2e9ba330fd6969f0",
+      "output_schema": "sha256:4be6619f2bf26588aebd2a8d442d88bd7b3c622ed8482455b5e377370440a5ed"
     },
     "graph.spanning_tree.minimum.compute": {
       "input_schema": "sha256:3116e8ef1855a1d335284a7a9ec593bd72e809b321e9b7b16a8f93e64971b9d0",

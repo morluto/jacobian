@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.universal_algebra._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -31,3 +36,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "exact quotient algebra induced by a congruence with block-wise operations",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

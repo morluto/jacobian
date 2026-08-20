@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.finite_sets._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -61,3 +66,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "ordinary deterministic set projection better authored directly in Python",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

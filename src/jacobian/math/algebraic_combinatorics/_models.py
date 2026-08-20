@@ -79,3 +79,49 @@ __all__ = [
     "StandardYoungTableauCountRequest",
     "StandardYoungTableauCountResult",
 ]
+
+
+# ---------------------------------------------------------------------------
+# RSK operations
+# ---------------------------------------------------------------------------
+
+
+class RSKPermutationRequest(StrictModel):
+    """One permutation for the RSK correspondence."""
+
+    permutation: tuple[int, ...] = Field(min_length=0, max_length=MAX_PARTITION_SIZE)
+
+    @model_validator(mode="after")
+    def require_valid_permutation(self) -> Self:
+        if not self.permutation:
+            return self
+        n = len(self.permutation)
+        if n > MAX_PARTITION_SIZE:
+            raise ValueError(f"permutation length must not exceed {MAX_PARTITION_SIZE}")
+        if sorted(self.permutation) != list(range(1, n + 1)):
+            raise ValueError("permutation must be a permutation of 1..n")
+        return self
+
+
+class RSKResult(StrictModel):
+    """The P (insertion) and Q (recording) tableaux from RSK."""
+
+    p_tableau: tuple[tuple[int, ...], ...]
+    q_tableau: tuple[tuple[int, ...], ...]
+    shape: tuple[int, ...]
+    lis_length: int = Field(ge=0)
+    lds_length: int = Field(ge=0)
+    method: Literal["ROW_INSERTION"] = "ROW_INSERTION"
+
+
+__all__ = [
+    "ConjugatePartitionRequest",
+    "ConjugatePartitionResult",
+    "HookLengthRequest",
+    "HookLengthResult",
+    "Partition",
+    "RSKPermutationRequest",
+    "RSKResult",
+    "StandardYoungTableauCountRequest",
+    "StandardYoungTableauCountResult",
+]

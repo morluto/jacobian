@@ -35,7 +35,7 @@ class JoinRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_same_space(self) -> Self:
-        if self.sigma1.space.samples != self.sigma2.space.samples:
+        if self.sigma1.space != self.sigma2.space:
             raise ValueError("sigma algebras must share the same probability space")
         return self
 
@@ -46,12 +46,25 @@ class ConditionalExpectationRequest(StrictModel):
     rv: FiniteRandomVariable
     sigma: FiniteSigmaAlgebra
 
+    @model_validator(mode="after")
+    def require_same_space(self) -> Self:
+        if self.rv.space != self.sigma.space:
+            raise ValueError("random variable and sigma algebra must share the same probability space")
+        return self
+
 
 class FiltrationRequest(StrictModel):
     """Compute the natural filtration of observations."""
 
     space: FiniteProbabilitySpace
     observations: tuple[tuple[str, ...], ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_observations_match_space(self) -> Self:
+        for obs in self.observations:
+            if len(obs) != len(self.space.samples):
+                raise ValueError("observation must have one entry per sample")
+        return self
 
 
 class DoobMartingaleRequest(StrictModel):
@@ -72,9 +85,9 @@ class DoobMartingaleRequest(StrictModel):
 
 
 class FiltrationResult(StrictModel):
-    """The natural filtration as a tuple of sigma algebra dicts."""
+    """The natural filtration as a tuple of sigma algebras."""
 
-    sigmas: tuple[dict[str, object], ...] = Field(default=())
+    sigmas: tuple[FiniteSigmaAlgebra, ...] = Field(default=())
 
 
 class DoobMartingaleResult(StrictModel):

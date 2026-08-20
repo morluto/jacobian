@@ -53,7 +53,7 @@ def compute_conditional_expectation(
 
 def compute_filtration(request: FiltrationRequest) -> FiltrationResult:
     sigmas = filtration_natural(request.space, request.observations)
-    return FiltrationResult(sigmas=tuple({"blocks": s.blocks} for s in sigmas))
+    return FiltrationResult(sigmas=sigmas)
 
 
 def compute_doob_martingale(

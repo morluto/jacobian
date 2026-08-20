@@ -1,26 +1,26 @@
 {
-  "catalog_version": "1",
-  "domain": "finite_stochastic_processes",
-  "operations": {
-    "probability.conditional_expectation.finite.compute": {
-      "input_schema": "sha256:e961c7edc3c3277b4a484489f0e21b18ee61c2aad66268557cbb2d37de8e1f4c",
-      "output_schema": "sha256:09e0e2e43a2353cc598499a55f3291ac9e88d81f6ae9cc65d3fb8d2cfb9df11f"
-    },
-    "probability.filtration.natural.compute": {
-      "input_schema": "sha256:2937d251912f80c78ac510744dc06d9f2984ad43ec03e95fd42ac85f04f88dc3",
-      "output_schema": "sha256:40533601ac4198d6d4a61e3880c31caac4bc86b4b491c9050d4d1e4761d11c26"
-    },
-    "probability.finite_sigma_algebra.from_observation.compute": {
-      "input_schema": "sha256:9607fc56f5c0cc3405ff3bd8b5db48e4ca2612715ef605a9d91cf35a579af1fc",
-      "output_schema": "sha256:6eb7cebfca29d7326bfdf89607c1303d96437e0087882af47cb963347fe037d3"
-    },
-    "probability.finite_sigma_algebra.join.compute": {
-      "input_schema": "sha256:1f637a37868def13d5c30e44092c21566f5ef1e1d90addc1cca4e7697f5a9c1f",
-      "output_schema": "sha256:6eb7cebfca29d7326bfdf89607c1303d96437e0087882af47cb963347fe037d3"
-    },
-    "probability.process.doob_martingale.compute": {
-      "input_schema": "sha256:20e2e6b37fbdb075a9c56119dc7cd11ce26431417ef1d55d39723fad00711632",
-      "output_schema": "sha256:0ac551bb0208454b1f73d988e4875170603800bd68bd2748d6c95d0de2ebb957"
+    "catalog_version": "1",
+    "domain": "finite_stochastic_processes",
+    "operations": {
+        "probability.conditional_expectation.finite.compute": {
+            "input_schema": "sha256:e961c7edc3c3277b4a484489f0e21b18ee61c2aad66268557cbb2d37de8e1f4c",
+            "output_schema": "sha256:09e0e2e43a2353cc598499a55f3291ac9e88d81f6ae9cc65d3fb8d2cfb9df11f"
+        },
+        "probability.filtration.natural.compute": {
+            "input_schema": "sha256:2937d251912f80c78ac510744dc06d9f2984ad43ec03e95fd42ac85f04f88dc3",
+            "output_schema": "sha256:aa6b26b0bf46f3cf4fb7b30a477bfc3713606cc36f944e396a73a2f03de3aa1a"
+        },
+        "probability.finite_sigma_algebra.from_observation.compute": {
+            "input_schema": "sha256:9607fc56f5c0cc3405ff3bd8b5db48e4ca2612715ef605a9d91cf35a579af1fc",
+            "output_schema": "sha256:6eb7cebfca29d7326bfdf89607c1303d96437e0087882af47cb963347fe037d3"
+        },
+        "probability.finite_sigma_algebra.join.compute": {
+            "input_schema": "sha256:1f637a37868def13d5c30e44092c21566f5ef1e1d90addc1cca4e7697f5a9c1f",
+            "output_schema": "sha256:6eb7cebfca29d7326bfdf89607c1303d96437e0087882af47cb963347fe037d3"
+        },
+        "probability.process.doob_martingale.compute": {
+            "input_schema": "sha256:20e2e6b37fbdb075a9c56119dc7cd11ce26431417ef1d55d39723fad00711632",
+            "output_schema": "sha256:0ac551bb0208454b1f73d988e4875170603800bd68bd2748d6c95d0de2ebb957"
+        }
     }
-  }
 }

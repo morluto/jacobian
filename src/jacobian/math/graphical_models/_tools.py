@@ -94,6 +94,7 @@ GRAPHICAL_MODEL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
+        version="2",
     ),
     _op(
         "graphical_model.factor.marginalize",

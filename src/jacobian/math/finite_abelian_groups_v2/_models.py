@@ -92,9 +92,7 @@ class SubgroupGeneratedRequest(StrictModel):
         for d in self.invariant_factors:
             order *= d
         if order > MAX_GROUP_ORDER:
-            raise ValueError(
-                f"group order exceeds the {MAX_GROUP_ORDER}-element bound"
-            )
+            raise ValueError(f"group order exceeds the {MAX_GROUP_ORDER}-element bound")
         return self
 
 
@@ -114,9 +112,7 @@ class QuotientRequest(StrictModel):
         for d in self.invariant_factors:
             order *= d
         if order > MAX_GROUP_ORDER:
-            raise ValueError(
-                f"group order exceeds the {MAX_GROUP_ORDER}-element bound"
-            )
+            raise ValueError(f"group order exceeds the {MAX_GROUP_ORDER}-element bound")
         return self
 
 

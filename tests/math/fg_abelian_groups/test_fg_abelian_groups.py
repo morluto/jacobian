@@ -84,7 +84,6 @@ def test_presentation_normalize_z6_z4() -> None:
     assert len(result.invariant_factors) == 2
 
 
-
 def test_invariant_factor_divisibility_canonical_order_accepted() -> None:
     """d_1 | d_2: (2, 4) is the canonical presentation of Z/2 x Z/4."""
     p = AbelianPresentation(invariant_factors=(2, 4))
@@ -112,9 +111,7 @@ def test_invariant_factor_rejects_trivial_one() -> None:
 def test_subgroup_generated_rejects_unbounded_group() -> None:
     """A single large cyclic factor that exceeds the bound must be rejected."""
     with pytest.raises(ValueError, match="bound"):
-        SubgroupGeneratedRequest(
-            invariant_factors=(4_097,), generators=((1,),)
-        )
+        SubgroupGeneratedRequest(invariant_factors=(4_097,), generators=((1,),))
 
 
 def test_quotient_rejects_unbounded_group() -> None:
@@ -124,9 +121,7 @@ def test_quotient_rejects_unbounded_group() -> None:
 
 def test_subgroup_generated_z2_x_z4() -> None:
     """Subgroup <(1,0)> in Z/2 x Z/4 has index 4."""
-    request = SubgroupGeneratedRequest(
-        invariant_factors=(2, 4), generators=((1, 0),)
-    )
+    request = SubgroupGeneratedRequest(invariant_factors=(2, 4), generators=((1, 0),))
     result = compute_subgroup_generated(request)
     assert result.index == 4
 

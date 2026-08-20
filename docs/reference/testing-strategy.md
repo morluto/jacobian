@@ -34,7 +34,10 @@ as a substitute for a focused regression test.
 For an operation, test the typed request boundary, the domain result, and a
 real caller-visible invocation when the MCP projection changed. The integration
 catalog test executes every advertised invocation example. When one result feeds
-another operation, test that composition through the next typed payload.
+another operation, serialize the producer result and pass its canonical value
+unchanged through the consumer's typed payload. The test should fail if a caller
+would have to reconstruct mathematical context or translate between parallel
+representations.
 Include the degenerate producer case most likely to erase ambient information,
 such as an empty basis, zero-row matrix, empty trace, or zero count. For
 source-bound decisions, mutate the source and conclusion independently and

@@ -92,6 +92,9 @@ public request
 
 - Public contracts use canonical mathematical values, not backend expressions
   or ambient contexts.
+- Each mathematical value has one domain-owned canonical type. Producers return
+  that type and consumers accept it unchanged, including for empty and
+  degenerate values; operation-specific models must not recreate it.
 - Backends never define the accepted public domain through runtime exceptions.
 - Intentional changes of ring, field, parent, or axis require explicit typed
   maps; implicit coercion is forbidden.

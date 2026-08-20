@@ -85,6 +85,7 @@ applicable` with a reason; it must not be omitted.
 
 - Mathematical input domain:
 - Canonical public value type:
+- Producer/consumer closure, or why not applicable:
 - Degenerate inputs:
 - Parent/ring/field identity:
 - Deterministic work bound:
@@ -178,13 +179,20 @@ variables to zero. Backend generator inference, ambient rings, and automatic
 coercion are private conveniences and do not define Jacobian's public
 semantics.
 
-Producer and consumer contracts must close over the same canonical value. A
-constructor for a projective point, subspace, code presentation, automaton, or
-other mathematical object returns the concrete value accepted by downstream
-operations; callers must not have to remember and reattach its field, ordered
-axis, ranked signature, or ambient dimension. Valid empty representations must
-retain that parent information explicitly—for example, a zero-row matrix still
-has a declared column axis.
+Each mathematical value has one canonical type owned by its domain. A producer
+returns that type and downstream consumers accept it unchanged. An operation
+request may contain the value alongside genuine operation parameters, but must
+not redefine the value as a parallel collection of fields. Callers must not
+have to remember and reattach a field, ordered axis, ranked signature, ambient
+dimension, or other mathematical context. This closure rule applies to empty
+and degenerate values too: for example, a zero-row matrix still retains its
+declared column axis.
+
+When a producer-consumer relationship exists, the operation review artifact
+must name it and its tests must pass the producer's serialized value directly
+through the consumer's typed boundary. Do not introduce a generic value
+registry or universal mathematical-object base class for this purpose; reuse
+the owner domain's concrete value type.
 
 Decision and profile results are relations, not detached booleans or numbers.
 Retain the source values needed to state the relation and replay its defining

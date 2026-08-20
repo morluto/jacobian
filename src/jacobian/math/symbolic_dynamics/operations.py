@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import itertools
+from typing import TYPE_CHECKING
 
-import networkx as nx
+if TYPE_CHECKING:
+    import networkx as nx
 
 from jacobian.math.symbolic_dynamics.values import (
     MAX_ENUMERATED_BLOCKS,
@@ -51,6 +53,8 @@ def normalize_forbidden_blocks(
 def block_language(
     shift: ForbiddenBlockShift, block_length: int
 ) -> tuple[tuple[str, ...], ...]:
+    import networkx as nx
+
     if block_length < 0:
         raise ValueError("block length must be nonnegative")
     enumeration_size(len(shift.alphabet), block_length)
@@ -111,6 +115,8 @@ def _presentation_support(
     set[tuple[str, ...]],
     set[tuple[str, ...]],
 ]:
+    import networkx as nx
+
     states = _locally_allowed_words(shift, memory)
     extensions = _locally_allowed_words(shift, memory + 1)
     graph: nx.DiGraph[tuple[str, ...]] = nx.DiGraph()

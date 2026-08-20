@@ -91,6 +91,25 @@ def test_missing_backend_is_a_typed_unavailable_outcome(
     assert result.ideal is None
 
 
+def test_relative_path_backend_is_resolved_before_entering_worker_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = Path(_executable(tmp_path, 'print("not the protocol")'))
+    monkeypatch.chdir(tmp_path)
+    _select_executable(monkeypatch, executable.name)
+
+    result = run_singular_ideal_operation(
+        "radical",
+        _ideal(),
+        None,
+        IdealComputationBudget(),
+    )
+
+    assert result.outcome == "ERROR"
+    assert result.detail == "Singular returned an invalid or unsupported result encoding."
+
+
 def test_nonzero_exit_is_a_typed_execution_error(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

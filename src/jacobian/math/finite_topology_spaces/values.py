@@ -38,6 +38,12 @@ class FiniteTopologicalSpace(StrictModel):
         for i in range(len(self.points)):
             if i not in self.preorder[i]:
                 raise ValueError("preorder must be reflexive")
+        # Transitivity: j in row[i] => row[j] subset of row[i].
+        for i, row in enumerate(self.preorder):
+            row_i = set(row)
+            for j in row:
+                if not set(self.preorder[j]).issubset(row_i):
+                    raise ValueError("preorder must be transitive")
         return self
 
 

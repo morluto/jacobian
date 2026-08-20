@@ -5,6 +5,8 @@ from __future__ import annotations
 from jacobian.math.finite_geometry._models import (
     GrassmannianCountRequest,
     GrassmannianCountResult,
+    LinearSubspace,
+    ProjectivePoint,
     ProjectivePointCanonicalizeRequest,
     ProjectivePointCanonicalizeResult,
     ProjectivePointEqualRequest,
@@ -64,16 +66,18 @@ def compute_projective_point_canonicalize(
     request: ProjectivePointCanonicalizeRequest,
 ) -> ProjectivePointCanonicalizeResult:
     vector = list(request.vector)
-    q = request.field_order
+    q = request.space.field_order
     for _i, v in enumerate(vector):
         if v % q != 0:
             scale = v % q
             inv = pow(scale, -1, q)
             canonical = [(v * inv) % q for v in vector]
             return ProjectivePointCanonicalizeResult(
-                canonical_vector=tuple(canonical),
+                **request.model_dump(),
+                point=ProjectivePoint(
+                    space=request.space, coordinates=tuple(canonical)
+                ),
                 scale=scale,
-                dimension=len(vector),
             )
     raise ValueError("zero vector has no projective point")
 
@@ -90,21 +94,10 @@ def _canonicalize_projective(vector: list[int], q: int) -> tuple[int, ...]:
 def compute_projective_point_equal(
     request: ProjectivePointEqualRequest,
 ) -> ProjectivePointEqualResult:
-    a = list(request.vector_a)
-    b = list(request.vector_b)
-    q = request.field_order
-    canon_a = _canonicalize_projective(a, q)
-    canon_b = _canonicalize_projective(b, q)
-    equal = canon_a == canon_b
-    scale = 0
-    if equal:
-        for i in range(len(a)):
-            if a[i] % q != 0:
-                scale = (b[i] * pow(a[i] % q, -1, q)) % q
-                break
     return ProjectivePointEqualResult(
-        equal=equal,
-        scale=scale,
+        point_a=request.point_a,
+        point_b=request.point_b,
+        equal=request.point_a.coordinates == request.point_b.coordinates,
     )
 
 
@@ -112,20 +105,19 @@ def compute_subspace_compute(
     request: SubspaceComputeRequest,
 ) -> SubspaceComputeResult:
     matrix = [list(row) for row in request.vectors]
-    basis = _canonical_basis(matrix, request.field_order)
+    basis = _canonical_basis(matrix, request.space.field_order)
     return SubspaceComputeResult(
-        basis=tuple(tuple(row) for row in basis),
-        dimension=len(basis),
-        ambient_dimension=len(request.vectors[0]),
+        **request.model_dump(),
+        subspace=LinearSubspace(space=request.space, basis=tuple(map(tuple, basis))),
     )
 
 
 def compute_subspace_membership(
     request: SubspaceMembershipRequest,
 ) -> SubspaceMembershipResult:
-    matrix = [list(row) for row in request.generators]
-    word = list(request.word)
-    q = request.field_order
+    matrix = [list(row) for row in request.subspace.basis]
+    word = list(request.vector)
+    q = request.subspace.space.field_order
 
     _, rank_g = _rref([list(r) for r in matrix], q)
     augmented = [list(row) for row in matrix] + [word]
@@ -134,7 +126,8 @@ def compute_subspace_membership(
 
     return SubspaceMembershipResult(
         is_member=is_member,
-        dimension=rank_g,
+        subspace=request.subspace,
+        vector=request.vector,
     )
 
 
@@ -142,20 +135,31 @@ def compute_subspace_span(
     request: SubspaceSpanRequest,
 ) -> SubspaceSpanResult:
     matrix = [list(row) for row in request.vectors]
-    basis = _canonical_basis(matrix, request.field_order)
+    matrix.extend(list(row) for subspace in request.subspaces for row in subspace.basis)
+    basis = _canonical_basis(matrix, request.space.field_order)
     return SubspaceSpanResult(
-        basis=tuple(tuple(row) for row in basis),
-        dimension=len(basis),
-        ambient_dimension=len(request.vectors[0]),
+        **request.model_dump(),
+        subspace=LinearSubspace(space=request.space, basis=tuple(map(tuple, basis))),
     )
 
 
 def compute_subspace_intersection(
     request: SubspaceIntersectionRequest,
 ) -> SubspaceIntersectionResult:
-    q = request.field_order
-    matrix_a = [list(row) for row in request.generators_a]
-    matrix_b = [list(row) for row in request.generators_b]
+    canonical = _intersection_basis(request.subspace_a, request.subspace_b)
+    return SubspaceIntersectionResult(
+        **request.model_dump(),
+        subspace=LinearSubspace(space=request.subspace_a.space, basis=canonical),
+    )
+
+
+def _intersection_basis(
+    subspace_a: LinearSubspace,
+    subspace_b: LinearSubspace,
+) -> tuple[tuple[int, ...], ...]:
+    q = subspace_a.space.field_order
+    matrix_a = [list(row) for row in subspace_a.basis]
+    matrix_b = [list(row) for row in subspace_b.basis]
 
     # Intersect row spaces: solve x in rowspace(A) and x in rowspace(B)
     # Intersection of rowspace(A) ∩ rowspace(B):
@@ -163,7 +167,7 @@ def compute_subspace_intersection(
     # coefficient vectors a, b.  This gives [A^T | -B^T] * [a; b] = 0.
     # The nullspace of [A^T | -B^T] gives coefficient pairs [a; b]; the
     # intersection vectors are A^T * a (= B^T * b).
-    n = len(matrix_a[0])
+    n = len(subspace_a.space.axis)
     k = len(matrix_a)
     m = len(matrix_b)
 
@@ -192,11 +196,7 @@ def compute_subspace_intersection(
     # Canonicalize
     canonical = _canonical_basis(intersection_basis, q) if intersection_basis else []
 
-    return SubspaceIntersectionResult(
-        basis=tuple(tuple(row) for row in canonical),
-        dimension=len(canonical),
-        ambient_dimension=n,
-    )
+    return tuple(tuple(row) for row in canonical)
 
 
 def _nullspace(matrix: list[list[int]], field_order: int) -> list[list[int]]:
@@ -238,7 +238,12 @@ def compute_grassmannian_count(
         numerator *= q ** (n - i) - 1
         denominator *= q ** (k - i) - 1
     count = numerator // denominator
-    return GrassmannianCountResult(count=count)
+    return GrassmannianCountResult(
+        field_order=q,
+        ambient_dimension=n,
+        subspace_dimension=k,
+        count=count,
+    )
 
 
 def compute_projective_space_enumerate(
@@ -246,9 +251,8 @@ def compute_projective_space_enumerate(
 ) -> ProjectiveSpaceEnumerateResult:
     from itertools import product
 
-    q = request.field_order
-    dim = request.projective_dimension
-    n = dim + 1
+    q = request.space.field_order
+    n = len(request.space.axis)
 
     seen: dict[tuple[int, ...], bool] = {}
     points: list[tuple[int, ...]] = []
@@ -267,6 +271,9 @@ def compute_projective_space_enumerate(
                 break
 
     return ProjectiveSpaceEnumerateResult(
-        points=tuple(points),
+        space=request.space,
+        points=tuple(
+            ProjectivePoint(space=request.space, coordinates=point) for point in points
+        ),
         count=len(points),
     )

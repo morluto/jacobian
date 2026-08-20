@@ -20,14 +20,25 @@ from jacobian.math.regular_languages._models import (
 
 def compute_run(request: RunRequest) -> RunResult:
     accepted, final_state = dfa_run(request.dfa, request.word)
-    return RunResult(accepted=accepted, final_state=final_state)
+    transitions = {
+        (item.source, item.symbol): item.target for item in request.dfa.transitions
+    }
+    trace = [request.dfa.initial_state]
+    for symbol in request.word:
+        trace.append(transitions[(trace[-1], symbol)])
+    return RunResult(
+        **request.model_dump(),
+        accepted=accepted,
+        final_state=final_state,
+        state_trace=tuple(trace),
+    )
 
 
 def compute_count(request: CountRequest) -> CountResult:
     count = count_accepted_words(request.dfa, request.word_length)
     return CountResult(
+        **request.model_dump(),
         count=format_canonical_integer(count),
-        word_length=request.word_length,
     )
 
 

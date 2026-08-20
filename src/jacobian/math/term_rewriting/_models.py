@@ -16,6 +16,7 @@ from jacobian.math.term_rewriting.operations import (
 )
 from jacobian.math.term_rewriting.values import (
     MAX_RULES,
+    RankedSignature,
     RewriteApplication,
     RewriteRule,
     Substitution,
@@ -26,40 +27,74 @@ from jacobian.math.term_rewriting.values import (
 class SubstitutionRequest(StrictModel):
     """Apply a substitution to a term."""
 
+    signature: RankedSignature
     term: Term
     substitution: Substitution
 
+    @model_validator(mode="after")
+    def require_signature(self) -> Self:
+        self.signature.validate_term(self.term)
+        for replacement in self.substitution.mapping.values():
+            self.signature.validate_term(replacement)
+        return self
 
-class SubstitutionResult(StrictModel):
+
+class SubstitutionResult(SubstitutionRequest):
     """The term after substitution."""
 
-    term: Term
+    result: Term
 
 
 class MatchingRequest(StrictModel):
     """Match a pattern against a subject term (one-way matching)."""
 
+    signature: RankedSignature
     pattern: Term
     subject: Term
 
+    @model_validator(mode="after")
+    def require_signature(self) -> Self:
+        self.signature.validate_term(self.pattern)
+        self.signature.validate_term(self.subject)
+        return self
 
-class MatchingResult(StrictModel):
+
+class MatchingResult(MatchingRequest):
     """Result of one-way matching."""
 
     matched: bool
     substitution: dict[int, Term] = Field(default_factory=dict)
 
+    @model_validator(mode="after")
+    def bind_matching(self) -> Self:
+        from jacobian.math.term_rewriting.operations import match
+
+        expected = match(self.pattern, self.subject)
+        if self.matched != (expected is not None) or self.substitution != (
+            expected or {}
+        ):
+            raise ValueError("matching result is not bound to its signed terms")
+        return self
+
 
 class UnificationRequest(StrictModel):
     """Unify two terms."""
 
+    signature: RankedSignature
     left: Term
     right: Term
+
+    @model_validator(mode="after")
+    def require_signature(self) -> Self:
+        self.signature.validate_term(self.left)
+        self.signature.validate_term(self.right)
+        return self
 
 
 class UnificationResult(StrictModel):
     """Result of unification."""
 
+    signature: RankedSignature
     left: Term
     right: Term
     unified: bool
@@ -92,12 +127,17 @@ class RewriteStepSelection(StrictModel):
 class RewriteStepRequest(StrictModel):
     """Enumerate every step, or apply one explicitly selected redex and rule."""
 
+    signature: RankedSignature
     term: Term
     rules: tuple[RewriteRule, ...] = Field(min_length=1, max_length=MAX_RULES)
     selection: RewriteStepSelection | None = None
 
     @model_validator(mode="after")
     def require_valid_selection(self) -> Self:
+        self.signature.validate_term(self.term)
+        for rule in self.rules:
+            self.signature.validate_term(rule.lhs)
+            self.signature.validate_term(rule.rhs)
         if self.selection is None:
             return self
         if self.selection.rule_index >= len(self.rules):
@@ -109,6 +149,7 @@ class RewriteStepRequest(StrictModel):
 class RewriteStepResult(StrictModel):
     """All applicable derivations or the declared selected derivation."""
 
+    signature: RankedSignature
     source_term: Term
     rules: tuple[RewriteRule, ...]
     selection: RewriteStepSelection | None
@@ -139,15 +180,25 @@ class RewriteStepResult(StrictModel):
 class NormalFormRequest(StrictModel):
     """Run an explicit bounded normalization strategy."""
 
+    signature: RankedSignature
     term: Term
     rules: tuple[RewriteRule, ...] = Field(min_length=1, max_length=MAX_RULES)
     strategy: Literal["LEFTMOST_OUTERMOST_RULE_ORDER"]
     max_steps: int = Field(default=1000, ge=1, le=1000)
 
+    @model_validator(mode="after")
+    def require_signature(self) -> Self:
+        self.signature.validate_term(self.term)
+        for rule in self.rules:
+            self.signature.validate_term(rule.lhs)
+            self.signature.validate_term(rule.rhs)
+        return self
+
 
 class NormalFormResult(StrictModel):
     """A proved normal form or a bounded prefix with an explicit next step."""
 
+    signature: RankedSignature
     source_term: Term
     rules: tuple[RewriteRule, ...]
     strategy: Literal["LEFTMOST_OUTERMOST_RULE_ORDER"]

@@ -128,7 +128,9 @@ class TestUnification:
         result = unify(left, right)
         assert result == {0: _app(2), 1: _app(2)}
         assert apply_substitution(left, result) == apply_substitution(right, result)
-        wire_result = compute_unification(UnificationRequest(left=left, right=right))
+        wire_result = compute_unification(
+            UnificationRequest(signature={"arities": [2, 0, 0]}, left=left, right=right)
+        )
         assert wire_result.unified
         assert wire_result.substitution == result
 
@@ -165,7 +167,11 @@ class TestRewriteStep:
             RewriteRule(lhs=_app(0, _var(0)), rhs=_app(2, _var(0))),
         )
         term = _app(0, _app(0, _app(3)))
-        result = compute_rewrite_step(RewriteStepRequest(term=term, rules=rules))
+        result = compute_rewrite_step(
+            RewriteStepRequest(
+                signature={"arities": [1, 1, 1, 0]}, term=term, rules=rules
+            )
+        )
         assert result.scope == "ALL_APPLICABLE_STEPS"
         assert tuple(
             (application.position, application.rule_index)
@@ -186,6 +192,7 @@ class TestRewriteStep:
         term = _app(0, _app(0, _app(3)))
         result = compute_rewrite_step(
             RewriteStepRequest(
+                signature={"arities": [1, 1, 1, 0]},
                 term=term,
                 rules=rules,
                 selection={"position": [0], "rule_index": 1},
@@ -200,6 +207,7 @@ class TestRewriteStep:
         assert selected_rewrite_step(_app(2), rules, (), 0) is None
         result = compute_rewrite_step(
             RewriteStepRequest(
+                signature={"arities": [0, 0, 0]},
                 term=_app(2),
                 rules=rules,
                 selection={"position": [], "rule_index": 0},
@@ -233,6 +241,7 @@ class TestNormalForm:
         rule = RewriteRule(lhs=_app(0, _var(0)), rhs=_var(0))
         result = compute_normal_form(
             NormalFormRequest(
+                signature={"arities": [1, 0]},
                 term=_app(0, _app(1)),
                 rules=(rule,),
                 strategy="LEFTMOST_OUTERMOST_RULE_ORDER",
@@ -246,6 +255,14 @@ class TestNormalForm:
 
 
 class TestValidation:
+    def test_public_terms_must_use_one_ranked_signature(self):
+        with pytest.raises(ValidationError, match="ranked signature"):
+            UnificationRequest(
+                signature={"arities": [1]},
+                left=_app(0, _var(0)),
+                right=_app(0, _var(0), _var(1)),
+            )
+
     def test_variable_with_children_rejected(self):
         with pytest.raises(ValidationError):
             Term(is_variable=True, symbol=0, children=(_var(1),))
@@ -261,6 +278,7 @@ class TestValidation:
     def test_selected_position_must_exist(self):
         with pytest.raises(ValidationError, match="outside the source term"):
             RewriteStepRequest(
+                signature={"arities": [0, 0]},
                 term=_app(0),
                 rules=(RewriteRule(lhs=_app(0), rhs=_app(1)),),
                 selection={"position": [0], "rule_index": 0},

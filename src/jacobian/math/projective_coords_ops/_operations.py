@@ -11,6 +11,7 @@ from jacobian.math.projective_coords_ops._models import (
     ChartTransitionResult,
     RationalPointConstructRequest,
     RationalPointConstructResult,
+    RationalProjectivePoint,
     StandardChartRequest,
     StandardChartResult,
 )
@@ -34,9 +35,8 @@ def compute_rational_point_construct(
             scale = _rational(inv)
             canonical = tuple(_rational(v.as_fraction() * inv) for v in coords)
             return RationalPointConstructResult(
-                canonical=canonical,
+                point=RationalProjectivePoint(coordinates=canonical),
                 scale=scale,
-                projective_dimension=len(coords) - 1,
             )
     raise ValueError("all coordinates are zero")
 

@@ -36,27 +36,30 @@ __all__ = [
 
 def compute_substitution(request: SubstitutionRequest) -> SubstitutionResult:
     return SubstitutionResult(
-        term=apply_substitution(request.term, request.substitution.mapping)
+        **request.model_dump(),
+        result=apply_substitution(request.term, request.substitution.mapping),
     )
 
 
 def compute_matching(request: MatchingRequest) -> MatchingResult:
     result = match(request.pattern, request.subject)
     if result is None:
-        return MatchingResult(matched=False, substitution={})
-    return MatchingResult(matched=True, substitution=result)
+        return MatchingResult(**request.model_dump(), matched=False, substitution={})
+    return MatchingResult(**request.model_dump(), matched=True, substitution=result)
 
 
 def compute_unification(request: UnificationRequest) -> UnificationResult:
     result = unify(request.left, request.right)
     if result is None:
         return UnificationResult(
+            signature=request.signature,
             left=request.left,
             right=request.right,
             unified=False,
             substitution={},
         )
     return UnificationResult(
+        signature=request.signature,
         left=request.left,
         right=request.right,
         unified=True,
@@ -79,6 +82,7 @@ def compute_rewrite_step(request: RewriteStepRequest) -> RewriteStepResult:
         applications = () if application is None else (application,)
         scope = "SELECTED_STEP"
     return RewriteStepResult(
+        signature=request.signature,
         source_term=request.term,
         rules=request.rules,
         selection=request.selection,
@@ -92,6 +96,7 @@ def compute_normal_form(request: NormalFormRequest) -> NormalFormResult:
         request.term, request.rules, request.max_steps
     )
     return NormalFormResult(
+        signature=request.signature,
         source_term=request.term,
         rules=request.rules,
         strategy=request.strategy,

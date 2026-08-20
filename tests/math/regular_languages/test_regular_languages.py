@@ -74,6 +74,7 @@ def test_run_accepts_word_ending_in_1() -> None:
     result = compute_run(RunRequest(dfa=dfa, word=(1, 0, 1)))
     assert result.accepted is True
     assert result.final_state == 1
+    assert result.state_trace == (0, 1, 0, 1)
     assert result.method == "DFA_SIMULATION"
 
 
@@ -155,6 +156,21 @@ def test_count_large_value_uses_canonical_string() -> None:
     dfa = _dfa_full_alphabet_accepting()
     result = compute_count(CountRequest(dfa=dfa, word_length=200))
     assert result.count == str(32**200)
+
+
+def test_run_and_count_results_reject_detached_conclusions() -> None:
+    dfa = _dfa_ends_in_1()
+    run = compute_run(RunRequest(dfa=dfa, word=(1, 0, 1)))
+    run_payload = run.model_dump()
+    run_payload["accepted"] = False
+    with pytest.raises(ValidationError, match="acceptance"):
+        type(run).model_validate(run_payload)
+
+    count = compute_count(CountRequest(dfa=dfa, word_length=3))
+    count_payload = count.model_dump()
+    count_payload["count"] = "5"
+    with pytest.raises(ValidationError, match="not bound"):
+        type(count).model_validate(count_payload)
 
 
 def test_native_kernels_are_typed_and_consistent() -> None:

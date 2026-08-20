@@ -18,6 +18,7 @@ from jacobian.math.tree_automata.values import (
 __all__ = [
     "accepted_tree_count",
     "run_tree_automaton",
+    "tree_state_chart",
 ]
 
 
@@ -29,8 +30,37 @@ def run_tree_automaton(
 
     Returns the set of states reachable at the root.
     """
+    return set(tree_state_chart(automaton, tree)[-1][1])
+
+
+def tree_state_chart(
+    automaton: BottomUpTreeAutomaton,
+    tree: RankedTree,
+) -> tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]:
+    """Return the canonical postorder position/state chart for a ranked tree."""
     validate_ranked_tree(automaton, tree)
-    return _reachable_root_states(automaton, tree)
+    chart: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
+
+    def visit(node: RankedTree, position: tuple[int, ...]) -> set[int]:
+        child_states = tuple(
+            visit(child, (*position, index))
+            for index, child in enumerate(node.children)
+        )
+        states = {
+            transition.target_state
+            for transition in automaton.transitions
+            if transition.symbol == node.symbol
+            and len(transition.child_states) == len(child_states)
+            and all(
+                transition.child_states[index] in states
+                for index, states in enumerate(child_states)
+            )
+        }
+        chart.append((position, tuple(sorted(states))))
+        return states
+
+    visit(tree, ())
+    return tuple(chart)
 
 
 def _reachable_root_states(

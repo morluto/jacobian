@@ -106,9 +106,8 @@ class ChartTransitionRequest(StrictModel):
 
 
 class RationalPointConstructResult(StrictModel):
-    canonical: tuple[CanonicalRational, ...]
+    point: RationalProjectivePoint
     scale: CanonicalRational
-    projective_dimension: int = Field(ge=0)
     method: str = "FIRST_NONZERO_SCALE"
 
 

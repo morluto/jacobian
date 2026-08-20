@@ -16,12 +16,19 @@ ROOT = Path(__file__).resolve().parents[1]
 _PRODUCT_ROOT = PurePosixPath("src/jacobian")
 _PROCESS_OWNER = PurePosixPath("src/jacobian/process.py")
 _EXTERNAL_OPERATION_OWNERS = frozenset(
-    {_PROCESS_OWNER, PurePosixPath("src/jacobian/math/logic/_operations.py")}
+    {
+        _PROCESS_OWNER,
+        PurePosixPath("src/jacobian/math/commutative_algebra_ops/_singular.py"),
+        PurePosixPath("src/jacobian/math/logic/_operations.py"),
+    }
 )
 _GENERATED_DIRECTORIES = frozenset(
     {"__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv"}
 )
 _EXEC_FUNCTIONS = frozenset({"execlp", "execv", "execve", "execvp", "execvpe"})
+_EVALUATOR_CAPABLE_FUNCTIONS = frozenset(
+    {"eval", "exec", "lambdify", "parse_expr", "sympify"}
+)
 _RATIONAL_COMPONENTS = frozenset({"denominator", "numerator", "p", "q"})
 _DESCRIPTIVE_RATIONAL_COMPONENTS = frozenset({"denominator", "numerator"})
 _EMBEDDED_PROCESS_PATTERNS = (
@@ -108,9 +115,10 @@ def _process_violations(
         return ()
     violations: list[Violation] = []
     for node in _walk(tree):
-        if (isinstance(node, ast.Import) and any(
-            alias.name == "subprocess" for alias in node.names
-        )) or (isinstance(node, ast.ImportFrom) and node.module == "subprocess"):
+        if (
+            isinstance(node, ast.Import)
+            and any(alias.name == "subprocess" for alias in node.names)
+        ) or (isinstance(node, ast.ImportFrom) and node.module == "subprocess"):
             violations.append(
                 _violation(
                     relative,
@@ -134,16 +142,19 @@ def _process_violations(
                     f"os.{node.func.attr} is unbounded process replacement",
                 )
             )
-        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-            if any(pattern in node.value for pattern in _EMBEDDED_PROCESS_PATTERNS):
-                violations.append(
-                    _violation(
-                        relative,
-                        node,
-                        "subprocess-confined",
-                        "embedded worker source must not bypass jacobian.process",
-                    )
+        elif (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and any(pattern in node.value for pattern in _EMBEDDED_PROCESS_PATTERNS)
+        ):
+            violations.append(
+                _violation(
+                    relative,
+                    node,
+                    "subprocess-confined",
+                    "embedded worker source must not bypass jacobian.process",
                 )
+            )
     return tuple(violations)
 
 
@@ -161,10 +172,14 @@ def _bounded_process_violations(
         ) or (
             isinstance(node, ast.Call)
             and (
-                (isinstance(node.func, ast.Name)
-                and node.func.id == "run_bounded_process")
-                or (isinstance(node.func, ast.Attribute)
-                and node.func.attr == "run_bounded_process")
+                (
+                    isinstance(node.func, ast.Name)
+                    and node.func.id == "run_bounded_process"
+                )
+                or (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "run_bounded_process"
+                )
             )
         ):
             violations.append(
@@ -265,6 +280,37 @@ def _unsafe_wire_conversion_violations(
         and isinstance(node.args[0], ast.Attribute)
         and node.args[0].attr in {"num", "den"}
     )
+
+
+def _evaluator_parser_violations(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    """Keep evaluator-capable parsers out of the mathematical operation tree."""
+
+    if not relative.is_relative_to(PurePosixPath("src/jacobian/math")):
+        return ()
+    violations: list[Violation] = []
+    for node in _walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = None
+        if isinstance(node.func, ast.Name):
+            name = node.func.id
+        elif isinstance(node.func, ast.Attribute) and node.func.attr not in {
+            "eval",
+            "exec",
+        }:
+            name = node.func.attr
+        if name in _EVALUATOR_CAPABLE_FUNCTIONS:
+            violations.append(
+                _violation(
+                    relative,
+                    node,
+                    "evaluator-capable-parser",
+                    f"{name} is forbidden in public mathematical input flows",
+                )
+            )
+    return tuple(violations)
 
 
 def _contains_component(node: ast.AST, attributes: frozenset[str]) -> bool:
@@ -373,6 +419,7 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
         *_bounded_process_violations(relative, tree),
         *_resolver_violations(relative, tree),
         *_environment_violations(relative, tree),
+        *_evaluator_parser_violations(relative, tree),
         *_unsafe_wire_conversion_violations(relative, tree),
         *_rational_output_violations(relative, tree),
     )

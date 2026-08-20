@@ -23,6 +23,7 @@ real boundary:
 | One mathematical domain | `make test-math TESTS=tests/math/logic/test_tools.py` |
 | Cross-owner behavior | `make test-integration` |
 | Child-process behavior | `make test-process` |
+| Singular ideal backend | `make test-singular` |
 | Documentation | `make docs-linkcheck` |
 
 `make check-all` is an intentional broad reproduction. Do not use a full suite
@@ -41,8 +42,41 @@ their owning domain tests rather than mocking their algorithms. A timeout,
 cancellation, unavailable external executable, or solver `UNKNOWN` is never a
 positive mathematical conclusion.
 
+Examples prove that a documented path works; they do not establish an
+algebraic claim. Select evidence by the claim being made:
+
+| Contract claim | Required evidence |
+| --- | --- |
+| Request domain | Accepted and rejected boundary cases |
+| Backend domain | Supported edge and an immediately unsupported case |
+| Exact decomposition | Reconstruction property |
+| Canonical value | Normalization and round-trip property |
+| Parent identity | Incompatible-parent rejection and explicit-map success |
+| Algebraic operation | Defining identities or an independent oracle |
+| Public operation | Catalog mutation conformance |
+| Process backend | Codec, version, timeout/output, and typed failure tests |
+
+For example, an ideal radical needs containment and radicality evidence or an
+independent bounded oracle. A factorization needs reconstruction, retained
+unit, and positive-multiplicity properties. Known answers remain useful
+regressions, but they do not replace these defining properties.
+
 `lean.check` is the retained external process boundary. Its tests cover request
 bounds, process cleanup, timeout/error projection, and typed diagnostics.
+
+Singular testing follows the same ownership split as other child-process
+backends. The shared bounded-process supervisor owns process-group termination,
+including descendants that ignore termination or retain inherited pipes. The
+Singular lane tests only adapter-specific behavior: timeout and execution-outcome
+projection, supported-version enforcement, strict codec behavior, output limits,
+and request-scoped cleanup. Do not duplicate the supervisor's termination suite
+for each mathematical backend.
+
+The commutative-algebra domain checks Singular's mathematical results against an
+independent combinatorial oracle on bounded monomial ideals, in addition to
+containment, idempotence, identity, and colon-law properties. SageMath may be
+used as a development-time differential oracle, but it is not a runtime or
+required-CI dependency.
 
 ## Documentation acceptance
 

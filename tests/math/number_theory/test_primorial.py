@@ -47,6 +47,8 @@ def test_primorial_5() -> None:
 
 def test_primorial_contract_version_tracks_the_result_schema_change() -> None:
     operation = next(
-        item for item in PRIME_OPERATIONS if item.operation_id == "integer.compute.primorial"
+        item
+        for item in PRIME_OPERATIONS
+        if item.operation_id == "integer.compute.primorial"
     )
     assert operation.version == "3"

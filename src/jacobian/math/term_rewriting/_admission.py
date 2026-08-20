@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.admission import AdmissionDecision, OperationAdmission
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.term_rewriting._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
@@ -21,3 +26,5 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "most general unifier certificate for a bounded first-order unification problem",
     ),
 )
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

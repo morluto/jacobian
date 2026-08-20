@@ -11,12 +11,18 @@ from jacobian.math.impartial_games._models import (
     BirthdayResult,
     GrundyTableRequest,
     GrundyTableResult,
+    NimSumRequest,
+    NimSumResult,
+    OutcomeProfileRequest,
+    OutcomeProfileResult,
     SubtractionGrundyPrefixRequest,
     SubtractionGrundyPrefixResult,
 )
 from jacobian.math.impartial_games._operations import (
     compute_birthday,
     compute_grundy_table,
+    compute_nim_sum,
+    compute_outcome_profile,
     compute_subtraction_grundy_prefix,
 )
 
@@ -116,6 +122,47 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "subtract_one_or_three",
                 "Compute heaps zero through five for subtraction set {1,3}.",
                 {"subtraction_set": [1, 3], "max_heap": 5},
+            ),
+        ),
+    ),
+    _op(
+        "game.nim.nim_sum.compute",
+        "Compute the nim sum of a Nim position",
+        "Compute the exact bitwise xor of heap sizes, determining "
+        "the P/N outcome of a finite Nim position under normal play.",
+        NimSumRequest,
+        NimSumResult,
+        compute_nim_sum,
+        "game-theory",
+        "nim",
+        "exact",
+        examples=(
+            example(
+                "nim_sum_1_2_3",
+                "Compute the nim sum of heaps (1, 2, 3); "
+                "heaps must be nonnegative integers.",
+                {"heaps": [1, 2, 3]},
+            ),
+        ),
+    ),
+    _op(
+        "game.impartial.outcome_profile.compute",
+        "Compute the P/N outcome partition",
+        "Partition positions into P-positions (Grundy=0, previous player "
+        "wins) and N-positions (Grundy>0, next player wins), with the "
+        "complete Grundy table and terminal positions.",
+        OutcomeProfileRequest,
+        OutcomeProfileResult,
+        compute_outcome_profile,
+        "game-theory",
+        "impartial",
+        "outcome",
+        "exact",
+        examples=(
+            example(
+                "four_position_outcome",
+                "Compute the P/N outcome partition of a four-position DAG.",
+                {"game": _GAME},
             ),
         ),
     ),

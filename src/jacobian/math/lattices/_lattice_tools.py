@@ -40,7 +40,7 @@ from jacobian.math.lattices._models import (
 __all__ = ["LATTICE_STRUCTURE_OPERATIONS"]
 
 
-def _lattice(ambient: int, basis: list[list[int]]) -> dict:
+def _lattice(ambient: int, basis: list[list[int]]) -> dict[str, object]:
     """Return a JSON-serialable IntegerLattice payload for examples."""
     return {
         "ambient_dimension": ambient,

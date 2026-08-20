@@ -88,7 +88,7 @@ def _basis_int_list(lattice: IntegerLattice) -> list[list[int]]:
 def _require_full_row_rank(lattice: IntegerLattice, *, label: str) -> list[list[int]]:
     entries = _basis_int_list(lattice)
     rows = len(entries)
-    if integer_rank(lattice.basis.entries) != rows:
+    if integer_rank(entries) != rows:
         raise ValueError(f"{label} basis must be full row rank over QQ")
     return entries
 
@@ -102,12 +102,11 @@ def _integer_matrix(matrix: list[list[int]]) -> IntegerMatrix:
 
 
 def _rational_matrix(matrix: list[list[Fraction]]) -> RationalMatrix:
+    from jacobian._exact import CanonicalRational
+
     return RationalMatrix(
         entries=tuple(
-            tuple(
-                {"num": str(frac.numerator), "den": str(frac.denominator)}
-                for frac in row
-            )
+            tuple(CanonicalRational.from_fraction(frac) for frac in row)
             for row in matrix
         )
     )

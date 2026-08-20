@@ -56,7 +56,7 @@ def _entries_to_int(matrix: Any) -> list[list[int]]:
     return [[int(matrix[i, j]) for j in range(cols)] for i in range(rows)]
 
 
-def integer_rank(entries: list[list[str | int]]) -> int:
+def integer_rank(entries: list[list[int]]) -> int:
     """Return the exact rank over ``QQ`` of an integer entry matrix."""
     from sympy import Matrix
 

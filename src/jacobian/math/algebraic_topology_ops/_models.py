@@ -44,9 +44,7 @@ class EdgePathWordRequest(StrictModel):
         for i in range(len(self.path) - 1):
             u, v = self.path[i], self.path[i + 1]
             if frozenset((u, v)) not in edge_set:
-                raise ValueError(
-                    f"path step {u}->{v} is not an edge in the graph"
-                )
+                raise ValueError(f"path step {u}->{v} is not an edge in the graph")
         return self
 
 

@@ -100,6 +100,22 @@ def test_chart_transition_reports_outside_target_chart() -> None:
     assert result.transition is None
 
 
+def test_chart_transition_rejects_unrepresentable_ratio_growth() -> None:
+    component = "1" + "0" * 16_384
+
+    with pytest.raises(ValidationError, match="ratio budget"):
+        ChartTransitionRequest(
+            point=RationalProjectivePoint(
+                coordinates=(
+                    CanonicalRational(num=component, den="1"),
+                    CanonicalRational(num="1", den=component),
+                )
+            ),
+            chart_i=0,
+            chart_j=1,
+        )
+
+
 def test_chart_transition_round_trips_between_defined_charts() -> None:
     point = _point(_r("2"), _r("3"), _r("5"))
     forward = compute_chart_transition(

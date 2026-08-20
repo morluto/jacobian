@@ -26,10 +26,19 @@ def test_discovery_phrase_matching_respects_token_boundaries() -> None:
 
 
 def test_standard_det_abbreviation_ranks_determinants_before_charpolys() -> None:
-    result = Catalog.open().search(OperationDiscoveryRequest(query="det", limit=4))
-    positions = {
-        match.operation_id: index for index, match in enumerate(result.matches)
-    }
+    catalog = Catalog.open()
+    cursor: str | None = None
+    matches = []
+    while True:
+        result = catalog.search(
+            OperationDiscoveryRequest(query="det", limit=20, cursor=cursor)
+        )
+        matches.extend(result.matches)
+        if result.next_cursor is None:
+            break
+        cursor = result.next_cursor
+
+    positions = {match.operation_id: index for index, match in enumerate(matches)}
 
     determinant_ids = (
         "matrix.determinant.compute",
@@ -39,6 +48,8 @@ def test_standard_det_abbreviation_ranks_determinants_before_charpolys() -> None
         "matrix.characteristic_polynomial.compute",
         "matrix.symbolic.characteristic_polynomial.compute",
     )
+    assert set(determinant_ids) <= positions.keys()
+    assert set(characteristic_polynomial_ids) <= positions.keys()
     assert all(
         positions[determinant_id] < positions[characteristic_polynomial_id]
         for determinant_id in determinant_ids

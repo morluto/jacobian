@@ -91,8 +91,6 @@ class DistanceGraphResult(StrictModel):
     edges: tuple[tuple[int, int], ...]
 
 
-
-
 # ---------------------------------------------------------------------------
 # Configuration-wide incidence search: collinear triples and concyclic quadruples
 # ---------------------------------------------------------------------------
@@ -122,7 +120,9 @@ class ConcyclicQuadruplesRequest(StrictModel):
         if not self.configuration.points:
             return self
         if len(self.configuration.points[0].coordinates) != 2:
-            raise ValueError("concyclic-quadruple search requires a planar configuration")
+            raise ValueError(
+                "concyclic-quadruple search requires a planar configuration"
+            )
         return self
 
 
@@ -143,6 +143,7 @@ class IncidenceSearchResult(StrictModel):
         if not self.holds and self.witnesses:
             raise ValueError("a holds=False result must list no witnesses")
         return self
+
 
 __all__ = [
     "CollinearTriplesRequest",

@@ -266,21 +266,24 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
                 "membership_x_squared",
                 "Decide if x lies in <x^2> in Q[x].",
                 {
-                    "generators": [
-                        {
-                            "polynomial_schema_version": "1",
-                            "domain": "QQ",
-                            "variables": ["x"],
-                            "polynomial": {
-                                "terms": [
-                                    {
-                                        "coefficient": {"num": "1", "den": "1"},
-                                        "exponents": [2],
-                                    },
-                                ],
+                    "ideal": {
+                        "variables": ["x"],
+                        "generators": [
+                            {
+                                "polynomial_schema_version": "1",
+                                "domain": "QQ",
+                                "variables": ["x"],
+                                "polynomial": {
+                                    "terms": [
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [2],
+                                        },
+                                    ],
+                                },
                             },
-                        },
-                    ],
+                        ],
+                    },
                     "polynomial": {
                         "polynomial_schema_version": "1",
                         "domain": "QQ",
@@ -314,21 +317,24 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
                 "normal_form_x_mod_x_squared",
                 "Reduce x modulo <x^2> in Q[x]; the remainder is x.",
                 {
-                    "generators": [
-                        {
-                            "polynomial_schema_version": "1",
-                            "domain": "QQ",
-                            "variables": ["x"],
-                            "polynomial": {
-                                "terms": [
-                                    {
-                                        "coefficient": {"num": "1", "den": "1"},
-                                        "exponents": [2],
-                                    },
-                                ],
+                    "ideal": {
+                        "variables": ["x"],
+                        "generators": [
+                            {
+                                "polynomial_schema_version": "1",
+                                "domain": "QQ",
+                                "variables": ["x"],
+                                "polynomial": {
+                                    "terms": [
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [2],
+                                        },
+                                    ],
+                                },
                             },
-                        },
-                    ],
+                        ],
+                    },
                     "polynomial": {
                         "polynomial_schema_version": "1",
                         "domain": "QQ",

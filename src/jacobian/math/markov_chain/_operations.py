@@ -8,6 +8,7 @@ from jacobian.math.markov_chain import (
     mixing_time,
 )
 from jacobian.math.markov_chain._models import (
+    CommunicatingClassesResult,
     ErgodicDecisionResult,
     ExtremeStationaryDistribution,
     MixingTimeRequest,
@@ -77,4 +78,54 @@ def compute_ergodic_decision(request: TransitionMatrixRequest) -> ErgodicDecisio
         is_ergodic=irreducible and aperiodic,
         is_irreducible=irreducible,
         is_aperiodic=aperiodic,
+    )
+
+
+def compute_communicating_classes(
+    request: TransitionMatrixRequest,
+) -> CommunicatingClassesResult:
+    """Decompose a Markov chain into communicating classes via SCC analysis."""
+
+    import networkx as nx
+
+    matrix = request.matrix
+    dimension = len(matrix)
+
+    graph = nx.DiGraph()
+    graph.add_nodes_from(range(dimension))
+    for i in range(dimension):
+        for j in range(dimension):
+            if matrix[i][j].as_fraction() > 0:
+                graph.add_edge(i, j)
+
+    sccs = list(nx.strongly_connected_components(graph))
+    condensation = nx.condensation(graph, sccs)
+
+    # Get topological order of SCC nodes
+    scc_list = list(nx.topological_sort(condensation))
+
+    # Reverse for recurrent-first order (closed classes last)
+    # Actually, let's order by: transient classes first, then recurrent classes
+    # A class is closed (recurrent) if it has no outgoing edges to other classes
+    classes_info: list[tuple[tuple[int, ...], bool]] = []
+    state_class = [0] * dimension
+
+    for scc_idx, scc_node in enumerate(scc_list):
+        scc = sccs[scc_node] if isinstance(scc_node, int) else scc_node
+        states = sorted(scc)
+        is_closed = True
+        for state in states:
+            for j in range(dimension):
+                if j not in scc and matrix[state][j].as_fraction() > 0:
+                    is_closed = False
+                    break
+            if not is_closed:
+                break
+        classes_info.append((tuple(states), is_closed))
+        for state in states:
+            state_class[state] = scc_idx
+
+    return CommunicatingClassesResult(
+        classes=tuple(classes_info),
+        state_class=tuple(state_class),
     )

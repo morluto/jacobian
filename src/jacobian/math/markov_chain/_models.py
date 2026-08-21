@@ -195,3 +195,24 @@ class MixingTimeResult(StrictModel):
         ):
             raise ValueError("a non-ergodic result has no mixing-time search value")
         return self
+
+
+class CommunicatingClassesResult(StrictModel):
+    """The communicating-class decomposition of a Markov chain."""
+
+    classes: tuple[tuple[tuple[int, ...], bool], ...]
+    """Each entry is (state_indices, is_closed). States are 0-indexed."""
+
+    state_class: tuple[int, ...]
+    """Class index of each state (0-indexed)."""
+
+    @model_validator(mode="after")
+    def require_partition_validity(self) -> Self:
+        all_states: list[int] = []
+        for states, _ in self.classes:
+            all_states.extend(states)
+        if sorted(all_states) != list(range(len(all_states))):
+            raise ValueError("classes must partition all state indices")
+        if len(self.state_class) != len(all_states):
+            raise ValueError("state_class must have one entry per state")
+        return self

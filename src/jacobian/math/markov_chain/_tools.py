@@ -7,6 +7,7 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.markov_chain._models import (
+    CommunicatingClassesResult,
     ErgodicDecisionResult,
     MixingTimeRequest,
     MixingTimeResult,
@@ -15,6 +16,7 @@ from jacobian.math.markov_chain._models import (
     TransitionMatrixRequest,
 )
 from jacobian.math.markov_chain._operations import (
+    compute_communicating_classes,
     compute_ergodic_decision,
     compute_mixing_time,
     compute_stationary_distribution,
@@ -138,6 +140,37 @@ MARKOV_CHAIN_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
+)
+
+MARKOV_COMMUNICATING_CLASSES_OPERATION = mc_operation(
+    "probability.markov_chain.communicating_classes.compute",
+    "Compute the communicating-class decomposition",
+    "Decompose a bounded exact finite Markov chain into communicating classes "
+    "(strongly connected components) of its transition support graph, "
+    "classifying each as transient or closed (recurrent).",
+    TransitionMatrixRequest,
+    CommunicatingClassesResult,
+    compute_communicating_classes,
+    "markov-chain",
+    "communicating-classes",
+    "exact",
+    examples=(
+        example(
+            "two_class_chain",
+            "A two-state chain where state 0 is transient and state 1 is absorbing.",
+            {
+                "matrix": [
+                    [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+                    [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+                ],
+            },
+        ),
+    ),
+)
+
+MARKOV_CHAIN_OPERATIONS = (
+    *MARKOV_CHAIN_OPERATIONS,
+    MARKOV_COMMUNICATING_CLASSES_OPERATION,
 )
 
 TOOLS = MARKOV_CHAIN_OPERATIONS

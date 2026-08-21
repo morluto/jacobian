@@ -25,6 +25,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "returns every canonical extreme point of the complete stationary-distribution simplex",
     ),
+    OperationAdmission(
+        "probability.markov_chain.communicating_classes.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

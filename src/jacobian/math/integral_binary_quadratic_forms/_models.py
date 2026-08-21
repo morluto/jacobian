@@ -218,4 +218,10 @@ class ReducedClassesResult(StrictModel):
         seen = set(self.classes)
         if len(seen) != len(self.classes):
             raise ValueError("classes must be distinct")
+        from jacobian.math.integral_binary_quadratic_forms._operations import (
+            _enumerate_reduced_classes,
+        )
+
+        if self.classes != _enumerate_reduced_classes(self.discriminant):
+            raise ValueError("classes must be the complete reduced class set")
         return self

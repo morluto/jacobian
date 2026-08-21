@@ -92,3 +92,148 @@ class TestDistanceGraph:
                 configuration=configuration,
                 target_squared_distance=CanonicalRational(num="-1", den="1"),
             )
+
+
+class TestPinnedLineDistance:
+    def _cfg(self, pts):
+        from fractions import Fraction
+
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.geometry.exact._models import (
+            LabelledRationalPoint,
+            PointConfiguration,
+        )
+
+        def cr(x):
+            return CanonicalRational.from_fraction(Fraction(x))
+
+        return PointConfiguration(
+            points=tuple(
+                LabelledRationalPoint(label=label, coordinates=(cr(x), cr(y)))
+                for label, x, y in pts
+            ),
+        )
+
+    def _anchor(self, x, y):
+        from fractions import Fraction
+
+        from jacobian._exact import CanonicalRational
+
+        return (
+            CanonicalRational.from_fraction(Fraction(x)),
+            CanonicalRational.from_fraction(Fraction(y)),
+        )
+
+    def test_inverted_orthocentric_equal_distance(self):
+        from fractions import Fraction
+
+        from jacobian.math.geometry.exact._models import (
+            PinnedLineDistanceRequest,
+        )
+        from jacobian.math.geometry.exact._operations import (
+            compute_pinned_line_distance_profile,
+        )
+
+        cfg = self._cfg(
+            [("b", Fraction(1, 4), Fraction(0)), ("c", Fraction(1, 5), Fraction(2, 5)), ("h", Fraction(4, 13), Fraction(6, 13))],
+        )
+        result = compute_pinned_line_distance_profile(
+            PinnedLineDistanceRequest(configuration=cfg, anchor=self._anchor(0, 0)),
+        )
+        assert result.point_count == 3
+        assert len(result.lines) == 3
+        for entry in result.lines:
+            assert entry.squared_distance.as_fraction() == Fraction(4, 65)
+        mult = [(m[0].as_fraction(), m[1]) for m in result.distance_multiplicities]
+        assert mult == [(Fraction(4, 65), 3)]
+
+    def test_unit_square_anchor_origin(self):
+        from fractions import Fraction
+
+        from jacobian.math.geometry.exact._models import (
+            PinnedLineDistanceRequest,
+        )
+        from jacobian.math.geometry.exact._operations import (
+            compute_pinned_line_distance_profile,
+        )
+
+        cfg = self._cfg([("a", 0, 0), ("b", 1, 0), ("c", 0, 1), ("d", 1, 1)])
+        result = compute_pinned_line_distance_profile(
+            PinnedLineDistanceRequest(configuration=cfg, anchor=self._anchor(0, 0)),
+        )
+        # C(4,2)=6 pairs, but opposite sides span distinct lines; collinear pairs
+        # a-b and c-d span parallel distinct lines. All 6 pairs give distinct
+        # geometric lines here (no three collinear), so 6 lines.
+        assert len(result.lines) == 6
+        total_pairs = sum(len(entry.pairs) for entry in result.lines)
+        assert total_pairs == 6
+        # The anchor (0,0) lies on lines a-b (y=0) and a-c (x=0): distance 0.
+        zero_lines = [e for e in result.lines if e.squared_distance.as_fraction() == Fraction(0)]
+        assert len(zero_lines) == 3
+
+    def test_collinear_pairs_collapse_to_one_line(self):
+        from fractions import Fraction
+
+        from jacobian.math.geometry.exact._models import (
+            PinnedLineDistanceRequest,
+        )
+        from jacobian.math.geometry.exact._operations import (
+            compute_pinned_line_distance_profile,
+        )
+
+        # Three collinear points on y=0: pairs (0,1),(0,2),(1,2) span ONE line.
+        cfg = self._cfg([("a", 0, 0), ("b", 1, 0), ("c", 2, 0)])
+        result = compute_pinned_line_distance_profile(
+            PinnedLineDistanceRequest(configuration=cfg, anchor=self._anchor(0, 1)),
+        )
+        assert len(result.lines) == 1
+        entry = result.lines[0]
+        assert len(entry.pairs) == 3  # all three source pairs retained
+        assert set(entry.pairs) == {(0, 1), (0, 2), (1, 2)}
+        # distance from (0,1) to y=0 is 1.
+        assert entry.squared_distance.as_fraction() == Fraction(1, 1)
+
+    def test_canonical_line_invariance_under_pair_order(self):
+        from jacobian.math.geometry.exact._models import (
+            PinnedLineDistanceRequest,
+        )
+        from jacobian.math.geometry.exact._operations import (
+            compute_pinned_line_distance_profile,
+        )
+
+        # Same geometric set, different label order -> same line coefficients.
+        cfg_a = self._cfg([("a", 0, 0), ("b", 2, 0), ("c", 1, 2)])
+        cfg_b = self._cfg([("x", 1, 2), ("y", 2, 0), ("z", 0, 0)])
+        ra = compute_pinned_line_distance_profile(
+            PinnedLineDistanceRequest(configuration=cfg_a, anchor=self._anchor(0, 0)),
+        )
+        rb = compute_pinned_line_distance_profile(
+            PinnedLineDistanceRequest(configuration=cfg_b, anchor=self._anchor(0, 0)),
+        )
+        coeffs_a = {tuple(c.as_fraction() for c in e.line_coefficients) for e in ra.lines}
+        coeffs_b = {tuple(c.as_fraction() for c in e.line_coefficients) for e in rb.lines}
+        assert coeffs_a == coeffs_b
+
+    def test_rejects_nonplanar(self):
+        import pytest
+
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.geometry.exact._models import (
+            LabelledRationalPoint,
+            PinnedLineDistanceRequest,
+            PointConfiguration,
+        )
+
+        def cr(x):
+            return CanonicalRational.from_fraction(__import__("fractions").Fraction(x))
+
+        pts = (
+            LabelledRationalPoint(label="a", coordinates=(cr(0), cr(0), cr(0))),
+            LabelledRationalPoint(label="b", coordinates=(cr(1), cr(0), cr(0))),
+            LabelledRationalPoint(label="c", coordinates=(cr(0), cr(1), cr(0))),
+        )
+        with pytest.raises(ValueError, match="planar"):
+            PinnedLineDistanceRequest(
+                configuration=PointConfiguration(points=pts),
+                anchor=(cr(0), cr(0)),
+            )

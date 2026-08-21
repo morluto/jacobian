@@ -421,6 +421,13 @@ class CycleRecord(StrictModel):
             raise ValueError("a cycle must be closed (first vertex == last)")
         if len(set(self.edge_ids)) != len(self.edge_ids):
             raise ValueError("a cycle must not repeat edge IDs")
+        if any(v < 0 or v >= MAX_VERTICES for v in self.vertices):
+            raise ValueError(f"cycle vertices must be in 0..{MAX_VERTICES - 1}")
+        if len(set(self.vertices[:-1])) != len(self.vertices) - 1:
+            raise ValueError(
+                "a cycle must not repeat interior vertices "
+                "(all vertices except the closing duplicate must be distinct)"
+            )
         return self
 
 
@@ -477,9 +484,16 @@ class CycleMulticoverResult(StrictModel):
     are edges covered fewer than ``k`` times; ``overcovered_edge_ids`` are
     edges covered more than ``k`` times.  ``is_exact_k_cover`` is true when
     every edge is covered exactly ``k`` times and all cycles are valid.
+
+    The result retains its source (``graph``, ``cycles``, ``target_multiplicity``)
+    so the exact-cover conclusion is reconstructible and bound to the submitted
+    request.
     """
 
     result_schema_version: Literal["1"] = "1"
+    graph: LooplessMultigraph
+    cycles: tuple[CycleRecord, ...] = Field(max_length=MAX_CYCLE_COUNT)
+    target_multiplicity: StrictInt = Field(ge=0, le=MAX_PARALLEL_MULTIPLICITY)
     cycle_validity: tuple[bool, ...] = Field(max_length=MAX_CYCLE_COUNT)
     edge_multiplicity: tuple[tuple[StrictStr, StrictInt], ...] = Field(
         max_length=MAX_EDGES
@@ -487,3 +501,78 @@ class CycleMulticoverResult(StrictModel):
     missing_edge_ids: tuple[StrictStr, ...] = Field(max_length=MAX_EDGES)
     overcovered_edge_ids: tuple[StrictStr, ...] = Field(max_length=MAX_EDGES)
     is_exact_k_cover: bool
+
+    @model_validator(mode="after")
+    def require_consistent_cover(self) -> Self:  # noqa: C901
+        if len(self.cycle_validity) != len(self.cycles):
+            raise ValueError("cycle_validity length must match cycles length")
+        # Recompute validity and multiplicity from the retained source.
+        recomputed_multiplicity: dict[str, int] = {
+            edge.edge_id: 0 for edge in self.graph.edges
+        }
+        recomputed_validity: list[bool] = []
+        for cycle in self.cycles:
+            valid = True
+            for i, eid in enumerate(cycle.edge_ids):
+                if eid not in recomputed_multiplicity:
+                    valid = False
+                    continue
+                v_from = cycle.vertices[i]
+                v_to = cycle.vertices[i + 1]
+                if not (
+                    0 <= v_from < self.graph.vertex_count
+                    and 0 <= v_to < self.graph.vertex_count
+                ):
+                    valid = False
+                    continue
+                edge = self.graph.edge_by_id(eid)
+                if not (
+                    (edge.left == v_from and edge.right == v_to)
+                    or (edge.right == v_from and edge.left == v_to)
+                ):
+                    valid = False
+                if valid:
+                    recomputed_multiplicity[eid] += 1
+            recomputed_validity.append(valid)
+        if tuple(recomputed_validity) != self.cycle_validity:
+            raise ValueError(
+                f"cycle_validity {self.cycle_validity} does not match "
+                f"recomputed {tuple(recomputed_validity)} from source"
+            )
+        recomputed_tuple = tuple(
+            (eid, recomputed_multiplicity[eid])
+            for eid in sorted(recomputed_multiplicity)
+        )
+        if recomputed_tuple != self.edge_multiplicity:
+            raise ValueError(
+                f"edge_multiplicity {self.edge_multiplicity} does not match "
+                f"recomputed {recomputed_tuple} from source"
+            )
+        k = self.target_multiplicity
+        recomputed_missing = tuple(
+            sorted(eid for eid, cnt in recomputed_multiplicity.items() if cnt < k)
+        )
+        recomputed_over = tuple(
+            sorted(eid for eid, cnt in recomputed_multiplicity.items() if cnt > k)
+        )
+        if recomputed_missing != self.missing_edge_ids:
+            raise ValueError(
+                f"missing_edge_ids {self.missing_edge_ids} does not match "
+                f"recomputed {recomputed_missing} for k={k}"
+            )
+        if recomputed_over != self.overcovered_edge_ids:
+            raise ValueError(
+                f"overcovered_edge_ids {self.overcovered_edge_ids} does not match "
+                f"recomputed {recomputed_over} for k={k}"
+            )
+        expected_exact = (
+            all(recomputed_validity)
+            and len(recomputed_missing) == 0
+            and len(recomputed_over) == 0
+        )
+        if self.is_exact_k_cover != expected_exact:
+            raise ValueError(
+                f"is_exact_k_cover {self.is_exact_k_cover} does not match "
+                f"expected {expected_exact} from source"
+            )
+        return self

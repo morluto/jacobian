@@ -114,8 +114,8 @@ class PrimeFieldNullspaceResult(StrictModel):
 
 
 __all__ = [
-    "PrimeFieldMatrixRequest",
     "PrimeFieldMatrixRankResult",
-    "PrimeFieldRrefResult",
+    "PrimeFieldMatrixRequest",
     "PrimeFieldNullspaceResult",
+    "PrimeFieldRrefResult",
 ]

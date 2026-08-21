@@ -1,6 +1,7 @@
 """Tests for prime-field matrix operations."""
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.prime_field_matrix._models import (
     PrimeFieldMatrixRequest,
@@ -26,9 +27,7 @@ class TestRank:
 
     def test_zero_matrix_gf2(self):
         """Zero matrix over GF(2) has rank 0."""
-        req = PrimeFieldMatrixRequest(
-            prime=2, entries=((0, 0), (0, 0))
-        )
+        req = PrimeFieldMatrixRequest(prime=2, entries=((0, 0), (0, 0)))
         result = compute_rank(req)
         assert result.rank == 0
 
@@ -44,14 +43,14 @@ class TestRank:
         and over GF(3) it stays [[2,0],[0,2]] (rank 2).
         """
         # Over GF(2), 2 mod 2 = 0.
-        rank_gf2 = compute_rank(PrimeFieldMatrixRequest(
-            prime=2, entries=((0, 0), (0, 0))
-        ))
+        rank_gf2 = compute_rank(
+            PrimeFieldMatrixRequest(prime=2, entries=((0, 0), (0, 0)))
+        )
         assert rank_gf2.rank == 0
         # Over GF(3), 2 mod 3 = 2.
-        rank_gf3 = compute_rank(PrimeFieldMatrixRequest(
-            prime=3, entries=((2, 0), (0, 2))
-        ))
+        rank_gf3 = compute_rank(
+            PrimeFieldMatrixRequest(prime=3, entries=((2, 0), (0, 2)))
+        )
         assert rank_gf3.rank == 2
 
     def test_rank_gf5(self):
@@ -93,17 +92,17 @@ class TestRank:
 
     def test_invalid_non_prime(self):
         """Non-prime modulus should raise."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PrimeFieldMatrixRequest(prime=4, entries=((1, 0), (0, 1)))
 
     def test_invalid_entry_out_of_range(self):
         """Entry >= prime should raise."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PrimeFieldMatrixRequest(prime=2, entries=((2, 0), (0, 1)))
 
     def test_empty_matrix_rejected(self):
         """Empty entries should raise."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PrimeFieldMatrixRequest(prime=2, entries=())
 
     def test_prime_2147483647(self):
@@ -119,9 +118,7 @@ class TestRank:
 class TestRref:
     def test_identity_gf2(self):
         """Identity matrix is already in RREF."""
-        req = PrimeFieldMatrixRequest(
-            prime=2, entries=((1, 0), (0, 1))
-        )
+        req = PrimeFieldMatrixRequest(prime=2, entries=((1, 0), (0, 1)))
         result = compute_rref(req)
         assert result.rref == ((1, 0), (0, 1))
         assert result.pivot_columns == (0, 1)
@@ -171,9 +168,7 @@ class TestRref:
 class TestNullspace:
     def test_full_rank_nullspace_empty(self):
         """Full rank matrix has empty nullspace."""
-        req = PrimeFieldMatrixRequest(
-            prime=2, entries=((1, 0), (0, 1))
-        )
+        req = PrimeFieldMatrixRequest(prime=2, entries=((1, 0), (0, 1)))
         result = compute_nullspace(req)
         assert result.nullity == 0
         assert result.nullspace == ()
@@ -228,20 +223,20 @@ class TestNullspace:
 class TestRequestValidation:
     def test_non_prime_rejected(self):
         """4 is not prime."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PrimeFieldMatrixRequest(prime=4, entries=((1, 0), (0, 1)))
 
     def test_jagged_rows_rejected(self):
         """Rows of different lengths should raise."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PrimeFieldMatrixRequest(prime=2, entries=((1, 0, 1), (0, 1)))
 
     def test_negative_entry_rejected(self):
         """Negative entries are not canonical residues."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PrimeFieldMatrixRequest(prime=2, entries=((-1, 0), (0, 1)))
 
     def test_entry_ge_prime_rejected(self):
         """Entries >= prime are not canonical."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PrimeFieldMatrixRequest(prime=2, entries=((2, 0), (0, 1)))

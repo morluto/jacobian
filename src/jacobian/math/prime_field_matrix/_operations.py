@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
-from jacobian.math.prime_field_matrix._models import (
-    PrimeFieldMatrixRequest,
-    PrimeFieldMatrixRankResult,
-    PrimeFieldNullspaceResult,
-    PrimeFieldRrefResult,
-)
 from jacobian.math.prime_field_linear_algebra import (
     PrimeFieldMatrix,
+)
+from jacobian.math.prime_field_linear_algebra import (
     nullspace as _nullspace,
+)
+from jacobian.math.prime_field_linear_algebra import (
     rank as _rank,
+)
+from jacobian.math.prime_field_linear_algebra import (
     rref as _rref,
+)
+from jacobian.math.prime_field_matrix._models import (
+    PrimeFieldMatrixRankResult,
+    PrimeFieldMatrixRequest,
+    PrimeFieldNullspaceResult,
+    PrimeFieldRrefResult,
 )
 
 
@@ -62,7 +68,7 @@ def compute_nullspace(request: PrimeFieldMatrixRequest) -> PrimeFieldNullspaceRe
 
 
 __all__ = [
+    "compute_nullspace",
     "compute_rank",
     "compute_rref",
-    "compute_nullspace",
 ]

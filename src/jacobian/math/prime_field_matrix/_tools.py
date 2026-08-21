@@ -7,8 +7,8 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.prime_field_matrix._models import (
-    PrimeFieldMatrixRequest,
     PrimeFieldMatrixRankResult,
+    PrimeFieldMatrixRequest,
     PrimeFieldNullspaceResult,
     PrimeFieldRrefResult,
 )

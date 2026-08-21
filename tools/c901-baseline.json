@@ -30,7 +30,7 @@
     {
       "path": "src/jacobian/math/root_systems/_operations.py",
       "symbol": "_weyl_group_data",
-      "complexity": 12
+      "complexity": 11
     },
     {
       "path": "tests/math/graphs/test_graph_isomorphism.py",

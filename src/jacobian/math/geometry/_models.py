@@ -437,3 +437,153 @@ class ConvexPolygonTriangulationResult(StrictModel):
     objective: Literal["NON_HULL_DIAGONAL_WEIGHT_SUM"] = "NON_HULL_DIAGONAL_WEIGHT_SUM"
     tie_break: Literal["LOWEST_SPLIT_INDEX"] = "LOWEST_SPLIT_INDEX"
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+
+class LabelledPoint2D(StrictModel):
+    """A labelled rational point in the plane."""
+
+    label: str = Field(min_length=1, max_length=64)
+    point: RationalPoint2D
+
+
+class CircumradiusProfileRequest(StrictModel):
+    """A bounded labelled rational planar point configuration."""
+
+    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
+
+    @model_validator(mode="after")
+    def require_unique_labels_and_coordinates(self) -> Self:
+        labels = tuple(item.label for item in self.points)
+        if len(labels) != len(set(labels)):
+            raise ValueError("point labels must be unique")
+        keys = tuple(
+            (
+                item.point.x.num,
+                item.point.x.den,
+                item.point.y.num,
+                item.point.y.den,
+            )
+            for item in self.points
+        )
+        if len(keys) != len(set(keys)):
+            raise ValueError("point coordinates must be unique")
+        return self
+
+
+class CircumradiusTripleEntry(StrictModel):
+    """Circumradius data for one unordered triple of points."""
+
+    labels: tuple[str, str, str]
+    indices: tuple[StrictInt, StrictInt, StrictInt]
+    collinear: bool
+    squared_circumradius: CanonicalRational | None = None
+
+    @model_validator(mode="after")
+    def bind_collinear_to_value(self) -> Self:
+        if self.collinear is (self.squared_circumradius is not None):
+            raise ValueError(
+                "exactly a collinear triple has no squared circumradius"
+            )
+        if (
+            self.squared_circumradius is not None
+            and self.squared_circumradius.as_fraction() <= 0
+        ):
+            raise ValueError("squared circumradius must be positive")
+        return self
+
+
+class CircumradiusProfileResult(StrictModel):
+    point_count: StrictInt = Field(ge=3, le=64)
+    triple_count: StrictInt = Field(ge=1, le=41664)
+    entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+    @model_validator(mode="after")
+    def require_complete_profile(self) -> Self:
+        if len(self.entries) != self.triple_count:
+            raise ValueError("circumradius profile must be complete")
+        return self
+
+
+class ForbiddenLabelledPoint(StrictModel):
+    """A labelled rational point in the affine plane."""
+
+    label: str = Field(min_length=1, max_length=64)
+    point: RationalPoint2D
+
+
+class ForbiddenConfiguration(StrictModel):
+    """A finite set of labelled rational planar points."""
+
+    points: tuple[ForbiddenLabelledPoint, ...] = Field(min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def require_unique_labels_and_coords(self) -> Self:
+        labels = tuple(item.label for item in self.points)
+        if len(labels) != len(set(labels)):
+            raise ValueError("configuration point labels must be unique")
+        keys = tuple(_point_key(item.point) for item in self.points)
+        if len(keys) != len(set(keys)):
+            raise ValueError("configuration point coordinates must be unique")
+        return self
+
+
+class ForbiddenPatternsRequest(StrictModel):
+    """A labelled rational planar point configuration to screen."""
+
+    configuration: ForbiddenConfiguration
+
+
+class CollinearTriple(StrictModel):
+    """A triple of configuration point indices lying on one line."""
+
+    first: StrictInt = Field(ge=0, le=127)
+    second: StrictInt = Field(ge=0, le=127)
+    third: StrictInt = Field(ge=0, le=127)
+
+    @model_validator(mode="after")
+    def require_strictly_ascending(self) -> Self:
+        if not (self.first < self.second < self.third):
+            raise ValueError("collinear triple indices must be strictly ascending")
+        return self
+
+
+class ConcyclicQuadruple(StrictModel):
+    """A quadruple of configuration point indices lying on one circle."""
+
+    first: StrictInt = Field(ge=0, le=127)
+    second: StrictInt = Field(ge=0, le=127)
+    third: StrictInt = Field(ge=0, le=127)
+    fourth: StrictInt = Field(ge=0, le=127)
+
+    @model_validator(mode="after")
+    def require_strictly_ascending(self) -> Self:
+        if not (self.first < self.second < self.third < self.fourth):
+            raise ValueError("concyclic quadruple indices must be strictly ascending")
+        return self
+
+
+class ForbiddenPatternsResult(StrictModel):
+    """Result of screening a configuration for forbidden patterns."""
+
+    point_count: StrictInt = Field(ge=1, le=128)
+    has_collinear_triple: bool
+    has_concyclic_quadruple: bool
+    collinear_triple: CollinearTriple | None = None
+    concyclic_quadruple: ConcyclicQuadruple | None = None
+    checked_triples: StrictInt = Field(ge=0)
+    checked_quadruples: StrictInt = Field(ge=0)
+
+    @model_validator(mode="after")
+    def bind_witnesses(self) -> Self:
+        if self.has_collinear_triple is (self.collinear_triple is None):
+            raise ValueError("exactly a collinear triple carries one witness")
+        if self.has_concyclic_quadruple is (self.concyclic_quadruple is None):
+            raise ValueError("exactly a concyclic quadruple carries one witness")
+        if self.collinear_triple is not None:
+            if self.collinear_triple.third >= self.point_count:
+                raise ValueError("collinear triple index exceeds configuration")
+        if self.concyclic_quadruple is not None:
+            if self.concyclic_quadruple.fourth >= self.point_count:
+                raise ValueError("concyclic quadruple index exceeds configuration")
+        return self

@@ -1,12 +1,12 @@
 """Exact bounded finite semigroup operations."""
 
 from jacobian.math.finite_semigroups._models import (
-    GreenRelationsRequest,
-    GreenRelationsResult,
     ElementPowerRequest,
     ElementPowerResult,
     GeneratedSubsemigroupRequest,
     GeneratedSubsemigroupResult,
+    GreenRelationsRequest,
+    GreenRelationsResult,
     IdempotentsRequest,
     IdempotentsResult,
     PowerProfileRequest,
@@ -208,7 +208,7 @@ def _left_ideals(
 ) -> list[frozenset[str]]:
     """Compute the principal left ideal S^1 a of each element."""
 
-    idx = {label: i for i, label in enumerate(elements)}
+    {label: i for i, label in enumerate(elements)}
     n = len(elements)
     ideals: list[frozenset[str]] = []
     for i in range(n):
@@ -225,7 +225,7 @@ def _right_ideals(
 ) -> list[frozenset[str]]:
     """Compute the principal right ideal a S^1 of each element."""
 
-    idx = {label: i for i, label in enumerate(elements)}
+    {label: i for i, label in enumerate(elements)}
     n = len(elements)
     ideals: list[frozenset[str]] = []
     for i in range(n):
@@ -301,22 +301,22 @@ def _green_relations(
       connected components of the L-R intersection graph
 
     Returns each as a tuple of equivalence-class tuples in declared element order.
-    """
+    """  # noqa: RUF002
 
     left = _left_ideals(elements, multiplication)
     right = _right_ideals(elements, multiplication)
     two_sided = _two_sided_ideals(elements, multiplication)
 
-    L_classes = _partition_from_ideals(elements, left)
-    R_classes = _partition_from_ideals(elements, right)
-    J_classes = _partition_from_ideals(elements, two_sided)
+    L_classes = _partition_from_ideals(elements, left)  # noqa: N806
+    R_classes = _partition_from_ideals(elements, right)  # noqa: N806
+    J_classes = _partition_from_ideals(elements, two_sided)  # noqa: N806
 
     # H = L ∩ R: two elements are H-related iff they are both L-related and R-related
-    H_classes = _intersection_partition(elements, L_classes, R_classes)
+    H_classes = _intersection_partition(elements, L_classes, R_classes)  # noqa: N806
 
-    # D = L ∨ R: build a graph where two elements are connected if L-related or R-related
+    # D = L ∨ R: build a graph where two elements are connected if L-related or R-related  # noqa: RUF003
     # then D-classes are the connected components
-    D_classes = _join_partition(elements, L_classes, R_classes)
+    D_classes = _join_partition(elements, L_classes, R_classes)  # noqa: N806
 
     return L_classes, R_classes, H_classes, D_classes, J_classes
 
@@ -352,7 +352,7 @@ def _intersection_partition(
     return tuple(result)
 
 
-def _join_partition(
+def _join_partition(  # noqa: C901
     elements: tuple[str, ...],
     partition_a: tuple[tuple[str, ...], ...],
     partition_b: tuple[tuple[str, ...], ...],
@@ -401,8 +401,7 @@ def compute_green_relations(
 ) -> "GreenRelationsResult":
     """Compute the Green relations of a finite semigroup."""
 
-
-    L, R, H, D, J = _green_relations(
+    L, R, H, D, J = _green_relations(  # noqa: N806
         request.semigroup.elements, request.semigroup.multiplication
     )
     return GreenRelationsResult(

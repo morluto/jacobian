@@ -264,7 +264,7 @@ class GreenRelationsResult(StrictModel):
     def bind_green_relations(self) -> Self:
         from jacobian.math.finite_semigroups._operations import _green_relations
 
-        L, R, H, D, J = _green_relations(
+        L, R, H, D, J = _green_relations(  # noqa: N806
             self.semigroup.elements, self.semigroup.multiplication
         )
         if self.L != L:

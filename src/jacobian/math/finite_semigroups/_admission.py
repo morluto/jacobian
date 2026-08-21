@@ -33,6 +33,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "exact principal two-sided ideals S^1 a S^1 of requested elements",
     ),
+    OperationAdmission(
+        "semigroup.green_relations.compute",
+        AdmissionDecision.KEEP,
+        "exact Green relations L, R, H, D, J via principal ideal equality",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

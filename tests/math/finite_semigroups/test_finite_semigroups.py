@@ -354,3 +354,108 @@ class TestPrincipalIdeals:
             ValidationError, match="every element must be in the semigroup"
         ):
             PrincipalIdealsRequest(semigroup=Z3, elements=["nope"])
+
+
+class TestGreenRelations:
+    """Tests for Green relations computation."""
+
+    def test_group_has_universal_green_relations(self) -> None:
+        """In a group, all Green relations are the universal relation."""
+        from jacobian.math.finite_semigroups._models import (
+            GreenRelationsRequest,
+        )
+        from jacobian.math.finite_semigroups._operations import compute_green_relations
+
+        sg = FiniteSemigroup(**Z3)
+        result = compute_green_relations(GreenRelationsRequest(semigroup=sg))
+        # In a group, all elements are J-equivalent (and hence L, R, H, D)
+        assert len(result.L) == 1
+        assert len(result.R) == 1
+        assert len(result.H) == 1
+        assert len(result.D) == 1
+        assert len(result.J) == 1
+
+    def test_null_semigroup_relations(self) -> None:
+        """In a null semigroup, each non-zero element is alone in its Green classes."""
+        from jacobian.math.finite_semigroups._models import (
+            GreenRelationsRequest,
+        )
+        from jacobian.math.finite_semigroups._operations import compute_green_relations
+
+        sg = FiniteSemigroup(**NULL_SG)
+        result = compute_green_relations(GreenRelationsRequest(semigroup=sg))
+        # Each element has distinct left/right ideals, so all singletons
+        assert result.L == (("0",), ("x",), ("y",))
+        assert result.R == (("0",), ("x",), ("y",))
+
+    def test_band_semigroup_relations(self) -> None:
+        """In a left-zero band (a*b=a), L is universal, R is discrete."""
+        from jacobian.math.finite_semigroups._models import (
+            GreenRelationsRequest,
+        )
+        from jacobian.math.finite_semigroups._operations import compute_green_relations
+
+        # left-zero band: a*b=a for all a,b
+        # left ideal of a = {a, ...} but since a*b=a, left ideal of a = {a}
+        # Actually for left-zero band: a*b=a, so Sa = {a} (left mult gives a),
+        # aS = {a, b} (right mult of a by everything gives a). So left ideals
+        # are all singletons, right ideals are universal.
+        band = FiniteSemigroup(
+            elements=("a", "b"),
+            multiplication=(("a", "a"), ("b", "b")),
+        )
+        result = compute_green_relations(GreenRelationsRequest(semigroup=band))
+        # left ideal of a = {a} (elements that left-multiply a), left ideal of b = {b}
+        # right ideal of a = {a, b} (a*a=a, a*b=a; but a is right-multiplied by all -> a)
+        # Actually: left ideal S^1 a = {s*a : s in S} union {a} = {a}
+        # right ideal a S^1 = {a*s : s in S} union {a} = {a, b}... wait a*a=a, a*b=a so right ideal of a = {a}
+        # Wait, the table is a*b=a (row a, col b), so a multiplied on right by a gives a, by b gives a. So right ideal of a = {a}.
+        # Similarly right ideal of b = {b}. So R is also discrete.
+        # Actually let me recheck: band table is [[a,a],[b,b]] meaning a*a=a, a*b=a, b*a=b, b*b=b
+        # This is a left-zero band where the LEFT argument wins.
+        # Left ideal of a: {s*a : s} = {a*a, b*a} = {a, b} = universal
+        # Right ideal of a: {a*s : s} = {a*a, a*b} = {a}
+        assert len(result.L) == 1  # universal
+        assert result.R == (("a",), ("b",))  # discrete
+
+    def test_green_relations_result_binds(self) -> None:
+        """GreenRelationsResult validates correctly."""
+        from jacobian.math.finite_semigroups._models import (
+            GreenRelationsRequest,
+            GreenRelationsResult,
+        )
+        from jacobian.math.finite_semigroups._operations import compute_green_relations
+
+        sg = FiniteSemigroup(**Z3)
+        req = GreenRelationsRequest(semigroup=sg)
+        result = compute_green_relations(req)
+        # Reconstruct with same values should work
+        reconstructed = GreenRelationsResult(
+            semigroup=result.semigroup,
+            L=result.L,
+            R=result.R,
+            H=result.H,
+            D=result.D,
+            J=result.J,
+        )
+        assert reconstructed.L == result.L
+
+    def test_green_relations_wrong_value_rejected(self) -> None:
+        """GreenRelationsResult rejects incorrect Green relations."""
+        from jacobian.math.finite_semigroups._models import (
+            GreenRelationsRequest,
+            GreenRelationsResult,
+        )
+        from jacobian.math.finite_semigroups._operations import compute_green_relations
+
+        sg = FiniteSemigroup(**Z3)
+        result = compute_green_relations(GreenRelationsRequest(semigroup=sg))
+        with pytest.raises(ValueError, match="L must be"):
+            GreenRelationsResult(
+                semigroup=sg,
+                L=(("0",), ("1",), ("2",)),  # wrong
+                R=result.R,
+                H=result.H,
+                D=result.D,
+                J=result.J,
+            )

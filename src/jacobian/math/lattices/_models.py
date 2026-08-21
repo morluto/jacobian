@@ -122,42 +122,46 @@ class IntegerLattice(StrictModel):
             maximum=_MAX_LATTICE_INPUT_SCALAR_DIGITS,
             label="lattice basis",
         )
-        # Full row rank over QQ: check that the r x n matrix has rank r.
-        # Use exact rational Gaussian elimination to avoid importing sympy at
-        # model-construction time for the common small cases.
-        from fractions import Fraction
-
-        matrix: list[list[Fraction]] = [
-            [Fraction(entry) for entry in row] for row in self.basis.entries
-        ]
-        rank = 0
-        col = 0
-        row = 0
-        # Copy for elimination
-        work = [row[:] for row in matrix]
-        while row < rows and col < columns:
-            # Find pivot
-            pivot = None
-            for r in range(row, rows):
-                if work[r][col] != 0:
-                    pivot = r
-                    break
-            if pivot is None:
-                col += 1
-                continue
-            work[row], work[pivot] = work[pivot], work[row]
-            # Eliminate below
-            for r in range(row + 1, rows):
-                if work[r][col] != 0:
-                    factor = work[r][col] / work[row][col]
-                    for c in range(col, columns):
-                        work[r][c] -= factor * work[row][c]
-            row += 1
-            col += 1
-            rank += 1
-        if rank != rows:
-            raise ValueError("lattice basis must have full row rank over QQ")
+        _require_full_rank_qq(self.basis.entries, rows, columns)
         return self
+
+
+def _require_full_rank_qq(
+    entries: tuple[tuple[str, ...], ...],
+    rows: int,
+    columns: int,
+) -> None:
+    """Raise when the integer rows are not full row rank over ``QQ``."""
+
+    from fractions import Fraction
+
+    matrix: list[list[Fraction]] = [
+        [Fraction(entry) for entry in row] for row in entries
+    ]
+    rank = 0
+    col = 0
+    row = 0
+    work = [row[:] for row in matrix]
+    while row < rows and col < columns:
+        pivot = None
+        for r in range(row, rows):
+            if work[r][col] != 0:
+                pivot = r
+                break
+        if pivot is None:
+            col += 1
+            continue
+        work[row], work[pivot] = work[pivot], work[row]
+        for r in range(row + 1, rows):
+            if work[r][col] != 0:
+                factor = work[r][col] / work[row][col]
+                for c in range(col, columns):
+                    work[r][c] -= factor * work[row][c]
+        row += 1
+        col += 1
+        rank += 1
+    if rank != rows:
+        raise ValueError("lattice basis must have full row rank over QQ")
 
 
 class RankGramRequest(StrictModel):

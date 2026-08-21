@@ -45,3 +45,28 @@ def group_orbit(degree: int, generators: list[list[int]], point: int) -> list[in
     group = PermutationGroup(perms)
     orbit = group.orbit(point)
     return sorted(orbit)
+
+
+def group_conjugacy_classes(
+    degree: int, generators: list[list[int]]
+) -> list[list[list[int]]]:
+    """Return conjugacy classes as lists of permutation array forms.
+
+    Two elements are conjugate iff they lie in the same class.  The returned
+    classes partition the group; each class is a list of permutations (as
+    array forms over ``0..n-1``).
+    """
+    from sympy.combinatorics import Permutation, PermutationGroup
+
+    if not 1 <= degree <= 64:
+        raise ValueError("group degree must be between 1 and 64")
+    if not generators:
+        raise ValueError("at least one generator is required")
+    perms = []
+    for perm in generators:
+        if len(perm) != degree or sorted(perm) != list(range(degree)):
+            raise ValueError("each generator must be a permutation of 0..n-1")
+        perms.append(Permutation(list(perm)))
+    group = PermutationGroup(perms)
+    classes = group.conjugacy_classes()
+    return [[list(p.array_form) for p in cls] for cls in classes]

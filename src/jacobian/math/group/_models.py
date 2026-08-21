@@ -84,3 +84,37 @@ class GroupOrbitResult(StrictModel):
 
     orbit: tuple[int, ...] = Field(min_length=1, max_length=MAX_GROUP_DEGREE)
     point: int = Field(ge=0, le=MAX_GROUP_DEGREE - 1)
+
+
+class GroupConjugacyClassesRequest(StrictModel):
+    """Request the conjugacy classes of a permutation group."""
+
+    degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
+    generators: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_GROUP_DEGREE
+    )
+
+    @model_validator(mode="after")
+    def require_valid_generators(self) -> Self:
+        for perm in self.generators:
+            if len(perm) != self.degree:
+                raise ValueError("each generator must have length equal to degree")
+            if sorted(perm) != list(range(self.degree)):
+                raise ValueError("each generator must be a permutation of 0..n-1")
+        return self
+
+
+class GroupConjugacyClassesResult(StrictModel):
+    """The conjugacy classes of a permutation group as array forms."""
+
+    classes: tuple[tuple[tuple[int, ...], ...], ...]
+    method: Literal["SYMPY_CONJUGACY_CLASSES"] = "SYMPY_CONJUGACY_CLASSES"
+
+    @model_validator(mode="after")
+    def require_nonempty_classes(self) -> Self:
+        if not self.classes:
+            raise ValueError("conjugacy classes must be nonempty")
+        for cls in self.classes:
+            if not cls:
+                raise ValueError("each conjugacy class must be nonempty")
+        return self

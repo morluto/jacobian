@@ -261,7 +261,10 @@ class MultivariateFactorResult(StrictModel):
                 key=lambda record: (
                     record.multiplicity,
                     max(
-                        (sum(term.exponents) for term in record.factor.polynomial.terms),
+                        (
+                            sum(term.exponents)
+                            for term in record.factor.polynomial.terms
+                        ),
                         default=0,
                     ),
                     tuple(
@@ -280,14 +283,14 @@ __all__ = [
     "MonomialOrder",
     "MultivariateDivisionRequest",
     "MultivariateDivisionResult",
+    "MultivariateFactorRequest",
+    "MultivariateFactorResult",
     "MultivariateGcdRequest",
     "MultivariateGcdResult",
     "MultivariateInvariantValue",
+    "MultivariateIrreducibleFactor",
     "MultivariatePolynomialValue",
     "MultivariateResultantRequest",
     "MultivariateResultantResult",
     "MultivariateScalarValue",
-    "MultivariateFactorRequest",
-    "MultivariateFactorResult",
-    "MultivariateIrreducibleFactor",
 ]

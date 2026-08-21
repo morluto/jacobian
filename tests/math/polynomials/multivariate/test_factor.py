@@ -2,8 +2,6 @@
 
 from fractions import Fraction
 
-import pytest
-
 from jacobian._exact import CanonicalRational
 from jacobian.math.polynomials.multivariate._models import (
     MultivariateFactorRequest,

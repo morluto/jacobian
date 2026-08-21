@@ -171,10 +171,12 @@ def compute_collinear_triples(
         if _are_collinear(points[i], points[j], points[k]):
             witnesses.append((i, j, k))
     return IncidenceSearchResult(
+        configuration=config,
         dimension=2,
         point_count=n,
         holds=bool(witnesses),
         witnesses=tuple(witnesses),
+        kind="COLLINEAR_TRIPLE",
     )
 
 
@@ -189,11 +191,20 @@ def compute_concyclic_quadruples(
     points = [_to_fraction_point(p) for p in config.points]
     witnesses: list[tuple[int, int, int, int]] = []
     for i, j, k, ell in combinations(range(n), 4):
+        # A quadruple containing a collinear triple is degenerate: it lies on
+        # no proper circle (infinite radius), so exclude it from witnesses.
+        if any(
+            _are_collinear(points[a], points[b], points[c])
+            for a, b, c in ((i, j, k), (i, j, ell), (i, k, ell), (j, k, ell))
+        ):
+            continue
         if _are_concyclic(points[i], points[j], points[k], points[ell]):
             witnesses.append((i, j, k, ell))
     return IncidenceSearchResult(
+        configuration=config,
         dimension=2,
         point_count=n,
         holds=bool(witnesses),
         witnesses=tuple(witnesses),
+        kind="CONCYCLIC_QUADRUPLE",
     )

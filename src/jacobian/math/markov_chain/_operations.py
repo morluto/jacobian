@@ -91,7 +91,7 @@ def compute_communicating_classes(
     matrix = request.matrix
     dimension = len(matrix)
 
-    graph = nx.DiGraph()
+    graph: nx.DiGraph[int] = nx.DiGraph()
     graph.add_nodes_from(range(dimension))
     for i in range(dimension):
         for j in range(dimension):

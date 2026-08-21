@@ -16,10 +16,15 @@ from jacobian.math.impartial_games.values import (
     MAX_HEAP_BOUND,
     MAX_HEAP_SIZE,
     MAX_HEAPS,
+    MAX_POSITIONS,
     MAX_SUBTRACTION_VALUE,
     MAX_SUBTRACTION_WORK,
     ImpartialGame,
 )
+
+
+MAX_COMPONENT_GRUNDY = MAX_POSITIONS - 1
+MAX_DISJUNCTIVE_GRUNDY = (1 << MAX_COMPONENT_GRUNDY.bit_length()) - 1
 
 
 class GrundyTableRequest(StrictModel):
@@ -217,10 +222,13 @@ class DisjunctiveSumRequest(StrictModel):
 class DisjunctiveSumResult(StrictModel):
     """The exact Grundy value of a disjunctive sum of impartial games."""
 
-    grundy_value: int = Field(ge=0)
-    component_grundy_values: tuple[int, ...]
+    grundy_value: int = Field(ge=0, le=MAX_DISJUNCTIVE_GRUNDY)
+    component_grundy_values: tuple[int, ...] = Field(
+        min_length=1,
+        max_length=MAX_HEAPS,
+    )
     is_p_position: bool
-    component_count: int = Field(ge=1)
+    component_count: int = Field(ge=1, le=MAX_HEAPS)
 
     @model_validator(mode="after")
     def require_exact_disjunctive_invariants(self) -> Self:
@@ -228,8 +236,14 @@ class DisjunctiveSumResult(StrictModel):
             raise ValueError(
                 "component_count must match component_grundy_values length"
             )
-        if any(value < 0 for value in self.component_grundy_values):
-            raise ValueError("component Grundy values must be nonnegative")
+        if any(
+            not 0 <= value <= MAX_COMPONENT_GRUNDY
+            for value in self.component_grundy_values
+        ):
+            raise ValueError(
+                f"component Grundy values must be between 0 and "
+                f"{MAX_COMPONENT_GRUNDY}"
+            )
         from functools import reduce
         from operator import xor
 

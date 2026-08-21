@@ -27,7 +27,9 @@ def _evaluate(a: int, b: int, c: int, x: int, y: int) -> int:
     return a * x * x + b * x * y + c * y * y
 
 
-def _transform(a: int, b: int, c: int, p: int, q: int, r: int, s: int) -> tuple[int, int, int]:
+def _transform(
+    a: int, b: int, c: int, p: int, q: int, r: int, s: int
+) -> tuple[int, int, int]:
     na = a * p * p + b * p * r + c * r * r
     nb = 2 * a * p * q + b * (p * s + q * r) + 2 * c * r * s
     nc = a * q * q + b * q * s + c * s * s
@@ -98,7 +100,10 @@ def _reduce(a: int, b: int, c: int) -> tuple[int, int, int, int, int, int, int, 
         r1, s1 = m1[1]
         p2, q2 = m2[0]
         r2, s2 = m2[1]
-        return ((p1 * p2 + q1 * r2, p1 * q2 + q1 * s2), (r1 * p2 + s1 * r2, r1 * q2 + s1 * s2))
+        return (
+            (p1 * p2 + q1 * r2, p1 * q2 + q1 * s2),
+            (r1 * p2 + s1 * r2, r1 * q2 + s1 * s2),
+        )
 
     cur_a, cur_b, cur_c = a, b, c
     matrix = ((1, 0), (0, 1))
@@ -150,7 +155,7 @@ def compute_check(
     if disc % 4 not in (0, 1):
         return BinaryQuadraticFormCheckResult(
             status="NOT_IN_INITIAL_DOMAIN",
-            obstruction=f"discriminant D={disc} mod 4 = {disc%4}: must be 0 or 1",
+            obstruction=f"discriminant D={disc} mod 4 = {disc % 4}: must be 0 or 1",
         )
 
     return BinaryQuadraticFormCheckResult(

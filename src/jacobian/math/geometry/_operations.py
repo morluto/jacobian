@@ -439,6 +439,34 @@ def _points_to_fractions(
     return [(p.x.as_fraction(), p.y.as_fraction()) for p in points]
 
 
+def _det3_frac(m: tuple[tuple[Fraction, ...], ...]) -> Fraction:
+    return (
+        m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+    )
+
+
+def _det4_frac(m: tuple[tuple[Fraction, ...], ...]) -> Fraction:
+    result = Fraction(0)
+    for col in range(4):
+        sub = tuple(
+            tuple(row[col2] for col2 in range(4) if col2 != col) for row in m[1:]
+        )
+        cofactor = _det3_frac(sub)
+        sign = 1 if col % 2 == 0 else -1
+        result += sign * m[0][col] * cofactor
+    return result
+
+
+def _is_collinear_pts(
+    a: tuple[Fraction, Fraction],
+    b: tuple[Fraction, Fraction],
+    c: tuple[Fraction, Fraction],
+) -> bool:
+    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) == 0
+
+
 def general_position_search(request: GeneralPositionRequest) -> GeneralPositionResult:
     """Find all collinear triples and concyclic quadruples in a point configuration."""
     from itertools import combinations
@@ -447,48 +475,36 @@ def general_position_search(request: GeneralPositionRequest) -> GeneralPositionR
     n = len(pts)
 
     collinear_triples: list[CollinearTripleWitness] = []
+    collinear_set: set[tuple[int, int, int]] = set()
     for i, j, k in combinations(range(n), 3):
-        a, b, c = pts[i], pts[j], pts[k]
-        d1 = (b[0] - a[0], b[1] - a[1])
-        d2 = (c[0] - a[0], c[1] - a[1])
-        cross = d1[0] * d2[1] - d1[1] * d2[0]
-        if cross == 0:
+        if _is_collinear_pts(pts[i], pts[j], pts[k]):
             collinear_triples.append(CollinearTripleWitness(indices=(i, j, k)))
+            collinear_set.add((i, j, k))
 
     concyclic_quadruples: list[ConcyclicQuadrupleWitness] = []
     for i, j, k, m in combinations(range(n), 4):
-        a, b = pts[i], pts[j]
-        c, d = pts[k], pts[m]
-
-        # Check concyclicity via determinant
-        # A 4x4 determinant: |x^2+y^2, x, y, 1| for each point
-        def det4(m: tuple[tuple[Fraction, ...], ...]) -> Fraction:
-            result = Fraction(0)
-            for col in range(4):
-                sub = tuple(
-                    tuple(row[col2] for col2 in range(4) if col2 != col)
-                    for row in m[1:]
-                )
-                cofactor = det3(sub)
-                sign = 1 if col % 2 == 0 else -1
-                result += sign * m[0][col] * cofactor
-            return result
-
-        def det3(m: tuple[tuple[Fraction, ...], ...]) -> Fraction:
-            return (
-                m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
-                - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
-                + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
-            )
-
-        rows = []
+        # Exclude collinear quadruples: any 3 collinear points are degenerate
+        # (collinear points lie on a line, not a finite circle). The
+        # determinant criterion |x^2+y^2, x, y, 1| is zero for four collinear
+        # points, but no Euclidean circle contains three distinct collinear
+        # points, so such quadruples must not be reported as concyclic.
+        if (
+            (i, j, k) in collinear_set
+            or (i, j, m) in collinear_set
+            or (i, k, m) in collinear_set
+            or (j, k, m) in collinear_set
+        ):
+            continue
+        a, b, c, d = pts[i], pts[j], pts[k], pts[m]
+        rows: list[tuple[Fraction, Fraction, Fraction, Fraction]] = []
         for px, py in (a, b, c, d):
             rows.append((px * px + py * py, px, py, Fraction(1)))
-        determinant = det4(tuple(rows))
+        determinant = _det4_frac(tuple(rows))
         if determinant == 0:
             concyclic_quadruples.append(ConcyclicQuadrupleWitness(indices=(i, j, k, m)))
 
     return GeneralPositionResult(
+        points=request.points,
         num_points=n,
         has_collinear_triple=bool(collinear_triples),
         has_concyclic_quadruple=bool(concyclic_quadruples),
@@ -512,14 +528,6 @@ def circumradius_profile(
         ax, ay = pts[i]
         bx, by = pts[j]
         cx, cy = pts[k]
-        # Compute squared circumradius R^2 = abc / (4 * Area)
-        # where a, b, c are side lengths and Area is the signed area.
-        # Using the formula: R^2 = (|AB|^2 * |BC|^2 * |CA|^2) / (16 * Area^2)
-        # where Area = cross(B-A, C-A) / 2.
-        # Actually: R = abc / (4 * Area), so R^2 = a^2 * b^2 * c^2 / (16 * Area^2)
-        # Area^2 = (cross / 2)^2 = cross^2 / 4
-        # So R^2 = a^2 * b^2 * c^2 / (16 * cross^2 / 4) = a^2 * b^2 * c^2 / (4 * cross^2)
-
         cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
 
         if cross == 0:
@@ -530,14 +538,9 @@ def circumradius_profile(
                 )
             )
         else:
-            # Squared side lengths
             ab_sq = (bx - ax) ** 2 + (by - ay) ** 2
             bc_sq = (cx - bx) ** 2 + (cy - by) ** 2
             ca_sq = (ax - cx) ** 2 + (ay - cy) ** 2
-            # R^2 = (a^2 * b^2 * c^2) / (4 * cross^2)
-            # But cross is the 2*Area (signed), so Area = cross/2
-            # R = abc/(4*Area), R^2 = a^2*b^2*c^2 / (16 * Area^2)
-            # = a^2*b^2*c^2 / (16 * cross^2/4) = a^2*b^2*c^2 / (4*cross^2)
             r_sq = Fraction(ab_sq * bc_sq * ca_sq) / Fraction(4 * cross * cross)
             entries.append(
                 CircumradiusTripleEntry(
@@ -547,7 +550,10 @@ def circumradius_profile(
                 )
             )
 
+    # Ensure deterministic lexicographic order (combinations already yields sorted).
+    entries.sort(key=lambda e: e.indices)
     return CircumradiusProfileResult(
+        points=request.points,
         num_points=n,
         entries=tuple(entries),
     )

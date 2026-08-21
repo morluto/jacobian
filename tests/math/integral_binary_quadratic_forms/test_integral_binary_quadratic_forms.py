@@ -7,8 +7,8 @@ from jacobian.math.integral_binary_quadratic_forms._models import (
     BinaryQuadraticFormCheckRequest,
     BinaryQuadraticFormEvaluateRequest,
     BinaryQuadraticFormProperEquivRequest,
-    BinaryQuadraticFormReduceRequest,
     BinaryQuadraticFormReducedClassesRequest,
+    BinaryQuadraticFormReduceRequest,
 )
 from jacobian.math.integral_binary_quadratic_forms._operations import (
     compute_check,
@@ -187,7 +187,7 @@ class TestReducedClasses:
         assert result.class_number == 2
 
     def test_all_classes_reduced(self) -> None:
-        for D in [-3, -4, -7, -8, -11, -15, -19, -20, -23, -43, -47, -163]:
+        for D in [-3, -4, -7, -8, -11, -15, -19, -20, -23, -43, -47, -163]:  # noqa: N806
             result = compute_reduced_classes(
                 BinaryQuadraticFormReducedClassesRequest(discriminant=D)
             )

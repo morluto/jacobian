@@ -93,9 +93,7 @@ def compute_containment_profile(
         count = sum(1 for block in blocks if s_set <= block)
         counts[subset] = count
 
-    subset_profile = tuple(
-        (subset, counts[subset]) for subset in subsets
-    )
+    subset_profile = tuple((subset, counts[subset]) for subset in subsets)
 
     histogram_dict: dict[int, int] = {}
     for count in counts.values():
@@ -275,9 +273,7 @@ def compute_derived_residual(
     for j in range(len(blocks)):
         contains_p = p in blocks[j]
         if kind == "derived" and contains_p:
-            new_block = tuple(
-                sorted((x for x in blocks[j] if x != p), key=sort_key)
-            )
+            new_block = tuple(sorted((x for x in blocks[j] if x != p), key=sort_key))
             new_block_ids.append(block_ids[j])
             new_blocks.append(new_block)
             source_blocks.append(block_ids[j])
@@ -353,18 +349,14 @@ def compute_gram(request: GramRequest) -> GramResult:
         gram = [[0] * n for _ in range(n)]
         for i in range(n):
             for j in range(n):
-                gram[i][j] = sum(
-                    matrix[i][k] * matrix[j][k] for k in range(m)
-                )
+                gram[i][j] = sum(matrix[i][k] * matrix[j][k] for k in range(m))
         result_matrix = tuple(tuple(row) for row in gram)
     else:
         labels = block_ids
         gram = [[0] * m for _ in range(m)]
         for i in range(m):
             for j in range(m):
-                gram[i][j] = sum(
-                    matrix[k][i] * matrix[k][j] for k in range(n)
-                )
+                gram[i][j] = sum(matrix[k][i] * matrix[k][j] for k in range(n))
         result_matrix = tuple(tuple(row) for row in gram)
 
     return GramResult(

@@ -64,7 +64,6 @@ class DegreeProfileResult(StrictModel):
     total_incidences: int
 
 
-
 # ---------------------------------------------------------------------------
 # 3. Containment profiles (t-subset codegree profiles)
 # ---------------------------------------------------------------------------

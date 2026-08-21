@@ -12,6 +12,7 @@ from jacobian.math.additive_combinatorics._models import (
     DirectSumPredicateRequest,
     DirectSumPredicateResult,
     FiniteIntegerSet,
+    IntegerVector,
     OrderedDifferenceClass,
     OrderedDifferencePair,
     OrderedDifferenceProfileRequest,
@@ -200,7 +201,9 @@ def compute_ordered_difference_profile(
 
     result_classes = tuple(
         OrderedDifferenceClass(
-            difference=tuple(format_canonical_integer(c) for c in d),
+            difference=IntegerVector(
+                coordinates=tuple(format_canonical_integer(c) for c in d)
+            ),
             pairs=tuple(classes[d]),
         )
         for d in sorted_diffs

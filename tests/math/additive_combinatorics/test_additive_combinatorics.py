@@ -202,7 +202,9 @@ class TestOrderedDifferenceProfile:
         assert result.max_multiplicity == 2
         assert result.first_repeated_difference == ("-1", "0")
         # The difference (1,0) is realized by two ordered pairs.
-        diff_10 = [c for c in result.classes if tuple(c.difference) == ("1", "0")]
+        diff_10 = [
+            c for c in result.classes if tuple(c.difference.coordinates) == ("1", "0")
+        ]
         assert len(diff_10) == 1
         assert len(diff_10[0].pairs) == 2
         assert {p.minuend_index for p in diff_10[0].pairs} == {1, 2}
@@ -226,7 +228,7 @@ class TestOrderedDifferenceProfile:
         assert result.dimension == 1
         assert result.ordered_pair_count == 6
         assert not result.has_repeated_difference
-        diffs = {tuple(c.difference) for c in result.classes}
+        diffs = {tuple(c.difference.coordinates) for c in result.classes}
         assert diffs == {("1",), ("3",), ("2",), ("-1",), ("-3",), ("-2",)}
 
     def test_translation_invariance(self):
@@ -236,15 +238,19 @@ class TestOrderedDifferenceProfile:
         shifted = compute_ordered_difference_profile(
             self._req([(5, -3), (6, -3), (5, -2)]),
         )
-        base_diffs = {tuple(c.difference): len(c.pairs) for c in base.classes}
-        shifted_diffs = {tuple(c.difference): len(c.pairs) for c in shifted.classes}
+        base_diffs = {
+            tuple(c.difference.coordinates): len(c.pairs) for c in base.classes
+        }
+        shifted_diffs = {
+            tuple(c.difference.coordinates): len(c.pairs) for c in shifted.classes
+        }
         assert base_diffs == shifted_diffs
 
     def test_sign_reversal(self):
         result = compute_ordered_difference_profile(
             self._req([(0, 0), (1, 0), (0, 1), (1, 1)]),
         )
-        diffs = {tuple(c.difference): len(c.pairs) for c in result.classes}
+        diffs = {tuple(c.difference.coordinates): len(c.pairs) for c in result.classes}
         # For every difference v, the multiplicity of -v must equal that of v.
         for d, count in diffs.items():
             neg = tuple(str(-int(x)) for x in d)
@@ -276,7 +282,7 @@ class TestOrderedDifferenceProfile:
         )
         seen = set()
         for cls in result.classes:
-            diff = tuple(int(c) for c in cls.difference)
+            diff = tuple(int(c) for c in cls.difference.coordinates)
             for pair in cls.pairs:
                 replayed = tuple(
                     points[pair.minuend_index][k] - points[pair.subtrahend_index][k]
@@ -302,13 +308,13 @@ class TestOrderedDifferenceProfile:
                 set_size=2,
                 classes=(
                     OrderedDifferenceClass(
-                        difference=("-999",),
+                        difference=IntegerVector(coordinates=("-999",)),
                         pairs=(
                             OrderedDifferencePair(minuend_index=0, subtrahend_index=1),
                         ),
                     ),
                     OrderedDifferenceClass(
-                        difference=("999",),
+                        difference=IntegerVector(coordinates=("999",)),
                         pairs=(
                             OrderedDifferencePair(minuend_index=1, subtrahend_index=0),
                         ),
@@ -346,9 +352,11 @@ class TestOrderedDifferenceProfile:
         )
         payload = result.model_dump()
         later = next(
-            cls.difference
+            cls.difference.coordinates
             for cls in result.classes
-            if len(cls.pairs) > 1 and cls.difference != result.first_repeated_difference
+            if len(cls.pairs) > 1
+            and tuple(cls.difference.coordinates)
+            != tuple(result.first_repeated_difference or ())
         )
         payload["first_repeated_difference"] = list(later)
         with pytest.raises(ValidationError, match="first class of multiplicity"):

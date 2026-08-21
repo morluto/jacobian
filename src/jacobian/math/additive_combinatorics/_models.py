@@ -283,17 +283,32 @@ class OrderedDifferencePair(StrictModel):
 
 
 class OrderedDifferenceClass(StrictModel):
-    """One nonzero difference vector and every ordered pair realizing it."""
+    """One nonzero difference vector and every ordered pair realizing it.
 
-    difference: tuple[CanonicalInteger, ...] = Field(min_length=1)
+    ``difference`` is the domain's canonical ``IntegerVector`` value so exact
+    differences compose downstream without reconstruction.  Difference
+    coordinates may carry one more digit than request coordinates (a
+    difference of two bounded integers), so this canonical use admits the
+    documented 65-digit boundary rather than the 64-digit request bound.
+    """
+
+    difference: IntegerVector = Field(
+        description=(
+            "The nonzero difference vector as the canonical IntegerVector "
+            "value; coordinates may carry one more digit than request "
+            "coordinates because a difference of two bounded integers can "
+            "grow by one digit."
+        ),
+    )
     pairs: tuple[OrderedDifferencePair, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def require_nonzero_difference(self) -> Self:
-        if all(parse_canonical_integer(c) == 0 for c in self.difference):
+        if all(parse_canonical_integer(c) == 0 for c in self.difference.coordinates):
             raise ValueError("the zero difference class is not reported")
         if any(
-            len(c.lstrip("-")) > _MAX_VECTOR_DIFFERENCE_DIGITS for c in self.difference
+            len(c.lstrip("-")) > _MAX_VECTOR_DIFFERENCE_DIGITS
+            for c in self.difference.coordinates
         ):
             raise ValueError("difference coordinate exceeds the digit bound")
         for pair in self.pairs:
@@ -356,9 +371,9 @@ def _require_replayed_classes(
     seen_pairs: set[tuple[int, int]] = set()
     numeric_diffs: list[tuple[int, ...]] = []
     for cls in classes:
-        if len(cls.difference) != dimension:
+        if len(cls.difference.coordinates) != dimension:
             raise ValueError("difference dimension must match the source")
-        diff = tuple(parse_canonical_integer(c) for c in cls.difference)
+        diff = tuple(parse_canonical_integer(c) for c in cls.difference.coordinates)
         numeric_diffs.append(diff)
         for pair in cls.pairs:
             if (
@@ -401,7 +416,7 @@ def _require_repeated_decision(
     if max_multiplicity != max_mult:
         raise ValueError("max_multiplicity must equal the largest class size")
     first_repeated = next(
-        (cls.difference for cls in classes if len(cls.pairs) > 1),
+        (cls.difference.coordinates for cls in classes if len(cls.pairs) > 1),
         None,
     )
     if has_repeated_difference != (max_mult > 1):

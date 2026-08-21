@@ -84,3 +84,81 @@ class GroupOrbitResult(StrictModel):
 
     orbit: tuple[int, ...] = Field(min_length=1, max_length=MAX_GROUP_DEGREE)
     point: int = Field(ge=0, le=MAX_GROUP_DEGREE - 1)
+
+
+class GroupConjugacyClassesRequest(StrictModel):
+    """Compute the conjugacy classes of a permutation group."""
+
+    degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
+    generators: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_GROUP_DEGREE
+    )
+
+    @model_validator(mode="after")
+    def require_valid_generators(self) -> Self:
+        for perm in self.generators:
+            if len(perm) != self.degree:
+                raise ValueError("each generator must have length equal to degree")
+            if sorted(perm) != list(range(self.degree)):
+                raise ValueError("each generator must be a permutation of 0..n-1")
+        return self
+
+
+class ConjugacyClass(StrictModel):
+    """One conjugacy class with representative elements and size."""
+
+    elements: tuple[tuple[int, ...], ...] = Field(min_length=1)
+    size: int = Field(ge=1)
+
+
+class GroupConjugacyClassesResult(StrictModel):
+    """All conjugacy classes of a permutation group."""
+
+    classes: tuple[ConjugacyClass, ...] = Field(min_length=1)
+    class_count: int = Field(ge=1)
+    method: Literal["SYMPY_CONJUGACY_CLASSES"] = "SYMPY_CONJUGACY_CLASSES"
+
+    @model_validator(mode="after")
+    def require_consistent_count(self) -> Self:
+        if len(self.classes) != self.class_count:
+            raise ValueError("class_count must match the number of classes")
+        return self
+
+
+class GroupSubgroupLatticeRequest(StrictModel):
+    """Enumerate all subgroups of a bounded permutation group."""
+
+    degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
+    generators: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_GROUP_DEGREE
+    )
+
+    @model_validator(mode="after")
+    def require_valid_generators(self) -> Self:
+        for perm in self.generators:
+            if len(perm) != self.degree:
+                raise ValueError("each generator must have length equal to degree")
+            if sorted(perm) != list(range(self.degree)):
+                raise ValueError("each generator must be a permutation of 0..n-1")
+        return self
+
+
+class SubgroupEntry(StrictModel):
+    """One subgroup with its generators and order."""
+
+    generators: tuple[tuple[int, ...], ...] = Field(min_length=1)
+    order: int = Field(ge=1, le=512)
+
+
+class GroupSubgroupLatticeResult(StrictModel):
+    """All subgroups of a bounded permutation group."""
+
+    subgroups: tuple[SubgroupEntry, ...] = Field(min_length=1)
+    subgroup_count: int = Field(ge=1)
+    method: Literal["SYMPY_SUBGROUPS"] = "SYMPY_SUBGROUPS"
+
+    @model_validator(mode="after")
+    def require_consistent_count(self) -> Self:
+        if len(self.subgroups) != self.subgroup_count:
+            raise ValueError("subgroup_count must match the number of subgroups")
+        return self

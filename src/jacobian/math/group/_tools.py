@@ -7,17 +7,23 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.group._models import (
+    GroupConjugacyClassesRequest,
+    GroupConjugacyClassesResult,
     GroupElementOrderRequest,
     GroupElementOrderResult,
     GroupOrbitRequest,
     GroupOrbitResult,
     GroupOrderResult,
+    GroupSubgroupLatticeRequest,
+    GroupSubgroupLatticeResult,
     PermutationGroupRequest,
 )
 from jacobian.math.group._operations import (
+    compute_conjugacy_classes,
     compute_element_order,
     compute_group_orbit,
     compute_group_order,
+    compute_subgroup_lattice,
 )
 
 
@@ -112,6 +118,54 @@ GROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     "degree": 4,
                     "generators": [[1, 2, 3, 0]],
                     "point": 0,
+                },
+            ),
+        ),
+    ),
+    group_operation(
+        "group.conjugacy_classes.compute",
+        "Compute conjugacy classes of a permutation group",
+        "Compute the exact conjugacy classes and class sizes of a bounded "
+        "permutation group via SymPy. Each class is returned with its "
+        "representative elements and size.",
+        GroupConjugacyClassesRequest,
+        GroupConjugacyClassesResult,
+        compute_conjugacy_classes,
+        "group",
+        "conjugacy",
+        "permutation",
+        "exact",
+        examples=(
+            example(
+                "s3_conjugacy_classes",
+                "Compute conjugacy classes of S3; generators must be bijections.",
+                {
+                    "degree": 3,
+                    "generators": [[1, 0, 2], [0, 2, 1]],
+                },
+            ),
+        ),
+    ),
+    group_operation(
+        "group.subgroup_lattice.compute",
+        "Enumerate all subgroups of a bounded permutation group",
+        "Enumerate all subgroups of a bounded permutation group via SymPy. "
+        "Each subgroup is returned with its generators and order. Bounded "
+        "to groups of order at most 512.",
+        GroupSubgroupLatticeRequest,
+        GroupSubgroupLatticeResult,
+        compute_subgroup_lattice,
+        "group",
+        "subgroup",
+        "permutation",
+        "exact",
+        examples=(
+            example(
+                "c4_subgroups",
+                "Enumerate all subgroups of C4; generators must be bijections.",
+                {
+                    "degree": 4,
+                    "generators": [[1, 2, 3, 0]],
                 },
             ),
         ),

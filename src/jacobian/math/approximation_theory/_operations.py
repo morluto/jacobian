@@ -11,7 +11,6 @@ from jacobian.math.approximation_theory._models import (
     LagrangeBasisResult,
     LagrangeInterpolationRequest,
     LagrangeInterpolationResult,
-    RationalNodeSet,
 )
 
 

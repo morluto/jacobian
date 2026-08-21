@@ -9,12 +9,10 @@ from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.additive_combinatorics._models import (
     AdditiveEnergyRequest,
     AdditiveEnergyResult,
+    DifferenceClassEntry,
     DirectSumPredicateRequest,
     DirectSumPredicateResult,
     FiniteIntegerSet,
-    IntegerVector,
-    OrderedDifferenceClass,
-    OrderedDifferencePair,
     OrderedDifferenceProfileRequest,
     OrderedDifferenceProfileResult,
     RepresentationProfileEntry,
@@ -22,9 +20,6 @@ from jacobian.math.additive_combinatorics._models import (
     RepresentationProfileResult,
     SumsetCardinalityRequest,
     SumsetCardinalityResult,
-    DifferenceClassEntry,
-    OrderedDifferenceProfileRequest,
-    OrderedDifferenceProfileResult,
 )
 
 

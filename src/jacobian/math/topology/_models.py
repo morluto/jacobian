@@ -829,3 +829,196 @@ class LinkResult(TopologyExactResult):
 
 
 __all__.extend(["FVectorRequest", "FVectorResult", "LinkRequest", "LinkResult"])
+
+
+class StarRequest(StrictModel):
+    """Request the closed star of a simplex in a simplicial complex."""
+
+    complex: SimplicialComplexRequest
+    simplex: tuple[VertexLabel, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_valid_star_simplex(self) -> Self:
+        simplex = set(self.simplex)
+        if len(simplex) != len(self.simplex):
+            raise ValueError("simplex vertices must be distinct")
+        if not simplex.issubset(self.complex.vertices):
+            raise ValueError("simplex vertices must be in the complex")
+        if not any(simplex.issubset(facet) for facet in self.complex.facets):
+            raise ValueError("simplex must be a face of the complex")
+        return self
+
+
+class StarResult(TopologyExactResult):
+    """The closed star of a simplex: all facets containing sigma."""
+
+    simplex: tuple[str, ...]
+    star_facets: tuple[tuple[str, ...], ...]
+    star_is_empty: bool
+
+
+class VertexDeletionRequest(StrictModel):
+    """Delete a vertex subset from a simplicial complex."""
+
+    complex: SimplicialComplexRequest
+    vertices_to_delete: tuple[VertexLabel, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_valid_deletion(self) -> Self:
+        vtd = set(self.vertices_to_delete)
+        if len(vtd) != len(self.vertices_to_delete):
+            raise ValueError("vertices_to_delete must be distinct")
+        if not vtd.issubset(set(self.complex.vertices)):
+            raise ValueError("vertices_to_delete must be in the complex")
+        return self
+
+
+class VertexDeletionResult(TopologyExactResult):
+    """The complex after deleting a vertex subset."""
+
+    deleted_vertices: tuple[str, ...]
+    remaining_vertices: tuple[str, ...]
+    remaining_facets: tuple[tuple[str, ...], ...]
+
+
+class SkeletonRequest(StrictModel):
+    """Request the k-skeleton of a simplicial complex."""
+
+    complex: SimplicialComplexRequest
+    k: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
+
+
+class SkeletonResult(TopologyExactResult):
+    """The k-skeleton as a facet list."""
+
+    k: int
+    skeleton_facets: tuple[tuple[str, ...], ...]
+    skeleton_vertices: tuple[str, ...]
+
+
+class JoinRequest(StrictModel):
+    """Join two simplicial complexes on disjoint vertex sets."""
+
+    complex_a: SimplicialComplexRequest
+    complex_b: SimplicialComplexRequest
+
+    @model_validator(mode="after")
+    def require_disjoint_vertices(self) -> Self:
+        va = set(self.complex_a.vertices)
+        vb = set(self.complex_b.vertices)
+        if va & vb:
+            raise ValueError(
+                "join requires disjoint vertex sets; rename vertices first"
+            )
+        return self
+
+
+class JoinResult(TopologyExactResult):
+    """The join of two complexes."""
+
+    join_vertices: tuple[str, ...]
+    join_facets: tuple[tuple[str, ...], ...]
+    join_dimension: int
+
+
+class BarycentricSubdivisionRequest(StrictModel):
+    """Subdivide a complex via its order complex (barycentric subdivision)."""
+
+    complex: SimplicialComplexRequest
+
+
+class BarycentricSubdivisionResult(TopologyExactResult):
+    """The barycentric subdivision as a facet list."""
+
+    original_vertices: tuple[str, ...]
+    original_dimension: int
+    subdivision_vertices: tuple[str, ...]
+    subdivision_facets: tuple[tuple[str, ...], ...]
+    num_new_vertices: int
+
+
+class PseudomanifoldRequest(StrictModel):
+    """Decide whether a complex is a pseudomanifold."""
+
+    complex: SimplicialComplexRequest
+
+
+class PseudomanifoldResult(TopologyExactResult):
+    """Pseudomanifold decision result."""
+
+    is_pseudomanifold: bool
+    is_closed: bool
+    dimension: int
+    num_facets: int
+    obstruction: str | None = None
+
+
+class ShellingCheckRequest(StrictModel):
+    """Check a submitted shelling order of a pure complex."""
+
+    complex: SimplicialComplexRequest
+    facet_order: tuple[int, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_valid_order(self) -> Self:
+        if sorted(self.facet_order) != list(range(len(self.complex.facets))):
+            raise ValueError("facet_order must be a permutation of facet indices")
+        return self
+
+
+class ShellingCheckResult(TopologyExactResult):
+    """Result of checking a shelling order."""
+
+    is_shelling: bool
+    failed_at: int | None = None
+    failure_reason: str | None = None
+
+
+class ElementaryCollapseRequest(StrictModel):
+    """Check and perform one elementary collapse step."""
+
+    complex: SimplicialComplexRequest
+    free_face: tuple[VertexLabel, ...] = Field(min_length=1)
+    coface: tuple[VertexLabel, ...] = Field(min_length=2)
+
+    @model_validator(mode="after")
+    def require_valid_collapse(self) -> Self:
+        face_set = set(self.free_face)
+        coface_set = set(self.coface)
+        if face_set == coface_set:
+            raise ValueError("free_face must be a proper subset of coface")
+        if not face_set.issubset(coface_set):
+            raise ValueError("free_face must be contained in coface")
+        return self
+
+
+class ElementaryCollapseResult(TopologyExactResult):
+    """Result of checking one elementary collapse step."""
+
+    is_free_face: bool
+    free_face: tuple[str, ...]
+    coface: tuple[str, ...]
+    remaining_facets: tuple[tuple[str, ...], ...]
+    remaining_vertices: tuple[str, ...]
+
+
+__all__.extend(
+    [
+        "BarycentricSubdivisionRequest",
+        "BarycentricSubdivisionResult",
+        "ElementaryCollapseRequest",
+        "ElementaryCollapseResult",
+        "JoinRequest",
+        "JoinResult",
+        "PseudomanifoldRequest",
+        "PseudomanifoldResult",
+        "ShellingCheckRequest",
+        "ShellingCheckResult",
+        "SkeletonRequest",
+        "SkeletonResult",
+        "StarRequest",
+        "StarResult",
+        "VertexDeletionRequest",
+        "VertexDeletionResult",
+    ]
+)

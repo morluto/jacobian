@@ -107,9 +107,95 @@ class GroupStabilizerRequest(StrictModel):
         return self
 
 
-class GroupStabilizerResult(StrictModel):
-    """Generators of the point stabilizer subgroup."""
+def _require_permutation(perm: tuple[int, ...], degree: int, label: str) -> None:
+    if len(perm) != degree:
+        raise ValueError(f"each {label} must have length equal to degree")
+    if sorted(perm) != list(range(degree)):
+        raise ValueError(f"each {label} must be a permutation of 0..n-1")
 
-    point: int = Field(ge=0)
-    generators: tuple[tuple[int, ...], ...]
+
+def _check_stabilizer_permutations(
+    degree: int,
+    point: int,
+    generators: tuple[tuple[int, ...], ...],
+    source_generators: tuple[tuple[int, ...], ...],
+) -> None:
+    if not 0 <= point < degree:
+        raise ValueError("point must be in 0..degree-1")
+    for perm in source_generators:
+        _require_permutation(perm, degree, "source generator")
+    for perm in generators:
+        _require_permutation(perm, degree, "generator")
+        if perm[point] != point:
+            raise ValueError("stabilizer generators must fix the point")
+
+
+def _check_orbit_stabilizer(
+    degree: int,
+    point: int,
+    generators: tuple[tuple[int, ...], ...],
+    source_generators: tuple[tuple[int, ...], ...],
+) -> None:
+    from sympy.combinatorics import Permutation, PermutationGroup
+
+    source_perms = [Permutation(list(p)) for p in source_generators]
+    source_group = PermutationGroup(source_perms)
+    source_order = int(source_group.order())
+    orbit = source_group.orbit(point)
+    orbit_size = len(orbit) if orbit is not None else 1
+    if generators:
+        stab_perms = [Permutation(list(p)) for p in generators]
+        stab_group = PermutationGroup(stab_perms)
+        stab_order = int(stab_group.order())
+        for perm in generators:
+            if not source_group.contains(Permutation(list(perm))):
+                raise ValueError(
+                    "stabilizer generators must be elements of the source group"
+                )
+        if source_order % stab_order != 0:
+            raise ValueError("stabilizer order must divide source order")
+    else:
+        stab_order = 1
+    if source_order != orbit_size * stab_order:
+        raise ValueError(
+            "orbit size times stabilizer order must equal source order "
+            "(orbit-stabilizer theorem)"
+        )
+
+
+class GroupStabilizerResult(StrictModel):
+    """Generators of the point stabilizer subgroup, bound to its source.
+
+    The result retains the ambient ``degree`` and the source group's
+    generators so the stabilizer is interpretable as a canonical
+    permutation-group value (``degree`` + ``generators``) without
+    reattaching external context. Validation replays the defining
+    orbit-stabilizer relation ``|G| = |orbit(point)| * |Stab(point)|``
+    and checks that every stabilizer generator fixes ``point`` and lies
+    in the source group.
+    """
+
+    degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
+    point: int = Field(ge=0, le=MAX_GROUP_DEGREE - 1)
+    generators: tuple[tuple[int, ...], ...] = Field(
+        default=(), max_length=MAX_GROUP_DEGREE
+    )
+    source_generators: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_GROUP_DEGREE
+    )
     method: Literal["SYMPY_STABILIZER"] = "SYMPY_STABILIZER"
+
+    @model_validator(mode="after")
+    def require_valid_stabilizer(self) -> Self:
+        _check_stabilizer_permutations(
+            self.degree, self.point, self.generators, self.source_generators
+        )
+        try:
+            _check_orbit_stabilizer(
+                self.degree, self.point, self.generators, self.source_generators
+            )
+        except ValueError:
+            raise
+        except Exception as exc:  # pragma: no cover - unexpected backend failure
+            raise ValueError(f"stabilizer validation failed: {exc}") from exc
+        return self

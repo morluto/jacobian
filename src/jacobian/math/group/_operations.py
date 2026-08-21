@@ -47,6 +47,8 @@ def compute_group_stabilizer(request: GroupStabilizerRequest) -> GroupStabilizer
         request.point,
     )
     return GroupStabilizerResult(
+        degree=request.degree,
         point=request.point,
         generators=tuple(tuple(g) for g in stabilizer_generators),
+        source_generators=request.generators,
     )

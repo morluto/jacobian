@@ -30,7 +30,7 @@ from jacobian.math.chip_firing._models import (
 )
 
 
-def _adjacency(graph) -> tuple[tuple[int, ...], ...]:
+def _adjacency(graph) -> tuple[tuple[int, ...], ...]:  # type: ignore[no-untyped-def]
     """Build an adjacency-list representation from a LabelledGraph."""
     n = len(graph.vertices)
     idx = {v: i for i, v in enumerate(graph.vertices)}
@@ -42,7 +42,7 @@ def _adjacency(graph) -> tuple[tuple[int, ...], ...]:
     return tuple(tuple(row) for row in adj)
 
 
-def _degrees(graph) -> tuple[int, ...]:
+def _degrees(graph) -> tuple[int, ...]:  # type: ignore[no-untyped-def]
     idx = {v: i for i, v in enumerate(graph.vertices)}
     deg = [0] * len(graph.vertices)
     for u, v in graph.edges:
@@ -327,7 +327,7 @@ def _smith_normal_form_diagonal(
     return tuple(result)
 
 
-def _critical_group_factors(
+def _critical_group_factors(  # type: ignore[no-untyped-def]
     graph,
     sink: str,
 ) -> tuple[tuple[str, ...], tuple[int, ...]]:

@@ -34,10 +34,18 @@ def compute_laplacian_spectrum(request: GraphSpectrumRequest) -> GraphSpectrumRe
 def compute_adjacency_characteristic_polynomial(
     request: GraphSpectrumRequest,
 ) -> GraphCharacteristicPolynomialResult:
-    return adjacency_characteristic_polynomial(request.graph)
+    return GraphCharacteristicPolynomialResult(
+        graph=request.graph,
+        convention="ADJACENCY",
+        polynomial=adjacency_characteristic_polynomial(request.graph),
+    )
 
 
 def compute_laplacian_characteristic_polynomial(
     request: GraphSpectrumRequest,
 ) -> GraphCharacteristicPolynomialResult:
-    return laplacian_characteristic_polynomial(request.graph)
+    return GraphCharacteristicPolynomialResult(
+        graph=request.graph,
+        convention="LAPLACIAN",
+        polynomial=laplacian_characteristic_polynomial(request.graph),
+    )

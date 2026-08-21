@@ -12,10 +12,8 @@ __all__ = [
 ]
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.graphs.spectral._models import (
-    GraphCharacteristicPolynomialResult,
-    GraphEdgeList,
-)
+from jacobian.math.graphs.spectral._models import GraphEdgeList
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
 def _characteristic_polynomial_coeffs(
@@ -34,7 +32,7 @@ def _characteristic_polynomial_coeffs(
 
 def _dense_to_canonical_polynomial(
     coefficients: tuple[CanonicalRational, ...],
-) -> Any:
+) -> RationalPolynomial:
     from jacobian.math.graphs.spectral._models import _dense_to_canonical_polynomial
 
     return _dense_to_canonical_polynomial(coefficients)
@@ -71,25 +69,19 @@ def laplacian_spectrum(graph: GraphEdgeList) -> list[tuple[str, int]]:
 
 def adjacency_characteristic_polynomial(
     graph: GraphEdgeList,
-) -> GraphCharacteristicPolynomialResult:
-    """Monic characteristic polynomial of the adjacency matrix (canonical value)."""
+) -> RationalPolynomial:
+    """Return det(xI - A) as the canonical sparse rational polynomial."""
 
-    coeffs = _characteristic_polynomial_coeffs(_adjacency_matrix(graph))
-    return GraphCharacteristicPolynomialResult(
-        graph=graph,
-        convention="ADJACENCY",
-        polynomial=_dense_to_canonical_polynomial(coeffs),
+    return _dense_to_canonical_polynomial(
+        _characteristic_polynomial_coeffs(_adjacency_matrix(graph))
     )
 
 
 def laplacian_characteristic_polynomial(
     graph: GraphEdgeList,
-) -> GraphCharacteristicPolynomialResult:
-    """Monic characteristic polynomial of the Laplacian matrix (canonical value)."""
+) -> RationalPolynomial:
+    """Return det(xI - L) as the canonical sparse rational polynomial."""
 
-    coeffs = _characteristic_polynomial_coeffs(_laplacian_matrix(graph))
-    return GraphCharacteristicPolynomialResult(
-        graph=graph,
-        convention="LAPLACIAN",
-        polynomial=_dense_to_canonical_polynomial(coeffs),
+    return _dense_to_canonical_polynomial(
+        _characteristic_polynomial_coeffs(_laplacian_matrix(graph))
     )

@@ -102,9 +102,10 @@ GRAPH_SPECTRAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     graph_spectral_operation(
         "graph.spectrum.adjacency.characteristic_polynomial.compute",
         "Compute exact adjacency characteristic polynomial",
-        "Compute the exact monic characteristic polynomial of the adjacency "
-        "matrix of a simple undirected graph over QQ, as increasing-degree "
-        "rational coefficients, using SymPy.",
+        "Compute the exact monic characteristic polynomial det(xI - A) of the "
+        "adjacency matrix of a simple undirected graph over QQ, returned as "
+        "the canonical sparse RationalPolynomial in x with nonzero terms "
+        "serialized in descending exponent order, using SymPy.",
         GraphSpectrumRequest,
         GraphCharacteristicPolynomialResult,
         compute_adjacency_characteristic_polynomial,
@@ -127,9 +128,10 @@ GRAPH_SPECTRAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     graph_spectral_operation(
         "graph.spectrum.laplacian.characteristic_polynomial.compute",
         "Compute exact Laplacian characteristic polynomial",
-        "Compute the exact monic characteristic polynomial of the Laplacian "
-        "matrix of a simple undirected graph over QQ, as increasing-degree "
-        "rational coefficients, using SymPy.",
+        "Compute the exact monic characteristic polynomial det(xI - L) of the "
+        "Laplacian matrix of a simple undirected graph over QQ, returned as "
+        "the canonical sparse RationalPolynomial in x with nonzero terms "
+        "serialized in descending exponent order, using SymPy.",
         GraphSpectrumRequest,
         GraphCharacteristicPolynomialResult,
         compute_laplacian_characteristic_polynomial,

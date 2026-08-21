@@ -69,10 +69,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "majorizes",
-                "Check that (3, 1) majorizes (2, 2).",
+                "Check that (3, 1) majorizes (2, 2) with labelled rational vectors.",
                 {
-                    "x": {"labels": ["a", "b"], "values": ["3", "1"]},
-                    "y": {"labels": ["a", "b"], "values": ["2", "2"]},
+                    "x": {
+                        "labels": ["a", "b"],
+                        "values": [{"num": "3", "den": "1"}, {"num": "1", "den": "1"}],
+                    },
+                    "y": {
+                        "labels": ["a", "b"],
+                        "values": [{"num": "2", "den": "1"}, {"num": "2", "den": "1"}],
+                    },
                 },
             ),
         ),
@@ -91,10 +97,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "weak_sub",
-                "Check weak submajorization.",
+                "Check weak submajorization for labelled rational vectors.",
                 {
-                    "x": {"labels": ["a", "b"], "values": ["4", "1"]},
-                    "y": {"labels": ["a", "b"], "values": ["2", "2"]},
+                    "x": {
+                        "labels": ["a", "b"],
+                        "values": [{"num": "4", "den": "1"}, {"num": "1", "den": "1"}],
+                    },
+                    "y": {
+                        "labels": ["a", "b"],
+                        "values": [{"num": "2", "den": "1"}, {"num": "2", "den": "1"}],
+                    },
                     "direction": "sub",
                 },
             ),
@@ -112,6 +124,22 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "linear-algebra",
         "majorization",
         "exact",
+        examples=(
+            example(
+                "t_transform_4_0_to_2_2",
+                "Compute T-transform sequence from (4,0) to (2,2) where (4,0) majorizes (2,2).",
+                {
+                    "x": {
+                        "labels": ["a", "b"],
+                        "values": [{"num": "4", "den": "1"}, {"num": "0", "den": "1"}],
+                    },
+                    "y": {
+                        "labels": ["a", "b"],
+                        "values": [{"num": "2", "den": "1"}, {"num": "2", "den": "1"}],
+                    },
+                },
+            ),
+        ),
     ),
     _op(
         "majorization.doubly_stochastic.check",
@@ -152,6 +180,22 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "linear-algebra",
         "majorization",
         "exact",
+        examples=(
+            example(
+                "birkhoff_2x2_average",
+                "Decompose the 2x2 averaging matrix [[1/2,1/2],[1/2,1/2]] which is doubly stochastic.",
+                {
+                    "matrix": {
+                        "row_labels": ["a", "b"],
+                        "col_labels": ["a", "b"],
+                        "entries": [
+                            [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
+                            [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
+                        ],
+                    },
+                },
+            ),
+        ),
     ),
     _op(
         "majorization.schur_horn.check",

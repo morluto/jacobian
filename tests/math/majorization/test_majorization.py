@@ -1,8 +1,5 @@
 """Tests for majorization and matrix mixing operations."""
 
-import pytest
-from pydantic import ValidationError
-
 from jacobian._exact import CanonicalRational
 from jacobian.math.majorization._models import (
     BirkhoffDecompositionRequest,

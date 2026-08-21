@@ -173,9 +173,29 @@ class BirkhoffTerm(StrictModel):
 
 
 class BirkhoffDecompositionRequest(StrictModel):
-    """Compute a Birkhoff-von Neumann decomposition."""
+    """Compute a Birkhoff-von Neumann decomposition of a doubly stochastic matrix."""
 
     matrix: RationalMatrix
+
+    @model_validator(mode="after")
+    def require_doubly_stochastic(self) -> Self:
+        fracs = self.matrix.as_fractions()
+        n = len(fracs)
+        for i in range(n):
+            for j in range(n):
+                if fracs[i][j] < 0:
+                    raise ValueError(
+                        "Birkhoff decomposition requires a nonnegative matrix"
+                    )
+        for i in range(n):
+            if sum(fracs[i][j] for j in range(n)) != Fraction(1):
+                raise ValueError("Birkhoff decomposition requires row sums equal to 1")
+        for j in range(n):
+            if sum(fracs[i][j] for i in range(n)) != Fraction(1):
+                raise ValueError(
+                    "Birkhoff decomposition requires column sums equal to 1"
+                )
+        return self
 
 
 class BirkhoffDecompositionResult(StrictModel):
@@ -189,8 +209,12 @@ class BirkhoffDecompositionResult(StrictModel):
 class SchurHornCheckRequest(StrictModel):
     """Check Schur-Horn feasibility."""
 
-    eigenvalues: tuple[CanonicalRational, ...] = Field(min_length=1)
-    diagonal: tuple[CanonicalRational, ...] = Field(min_length=1)
+    eigenvalues: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_DIMENSION
+    )
+    diagonal: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_DIMENSION
+    )
 
     @model_validator(mode="after")
     def require_consistent(self) -> Self:

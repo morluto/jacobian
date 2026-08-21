@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from fractions import Fraction
-from typing import Sequence
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.majorization._models import (
@@ -139,7 +139,7 @@ def compute_weak_majorization_check(
     )
 
 
-def compute_t_transform_sequence(
+def compute_t_transform_sequence(  # noqa: C901
     request: TTransformSequenceRequest,
 ) -> TTransformSequenceResult:
     """Compute an exact T-transform sequence from x to y.
@@ -177,72 +177,82 @@ def compute_t_transform_sequence(
             target_match=False,
         )
 
-    # Compute T-transform sequence using the Robin Hood algorithm
+    # Compute T-transform sequence using order-independent donor pairing.
+    # At each step find an excess index i (current > target) and deficit j
+    # (current < target), then mix them so at least one hits the target.
     current = list(x_vals)
     target = list(y_vals)
     steps: list[tuple[int, int, Fraction]] = []
 
-    for k in range(n - 1, 0, -1):
-        while True:
-            # Check if current[k] matches target[k]
-            if current[k] == target[k]:
+    max_steps = 5 * n  # conservative bound; majorizes guarantees ≤ n-1 T-transforms
+    for _ in range(max_steps):
+        if all(current[k] == target[k] for k in range(n)):
+            break
+        i_idx = None
+        j_idx = None
+        for idx in range(n):
+            if current[idx] > target[idx]:
+                i_idx = idx
                 break
-
-            # Find index i < k with current[i] > current[k] (rich donor)
-            idx_i = None
-            for j in range(k):
-                if current[j] > current[k]:
-                    idx_i = j
-                    break
-
-            if idx_i is None:
+        for idx in range(n):
+            if current[idx] < target[idx]:
+                j_idx = idx
                 break
+        if i_idx is None or j_idx is None:
+            break
+        ci = current[i_idx]
+        cj = current[j_idx]
+        denom = ci - cj
+        if denom == 0:
+            break
+        # Amount that can be transferred to satisfy either i or j
+        deficit_j = target[j_idx] - cj  # >0
+        excess_i = ci - target[i_idx]  # >0
+        delta = deficit_j if deficit_j < excess_i else excess_i
+        lam = Fraction(1) - delta / denom
+        if lam < 0 or lam > 1:
+            break
+        if lam == 1:
+            break
+        new_i = lam * ci + (Fraction(1) - lam) * cj
+        new_j = (Fraction(1) - lam) * ci + lam * cj
+        current[i_idx] = new_i
+        current[j_idx] = new_j
+        steps.append((i_idx, j_idx, lam))
+    else:
+        # Hit iteration bound without convergence - report non-match
+        pass
 
-            idx_j = k
-            ci = current[idx_i]
-            cj = current[idx_j]
-
-            # Compute lambda for the T-transform
-            # We want to move current[k] towards target[k]
-            # T-transform: new_i = lam * ci + (1-lam) * cj
-            #              new_j = (1-lam) * ci + lam * cj
-            # We need new_j = target[k] (or as close as possible)
-            denom = ci - cj
-            if denom <= 0:
-                break
-
-            lam = (ci - target[k]) / denom
-            if lam < 0:
-                lam = Fraction(0)
-                break
-            if lam > 1:
-                lam = Fraction(1)
-                break
-            if lam == 0:
-                break
-
-            new_i = lam * ci + (1 - lam) * cj
-            new_j = (1 - lam) * ci + lam * cj
-
-            current[idx_i] = new_i
-            current[idx_j] = new_j
-            steps.append((idx_i, idx_j, lam))
-
-    # Now current should match x_sorted but maybe permuted
-    # Apply permutation if needed
+    # Permutation handling: if current is a permutation of target, record it.
     final_perm: list[int] = list(range(n))
     needs_perm = False
-    for i in range(n):
-        if current[i] != target[i]:
-            # Find j to swap
-            for j in range(i + 1, n):
-                if current[j] == target[i] and current[j] != target[j]:
-                    current[i], current[j] = current[j], current[i]
-                    final_perm[i], final_perm[j] = final_perm[j], final_perm[i]
-                    needs_perm = True
+    if current != target and sorted(current) == sorted(target):
+        # Find permutation mapping current -> target via stable matching
+        used = [False] * n
+        perm = [0] * n
+        # Build bipartite mapping from current positions to target positions
+        # using greedy for equal values
+        for idx in range(n):
+            found = None
+            for j in range(n):
+                if not used[j] and current[j] == target[idx]:
+                    found = j
                     break
+            if found is None:
+                # fallback: find any unused with same value
+                break
+            perm[idx] = found
+            used[found] = True
+        if all(used):
+            # perm maps target index -> current index; need final_perm that
+            # reorders current to target: new_current[i] = current[perm[i]]
+            test = [current[perm[i]] for i in range(n)]
+            if test == target:
+                final_perm = perm
+                needs_perm = True
+                current = test
 
-    target_match = all(current[i] == y_vals[i] for i in range(n))
+    target_match = current == target
 
     # Build the composed doubly stochastic matrix
     composed = _build_composed_matrix(steps, final_perm if needs_perm else None, n)
@@ -254,8 +264,8 @@ def compute_t_transform_sequence(
     for i, j, lam in steps:
         ci_val = cur_vec[i]
         cj_val = cur_vec[j]
-        cur_vec[i] = lam * ci_val + (1 - lam) * cj_val
-        cur_vec[j] = (1 - lam) * ci_val + lam * cj_val
+        cur_vec[i] = lam * ci_val + (Fraction(1) - lam) * cj_val
+        cur_vec[j] = (Fraction(1) - lam) * ci_val + lam * cj_val
         intermediate.append(tuple(_format_rational(v) for v in cur_vec))
     if needs_perm:
         cur_vec = [cur_vec[final_perm[i]] for i in range(n)]
@@ -289,32 +299,17 @@ def _build_composed_matrix(
 ) -> list[list[Fraction]]:
     """Build the composed doubly stochastic matrix from T-transform steps."""
     mat: list[list[Fraction]] = [
-        [Fraction(1) if i == j else Fraction(0) for j in range(n)]
-        for i in range(n)
+        [Fraction(1) if i == j else Fraction(0) for j in range(n)] for i in range(n)
     ]
 
     for i, j, lam in steps:
-        new_mat = [[Fraction(0)] * n for _ in range(n)]
-        for r in range(n):
-            for c in range(n):
-                if r == i and c == i:
-                    new_mat[r][c] = lam * mat[r][c]
-                elif r == j and c == j:
-                    new_mat[r][c] = lam * mat[r][c]
-                elif r == i and c == j:
-                    new_mat[r][c] = (1 - lam) * mat[r][c]
-                elif r == j and c == i:
-                    new_mat[r][c] = (1 - lam) * mat[r][c]
-                elif r == i:
-                    new_mat[r][c] = lam * mat[r][c]
-                elif r == j:
-                    new_mat[r][c] = (1 - lam) * mat[r][c]
-                elif c == i:
-                    new_mat[r][c] = lam * mat[r][c]
-                elif c == j:
-                    new_mat[r][c] = (1 - lam) * mat[r][c]
-                else:
-                    new_mat[r][c] = mat[r][c]
+        # Left-multiply by T_{i,j}(lam): mixes rows i and j
+        new_mat = [row[:] for row in mat]
+        for c in range(n):
+            orig_i = mat[i][c]
+            orig_j = mat[j][c]
+            new_mat[i][c] = lam * orig_i + (Fraction(1) - lam) * orig_j
+            new_mat[j][c] = (Fraction(1) - lam) * orig_i + lam * orig_j
         mat = new_mat
 
     if final_perm is not None:
@@ -365,7 +360,7 @@ def compute_doubly_stochastic_check(
     )
 
 
-def compute_birkhoff_decomposition(
+def compute_birkhoff_decomposition(  # noqa: C901
     request: BirkhoffDecompositionRequest,
 ) -> BirkhoffDecompositionResult:
     """Compute a Birkhoff-von Neumann decomposition of a doubly stochastic matrix.
@@ -403,9 +398,8 @@ def compute_birkhoff_decomposition(
         min_val = None
         for i in range(n):
             j = matching[i]
-            if current[i][j] > 0:
-                if min_val is None or current[i][j] < min_val:
-                    min_val = current[i][j]
+            if current[i][j] > 0 and (min_val is None or current[i][j] < min_val):
+                min_val = current[i][j]
 
         if min_val is None or min_val <= 0:
             break
@@ -431,9 +425,7 @@ def compute_birkhoff_decomposition(
     )
 
 
-def _find_perfect_matching(
-    matrix: list[list[Fraction]], n: int
-) -> list[int] | None:
+def _find_perfect_matching(matrix: list[list[Fraction]], n: int) -> list[int] | None:
     """Find a perfect matching in the bipartite graph of positive entries."""
     match_col = [-1] * n
     match_row = [-1] * n

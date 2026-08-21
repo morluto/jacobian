@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -30,11 +29,18 @@ class CircleInversionRequest(StrictModel):
     point_y: CanonicalRational = Field(description="y-coordinate of the point to invert")
 
     @model_validator(mode="after")
-    def require_nonzero_power(self) -> Self:
+    def require_admissible_request(self) -> Self:
         if self.power.num == "0":
             raise ValueError("inversion power must be positive")
         if self.power.num.startswith("-"):
             raise ValueError("inversion power must be positive")
+        # The contract requires p != c; inverting the center would divide by
+        # the zero displacement, so reject it at this typed boundary.
+        if (
+            self.point_x.as_fraction() == self.center_x.as_fraction()
+            and self.point_y.as_fraction() == self.center_y.as_fraction()
+        ):
+            raise ValueError("the inversion center cannot be inverted")
         return self
 
 

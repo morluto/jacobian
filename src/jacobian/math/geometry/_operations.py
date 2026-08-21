@@ -432,12 +432,11 @@ def circumradius_profile(
     Each triple is either nondegenerate (exact squared circumradius) or
     degenerate (collinear, no circumcircle).
     """
-    from fractions import Fraction as _F
     from itertools import combinations
 
     points = request.points
     n = len(points)
-    coords: list[tuple[_F, _F]] = [
+    coords: list[tuple[Fraction, Fraction]] = [
         (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in points
     ]
     entries: list[CircumradiusTripleEntry] = []
@@ -488,7 +487,6 @@ def forbidden_patterns(request):
     [x^2 + y^2, x, y, 1] vanishes.  Both predicates are evaluated with exact
     ``fractions.Fraction`` arithmetic!
     """
-    from fractions import Fraction
     from itertools import combinations
 
     from jacobian.math.geometry._models import (
@@ -521,12 +519,12 @@ def forbidden_patterns(request):
     concyclic_quadruple = None
     has_concyclic = False
     checked_quadruples = 0
-    for i, j, k, l in combinations(range(n), 4):
+    for i, j, k, ell in combinations(range(n), 4):
         checked_quadruples += 1
         xi, yi = xy[i]
         xj, yj = xy[j]
         xk, yk = xy[k]
-        xl, yl = xy[l]
+        xl, yl = xy[ell]
         si = xi * xi + yi * yi
         sj = xj * xj + yj * yj
         sk = xk * xk + yk * yk
@@ -538,16 +536,18 @@ def forbidden_patterns(request):
             [sk, xk, yk, 1],
             [sl, xl, yl, 1],
         ]
+        # Laplace expansion of the 4x4 determinant along row 0:
+        # each cofactor deletes row 0 and its own column, keeping rows 1-3.
         det = (
-            m[0][0] * _minor3(m, 1, 2, 3, 0, 1, 2)
+            m[0][0] * _minor3(m, 1, 2, 3, 1, 2, 3)
             - m[0][1] * _minor3(m, 1, 2, 3, 0, 2, 3)
-            + m[0][2] * _minor3(m, 1, 2, 3, 1, 2, 3)
-            - m[0][3] * _minor3(m, 0, 1, 2, 0, 1, 2)
+            + m[0][2] * _minor3(m, 1, 2, 3, 0, 1, 3)
+            - m[0][3] * _minor3(m, 1, 2, 3, 0, 1, 2)
         )
         if det == 0:
             has_concyclic = True
             concyclic_quadruple = ConcyclicQuadruple(
-                first=i, second=j, third=k, fourth=l
+                first=i, second=j, third=k, fourth=ell
             )
             break
 

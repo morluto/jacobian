@@ -144,6 +144,20 @@ def test_number_field_discriminant_is_not_power_basis_discriminant() -> None:
     assert result.discriminant == "5"
 
 
+@pytest.mark.parametrize(
+    "variable",
+    ["", " ", "x y", "x; y", "x\n", "x\x00", "1x", "x" * 33],
+)
+def test_number_field_variable_uses_polynomial_identifier_grammar(
+    variable: str,
+) -> None:
+    with pytest.raises(ValidationError):
+        NumberFieldRequest(
+            coefficients_descending=("1", "0", "-2"),
+            variable=variable,
+        )
+
+
 def test_integral_basis_is_computed_in_the_defining_power_basis() -> None:
     assert ring_of_integers(["1", "0", "-5"], "x") == ["1", "x/2 + 1/2"]
 

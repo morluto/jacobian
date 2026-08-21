@@ -153,6 +153,13 @@ class TestContinuityCheck:
 
 
 class TestValidation:
+    def test_duplicate_point_labels_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="point labels must be distinct"):
+            FiniteTopologicalSpace(
+                points=("a", "a"),
+                preorder=((0,), (1,)),
+            )
+
     def test_non_reflexive_preorder_rejected(self) -> None:
         with pytest.raises(ValidationError, match="reflexive"):
             FiniteTopologicalSpace(

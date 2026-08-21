@@ -6,12 +6,18 @@ from pydantic import ValidationError
 from jacobian.math import term_rewriting
 from jacobian.math.term_rewriting._models import (
     NormalFormRequest,
+    NormalFormResult,
     RewriteStepRequest,
+    RewriteStepResult,
+    SubstitutionRequest,
+    SubstitutionResult,
     UnificationRequest,
+    UnificationResult,
 )
 from jacobian.math.term_rewriting._operations import (
     compute_normal_form,
     compute_rewrite_step,
+    compute_substitution,
     compute_unification,
 )
 from jacobian.math.term_rewriting._tools import TOOLS
@@ -83,6 +89,19 @@ class TestSubstitution:
         result = apply_substitution(term, {})
         assert result == term
 
+    def test_result_is_bound_to_the_source_substitution(self):
+        result = compute_substitution(
+            SubstitutionRequest(
+                signature={"arities": [1, 0]},
+                term=_app(0, _var(0)),
+                substitution={"mapping": {0: _app(1)}},
+            )
+        )
+        payload = result.model_dump()
+        payload["result"] = _app(1).model_dump()
+        with pytest.raises(ValidationError, match="not bound"):
+            SubstitutionResult.model_validate(payload)
+
 
 class TestMatching:
     def test_match_variable(self):
@@ -133,6 +152,16 @@ class TestUnification:
         )
         assert wire_result.unified
         assert wire_result.substitution == result
+
+    def test_result_rejects_terms_outside_its_ranked_signature(self):
+        with pytest.raises(ValidationError, match="undeclared"):
+            UnificationResult(
+                signature={"arities": [0]},
+                left=_app(1),
+                right=_app(1),
+                unified=True,
+                substitution={},
+            )
 
 
 class TestRewriteStep:
@@ -216,6 +245,19 @@ class TestRewriteStep:
         assert result.scope == "SELECTED_STEP"
         assert result.applications == ()
 
+    def test_result_reestablishes_signature_membership(self):
+        result = compute_rewrite_step(
+            RewriteStepRequest(
+                signature={"arities": [1, 0]},
+                term=_app(0, _app(1)),
+                rules=(RewriteRule(lhs=_app(0, _var(0)), rhs=_var(0)),),
+            )
+        )
+        payload = result.model_dump()
+        payload["signature"] = {"arities": [0, 0]}
+        with pytest.raises(ValidationError, match="child count"):
+            RewriteStepResult.model_validate(payload)
+
 
 class TestNormalForm:
     def test_convergent(self):
@@ -252,6 +294,11 @@ class TestNormalForm:
         assert result.term == _app(1)
         assert result.steps == 1
         assert result.next_step is None
+
+        payload = result.model_dump()
+        payload["signature"] = {"arities": [0, 0]}
+        with pytest.raises(ValidationError, match="child count"):
+            NormalFormResult.model_validate(payload)
 
 
 class TestValidation:

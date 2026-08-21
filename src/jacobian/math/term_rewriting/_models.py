@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.term_rewriting.operations import (
+    apply_substitution,
     normal_form,
     rewrite_steps,
     selected_rewrite_step,
@@ -43,6 +44,13 @@ class SubstitutionResult(SubstitutionRequest):
     """The term after substitution."""
 
     result: Term
+
+    @model_validator(mode="after")
+    def bind_substitution(self) -> Self:
+        self.signature.validate_term(self.result)
+        if self.result != apply_substitution(self.term, self.substitution.mapping):
+            raise ValueError("substitution result is not bound to its source")
+        return self
 
 
 class MatchingRequest(StrictModel):
@@ -91,12 +99,9 @@ class UnificationRequest(StrictModel):
         return self
 
 
-class UnificationResult(StrictModel):
+class UnificationResult(UnificationRequest):
     """Result of unification."""
 
-    signature: RankedSignature
-    left: Term
-    right: Term
     unified: bool
     substitution: dict[int, Term] = Field(default_factory=dict)
 
@@ -158,6 +163,10 @@ class RewriteStepResult(StrictModel):
 
     @model_validator(mode="after")
     def require_exact_applications(self) -> Self:
+        self.signature.validate_term(self.source_term)
+        for rule in self.rules:
+            self.signature.validate_term(rule.lhs)
+            self.signature.validate_term(rule.rhs)
         if self.selection is None:
             expected = rewrite_steps(self.source_term, self.rules)
             expected_scope = "ALL_APPLICABLE_STEPS"
@@ -210,6 +219,10 @@ class NormalFormResult(StrictModel):
 
     @model_validator(mode="after")
     def require_exact_bounded_run(self) -> Self:
+        self.signature.validate_term(self.source_term)
+        for rule in self.rules:
+            self.signature.validate_term(rule.lhs)
+            self.signature.validate_term(rule.rhs)
         term, status, steps, next_step = normal_form(
             self.source_term, self.rules, self.max_steps
         )

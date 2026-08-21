@@ -370,13 +370,31 @@ class LeanDeclarationKind(StrEnum):
 
 
 class LeanDeclarationSearchRequest(StrictModel):
-    """Search the fixed Mathlib environment by literal declaration metadata."""
+    """Search the fixed Mathlib environment by literal declaration metadata.
+
+    At least one of ``name_contains`` or ``type_constants`` is required;
+    requests supplying neither are rejected. This cross-field rule is
+    documented here and in the JSON schema so MCP callers can discover the
+    valid shape without a failed ``math.run``.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Search the fixed Mathlib environment by literal declaration metadata. "
+                "At least one of 'name_contains' or 'type_constants' is required."
+            )
+        }
+    )
 
     name_contains: str | None = Field(
         default=None,
         min_length=1,
         max_length=128,
-        description="A literal, case-sensitive substring of the declaration name.",
+        description=(
+            "A literal, case-sensitive substring of the declaration name. "
+            "At least one of 'name_contains' or 'type_constants' is required."
+        ),
     )
     type_constants: tuple[str, ...] = Field(
         default=(),
@@ -471,6 +489,19 @@ class LeanDeclarationSearchResult(StrictModel):
                     for prefix in self.query.namespace_prefixes
                 ):
                     raise ValueError("a declaration namespace does not match the query")
+                if self.query.type_constants:
+                    # Type constants are compared as names, never evaluated.
+                    # The preview is bounded (8000 chars) and may be truncated;
+                    # we still require that every requested constant appears as a
+                    # substring of the preview when not truncated, and that the
+                    # backend's scanned set was validated. The Lean helper
+                    # already ensures the `used.contains` check; here we replay
+                    # the substring check on the preview as a defense-in-depth.
+                    for constant in self.query.type_constants:
+                        if constant not in declaration.type:
+                            raise ValueError(
+                                "a declaration type does not match the requested type constants"
+                            )
         elif (
             self.declarations
             or self.scanned_declarations
@@ -595,7 +626,9 @@ def check_lean_source(request: LeanCheckRequest) -> LeanCheckResult:
             diagnostics=(),
             detail="The fixed Lean and Mathlib environment is not installed.",
         )
-    with tempfile.TemporaryDirectory(prefix="jacobian-lean-") as directory:
+    with tempfile.TemporaryDirectory(
+        prefix="jacobian-lean-", dir=str(mathlib_root)
+    ) as directory:
         source_path = Path(directory) / "Snippet.lean"
         source_path.write_text(request.source, encoding="utf-8")
         try:
@@ -627,7 +660,7 @@ def check_lean_source(request: LeanCheckRequest) -> LeanCheckResult:
                 ),
                 stdout_limit=64_000,
                 stderr_limit=64_000,
-                cwd=str(mathlib_root),
+                cwd=str(directory),
             )
         except OSError:
             return LeanCheckResult(
@@ -650,6 +683,13 @@ def check_lean_source(request: LeanCheckRequest) -> LeanCheckResult:
     diagnostics = _lean_diagnostics(completed.stdout + completed.stderr)
     if completed.returncode == 0:
         return LeanCheckResult(outcome="ELABORATED", diagnostics=diagnostics)
+    # Preserve Lake wrapper / environment failures as ERROR, not REJECTED.
+    if b"Lake" in completed.stderr or b"error:" in completed.stderr.lower():
+        return LeanCheckResult(
+            outcome="ERROR",
+            diagnostics=diagnostics,
+            detail="Lean wrapper or environment failed; not a mathematical rejection.",
+        )
     return LeanCheckResult(outcome="REJECTED", diagnostics=diagnostics)
 
 
@@ -666,7 +706,9 @@ def search_mathlib_declarations(
             "UNAVAILABLE",
             "The fixed local Mathlib environment is not installed.",
         )
-    with tempfile.TemporaryDirectory(prefix="jacobian-mathlib-search-") as directory:
+    with tempfile.TemporaryDirectory(
+        prefix="jacobian-mathlib-search-", dir=str(mathlib_root)
+    ) as directory:
         query_path = Path(directory) / "query.json"
         query_path.write_text(
             json.dumps(
@@ -710,7 +752,7 @@ def search_mathlib_declarations(
                 ),
                 stdout_limit=1_000_000,
                 stderr_limit=64_000,
-                cwd=str(mathlib_root),
+                cwd=str(directory),
             )
         except OSError:
             return _mathlib_search_failure(

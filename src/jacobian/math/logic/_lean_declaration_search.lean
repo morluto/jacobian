@@ -78,11 +78,17 @@ def executeQuery (env : Environment) (query : DeclarationQuery) :
   let mut declarations : Array Json := #[]
   let mut scanned := 0
   let mut stopReason := "EXHAUSTED"
+  -- The helper's own declarations (DeclarationQuery, executeQuery, etc.)
+  -- are added to the environment when this file is elaborated. Exclude
+  -- them so the operation's advertised scope (pinned Mathlib) remains truthful.
+  let helperModule := `Jacobian.Math.Logic._lean_declaration_search
   for name in names do
     if declarations.size == query.limit then
       stopReason := "RESULT_LIMIT"
       break
     if isPrivateName name then continue
+    -- Exclude helper-owned declarations.
+    if (moduleContaining? env name) == some helperModule then continue
     scanned := scanned + 1
     let some info := env.find? name | continue
     if !namespaceMatches query name || !kindMatches query info then continue

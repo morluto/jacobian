@@ -54,11 +54,22 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
     )
 
 
-
-CYCLE_C4_WITH_CHORD = {'graph': {'vertex_count': 4, 'edges': [[0, 1], [1, 2], [2, 3], [3, 0], [0, 2]]}, 'length': 3}
-CYCLE_C4_PLAIN = {'graph': {'vertex_count': 4, 'edges': [[0, 1], [1, 2], [2, 3], [3, 0]]}, 'length': 3}
-SUBGRAPH_TRIANGLE_IN_C4_CHORD = {'pattern': {'vertex_count': 3, 'edges': [[0, 1], [1, 2], [0, 2]]}, 'host': {'vertex_count': 4, 'edges': [[0, 1], [1, 2], [2, 3], [3, 0], [0, 2]]}}
-SUBGRAPH_P3_NOT_IN_MATCHING = {'pattern': {'vertex_count': 3, 'edges': [[0, 1], [1, 2]]}, 'host': {'vertex_count': 4, 'edges': [[0, 1], [2, 3]]}}
+CYCLE_C4_WITH_CHORD = {
+    "graph": {"vertex_count": 4, "edges": [[0, 1], [1, 2], [2, 3], [3, 0], [0, 2]]},
+    "length": 3,
+}
+CYCLE_C4_PLAIN = {
+    "graph": {"vertex_count": 4, "edges": [[0, 1], [1, 2], [2, 3], [3, 0]]},
+    "length": 3,
+}
+SUBGRAPH_TRIANGLE_IN_C4_CHORD = {
+    "pattern": {"vertex_count": 3, "edges": [[0, 1], [1, 2], [0, 2]]},
+    "host": {"vertex_count": 4, "edges": [[0, 1], [1, 2], [2, 3], [3, 0], [0, 2]]},
+}
+SUBGRAPH_P3_NOT_IN_MATCHING = {
+    "pattern": {"vertex_count": 3, "edges": [[0, 1], [1, 2]]},
+    "host": {"vertex_count": 4, "edges": [[0, 1], [2, 3]]},
+}
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(

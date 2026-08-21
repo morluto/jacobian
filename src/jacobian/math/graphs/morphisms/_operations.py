@@ -178,7 +178,9 @@ def compute_retraction_check(
     return RetractionCheckResult(is_retraction=found)
 
 
-def compute_fixed_length_cycle(request: FixedLengthCycleRequest) -> FixedLengthCycleResult:
+def compute_fixed_length_cycle(
+    request: FixedLengthCycleRequest,
+) -> FixedLengthCycleResult:
     """Decide whether ``graph`` contains a simple cycle of length ``length``.
 
     Returns ``EXISTS`` with one ordered cycle witness (a sequence of vertex
@@ -223,7 +225,9 @@ def compute_fixed_length_cycle(request: FixedLengthCycleRequest) -> FixedLengthC
     return FixedLengthCycleResult(decision="DOES_NOT_EXIST", length=k, cycle=())
 
 
-def compute_subgraph_pattern_find(request: SubgraphPatternFindRequest) -> SubgraphPatternFindResult:
+def compute_subgraph_pattern_find(
+    request: SubgraphPatternFindRequest,
+) -> SubgraphPatternFindResult:
     """Find an injective edge-preserving embedding of ``pattern`` in ``host``.
 
     Ordinary (non-induced) subgraph containment: an injective map from pattern
@@ -236,9 +240,10 @@ def compute_subgraph_pattern_find(request: SubgraphPatternFindRequest) -> Subgra
     host_adj = _adjacency(host.edges)
     vertex_map: list[int] = [-1] * pattern.vertex_count
     used: set[int] = set()
-    pattern_order = sorted(range(pattern.vertex_count), key=lambda i: -len([
-        (u, v) for u, v in pattern.edges if u == i or v == i
-    ]))
+    pattern_order = sorted(
+        range(pattern.vertex_count),
+        key=lambda i: -len([(u, v) for u, v in pattern.edges if u == i or v == i]),
+    )
 
     def backtrack(pos: int) -> bool:
         if pos == pattern.vertex_count:
@@ -250,10 +255,15 @@ def compute_subgraph_pattern_find(request: SubgraphPatternFindRequest) -> Subgra
             ok = True
             for u, v in pattern.edges:
                 other = v if u == vertex else (u if v == vertex else None)
-                if other is not None and vertex_map[other] != -1 and (
-                    candidate,
-                    vertex_map[other],
-                ) not in host_adj:
+                if (
+                    other is not None
+                    and vertex_map[other] != -1
+                    and (
+                        candidate,
+                        vertex_map[other],
+                    )
+                    not in host_adj
+                ):
                     ok = False
                     break
             if ok:

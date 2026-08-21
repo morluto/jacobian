@@ -437,3 +437,153 @@ class ConvexPolygonTriangulationResult(StrictModel):
     objective: Literal["NON_HULL_DIAGONAL_WEIGHT_SUM"] = "NON_HULL_DIAGONAL_WEIGHT_SUM"
     tie_break: Literal["LOWEST_SPLIT_INDEX"] = "LOWEST_SPLIT_INDEX"
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+
+class LabelledPoint2D(StrictModel):
+    """A labelled rational point in the plane."""
+
+    label: str = Field(min_length=1, max_length=64)
+    point: RationalPoint2D
+
+
+CIRCUMRADIUS_COORDINATE_DIGITS = 256
+"""Conservative per-coordinate digit bound.
+
+``R^2 = (|a-b|^2 |b-c|^2 |c-a|^2) / (4 * cross^2)`` roughly squares each
+input height, so bounding inputs at a fraction of the 32,768-digit canonical
+limit keeps every intermediate and output representable.
+"""
+
+_CIRCUMRADIUS_INPUT_HEIGHT = CIRCUMRADIUS_COORDINATE_DIGITS // 4
+
+
+def _bounded_circumradius_coordinate(value: CanonicalRational, label: str) -> None:
+    from jacobian._exact import require_bounded_rational
+
+    require_bounded_rational(
+        value,
+        max_digits=_CIRCUMRADIUS_INPUT_HEIGHT,
+        label=label,
+    )
+
+
+class CircumradiusProfileRequest(StrictModel):
+    """A bounded labelled rational planar point configuration.
+
+    Requires at least three points (a circumradius profile needs triples),
+    unique labels, unique coordinates, and coordinates within the
+    operation-specific digit bound so exact radii stay representable.
+    """
+
+    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
+
+    @model_validator(mode="after")
+    def require_admissible_configuration(self) -> Self:
+        if len(self.points) < 3:
+            raise ValueError("circumradius profile requires at least three points")
+        labels = tuple(item.label for item in self.points)
+        if len(labels) != len(set(labels)):
+            raise ValueError("point labels must be unique")
+        keys = tuple(
+            (
+                item.point.x.num,
+                item.point.x.den,
+                item.point.y.num,
+                item.point.y.den,
+            )
+            for item in self.points
+        )
+        if len(keys) != len(set(keys)):
+            raise ValueError("point coordinates must be unique")
+        for index, item in enumerate(self.points):
+            _bounded_circumradius_coordinate(
+                item.point.x, f"point {index} x coordinate"
+            )
+            _bounded_circumradius_coordinate(
+                item.point.y, f"point {index} y coordinate"
+            )
+        return self
+
+
+class CircumradiusTripleEntry(StrictModel):
+    """Circumradius data for one unordered triple of points."""
+
+    labels: tuple[str, str, str]
+    indices: tuple[StrictInt, StrictInt, StrictInt]
+    collinear: bool
+    squared_circumradius: CanonicalRational | None = None
+
+    @model_validator(mode="after")
+    def bind_collinear_to_value(self) -> Self:
+        if self.collinear is (self.squared_circumradius is not None):
+            raise ValueError("exactly a collinear triple has no squared circumradius")
+        if (
+            self.squared_circumradius is not None
+            and self.squared_circumradius.as_fraction() <= 0
+        ):
+            raise ValueError("squared circumradius must be positive")
+        return self
+
+
+class CircumradiusProfileResult(StrictModel):
+    """Complete exact circumradius profile bound to its source configuration."""
+
+    configuration: CircumradiusProfileRequest
+    point_count: StrictInt = Field(ge=3, le=64)
+    triple_count: StrictInt = Field(ge=1, le=41664)
+    entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
+    exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+    @model_validator(mode="after")
+    def require_complete_profile(self) -> Self:
+        import math
+
+        # Cap point_count before enumerating expected triples.
+        if self.point_count > 64 or len(self.configuration.points) != self.point_count:
+            raise ValueError(
+                "point_count must match the retained configuration (at most 64)"
+            )
+        expected_count = math.comb(self.point_count, 3)
+        if len(self.entries) != self.triple_count:
+            raise ValueError("circumradius profile must be complete")
+        if self.triple_count != expected_count:
+            raise ValueError("triple_count must equal C(point_count, 3)")
+        points = self.configuration.points
+        coords: list[tuple[Fraction, Fraction]] = [
+            (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in points
+        ]
+        seen: set[tuple[int, int, int]] = set()
+        histogram: dict[Fraction, int] = {}
+        from itertools import combinations
+
+        expected_triples = set(combinations(range(self.point_count), 3))
+        for entry in self.entries:
+            i, j, k = entry.indices
+            triple = (i, j, k)
+            if triple not in expected_triples or triple in seen:
+                raise ValueError(
+                    "entries must cover exactly the canonical triples once"
+                )
+            seen.add(triple)
+            # Replay collinearity and radius against the source configuration.
+            (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
+            cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+            if entry.collinear != (cross == 0):
+                raise ValueError(
+                    "collinearity flag does not match the source configuration"
+                )
+            if entry.collinear:
+                continue
+            dab = (ax - bx) ** 2 + (ay - by) ** 2
+            dbc = (bx - cx) ** 2 + (by - cy) ** 2
+            dac = (ax - cx) ** 2 + (ay - cy) ** 2
+            expected_radius = (dab * dbc * dac) / (4 * cross * cross)
+            assert entry.squared_circumradius is not None
+            if (
+                entry.squared_circumradius.as_fraction() != expected_radius
+                or entry.labels != (points[i].label, points[j].label, points[k].label)
+            ):
+                raise ValueError("entry does not match its recomputed radius or labels")
+            d = entry.squared_circumradius.as_fraction()
+            histogram[d] = histogram.get(d, 0) + 1
+        return self

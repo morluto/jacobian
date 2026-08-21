@@ -10,6 +10,9 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry._models import (
     CircumcircleRequest,
+    CircumradiusProfileRequest,
+    CircumradiusProfileResult,
+    CircumradiusTripleEntry,
     ClosedSegment2D,
     GeometryBooleanResult,
     GeometryCircleResult,
@@ -319,7 +322,6 @@ def circumcircle(request: CircumcircleRequest) -> GeometryCircleResult:
 
 
 def signed_area(request: PolygonRequest) -> GeometryRationalResult:
-    from fractions import Fraction
 
     polygon = request
     points = [_point(point) for point in polygon.points]
@@ -419,3 +421,56 @@ def convex_hull_points(request: PointSetRequest) -> GeometryConvexHullResult:
     else:
         points = tuple(cast(Polygon, hull).vertices)
     return GeometryConvexHullResult(points=_canonical_points(points))
+
+
+def circumradius_profile(
+    request: CircumradiusProfileRequest,
+) -> CircumradiusProfileResult:
+    """Compute exact circumradius data for every unordered triple of a planar configuration.
+
+    Each triple is either nondegenerate (exact squared circumradius) or
+    degenerate (collinear, no circumcircle).
+    """
+    from itertools import combinations
+
+    points = request.points
+    n = len(points)
+    coords: list[tuple[Fraction, Fraction]] = [
+        (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in points
+    ]
+    entries: list[CircumradiusTripleEntry] = []
+    for i, j, k in combinations(range(n), 3):
+        (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
+        # Squared side lengths of the triangle.
+        dab = (ax - bx) ** 2 + (ay - by) ** 2
+        dbc = (bx - cx) ** 2 + (by - cy) ** 2
+        dac = (ax - cx) ** 2 + (ay - cy) ** 2
+        # Twice the signed area (cross product) of the triangle.
+        cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+        if cross == 0:
+            entries.append(
+                CircumradiusTripleEntry(
+                    labels=(points[i].label, points[j].label, points[k].label),
+                    indices=(i, j, k),
+                    collinear=True,
+                )
+            )
+            continue
+        # R^2 = (|a-b|^2 |b-c|^2 |c-a|^2) / (4 * (2*area)^2)
+        squared_circumradius = (dab * dbc * dac) / (4 * cross * cross)
+        entries.append(
+            CircumradiusTripleEntry(
+                labels=(points[i].label, points[j].label, points[k].label),
+                indices=(i, j, k),
+                collinear=False,
+                squared_circumradius=CanonicalRational.from_fraction(
+                    squared_circumradius
+                ),
+            )
+        )
+    return CircumradiusProfileResult(
+        configuration=request,
+        point_count=n,
+        triple_count=len(entries),
+        entries=tuple(entries),
+    )

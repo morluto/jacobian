@@ -26,7 +26,7 @@ from jacobian._models import StrictModel
 
 _MAX_INTEGER_LENGTH = 256
 _MAX_FACTORIZATION_LENGTH = 12
-_MAX_BUDGETED_FACTORIZATION_LENGTH = 15
+_MAX_CERTIFIED_FACTORIZATION_LENGTH = 80
 # These small bounds deliberately keep arithmetic functions that may factor
 # their input (totient, Möbius, divisor sigma, square-free predicates, and
 # multiplicative order) safe for in-process SymPy execution.
@@ -58,11 +58,11 @@ FactorizationInteger = Annotated[
         strict=True,
     ),
 ]
-BudgetedFactorizationInteger = Annotated[
+CertifiedFactorizationInteger = Annotated[
     str,
     StringConstraints(
         pattern=r"^-?(?:0|[1-9][0-9]*)$",
-        max_length=_MAX_BUDGETED_FACTORIZATION_LENGTH,
+        max_length=_MAX_CERTIFIED_FACTORIZATION_LENGTH,
         strict=True,
     ),
 ]
@@ -491,62 +491,6 @@ class PrimeFactorizationResult(StrictModel):
         return self
 
 
-class BudgetedFactorizationRequest(StrictModel):
-    """One small positive integer and an explicit bounded factor-search limit."""
-
-    value: BudgetedFactorizationInteger
-    factor_limit: StrictInt = Field(default=100_000, ge=4, le=1_000_000)
-
-    @model_validator(mode="after")
-    def require_composite_domain(self) -> Self:
-        from jacobian.canonical import parse_canonical_integer
-
-        if parse_canonical_integer(self.value) < 2:
-            raise ValueError("budgeted factorization requires an integer at least 2")
-        return self
-
-
-class CertifiedFactorComponent(StrictModel):
-    value: BudgetedFactorizationInteger
-    exponent: StrictInt = Field(ge=1, le=1024)
-    status: Literal["CERTIFIED_PRIME", "UNFACTORED_COMPOSITE"]
-
-
-class BudgetedFactorizationResult(StrictModel):
-    status: Literal["COMPLETE", "INCOMPLETE"]
-    value: BudgetedFactorizationInteger
-    factor_limit: StrictInt = Field(ge=4, le=1_000_000)
-    factors: tuple[CertifiedFactorComponent, ...] = Field(min_length=1, max_length=256)
-
-    @model_validator(mode="after")
-    def bind_decomposition(self) -> Self:
-        from flint import fmpz
-
-        from jacobian.canonical import parse_canonical_integer
-
-        product = math.prod(
-            parse_canonical_integer(item.value) ** item.exponent
-            for item in self.factors
-        )
-        if product != parse_canonical_integer(self.value):
-            raise ValueError("factor components must multiply to the requested integer")
-        complete = all(item.status == "CERTIFIED_PRIME" for item in self.factors)
-        if complete != (self.status == "COMPLETE"):
-            raise ValueError(
-                "complete status must match the per-factor primality statuses"
-            )
-        values = [parse_canonical_integer(item.value) for item in self.factors]
-        if values != sorted(values) or len(values) != len(set(values)):
-            raise ValueError("factor components must be unique and ascending")
-        for item, component in zip(self.factors, values, strict=True):
-            is_prime = fmpz(component).is_prime()
-            if item.status == "CERTIFIED_PRIME" and not is_prime:
-                raise ValueError("CERTIFIED_PRIME components must be prime")
-            if item.status == "UNFACTORED_COMPOSITE" and is_prime:
-                raise ValueError("UNFACTORED_COMPOSITE components must be composite")
-        return self
-
-
 class PowerfulNumberResult(StrictModel):
     """A powerful-number decision with its complete factor witness."""
 
@@ -818,3 +762,143 @@ class DiscreteLogarithmResult(StrictModel):
         elif self.discrete_log is not None:
             raise ValueError("unsolvable discrete logarithm cannot carry an exponent")
         return self
+
+
+# ---------------------------------------------------------------------------
+# Pratt certificate and certified factorization models
+# ---------------------------------------------------------------------------
+
+
+class PrattCertificateNode(StrictModel):
+    """One node in a Pratt primality certificate tree.
+
+    A Pratt certificate proves that ``prime`` is prime by exhibiting a witness
+    ``a`` such that ``a^(prime-1) ≡ 1 (mod prime)`` and ``a^((prime-1)/q) ≢ 1
+    (mod prime)`` for every prime factor ``q`` of ``prime - 1``.  Each such
+    ``q`` is itself certified by a recursive Pratt certificate.
+
+    The base case is ``prime == 2``: it has no prime factors of ``prime - 1``
+    and thus no sub-certificates and no witness.
+    """
+
+    prime: BoundedInteger
+    witness: BoundedInteger | None = None
+    sub_certificates: tuple[PrattCertificateNode, ...] = Field(
+        default_factory=tuple,
+        min_length=0,
+        max_length=256,
+    )
+
+    @model_validator(mode="after")
+    def require_valid_certificate(self) -> Self:
+        from jacobian.canonical import parse_canonical_integer
+
+        p = parse_canonical_integer(self.prime)
+        if p < 2:
+            raise ValueError("certificate prime must be at least 2")
+        if p == 2:
+            if self.witness is not None:
+                raise ValueError("base case prime 2 has no witness")
+            if self.sub_certificates:
+                raise ValueError("base case prime 2 has no sub-certificates")
+            return self
+        if self.witness is None:
+            raise ValueError("non-base-case certificate requires a witness")
+        witnesses = {item.prime for item in self.sub_certificates}
+        if len(witnesses) != len(self.sub_certificates):
+            raise ValueError("sub-certificate primes must be unique")
+        return self
+
+
+class CertifiedFactorizationRequest(StrictModel):
+    """One positive integer for subexponential certified factorization.
+
+    The integer is bounded to ``_MAX_CERTIFIED_FACTORIZATION_LENGTH`` digits
+    so that SymPy's ``factorint`` (Pollard rho, p-1, ECM) can complete the
+    full factorization within a bounded wall-clock budget.
+    """
+
+    value: CertifiedFactorizationInteger
+
+    @model_validator(mode="after")
+    def require_composite_domain(self) -> Self:
+        from jacobian.canonical import parse_canonical_integer
+
+        if parse_canonical_integer(self.value) < 2:
+            raise ValueError("certified factorization requires an integer at least 2")
+        return self
+
+
+class CertifiedFactor(StrictModel):
+    """One certified prime factor with its Pratt primality certificate."""
+
+    prime: BoundedInteger
+    exponent: StrictInt = Field(ge=1, le=4096)
+    certificate: PrattCertificateNode
+
+
+class CertifiedFactorizationResult(StrictModel):
+    """The complete certified prime-power factorization of one integer."""
+
+    status: Literal["COMPLETE"]
+    value: CertifiedFactorizationInteger
+    factors: tuple[CertifiedFactor, ...] = Field(min_length=1, max_length=256)
+
+    @model_validator(mode="after")
+    def bind_decomposition(self) -> Self:
+        import math as _math
+
+        from jacobian.canonical import parse_canonical_integer
+
+        product = _math.prod(
+            parse_canonical_integer(item.prime) ** item.exponent
+            for item in self.factors
+        )
+        if product != parse_canonical_integer(self.value):
+            raise ValueError("factor components must multiply to the requested integer")
+        primes = [parse_canonical_integer(item.prime) for item in self.factors]
+        if primes != sorted(primes):
+            raise ValueError("factor primes must be ascending")
+        if len(set(primes)) != len(primes):
+            raise ValueError("factor primes must be unique")
+        return self
+
+
+class PrimalityCertificateRequest(StrictModel):
+    """One positive integer to be certified as prime via a Pratt certificate."""
+
+    value: CertifiedFactorizationInteger
+
+    @model_validator(mode="after")
+    def require_candidate_domain(self) -> Self:
+        from jacobian.canonical import parse_canonical_integer
+
+        if parse_canonical_integer(self.value) < 2:
+            raise ValueError("primality certificate requires an integer at least 2")
+        return self
+
+
+class PrimalityCertificateResult(StrictModel):
+    """A Pratt primality certificate for one declared prime."""
+
+    status: Literal["CERTIFIED", "COMPOSITE"]
+    value: CertifiedFactorizationInteger
+    certificate: PrattCertificateNode | None = None
+
+    @model_validator(mode="after")
+    def bind_result(self) -> Self:
+        from jacobian.canonical import parse_canonical_integer
+
+        if self.status == "CERTIFIED" and self.certificate is None:
+            raise ValueError("CERTIFIED status requires a certificate")
+        if self.status == "COMPOSITE" and self.certificate is not None:
+            raise ValueError("COMPOSITE status must not carry a certificate")
+        if self.status == "CERTIFIED":
+            cert_prime = parse_canonical_integer(self.certificate.prime)
+            value = parse_canonical_integer(self.value)
+            if cert_prime != value:
+                raise ValueError("certificate prime must match the candidate value")
+        return self
+
+
+PrattCertificateNode.model_rebuild()

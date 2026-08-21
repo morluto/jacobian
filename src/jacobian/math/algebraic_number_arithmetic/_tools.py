@@ -40,10 +40,10 @@ def _an_op[RequestT: StrictModel, ResultT: StrictModel](
     )
 
 
-def _element(a_num: int, b_num: int, d: int) -> dict[str, int]:
+def _element(a_num: int, b_num: int, d: int) -> dict[str, object]:
     return {
-        "rational_part_num": a_num,
-        "irrational_part_num": b_num,
+        "rational_part": {"num": str(a_num), "den": "1"},
+        "radical_coefficient": {"num": str(b_num), "den": "1"},
         "radicand": d,
     }
 

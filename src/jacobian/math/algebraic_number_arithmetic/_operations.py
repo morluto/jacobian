@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.algebraic_number_arithmetic._models import (
     AlgebraicArithmeticRequest,
     AlgebraicArithmeticResult,
-    QuadraticElement,
 )
+from jacobian.math.real_quadratic import RealQuadraticValue
 
 
 def _normalize(
@@ -16,21 +17,19 @@ def _normalize(
     irrational_part: Fraction,
     radicand: int,
 ) -> AlgebraicArithmeticResult:
-    """Normalize Fraction components to canonical (num, den) integers."""
+    """Normalize Fraction components to canonical bounded rationals."""
 
     return AlgebraicArithmeticResult(
-        rational_part_num=rational_part.numerator,
-        rational_part_den=rational_part.denominator,
-        irrational_part_num=irrational_part.numerator,
-        irrational_part_den=irrational_part.denominator,
+        rational_part=CanonicalRational.from_fraction(rational_part),
+        radical_coefficient=CanonicalRational.from_fraction(irrational_part),
         radicand=radicand,
     )
 
 
-def _to_fractions(element: QuadraticElement) -> tuple[Fraction, Fraction]:
+def _to_fractions(element: RealQuadraticValue) -> tuple[Fraction, Fraction]:
     return (
-        Fraction(element.rational_part_num, element.rational_part_den),
-        Fraction(element.irrational_part_num, element.irrational_part_den),
+        element.rational_part.as_fraction(),
+        element.radical_coefficient.as_fraction(),
     )
 
 

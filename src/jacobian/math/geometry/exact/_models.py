@@ -129,7 +129,9 @@ class CircumradiusProfileEntry(StrictModel):
     def require_consistent_radius(self) -> Self:
         if self.disposition is CircumradiusTripleDisposition.NONDEGENERATE:
             if self.squared_radius is None:
-                raise ValueError("a nondegenerate triple must report its squared radius")
+                raise ValueError(
+                    "a nondegenerate triple must report its squared radius"
+                )
             if self.squared_radius.as_fraction() <= 0:
                 raise ValueError("squared circumradius must be positive")
         elif self.disposition is CircumradiusTripleDisposition.DEGENERATE:

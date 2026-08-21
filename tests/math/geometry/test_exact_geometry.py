@@ -193,9 +193,14 @@ class TestCircumradiusProfile:
         )
 
         result = compute_circumradius_profile(
-            CircumradiusProfileRequest(configuration=PointConfiguration(points=self._parabola())),
+            CircumradiusProfileRequest(
+                configuration=PointConfiguration(points=self._parabola())
+            ),
         )
-        assert sum(e.triple_count for e in result.multiplicities) == result.nondegenerate_count
+        assert (
+            sum(e.triple_count for e in result.multiplicities)
+            == result.nondegenerate_count
+        )
 
     def test_rejects_nonplanar(self):
         import pytest

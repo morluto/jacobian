@@ -86,7 +86,6 @@ def compute_distance_graph(
     )
 
 
-
 def _squared_circumradius(
     p: tuple[Fraction, ...],
     q: tuple[Fraction, ...],
@@ -103,8 +102,8 @@ def _squared_circumradius(
     a2 = _squared_distance(q, r)
     b2 = _squared_distance(p, r)
     c2 = _squared_distance(p, q)
-    sixteen_k_squared = (
-        2 * (a2 * b2 + b2 * c2 + c2 * a2) - (a2 * a2 + b2 * b2 + c2 * c2)
+    sixteen_k_squared = 2 * (a2 * b2 + b2 * c2 + c2 * a2) - (
+        a2 * a2 + b2 * b2 + c2 * c2
     )
     if sixteen_k_squared == 0:
         return CircumradiusTripleDisposition.DEGENERATE, None

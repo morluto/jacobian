@@ -115,6 +115,16 @@ class DualResult(StrictModel):
     point_map: tuple[tuple[str, str], ...]
     block_map: tuple[tuple[str, str], ...]
 
+    @model_validator(mode="after")
+    def require_canonical_projection(self) -> Self:
+        if (
+            self.points != self.incidence.points
+            or self.block_ids != self.incidence.block_ids
+            or self.blocks != self.incidence.blocks
+        ):
+            raise ValueError("dual structural fields must project incidence")
+        return self
+
 
 # ---------------------------------------------------------------------------
 # 6. Complement incidence structure

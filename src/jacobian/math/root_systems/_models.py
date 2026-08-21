@@ -173,6 +173,11 @@ class SimpleReflectionResult(StrictModel):  # noqa: F811
     def bind_reflection(self) -> Self:
         from jacobian.math.root_systems._operations import _apply_reflection
 
+        SimpleReflectionRequest(
+            matrix=self.matrix,
+            vector=self.vector,
+            simple_index=self.simple_index,
+        )
         reflected = _apply_reflection(
             [list(row) for row in self.matrix], list(self.vector), self.simple_index
         )

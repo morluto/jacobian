@@ -165,7 +165,6 @@ PETRI_NET_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-
     _op(
         "petri_net.siphon_trap.check",
         "Check for siphons and traps in a Petri net",
@@ -186,10 +185,10 @@ PETRI_NET_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "Siphons and traps of a cyclic 2-place net.",
                 {
                     "net": {
- "place_count": 2,
- "transition_count": 2,
- "pre": [[1, 0], [0, 1]],
- "post": [[0, 1], [1, 0]],
+                        "place_count": 2,
+                        "transition_count": 2,
+                        "pre": [[1, 0], [0, 1]],
+                        "post": [[0, 1], [1, 0]],
                     },
                 },
             ),

@@ -9,10 +9,10 @@ from jacobian.math.petri_nets.values import Marking, PetriNet
 __all__ = [
     "compute_incidence_matrix",
     "enabled_transitions",
-    "fire_transition",
-    "reachability_graph",
     "find_minimal_siphons",
     "find_minimal_traps",
+    "fire_transition",
+    "reachability_graph",
 ]
 
 
@@ -31,7 +31,9 @@ def enabled_transitions(net: PetriNet, marking: Marking) -> list[int]:
 
 
 def fire_transition(
-    net: PetriNet, marking: Marking, transition: int,
+    net: PetriNet,
+    marking: Marking,
+    transition: int,
 ) -> tuple[bool, tuple[int, ...]]:
     """Fire a transition. Returns (success, new_marking)."""
     for p in range(net.place_count):
@@ -47,10 +49,7 @@ def fire_transition(
 def compute_incidence_matrix(net: PetriNet) -> tuple[tuple[int, ...], ...]:
     """Compute C = Post - Pre."""
     return tuple(
-        tuple(
-            net.post[p][t] - net.pre[p][t]
-            for t in range(net.transition_count)
-        )
+        tuple(net.post[p][t] - net.pre[p][t] for t in range(net.transition_count))
         for p in range(net.place_count)
     )
 
@@ -88,7 +87,6 @@ def reachability_graph(
                 queue.append(len(state_list) - 1)
             edges.append((idx, t, state_index[new_tokens]))
     return (state_list, edges, truncated)
-
 
 
 # ---------------------------------------------------------------------------

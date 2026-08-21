@@ -96,13 +96,18 @@ class ReachabilityResult(StrictModel):
     truncated: bool
 
 
-
-
-
 class SiphonTrapRequest(StrictModel):
     """Check for siphons and traps in a Petri net."""
 
     net: PetriNet
+
+    @model_validator(mode="after")
+    def require_bounded_places(self) -> Self:
+        if self.net.place_count > 20:
+            raise ValueError(
+                "siphon/trap check supports at most 20 places for exact enumeration"
+            )
+        return self
 
 
 class SiphonTrapResult(StrictModel):

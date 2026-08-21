@@ -8,9 +8,13 @@ from typing import Any
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
 from jacobian.math.posets._models import (
+    AntichainProfileRequest,
+    AntichainProfileResult,
     FinitePoset,
     FinitePosetMaterializationResult,
     FinitePosetRequest,
+    IncidenceConvolutionRequest,
+    IncidenceConvolutionResult,
     IncomparablePair,
     LinearExtensionCountResult,
     LinearExtensionRequest,
@@ -22,18 +26,14 @@ from jacobian.math.posets._models import (
     MobiusValue,
     OrderedPair,
     PosetChain,
-    PosetInterval,
-    PosetRequest,
-    PosetWidthResult,
-    RelationInterpretation,
-    AntichainProfileRequest,
-    AntichainProfileResult,
-    IncidenceConvolutionRequest,
-    IncidenceConvolutionResult,
     PosetClosureRequest,
     PosetClosureResult,
     PosetDualRequest,
     PosetDualResult,
+    PosetInterval,
+    PosetRequest,
+    PosetWidthResult,
+    RelationInterpretation,
     ZetaTransformRequest,
     ZetaTransformResult,
     canonical_poset_ranks,
@@ -349,14 +349,14 @@ def _closure(request: PosetClosureRequest) -> PosetClosureResult:
     if request.closure_type == "LOWER":
         result = set()
         for target in request.subset.elements:
-            for (lo, hi) in order_set:
+            for lo, hi in order_set:
                 if hi == target:
                     result.add(lo)
         result |= set(request.subset.elements)
     else:
         result = set()
         for target in request.subset.elements:
-            for (lo, hi) in order_set:
+            for lo, hi in order_set:
                 if lo == target:
                     result.add(hi)
         result |= set(request.subset.elements)
@@ -379,12 +379,17 @@ def _dual(request: PosetDualRequest) -> PosetDualResult:
     )
     sorted_pairs = tuple(sorted((p.lower, p.upper) for p in reversed_pairs))
     sorted_covers = tuple(sorted((p.lower, p.upper) for p in reversed_covers))
-    order_pairs_obj = tuple(
-        OrderedPair(lower=lo, upper=hi) for lo, hi in sorted_pairs
-    )
-    cover_pairs_obj = tuple(
-        OrderedPair(lower=lo, upper=hi) for lo, hi in sorted_covers
-    )
+    order_pairs_obj = tuple(OrderedPair(lower=lo, upper=hi) for lo, hi in sorted_pairs)
+    cover_pairs_obj = tuple(OrderedPair(lower=lo, upper=hi) for lo, hi in sorted_covers)
+    if poset.graded and poset.ranks:
+        height = max(r.rank for r in poset.ranks)
+        dual_ranks = tuple(
+            type(poset.ranks[0])(element=r.element, rank=height - r.rank)  # type: ignore[arg-type]
+            for r in sorted(poset.ranks, key=lambda r: r.element)
+        )
+        dual_ranks_sorted = tuple(sorted(dual_ranks, key=lambda r: r.element))
+    else:
+        dual_ranks_sorted = None
     new_digest = finite_poset_digest(
         elements=elements,
         strict_order_pairs=order_pairs_obj,
@@ -393,11 +398,7 @@ def _dual(request: PosetDualRequest) -> PosetDualResult:
         minimal_elements=tuple(sorted(poset.maximal_elements)),
         maximal_elements=tuple(sorted(poset.minimal_elements)),
         graded=poset.graded,
-        ranks=(
-            tuple(sorted(poset.ranks, key=lambda r: r.element))
-            if poset.ranks
-            else None
-        ),
+        ranks=dual_ranks_sorted,
     )
     new_poset = FinitePoset(
         poset_format="jacobian.finite-poset/v1",
@@ -408,11 +409,7 @@ def _dual(request: PosetDualRequest) -> PosetDualResult:
         minimal_elements=tuple(sorted(poset.maximal_elements)),
         maximal_elements=tuple(sorted(poset.minimal_elements)),
         graded=poset.graded,
-        ranks=(
-            tuple(sorted(poset.ranks, key=lambda r: r.element))
-            if poset.ranks
-            else None
-        ),
+        ranks=dual_ranks_sorted,
         poset_digest=new_digest,
     )
     return PosetDualResult(poset=new_poset)
@@ -428,7 +425,7 @@ def _zeta_transform(request: ZetaTransformRequest) -> ZetaTransformResult:
             if a == c or (a, c) in comparable:
                 all_intervals.append((a, c))
     results = []
-    for (a, c) in all_intervals:
+    for a, c in all_intervals:
         total = 0
         for b in poset.elements:
             if (b == a or (a, b) in comparable) and (b == c or (b, c) in comparable):
@@ -453,7 +450,7 @@ def _incidence_convolution(
             if a == c or (a, c) in comparable:
                 all_intervals.append((a, c))
     results = []
-    for (a, c) in all_intervals:
+    for a, c in all_intervals:
         total = 0
         for b in poset.elements:
             if (b == a or (a, b) in comparable) and (b == c or (b, c) in comparable):
@@ -474,7 +471,7 @@ def _antichain_profile(
 
     def is_antichain(subset: tuple[str, ...]) -> bool:
         for i, a in enumerate(subset):
-            for b in subset[i + 1:]:
+            for b in subset[i + 1 :]:
                 if (a, b) in comparable or (b, a) in comparable:
                     return False
         return True
@@ -637,7 +634,6 @@ FINITE_POSET_OPERATIONS: MathTools = (
             ),
         ),
     ),
-
     MathTool(
         operation_id="poset.closure.compute",
         version="1",
@@ -797,7 +793,6 @@ FINITE_POSET_OPERATIONS: MathTools = (
             ),
         ),
     ),
-
 )
 
 __all__ = ["FINITE_POSET_OPERATIONS"]

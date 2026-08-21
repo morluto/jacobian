@@ -51,19 +51,25 @@ class TestEnabledTransitions:
     def test_simple_enabled(self):
         net = _simple_net()
         marking = Marking(tokens=(2, 0))
-        result = compute_enabled_transitions(EnabledTransitionsRequest(net=net, marking=marking))
+        result = compute_enabled_transitions(
+            EnabledTransitionsRequest(net=net, marking=marking)
+        )
         assert result.transitions == (0,)
 
     def test_none_enabled(self):
         net = _simple_net()
         marking = Marking(tokens=(0, 0))
-        result = compute_enabled_transitions(EnabledTransitionsRequest(net=net, marking=marking))
+        result = compute_enabled_transitions(
+            EnabledTransitionsRequest(net=net, marking=marking)
+        )
         assert result.transitions == ()
 
     def test_both_enabled(self):
         net = _token_passing_net()
         marking = Marking(tokens=(1, 1))
-        result = compute_enabled_transitions(EnabledTransitionsRequest(net=net, marking=marking))
+        result = compute_enabled_transitions(
+            EnabledTransitionsRequest(net=net, marking=marking)
+        )
         assert result.transitions == (0, 1)
 
 
@@ -192,14 +198,13 @@ class TestValidation:
             )
 
 
-
 # ---------------------------------------------------------------------------
 # Siphon and trap detection
 # ---------------------------------------------------------------------------
 
-from jacobian.math.petri_nets._models import SiphonTrapRequest
-from jacobian.math.petri_nets._operations import compute_siphon_trap
-from jacobian.math.petri_nets.operations import (
+from jacobian.math.petri_nets._models import SiphonTrapRequest  # noqa: E402
+from jacobian.math.petri_nets._operations import compute_siphon_trap  # noqa: E402
+from jacobian.math.petri_nets.operations import (  # noqa: E402
     find_minimal_siphons,
     find_minimal_traps,
 )

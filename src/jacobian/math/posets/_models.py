@@ -581,8 +581,6 @@ class MobiusFunctionResult(PosetExactResult):
         return self
 
 
-
-
 # ---------------------------------------------------------------------------
 # Issue #1746: Closures, duals, zeta transforms, antichain profiles
 # ---------------------------------------------------------------------------
@@ -615,9 +613,7 @@ class PosetClosureRequest(StrictModel):
 class PosetClosureResult(PosetExactResult):
     poset_digest: Sha256Digest
     closure_type: Literal["LOWER", "UPPER"]
-    closure: tuple[ElementLabel, ...] = Field(
-        default=(), max_length=MAX_POSET_ELEMENTS
-    )
+    closure: tuple[ElementLabel, ...] = Field(default=(), max_length=MAX_POSET_ELEMENTS)
     generated_element: tuple[ElementLabel, ...] = Field(
         default=(), max_length=MAX_POSET_ELEMENTS
     )
@@ -659,21 +655,15 @@ class ZetaTransformRequest(StrictModel):
 class ZetaTransformResult(PosetExactResult):
     poset_digest: Sha256Digest
     transform: Literal["ZETA"] = "ZETA"
-    values: tuple[MobiusValue, ...] = Field(
-        default=(), max_length=MAX_POSET_RELATIONS
-    )
+    values: tuple[MobiusValue, ...] = Field(default=(), max_length=MAX_POSET_RELATIONS)
 
 
 class IncidenceConvolutionRequest(StrictModel):
     """Incidence-algebra convolution of two functions on the poset."""
 
     poset: FinitePoset
-    first: tuple[MobiusValue, ...] = Field(
-        default=(), max_length=MAX_POSET_RELATIONS
-    )
-    second: tuple[MobiusValue, ...] = Field(
-        default=(), max_length=MAX_POSET_RELATIONS
-    )
+    first: tuple[MobiusValue, ...] = Field(default=(), max_length=MAX_POSET_RELATIONS)
+    second: tuple[MobiusValue, ...] = Field(default=(), max_length=MAX_POSET_RELATIONS)
 
     @model_validator(mode="after")
     def require_unique_values(self) -> Self:
@@ -693,9 +683,7 @@ class IncidenceConvolutionRequest(StrictModel):
 
 class IncidenceConvolutionResult(PosetExactResult):
     poset_digest: Sha256Digest
-    values: tuple[MobiusValue, ...] = Field(
-        default=(), max_length=MAX_POSET_RELATIONS
-    )
+    values: tuple[MobiusValue, ...] = Field(default=(), max_length=MAX_POSET_RELATIONS)
 
 
 class AntichainProfileRequest(StrictModel):
@@ -712,15 +700,20 @@ class AntichainProfileResult(PosetExactResult):
         default=(), max_length=MAX_POSET_ELEMENTS
     )
 
+
 __all__ = [
     "MAX_LINEAR_EXTENSION_ELEMENTS",
     "MAX_POSET_ELEMENTS",
     "MAX_POSET_RELATIONS",
+    "AntichainProfileRequest",
+    "AntichainProfileResult",
     "ElementLabel",
     "ElementRank",
     "FinitePoset",
     "FinitePosetMaterializationResult",
     "FinitePosetRequest",
+    "IncidenceConvolutionRequest",
+    "IncidenceConvolutionResult",
     "IncomparablePair",
     "LinearExtensionCountResult",
     "LinearExtensionRequest",
@@ -732,23 +725,19 @@ __all__ = [
     "MobiusValue",
     "OrderedPair",
     "PosetChain",
+    "PosetClosureRequest",
+    "PosetClosureResult",
+    "PosetDualRequest",
+    "PosetDualResult",
     "PosetInterval",
     "PosetRequest",
+    "PosetSubset",
     "PosetWidthResult",
     "PresentationPair",
     "ReflexivePairPolicy",
     "RelationInterpretation",
+    "ZetaTransformRequest",
+    "ZetaTransformResult",
     "canonical_poset_ranks",
     "finite_poset_digest",
-    "AntichainProfileResult",
-    "AntichainProfileRequest",
-    "IncidenceConvolutionResult",
-    "IncidenceConvolutionRequest",
-    "PosetClosureResult",
-    "PosetClosureRequest",
-    "PosetDualResult",
-    "PosetDualRequest",
-    "PosetSubset",
-    "ZetaTransformResult",
-    "ZetaTransformRequest",
 ]

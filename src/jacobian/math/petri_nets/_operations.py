@@ -17,10 +17,10 @@ from jacobian.math.petri_nets._models import (
 from jacobian.math.petri_nets.operations import (
     compute_incidence_matrix,
     enabled_transitions,
-    fire_transition,
-    reachability_graph,
     find_minimal_siphons,
     find_minimal_traps,
+    fire_transition,
+    reachability_graph,
 )
 
 __all__ = [
@@ -48,9 +48,7 @@ def compute_fire_transition(request: FireTransitionRequest) -> FireTransitionRes
 
 
 def compute_incidence(request: IncidenceMatrixRequest) -> IncidenceMatrixResult:
-    return IncidenceMatrixResult(
-        incidence=compute_incidence_matrix(request.net)
-    )
+    return IncidenceMatrixResult(incidence=compute_incidence_matrix(request.net))
 
 
 def compute_reachability(request: ReachabilityRequest) -> ReachabilityResult:

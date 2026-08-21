@@ -162,6 +162,8 @@ class DerivedResidualRequest(StrictModel):
     def require_valid_kind(self) -> Self:
         if self.kind not in ("derived", "residual"):
             raise ValueError("kind must be 'derived' or 'residual'")
+        if self.point not in self.incidence.points:
+            raise ValueError("anchor point must be a declared point")
         return self
 
 

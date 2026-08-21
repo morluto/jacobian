@@ -70,12 +70,11 @@ class BinaryQuadraticFormCheckResult(StrictModel):
                 raise ValueError("accepted form must carry discriminant")
             if self.discriminant != self.b**2 - 4 * self.a * self.c:
                 raise ValueError("discriminant must be b^2 - 4ac")
-            if self.gram is not None:
-                if self.gram != (
-                    (self.a, self.b),
-                    (self.b, self.c),
-                ):
-                    raise ValueError("gram must be [[a,b],[b,c]]")
+            if self.gram is not None and self.gram != (
+                (self.a, self.b),
+                (self.b, self.c),
+            ):
+                raise ValueError("gram must be [[a,b],[b,c]]")
         return self
 
 
@@ -124,11 +123,13 @@ class ReducedBinaryQuadraticFormResult(StrictModel):
             _check_reduced,
         )
 
-        if not _check_reduced(
-            self.reduced_a, self.reduced_b, self.reduced_c
-        ):
+        if not _check_reduced(self.reduced_a, self.reduced_b, self.reduced_c):
             raise ValueError("reduced form must satisfy |b|<=a<=c with tie-breaking")
-        if self.a == self.reduced_a and self.b == self.reduced_b and self.c == self.reduced_c:
+        if (
+            self.a == self.reduced_a
+            and self.b == self.reduced_b
+            and self.c == self.reduced_c
+        ):
             return self
         p, q = self.matrix[0]
         r, s = self.matrix[1]
@@ -140,7 +141,9 @@ class ReducedBinaryQuadraticFormResult(StrictModel):
         return self
 
 
-def _transform(a: int, b: int, c: int, p: int, q: int, r: int, s: int) -> tuple[int, int, int]:
+def _transform(
+    a: int, b: int, c: int, p: int, q: int, r: int, s: int
+) -> tuple[int, int, int]:
     """Apply SL_2(Z) transformation U=[[p,q],[r,s]] to form [a,b,c]."""
     na = a * p * p + b * p * r + c * r * r
     nb = 2 * a * p * q + b * (p * s + q * r) + 2 * c * r * s

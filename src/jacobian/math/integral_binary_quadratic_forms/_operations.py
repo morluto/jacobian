@@ -6,8 +6,8 @@ from jacobian.math.integral_binary_quadratic_forms._models import (
     BinaryQuadraticFormEvaluateRequest,
     BinaryQuadraticFormEvaluateResult,
     BinaryQuadraticFormProperEquivRequest,
-    BinaryQuadraticFormReduceRequest,
     BinaryQuadraticFormReducedClassesRequest,
+    BinaryQuadraticFormReduceRequest,
     ProperEquivalenceResult,
     ReducedBinaryQuadraticFormResult,
     ReducedClassesResult,
@@ -44,9 +44,7 @@ def _check_reduced(a: int, b: int, c: int) -> bool:
         return False
     if abs(b) == a and b < 0:
         return False
-    if a == c and b < 0:
-        return False
-    return True
+    return not (a == c and b < 0)
 
 
 def _reduce_step(
@@ -93,7 +91,6 @@ def _reduce(a: int, b: int, c: int) -> tuple[int, int, int, int, int, int, int, 
 
     Returns (ra, rb, rc, p, q, r, s, steps).
     """
-    from math import gcd
 
     # Compose two SL_2(Z) matrices
     def compose(m1, m2):
@@ -255,7 +252,7 @@ def compute_reduced_classes(
 ) -> ReducedClassesResult:
     """Enumerate all reduced primitive positive-definite classes of a discriminant."""
 
-    D = request.discriminant
+    D = request.discriminant  # noqa: N806  # noqa: N806
     if D >= -2:
         return ReducedClassesResult(discriminant=D, classes=(), class_number=0)
     if D % 4 not in (0, 1):
@@ -271,7 +268,7 @@ def compute_reduced_classes(
     # So a <= sqrt(|D|/3) (standard bound)
     import math
 
-    a_bound = int(math.isqrt(abs(D) // 3)) + 1
+    a_bound = math.isqrt(abs(D) // 3) + 1
     for a in range(1, a_bound + 1):
         # b ranges from -a to a
         for b in range(-a, a + 1):

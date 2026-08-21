@@ -132,7 +132,7 @@ class SimpleReflectionRequest(StrictModel):
         return self
 
 
-class SimpleReflectionResult(StrictModel):
+class SimpleReflectionResult(StrictModel):  # noqa: F811
     """Result of applying a simple reflection to a vector."""
 
     matrix: tuple[tuple[int, ...], ...]

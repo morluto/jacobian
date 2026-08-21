@@ -36,7 +36,13 @@ STRUCTURE = {
 FANO = {
     "points": ["1", "2", "3", "4", "5", "6", "7"],
     "block_ids": [
-        "L1", "L2", "L3", "L4", "L5", "L6", "L7",
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "L5",
+        "L6",
+        "L7",
     ],
     "blocks": [
         ["1", "2", "3"],
@@ -258,9 +264,7 @@ class TestRestriction:
 class TestDerivedResidual:
     def test_derived_at_p2(self) -> None:
         result = compute_derived_residual(
-            DerivedResidualRequest(
-                incidence=STRUCTURE, point="p2", kind="derived"
-            )
+            DerivedResidualRequest(incidence=STRUCTURE, point="p2", kind="derived")
         )
         assert result.kind == "derived"
         assert result.anchor_point == "p2"
@@ -273,9 +277,7 @@ class TestDerivedResidual:
 
     def test_residual_at_p1(self) -> None:
         result = compute_derived_residual(
-            DerivedResidualRequest(
-                incidence=STRUCTURE, point="p1", kind="residual"
-            )
+            DerivedResidualRequest(incidence=STRUCTURE, point="p1", kind="residual")
         )
         assert result.kind == "residual"
         assert result.anchor_point == "p1"

@@ -143,7 +143,7 @@ def _apply_reflection(
     return result
 
 
-def _weyl_group_data(cartan: list[list[int]]) -> tuple[int, tuple[int, ...], int]:
+def _weyl_group_data(cartan: list[list[int]]) -> tuple[int, tuple[int, ...], int]:  # noqa: C901
     """Compute Weyl group order, longest element, and Coxeter number.
 
     Returns (order, longest_element_permutation, coxeter_number).
@@ -157,10 +157,8 @@ def _weyl_group_data(cartan: list[list[int]]) -> tuple[int, tuple[int, ...], int
     # Each element is a permutation of simple root indices.
 
     # Start with identity permutation
-    from itertools import permutations
 
     # For small rank, enumerate Weyl group elements by BFS on simple reflections
-    identity = tuple(range(n))
 
     def apply_simple_reflection_to_perm(perm, i, cartan):
         """Apply s_i on the right of a Weyl group element (as a permutation of roots)."""
@@ -241,7 +239,7 @@ def _weyl_group_data(cartan: list[list[int]]) -> tuple[int, tuple[int, ...], int
     return order, longest_perm, coxeter_number
 
 
-def compute_simple_reflection(request):
+def compute_simple_reflection(request):  # noqa: F811
     """Apply a simple reflection to a root lattice vector."""
     from jacobian.math.root_systems._models import SimpleReflectionResult
 

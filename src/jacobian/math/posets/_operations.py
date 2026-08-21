@@ -384,7 +384,7 @@ def _dual(request: PosetDualRequest) -> PosetDualResult:
     if poset.graded and poset.ranks is not None:
         height = max(r.rank for r in poset.ranks)
         dual_ranks = tuple(
-            type(poset.ranks[0])(element=r.element, rank=height - r.rank)  # type: ignore[arg-type]
+            type(poset.ranks[0])(element=r.element, rank=height - r.rank)
             for r in sorted(poset.ranks, key=lambda r: r.element)
         )
         dual_ranks_sorted = tuple(sorted(dual_ranks, key=lambda r: r.element))

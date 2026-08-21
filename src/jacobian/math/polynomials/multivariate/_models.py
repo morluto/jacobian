@@ -225,6 +225,8 @@ class MultivariateFactorRequest(StrictModel):
     def require_factor_budget(self) -> Self:
         if len(self.polynomial.variables) < 1:
             raise ValueError("factorization requires at least one variable")
+        if not self.polynomial.polynomial.terms:
+            raise ValueError("zero polynomial has no factorization")
         require_polynomial_budget(
             self.polynomial,
             maximum_terms=_MAX_MULTIVARIATE_TERMS,
@@ -241,7 +243,7 @@ class MultivariateIrreducibleFactor(StrictModel):
 
 class MultivariateFactorResult(StrictModel):
     coefficient: CanonicalRational
-    factors: tuple[MultivariateIrreducibleFactor, ...] = Field(max_length=64)
+    factors: tuple[MultivariateIrreducibleFactor, ...] = Field(max_length=128)
     reconstructed: RationalPolynomial
     normalization: Literal["CONTENT_AND_MONIC_IRREDUCIBLES"] = (
         "CONTENT_AND_MONIC_IRREDUCIBLES"
@@ -276,6 +278,38 @@ class MultivariateFactorResult(StrictModel):
         )
         if self.factors != ordered:
             raise ValueError("irreducible factors must use canonical order")
+        # Exact reconstruction: coefficient * ∏ factor**multiplicity == reconstructed
+        try:
+            from sympy import QQ, Poly
+            from sympy import Rational as SymRational
+
+            from jacobian.math.polynomials._conversions import (
+                rational_polynomial_to_sympy,
+                symbols_for_variables,
+            )
+
+            reconstructed_poly = rational_polynomial_to_sympy(self.reconstructed)
+            coeff_frac = self.coefficient.as_fraction()
+            symbols = symbols_for_variables(self.reconstructed.variables)
+            # Constant coefficient as Poly
+            coeff_poly = Poly(
+                SymRational(coeff_frac.numerator, coeff_frac.denominator),
+                *symbols,
+                domain=QQ,
+            )
+            product = coeff_poly
+            for record in self.factors:
+                factor_poly = rational_polynomial_to_sympy(record.factor)
+                for _ in range(record.multiplicity):
+                    product = product * factor_poly
+            if product != reconstructed_poly:
+                raise ValueError(
+                    "factorization product does not equal reconstructed polynomial"
+                )
+        except ValueError:
+            raise
+        except Exception as exc:  # pragma: no cover - defensive
+            raise ValueError("invalid factorization reconstruction") from exc
         return self
 
 

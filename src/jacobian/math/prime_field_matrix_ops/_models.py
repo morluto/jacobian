@@ -10,15 +10,17 @@ from jacobian._models import StrictModel
 from jacobian.math.prime_field_linear_algebra import (
     PrimeFieldMatrix,
     nullspace,
-    rank,
     rref,
 )
 
 MAX_DIMENSION = 256
+# Primality testing and modular elimination run on the raw modulus; an
+# unbounded accepted integer makes admitted-request work unbounded.
+MAX_MODULUS = 2**53 - 1
 
 
 class PrimeFieldMatrixRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_MODULUS)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
@@ -48,7 +50,7 @@ class _PrimeFieldMatrixValidator:
 
 
 class RankRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_MODULUS)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
@@ -70,7 +72,7 @@ class RankRequest(StrictModel):
 
 class RankResult(StrictModel):
     rank: int = Field(ge=0)
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_MODULUS)
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_RANK"] = "EXACT_DOMAIN_MATRIX_RANK"
 
@@ -82,7 +84,7 @@ class RankResult(StrictModel):
 
 
 class RrefRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_MODULUS)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
@@ -128,7 +130,7 @@ class RrefResult(RrefRequest):
 
 
 class NullspaceRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_MODULUS)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 

@@ -15,7 +15,6 @@ from jacobian.math.elliptic_curves._models import (
     RationalAffinePoint,
     ScalarMultiplicationRequest,
     ScalarMultiplicationResult,
-    ShortWeierstrassCurve,
 )
 
 
@@ -121,11 +120,13 @@ def scalar_multiply(
     py = _frac_from_rational(request.point.y)
 
     result: tuple[Fraction, Fraction] | None = None
-    addend: tuple[Fraction, Fraction] = (px, py)
+    # An infinite addend contributes nothing; doubling to the point at
+    # infinity must not discard the accumulated result.
+    addend: tuple[Fraction, Fraction] | None = (px, py)
     n = request.scalar
 
     while n > 0:
-        if n & 1:
+        if n & 1 and addend is not None:
             if result is None:
                 result = addend
             else:
@@ -133,12 +134,8 @@ def scalar_multiply(
                 if added is None:
                     return ScalarMultiplicationResult(at_infinity=True)
                 result = added
-        doubled = _point_add(a, b, addend, addend)
-        if doubled is None:
-            if n > 1:
-                return ScalarMultiplicationResult(at_infinity=True)
-        else:
-            addend = doubled
+        if addend is not None:
+            addend = _point_add(a, b, addend, addend)
         n >>= 1
 
     if result is None:

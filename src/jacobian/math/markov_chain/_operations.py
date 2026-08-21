@@ -126,6 +126,7 @@ def compute_communicating_classes(
             state_class[state] = scc_idx
 
     return CommunicatingClassesResult(
+        transition_matrix=request.matrix,
         classes=tuple(classes_info),
         state_class=tuple(state_class),
     )

@@ -200,6 +200,11 @@ class MixingTimeResult(StrictModel):
 class CommunicatingClassesResult(StrictModel):
     """The communicating-class decomposition of a Markov chain."""
 
+    transition_matrix: tuple[tuple[CanonicalRational, ...], ...] = Field(
+        min_length=1, max_length=32
+    )
+    """The source transition matrix whose support graph is decomposed."""
+
     classes: tuple[tuple[tuple[int, ...], bool], ...]
     """Each entry is (state_indices, is_closed). States are 0-indexed."""
 
@@ -207,12 +212,66 @@ class CommunicatingClassesResult(StrictModel):
     """Class index of each state (0-indexed)."""
 
     @model_validator(mode="after")
-    def require_partition_validity(self) -> Self:
+    def require_partition_validity(self) -> Self:  # noqa: C901
+        dimension = len(self.transition_matrix)
+        if any(len(row) != dimension for row in self.transition_matrix):
+            raise ValueError("transition matrix must be square")
+        for row in self.transition_matrix:
+            values = tuple(value.as_fraction() for value in row)
+            if any(value < 0 for value in values):
+                raise ValueError("transition probabilities must be nonnegative")
+            if sum(values) != 1:
+                raise ValueError("each transition row must sum to one")
         all_states: list[int] = []
         for states, _ in self.classes:
             all_states.extend(states)
         if sorted(all_states) != list(range(len(all_states))):
             raise ValueError("classes must partition all state indices")
+        if len(all_states) != dimension:
+            raise ValueError("classes must partition the transition matrix states")
         if len(self.state_class) != len(all_states):
             raise ValueError("state_class must have one entry per state")
+        for class_index, (states, _) in enumerate(self.classes):
+            for state in states:
+                if self.state_class[state] != class_index:
+                    raise ValueError("state_class must match classes")
+        return self
+
+    @model_validator(mode="after")
+    def bind_decomposition(self) -> Self:  # noqa: C901
+        import networkx as nx
+
+        matrix = self.transition_matrix
+        dimension = len(matrix)
+        graph: nx.DiGraph[int] = nx.DiGraph()
+        graph.add_nodes_from(range(dimension))
+        for i in range(dimension):
+            for j in range(dimension):
+                if matrix[i][j].as_fraction() > 0:
+                    graph.add_edge(i, j)
+        sccs = list(nx.strongly_connected_components(graph))
+        condensation = nx.condensation(graph, sccs)
+        scc_list = list(nx.topological_sort(condensation))
+        expected_classes: list[tuple[tuple[int, ...], bool]] = []
+        expected_state_class = [0] * dimension
+        for scc_idx, scc_node in enumerate(scc_list):
+            scc = sccs[scc_node] if isinstance(scc_node, int) else scc_node
+            states = tuple(sorted(scc))
+            is_closed = True
+            for state in states:
+                for target in range(dimension):
+                    if target not in scc and matrix[state][target].as_fraction() > 0:
+                        is_closed = False
+                        break
+                if not is_closed:
+                    break
+            expected_classes.append((states, is_closed))
+            for state in states:
+                expected_state_class[state] = scc_idx
+        if self.classes != tuple(expected_classes):
+            raise ValueError(
+                "classes must be the exact SCC decomposition of the transition matrix"
+            )
+        if self.state_class != tuple(expected_state_class):
+            raise ValueError("state_class must match the SCC decomposition")
         return self

@@ -28,6 +28,16 @@
       "complexity": 23
     },
     {
+      "path": "src/jacobian/math/markov_chain/_models.py",
+      "symbol": "bind_decomposition",
+      "complexity": 12
+    },
+    {
+      "path": "src/jacobian/math/markov_chain/_models.py",
+      "symbol": "require_partition_validity",
+      "complexity": 12
+    },
+    {
       "path": "src/jacobian/math/root_systems/_operations.py",
       "symbol": "_weyl_group_data",
       "complexity": 11

@@ -13,6 +13,16 @@
       "complexity": 13
     },
     {
+      "path": "src/jacobian/math/majorization/_operations.py",
+      "symbol": "compute_birkhoff_decomposition",
+      "complexity": 11
+    },
+    {
+      "path": "src/jacobian/math/majorization/_operations.py",
+      "symbol": "compute_t_transform_sequence",
+      "complexity": 23
+    },
+    {
       "path": "tests/math/graphs/test_graph_isomorphism.py",
       "symbol": "_is_mapping_valid_isomorphism",
       "complexity": 13

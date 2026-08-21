@@ -8,8 +8,10 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.petri_nets.values import (
+    MAX_REACHABILITY_STATES,
     Marking,
     PetriNet,
+    require_reachability_bounds,
 )
 
 
@@ -52,7 +54,7 @@ class FireTransitionResult(StrictModel):
     """Result of firing a transition."""
 
     fired: bool
-    new_marking: tuple[int, ...] = Field(default=())
+    new_marking: Marking = Field(default=Marking(tokens=()))
 
 
 class IncidenceMatrixRequest(StrictModel):
@@ -75,12 +77,13 @@ class ReachabilityRequest(StrictModel):
 
     net: PetriNet
     initial_marking: Marking
-    max_states: int = Field(default=10000, ge=1, le=100000)
+    max_states: int = Field(default=10000, ge=1, le=MAX_REACHABILITY_STATES)
 
     @model_validator(mode="after")
     def require_valid_marking_size(self) -> Self:
         if len(self.initial_marking.tokens) != self.net.place_count:
             raise ValueError("marking length must match place_count")
+        require_reachability_bounds(self.net, self.max_states)
         return self
 
 

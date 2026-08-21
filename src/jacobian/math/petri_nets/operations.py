@@ -36,6 +36,8 @@ def fire_transition(
     transition: int,
 ) -> tuple[bool, tuple[int, ...]]:
     """Fire a transition. Returns (success, new_marking)."""
+    if not 0 <= transition < net.transition_count:
+        raise ValueError("transition index out of range")
     for p in range(net.place_count):
         if marking.tokens[p] < net.pre[p][transition]:
             return (False, marking.tokens)

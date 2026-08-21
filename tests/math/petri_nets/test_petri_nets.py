@@ -86,7 +86,7 @@ class TestFireTransition:
             FireTransitionRequest(net=net, marking=marking, transition=0)
         )
         assert result.fired is True
-        assert result.new_marking == (1, 0)
+        assert result.new_marking.tokens == (1, 0)
 
     def test_fire_disabled(self):
         net = _simple_net()
@@ -95,7 +95,7 @@ class TestFireTransition:
             FireTransitionRequest(net=net, marking=marking, transition=0)
         )
         assert result.fired is False
-        assert result.new_marking == (0, 0)
+        assert result.new_marking.tokens == (0, 0)
 
     def test_fire_cyclic(self):
         net = _token_passing_net()
@@ -104,7 +104,7 @@ class TestFireTransition:
             FireTransitionRequest(net=net, marking=marking, transition=0)
         )
         assert result.fired is True
-        assert result.new_marking == (0, 1)
+        assert result.new_marking.tokens == (0, 1)
 
 
 # ---------------------------------------------------------------------------

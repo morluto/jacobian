@@ -12,6 +12,8 @@ def test_exact_public_api_symbols() -> None:
         "PetriNet",
         "compute_incidence_matrix",
         "enabled_transitions",
+        "find_minimal_siphons",
+        "find_minimal_traps",
         "fire_transition",
         "reachability_graph",
     )

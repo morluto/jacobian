@@ -50,6 +50,26 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
+    OperationAdmission(
+        "poset.closure.compute",
+        AdmissionDecision.KEEP,
+        "exact lower or upper closure of a bounded poset subset",
+    ),
+    OperationAdmission(
+        "poset.zeta_transform.compute",
+        AdmissionDecision.KEEP,
+        "exact incidence-algebra zeta transform on a bounded poset",
+    ),
+    OperationAdmission(
+        "poset.incidence_convolution.compute",
+        AdmissionDecision.KEEP,
+        "exact bounded incidence-algebra convolution",
+    ),
+    OperationAdmission(
+        "poset.antichain_profile.compute",
+        AdmissionDecision.KEEP,
+        "exact bounded antichain profile and maximum witnesses",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

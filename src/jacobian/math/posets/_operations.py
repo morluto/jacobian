@@ -381,7 +381,7 @@ def _dual(request: PosetDualRequest) -> PosetDualResult:
     sorted_covers = tuple(sorted((p.lower, p.upper) for p in reversed_covers))
     order_pairs_obj = tuple(OrderedPair(lower=lo, upper=hi) for lo, hi in sorted_pairs)
     cover_pairs_obj = tuple(OrderedPair(lower=lo, upper=hi) for lo, hi in sorted_covers)
-    if poset.graded and poset.ranks:
+    if poset.graded and poset.ranks is not None:
         height = max(r.rank for r in poset.ranks)
         dual_ranks = tuple(
             type(poset.ranks[0])(element=r.element, rank=height - r.rank)  # type: ignore[arg-type]
@@ -661,28 +661,6 @@ FINITE_POSET_OPERATIONS: MathTools = (
                     "subset": {"elements": ["1"]},
                     "closure_type": "LOWER",
                 },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="poset.dual.compute",
-        version="1",
-        title="Compute the dual (opposite) of a finite poset",
-        description="Return the dual poset where all order relations are reversed.",
-        request_type=PosetDualRequest,
-        result_type=PosetDualResult,
-        run=_dual,
-        tags=(
-            "poset",
-            "dual",
-            "opposite",
-            "exact",
-        ),
-        examples=(
-            example(
-                "materialized_diamond",
-                "Compute the dual of the canonical diamond poset.",
-                {"poset": _MATERIALIZED_DIAMOND},
             ),
         ),
     ),

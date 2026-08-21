@@ -22,6 +22,7 @@ from jacobian.math.petri_nets.operations import (
     fire_transition,
     reachability_graph,
 )
+from jacobian.math.petri_nets.values import Marking
 
 __all__ = [
     "compute_enabled_transitions",
@@ -44,7 +45,10 @@ def compute_fire_transition(request: FireTransitionRequest) -> FireTransitionRes
     success, new_marking = fire_transition(
         request.net, request.marking, request.transition
     )
-    return FireTransitionResult(fired=success, new_marking=new_marking)
+    return FireTransitionResult(
+        fired=success,
+        new_marking=Marking(tokens=new_marking),
+    )
 
 
 def compute_incidence(request: IncidenceMatrixRequest) -> IncidenceMatrixResult:

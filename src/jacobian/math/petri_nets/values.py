@@ -12,6 +12,10 @@ MAX_PETRI_PLACES = 64
 MAX_PETRI_TRANSITIONS = 64
 MAX_PETRI_MARKING = 1000
 MAX_PETRI_ARC_WEIGHT = 1000
+MAX_REACHABILITY_STATES = 100_000
+MAX_REACHABILITY_STATE_TOKEN_CELLS = 100_000
+MAX_REACHABILITY_FIRING_RECORDS = 100_000
+MAX_REACHABILITY_EXPLORATION_WORK = 1_000_000
 
 
 class PetriNet(StrictModel):
@@ -64,12 +68,30 @@ class FiringSequence(StrictModel):
     transitions: tuple[int, ...] = Field(default=())
 
 
+def require_reachability_bounds(net: PetriNet, max_states: int) -> None:
+    """Admit BFS work jointly with state, place, and transition dimensions."""
+    state_cells = max_states * net.place_count
+    firing_records = max_states * net.transition_count
+    exploration_work = 2 * firing_records * net.place_count
+    if state_cells > MAX_REACHABILITY_STATE_TOKEN_CELLS:
+        raise ValueError("reachability state-token cells exceed the work bound")
+    if firing_records > MAX_REACHABILITY_FIRING_RECORDS:
+        raise ValueError("reachability firing records exceed the work bound")
+    if exploration_work > MAX_REACHABILITY_EXPLORATION_WORK:
+        raise ValueError("reachability exploration exceeds the work bound")
+
+
 __all__ = [
     "MAX_PETRI_ARC_WEIGHT",
     "MAX_PETRI_MARKING",
     "MAX_PETRI_PLACES",
     "MAX_PETRI_TRANSITIONS",
+    "MAX_REACHABILITY_EXPLORATION_WORK",
+    "MAX_REACHABILITY_FIRING_RECORDS",
+    "MAX_REACHABILITY_STATES",
+    "MAX_REACHABILITY_STATE_TOKEN_CELLS",
     "FiringSequence",
     "Marking",
     "PetriNet",
+    "require_reachability_bounds",
 ]

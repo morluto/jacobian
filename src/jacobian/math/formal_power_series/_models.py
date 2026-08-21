@@ -17,7 +17,6 @@ from jacobian.math._rational_height import RationalHeight, sum_heights
 MAX_TRUNCATION_ORDER = 512
 MAX_RATIONAL_DIGITS = 256
 MAX_RESULT_RATIONAL_DIGITS = 4_096
-MAX_RESULT_BYTES = 10 * 1024 * 1024
 MAX_POWER_EXPONENT = 1_000
 
 CoefficientHeight = RationalHeight | None
@@ -133,6 +132,17 @@ def _require_height(height: RationalHeight, operation: str) -> None:
             f"{operation} coefficient growth exceeds the "
             f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
         )
+
+
+def _require_zero_residual(
+    coefficients: tuple[CanonicalRational, ...], order: int, operation: str
+) -> None:
+    if len(coefficients) != order:
+        raise ValueError(
+            f"{operation} residual must contain exactly {order} coefficients"
+        )
+    if any(value.num != "0" for value in coefficients):
+        raise ValueError(f"{operation} residual must be identically zero")
 
 
 def _inverse_height(series: InputTruncatedSeries) -> RationalHeight:
@@ -318,6 +328,12 @@ class SeriesMultiplyResult(StrictModel):
     residual_congruence: Literal["EXACT_MOD_X_TO_N"] = "EXACT_MOD_X_TO_N"
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
+    @model_validator(mode="after")
+    def require_exact_convolution_ledger(self) -> Self:
+        if self.convolution_ledger != self.result.coefficients:
+            raise ValueError("convolution ledger must equal the result coefficients")
+        return self
+
 
 class SeriesScalarMultiplyRequest(StrictModel):
     series: InputTruncatedSeries
@@ -425,6 +441,15 @@ class SeriesInverseResult(StrictModel):
     )
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
+    @model_validator(mode="after")
+    def require_zero_residual(self) -> Self:
+        _require_zero_residual(
+            self.residual_coefficients,
+            self.result.truncation_order,
+            "inverse",
+        )
+        return self
+
 
 # ---------------------------------------------------------------------------
 # Divide
@@ -440,6 +465,15 @@ class SeriesDivideResult(StrictModel):
         description="B(x) Q(x) - A(x) coefficients (must all be zero).",
     )
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+    @model_validator(mode="after")
+    def require_zero_residual(self) -> Self:
+        _require_zero_residual(
+            self.residual_coefficients,
+            self.quotient.truncation_order,
+            "division",
+        )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -546,6 +580,13 @@ class SeriesReversionResult(StrictModel):
     left_residual: tuple[CanonicalRational, ...]
     right_residual: tuple[CanonicalRational, ...]
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+    @model_validator(mode="after")
+    def require_zero_residuals(self) -> Self:
+        order = self.result.truncation_order
+        _require_zero_residual(self.left_residual, order, "left reversion")
+        _require_zero_residual(self.right_residual, order, "right reversion")
+        return self
 
 
 # ---------------------------------------------------------------------------

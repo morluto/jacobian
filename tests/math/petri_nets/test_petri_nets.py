@@ -121,8 +121,9 @@ class TestFireTransition:
         result = compute_fire_transition(
             FireTransitionRequest(net=net, marking=marking, transition=0)
         )
-        assert result.fired is True
-        assert result.new_marking == (1, 0)
+        assert result.status == "FIRED"
+        assert result.new_marking == Marking(tokens=(1, 0))
+        assert result.envelope_escape is None
 
     def test_fire_disabled(self):
         net = _simple_net()
@@ -130,8 +131,9 @@ class TestFireTransition:
         result = compute_fire_transition(
             FireTransitionRequest(net=net, marking=marking, transition=0)
         )
-        assert result.fired is False
-        assert result.new_marking == (0, 0)
+        assert result.status == "NOT_ENABLED"
+        assert result.new_marking == Marking(tokens=(0, 0))
+        assert result.envelope_escape is None
 
     def test_fire_cyclic(self):
         net = _token_passing_net()
@@ -139,8 +141,28 @@ class TestFireTransition:
         result = compute_fire_transition(
             FireTransitionRequest(net=net, marking=marking, transition=0)
         )
-        assert result.fired is True
-        assert result.new_marking == (0, 1)
+        assert result.status == "FIRED"
+        assert result.new_marking == Marking(tokens=(0, 1))
+        assert result.envelope_escape is None
+
+    def test_fire_reports_successor_outside_marking_envelope(self):
+        net = PetriNet(
+            place_count=1,
+            transition_count=1,
+            pre=((0,),),
+            post=((MAX_PETRI_ARC_WEIGHT,),),
+        )
+        result = compute_fire_transition(
+            FireTransitionRequest(
+                net=net,
+                marking=Marking(tokens=(MAX_PETRI_MARKING,)),
+                transition=0,
+            )
+        )
+
+        assert result.status == "ESCAPES_DECLARED_ENVELOPE"
+        assert result.new_marking is None
+        assert result.envelope_escape == (2 * MAX_PETRI_MARKING,)
 
 
 # ---------------------------------------------------------------------------

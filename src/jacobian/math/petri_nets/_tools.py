@@ -61,9 +61,9 @@ PETRI_NET_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "petri_net.fire_transition.compute",
         "Fire one transition in a Petri net",
-        "Fire a single transition at the given marking and return whether it "
-        "succeeded and the resulting marking. If the transition is not "
-        "enabled, it does not fire.",
+        "Fire a single transition at the given marking. Return the canonical "
+        "resulting marking, report that the transition is not enabled, or "
+        "return the exact successor when it leaves the declared envelope.",
         FireTransitionRequest,
         FireTransitionResult,
         compute_fire_transition,

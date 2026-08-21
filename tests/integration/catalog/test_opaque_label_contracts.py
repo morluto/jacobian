@@ -69,3 +69,20 @@ def test_public_opaque_labels_remain_mathematical_labels(label: str) -> None:
     catalog = Catalog.open()
     for operation_id, payload in _payloads(label):
         invoke_operation(operation_id, payload, catalog)
+
+
+def test_kolmogorov_quotient_retains_long_labels_as_a_class() -> None:
+    left = "a" * 64
+    right = "b" * 64
+    result = invoke_operation(
+        "topology.finite.kolmogorov_quotient.compute",
+        {
+            "space": {
+                "points": [left, right],
+                "preorder": [[0, 1], [0, 1]],
+            }
+        },
+        Catalog.open(),
+    )
+
+    assert result.output["quotient_points"] == [[left, right]]

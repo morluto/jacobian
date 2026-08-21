@@ -20,6 +20,7 @@ from jacobian.math.petri_nets.operations import (
     fire_transition,
     reachability_graph,
 )
+from jacobian.math.petri_nets.values import MAX_PETRI_MARKING, Marking
 
 __all__ = [
     "compute_enabled_transitions",
@@ -41,7 +42,15 @@ def compute_fire_transition(request: FireTransitionRequest) -> FireTransitionRes
     success, new_marking = fire_transition(
         request.net, request.marking, request.transition
     )
-    return FireTransitionResult(fired=success, new_marking=new_marking)
+    if any(token > MAX_PETRI_MARKING for token in new_marking):
+        return FireTransitionResult(
+            status="ESCAPES_DECLARED_ENVELOPE",
+            envelope_escape=new_marking,
+        )
+    return FireTransitionResult(
+        status="FIRED" if success else "NOT_ENABLED",
+        new_marking=Marking(tokens=new_marking),
+    )
 
 
 def compute_incidence(request: IncidenceMatrixRequest) -> IncidenceMatrixResult:

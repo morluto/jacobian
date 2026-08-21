@@ -98,7 +98,7 @@ def kolmogorov_quotient(space: FiniteTopologicalSpace) -> dict[str, object]:
         nbhd_to_class.setdefault(key, []).append(i)
     classes = list(nbhd_to_class.values())
     quotient_points = tuple(
-        "|".join(space.points[idx] for idx in sorted(cls)) for cls in classes
+        tuple(space.points[idx] for idx in sorted(cls)) for cls in classes
     )
     class_map: dict[int, int] = {}
     for class_idx, cls in enumerate(classes):

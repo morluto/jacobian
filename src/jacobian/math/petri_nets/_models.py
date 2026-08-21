@@ -54,8 +54,24 @@ class FireTransitionRequest(StrictModel):
 class FireTransitionResult(StrictModel):
     """Result of firing a transition."""
 
-    fired: bool
-    new_marking: tuple[int, ...] = Field(default=())
+    status: Literal["FIRED", "NOT_ENABLED", "ESCAPES_DECLARED_ENVELOPE"]
+    new_marking: Marking | None = None
+    envelope_escape: tuple[int, ...] | None = None
+
+    @model_validator(mode="after")
+    def require_consistent_outcome(self) -> Self:
+        if self.status == "ESCAPES_DECLARED_ENVELOPE":
+            if self.new_marking is not None or self.envelope_escape is None:
+                raise ValueError(
+                    "envelope escape must carry only the successor witness"
+                )
+            if any(token < 0 for token in self.envelope_escape):
+                raise ValueError("envelope escape tokens must be nonnegative")
+            if all(token <= MAX_PETRI_MARKING for token in self.envelope_escape):
+                raise ValueError("envelope escape must contain an out-of-range token")
+        elif self.new_marking is None or self.envelope_escape is not None:
+            raise ValueError("ordinary firing outcomes must carry only a marking")
+        return self
 
 
 class IncidenceMatrixRequest(StrictModel):

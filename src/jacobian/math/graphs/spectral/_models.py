@@ -6,6 +6,7 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
 
@@ -40,3 +41,22 @@ class GraphSpectrumResult(StrictModel):
     eigenvalues: tuple[str, ...]
     multiplicities: tuple[int, ...]
     convention: Literal["SYMPY_EIGENVALS"] = "SYMPY_EIGENVALS"
+
+
+class GraphCharacteristicPolynomialResult(StrictModel):
+    """The exact monic characteristic polynomial of a graph matrix over QQ."""
+
+    coefficients: tuple[CanonicalRational, ...] = Field(
+        min_length=1,
+        description=(
+            "Monic polynomial coefficients in increasing degree over QQ."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_monic(self) -> Self:
+        if not self.coefficients:
+            raise ValueError("characteristic polynomial must have coefficients")
+        if self.coefficients[-1].as_fraction() != 1:
+            raise ValueError("characteristic polynomial must be monic")
+        return self

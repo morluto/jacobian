@@ -46,21 +46,26 @@ class ChristoffelDarbouxKernel:
 
 @dataclass(frozen=True, slots=True)
 class GaussianQuadrature:
-    """Gaussian quadrature nodes and weights from the Golub-Welsch algorithm."""
+    """Gaussian quadrature nodes and weights from the Golub-Welsch algorithm.
 
-    nodes: tuple[float, ...]
-    weights: tuple[float, ...]
+    The Golub-Welsch eigenvalue decomposition runs in IEEE doubles; each
+    returned value is the exact dyadic rational image of one computed double,
+    so results stay canonical and reconstructible without JSON floats.
+    """
+
+    nodes: tuple[Fraction, ...]
+    weights: tuple[Fraction, ...]
 
 
 __all__ = [
-    "ChristoffelDarbouxKernel",
-    "GaussianQuadrature",
-    "HankelMatrix",
-    "JacobiMatrix",
     "MAX_HANKEL_DIMENSION",
     "MAX_MOMENTS",
     "MAX_POLYNOMIAL_COUNT",
     "MAX_QUADRATURE_POINTS",
     "MAX_RECURRENCE_ORDER",
+    "ChristoffelDarbouxKernel",
+    "GaussianQuadrature",
+    "HankelMatrix",
+    "JacobiMatrix",
     "RecurrenceCoefficients",
 ]

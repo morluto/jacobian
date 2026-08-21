@@ -36,20 +36,20 @@ class TestRootSystemData:
         result = compute_root_system_data(CartanMatrixRequest(matrix=A2))
         assert result.rank == 2
         assert result.num_positive_roots == 3
-        assert result.coxeter_number == 3
-        assert result.highest_root == (1, 1)
+        assert result.components[0].coxeter_number == 3
+        assert result.components[0].highest_root == (1, 1)
 
     def test_a3_positive_roots(self) -> None:
         result = compute_root_system_data(CartanMatrixRequest(matrix=A3))
         assert result.rank == 3
         assert result.num_positive_roots == 6
-        assert result.coxeter_number == 4
+        assert result.components[0].coxeter_number == 4
 
     def test_g2_positive_roots(self) -> None:
         result = compute_root_system_data(CartanMatrixRequest(matrix=G2))
         assert result.rank == 2
         assert result.num_positive_roots == 6
-        assert result.coxeter_number == 6
+        assert result.components[0].coxeter_number == 6
 
     def test_negative_roots(self) -> None:
         result = compute_root_system_data(CartanMatrixRequest(matrix=A2))

@@ -153,15 +153,11 @@ class SimpleReflectionRequest(StrictModel):
         n = len(self.matrix)
         if n < 1 or n > MAX_RANK:
             raise ValueError(f"rank must be between 1 and {MAX_RANK}")
-        for row in self.matrix:
-            if len(row) != n:
-                raise ValueError("Cartan matrix must be square")
-        if self.matrix[self.simple_index][self.simple_index] != 2:
-            raise ValueError("diagonal entries must be 2")
         if self.simple_index >= n:
             raise ValueError("simple_index out of range")
         if len(self.vector) != n:
             raise ValueError("vector length must match rank")
+        CartanMatrixRequest(matrix=self.matrix)
         return self
 
 
@@ -204,7 +200,10 @@ class WeylGroupDataResult(StrictModel):
     def bind_weyl_data(self) -> Self:
         from jacobian.math.root_systems._operations import _weyl_group_data
 
+        CartanMatrixRequest(matrix=self.matrix)
         order, longest, coxeter = _weyl_group_data([list(row) for row in self.matrix])
+        if self.rank != len(self.matrix):
+            raise ValueError("rank must match the Cartan matrix")
         if self.group_order != order:
             raise ValueError("group_order must be |W|")
         if self.longest_element != longest:

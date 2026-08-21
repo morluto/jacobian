@@ -70,7 +70,10 @@ def _reduce_step(
         # Find n such that |b + 2n*a| <= a
         # b' = b + 2n*a, we want -a <= b' <= a
         # n = round(-b / (2*a))
-        n = round(-b / (2 * a))
+        quotient, remainder = divmod(abs(b), 2 * a)
+        if remainder * 2 >= 2 * a:
+            quotient += 1
+        n = -quotient if b > 0 else quotient
         # T^n = [[1,n],[0,1]]
         new_b = b + 2 * n * a
         new_c = c + n * b + n * n * a

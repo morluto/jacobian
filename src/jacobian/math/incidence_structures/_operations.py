@@ -17,6 +17,7 @@ from jacobian.math.incidence_structures._models import (
     GramResult,
     IncidenceMatrixRequest,
     IncidenceMatrixResult,
+    IncidenceStructure,
     IntersectionsRequest,
     IntersectionsResult,
     LeviGraphRequest,
@@ -171,6 +172,11 @@ def compute_dual(request: DualRequest) -> DualResult:
     block_map = tuple((b, b) for b in block_ids)
 
     return DualResult(
+        incidence=IncidenceStructure(
+            points=dual_points,
+            block_ids=dual_block_ids,
+            blocks=tuple(dual_blocks),
+        ),
         points=dual_points,
         block_ids=dual_block_ids,
         blocks=tuple(dual_blocks),

@@ -108,6 +108,7 @@ class DualRequest(StrictModel):
 
 
 class DualResult(StrictModel):
+    incidence: IncidenceStructure
     points: tuple[str, ...]
     block_ids: tuple[str, ...]
     blocks: tuple[tuple[str, ...], ...]
@@ -141,6 +142,14 @@ class RestrictionRequest(StrictModel):
     points: tuple[str, ...] = Field(default_factory=tuple)
     block_ids: tuple[str, ...] = Field(default_factory=tuple)
 
+    @model_validator(mode="after")
+    def require_declared_subsets(self) -> Self:
+        if not set(self.points) <= set(self.incidence.points):
+            raise ValueError("points must be a subset of the incidence points")
+        if not set(self.block_ids) <= set(self.incidence.block_ids):
+            raise ValueError("block_ids must be a subset of the incidence block IDs")
+        return self
+
 
 class RestrictionResult(StrictModel):
     points: tuple[str, ...]
@@ -162,6 +171,8 @@ class DerivedResidualRequest(StrictModel):
     def require_valid_kind(self) -> Self:
         if self.kind not in ("derived", "residual"):
             raise ValueError("kind must be 'derived' or 'residual'")
+        if self.point not in self.incidence.points:
+            raise ValueError("point must be a declared point in the incidence structure")
         return self
 
 

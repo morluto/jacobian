@@ -105,7 +105,9 @@ def _det4(rows: tuple[tuple[Fraction, ...], ...]) -> Fraction:
     """Exact 4x4 determinant by cofactor expansion along the first row."""
     n = 4
 
-    def minor(matrix: tuple[tuple[Fraction, ...], ...], drop_col: int) -> tuple[tuple[Fraction, ...], ...]:
+    def minor(
+        matrix: tuple[tuple[Fraction, ...], ...], drop_col: int
+    ) -> tuple[tuple[Fraction, ...], ...]:
         return tuple(
             tuple(matrix[r][c] for c in range(n) if c != drop_col) for r in range(1, n)
         )
@@ -130,13 +132,16 @@ def _are_collinear(
     q: tuple[Fraction, ...],
     r: tuple[Fraction, ...],
 ) -> bool:
-    return _det3(
-        (
-            (p[0], p[1], Fraction(1)),
-            (q[0], q[1], Fraction(1)),
-            (r[0], r[1], Fraction(1)),
-        ),
-    ) == 0
+    return (
+        _det3(
+            (
+                (p[0], p[1], Fraction(1)),
+                (q[0], q[1], Fraction(1)),
+                (r[0], r[1], Fraction(1)),
+            ),
+        )
+        == 0
+    )
 
 
 def _are_concyclic(
@@ -152,7 +157,9 @@ def _are_concyclic(
     return _det4(rows) == 0
 
 
-def compute_collinear_triples(request: CollinearTriplesRequest) -> IncidenceSearchResult:
+def compute_collinear_triples(
+    request: CollinearTriplesRequest,
+) -> IncidenceSearchResult:
     """Find a witness collinear triple, or establish none exists."""
     from itertools import combinations
 
@@ -171,7 +178,9 @@ def compute_collinear_triples(request: CollinearTriplesRequest) -> IncidenceSear
     )
 
 
-def compute_concyclic_quadruples(request: ConcyclicQuadruplesRequest) -> IncidenceSearchResult:
+def compute_concyclic_quadruples(
+    request: ConcyclicQuadruplesRequest,
+) -> IncidenceSearchResult:
     """Find a witness concyclic quadruple, or establish none exists."""
     from itertools import combinations
 

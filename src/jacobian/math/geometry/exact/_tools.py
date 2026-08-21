@@ -74,10 +74,72 @@ UNIT_SQUARE = {
 }
 
 
-
-NO_COLLINEAR_GENERAL_POSITION = {'configuration': {'points': [{'label': 'a', 'coordinates': [{'num': '-1', 'den': '1'}, {'num': '0', 'den': '1'}]}, {'label': 'b', 'coordinates': [{'num': '1', 'den': '1'}, {'num': '0', 'den': '1'}]}, {'label': 'c', 'coordinates': [{'num': '0', 'den': '1'}, {'num': '2', 'den': '1'}]}, {'label': 'd', 'coordinates': [{'num': '0', 'den': '1'}, {'num': '-2', 'den': '1'}]}]}}
-HAS_COLLINEAR_TRIPLE = {'configuration': {'points': [{'label': 'a', 'coordinates': [{'num': '0', 'den': '1'}, {'num': '0', 'den': '1'}]}, {'label': 'b', 'coordinates': [{'num': '2', 'den': '1'}, {'num': '0', 'den': '1'}]}, {'label': 'c', 'coordinates': [{'num': '0', 'den': '1'}, {'num': '2', 'den': '1'}]}, {'label': 'd', 'coordinates': [{'num': '0', 'den': '1'}, {'num': '-2', 'den': '1'}]}]}}
-HAS_CONCYCLIC_QUADRUPLE = {'configuration': {'points': [{'label': 'a', 'coordinates': [{'num': '1', 'den': '1'}, {'num': '0', 'den': '1'}]}, {'label': 'b', 'coordinates': [{'num': '0', 'den': '1'}, {'num': '1', 'den': '1'}]}, {'label': 'c', 'coordinates': [{'num': '-1', 'den': '1'}, {'num': '0', 'den': '1'}]}, {'label': 'd', 'coordinates': [{'num': '0', 'den': '1'}, {'num': '-1', 'den': '1'}]}]}}
+NO_COLLINEAR_GENERAL_POSITION = {
+    "configuration": {
+        "points": [
+            {
+                "label": "a",
+                "coordinates": [{"num": "-1", "den": "1"}, {"num": "0", "den": "1"}],
+            },
+            {
+                "label": "b",
+                "coordinates": [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+            },
+            {
+                "label": "c",
+                "coordinates": [{"num": "0", "den": "1"}, {"num": "2", "den": "1"}],
+            },
+            {
+                "label": "d",
+                "coordinates": [{"num": "0", "den": "1"}, {"num": "-2", "den": "1"}],
+            },
+        ]
+    }
+}
+HAS_COLLINEAR_TRIPLE = {
+    "configuration": {
+        "points": [
+            {
+                "label": "a",
+                "coordinates": [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
+            },
+            {
+                "label": "b",
+                "coordinates": [{"num": "2", "den": "1"}, {"num": "0", "den": "1"}],
+            },
+            {
+                "label": "c",
+                "coordinates": [{"num": "0", "den": "1"}, {"num": "2", "den": "1"}],
+            },
+            {
+                "label": "d",
+                "coordinates": [{"num": "0", "den": "1"}, {"num": "-2", "den": "1"}],
+            },
+        ]
+    }
+}
+HAS_CONCYCLIC_QUADRUPLE = {
+    "configuration": {
+        "points": [
+            {
+                "label": "a",
+                "coordinates": [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+            },
+            {
+                "label": "b",
+                "coordinates": [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+            },
+            {
+                "label": "c",
+                "coordinates": [{"num": "-1", "den": "1"}, {"num": "0", "den": "1"}],
+            },
+            {
+                "label": "d",
+                "coordinates": [{"num": "0", "den": "1"}, {"num": "-1", "den": "1"}],
+            },
+        ]
+    }
+}
 
 EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(

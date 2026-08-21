@@ -262,7 +262,9 @@ class IdealSaturationResult(StrictModel):
             or self.backend_version is not None
             or not self.detail
         ):
-            raise ValueError("failed saturation computation requires only a safe detail")
+            raise ValueError(
+                "failed saturation computation requires only a safe detail"
+            )
         return self
 
 

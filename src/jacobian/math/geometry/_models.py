@@ -580,10 +580,14 @@ class ForbiddenPatternsResult(StrictModel):
             raise ValueError("exactly a collinear triple carries one witness")
         if self.has_concyclic_quadruple is (self.concyclic_quadruple is None):
             raise ValueError("exactly a concyclic quadruple carries one witness")
-        if self.collinear_triple is not None:
-            if self.collinear_triple.third >= self.point_count:
-                raise ValueError("collinear triple index exceeds configuration")
-        if self.concyclic_quadruple is not None:
-            if self.concyclic_quadruple.fourth >= self.point_count:
-                raise ValueError("concyclic quadruple index exceeds configuration")
+        if (
+            self.collinear_triple is not None
+            and self.collinear_triple.third >= self.point_count
+        ):
+            raise ValueError("collinear triple index exceeds configuration")
+        if (
+            self.concyclic_quadruple is not None
+            and self.concyclic_quadruple.fourth >= self.point_count
+        ):
+            raise ValueError("concyclic quadruple index exceeds configuration")
         return self

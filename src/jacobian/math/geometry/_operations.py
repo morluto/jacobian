@@ -421,6 +421,7 @@ def convex_hull_points(request: PointSetRequest) -> GeometryConvexHullResult:
         points = tuple(cast(Polygon, hull).vertices)
     return GeometryConvexHullResult(points=_canonical_points(points))
 
+
 def circle_inversion(request: CircleInversionRequest) -> GeometryPointResult:
     """Invert one rational planar point in a circle.
 
@@ -442,4 +443,3 @@ def circle_inversion(request: CircleInversionRequest) -> GeometryPointResult:
         y=CanonicalRational.from_fraction(center.y.as_fraction() + scale * dy),
     )
     return GeometryPointResult(point=inverted)
-

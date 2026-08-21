@@ -184,8 +184,6 @@ def compute_ordered_difference_profile(
             if i == j:
                 continue
             diff = tuple(points[i][k] - points[j][k] for k in range(dim))
-            if all(d == 0 for d in diff):
-                continue
             classes.setdefault(diff, []).append(
                 OrderedDifferencePair(minuend_index=i, subtrahend_index=j),
             )
@@ -210,6 +208,7 @@ def compute_ordered_difference_profile(
     total_pairs = sum(len(cls.pairs) for cls in result_classes)
     max_mult = max((len(cls.pairs) for cls in result_classes), default=0)
     return OrderedDifferenceProfileResult(
+        vectors=vectors,
         dimension=dim,
         set_size=n,
         classes=result_classes,

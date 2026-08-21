@@ -1,15 +1,25 @@
 """Tests for additive combinatorics operations."""
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.additive_combinatorics._models import (
     AdditiveEnergyRequest,
     DirectSumPredicateRequest,
     FiniteIntegerSet,
+    IntegerVector,
+    IntegerVectorSet,
+    OrderedDifferenceClass,
+    OrderedDifferencePair,
+    OrderedDifferenceProfileRequest,
+    OrderedDifferenceProfileResult,
     RepresentationProfileRequest,
     SumsetCardinalityRequest,
 )
 from jacobian.math.additive_combinatorics._operations import (
     compute_additive_energy,
+    compute_ordered_difference_profile,
     compute_representation_profile,
     compute_sumset_cardinality,
     decide_direct_sum_predicate,
@@ -174,12 +184,6 @@ class TestDirectSumPredicate:
 
 class TestOrderedDifferenceProfile:
     def _req(self, vecs):
-        from jacobian.math.additive_combinatorics._models import (
-            IntegerVector,
-            IntegerVectorSet,
-            OrderedDifferenceProfileRequest,
-        )
-
         return OrderedDifferenceProfileRequest(
             vectors=IntegerVectorSet(
                 vectors=tuple(
@@ -189,17 +193,14 @@ class TestOrderedDifferenceProfile:
         )
 
     def test_rectangle_repeated_difference(self):
-        from jacobian.math.additive_combinatorics._operations import (
-            compute_ordered_difference_profile,
-        )
-
-        result = compute_ordered_difference_profile(
-            self._req([(0, 0), (1, 0), (1, 1), (0, 1)]),
-        )
+        request = self._req([(0, 0), (1, 0), (1, 1), (0, 1)])
+        result = compute_ordered_difference_profile(request)
+        assert result.vectors == request.vectors
         assert result.set_size == 4
         assert result.ordered_pair_count == 12  # 4 * 3
         assert result.has_repeated_difference
         assert result.max_multiplicity == 2
+        assert result.first_repeated_difference == ("-1", "0")
         # The difference (1,0) is realized by two ordered pairs.
         diff_10 = [c for c in result.classes if tuple(c.difference) == ("1", "0")]
         assert len(diff_10) == 1
@@ -207,10 +208,6 @@ class TestOrderedDifferenceProfile:
         assert {p.minuend_index for p in diff_10[0].pairs} == {1, 2}
 
     def test_triangle_is_sidon(self):
-        from jacobian.math.additive_combinatorics._operations import (
-            compute_ordered_difference_profile,
-        )
-
         result = compute_ordered_difference_profile(
             self._req([(0, 0), (1, 0), (0, 1)]),
         )
@@ -222,10 +219,6 @@ class TestOrderedDifferenceProfile:
         assert result.max_multiplicity == 1
 
     def test_one_dimension_agrees_with_sidon(self):
-        from jacobian.math.additive_combinatorics._operations import (
-            compute_ordered_difference_profile,
-        )
-
         # A 1D Sidon set {0,1,3} has all ordered differences distinct.
         result = compute_ordered_difference_profile(
             self._req([(0,), (1,), (3,)]),
@@ -237,10 +230,6 @@ class TestOrderedDifferenceProfile:
         assert diffs == {("1",), ("3",), ("2",), ("-1",), ("-3",), ("-2",)}
 
     def test_translation_invariance(self):
-        from jacobian.math.additive_combinatorics._operations import (
-            compute_ordered_difference_profile,
-        )
-
         base = compute_ordered_difference_profile(
             self._req([(0, 0), (1, 0), (0, 1)]),
         )
@@ -252,10 +241,6 @@ class TestOrderedDifferenceProfile:
         assert base_diffs == shifted_diffs
 
     def test_sign_reversal(self):
-        from jacobian.math.additive_combinatorics._operations import (
-            compute_ordered_difference_profile,
-        )
-
         result = compute_ordered_difference_profile(
             self._req([(0, 0), (1, 0), (0, 1), (1, 1)]),
         )
@@ -266,13 +251,6 @@ class TestOrderedDifferenceProfile:
             assert diffs[neg] == count
 
     def test_rejects_duplicate_vectors(self):
-        import pytest
-
-        from jacobian.math.additive_combinatorics._models import (
-            IntegerVector,
-            IntegerVectorSet,
-        )
-
         with pytest.raises(ValueError, match="distinct"):
             IntegerVectorSet(
                 vectors=(
@@ -282,13 +260,6 @@ class TestOrderedDifferenceProfile:
             )
 
     def test_rejects_mixed_dimensions(self):
-        import pytest
-
-        from jacobian.math.additive_combinatorics._models import (
-            IntegerVector,
-            IntegerVectorSet,
-        )
-
         with pytest.raises(ValueError, match="dimension"):
             IntegerVectorSet(
                 vectors=(
@@ -296,3 +267,105 @@ class TestOrderedDifferenceProfile:
                     IntegerVector(coordinates=("0",)),
                 ),
             )
+
+    def test_result_replays_every_difference_from_source(self):
+        request = self._req([(0, 0), (1, 0), (1, 1), (0, 1)])
+        result = compute_ordered_difference_profile(request)
+        points = tuple(
+            tuple(int(c) for c in vec.coordinates) for vec in result.vectors.vectors
+        )
+        seen = set()
+        for cls in result.classes:
+            diff = tuple(int(c) for c in cls.difference)
+            for pair in cls.pairs:
+                replayed = tuple(
+                    points[pair.minuend_index][k] - points[pair.subtrahend_index][k]
+                    for k in range(result.dimension)
+                )
+                assert replayed == diff
+                seen.add((pair.minuend_index, pair.subtrahend_index))
+        n = result.set_size
+        assert seen == {(i, j) for i in range(n) for j in range(n) if i != j}
+        OrderedDifferenceProfileResult.model_validate(result.model_dump())
+
+    def test_result_rejects_forged_difference_independent_of_source(self):
+        vectors = IntegerVectorSet(
+            vectors=(
+                IntegerVector(coordinates=("0",)),
+                IntegerVector(coordinates=("1",)),
+            ),
+        )
+        with pytest.raises(ValidationError, match="source\\[minuend\\]"):
+            OrderedDifferenceProfileResult(
+                vectors=vectors,
+                dimension=1,
+                set_size=2,
+                classes=(
+                    OrderedDifferenceClass(
+                        difference=("-999",),
+                        pairs=(
+                            OrderedDifferencePair(minuend_index=0, subtrahend_index=1),
+                        ),
+                    ),
+                    OrderedDifferenceClass(
+                        difference=("999",),
+                        pairs=(
+                            OrderedDifferencePair(minuend_index=1, subtrahend_index=0),
+                        ),
+                    ),
+                ),
+                ordered_pair_count=2,
+                support_size=2,
+                max_multiplicity=1,
+                has_repeated_difference=False,
+                first_repeated_difference=None,
+            )
+
+    def test_result_rejects_mutated_source(self):
+        result = compute_ordered_difference_profile(
+            self._req([(0, 0), (1, 0), (1, 1), (0, 1)]),
+        )
+        payload = result.model_dump()
+        payload["vectors"]["vectors"][0]["coordinates"] = ["9", "9"]
+        with pytest.raises(ValidationError, match="source\\[minuend\\]"):
+            OrderedDifferenceProfileResult.model_validate(payload)
+
+    def test_result_rejects_false_repeated_flag(self):
+        result = compute_ordered_difference_profile(
+            self._req([(0, 0), (1, 0), (1, 1), (0, 1)]),
+        )
+        payload = result.model_dump()
+        payload["has_repeated_difference"] = False
+        payload["first_repeated_difference"] = None
+        with pytest.raises(ValidationError, match="max_multiplicity > 1"):
+            OrderedDifferenceProfileResult.model_validate(payload)
+
+    def test_result_rejects_wrong_repeated_witness(self):
+        result = compute_ordered_difference_profile(
+            self._req([(0, 0), (1, 0), (1, 1), (0, 1)]),
+        )
+        payload = result.model_dump()
+        later = next(
+            cls.difference
+            for cls in result.classes
+            if len(cls.pairs) > 1 and cls.difference != result.first_repeated_difference
+        )
+        payload["first_repeated_difference"] = list(later)
+        with pytest.raises(ValidationError, match="first class of multiplicity"):
+            OrderedDifferenceProfileResult.model_validate(payload)
+
+    def test_request_schema_publishes_coordinate_digit_bound(self):
+        schema = OrderedDifferenceProfileRequest.model_json_schema()
+        vector = schema["$defs"]["IntegerVector"]["properties"]["coordinates"]
+        assert "64 decimal digits" in vector["description"]
+        assert vector["items"]["pattern"] == r"^(?:0|-?[1-9][0-9]{0,63})$"
+        assert vector["items"]["maxLength"] == 65
+        assert "64 decimal digits" in schema["description"]
+
+    def test_rejects_65_digit_coordinate(self):
+        with pytest.raises(ValidationError):
+            IntegerVector(coordinates=("1" * 65,))
+
+    def test_accepts_64_digit_coordinate(self):
+        vector = IntegerVector(coordinates=("-" + "1" * 64,))
+        assert vector.coordinates == ("-" + "1" * 64,)

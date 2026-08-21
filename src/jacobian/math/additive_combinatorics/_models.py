@@ -175,8 +175,6 @@ class DirectSumPredicateResult(StrictModel):
         return self
 
 
-
-
 # ---------------------------------------------------------------------------
 # Ordered-difference profile for integer-vector sets
 # ---------------------------------------------------------------------------
@@ -298,11 +296,16 @@ class OrderedDifferenceProfileResult(StrictModel):
             raise ValueError(
                 "a repeated difference must supply a first repeated difference witness",
             )
-        if not self.has_repeated_difference and self.first_repeated_difference is not None:
+        if (
+            not self.has_repeated_difference
+            and self.first_repeated_difference is not None
+        ):
             raise ValueError(
                 "first_repeated_difference must be absent when no difference repeats",
             )
         return self
+
+
 __all__ = [
     "AdditiveEnergyRequest",
     "AdditiveEnergyResult",

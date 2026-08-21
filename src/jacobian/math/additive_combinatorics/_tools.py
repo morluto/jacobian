@@ -77,8 +77,25 @@ _DIRECT_SUM_EXAMPLE: dict[str, Any] = {
     "right": {"elements": ["0", "2"]},
 }
 
-_ORDERED_DIFFERENCE_RECT_EXAMPLE: dict[str, Any] = {'vectors': {'vectors': [{'coordinates': ['0', '0']}, {'coordinates': ['1', '0']}, {'coordinates': ['1', '1']}, {'coordinates': ['0', '1']}]}}
-_ORDERED_DIFFERENCE_SIDON_EXAMPLE: dict[str, Any] = {'vectors': {'vectors': [{'coordinates': ['0', '0']}, {'coordinates': ['1', '0']}, {'coordinates': ['0', '1']}]}}
+_ORDERED_DIFFERENCE_RECT_EXAMPLE: dict[str, Any] = {
+    "vectors": {
+        "vectors": [
+            {"coordinates": ["0", "0"]},
+            {"coordinates": ["1", "0"]},
+            {"coordinates": ["1", "1"]},
+            {"coordinates": ["0", "1"]},
+        ]
+    }
+}
+_ORDERED_DIFFERENCE_SIDON_EXAMPLE: dict[str, Any] = {
+    "vectors": {
+        "vectors": [
+            {"coordinates": ["0", "0"]},
+            {"coordinates": ["1", "0"]},
+            {"coordinates": ["0", "1"]},
+        ]
+    }
+}
 _DIRECT_SUM_NON_TILING_EXAMPLE: dict[str, Any] = {
     "modulus": 4,
     "left": {"elements": ["0", "1"]},

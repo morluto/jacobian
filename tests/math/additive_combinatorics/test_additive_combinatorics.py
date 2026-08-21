@@ -183,8 +183,7 @@ class TestOrderedDifferenceProfile:
         return OrderedDifferenceProfileRequest(
             vectors=IntegerVectorSet(
                 vectors=tuple(
-                    IntegerVector(coordinates=tuple(str(c) for c in v))
-                    for v in vecs
+                    IntegerVector(coordinates=tuple(str(c) for c in v)) for v in vecs
                 ),
             ),
         )
@@ -202,9 +201,7 @@ class TestOrderedDifferenceProfile:
         assert result.has_repeated_difference
         assert result.max_multiplicity == 2
         # The difference (1,0) is realized by two ordered pairs.
-        diff_10 = [
-            c for c in result.classes if tuple(c.difference) == ("1", "0")
-        ]
+        diff_10 = [c for c in result.classes if tuple(c.difference) == ("1", "0")]
         assert len(diff_10) == 1
         assert len(diff_10[0].pairs) == 2
         assert {p.minuend_index for p in diff_10[0].pairs} == {1, 2}

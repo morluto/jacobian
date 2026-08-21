@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.matroids._models import (
     LinearMatroid,
@@ -17,6 +18,11 @@ from jacobian.math.matroids._operations import (
 
 class TestMatroidRank:
     """Test matroid rank computation."""
+
+    def test_composite_prime_rejected(self):
+        """Composite moduli are not prime fields; Fermat inverses break."""
+        with pytest.raises(ValidationError, match="prime field modulus"):
+            LinearMatroid(prime=4, num_rows=1, columns=((0,), (1,)))
 
     def test_full_rank(self):
         """U(2,3) has rank 2."""

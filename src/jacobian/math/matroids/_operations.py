@@ -11,6 +11,28 @@ from jacobian.math.matroids._models import (
 )
 
 
+def _pivot_row(augmented: list[list[int]], col: int, start: int, prime: int) -> int | None:
+    """Find the first row at or below ``start`` with a nonzero pivot column."""
+    for r in range(start, len(augmented)):
+        if augmented[r][col] % prime != 0:
+            return r
+    return None
+
+
+def _scale_and_clear(
+    augmented: list[list[int]], rank: int, col: int, cols: int, prime: int
+) -> None:
+    """Scale the pivot row to a unit leading entry and clear its column."""
+    inv_pivot = pow(augmented[rank][col] % prime, prime - 2, prime)
+    for c in range(cols):
+        augmented[rank][c] = (augmented[rank][c] * inv_pivot) % prime
+    for r, row in enumerate(augmented):
+        factor = row[col] % prime
+        if r != rank and factor != 0:
+            for c in range(cols):
+                row[c] = (row[c] - factor * augmented[rank][c]) % prime
+
+
 def _gaussian_rank(matrix: list[list[int]], prime: int) -> int:
     """Compute the rank of a matrix over GF(prime) using Gaussian elimination."""
     rows = len(matrix)
@@ -21,24 +43,11 @@ def _gaussian_rank(matrix: list[list[int]], prime: int) -> int:
 
     rank = 0
     for col in range(cols):
-        pivot = None
-        for r in range(rank, rows):
-            if augmented[r][col] % prime != 0:
-                pivot = r
-                break
+        pivot = _pivot_row(augmented, col, rank, prime)
         if pivot is None:
             continue
         augmented[rank], augmented[pivot] = augmented[pivot], augmented[rank]
-        inv_pivot = pow(augmented[rank][col] % prime, prime - 2, prime)
-        for c in range(cols):
-            augmented[rank][c] = (augmented[rank][c] * inv_pivot) % prime
-        for r in range(rows):
-            if r == rank:
-                continue
-            factor = augmented[r][col] % prime
-            if factor != 0:
-                for c in range(cols):
-                    augmented[r][c] = (augmented[r][c] - factor * augmented[rank][c]) % prime
+        _scale_and_clear(augmented, rank, col, cols, prime)
         rank += 1
         if rank >= rows:
             break

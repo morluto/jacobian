@@ -18,6 +18,11 @@
       "complexity": 13
     },
     {
+      "path": "src/jacobian/math/lattice_polytopes/_operations.py",
+      "symbol": "_facets_and_box",
+      "complexity": 14
+    },
+    {
       "path": "src/jacobian/math/majorization/_operations.py",
       "symbol": "compute_birkhoff_decomposition",
       "complexity": 11

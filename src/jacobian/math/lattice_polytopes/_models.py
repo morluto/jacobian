@@ -209,7 +209,6 @@ class EnumerateLatticePointsResult(StrictModel):
     point_count: int = Field(ge=0)
     points: tuple[LatticePoint, ...]
     representation: str
-    evidence: str = "COMPUTED"
 
 
 class CountLatticePointsResult(StrictModel):
@@ -218,7 +217,6 @@ class CountLatticePointsResult(StrictModel):
     dimension: int = Field(ge=1)
     point_count: int = Field(ge=0)
     representation: str
-    evidence: str = "COMPUTED"
 
 
 __all__ = [

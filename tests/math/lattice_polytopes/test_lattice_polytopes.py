@@ -56,7 +56,6 @@ class TestEnumerate:
         )
         assert result.point_count == 4
         assert result.representation == "vertices"
-        assert result.evidence == "COMPUTED"
         coords = {p.coordinates for p in result.points}
         assert coords == {
             ("0", "0"),
@@ -170,7 +169,6 @@ class TestCount:
             )
         )
         assert result.point_count == 6
-        assert result.evidence == "COMPUTED"
 
     def test_count_and_enumerate_agree_on_cube(self) -> None:
         cube = tuple(

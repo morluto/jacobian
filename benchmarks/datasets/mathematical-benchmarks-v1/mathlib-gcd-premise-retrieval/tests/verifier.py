@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -66,10 +67,17 @@ def _elaborates(result: object, frozen: dict[str, object]) -> bool:
     application = " ".join((theorem, *arguments))
     source = f"{source_prefix}\n  exact {application}\n"
     source_path = Path("/logs/verifier/Submission.lean")
+    candidates: list[str] = list(_LEAN_CANDIDATES)
+    # ``setup-lean`` installs Lean via ``elan`` into ``$HOME/.elan/bin``,
+    # which is on ``PATH`` in CI host-validation but not in the fixed list
+    # above.  ``shutil.which`` resolves the active toolchain's shim.
+    which_lean = shutil.which("lean")
+    if which_lean:
+        candidates.append(which_lean)
     lean = next(
         (
             candidate
-            for candidate in _LEAN_CANDIDATES
+            for candidate in candidates
             if os.path.isfile(candidate)  # noqa: PTH113 -- Path is virtualized.
             and os.access(candidate, os.X_OK)
         ),

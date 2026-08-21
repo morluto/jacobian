@@ -129,6 +129,35 @@ class IdealRadicalMembershipRequest(StrictModel):
         return self
 
 
+class IdealSaturationRequest(StrictModel):
+    """Compute I : <d>^infinity for a bounded ideal and denominator ideal."""
+
+    ideal: RationalPolynomialIdeal = Field(
+        description=(
+            "An ideal in at most 6 variables with at most 16 generators and "
+            "256 aggregate terms; generator total degree is at most 12 and "
+            "coefficient components are at most 128 digits."
+        )
+    )
+    denominator: RationalPolynomialIdeal = Field(
+        description=(
+            "An ideal in the dividend's exact ordered ring, with the same "
+            "6-variable, 16-generator, 256-term, degree-12, and 128-digit bounds."
+        )
+    )
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
+
+    @model_validator(mode="after")
+    def require_backend_domain(self) -> Self:
+        _require_ideal_budget(self.ideal, label="ideal")
+        _require_ideal_budget(self.denominator, label="denominator ideal")
+        if self.ideal.variables != self.denominator.variables:
+            raise ValueError("saturation operands must use the same ordered ring")
+        return self
+
+
 class IdealQuotientRequest(StrictModel):
     """Compute ``(I : J)`` for bounded ideals in one ``QQ`` ring."""
 
@@ -214,6 +243,29 @@ class IdealQuotientResult(StrictModel):
         return self
 
 
+class IdealSaturationResult(StrictModel):
+    outcome: IdealExecutionOutcome
+    saturation: RationalPolynomialIdeal | None = None
+    method: Literal["SINGULAR_SATURATION"] = "SINGULAR_SATURATION"
+    backend_version: str | None = None
+    detail: str | None = None
+
+    @model_validator(mode="after")
+    def require_outcome_shape(self) -> Self:
+        if self.outcome == "COMPUTED":
+            if self.saturation is None or self.backend_version is None or self.detail:
+                raise ValueError(
+                    "computed saturation requires a value and backend version"
+                )
+        elif (
+            self.saturation is not None
+            or self.backend_version is not None
+            or not self.detail
+        ):
+            raise ValueError("failed saturation computation requires only a safe detail")
+        return self
+
+
 __all__ = [
     "MAX_OUTPUT_GENERATORS",
     "MAX_OUTPUT_TERMS",
@@ -225,4 +277,6 @@ __all__ = [
     "IdealRadicalMembershipResult",
     "IdealRadicalRequest",
     "IdealRadicalResult",
+    "IdealSaturationRequest",
+    "IdealSaturationResult",
 ]

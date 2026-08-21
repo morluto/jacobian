@@ -11,12 +11,12 @@ from jacobian.math.polynomials._conversions import (
 )
 from jacobian.math.polynomials.multivariate._models import (
     MultivariateDivisionRequest,
+    MultivariateDivisionResult,
     MultivariateFactorRequest,
     MultivariateFactorResult,
-    MultivariateIrreducibleFactor,
-    MultivariateDivisionResult,
     MultivariateGcdRequest,
     MultivariateGcdResult,
+    MultivariateIrreducibleFactor,
     MultivariatePolynomialValue,
     MultivariateResultantRequest,
     MultivariateResultantResult,
@@ -167,6 +167,7 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
     """Exact factorization over ``QQ[variables]`` via SymPy's ``factor_list``."""
 
     from fractions import Fraction
+
     from jacobian._exact import CanonicalRational
 
     source = rational_polynomial_to_sympy(request.polynomial)
@@ -177,6 +178,7 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
         coeff_fraction = Fraction(int(coeff_rational.p), int(coeff_rational.q))
     else:
         from sympy import Rational as SymPyRational
+
         coeff_value = SymPyRational(coefficient)
         coeff_fraction = Fraction(int(coeff_value.p), int(coeff_value.q))
     coefficient_value = CanonicalRational.from_fraction(coeff_fraction)
@@ -204,9 +206,7 @@ def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFacto
     )
     factors = tuple(factors_list)
 
-    reconstructed_poly = _result_polynomial(
-        reconstructed, request.polynomial.variables
-    )
+    reconstructed_poly = _result_polynomial(reconstructed, request.polynomial.variables)
 
     return MultivariateFactorResult(
         coefficient=coefficient_value,

@@ -93,9 +93,7 @@ def compute_reduced_laplacian(
     lap = full.laplacian
     sink_idx = vertices.index(request.sink)
     nonsink = [i for i in range(n) if i != sink_idx]
-    reduced = tuple(
-        tuple(lap[i][j] for j in nonsink) for i in nonsink
-    )
+    reduced = tuple(tuple(lap[i][j] for j in nonsink) for i in nonsink)
     return ReducedLaplacianResult(
         vertices=vertices,
         sink=request.sink,
@@ -187,7 +185,6 @@ def compute_stabilize(request: StabilizeRequest) -> StabilizeResult:
     """Stabilize a sink configuration and return the odometer."""
     sc = request.configuration
     vertices = sc.graph.vertices
-    n = len(vertices)
     sink_idx = vertices.index(sc.sink)
     adj = _adjacency(sc.graph)
     degrees = _degrees(sc.graph)
@@ -204,13 +201,13 @@ def compute_parallel_step(request: ParallelStepRequest) -> ParallelStepResult:
     """One simultaneous legal firing step on all unstable nonsink vertices."""
     sc = request.configuration
     vertices = sc.graph.vertices
-    n = len(vertices)
     sink_idx = vertices.index(sc.sink)
     adj = _adjacency(sc.graph)
     degrees = _degrees(sc.graph)
     config = list(sc.configuration)
-    fired = [v for i, v in enumerate(vertices)
-             if i != sink_idx and config[i] >= degrees[i]]
+    fired = [
+        v for i, v in enumerate(vertices) if i != sink_idx and config[i] >= degrees[i]
+    ]
     next_config = list(config)
     for v in fired:
         vi = vertices.index(v)
@@ -319,9 +316,7 @@ def _smith_normal_form_diagonal(
     cols = len(matrix[0]) if matrix else 0
     if rows == 0 or cols == 0:
         return ()
-    source = sympy.Matrix(
-        [[int(value) for value in row] for row in matrix]
-    )
+    source = sympy.Matrix([[int(value) for value in row] for row in matrix])
     diagonal, _left, _right = smith_normal_decomp(source, domain=sympy.ZZ)
     result = []
     for i in range(min(rows, cols)):
@@ -353,9 +348,7 @@ def _critical_group_factors(
 
 def compute_critical_group(request: CriticalGroupRequest) -> CriticalGroupResult:
     """Compute the critical group via SNF of the reduced Laplacian."""
-    nonsink_labels, invariant = _critical_group_factors(
-        request.graph, request.sink
-    )
+    nonsink_labels, invariant = _critical_group_factors(request.graph, request.sink)
     order = 1
     for d in invariant:
         order *= d
@@ -378,9 +371,7 @@ def compute_abel_jacobi(request: AbelJacobiRequest) -> AbelJacobiResult:
     n = len(vertices)
     sink_idx = vertices.index(request.sink)
     nonsink = [i for i in range(n) if i != sink_idx]
-    nonsink_labels, invariant = _critical_group_factors(
-        request.graph, request.sink
-    )
+    nonsink_labels, invariant = _critical_group_factors(request.graph, request.sink)
     nonsink_div = [request.divisor[i] for i in nonsink]
     # The coordinates: nonsink_div mod the invariant factors.
     # Only non-unit, non-zero factors matter for the quotient group.

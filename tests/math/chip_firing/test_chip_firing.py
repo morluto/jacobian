@@ -63,9 +63,7 @@ class TestReducedLaplacian:
         assert result.reduced_laplacian == ((2, -1), (-1, 1))
 
     def test_triangle_sink_b(self) -> None:
-        result = compute_reduced_laplacian(
-            ReducedLaplacianRequest(graph=C3, sink="b")
-        )
+        result = compute_reduced_laplacian(ReducedLaplacianRequest(graph=C3, sink="b"))
         assert result.reduced_laplacian == ((2, -1), (-1, 2))
 
     def test_invalid_sink(self) -> None:
@@ -133,7 +131,9 @@ class TestFireVector:
         )
         composed = compute_fire_vector(
             FireVectorRequest(
-                graph=GRAPH, divisor=div, firing_vector=[f1[i] + f2[i] for i in range(3)]
+                graph=GRAPH,
+                divisor=div,
+                firing_vector=[f1[i] + f2[i] for i in range(3)],
             )
         )
         assert r2.fired_divisor == composed.fired_divisor
@@ -162,9 +162,7 @@ class TestStabilize:
     def test_stabilization_idempotence(self) -> None:
         sc = SinkConfiguration(graph=GRAPH, sink="a", configuration=[0, 5, 0])
         r1 = compute_stabilize(StabilizeRequest(configuration=sc))
-        sc2 = SinkConfiguration(
-            graph=GRAPH, sink="a", configuration=list(r1.stable)
-        )
+        sc2 = SinkConfiguration(graph=GRAPH, sink="a", configuration=list(r1.stable))
         r2 = compute_stabilize(StabilizeRequest(configuration=sc2))
         assert r1.stable == r2.stable
         assert r2.total_firings == 0
@@ -274,11 +272,11 @@ class TestCriticalGroup:
         assert result.order == 3
 
     def test_cycle_c4(self) -> None:
-        C4 = {
+        c4 = {
             "vertices": ["a", "b", "c", "d"],
             "edges": [["a", "b"], ["b", "c"], ["c", "d"], ["d", "a"]],
         }
-        result = compute_critical_group(CriticalGroupRequest(graph=C4, sink="a"))
+        result = compute_critical_group(CriticalGroupRequest(graph=c4, sink="a"))
         assert result.invariant_factors == (1, 1, 4)
         assert result.order == 4
 
@@ -288,14 +286,18 @@ class TestCriticalGroup:
         assert result.order == 1
 
     def test_complete_k4(self) -> None:
-        K4 = {
+        k4 = {
             "vertices": ["a", "b", "c", "d"],
             "edges": [
-                ["a", "b"], ["a", "c"], ["a", "d"],
-                ["b", "c"], ["b", "d"], ["c", "d"],
+                ["a", "b"],
+                ["a", "c"],
+                ["a", "d"],
+                ["b", "c"],
+                ["b", "d"],
+                ["c", "d"],
             ],
         }
-        result = compute_critical_group(CriticalGroupRequest(graph=K4, sink="a"))
+        result = compute_critical_group(CriticalGroupRequest(graph=k4, sink="a"))
         assert result.order == 16
 
     def test_order_matches_spanning_tree_count(self) -> None:
@@ -314,17 +316,17 @@ class TestCriticalGroup:
             minor = Matrix([row[: n - 1] for row in lap[: n - 1]])
             result = compute_critical_group(
                 CriticalGroupRequest(
-                    graph={'vertices': vertices, 'edges': [list(e) for e in edges]},
+                    graph={"vertices": vertices, "edges": [list(e) for e in edges]},
                     sink=vertices[0],
                 )
             )
             return result, int(minor.det())
 
         for vertices, edges in [
-            (['a', 'b', 'c'], [('a', 'b'), ('b', 'c'), ('a', 'c')]),
+            (["a", "b", "c"], [("a", "b"), ("b", "c"), ("a", "c")]),
             (
-                ['a', 'b', 'c', 'd'],
-                [('a', 'b'), ('b', 'c'), ('c', 'd'), ('d', 'a')],
+                ["a", "b", "c", "d"],
+                [("a", "b"), ("b", "c"), ("c", "d"), ("d", "a")],
             ),
         ]:
             res, trees = count_spanning_trees(vertices, edges)
@@ -369,8 +371,14 @@ class TestVertexRelabelling:
         assert r1.laplacian == r2.laplacian
 
     def test_critical_group_relabelling(self) -> None:
-        graph1 = {"vertices": ["a", "b", "c"], "edges": [["a", "b"], ["b", "c"], ["a", "c"]]}
-        graph2 = {"vertices": ["x", "y", "z"], "edges": [["x", "y"], ["y", "z"], ["x", "z"]]}
+        graph1 = {
+            "vertices": ["a", "b", "c"],
+            "edges": [["a", "b"], ["b", "c"], ["a", "c"]],
+        }
+        graph2 = {
+            "vertices": ["x", "y", "z"],
+            "edges": [["x", "y"], ["y", "z"], ["x", "z"]],
+        }
         r1 = compute_critical_group(CriticalGroupRequest(graph=graph1, sink="a"))
         r2 = compute_critical_group(CriticalGroupRequest(graph=graph2, sink="x"))
         assert r1.invariant_factors == r2.invariant_factors

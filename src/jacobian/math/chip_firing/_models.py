@@ -21,7 +21,7 @@ def _validate_divisor(
 ) -> None:
     if len(divisor) != len(vertices):
         raise ValueError(f"{label} length must match vertex count")
-    if any(abs(c) >= 10 ** MAX_COEFFICIENT_DIGITS for c in divisor):
+    if any(abs(c) >= 10**MAX_COEFFICIENT_DIGITS for c in divisor):
         raise ValueError(f"{label} coefficients exceed the digit bound")
 
 
@@ -132,7 +132,7 @@ class FireVectorRequest(StrictModel):
             raise ValueError("divisor length must match vertex count")
         if len(self.firing_vector) != n:
             raise ValueError("firing vector length must match vertex count")
-        if any(abs(c) >= 10 ** MAX_COEFFICIENT_DIGITS for c in self.firing_vector):
+        if any(abs(c) >= 10**MAX_COEFFICIENT_DIGITS for c in self.firing_vector):
             raise ValueError("firing vector coefficients exceed the digit bound")
         return self
 

@@ -112,8 +112,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "path_graph_3_sink_a",
-                "Compute the reduced Laplacian of a path graph with sink "
-                "at vertex a.",
+                "Compute the reduced Laplacian of a path graph with sink at vertex a.",
                 {"graph": _GRAPH, "sink": "a"},
             ),
         ),
@@ -153,8 +152,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "fire_e_a",
-                "Fire the unit vector e_a on a path graph; degree is "
-                "preserved.",
+                "Fire the unit vector e_a on a path graph; degree is preserved.",
                 {
                     "graph": _GRAPH,
                     "divisor": [3, 0, 1],
@@ -178,8 +176,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "path_graph_3_sink_a",
-                "Stabilize a path graph configuration with sink at "
-                "vertex a.",
+                "Stabilize a path graph configuration with sink at vertex a.",
                 {"configuration": _SINK_CONFIG},
             ),
         ),
@@ -265,8 +262,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "path_graph_3",
-                "Compute the canonical divisor of a path graph on 3 "
-                "vertices.",
+                "Compute the canonical divisor of a path graph on 3 vertices.",
                 {"graph": _GRAPH},
             ),
         ),
@@ -286,8 +282,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "triangle_sink_a",
-                "Compute the critical group of a triangle graph with "
-                "sink at vertex a.",
+                "Compute the critical group of a triangle graph with sink at vertex a.",
                 {
                     "graph": {
                         "vertices": ["a", "b", "c"],

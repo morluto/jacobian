@@ -225,7 +225,7 @@ def _to_integer_facet(
     yields integer ``A`` and integer ``C`` so that membership of an
     integer point is the exact integer test ``sum(A_k * x_k) <= C``.
     """
-    fracs = [Fraction(int(normal[k]), int(normal[k].q)) for k in range(d)]
+    fracs = [Fraction(int(normal[k].p), int(normal[k].q)) for k in range(d)]
     bound = Fraction(offset)
     dens = [f.denominator for f in fracs] + [bound.denominator]
     scale = 1
@@ -236,7 +236,7 @@ def _to_integer_facet(
     return coeffs, rhs
 
 
-def _facets_and_box(
+def _facets_and_box(  # noqa: C901
     request: LatticePolytopeRequest,
 ) -> tuple[list[tuple[tuple[int, ...], int]], list[int], list[int], int]:
     """Build the integer facet inequalities and the integer bounding box.
@@ -275,6 +275,39 @@ def _facets_and_box(
         d = request.dimension()
         vertex_models: tuple[Vertex, ...] = request.vertices  # type: ignore[assignment]
         verts = [[c.as_fraction() for c in v.coordinates] for v in vertex_models]
+        # Facet-combination budget: C(n,d) subsets of vertices define candidate
+        # hyperplanes. For n=64,d=4 this is 635k; larger would be unbounded work.
+        if d > 1:
+            from math import comb as _comb
+
+            try:
+                facet_combinations = _comb(len(verts), d)
+            except ValueError:
+                facet_combinations = 10**18
+            if facet_combinations > 700_000:
+                raise LatticePointBudgetError(
+                    "vertex facet enumeration exceeds the 700k-combination budget"
+                )
+            # Lower-dimensional hulls: if vertices do not span full dimension,
+            # the facet enumeration would be empty and the scan would be wrong.
+            # Detect affine rank and handle via convex-hull membership.
+            if len(verts) >= d:
+                diffs = Matrix(
+                    [
+                        [verts[i][k] - verts[0][k] for k in range(d)]
+                        for i in range(1, len(verts))
+                    ]
+                )
+                if diffs.rank() < d:
+                    # Lower-dimensional: use direct convex-hull point-in-polytope
+                    # check via linear programming would be needed. For now,
+                    # reject as not full-dimensional to avoid incorrect counts.
+                    # This is exact: a lower-dimensional polytope's lattice
+                    # points are still well-defined, but our facet method
+                    # assumes full dimension. Rejecting is fail-closed.
+                    raise LatticePointBudgetError(
+                        "V-representation is not full-dimensional; lower-dimensional hulls require exact handling"
+                    )
         if d == 1:
             # The single facet pair is the interval endpoints.
             low = min(v[0] for v in verts)
@@ -294,6 +327,15 @@ def _facets_and_box(
             raise LatticePointBudgetError(
                 "the integer bounding box exceeds the "
                 f"{MAX_BOUND_SPAN}-point per-axis span bound"
+            )
+    # Total scan bound: product of per-axis spans, not just per-axis.
+    total_scan = 1
+    for k in range(d):
+        span = hi[k] - lo[k] + 1
+        total_scan *= span
+        if total_scan > 10_000_000:
+            raise LatticePointBudgetError(
+                "integer bounding box total scan exceeds the 10M-point budget"
             )
     return facets, lo, hi, d
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -11,6 +11,8 @@ from jacobian._models import StrictModel
 
 MAX_POINTS = 64
 MAX_DIMENSION = 20
+MAX_QUADRUPLE_SEARCH_POINTS = 24
+"""Cap on configuration size for C(n,4) quadruple enumeration (10626 subsets)."""
 
 
 class LabelledRationalPoint(StrictModel):
@@ -107,6 +109,11 @@ class CollinearTriplesRequest(StrictModel):
             return self
         if len(self.configuration.points[0].coordinates) != 2:
             raise ValueError("collinear-triple search requires a planar configuration")
+        # A collinear triple needs three distinct points; two-point
+        # configurations cannot produce witnesses and are rejected at the
+        # boundary so the search scope is exact.
+        if len(self.configuration.points) < 3:
+            raise ValueError("collinear-triple search requires at least three points")
         return self
 
 
@@ -117,31 +124,116 @@ class ConcyclicQuadruplesRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_planar(self) -> Self:
+        from jacobian.math.geometry.exact._models import MAX_QUADRUPLE_SEARCH_POINTS
+
         if not self.configuration.points:
             return self
         if len(self.configuration.points[0].coordinates) != 2:
             raise ValueError(
                 "concyclic-quadruple search requires a planar configuration"
             )
+        if len(self.configuration.points) < 4:
+            raise ValueError("concyclic-quadruple search requires at least four points")
+        if len(self.configuration.points) > MAX_QUADRUPLE_SEARCH_POINTS:
+            raise ValueError(
+                "concyclic-quadruple search exceeds the "
+                f"{MAX_QUADRUPLE_SEARCH_POINTS}-point enumeration bound"
+            )
         return self
 
 
 class IncidenceSearchResult(StrictModel):
-    """Witnesses to a forbidden planar incidence configuration, or none."""
+    """Witnesses to a forbidden planar incidence configuration, or none.
 
+    The result retains its source configuration so validation can replay
+    every witness exactly against the certified points.
+    """
+
+    configuration: PointConfiguration
     dimension: int = Field(ge=2, le=2)
     point_count: int = Field(ge=3)
     holds: bool = Field(
         description="True iff at least one witness incidence exists.",
     )
     witnesses: tuple[tuple[int, ...], ...] = Field(default=())
+    kind: Literal["COLLINEAR_TRIPLE", "CONCYCLIC_QUADRUPLE"]
 
     @model_validator(mode="after")
-    def require_consistent_witnesses(self) -> Self:
+    def require_consistent_witnesses(self) -> Self:  # noqa: C901
+        from fractions import Fraction
+
+        if len(self.configuration.points) != self.point_count:
+            raise ValueError("point_count must match the retained configuration")
         if self.holds and not self.witnesses:
             raise ValueError("a holds=True result must list at least one witness")
         if not self.holds and self.witnesses:
             raise ValueError("a holds=False result must list no witnesses")
+
+        expected_size = 3 if self.kind == "COLLINEAR_TRIPLE" else 4
+        pts = [
+            tuple(c.as_fraction() for c in point.coordinates)
+            for point in self.configuration.points
+        ]
+
+        def cross(
+            o: tuple[Fraction, ...], a: tuple[Fraction, ...], b: tuple[Fraction, ...]
+        ) -> Fraction:
+            return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+        def det4(indices: tuple[int, ...]) -> Fraction:
+            rows = []
+            for idx in indices:
+                x, y = pts[idx]
+                rows.append((x * x + y * y, x, y, Fraction(1)))
+            total = Fraction(0)
+            for col in range(4):
+                sub = tuple(
+                    tuple(row[c] for c in range(4) if c != col) for row in rows[1:]
+                )
+                m = sub
+                sign = 1 if col % 2 == 0 else -1
+                det3 = (
+                    m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+                    - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+                    + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+                )
+                total += sign * rows[0][col] * det3
+            return total
+
+        seen: set[tuple[int, ...]] = set()
+        for witness in self.witnesses:
+            if len(witness) != expected_size:
+                raise ValueError(
+                    f"{self.kind} witnesses must list {expected_size} indices"
+                )
+            if witness != tuple(sorted(witness)):
+                raise ValueError("witness indices must be sorted ascending")
+            if len(set(witness)) != len(witness):
+                raise ValueError("witness indices must be distinct")
+            if any(i >= self.point_count for i in witness):
+                raise ValueError("witness index out of range")
+            if witness in seen:
+                raise ValueError("witnesses must be unique")
+            seen.add(witness)
+            if self.kind == "COLLINEAR_TRIPLE":
+                i, j, k = witness
+                if cross(pts[i], pts[j], pts[k]) != 0:
+                    raise ValueError("a collinear witness is not actually collinear")
+            else:
+                i, j, k, m = witness
+                # Concyclic excludes degenerate (collinear) quadruples.
+                if any(
+                    cross(pts[a], pts[b], pts[c]) == 0
+                    for a, b, c in (
+                        (i, j, k),
+                        (i, j, m),
+                        (i, k, m),
+                        (j, k, m),
+                    )
+                ):
+                    raise ValueError("a concyclic witness contains a collinear triple")
+                if det4(witness) != 0:
+                    raise ValueError("a concyclic witness is not actually concyclic")
         return self
 
 

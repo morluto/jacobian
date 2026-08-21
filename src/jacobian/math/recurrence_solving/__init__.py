@@ -2,6 +2,7 @@
 
 from jacobian.math.recurrence_solving.operations import (
     ClosedForm,
+    PrimeFieldRecurrence,
     Recurrence,
     berlekamp_massey,
     closed_form,
@@ -10,6 +11,7 @@ from jacobian.math.recurrence_solving.operations import (
 
 __all__ = [
     "ClosedForm",
+    "PrimeFieldRecurrence",
     "Recurrence",
     "berlekamp_massey",
     "closed_form",

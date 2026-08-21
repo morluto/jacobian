@@ -90,12 +90,57 @@ class ClosedFormResult(StrictModel):
 # ---------------------------------------------------------------------------
 
 _MAX_FIELD_SEQUENCE_LENGTH = 256
+_MAX_FIELD_PRIME = 10_000
+
+
+def _require_bounded_prime(prime: int) -> None:
+    if not 2 <= prime <= _MAX_FIELD_PRIME:
+        raise ValueError(
+            f"prime must be a prime number between 2 and {_MAX_FIELD_PRIME}"
+        )
+    from sympy import isprime
+
+    if not isprime(prime):
+        raise ValueError("prime must be a prime integer")
+
+
+def _require_canonical_residues(
+    values: tuple[int, ...], prime: int, label: str
+) -> None:
+    for value in values:
+        if type(value) is not int or not 0 <= value < prime:
+            raise ValueError(f"{label} must be canonical residues modulo the prime")
+
+
+def _require_found_prime_recurrence(
+    prime: int,
+    sequence: tuple[int, ...],
+    coefficients: tuple[int, ...],
+    order: int,
+) -> None:
+    if len(coefficients) != order:
+        raise ValueError("a found recurrence must have one coefficient per order")
+    _require_canonical_residues(coefficients, prime, "coefficients")
+    if order == 0:
+        if coefficients:
+            raise ValueError("order-zero recurrence must have no coefficients")
+        if any(value != 0 for value in sequence):
+            raise ValueError("order-zero recurrence only fits the all-zero sequence")
+        return
+    for n in range(order, len(sequence)):
+        expected = (
+            sum(coefficients[i] * sequence[n - 1 - i] for i in range(order)) % prime
+        )
+        if sequence[n] != expected:
+            raise ValueError(
+                "coefficients do not reproduce the source sequence over GF(p)"
+            )
 
 
 class PrimeFieldRecurrenceFindRequest(StrictModel):
     """Find the minimal linear recurrence of a sequence over ``GF(p)``."""
 
-    prime: int = Field(gt=1)
+    prime: int = Field(ge=2, le=_MAX_FIELD_PRIME)
     sequence: tuple[int, ...] = Field(
         min_length=2,
         max_length=_MAX_FIELD_SEQUENCE_LENGTH,
@@ -103,39 +148,32 @@ class PrimeFieldRecurrenceFindRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_field_sequence(self) -> Self:
-        from sympy import isprime
-
-        if not isprime(self.prime):
-            raise ValueError("prime must be a prime integer")
-        for value in self.sequence:
-            if type(value) is not int or not 0 <= value < self.prime:
-                raise ValueError(
-                    "sequence values must be canonical residues modulo the prime"
-                )
+        _require_bounded_prime(self.prime)
+        _require_canonical_residues(self.sequence, self.prime, "sequence values")
         return self
 
 
 class PrimeFieldRecurrenceFindResult(StrictModel):
     """The minimal LFSR over ``GF(p)`` found by Berlekamp-Massey."""
 
-    prime: int = Field(gt=1)
-    coefficients: tuple[int, ...] = Field(max_length=255)
-    order: int = Field(ge=0, le=255)
+    prime: int = Field(ge=2, le=_MAX_FIELD_PRIME)
+    sequence: tuple[int, ...] = Field(
+        min_length=2,
+        max_length=_MAX_FIELD_SEQUENCE_LENGTH,
+    )
+    coefficients: tuple[int, ...] = Field(max_length=_MAX_FIELD_SEQUENCE_LENGTH)
+    order: int = Field(ge=0, le=_MAX_FIELD_SEQUENCE_LENGTH)
     status: Literal["FOUND", "NO_FITTING_RECURRENCE"]
     method: Literal["BERLEKAMP_MASSEY"] = "BERLEKAMP_MASSEY"
 
     @model_validator(mode="after")
     def require_status_consistent_coefficients(self) -> Self:
+        _require_bounded_prime(self.prime)
+        _require_canonical_residues(self.sequence, self.prime, "sequence values")
         if self.status == "FOUND":
-            if self.order == 0 or len(self.coefficients) != self.order:
-                raise ValueError(
-                    "a found recurrence must have one coefficient per order"
-                )
-            for value in self.coefficients:
-                if type(value) is not int or not 0 <= value < self.prime:
-                    raise ValueError(
-                        "coefficients must be canonical residues modulo the prime"
-                    )
+            _require_found_prime_recurrence(
+                self.prime, self.sequence, self.coefficients, self.order
+            )
         elif self.order != 0 or self.coefficients:
             raise ValueError(
                 "a missing recurrence must have zero order and no coefficients"

@@ -38,17 +38,11 @@ def compute_prime_field_find_recurrence(
     request: PrimeFieldRecurrenceFindRequest,
 ) -> PrimeFieldRecurrenceFindResult:
     """Find the minimal LFSR over ``GF(p)`` via Berlekamp-Massey."""
-    coeffs = berlekamp_massey(list(request.sequence), request.prime)
-    if not coeffs:
-        return PrimeFieldRecurrenceFindResult(
-            prime=request.prime,
-            coefficients=(),
-            order=0,
-            status="NO_FITTING_RECURRENCE",
-        )
+    rec = berlekamp_massey(list(request.sequence), request.prime)
     return PrimeFieldRecurrenceFindResult(
-        prime=request.prime,
-        coefficients=tuple(coeffs),
-        order=len(coeffs),
-        status="FOUND",
+        prime=rec.prime,
+        sequence=request.sequence,
+        coefficients=rec.coefficients,
+        order=rec.order,
+        status=rec.status,
     )

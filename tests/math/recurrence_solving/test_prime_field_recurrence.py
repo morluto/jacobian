@@ -45,9 +45,10 @@ class TestPrimeFieldRecurrenceFind:
         result = compute_prime_field_find_recurrence(
             PrimeFieldRecurrenceFindRequest(prime=5, sequence=(0, 0, 0, 0)),
         )
-        assert result.status == "NO_FITTING_RECURRENCE"
+        assert result.status == "FOUND"
         assert result.order == 0
         assert result.coefficients == ()
+        assert result.sequence == (0, 0, 0, 0)
 
     def test_constant_sequence(self):
         # 3,3,3,3 mod 5 -> s_n = s_{n-1}, coefficient (1,).

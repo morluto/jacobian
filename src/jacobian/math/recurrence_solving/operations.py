@@ -9,6 +9,7 @@ from jacobian._exact import CanonicalRational
 
 __all__ = [
     "ClosedForm",
+    "PrimeFieldRecurrence",
     "Recurrence",
     "berlekamp_massey",
     "closed_form",
@@ -21,6 +22,57 @@ class Recurrence:
     coefficients: tuple[CanonicalRational, ...]
     order: int
     status: Literal["FOUND", "NO_FITTING_RECURRENCE"]
+
+
+_MAX_FIELD_PRIME = 10_000
+_MAX_FIELD_SEQUENCE_LENGTH = 256
+
+
+@dataclass(frozen=True, slots=True)
+class PrimeFieldRecurrence:
+    """Minimal linear recurrence over an explicit prime field ``GF(p)``."""
+
+    prime: int
+    coefficients: tuple[int, ...]
+    order: int
+    status: Literal["FOUND", "NO_FITTING_RECURRENCE"]
+
+
+def _validate_berlekamp_inputs(sequence: list[int], prime: int) -> None:
+    if type(prime) is not int or not 2 <= prime <= _MAX_FIELD_PRIME:
+        raise ValueError(
+            f"prime must be a prime number between 2 and {_MAX_FIELD_PRIME}"
+        )
+    from sympy import isprime
+
+    if not isprime(prime):
+        raise ValueError("prime must be a prime integer")
+    if not 2 <= len(sequence) <= _MAX_FIELD_SEQUENCE_LENGTH:
+        raise ValueError(
+            f"sequence must have length between 2 and {_MAX_FIELD_SEQUENCE_LENGTH}"
+        )
+    for value in sequence:
+        if type(value) is not int or not 0 <= value < prime:
+            raise ValueError(
+                "sequence values must be canonical residues modulo the prime"
+            )
+
+
+def _berlekamp_discrepancy(
+    s: list[int], coeffs: list[int], prime: int, index: int
+) -> int:
+    discrepancy = s[index] % prime
+    for j in range(1, len(coeffs)):
+        discrepancy = (discrepancy + coeffs[j] * s[index - j]) % prime
+    return discrepancy
+
+
+def _berlekamp_combine(coeffs: list[int], shifted: list[int], prime: int) -> list[int]:
+    if len(shifted) > len(coeffs):
+        coeffs = coeffs + [0] * (len(shifted) - len(coeffs))
+    elif len(shifted) < len(coeffs):
+        shifted = shifted + [0] * (len(coeffs) - len(shifted))
+    return [(c + s_coeff) % prime for c, s_coeff in zip(coeffs, shifted, strict=True)]
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,15 +154,18 @@ def closed_form(
     return ClosedForm(expression=str(sympy.simplify(expr)))
 
 
-def berlekamp_massey(sequence: list[int], prime: int) -> list[int]:
-    """Return the minimal LFSR connection polynomial coefficients over ``GF(p)``.
+def berlekamp_massey(sequence: list[int], prime: int) -> PrimeFieldRecurrence:
+    """Return the minimal LFSR over ``GF(p)`` via Berlekamp-Massey.
 
-    Implements the classical Berlekamp-Massey algorithm.  Returns the list
-    ``[c_1, ..., c_L]`` such that for every ``n >= L``,
-    ``s_n = c_1 s_{n-1} + ... + c_L s_{n-L}`` (mod p), with ``L`` minimal.  An
-    empty list means no nontrivial recurrence of positive order was found.
+    Returns a :class:`PrimeFieldRecurrence` containing the field ``prime``
+    and the coefficient tuple ``(c_1, ..., c_L)`` such that for every
+    ``n >= L``, ``s_n = c_1 s_{n-1} + ... + c_L s_{n-L}`` (mod p) with ``L``
+    minimal. The returned value retains its field; ``[1, 1]`` over ``GF(2)``
+    and ``GF(7)`` are distinct values. An order-zero ``FOUND`` result
+    represents the all-zero sequence.
     """
-    s = [int(x) % prime for x in sequence]
+    _validate_berlekamp_inputs(sequence, prime)
+    s = [int(x) for x in sequence]
     n = len(s)
     coeffs = [1]  # C(x) = 1
     b = [1]  # B(x) = 1
@@ -119,45 +174,31 @@ def berlekamp_massey(sequence: list[int], prime: int) -> list[int]:
     last_discrepancy = 1
 
     for i in range(n):
-        # compute discrepancy: s_i + sum_j C_j s_{i-j}
-        discrepancy = s[i] % prime
-        for j in range(1, len(coeffs)):
-            discrepancy = (discrepancy + coeffs[j] * s[i - j]) % prime
+        discrepancy = _berlekamp_discrepancy(s, coeffs, prime, i)
         if discrepancy == 0:
             m += 1
-        elif 2 * length <= i:
+            continue
+        factor = (discrepancy * pow(last_discrepancy, prime - 2, prime)) % prime
+        shifted = [0] * m + [(-factor * x) % prime for x in b]
+        if 2 * length <= i:
             temp = list(coeffs)
-            factor = (discrepancy * pow(last_discrepancy, prime - 2, prime)) % prime
-            shifted = [0] * m + [(-factor * x) % prime for x in b]
-            if len(shifted) > len(coeffs):
-                coeffs.extend([0] * (len(shifted) - len(coeffs)))
-            elif len(shifted) < len(coeffs):
-                shifted.extend([0] * (len(coeffs) - len(shifted)))
-            coeffs = [
-                (c + s_coeff) % prime
-                for c, s_coeff in zip(coeffs, shifted, strict=True)
-            ]
+            coeffs = _berlekamp_combine(coeffs, shifted, prime)
             length = i + 1 - length
             b = temp
             last_discrepancy = discrepancy
             m = 1
         else:
-            factor = (discrepancy * pow(last_discrepancy, prime - 2, prime)) % prime
-            shifted = [0] * m + [(-factor * x) % prime for x in b]
-            if len(shifted) > len(coeffs):
-                coeffs.extend([0] * (len(shifted) - len(coeffs)))
-            elif len(shifted) < len(coeffs):
-                shifted.extend([0] * (len(coeffs) - len(shifted)))
-            coeffs = [
-                (c + s_coeff) % prime
-                for c, s_coeff in zip(coeffs, shifted, strict=True)
-            ]
+            coeffs = _berlekamp_combine(coeffs, shifted, prime)
             m += 1
 
     # The connection polynomial is C(x) = 1 + c_1 x + ... + c_L x^L.
     # The recurrence is s_n = -c_1 s_{n-1} - ... - c_L s_{n-L}, so the
     # recurrence coefficients are [-c_1, ..., -c_L].
     if length == 0:
-        return []
-    recurrence = [(-coeffs[j]) % prime for j in range(1, length + 1)]
-    return recurrence
+        return PrimeFieldRecurrence(
+            prime=prime, coefficients=(), order=0, status="FOUND"
+        )
+    recurrence = tuple((-coeffs[j]) % prime for j in range(1, length + 1))
+    return PrimeFieldRecurrence(
+        prime=prime, coefficients=recurrence, order=length, status="FOUND"
+    )

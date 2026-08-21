@@ -17,7 +17,7 @@ ENV PATH=/opt/lean/lean-4.31.0-linux/bin:$PATH
 RUN python -m pip install --no-cache-dir attrs==26.1.0 jsonschema==4.26.0 jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 typing-extensions==4.16.0
 
 LABEL jacobian.task="jacobian/mathlib-gcd-premise-retrieval" \
-      jacobian.checksum="4c187eebb1c41ae1b9695e7a7a86ac2c0d301888c46a34f72171e651c59c7aaa"
+      jacobian.checksum="15ad32313168d3062f986952559882bfe3828009dc25b832c2519c0dd1fd1cde"
 COPY expected.json input.json test.sh verifier.py verifier_support.py public_contract.json /tests/
 COPY input.json /app/input.json
 RUN chmod +x /tests/test.sh \

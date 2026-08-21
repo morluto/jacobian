@@ -262,44 +262,47 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
             example(
                 "groebner_basis_xy",
                 "Compute the Gröbner basis of <x^2 - y, xy - 1> in "
-                "Q[x, y] under grevlex order.",
+                "Q[x, y] under grevlex order; the ideal must use the canonical ordered QQ ring.",
                 {
-                    "generators": [
-                        {
-                            "polynomial_schema_version": "1",
-                            "domain": "QQ",
-                            "variables": ["x", "y"],
-                            "polynomial": {
-                                "terms": [
-                                    {
-                                        "coefficient": {"num": "1", "den": "1"},
-                                        "exponents": [2, 0],
-                                    },
-                                    {
-                                        "coefficient": {"num": "-1", "den": "1"},
-                                        "exponents": [0, 1],
-                                    },
-                                ],
+                    "ideal": {
+                        "variables": ["x", "y"],
+                        "generators": [
+                            {
+                                "polynomial_schema_version": "1",
+                                "domain": "QQ",
+                                "variables": ["x", "y"],
+                                "polynomial": {
+                                    "terms": [
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [2, 0],
+                                        },
+                                        {
+                                            "coefficient": {"num": "-1", "den": "1"},
+                                            "exponents": [0, 1],
+                                        },
+                                    ],
+                                },
                             },
-                        },
-                        {
-                            "polynomial_schema_version": "1",
-                            "domain": "QQ",
-                            "variables": ["x", "y"],
-                            "polynomial": {
-                                "terms": [
-                                    {
-                                        "coefficient": {"num": "1", "den": "1"},
-                                        "exponents": [1, 1],
-                                    },
-                                    {
-                                        "coefficient": {"num": "-1", "den": "1"},
-                                        "exponents": [0, 0],
-                                    },
-                                ],
+                            {
+                                "polynomial_schema_version": "1",
+                                "domain": "QQ",
+                                "variables": ["x", "y"],
+                                "polynomial": {
+                                    "terms": [
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [1, 1],
+                                        },
+                                        {
+                                            "coefficient": {"num": "-1", "den": "1"},
+                                            "exponents": [0, 0],
+                                        },
+                                    ],
+                                },
                             },
-                        },
-                    ],
+                        ],
+                    },
                     "monomial_order": "grevlex",
                 },
             ),

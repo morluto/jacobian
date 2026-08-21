@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from jacobian.math import polynomials
@@ -31,7 +32,11 @@ from jacobian.math.polynomials._models import (
     PolynomialSquareFreeRequest,
     PolynomialValue,
 )
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialIdeal,
+    SparseRationalPolynomial,
+)
 
 _MAX_OUTPUT_TERMS = 1024
 
@@ -182,36 +187,161 @@ def polynomial_factorization(
     )
 
 
+def _groebner_worker(
+    ideal_payload: dict[str, Any],
+    monomial_order: str,
+    queue: Any,
+) -> None:
+    """Entry point for the isolated Gröbner worker process."""
+
+    try:
+        from jacobian.math.polynomials.values import RationalPolynomialIdeal
+
+        ideal = RationalPolynomialIdeal.model_validate(ideal_payload)
+        variables = ideal.variables
+        wire_polys = polynomials.groebner_basis(
+            tuple(
+                rational_polynomial_to_sympy(generator)
+                for generator in ideal.generators
+            ),
+            symbols_for_variables(variables),
+            monomial_order,
+        )
+        basis_payloads: list[dict[str, Any]] = []
+        for poly in wire_polys:
+            converted = rational_polynomial_from_sympy(
+                poly,
+                variables,
+                maximum_terms=_MAX_OUTPUT_TERMS,
+            )
+            basis_payloads.append(converted.model_dump(mode="json"))
+        queue.put(("ok", basis_payloads))
+    except Exception as exc:
+        queue.put(("error", str(exc)))
+
+
+def _run_groebner_isolated(
+    ideal: RationalPolynomialIdeal,
+    monomial_order: str,
+    wall_seconds: int,
+) -> tuple[str, Any]:
+    """Run the SymPy Groebner worker with a killable wall-time limit."""
+
+    import multiprocessing
+
+    ctx = multiprocessing.get_context("spawn")
+    queue: Any = ctx.Queue()
+    payload = ideal.model_dump(mode="json")
+    process = ctx.Process(
+        target=_groebner_worker,
+        args=(payload, monomial_order, queue),
+    )
+    process.start()
+    process.join(timeout=float(wall_seconds))
+    if process.is_alive():
+        process.terminate()
+        process.join(timeout=1.0)
+        if process.is_alive():
+            with contextlib.suppress(AttributeError):
+                process.kill()
+            process.join(timeout=1.0)
+        return "timeout", None
+    if process.exitcode not in (0, None):
+        detail = "Gröbner basis worker exited unexpectedly."
+        try:
+            if not queue.empty():
+                status, data = queue.get_nowait()
+                if status == "error":
+                    detail = str(data)
+        except Exception:
+            pass
+        return "error", detail
+    try:
+        status, data = queue.get_nowait()
+    except Exception:
+        return "error", "Gröbner basis worker produced no result."
+    if status == "error":
+        return "error", str(data)
+    return "ok", data
+
+
+def _check_groebner_output_budget(
+    wire_basis: tuple[RationalPolynomial, ...],
+    maximum_basis_polynomials: int,
+    maximum_output_terms: int,
+) -> str | None:
+    if len(wire_basis) > maximum_basis_polynomials:
+        return "Gröbner basis exceeds the requested polynomial-count limit."
+    if (
+        sum(len(polynomial.polynomial.terms) for polynomial in wire_basis)
+        > maximum_output_terms
+    ):
+        return "Gröbner basis exceeds the requested aggregate term limit."
+    return None
+
+
 def polynomial_groebner_basis(
     request: PolynomialGroebnerBasisRequest,
 ) -> PolynomialGroebnerBasisResult:
-    """Compute one complete reduced basis inside the isolated worker."""
+    """Compute one bounded Gröbner basis with typed wall-time and output limits."""
 
-    variables = request.generators[0].variables
+    ideal = request.ideal
+    budget = request.resource_budget
+    variables = ideal.variables
+    try:
+        status, data = _run_groebner_isolated(
+            ideal, request.monomial_order, budget.wall_seconds
+        )
+    except Exception as exc:
+        return PolynomialGroebnerBasisResult(
+            outcome="LIMIT_EXCEEDED",
+            ideal=ideal,
+            monomial_order=request.monomial_order,
+            detail=str(exc),
+        )
+    if status == "timeout":
+        return PolynomialGroebnerBasisResult(
+            outcome="TIMEOUT",
+            ideal=ideal,
+            monomial_order=request.monomial_order,
+            detail="Gröbner basis computation exceeded the wall-time budget.",
+        )
+    if status == "error":
+        return PolynomialGroebnerBasisResult(
+            outcome="LIMIT_EXCEEDED",
+            ideal=ideal,
+            monomial_order=request.monomial_order,
+            detail=str(data),
+        )
+    wire_basis_dicts: list[dict[str, Any]] = data
     wire_basis = tuple(
-        _result_polynomial(polynomial, variables)
-        for polynomial in polynomials.groebner_basis(
-            tuple(
-                rational_polynomial_to_sympy(generator)
-                for generator in request.generators
-            ),
-            symbols_for_variables(variables),
-            request.monomial_order,
-        )
+        RationalPolynomial.model_validate(item) for item in wire_basis_dicts
     )
-    if len(wire_basis) > request.resource_budget.maximum_basis_polynomials:
-        raise PolynomialOutputBudgetError(
-            "Gröbner basis exceeds the requested polynomial-count limit"
+    budget_error = _check_groebner_output_budget(
+        wire_basis,
+        budget.maximum_basis_polynomials,
+        budget.maximum_output_terms,
+    )
+    if budget_error is not None:
+        return PolynomialGroebnerBasisResult(
+            outcome="LIMIT_EXCEEDED",
+            ideal=ideal,
+            monomial_order=request.monomial_order,
+            detail=budget_error,
         )
-    if (
-        sum(len(polynomial.polynomial.terms) for polynomial in wire_basis)
-        > request.resource_budget.maximum_output_terms
-    ):
-        raise PolynomialOutputBudgetError(
-            "Gröbner basis exceeds the requested aggregate term limit"
+    if not wire_basis:
+        zero = RationalPolynomial(
+            variables=variables,
+            polynomial=SparseRationalPolynomial(terms=()),
+        )
+        basis_ideal = RationalPolynomialIdeal(variables=variables, generators=(zero,))
+    else:
+        basis_ideal = RationalPolynomialIdeal(
+            variables=variables, generators=wire_basis
         )
     return PolynomialGroebnerBasisResult(
-        variables=variables,
+        outcome="COMPUTED",
+        ideal=ideal,
         monomial_order=request.monomial_order,
-        basis=wire_basis,
+        basis=basis_ideal,
     )

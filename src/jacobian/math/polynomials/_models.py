@@ -14,9 +14,9 @@ from jacobian._exact import (
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_TERMS,
-    MAX_POLYNOMIAL_VARIABLES,
     PolynomialVariable,
     RationalPolynomial,
+    RationalPolynomialIdeal,
     require_polynomial_budget,
 )
 
@@ -271,7 +271,13 @@ class PolynomialGroebnerBudget(StrictModel):
 
 
 class PolynomialGroebnerBasisRequest(StrictModel):
-    generators: tuple[RationalPolynomial, ...] = Field(min_length=1, max_length=16)
+    ideal: RationalPolynomialIdeal = Field(
+        description=(
+            "A finitely generated ideal in at most 8 variables with at most 16 "
+            "generators and 256 aggregate terms; generator total degree is at most "
+            "12 and coefficient components are at most 128 digits."
+        )
+    )
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
     resource_budget: PolynomialGroebnerBudget = Field(
         default_factory=PolynomialGroebnerBudget
@@ -279,12 +285,12 @@ class PolynomialGroebnerBasisRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_groebner_budget(self) -> Self:
-        variables = self.generators[0].variables
-        if any(generator.variables != variables for generator in self.generators):
-            raise ValueError("all ideal generators must use the same ordered ring")
-        if sum(len(generator.polynomial.terms) for generator in self.generators) > 256:
+        if (
+            sum(len(generator.polynomial.terms) for generator in self.ideal.generators)
+            > 256
+        ):
             raise ValueError("ideal generators exceed the aggregate term budget")
-        for generator in self.generators:
+        for generator in self.ideal.generators:
             require_polynomial_budget(
                 generator,
                 maximum_terms=MAX_POLYNOMIAL_TERMS,
@@ -298,21 +304,50 @@ class PolynomialGroebnerBasisRequest(StrictModel):
 
 
 class PolynomialGroebnerBasisResult(StrictModel):
-    variables: tuple[PolynomialVariable, ...] = Field(
-        min_length=1,
-        max_length=MAX_POLYNOMIAL_VARIABLES,
+    outcome: Literal["COMPUTED", "TIMEOUT", "LIMIT_EXCEEDED"] = Field(
+        description="Whether the exact reduced basis was completed within the declared budgets."
+    )
+    ideal: RationalPolynomialIdeal = Field(
+        description="The source ideal supplied by the caller, retained for source-bound validation."
     )
     monomial_order: Literal["lex", "grlex", "grevlex"]
-    basis: tuple[RationalPolynomial, ...] = Field(max_length=64)
-    completion: Literal["COMPLETE"] = "COMPLETE"
+    basis: RationalPolynomialIdeal | None = Field(
+        default=None,
+        description="The exact reduced monic Gröbner basis ideal when computed.",
+    )
+    detail: str | None = Field(
+        default=None,
+        max_length=1024,
+        description="Human-readable detail when the computation did not complete.",
+    )
     normalization: Literal["REDUCED_MONIC"] = "REDUCED_MONIC"
 
     @model_validator(mode="after")
-    def require_canonical_basis_ring(self) -> Self:
-        if any(polynomial.variables != self.variables for polynomial in self.basis):
-            raise ValueError("every basis polynomial must use the declared ring")
-        if sum(len(polynomial.polynomial.terms) for polynomial in self.basis) > 1024:
-            raise ValueError("Gröbner basis exceeds the aggregate output term limit")
+    def require_outcome_shape(self) -> Self:
+        if self.outcome == "COMPUTED":
+            if self.basis is None or self.detail is not None:
+                raise ValueError("computed basis requires a value and no detail")
+            if self.basis.variables != self.ideal.variables:
+                raise ValueError("basis must use the same ordered ring as source ideal")
+            if any(
+                generator.variables != self.ideal.variables
+                for generator in self.basis.generators
+            ):
+                raise ValueError("every basis polynomial must use the declared ring")
+            if len(self.basis.generators) > 64:
+                raise ValueError("Gröbner basis exceeds the polynomial-count limit")
+            if (
+                sum(
+                    len(generator.polynomial.terms)
+                    for generator in self.basis.generators
+                )
+                > 1024
+            ):
+                raise ValueError(
+                    "Gröbner basis exceeds the aggregate output term limit"
+                )
+        elif self.basis is not None or not self.detail:
+            raise ValueError("failed computation requires only a safe detail")
         return self
 
 

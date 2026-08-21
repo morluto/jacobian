@@ -71,11 +71,11 @@ class BlockLanguageResult(BlockLanguageRequest):
     allowed_blocks: tuple[tuple[str, ...], ...]
     count: int = Field(ge=0)
     complete: Literal[True] = True
-    scope: Literal["ALL_LOCALLY_ALLOWED_BLOCKS_OF_REQUESTED_LENGTH"] = (
-        "ALL_LOCALLY_ALLOWED_BLOCKS_OF_REQUESTED_LENGTH"
+    scope: Literal["ALL_OCCURRING_BLOCKS_OF_REQUESTED_LENGTH"] = (
+        "ALL_OCCURRING_BLOCKS_OF_REQUESTED_LENGTH"
     )
-    method: Literal["EXACT_LEXICOGRAPHIC_ENUMERATION"] = (
-        "EXACT_LEXICOGRAPHIC_ENUMERATION"
+    method: Literal["EXACT_PRESENTATION_SUPPORT_ENUMERATION"] = (
+        "EXACT_PRESENTATION_SUPPORT_ENUMERATION"
     )
 
     @model_validator(mode="after")

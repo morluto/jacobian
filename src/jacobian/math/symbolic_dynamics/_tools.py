@@ -53,8 +53,9 @@ SYMBOLIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         version="1",
         title="Compute a bounded block language",
         description=(
-            "Enumerate every locally allowed block of one requested length. "
-            "Oversized enumerations are rejected before computation, never truncated."
+            "Enumerate every block of one requested length that occurs in an "
+            "infinite shift point. Oversized support or result enumerations are "
+            "rejected before computation, never truncated."
         ),
         request_type=BlockLanguageRequest,
         result_type=BlockLanguageResult,
@@ -63,7 +64,7 @@ SYMBOLIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "golden_mean_blocks_3",
-                "Enumerate every allowed length-three block.",
+                "Enumerate every occurring length-three block.",
                 {"shift": _GOLDEN_MEAN, "block_length": 3},
             ),
         ),
@@ -96,8 +97,8 @@ SYMBOLIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         version="1",
         title="Construct a higher-block presentation",
         description=(
-            "Construct the exact overlap presentation on all allowed blocks of a "
-            "declared length at least the forbidden-block presentation memory."
+            "Construct the exact overlap presentation on all occurring blocks of "
+            "a declared length at least the forbidden-block presentation memory."
         ),
         request_type=HigherBlockRequest,
         result_type=HigherBlockResult,

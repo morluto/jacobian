@@ -89,6 +89,15 @@ def test_two_sided_language_removes_states_without_left_extension() -> None:
     one_sided = two_sided.model_copy(update={"two_sided": False})
     assert block_language(two_sided, 1) == (("1",),)
     assert block_language(one_sided, 1) == (("0",), ("1",))
+    result = compute_block_language(
+        BlockLanguageRequest(shift=two_sided, block_length=1)
+    )
+    assert result.scope == "ALL_OCCURRING_BLOCKS_OF_REQUESTED_LENGTH"
+    assert "occurs in an infinite shift point" in next(
+        tool.description
+        for tool in TOOLS
+        if tool.operation_id == "symbolic_dynamics.block_language.compute"
+    )
 
 
 def test_forbidden_family_normalization_and_empty_block() -> None:

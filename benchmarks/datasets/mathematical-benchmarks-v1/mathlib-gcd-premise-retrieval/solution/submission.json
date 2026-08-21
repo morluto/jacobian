@@ -1,0 +1,6 @@
+{
+  "result": {
+    "theorem": "Nat.gcd_zero_right",
+    "arguments": ["n"]
+  }
+}

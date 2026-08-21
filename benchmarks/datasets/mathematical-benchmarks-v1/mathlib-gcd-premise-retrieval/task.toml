@@ -1,0 +1,44 @@
+schema_version = "1.4"
+artifacts = ["/app/submission.json"]
+
+[task]
+name = "jacobian/mathlib-gcd-premise-retrieval"
+version = "1.0.0"
+description = "Retrieve and apply a Lean declaration for a frozen natural-number gcd goal."
+keywords = ["lean", "mathlib", "premise-retrieval", "formal-proof"]
+
+[metadata]
+evaluation_kind = "workflow"
+domain = "mathematical-sciences"
+primary_domain = "logic-formal-mathematics"
+field = "formal-mathematics"
+answer_visibility = "hidden-at-runtime"
+provenance_class = "public-reproduction-derived-formal-replay"
+required_provider = "core"
+author_name = "Jacobian contributors"
+difficulty = "medium"
+category = "mathematics"
+tags = ["lean", "mathlib", "premise-retrieval", "formal-replay", "offline"]
+case_version = "mathematical-benchmarks-v1"
+contamination_class = "public-reproduction-derived"
+fixture_digest = "sha256:4829da825dc1bf766d37ee0f090b354a91a78853b777b72d24fcc9489f77ba11"
+derivation = "Derived from the public-reproductions-v1 lean-retrieval case."
+
+[agent]
+timeout_sec = 600.0
+
+[verifier]
+timeout_sec = 120.0
+environment_mode = "separate"
+
+[environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096
+
+[verifier.environment]
+network_mode = "no-network"
+cpus = 1
+memory_mb = 1024
+storage_mb = 4096

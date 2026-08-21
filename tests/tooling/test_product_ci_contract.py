@@ -93,8 +93,18 @@ def test_full_lean_runs_on_merge_group_and_main() -> None:
     assert "JacobianLeanRuntime" not in action
     assert "jacobian_lean_proof_state" not in action
     assert "preflight_lean_runtime" not in action
-    assert "Mathlib" not in action
+    assert "Install the fixed Lean and Mathlib environment" in action
     assert "uses: actions/cache" not in action
+
+
+def test_service_image_contains_the_fixed_mathlib_runtime() -> None:
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+
+    assert "ARG LEAN_VERSION=4.31.0" in dockerfile
+    assert "ARG MATHLIB_MANIFEST_SHA256=" in dockerfile
+    assert "lake exe cache get" in dockerfile
+    assert "JACOBIAN_MATHLIB_ROOT=/app/lean" in dockerfile
+    assert "Mathlib.olean" in dockerfile
 
 
 def test_optional_boundary_jobs_have_explicit_workflow_gates() -> None:

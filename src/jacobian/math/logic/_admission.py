@@ -16,6 +16,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded predicate or candidate check with typed semantics",
     ),
     OperationAdmission(
+        "lean.declarations.search",
+        AdmissionDecision.KEEP,
+        "distinct exact or explicitly bounded search outcome with material computational leverage",
+    ),
+    OperationAdmission(
         "sat.assignment.check",
         AdmissionDecision.KEEP,
         "distinct exact bounded predicate or candidate check with typed semantics",

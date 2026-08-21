@@ -1,0 +1,28 @@
+{
+  "public_notes": "Submit one fully qualified Lean declaration and the ordered local identifiers passed to it. The verifier accepts any exact declaration application that elaborates against the frozen goal.",
+  "schema_definitions": {},
+  "schema_version": "1",
+  "submission_path": "/app/submission.json",
+  "submission_result": {
+    "additionalProperties": false,
+    "properties": {
+      "arguments": {
+        "items": {
+          "maxLength": 64,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "type": "string"
+        },
+        "maxItems": 4,
+        "type": "array"
+      },
+      "theorem": {
+        "maxLength": 128,
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$",
+        "type": "string"
+      }
+    },
+    "required": ["theorem", "arguments"],
+    "type": "object"
+  },
+  "task_id": "jacobian/mathlib-gcd-premise-retrieval"
+}

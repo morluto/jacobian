@@ -6,7 +6,7 @@ uv-version-check: ## Require the repository-pinned uv release.
 setup: uv-version-check ## Install the locked Python environment.
 	uv sync --locked --dev
 
-setup-lean: setup ## Install the locked environment and the pinned Lean toolchain.
+setup-lean: setup ## Install the locked Lean toolchain and pinned Mathlib cache.
 	python3 tools/setup_lean.py --repo .
 
 JACOBIAN_REGISTRY_IMAGE ?= ghcr.io/morluto/jacobian

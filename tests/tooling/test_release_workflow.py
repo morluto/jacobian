@@ -138,10 +138,14 @@ def test_release_please_updates_all_mcp_server_versions() -> None:
     assert metadata["version"] == metadata["packages"][0]["version"]
 
 
-def test_local_diagnostics_are_excluded_from_source_distributions() -> None:
+def test_local_build_state_is_excluded_from_source_distributions() -> None:
     configuration = loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     exclusions = configuration["tool"]["hatch"]["build"]["targets"]["sdist"]["exclude"]
 
     assert "/.diagnostics" in exclusions
     assert "/.diagnostics/**" in exclusions
-    assert ".diagnostics/" in (ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert "/lean/.lake" in exclusions
+    assert "/lean/.lake/**" in exclusions
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert ".diagnostics/" in gitignore
+    assert "lean/.lake/" in gitignore

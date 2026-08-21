@@ -68,8 +68,9 @@ independent bounded oracle. A factorization needs reconstruction, retained
 unit, and positive-multiplicity properties. Known answers remain useful
 regressions, but they do not replace these defining properties.
 
-`lean.check` is the retained external process boundary. Its tests cover request
-bounds, process cleanup, timeout/error projection, and typed diagnostics.
+`lean.check` is the retained external process boundary. Its tests cover the
+fixed Mathlib Lake environment, request bounds, process cleanup, timeout/error
+projection, and typed diagnostics.
 
 Singular testing follows the same ownership split as other child-process
 backends. The shared bounded-process supervisor owns process-group termination,

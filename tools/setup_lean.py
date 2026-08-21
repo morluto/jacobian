@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the fixed Lean toolchain used by the one-shot ``lean.check`` tool."""
+"""Install the fixed Lean and Mathlib environments used by logic operations."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def _run_required(arguments: Sequence[str], *, cwd: Path, run: CommandRunner) ->
 
 
 def setup_lean(repo: Path, *, run: CommandRunner = _run) -> None:
-    """Install the repository-pinned Lean toolchain without a Lean workspace."""
+    """Install the repository-pinned Lean toolchain and Mathlib cache."""
 
     repo = repo.resolve()
     if shutil.which("elan") is None:
@@ -35,6 +35,16 @@ def setup_lean(repo: Path, *, run: CommandRunner = _run) -> None:
         )
     toolchain = (repo / "lean" / "lean-toolchain").read_text(encoding="utf-8").strip()
     _run_required(("elan", "toolchain", "install", toolchain), cwd=repo, run=run)
+    _run_required(
+        ("elan", "run", toolchain, "lake", "update"),
+        cwd=repo / "lean",
+        run=run,
+    )
+    _run_required(
+        ("elan", "run", toolchain, "lake", "exe", "cache", "get"),
+        cwd=repo / "lean",
+        run=run,
+    )
 
 
 def main() -> int:

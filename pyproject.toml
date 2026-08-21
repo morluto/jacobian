@@ -65,6 +65,8 @@ packages = ["src/jacobian"]
 exclude = [
     "/.diagnostics",
     "/.diagnostics/**",
+    "/lean/.lake",
+    "/lean/.lake/**",
 ]
 
 [tool.pytest.ini_options]

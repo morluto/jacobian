@@ -10,6 +10,8 @@ from jacobian.math.logic._operations import (
     CanonicalCnf,
     CnfCanonicalizeRequest,
     LeanCheckRequest,
+    LeanDeclarationKind,
+    LeanDeclarationSearchRequest,
     SatAssignmentCheckRequest,
     SatSolveRequest,
     SmtLogic,
@@ -17,6 +19,7 @@ from jacobian.math.logic._operations import (
     canonicalize_cnf,
     check_lean_source,
     check_sat_assignment,
+    search_mathlib_declarations,
     solve_sat,
     solve_smt,
 )
@@ -30,6 +33,7 @@ def test_logic_bundle_exposes_only_atomic_inline_operations() -> None:
         "sat.solve",
         "smt.solve",
         "lean.check",
+        "lean.declarations.search",
     )
 
 
@@ -126,9 +130,11 @@ def test_smt_request_rejects_non_ascii_input() -> None:
 
 
 def test_lean_check_returns_typed_rejection_without_retaining_source(
+    tmp_path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(operations.shutil, "which", lambda _name: "/usr/bin/lean")
+    monkeypatch.setattr(operations, "_mathlib_runtime_root", lambda: tmp_path)
+    monkeypatch.setattr(operations.shutil, "which", lambda _name: "/usr/bin/lake")
     monkeypatch.setattr(
         operations,
         "run_bounded_process",
@@ -151,3 +157,127 @@ def test_lean_check_returns_typed_rejection_without_retaining_source(
             severity="ERROR", message="Snippet.lean:1:20: error: invalid proof"
         ),
     )
+
+
+def test_lean_check_uses_the_fixed_mathlib_lake_environment(
+    tmp_path, monkeypatch
+) -> None:
+    observed: dict[str, object] = {}
+    monkeypatch.setattr(operations, "_mathlib_runtime_root", lambda: tmp_path)
+    monkeypatch.setattr(operations.shutil, "which", lambda _name: "/usr/bin/lake")
+
+    def fake_run(arguments: list[str], **kwargs: object) -> SimpleNamespace:
+        observed["arguments"] = arguments
+        observed["cwd"] = kwargs["cwd"]
+        return SimpleNamespace(
+            returncode=0,
+            stdout=b"",
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+            timed_out=False,
+            cancelled=False,
+        )
+
+    monkeypatch.setattr(operations, "run_bounded_process", fake_run)
+
+    result = check_lean_source(
+        LeanCheckRequest(source="import Mathlib\nexample : True := by trivial")
+    )
+
+    assert result.outcome == "ELABORATED"
+    arguments = observed["arguments"]
+    assert isinstance(arguments, list)
+    assert arguments[:3] == ["/usr/bin/lake", "env", "lean"]
+    assert observed["cwd"] == str(tmp_path)
+
+
+def test_mathlib_search_rejects_executable_text_as_a_declaration_name() -> None:
+    with pytest.raises(ValidationError, match="ASCII dotted-name grammar"):
+        LeanDeclarationSearchRequest(type_constants=("Nat; #eval 1",))
+
+
+def test_mathlib_search_returns_a_query_bound_display_projection(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(operations, "_mathlib_runtime_root", lambda: tmp_path)
+    monkeypatch.setattr(operations.shutil, "which", lambda _name: "/usr/bin/lake")
+    monkeypatch.setattr(
+        operations,
+        "run_bounded_process",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=(
+                b'JACOBIAN_LEAN_SEARCH_RESULT {"declarations":['
+                b'{"kind":"THEOREM","module":"Init.Data.Nat.Basic",'
+                b'"name":"Nat.add_comm","type":"forall (n m : Nat), '
+                b'n + m = m + n","type_truncated":false}],'
+                b'"scanned_declarations":42,'
+                b'"stop_reason":"EXHAUSTED"}\n'
+            ),
+            stderr=b"",
+            stdout_exceeded=False,
+            stderr_exceeded=False,
+            timed_out=False,
+            cancelled=False,
+        ),
+    )
+    request = LeanDeclarationSearchRequest(
+        name_contains="add_comm",
+        namespace_prefixes=("Nat",),
+        kinds=(LeanDeclarationKind.THEOREM,),
+    )
+
+    result = search_mathlib_declarations(request)
+
+    assert result.outcome == "COMPLETED"
+    assert result.query == request
+    assert result.stop_reason == "EXHAUSTED"
+    assert result.declarations[0].name == "Nat.add_comm"
+
+
+def test_mathlib_search_reports_an_unavailable_fixed_environment(monkeypatch) -> None:
+    monkeypatch.setattr(operations, "_mathlib_runtime_root", lambda: None)
+
+    result = search_mathlib_declarations(
+        LeanDeclarationSearchRequest(name_contains="add_comm")
+    )
+
+    assert result.outcome == "UNAVAILABLE"
+    assert result.declarations == ()
+    assert result.stop_reason is None
+
+
+def test_mathlib_runtime_rejects_a_changed_manifest(tmp_path, monkeypatch) -> None:
+    manifest = (
+        f'{{"packages":[{{"name":"mathlib","rev":"{operations._MATHLIB_REVISION}"}}]}}'
+    ).encode()
+    (tmp_path / "lake-manifest.json").write_bytes(manifest)
+    (tmp_path / "lean-toolchain").write_text(
+        operations._LEAN_TOOLCHAIN, encoding="utf-8"
+    )
+    mathlib_olean = (
+        tmp_path
+        / ".lake"
+        / "packages"
+        / "mathlib"
+        / ".lake"
+        / "build"
+        / "lib"
+        / "lean"
+        / "Mathlib.olean"
+    )
+    mathlib_olean.parent.mkdir(parents=True)
+    mathlib_olean.touch()
+    monkeypatch.setenv("JACOBIAN_MATHLIB_ROOT", str(tmp_path))
+    monkeypatch.setattr(
+        operations,
+        "_MATHLIB_MANIFEST_SHA256",
+        operations.hashlib.sha256(manifest).hexdigest(),
+    )
+
+    assert operations._mathlib_runtime_root() == tmp_path
+
+    (tmp_path / "lake-manifest.json").write_bytes(manifest + b"\n")
+
+    assert operations._mathlib_runtime_root() is None

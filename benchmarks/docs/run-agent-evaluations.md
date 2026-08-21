@@ -21,6 +21,30 @@ Set `EVAL_ATTEMPTS` for repeated rollouts. `EVAL_ARGS` remains available for
 Harbor options such as a job name or a separate results directory, but no
 hand-authored runtime snapshot is required for an ordinary observation.
 
+For the Mathlib declaration-search adoption regression, first run the uncued
+natural-use arm, then rerun the identical task with the explicitly labeled
+task-level routing cue:
+
+```sh
+JACOBIAN_MODEL=gpt-5.6-terra make agent-eval \
+  DATASET=mathematical-benchmarks-v1 TASKS=mathlib-gcd-premise-retrieval \
+  EVAL_EXECUTE=1 EVAL_ATTEMPTS=3 EVAL_REASONING_EFFORT=high
+
+JACOBIAN_MODEL=gpt-5.6-terra make agent-eval \
+  DATASET=mathematical-benchmarks-v1 TASKS=mathlib-gcd-premise-retrieval \
+  EVAL_EXECUTE=1 EVAL_ATTEMPTS=3 EVAL_REASONING_EFFORT=high \
+  EVAL_ARGS="--extra-instruction-path benchmarks/config/mathlib-search-routing-cue.md"
+```
+
+Keep the two arms separate when reporting them. The first measures uncued tool
+selection; the second is a routing intervention that localizes whether a miss
+is selection friction rather than discovery or execution friction. In both
+arms, inspect the trajectory and Jacobian MCP log separately from the formal
+verifier reward; a tool call is not itself a successful mathematical outcome.
+The frozen witness is a core declaration imported by the pinned Mathlib
+environment, which keeps the independent verifier small; the Lean process lane
+separately requires a match whose defining module is under `Mathlib.*`.
+
 Run each arm in a fresh temporary `CODEX_HOME`, never through direct host `codex exec`.
 The control must have no Jacobian MCP server; the treatment must expose only the
 intended Jacobian MCP configuration and no Jacobian Skill.

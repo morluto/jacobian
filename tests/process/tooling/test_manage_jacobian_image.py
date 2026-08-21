@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -62,6 +62,30 @@ def test_select_builds_local_image_for_dirty_tree(
 
     assert module.select("ghcr.io/morluto/jacobian") == "jacobian:local"
     assert built == ["jacobian:local"]
+
+
+def test_build_keeps_stdout_free_of_docker_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    module = _module()
+    monkeypatch.setattr(module, "_git_sha", lambda: "a" * 40)
+    monkeypatch.setattr(module, "_source_dirty", lambda: True)
+    monkeypatch.setattr(module, "_package_version", lambda: "0.13.0")
+    monkeypatch.setattr(
+        module,
+        "_run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            stdout=b"Successfully built image\n",
+            stderr=b"build warning\n",
+        ),
+    )
+
+    assert module.build("jacobian:local") == "jacobian:local"
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == "Successfully built image\nbuild warning\n"
 
 
 def test_pull_rejects_dirty_tree(monkeypatch: pytest.MonkeyPatch) -> None:

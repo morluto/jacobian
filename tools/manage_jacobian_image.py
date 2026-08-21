@@ -160,7 +160,10 @@ def build(image: str) -> str:
         timeout_seconds=30 * 60,
         output_limit_bytes=64 * 1024 * 1024,
     )
-    print(_text(result.stdout), end="")
+    # ``select`` is consumed through command substitution by ``make agent-eval``.
+    # Keep stdout machine-readable: build diagnostics belong on stderr, while
+    # ``main`` prints only the selected image reference to stdout.
+    print(_text(result.stdout), file=sys.stderr, end="")
     print(_text(result.stderr), file=sys.stderr, end="")
     return image
 

@@ -20,7 +20,7 @@ def _load(name: str) -> ModuleType:
     return module
 
 
-def test_lean_setup_installs_only_the_pinned_toolchain(
+def test_lean_setup_installs_the_pinned_toolchain_and_mathlib(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     setup_lean = _load("setup_lean")
@@ -39,9 +39,30 @@ def test_lean_setup_installs_only_the_pinned_toolchain(
     setup_lean.setup_lean(repo, run=record)
 
     assert commands == [
-        (("elan", "toolchain", "install", "leanprover/lean4:v4.31.0"), repo)
+        (("elan", "toolchain", "install", "leanprover/lean4:v4.31.0"), repo),
+        (
+            (
+                "elan",
+                "run",
+                "leanprover/lean4:v4.31.0",
+                "lake",
+                "update",
+            ),
+            repo / "lean",
+        ),
+        (
+            (
+                "elan",
+                "run",
+                "leanprover/lean4:v4.31.0",
+                "lake",
+                "exe",
+                "cache",
+                "get",
+            ),
+            repo / "lean",
+        ),
     ]
-    assert all("update" not in command for command, _cwd in commands)
 
 
 def test_lean_setup_requires_elan(

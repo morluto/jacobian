@@ -1,0 +1,7 @@
+{
+  "task_id": "jacobian/mathlib-gcd-premise-retrieval",
+  "lean_version": "4.31.0",
+  "goal": "For every natural number n, Nat.gcd n 0 = n.",
+  "source_prefix": "example (n : Nat) : Nat.gcd n 0 = n := by",
+  "available_arguments": ["n"]
+}

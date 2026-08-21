@@ -65,7 +65,7 @@ The logic family illustrates the boundary. `sat.cnf.canonicalize` returns a
 canonical CNF value; `sat.assignment.check` and `sat.solve` accept that value
 directly. `smt.solve` accepts one bounded QF SMT-LIB query. `lean.check` accepts
 one bounded source snippet and returns elaboration diagnostics after a one-shot
-process invocation.
+process invocation in the fixed Mathlib Lake environment.
 
 ## Operation preflight
 

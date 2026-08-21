@@ -1,5 +1,5 @@
-name: Prepare Lean check environment
-description: Install the fixed Lean toolchain and Python dependencies for one-shot Lean checks.
+name: Prepare Lean and Mathlib environment
+description: Install the fixed Lean toolchain, Mathlib cache, and Python dependencies.
 
 inputs:
   timing-heading:
@@ -20,7 +20,7 @@ runs:
           https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
           | sh -s -- -y --default-toolchain none
         echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-    - name: Install the fixed Lean toolchain
+    - name: Install the fixed Lean and Mathlib environment
       shell: bash
       run: python tools/setup_lean.py --repo .
     - name: Record Lean setup timing
@@ -35,7 +35,7 @@ runs:
           echo ""
           echo "| Phase | Seconds |"
           echo "| --- | ---: |"
-          echo "| Fixed Lean toolchain | $duration |"
+          echo "| Fixed Lean and Mathlib | $duration |"
         } >> "$GITHUB_STEP_SUMMARY"
     - name: Set up Python
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -59,9 +59,9 @@ runs:
         setup_seconds=${LEAN_TOOLCHAIN_SETUP_SECONDS:-0}
         {
           echo ""
-          echo "## Lean toolchain"
+          echo "## Lean and Mathlib environment"
           echo ""
           echo "| Field | Value |"
           echo "| --- | --- |"
-          echo "| Fixed toolchain setup seconds | $setup_seconds |"
+          echo "| Fixed Lean and Mathlib setup seconds | $setup_seconds |"
         } >> "$GITHUB_STEP_SUMMARY"

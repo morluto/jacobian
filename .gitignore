@@ -35,6 +35,7 @@ __pycache__/
 *.py[cod]
 build/
 dist/
+lean/.lake/
 # Container images belong in an OCI registry, never in Git.
 *.docker.tar
 *.oci.tar

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import shutil
 import tempfile
@@ -29,9 +31,33 @@ _MAX_LITERALS = 32_768
 _MAX_SMTLIB_BYTES = 128_000
 _MAX_MODEL_BYTES = 64_000
 _LEAN_TOOLCHAIN = "leanprover/lean4:v4.31.0"
+_MATHLIB_REVISION: Literal["fabf563a7c95a166b8d7b6efca11c8b4dc9d911f"] = (
+    "fabf563a7c95a166b8d7b6efca11c8b4dc9d911f"
+)
+_MATHLIB_MANIFEST_SHA256 = (
+    "2e3e4f23e695c64bd3eac9d210a7e0aa6ce9a270495aaa10442a019ea303d679"
+)
+_LEAN_DECLARATION_SEARCH_SOURCE = Path(__file__).with_name(
+    "_lean_declaration_search.lean"
+)
 _SUPPORTED_SMTLIB_COMMANDS = frozenset(
     {"set-logic", "declare-const", "declare-fun", "assert", "check-sat"}
 )
+
+
+def _is_ascii_lean_declaration_name(value: str) -> bool:
+    """Recognize a conservative non-evaluating Lean dotted-name grammar."""
+
+    if not value or not value.isascii():
+        return False
+    for component in value.split("."):
+        if not component or not (component[0].isalpha() or component[0] == "_"):
+            return False
+        if any(
+            not (character.isalnum() or character in "_'") for character in component
+        ):
+            return False
+    return True
 
 
 class CanonicalCnf(StrictModel):
@@ -305,7 +331,7 @@ class LeanDiagnostic(StrictModel):
 
 
 class LeanCheckRequest(StrictModel):
-    """A source snippet checked in the service image's fixed Lean environment."""
+    """A source snippet checked in the fixed Lean and Mathlib environment."""
 
     source: str = Field(
         min_length=1,
@@ -313,7 +339,7 @@ class LeanCheckRequest(StrictModel):
         description="A self-contained Lean source snippet for the fixed service toolchain.",
         examples=["example : True := by trivial"],
     )
-    timeout_seconds: StrictInt = Field(default=10, ge=1, le=30)
+    timeout_seconds: StrictInt = Field(default=30, ge=1, le=30)
 
 
 class LeanCheckResult(StrictModel):
@@ -327,6 +353,133 @@ class LeanCheckResult(StrictModel):
             diagnostic.severity == "ERROR" for diagnostic in self.diagnostics
         ):
             raise ValueError("an elaborated source result cannot contain an error")
+        return self
+
+
+class LeanDeclarationKind(StrEnum):
+    """Public declaration kinds reported by the fixed Lean environment."""
+
+    AXIOM = "AXIOM"
+    DEFINITION = "DEFINITION"
+    THEOREM = "THEOREM"
+    OPAQUE = "OPAQUE"
+    QUOTIENT = "QUOTIENT"
+    INDUCTIVE = "INDUCTIVE"
+    CONSTRUCTOR = "CONSTRUCTOR"
+    RECURSOR = "RECURSOR"
+
+
+class LeanDeclarationSearchRequest(StrictModel):
+    """Search the fixed Mathlib environment by literal declaration metadata."""
+
+    name_contains: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+        description="A literal, case-sensitive substring of the declaration name.",
+    )
+    type_constants: tuple[str, ...] = Field(
+        default=(),
+        max_length=4,
+        description=(
+            "ASCII dotted Lean declaration names that must all occur in the "
+            "declaration type; values are compared as names and never evaluated."
+        ),
+    )
+    namespace_prefixes: tuple[str, ...] = Field(
+        default=(),
+        max_length=8,
+        description="ASCII dotted Lean namespace names used as literal prefixes.",
+    )
+    kinds: tuple[LeanDeclarationKind, ...] = Field(default=(), max_length=8)
+    result_limit: StrictInt = Field(default=10, ge=1, le=20)
+    timeout_seconds: StrictInt = Field(default=30, ge=1, le=60)
+
+    @field_validator("type_constants", "namespace_prefixes")
+    @classmethod
+    def require_lean_declaration_names(cls, names: tuple[str, ...]) -> tuple[str, ...]:
+        if len(set(names)) != len(names):
+            raise ValueError("Lean declaration names must be unique")
+        if any(not _is_ascii_lean_declaration_name(name) for name in names):
+            raise ValueError(
+                "Lean declaration names must use the ASCII dotted-name grammar"
+            )
+        return names
+
+    @field_validator("kinds")
+    @classmethod
+    def require_distinct_kinds(
+        cls, kinds: tuple[LeanDeclarationKind, ...]
+    ) -> tuple[LeanDeclarationKind, ...]:
+        if len(set(kinds)) != len(kinds):
+            raise ValueError("declaration kinds must be unique")
+        return kinds
+
+    @model_validator(mode="after")
+    def require_search_term(self) -> Self:
+        if self.name_contains is None and not self.type_constants:
+            raise ValueError("name_contains or type_constants is required")
+        return self
+
+
+class LeanDeclaration(StrictModel):
+    """One bounded declaration display from the fixed Mathlib environment."""
+
+    name: str = Field(min_length=1, max_length=512)
+    type: str = Field(min_length=1, max_length=8_000)
+    type_truncated: StrictBool
+    kind: LeanDeclarationKind
+    module: str | None = Field(default=None, min_length=1, max_length=512)
+
+
+class LeanDeclarationSearchResult(StrictModel):
+    """A bounded display projection of fixed-environment declaration matches."""
+
+    outcome: Literal["COMPLETED", "UNAVAILABLE", "TIMEOUT", "ERROR"]
+    query: LeanDeclarationSearchRequest
+    mathlib_revision: Literal["fabf563a7c95a166b8d7b6efca11c8b4dc9d911f"]
+    declarations: tuple[LeanDeclaration, ...] = Field(max_length=20)
+    scanned_declarations: StrictInt = Field(ge=0, le=1_000_000)
+    stop_reason: Literal["EXHAUSTED", "RESULT_LIMIT"] | None = None
+    detail: str | None = Field(default=None, max_length=4_000)
+
+    @model_validator(mode="after")
+    def bind_projection_to_query_and_outcome(self) -> Self:
+        if len(self.declarations) > self.query.result_limit:
+            raise ValueError("declaration results exceed the requested result limit")
+        if self.outcome == "COMPLETED":
+            if self.stop_reason is None or self.detail is not None:
+                raise ValueError(
+                    "a completed declaration search requires a stop reason only"
+                )
+            if (
+                self.stop_reason == "RESULT_LIMIT"
+                and len(self.declarations) != self.query.result_limit
+            ):
+                raise ValueError("a result-limited search must fill the result limit")
+            for declaration in self.declarations:
+                if (
+                    self.query.name_contains is not None
+                    and self.query.name_contains not in declaration.name
+                ):
+                    raise ValueError("a declaration name does not match the query")
+                if self.query.kinds and declaration.kind not in self.query.kinds:
+                    raise ValueError("a declaration kind does not match the query")
+                if self.query.namespace_prefixes and not any(
+                    declaration.name == prefix
+                    or declaration.name.startswith(f"{prefix}.")
+                    for prefix in self.query.namespace_prefixes
+                ):
+                    raise ValueError("a declaration namespace does not match the query")
+        elif (
+            self.declarations
+            or self.scanned_declarations
+            or self.stop_reason is not None
+            or self.detail is None
+        ):
+            raise ValueError(
+                "an unsuccessful declaration search carries only failure detail"
+            )
         return self
 
 
@@ -432,25 +585,38 @@ def solve_smt(request: SmtSolveRequest) -> SmtSolveResult:
 
 
 def check_lean_source(request: LeanCheckRequest) -> LeanCheckResult:
-    """Elaborate one source snippet in a temporary request-scoped directory."""
+    """Elaborate one source snippet in the fixed request-scoped Mathlib environment."""
 
-    executable = shutil.which("lean")
-    if executable is None:
+    mathlib_root = _mathlib_runtime_root()
+    lake = shutil.which("lake")
+    if mathlib_root is None or lake is None:
         return LeanCheckResult(
             outcome="UNAVAILABLE",
             diagnostics=(),
-            detail="The fixed Lean environment is not installed.",
+            detail="The fixed Lean and Mathlib environment is not installed.",
         )
     with tempfile.TemporaryDirectory(prefix="jacobian-lean-") as directory:
         source_path = Path(directory) / "Snippet.lean"
         source_path.write_text(request.source, encoding="utf-8")
         try:
             completed = run_bounded_process(
-                [executable, str(source_path)],
+                [
+                    lake,
+                    "env",
+                    "lean",
+                    str(source_path),
+                    "-T",
+                    "1000000",
+                    "-M",
+                    "10240",
+                    "-j",
+                    "1",
+                    "--trust=0",
+                ],
                 input_bytes=b"",
                 timeout_seconds=float(request.timeout_seconds),
                 environment=worker_environment(
-                    extra_variables=("PATH", "ELAN_HOME"),
+                    extra_variables=("PATH", "ELAN_HOME", "HOME"),
                     overrides={
                         "ELAN_TOOLCHAIN": _LEAN_TOOLCHAIN,
                         "ELAN_HOME": os.environ.get(
@@ -461,13 +627,13 @@ def check_lean_source(request: LeanCheckRequest) -> LeanCheckResult:
                 ),
                 stdout_limit=64_000,
                 stderr_limit=64_000,
-                cwd=directory,
+                cwd=str(mathlib_root),
             )
         except OSError:
             return LeanCheckResult(
                 outcome="UNAVAILABLE",
                 diagnostics=(),
-                detail="The fixed Lean environment could not be started.",
+                detail="The fixed Lean and Mathlib environment could not be started.",
             )
     if completed.timed_out:
         return LeanCheckResult(
@@ -485,6 +651,185 @@ def check_lean_source(request: LeanCheckRequest) -> LeanCheckResult:
     if completed.returncode == 0:
         return LeanCheckResult(outcome="ELABORATED", diagnostics=diagnostics)
     return LeanCheckResult(outcome="REJECTED", diagnostics=diagnostics)
+
+
+def search_mathlib_declarations(
+    request: LeanDeclarationSearchRequest,
+) -> LeanDeclarationSearchResult:
+    """Search one fixed local Mathlib environment in a bounded child process."""
+
+    mathlib_root = _mathlib_runtime_root()
+    lake = shutil.which("lake")
+    if mathlib_root is None or lake is None:
+        return _mathlib_search_failure(
+            request,
+            "UNAVAILABLE",
+            "The fixed local Mathlib environment is not installed.",
+        )
+    with tempfile.TemporaryDirectory(prefix="jacobian-mathlib-search-") as directory:
+        query_path = Path(directory) / "query.json"
+        query_path.write_text(
+            json.dumps(
+                {
+                    "name_contains": request.name_contains,
+                    "type_constants": list(request.type_constants),
+                    "namespace_prefixes": list(request.namespace_prefixes),
+                    "kinds": [kind.value for kind in request.kinds],
+                    "limit": request.result_limit,
+                },
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+        try:
+            completed = run_bounded_process(
+                [
+                    lake,
+                    "env",
+                    "lean",
+                    str(_LEAN_DECLARATION_SEARCH_SOURCE),
+                    "-T",
+                    "1000000000",
+                    "-M",
+                    "10240",
+                    "-j",
+                    "1",
+                    "--trust=0",
+                ],
+                input_bytes=b"",
+                timeout_seconds=float(request.timeout_seconds),
+                environment=worker_environment(
+                    extra_variables=("PATH", "ELAN_HOME", "HOME"),
+                    overrides={
+                        "ELAN_TOOLCHAIN": _LEAN_TOOLCHAIN,
+                        "JACOBIAN_LEAN_QUERY_FILE": str(query_path),
+                    },
+                    locale="C.UTF-8",
+                ),
+                stdout_limit=1_000_000,
+                stderr_limit=64_000,
+                cwd=str(mathlib_root),
+            )
+        except OSError:
+            return _mathlib_search_failure(
+                request,
+                "UNAVAILABLE",
+                "The fixed local Mathlib environment could not be started.",
+            )
+    if completed.timed_out:
+        return _mathlib_search_failure(
+            request,
+            "TIMEOUT",
+            "Mathlib declaration search exceeded the declared time limit.",
+        )
+    if (
+        completed.cancelled
+        or completed.stdout_exceeded
+        or completed.stderr_exceeded
+        or completed.returncode != 0
+    ):
+        return _mathlib_search_failure(
+            request,
+            "ERROR",
+            "Mathlib declaration search failed within a process resource limit.",
+        )
+    return _parse_mathlib_search_result(request, completed.stdout)
+
+
+def _mathlib_runtime_root() -> Path | None:
+    configured = os.environ.get("JACOBIAN_MATHLIB_ROOT")
+    candidates = (
+        (Path(configured),)
+        if configured is not None
+        else (Path(__file__).resolve().parents[4] / "lean",)
+    )
+    for candidate in candidates:
+        manifest_path = candidate / "lake-manifest.json"
+        mathlib_olean = (
+            candidate
+            / ".lake"
+            / "packages"
+            / "mathlib"
+            / ".lake"
+            / "build"
+            / "lib"
+            / "lean"
+            / "Mathlib.olean"
+        )
+        try:
+            manifest_bytes = manifest_path.read_bytes()
+            manifest = json.loads(manifest_bytes)
+            packages = manifest["packages"]
+            revision = next(
+                package["rev"]
+                for package in packages
+                if package.get("name") == "mathlib"
+            )
+            toolchain = (
+                (candidate / "lean-toolchain").read_text(encoding="utf-8").strip()
+            )
+        except (KeyError, OSError, StopIteration, TypeError, ValueError):
+            continue
+        if (
+            revision == _MATHLIB_REVISION
+            and toolchain == _LEAN_TOOLCHAIN
+            and hashlib.sha256(manifest_bytes).hexdigest() == _MATHLIB_MANIFEST_SHA256
+            and mathlib_olean.is_file()
+        ):
+            return candidate
+    return None
+
+
+def _mathlib_search_failure(
+    request: LeanDeclarationSearchRequest,
+    outcome: Literal["UNAVAILABLE", "TIMEOUT", "ERROR"],
+    detail: str,
+) -> LeanDeclarationSearchResult:
+    return LeanDeclarationSearchResult(
+        outcome=outcome,
+        query=request,
+        mathlib_revision=_MATHLIB_REVISION,
+        declarations=(),
+        scanned_declarations=0,
+        detail=detail,
+    )
+
+
+def _parse_mathlib_search_result(
+    request: LeanDeclarationSearchRequest, output: bytes
+) -> LeanDeclarationSearchResult:
+    marker = "JACOBIAN_LEAN_SEARCH_RESULT "
+    lines = output.decode("utf-8", errors="replace").splitlines()
+    payload_lines = [
+        line.removeprefix(marker) for line in lines if line.startswith(marker)
+    ]
+    if len(payload_lines) != 1:
+        return _mathlib_search_failure(
+            request,
+            "ERROR",
+            "Mathlib declaration search returned an invalid response.",
+        )
+    try:
+        payload = json.loads(payload_lines[0])
+        declarations = tuple(
+            LeanDeclaration.model_validate(value) for value in payload["declarations"]
+        )
+        return LeanDeclarationSearchResult(
+            outcome="COMPLETED",
+            query=request,
+            mathlib_revision=_MATHLIB_REVISION,
+            declarations=declarations,
+            scanned_declarations=payload["scanned_declarations"],
+            stop_reason=payload["stop_reason"],
+        )
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return _mathlib_search_failure(
+            request,
+            "ERROR",
+            "Mathlib declaration search returned an invalid response.",
+        )
 
 
 def _lean_diagnostics(output: bytes) -> tuple[LeanDiagnostic, ...]:
@@ -608,7 +953,7 @@ LOGIC_OPERATIONS = (
         operation_id="lean.check",
         version="1",
         title="Check a bounded Lean source snippet",
-        description="Elaborate one source snippet in the fixed Lean service environment and return typed diagnostics.",
+        description="Elaborate one source snippet in the fixed Lean and Mathlib service environment and return typed diagnostics.",
         request_type=LeanCheckRequest,
         result_type=LeanCheckResult,
         run=check_lean_source,
@@ -621,6 +966,26 @@ LOGIC_OPERATIONS = (
             ),
         ),
     ),
+    MathTool(
+        operation_id="lean.declarations.search",
+        version="1",
+        title="Search the fixed Mathlib declaration environment",
+        description=(
+            "Return bounded declaration-name and complete-type matches with "
+            "typed previews from the pinned local Mathlib environment."
+        ),
+        request_type=LeanDeclarationSearchRequest,
+        result_type=LeanDeclarationSearchResult,
+        run=search_mathlib_declarations,
+        tags=("lean", "mathlib", "declarations", "search", "bounded"),
+        examples=(
+            example(
+                "natural_number_types",
+                "Find declarations whose types mention Nat.",
+                {"type_constants": ["Nat"]},
+            ),
+        ),
+    ),
 )
 
 __all__ = [
@@ -630,6 +995,10 @@ __all__ = [
     "CnfCanonicalizeResult",
     "LeanCheckRequest",
     "LeanCheckResult",
+    "LeanDeclaration",
+    "LeanDeclarationKind",
+    "LeanDeclarationSearchRequest",
+    "LeanDeclarationSearchResult",
     "SatAssignmentCheckRequest",
     "SatAssignmentCheckResult",
     "SatSolveRequest",
@@ -640,6 +1009,7 @@ __all__ = [
     "canonicalize_cnf",
     "check_lean_source",
     "check_sat_assignment",
+    "search_mathlib_declarations",
     "solve_sat",
     "solve_smt",
 ]

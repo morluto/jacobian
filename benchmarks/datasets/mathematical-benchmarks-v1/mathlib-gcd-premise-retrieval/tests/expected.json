@@ -1,0 +1,4 @@
+{
+  "task_id": "jacobian/mathlib-gcd-premise-retrieval",
+  "oracle_reward": 1.0
+}

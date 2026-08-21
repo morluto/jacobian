@@ -76,6 +76,7 @@ def compute_root_system_data(request: CartanMatrixRequest) -> RootSystemDataResu
         components=tuple(components),
     )
 
+
 def _apply_reflection(
     cartan: list[list[int]], vector: list[int], simple_idx: int
 ) -> list[int]:

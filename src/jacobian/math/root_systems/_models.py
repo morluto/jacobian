@@ -140,6 +140,7 @@ class RootSystemDataResult(StrictModel):
             raise ValueError("component data is not bound to the Cartan matrix")
         return self
 
+
 class SimpleReflectionRequest(StrictModel):
     """Request to apply a simple reflection s_i to a root lattice vector."""
 

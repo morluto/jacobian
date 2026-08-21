@@ -11,6 +11,11 @@ from jacobian.math.geometry.exact._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "geometry.points.circumradius_profile.compute",
+        AdmissionDecision.KEEP,
+        "one complete exact squared-circumradius multiset of every unordered triple with explicit degenerate disposition",
+    ),
+    OperationAdmission(
         "geometry.points.distance_graph.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

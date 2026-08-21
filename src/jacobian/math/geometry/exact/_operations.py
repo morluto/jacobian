@@ -6,6 +6,11 @@ from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.geometry.exact._models import (
+    CircumradiusMultiplicityEntry,
+    CircumradiusProfileEntry,
+    CircumradiusProfileRequest,
+    CircumradiusProfileResult,
+    CircumradiusTripleDisposition,
     DistanceGraphRequest,
     DistanceGraphResult,
     DistanceMultiplicityEntry,
@@ -81,4 +86,87 @@ def compute_distance_graph(
     )
 
 
-__all__ = ["compute_distance_graph", "compute_distance_profile"]
+
+def _squared_circumradius(
+    p: tuple[Fraction, ...],
+    q: tuple[Fraction, ...],
+    r: tuple[Fraction, ...],
+) -> tuple[CircumradiusTripleDisposition, Fraction | None]:
+    """Return the disposition and exact squared circumradius of one triple.
+
+    For side squared-lengths ``a2, b2, c2`` the squared circumradius is
+    ``R^2 = (a2 b2 c2) / (16 K^2)`` where
+    ``16 K^2 = 2(a2 b2 + b2 c2 + c2 a2) - (a2^2 + b2^2 + c2^2)`` is the
+    Heron expression in squared sides.  A zero denominator means the three
+    points are collinear, so no circumcircle exists.
+    """
+    a2 = _squared_distance(q, r)
+    b2 = _squared_distance(p, r)
+    c2 = _squared_distance(p, q)
+    sixteen_k_squared = (
+        2 * (a2 * b2 + b2 * c2 + c2 * a2) - (a2 * a2 + b2 * b2 + c2 * c2)
+    )
+    if sixteen_k_squared == 0:
+        return CircumradiusTripleDisposition.DEGENERATE, None
+    radius_squared = (a2 * b2 * c2) / sixteen_k_squared
+    return CircumradiusTripleDisposition.NONDEGENERATE, radius_squared
+
+
+def compute_circumradius_profile(
+    request: CircumradiusProfileRequest,
+) -> CircumradiusProfileResult:
+    """Compute the exact squared circumradius of every unordered triple.
+
+    Each triple receives an explicit mathematical disposition: a nondegenerate
+    triangle with its exact squared circumradius, or a degenerate (collinear)
+    triple for which no circumcircle exists.  Triples sharing each radius are
+    grouped into a sorted multiplicity profile so collisions are directly
+    inspectable.
+    """
+    from collections import Counter
+    from itertools import combinations
+
+    config = request.configuration
+    n = len(config.points)
+    points = [_to_fraction_point(p) for p in config.points]
+
+    triples: list[CircumradiusProfileEntry] = []
+    radii: Counter[Fraction] = Counter()
+    for i, j, k in combinations(range(n), 3):
+        disposition, radius = _squared_circumradius(points[i], points[j], points[k])
+        squared_radius_value: CanonicalRational | None = None
+        if disposition is CircumradiusTripleDisposition.NONDEGENERATE:
+            assert radius is not None
+            squared_radius_value = CanonicalRational.from_fraction(radius)
+            radii[radius] += 1
+        triples.append(
+            CircumradiusProfileEntry(
+                triple=(i, j, k),
+                disposition=disposition,
+                squared_radius=squared_radius_value,
+            ),
+        )
+
+    nondegenerate = sum(radii.values())
+    multiplicities = tuple(
+        CircumradiusMultiplicityEntry(
+            squared_radius=CanonicalRational.from_fraction(radius),
+            triple_count=count,
+        )
+        for radius, count in sorted(radii.items())
+    )
+    return CircumradiusProfileResult(
+        dimension=2,
+        point_count=n,
+        triples=tuple(triples),
+        multiplicities=multiplicities,
+        nondegenerate_count=nondegenerate,
+        degenerate_count=len(triples) - nondegenerate,
+    )
+
+
+__all__ = [
+    "compute_circumradius_profile",
+    "compute_distance_graph",
+    "compute_distance_profile",
+]

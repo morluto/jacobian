@@ -13,6 +13,7 @@ from jacobian.math.numerical_semigroups._algorithms import (
     catenary_degree_from_factorizations,
     factorization_count,
     factorization_lengths,
+    factorization_length_extrema,
     factorizations,
     minimal_generating_system,
 )
@@ -130,6 +131,7 @@ __all__ = [
     "factorization_distance",
     "factorization_graph",
     "factorization_lengths",
+    "factorization_length_extrema",
     "factorizations",
     "minimal_generating_system",
 ]

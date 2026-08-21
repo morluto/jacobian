@@ -18,6 +18,7 @@ from jacobian.math.numerical_semigroups._algorithms import (
     catenary_degree_from_factorizations,
     delta_periodicity_bound,
     factorization_count,
+    factorization_length_extrema,
     factorization_lengths,
     factorizations,
     minimal_generating_system,
@@ -516,9 +517,11 @@ class ElementElasticityResult(StrictModel):
     @model_validator(mode="after")
     def require_length_ratio(self) -> Self:
         generators = tuple(map(parse_canonical_integer, self.minimal_generators))
-        lengths = factorization_lengths(generators, parse_canonical_integer(self.value))
-        if (self.minimum_length, self.maximum_length) != (min(lengths), max(lengths)):
-            raise ValueError("length extrema do not match the complete length set")
+        expected_extrema = factorization_length_extrema(
+            generators, parse_canonical_integer(self.value)
+        )
+        if (self.minimum_length, self.maximum_length) != expected_extrema:
+            raise ValueError("length extrema do not match the element")
         if Fraction(self.elasticity) != Fraction(
             self.maximum_length, self.minimum_length
         ):

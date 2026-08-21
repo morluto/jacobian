@@ -13,6 +13,7 @@ from jacobian.math.numerical_semigroups._algorithms import (
     catenary_degree_from_factorizations,
     delta_periodicity_bound,
     factorization_lengths,
+    factorization_length_extrema,
     factorization_predecessors,
     factorizations,
     minimal_generating_system,
@@ -337,9 +338,7 @@ def compute_element_elasticity(
 ) -> ElementElasticityResult:
     atoms = _minimal_generators_list(request.generators)
     value = parse_canonical_integer(request.value)
-    lengths = factorization_lengths(tuple(atoms), value)
-    min_len = min(lengths)
-    max_len = max(lengths)
+    min_len, max_len = factorization_length_extrema(tuple(atoms), value)
     frac = Fraction(max_len, min_len)
     return ElementElasticityResult(
         value=request.value,

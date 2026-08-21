@@ -225,7 +225,9 @@ class DisjunctiveSumResult(StrictModel):
     @model_validator(mode="after")
     def require_exact_disjunctive_invariants(self) -> Self:
         if self.component_count != len(self.component_grundy_values):
-            raise ValueError("component_count must match component_grundy_values length")
+            raise ValueError(
+                "component_count must match component_grundy_values length"
+            )
         if any(value < 0 for value in self.component_grundy_values):
             raise ValueError("component Grundy values must be nonnegative")
         from functools import reduce

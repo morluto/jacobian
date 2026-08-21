@@ -2,8 +2,10 @@
 
 from jacobian.catalog.models import MathTools
 from jacobian.math.geometry._lines import LINE_OPERATIONS
+from jacobian.math.geometry._pinned_distances import PINNED_DISTANCE_OPERATIONS
 from jacobian.math.geometry._points import POINT_OPERATIONS
 from jacobian.math.geometry._polygons import POLYGON_OPERATIONS
+from jacobian.math.geometry._profiles import PROFILE_OPERATIONS
 from jacobian.math.geometry._segments import SEGMENT_OPERATIONS
 from jacobian.math.geometry._triangles import TRIANGLE_OPERATIONS
 
@@ -15,4 +17,6 @@ TOOLS: MathTools = (
     *LINE_OPERATIONS,
     *TRIANGLE_OPERATIONS,
     *POLYGON_OPERATIONS,
+    *PROFILE_OPERATIONS,
+    *PINNED_DISTANCE_OPERATIONS,
 )

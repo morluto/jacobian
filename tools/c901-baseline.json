@@ -13,6 +13,11 @@
       "complexity": 12
     },
     {
+      "path": "src/jacobian/math/graphs/multigraph/_models.py",
+      "symbol": "require_consistent_cover",
+      "complexity": 13
+    },
+    {
       "path": "src/jacobian/math/graphs/tree_decompositions/operations.py",
       "symbol": "restrict",
       "complexity": 13

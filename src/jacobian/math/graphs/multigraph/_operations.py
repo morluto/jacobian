@@ -200,18 +200,18 @@ def _search_dfs(
     num_edges = len(graph.edges)
     edges = graph.edges
     states_explored = 0
-    stack: list[tuple[int, list[FlowEdgeAssignment]]] = [(0, [])]
-    while stack:
-        edge_index, assignments = stack.pop()
-        if edge_index == num_edges:
-            states_explored += 1
-            if states_explored > max_states:
-                return MultigraphFlowFindResult(
-                    status="UNKNOWN",
-                    flow=None,
-                    states_explored=states_explored - 1,
-                    termination_reason="STATE_BUDGET_EXCEEDED",
-                )
+    # Iterative DFS that expands one branch at a time and charges the
+    # budget on every partial state. This avoids eagerly pushing all
+    # children while copying prefix lists, which would retain up to
+    # ``branching * depth`` assignments even when ``max_states == 1``.
+    assignments: list[FlowEdgeAssignment] = []
+    next_index: list[int] = [0]
+
+    while next_index:
+        depth = len(assignments)
+        if depth == num_edges:
+            # Complete assignment was already counted when the final edge
+            # was pushed. Evaluate conservation within the remaining budget.
             if _check_flow_conservation(graph, group, assignments):
                 return MultigraphFlowFindResult(
                     status="FOUND",
@@ -219,15 +219,46 @@ def _search_dfs(
                     states_explored=states_explored,
                     termination_reason="WITNESS_FOUND",
                 )
+            # Backtrack from leaf: pop placeholder and last assignment.
+            next_index.pop()
+            if not next_index:
+                break
+            assignments.pop()
             continue
-        edge = edges[edge_index]
-        for orientation, value in reversed(choices_per_edge[edge_index]):
-            new_assign = FlowEdgeAssignment(
-                edge_id=edge.edge_id,
-                orientation=orientation,
-                value=value,
+
+        choices = choices_per_edge[depth]
+        idx = next_index[depth]
+        if idx >= len(choices):
+            # Exhausted all choices at this depth — backtrack.
+            next_index.pop()
+            if assignments:
+                assignments.pop()
+            continue
+
+        # Advance pointer for this depth so the next sibling is tried
+        # after backtracking.
+        next_index[depth] = idx + 1
+
+        # Charge the budget for the new partial state before materialising it.
+        states_explored += 1
+        if states_explored > max_states:
+            return MultigraphFlowFindResult(
+                status="UNKNOWN",
+                flow=None,
+                states_explored=states_explored - 1,
+                termination_reason="STATE_BUDGET_EXCEEDED",
             )
-            stack.append((edge_index + 1, [*assignments, new_assign]))
+
+        orientation, value = choices[idx]
+        edge = edges[depth]
+        new_assign = FlowEdgeAssignment(
+            edge_id=edge.edge_id,
+            orientation=orientation,
+            value=value,
+        )
+        assignments.append(new_assign)
+        next_index.append(0)
+
     return MultigraphFlowFindResult(
         status="EXHAUSTED",
         flow=None,
@@ -483,6 +514,9 @@ def check_cycle_multicover(
     )
 
     return CycleMulticoverResult(
+        graph=graph,
+        cycles=request.cycles,
+        target_multiplicity=k,
         cycle_validity=tuple(cycle_validity),
         edge_multiplicity=multiplicity_tuple,
         missing_edge_ids=tuple(missing),

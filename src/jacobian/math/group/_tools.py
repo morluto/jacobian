@@ -51,8 +51,7 @@ def group_operation[
     )
 
 
-
-S3_STABILIZER_POINT_0 = {'degree': 3, 'generators': [[1, 2, 0], [1, 0, 2]], 'point': 0}
+S3_STABILIZER_POINT_0 = {"degree": 3, "generators": [[1, 2, 0], [1, 0, 2]], "point": 0}
 
 GROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     group_operation(

@@ -26,9 +26,17 @@ def test_group_stabilizer_orbit_stabilizer_theorem() -> None:
 
     gens = ((1, 2, 0), (1, 0, 2))
     degree = 3
-    order = int(compute_group_order(PermutationGroupRequest(degree=degree, generators=gens)).order)
-    orbit = compute_group_orbit(GroupOrbitRequest(degree=degree, generators=gens, point=0)).orbit
-    stab = compute_group_stabilizer(GroupStabilizerRequest(degree=degree, generators=gens, point=0))
+    order = int(
+        compute_group_order(
+            PermutationGroupRequest(degree=degree, generators=gens)
+        ).order
+    )
+    orbit = compute_group_orbit(
+        GroupOrbitRequest(degree=degree, generators=gens, point=0)
+    ).orbit
+    stab = compute_group_stabilizer(
+        GroupStabilizerRequest(degree=degree, generators=gens, point=0)
+    )
 
     # Stabilizer generators must fix the point.
     for gen in stab.generators:

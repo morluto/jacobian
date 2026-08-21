@@ -49,6 +49,22 @@ def test_process_lane_is_invoked_by_ci() -> None:
     assert "run: make test-${{ inputs.lane }}" in action
 
 
+def test_singular_backend_has_a_pinned_required_ci_lane() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    singular = workflow.split("  singular:", 1)[1].split("  wheel:", 1)[0]
+    required = workflow.split("  required:", 1)[1]
+
+    assert "SINGULAR_DEBIAN_VERSION: 1:4.4.1+ds-2" in singular
+    assert '"singular=${SINGULAR_DEBIAN_VERSION}"' in singular
+    assert 'system("version")' in singular
+    assert "make test-singular" in singular
+    assert (
+        "needs: [static, python, boundaries, singular, wheel, coverage, lean]"
+        in required
+    )
+    assert 'test "$SINGULAR_RESULT" = success' in required
+
+
 def test_python_and_boundary_lanes_share_evidence_collection() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     action = (ROOT / ".github/actions/run-test-lane/action.yml").read_text(

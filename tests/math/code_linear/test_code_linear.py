@@ -66,7 +66,7 @@ def test_parity_check_matches_dual() -> None:
     assert result.dimension == 1
     assert result.rank_h == 1
     assert result.length == 2
-    assert len(result.parity_check) == 1
+    assert len(result.parity_check.rows) == 1
 
 
 def test_codeword_check_member() -> None:
@@ -88,17 +88,46 @@ def test_codeword_check_nonmember() -> None:
 
 
 def test_syndrome_zero_for_codeword() -> None:
-    request = SyndromeRequest(field_order=2, parity_check_matrix=((1, 1),), word=(1, 1))
+    request = SyndromeRequest(
+        parity_check={"field_order": 2, "column_count": 2, "rows": ((1, 1),)},
+        word=(1, 1),
+    )
     result = compute_syndrome(request)
     assert result.syndrome == (0,)
     assert result.is_member is True
 
 
 def test_syndrome_nonzero_for_noncodeword() -> None:
-    request = SyndromeRequest(field_order=2, parity_check_matrix=((1, 1),), word=(1, 0))
+    request = SyndromeRequest(
+        parity_check={"field_order": 2, "column_count": 2, "rows": ((1, 1),)},
+        word=(1, 0),
+    )
     result = compute_syndrome(request)
     assert result.syndrome == (1,)
     assert result.is_member is False
+
+
+def test_full_space_dual_composes_into_empty_syndrome() -> None:
+    dual = compute_dual_code(
+        GeneratorMatrixRequest(field_order=2, generator_matrix=((1, 0), (0, 1)))
+    )
+    assert dual.parity_check.rows == ()
+    result = compute_syndrome(
+        SyndromeRequest(parity_check=dual.parity_check, word=(1, 1))
+    )
+    assert result.syndrome == ()
+    assert result.is_member is True
+
+
+def test_rank_one_length_32_code_retains_all_dual_rows() -> None:
+    result = compute_dual_code(
+        GeneratorMatrixRequest(
+            field_order=2,
+            generator_matrix=(tuple([1] + [0] * 31),),
+        )
+    )
+    assert len(result.parity_check.rows) == 31
+    assert result.parity_check.column_count == 32
 
 
 def test_code_equal_same_matrices() -> None:
@@ -186,7 +215,10 @@ def test_request_rejects_bad_entry() -> None:
 
 def test_syndrome_request_rejects_bad_word_length() -> None:
     with pytest.raises(ValidationError, match="length"):
-        SyndromeRequest(field_order=2, parity_check_matrix=((1, 1),), word=(1,))
+        SyndromeRequest(
+            parity_check={"field_order": 2, "column_count": 2, "rows": ((1, 1),)},
+            word=(1,),
+        )
 
 
 def test_codeword_check_request_rejects_bad_word_length() -> None:

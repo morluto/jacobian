@@ -7,6 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math._labels import OpaqueLabel
 from jacobian.math.finite_topology_spaces.values import (
     FiniteTopologicalMap,
     FiniteTopologicalSpace,
@@ -55,7 +56,7 @@ class KolmogorovQuotientRequest(StrictModel):
 
 
 class KolmogorovQuotientResult(StrictModel):
-    quotient_points: tuple[str, ...]
+    quotient_points: tuple[tuple[OpaqueLabel, ...], ...]
     quotient_preorder: tuple[tuple[int, ...], ...]
 
 

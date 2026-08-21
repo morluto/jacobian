@@ -8,17 +8,21 @@ from jacobian.math.universal_algebra.operations import (
     quotient,
 )
 from jacobian.math.universal_algebra.values import (
+    ApplicationTerm,
     FiniteAlgebra,
     FlatTerm,
     OperationSymbol,
     Term,
+    VariableTerm,
 )
 
 __all__ = [
+    "ApplicationTerm",
     "FiniteAlgebra",
     "FlatTerm",
     "OperationSymbol",
     "Term",
+    "VariableTerm",
     "congruence_check",
     "equation_profile",
     "evaluate_term",

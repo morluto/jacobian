@@ -20,7 +20,7 @@ def compute_arrangement(
     """Check if an arrangement is central (all hyperplanes pass through origin)."""
     is_central = True
     for hp in request.hyperplanes:
-        if sympy.Rational(hp.constant) != 0:
+        if hp.constant.as_fraction() != 0:
             is_central = False
             break
     return HyperplaneArrangementResult(

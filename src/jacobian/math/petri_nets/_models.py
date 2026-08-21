@@ -8,8 +8,11 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.petri_nets.values import (
+    MAX_PETRI_MARKING,
+    MAX_REACHABILITY_STATES,
     Marking,
     PetriNet,
+    require_reachability_bounds,
 )
 
 
@@ -51,8 +54,24 @@ class FireTransitionRequest(StrictModel):
 class FireTransitionResult(StrictModel):
     """Result of firing a transition."""
 
-    fired: bool
-    new_marking: tuple[int, ...] = Field(default=())
+    status: Literal["FIRED", "NOT_ENABLED", "ESCAPES_DECLARED_ENVELOPE"]
+    new_marking: Marking | None = None
+    envelope_escape: tuple[int, ...] | None = None
+
+    @model_validator(mode="after")
+    def require_consistent_outcome(self) -> Self:
+        if self.status == "ESCAPES_DECLARED_ENVELOPE":
+            if self.new_marking is not None or self.envelope_escape is None:
+                raise ValueError(
+                    "envelope escape must carry only the successor witness"
+                )
+            if any(token < 0 for token in self.envelope_escape):
+                raise ValueError("envelope escape tokens must be nonnegative")
+            if all(token <= MAX_PETRI_MARKING for token in self.envelope_escape):
+                raise ValueError("envelope escape must contain an out-of-range token")
+        elif self.new_marking is None or self.envelope_escape is not None:
+            raise ValueError("ordinary firing outcomes must carry only a marking")
+        return self
 
 
 class IncidenceMatrixRequest(StrictModel):
@@ -70,17 +89,19 @@ class IncidenceMatrixResult(StrictModel):
 class ReachabilityRequest(StrictModel):
     """Compute the bounded reachability graph from an initial marking.
 
-    Bounds the state space to avoid unbounded exploration.
+    The state count is admitted jointly with place and transition dimensions,
+    bounding state cells, firing records, exploration work, and result bytes.
     """
 
     net: PetriNet
     initial_marking: Marking
-    max_states: int = Field(default=10000, ge=1, le=100000)
+    max_states: int = Field(default=10000, ge=1, le=MAX_REACHABILITY_STATES)
 
     @model_validator(mode="after")
     def require_valid_marking_size(self) -> Self:
         if len(self.initial_marking.tokens) != self.net.place_count:
             raise ValueError("marking length must match place_count")
+        require_reachability_bounds(self.net, self.max_states)
         return self
 
 
@@ -92,140 +113,77 @@ class ReachabilityFrontier(StrictModel):
     target_marking: tuple[int, ...]
 
 
-def _fired_marking(
-    net: PetriNet,
-    states: tuple[tuple[int, ...], ...],
-    source: int,
-    transition: int,
-) -> tuple[int, ...]:
-    if not 0 <= transition < net.transition_count:
-        raise ValueError("transition index is out of range")
-    marking = states[source]
-    if any(
-        marking[place] < net.pre[place][transition] for place in range(net.place_count)
-    ):
-        raise ValueError("reported firing is not enabled")
-    return tuple(
-        marking[place] - net.pre[place][transition] + net.post[place][transition]
-        for place in range(net.place_count)
-    )
+class ReachabilityEnvelopeEscape(ReachabilityFrontier):
+    """First deterministic firing whose successor exceeds the marking domain."""
 
-
-def _require_valid_states(
-    net: PetriNet,
-    initial_marking: tuple[int, ...],
-    max_states: int,
-    states: tuple[tuple[int, ...], ...],
-) -> None:
-    if not states or states[0] != initial_marking:
-        raise ValueError("states must begin with the initial marking")
-    if len(states) > max_states:
-        raise ValueError("states exceed max_states")
-    if len(set(states)) != len(states):
-        raise ValueError("states must be unique")
-    if any(len(state) != net.place_count for state in states):
-        raise ValueError("state marking length must match place_count")
-    if any(token < 0 for state in states for token in state):
-        raise ValueError("state markings must be non-negative")
-
-
-def _expected_firings(
-    net: PetriNet, states: tuple[tuple[int, ...], ...]
-) -> set[tuple[int, int]]:
-    return {
-        (source, transition)
-        for source, marking in enumerate(states)
-        for transition in range(net.transition_count)
-        if all(
-            marking[place] >= net.pre[place][transition]
-            for place in range(net.place_count)
-        )
-    }
-
-
-def _validate_edges(
-    net: PetriNet,
-    states: tuple[tuple[int, ...], ...],
-    edges: tuple[tuple[int, int, int], ...],
-) -> tuple[set[tuple[int, int]], dict[int, set[int]]]:
-    observed: set[tuple[int, int]] = set()
-    adjacency: dict[int, set[int]] = {index: set() for index in range(len(states))}
-    for source, transition, target in edges:
-        if not 0 <= source < len(states) or not 0 <= target < len(states):
-            raise ValueError("edge state index is out of range")
-        firing = (source, transition)
-        if firing in observed:
-            raise ValueError("each enabled firing must appear exactly once")
-        observed.add(firing)
-        if states[target] != _fired_marking(net, states, source, transition):
-            raise ValueError("edge target does not match transition firing")
-        adjacency[source].add(target)
-    return observed, adjacency
-
-
-def _validate_frontier(
-    net: PetriNet,
-    states: tuple[tuple[int, ...], ...],
-    frontier: tuple[ReachabilityFrontier, ...],
-    observed: set[tuple[int, int]],
-) -> None:
-    state_set = set(states)
-    for record in frontier:
-        if not 0 <= record.source_state < len(states):
-            raise ValueError("frontier source_state is out of range")
-        firing = (record.source_state, record.transition)
-        if firing in observed:
-            raise ValueError("each enabled firing must appear exactly once")
-        observed.add(firing)
-        if record.target_marking != _fired_marking(net, states, *firing):
-            raise ValueError("frontier target does not match transition firing")
-        if record.target_marking in state_set:
-            raise ValueError("frontier target must be omitted from states")
-
-
-def _require_reachable(adjacency: dict[int, set[int]]) -> None:
-    reached = {0}
-    pending = [0]
-    while pending:
-        for target in adjacency[pending.pop()]:
-            if target not in reached:
-                reached.add(target)
-                pending.append(target)
-    if reached != set(adjacency):
-        raise ValueError("every reported state must be reachable from state 0")
+    @model_validator(mode="after")
+    def require_outside_marking_envelope(self) -> Self:
+        if not any(token > MAX_PETRI_MARKING for token in self.target_marking):
+            raise ValueError("escape target must exceed the marking envelope")
+        return self
 
 
 class ReachabilityResult(StrictModel):
-    """A complete graph or a bounded prefix with an explicit open frontier.
+    """A complete graph, bounded prefix, or marking-envelope escape.
 
     Each state is a marking tuple. The graph is a mapping from marking
-    to a list of (transition, resulting_marking) pairs.
+    to a list of (transition, resulting_marking) pairs. An envelope escape is
+    a typed non-conclusion carrying the first deterministic firing witness.
     """
 
     net: PetriNet
-    initial_marking: tuple[int, ...]
-    max_states: int = Field(ge=1, le=100000)
+    initial_marking: Marking
+    max_states: int = Field(ge=1, le=MAX_REACHABILITY_STATES)
     states: tuple[tuple[int, ...], ...]
     edges: tuple[tuple[int, int, int], ...]
-    status: Literal["COMPLETE", "TRUNCATED"]
+    status: Literal["COMPLETE", "TRUNCATED", "ESCAPES_DECLARED_ENVELOPE"]
     frontier: tuple[ReachabilityFrontier, ...]
+    envelope_escape: ReachabilityEnvelopeEscape | None = None
 
     @model_validator(mode="after")
     def require_exact_bounded_graph(self) -> Self:
-        _require_valid_states(
-            self.net, self.initial_marking, self.max_states, self.states
+        from jacobian.math.petri_nets.operations import reachability_graph
+
+        expected_states, expected_edges, expected_frontier, expected_escape = (
+            reachability_graph(
+                self.net,
+                self.initial_marking,
+                self.max_states,
+            )
         )
-        observed_firings, adjacency = _validate_edges(self.net, self.states, self.edges)
-        _validate_frontier(self.net, self.states, self.frontier, observed_firings)
-        expected_firings = _expected_firings(self.net, self.states)
-        if observed_firings != expected_firings:
-            raise ValueError("edges and frontier must cover every enabled firing")
-        if self.frontier and len(self.states) != self.max_states:
-            raise ValueError("a nonempty frontier requires an exhausted state bound")
-        expected_status = "TRUNCATED" if self.frontier else "COMPLETE"
+        if self.states != tuple(expected_states):
+            raise ValueError("states must equal the deterministic BFS states")
+        if self.edges != tuple(expected_edges):
+            raise ValueError("edges must equal the deterministic BFS edges")
+        if self.frontier != tuple(
+            ReachabilityFrontier(
+                source_state=source,
+                transition=transition,
+                target_marking=target,
+            )
+            for source, transition, target in expected_frontier
+        ):
+            raise ValueError("frontier must equal the deterministic BFS frontier")
+        expected_escape_value = (
+            None
+            if expected_escape is None
+            else ReachabilityEnvelopeEscape(
+                source_state=expected_escape[0],
+                transition=expected_escape[1],
+                target_marking=expected_escape[2],
+            )
+        )
+        if self.envelope_escape != expected_escape_value:
+            raise ValueError("envelope escape must equal the deterministic BFS witness")
+        expected_status = (
+            "ESCAPES_DECLARED_ENVELOPE"
+            if expected_escape is not None
+            else "TRUNCATED"
+            if expected_frontier
+            else "COMPLETE"
+        )
         if self.status != expected_status:
-            raise ValueError("status must agree with the open frontier")
-        _require_reachable(adjacency)
+            raise ValueError("status must agree with the deterministic BFS outcome")
         return self
 
 
@@ -236,6 +194,7 @@ __all__ = [
     "FireTransitionResult",
     "IncidenceMatrixRequest",
     "IncidenceMatrixResult",
+    "ReachabilityEnvelopeEscape",
     "ReachabilityFrontier",
     "ReachabilityRequest",
     "ReachabilityResult",

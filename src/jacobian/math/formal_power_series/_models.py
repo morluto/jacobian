@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
@@ -17,7 +18,6 @@ from jacobian.math._rational_height import RationalHeight, sum_heights
 MAX_TRUNCATION_ORDER = 512
 MAX_RATIONAL_DIGITS = 256
 MAX_RESULT_RATIONAL_DIGITS = 4_096
-MAX_RESULT_BYTES = 10 * 1024 * 1024
 MAX_POWER_EXPONENT = 1_000
 
 CoefficientHeight = RationalHeight | None
@@ -133,6 +133,73 @@ def _require_height(height: RationalHeight, operation: str) -> None:
             f"{operation} coefficient growth exceeds the "
             f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
         )
+
+
+def _require_zero_residual(
+    coefficients: tuple[CanonicalRational, ...], order: int, operation: str
+) -> None:
+    if len(coefficients) != order:
+        raise ValueError(
+            f"{operation} residual must contain exactly {order} coefficients"
+        )
+    if any(value.num != "0" for value in coefficients):
+        raise ValueError(f"{operation} residual must be identically zero")
+
+
+def _fraction_coefficients(series: TruncatedSeries) -> tuple[Fraction, ...]:
+    return tuple(value.as_fraction() for value in series.coefficients)
+
+
+def _convolution_coefficients(
+    left: TruncatedSeries, right: TruncatedSeries
+) -> tuple[Fraction, ...]:
+    if (
+        left.variable != right.variable
+        or left.truncation_order != right.truncation_order
+    ):
+        raise ValueError("source series must share variable and truncation order")
+    left_values = _fraction_coefficients(left)
+    right_values = _fraction_coefficients(right)
+    return tuple(
+        sum(
+            (
+                left_values[index] * right_values[degree - index]
+                for index in range(degree + 1)
+            ),
+            start=Fraction(0),
+        )
+        for degree in range(left.truncation_order)
+    )
+
+
+def _composition_coefficients(
+    outer: TruncatedSeries, inner: TruncatedSeries
+) -> tuple[Fraction, ...]:
+    if (
+        outer.variable != inner.variable
+        or outer.truncation_order != inner.truncation_order
+    ):
+        raise ValueError("source series must share variable and truncation order")
+    order = outer.truncation_order
+    outer_values = _fraction_coefficients(outer)
+    inner_values = _fraction_coefficients(inner)
+    power = (Fraction(1), *([Fraction(0)] * (order - 1)))
+    result = [Fraction(0)] * order
+    for outer_degree in range(order):
+        for degree in range(order):
+            result[degree] += outer_values[outer_degree] * power[degree]
+        if outer_degree + 1 < order:
+            power = tuple(
+                sum(
+                    (
+                        power[index] * inner_values[degree - index]
+                        for index in range(degree + 1)
+                    ),
+                    start=Fraction(0),
+                )
+                for degree in range(order)
+            )
+    return tuple(result)
 
 
 def _inverse_height(series: InputTruncatedSeries) -> RationalHeight:
@@ -311,12 +378,23 @@ class SeriesArithmeticResult(StrictModel):
 
 
 class SeriesMultiplyResult(StrictModel):
+    left: TruncatedSeries
+    right: TruncatedSeries
     result: TruncatedSeries
     convolution_ledger: tuple[CanonicalRational, ...] = Field(
         description="Per-degree Cauchy convolution sums c_n = sum_{i=0}^n a_i b_{n-i}.",
     )
     residual_congruence: Literal["EXACT_MOD_X_TO_N"] = "EXACT_MOD_X_TO_N"
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+    @model_validator(mode="after")
+    def require_exact_convolution_ledger(self) -> Self:
+        expected = _convolution_coefficients(self.left, self.right)
+        if _fraction_coefficients(self.result) != expected:
+            raise ValueError("result must equal the source convolution")
+        if tuple(value.as_fraction() for value in self.convolution_ledger) != expected:
+            raise ValueError("convolution ledger must equal the source convolution")
+        return self
 
 
 class SeriesScalarMultiplyRequest(StrictModel):
@@ -416,6 +494,7 @@ class SeriesInverseRequest(StrictModel):
 
 
 class SeriesInverseResult(StrictModel):
+    source: TruncatedSeries
     result: TruncatedSeries
     residual_congruence: Literal["PRODUCT_IS_ONE_MOD_X_TO_N"] = (
         "PRODUCT_IS_ONE_MOD_X_TO_N"
@@ -425,6 +504,22 @@ class SeriesInverseResult(StrictModel):
     )
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
+    @model_validator(mode="after")
+    def require_inverse_identity(self) -> Self:
+        _require_zero_residual(
+            self.residual_coefficients,
+            self.result.truncation_order,
+            "inverse",
+        )
+        product = list(_convolution_coefficients(self.source, self.result))
+        product[0] -= 1
+        residual = tuple(value.as_fraction() for value in self.residual_coefficients)
+        if tuple(product) != residual:
+            raise ValueError(
+                "inverse residual must equal source times result minus one"
+            )
+        return self
+
 
 # ---------------------------------------------------------------------------
 # Divide
@@ -432,6 +527,8 @@ class SeriesInverseResult(StrictModel):
 
 
 class SeriesDivideResult(StrictModel):
+    numerator: TruncatedSeries
+    denominator: TruncatedSeries
     quotient: TruncatedSeries
     residual_congruence: Literal[
         "DENOMINATOR_TIMES_QUOTIENT_MINUS_NUMERATOR_IS_ZERO_MOD_X_TO_N"
@@ -440,6 +537,26 @@ class SeriesDivideResult(StrictModel):
         description="B(x) Q(x) - A(x) coefficients (must all be zero).",
     )
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+    @model_validator(mode="after")
+    def require_division_identity(self) -> Self:
+        _require_zero_residual(
+            self.residual_coefficients,
+            self.quotient.truncation_order,
+            "division",
+        )
+        product = _convolution_coefficients(self.denominator, self.quotient)
+        numerator = _fraction_coefficients(self.numerator)
+        expected = tuple(
+            product[index] - numerator[index]
+            for index in range(self.quotient.truncation_order)
+        )
+        residual = tuple(value.as_fraction() for value in self.residual_coefficients)
+        if expected != residual:
+            raise ValueError(
+                "division residual must equal denominator times quotient minus numerator"
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -540,12 +657,39 @@ class SeriesReversionRequest(StrictModel):
 
 
 class SeriesReversionResult(StrictModel):
+    source: TruncatedSeries
     result: TruncatedSeries
     left_identity: Literal["F_OF_G_IS_X_MOD_X_TO_N"] = "F_OF_G_IS_X_MOD_X_TO_N"
     right_identity: Literal["G_OF_F_IS_X_MOD_X_TO_N"] = "G_OF_F_IS_X_MOD_X_TO_N"
     left_residual: tuple[CanonicalRational, ...]
     right_residual: tuple[CanonicalRational, ...]
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+    @model_validator(mode="after")
+    def require_zero_residuals(self) -> Self:
+        order = self.result.truncation_order
+        _require_zero_residual(self.left_residual, order, "left reversion")
+        _require_zero_residual(self.right_residual, order, "right reversion")
+        identity = tuple(Fraction(int(index == 1)) for index in range(order))
+        left = _composition_coefficients(self.source, self.result)
+        right = _composition_coefficients(self.result, self.source)
+        left_residual = tuple(value.as_fraction() for value in self.left_residual)
+        right_residual = tuple(value.as_fraction() for value in self.right_residual)
+        if (
+            tuple(left[index] - identity[index] for index in range(order))
+            != left_residual
+        ):
+            raise ValueError(
+                "left residual must equal source composed with result minus x"
+            )
+        if (
+            tuple(right[index] - identity[index] for index in range(order))
+            != right_residual
+        ):
+            raise ValueError(
+                "right residual must equal result composed with source minus x"
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------

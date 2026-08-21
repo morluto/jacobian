@@ -70,9 +70,17 @@ ARITHMETIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "f_x_squared_plus_1_iterate_2",
                 "Compute f^2 for f(x)=x^2+1; n must be non-negative.",
-                {"coefficients": ["1", "0", "1"], "n": 2},
+                {
+                    "coefficients": [
+                        {"num": "1", "den": "1"},
+                        {"num": "0", "den": "1"},
+                        {"num": "1", "den": "1"},
+                    ],
+                    "n": 2,
+                },
             ),
         ),
+        version="2",
     ),
     _op(
         "arithmetic_dynamics.point.orbit.compute",
@@ -92,9 +100,18 @@ ARITHMETIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "orbit_of_0_under_x2",
                 "Orbit of 0 under f(x)=x^2 for 5 steps; "
                 "start must be a rational number.",
-                {"coefficients": ["0", "0", "1"], "start": "0", "max_steps": 5},
+                {
+                    "coefficients": [
+                        {"num": "0", "den": "1"},
+                        {"num": "0", "den": "1"},
+                        {"num": "1", "den": "1"},
+                    ],
+                    "start": {"num": "0", "den": "1"},
+                    "max_steps": 5,
+                },
             ),
         ),
+        version="2",
     ),
     _op(
         "arithmetic_dynamics.dynatomic_polynomial.compute",
@@ -112,9 +129,17 @@ ARITHMETIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "dynatomic_n1_x2",
                 "Dynatomic polynomial for n=1 of f(x)=x^2; n must be at least 1.",
-                {"coefficients": ["0", "0", "1"], "n": 1},
+                {
+                    "coefficients": [
+                        {"num": "0", "den": "1"},
+                        {"num": "0", "den": "1"},
+                        {"num": "1", "den": "1"},
+                    ],
+                    "n": 1,
+                },
             ),
         ),
+        version="2",
     ),
     _op(
         "arithmetic_dynamics.cycle.multiplier.compute",
@@ -134,9 +159,17 @@ ARITHMETIC_DYNAMICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "multiplier_fixed_0_x2",
                 "Multiplier of the fixed point 0 under f(x)=x^2; "
                 "cycle points must be rational.",
-                {"coefficients": ["0", "0", "1"], "cycle": ["0"]},
+                {
+                    "coefficients": [
+                        {"num": "0", "den": "1"},
+                        {"num": "0", "den": "1"},
+                        {"num": "1", "den": "1"},
+                    ],
+                    "cycle": [{"num": "0", "den": "1"}],
+                },
             ),
         ),
+        version="2",
     ),
     _op(
         "arithmetic_dynamics.finite_field.functional_graph.compute",

@@ -113,9 +113,15 @@ class TestRun:
         result = compute_tree_run(TreeRunRequest(automaton=automaton, tree=_leaf()))
 
         assert result.root_states == (0, 1)
+        assert result.state_chart == (((), (0, 1)),)
         assert result.accepted is True
         assert result.node_count == 1
         assert result.complete is True
+
+        payload = result.model_dump()
+        payload["state_chart"] = (((), (0,)),)
+        with pytest.raises(ValidationError, match="not bound"):
+            type(result).model_validate(payload)
 
     def test_native_run_rejects_invalid_nested_rank(self):
         automaton = _simple_automaton()
@@ -131,14 +137,14 @@ class TestAcceptedTreeCount:
         result = compute_accepted_tree_count(
             AcceptedTreeCountRequest(automaton=automaton, tree_size=1)
         )
-        assert result.count == 1
+        assert result.count == "1"
 
     def test_count_size_3(self):
         automaton = _simple_automaton()
         result = compute_accepted_tree_count(
             AcceptedTreeCountRequest(automaton=automaton, tree_size=3)
         )
-        assert result.count == 1
+        assert result.count == "1"
 
     def test_nondeterminism_counts_trees_not_accepting_runs(self):
         automaton = BottomUpTreeAutomaton(
@@ -195,7 +201,7 @@ class TestAcceptedTreeCount:
             AcceptedTreeCountRequest(automaton=automaton, tree_size=99)
         )
 
-        assert result.count == comb(98, 49) // 50
+        assert result.count == str(comb(98, 49) // 50)
         assert result.tree_size == 99
         assert result.complete is True
         assert result.estimated_work_bound <= 2_000_000
@@ -207,7 +213,7 @@ class TestAcceptedTreeCount:
             AcceptedTreeCountRequest(automaton=automaton, tree_size=2)
         )
 
-        assert result.count == 0
+        assert result.count == "0"
         assert result.complete is True
 
 

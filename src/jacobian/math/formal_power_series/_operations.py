@@ -117,6 +117,8 @@ def compute_multiply(
     b = _series_fractions(right)
     result = _cauchy_convolve(a, b, n)
     return SeriesMultiplyResult(
+        left=left,
+        right=right,
         result=_series_result(left.variable, n, result),
         convolution_ledger=tuple(_wire(c) for c in result),
     )
@@ -190,6 +192,7 @@ def compute_inverse(series: TruncatedSeries) -> SeriesInverseResult:
     product = _cauchy_convolve(a, inv, n)
     product[0] -= Fraction(1)
     return SeriesInverseResult(
+        source=series,
         result=_series_result(series.variable, n, inv),
         residual_coefficients=tuple(_wire(c) for c in product),
     )
@@ -217,6 +220,8 @@ def compute_divide(
     bq = _cauchy_convolve(b, q, n)
     residual = [bq[i] - a[i] for i in range(n)]
     return SeriesDivideResult(
+        numerator=numerator,
+        denominator=denominator,
         quotient=_series_result(numerator.variable, n, q),
         residual_coefficients=tuple(_wire(c) for c in residual),
     )
@@ -320,6 +325,7 @@ def compute_reversion(series: TruncatedSeries) -> SeriesReversionResult:
     ]
 
     return SeriesReversionResult(
+        source=series,
         result=_series_result(series.variable, n, g),
         left_residual=tuple(_wire(c) for c in left_residual),
         right_residual=tuple(_wire(c) for c in right_residual),

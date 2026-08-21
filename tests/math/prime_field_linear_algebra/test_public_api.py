@@ -80,7 +80,7 @@ def test_matrix_rejects_noncanonical_entries() -> None:
         PrimeFieldMatrix(prime=2, entries=((3,),), columns=1)
     with pytest.raises(ValueError, match="canonical"):
         PrimeFieldMatrix(prime=3, entries=((1, -1),), columns=2)
-    with pytest.raises(ValueError, match="canonical"):
+    with pytest.raises(ValueError):
         PrimeFieldMatrix(prime=2, entries=((1.0,),), columns=1)
 
 

@@ -46,7 +46,7 @@ def minimum_distance(generator_matrix: GeneratorMatrix, field_order: int) -> int
         weight = sum(1 for c in codeword if c != 0)
         if weight > 0 and weight < min_dist:
             min_dist = weight
-    return int(min_dist) if min_dist != float("inf") else 0
+    return int(min_dist) if min_dist != float("inf") else len(generator_matrix[0])
 
 
 def weight_distribution(

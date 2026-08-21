@@ -8,6 +8,7 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math._rational_height import RationalHeight, sum_heights
 
@@ -146,26 +147,19 @@ def _mobius(value: int) -> int:
     return -1 if factors % 2 else 1
 
 
-def parse_canonical_rational(value: str, *, label: str) -> Fraction:
-    if len(value) > 2 * MAX_COEFFICIENT_DIGITS + 2:
-        raise ValueError(f"{label} exceeds the rational digit bound")
-    try:
-        parsed = Fraction(value)
-    except (ValueError, ZeroDivisionError):
-        raise ValueError(f"{label} must be a canonical rational") from None
-    if str(parsed) != value:
-        raise ValueError(f"{label} must be a reduced canonical rational")
-    if (
-        len(str(abs(parsed.numerator))) > MAX_COEFFICIENT_DIGITS
-        or len(str(parsed.denominator)) > MAX_COEFFICIENT_DIGITS
-    ):
-        raise ValueError(f"{label} exceeds the rational digit bound")
-    return parsed
+def _bounded_fraction(
+    value: CanonicalRational, *, max_digits: int, label: str
+) -> Fraction:
+    require_bounded_rational(value, max_digits=max_digits, label=label)
+    return value.as_fraction()
 
 
-def parse_polynomial_coefficients(values: tuple[str, ...]) -> tuple[Fraction, ...]:
+def parse_polynomial_coefficients(
+    values: tuple[CanonicalRational, ...],
+) -> tuple[Fraction, ...]:
     coefficients = tuple(
-        parse_canonical_rational(value, label="coefficient") for value in values
+        _bounded_fraction(value, max_digits=MAX_COEFFICIENT_DIGITS, label="coefficient")
+        for value in values
     )
     if len(coefficients) > 1 and coefficients[-1] == 0:
         raise ValueError("polynomial coefficients must omit trailing zeros")
@@ -173,7 +167,9 @@ def parse_polynomial_coefficients(values: tuple[str, ...]) -> tuple[Fraction, ..
 
 
 class PolynomialCoefficientRequest(StrictModel):
-    coefficients: tuple[str, ...] = Field(min_length=1, max_length=MAX_DEGREE + 1)
+    coefficients: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_DEGREE + 1
+    )
 
     @model_validator(mode="after")
     def require_canonical_coefficients(self) -> Self:
@@ -207,12 +203,12 @@ class MapIterateRequest(PolynomialCoefficientRequest):
 class OrbitPrefixRequest(PolynomialCoefficientRequest):
     """Compute until a first repeat or an explicit finite/output bound."""
 
-    start: str
+    start: CanonicalRational
     max_steps: int = Field(ge=0, le=MAX_ORBIT_STEPS)
 
     @model_validator(mode="after")
     def require_canonical_start(self) -> Self:
-        parse_canonical_rational(self.start, label="start")
+        _bounded_fraction(self.start, max_digits=MAX_COEFFICIENT_DIGITS, label="start")
         return self
 
 
@@ -253,12 +249,17 @@ class DynatomicPolynomialRequest(PolynomialCoefficientRequest):
 class CycleMultiplierRequest(PolynomialCoefficientRequest):
     """Compute the multiplier of a supplied, validated exact rational cycle."""
 
-    cycle: tuple[str, ...] = Field(min_length=1, max_length=MAX_ORBIT_STEPS)
+    cycle: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_ORBIT_STEPS
+    )
 
     @model_validator(mode="after")
     def require_exact_cycle(self) -> Self:
         points = tuple(
-            parse_canonical_rational(value, label="cycle point") for value in self.cycle
+            _bounded_fraction(
+                value, max_digits=MAX_COEFFICIENT_DIGITS, label="cycle point"
+            )
+            for value in self.cycle
         )
         if len(set(points)) != len(points):
             raise ValueError("cycle points must be distinct")
@@ -287,11 +288,11 @@ class FiniteFieldMapRequest(StrictModel):
 
 
 class MapIterateResult(StrictModel):
-    source_coefficients: tuple[str, ...] = Field(
+    source_coefficients: tuple[CanonicalRational, ...] = Field(
         min_length=1, max_length=MAX_DEGREE + 1
     )
     n: int = Field(ge=0, le=MAX_ITERATE)
-    coefficients: tuple[str, ...] = Field(
+    coefficients: tuple[CanonicalRational, ...] = Field(
         min_length=1, max_length=MAX_ITERATE_DEGREE + 1
     )
     degree: int = Field(ge=0, le=MAX_ITERATE_DEGREE)
@@ -301,13 +302,14 @@ class MapIterateResult(StrictModel):
     @model_validator(mode="after")
     def bind_degree_and_coefficients(self) -> Self:
         parse_polynomial_coefficients(self.source_coefficients)
-        values = tuple(Fraction(value) for value in self.coefficients)
-        if any(
-            str(Fraction(value)) != value
-            or len(value) > MAX_POLYNOMIAL_OUTPUT_DIGITS * 2 + 2
+        values = tuple(
+            _bounded_fraction(
+                value,
+                max_digits=MAX_POLYNOMIAL_OUTPUT_DIGITS,
+                label="iterate coefficient",
+            )
             for value in self.coefficients
-        ):
-            raise ValueError("iterate coefficients must be bounded and canonical")
+        )
         expected_degree = 0 if values == (Fraction(0),) else len(values) - 1
         if self.degree != expected_degree:
             raise ValueError("degree must match the canonical coefficient tuple")
@@ -330,11 +332,13 @@ class OrbitRepeatEvidence(StrictModel):
 
 
 class OrbitPrefixResult(StrictModel):
-    source_coefficients: tuple[str, ...] = Field(
+    source_coefficients: tuple[CanonicalRational, ...] = Field(
         min_length=1, max_length=MAX_DEGREE + 1
     )
-    start: str
-    orbit: tuple[str, ...] = Field(min_length=1, max_length=MAX_ORBIT_STEPS + 1)
+    start: CanonicalRational
+    orbit: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_ORBIT_STEPS + 1
+    )
     requested_steps: int = Field(ge=0, le=MAX_ORBIT_STEPS)
     computed_steps: int = Field(ge=0, le=MAX_ORBIT_STEPS)
     termination: Literal["REPEAT_FOUND", "STEP_BOUND_REACHED", "OUTPUT_BOUND_REACHED"]
@@ -374,10 +378,10 @@ class OrbitPrefixResult(StrictModel):
 
 
 class DynatomicPolynomialResult(StrictModel):
-    source_coefficients: tuple[str, ...] = Field(
+    source_coefficients: tuple[CanonicalRational, ...] = Field(
         min_length=1, max_length=MAX_DEGREE + 1
     )
-    coefficients: tuple[str, ...] = Field(
+    coefficients: tuple[CanonicalRational, ...] = Field(
         min_length=1, max_length=MAX_DYNATOMIC_DEGREE + 1
     )
     degree: int = Field(ge=0, le=MAX_DYNATOMIC_DEGREE)
@@ -390,13 +394,14 @@ class DynatomicPolynomialResult(StrictModel):
     @model_validator(mode="after")
     def bind_degree_and_coefficients(self) -> Self:
         parse_polynomial_coefficients(self.source_coefficients)
-        values = tuple(Fraction(value) for value in self.coefficients)
-        if any(
-            str(Fraction(value)) != value
-            or len(value) > MAX_POLYNOMIAL_OUTPUT_DIGITS * 2 + 2
+        values = tuple(
+            _bounded_fraction(
+                value,
+                max_digits=MAX_POLYNOMIAL_OUTPUT_DIGITS,
+                label="dynatomic coefficient",
+            )
             for value in self.coefficients
-        ):
-            raise ValueError("dynatomic coefficients must be bounded and canonical")
+        )
         expected_degree = 0 if values == (Fraction(0),) else len(values) - 1
         if self.degree != expected_degree:
             raise ValueError("degree must match the canonical coefficient tuple")
@@ -404,11 +409,13 @@ class DynatomicPolynomialResult(StrictModel):
 
 
 class CycleMultiplierResult(StrictModel):
-    source_coefficients: tuple[str, ...] = Field(
+    source_coefficients: tuple[CanonicalRational, ...] = Field(
         min_length=1, max_length=MAX_DEGREE + 1
     )
-    multiplier: str
-    cycle: tuple[str, ...] = Field(min_length=1, max_length=MAX_ORBIT_STEPS)
+    multiplier: CanonicalRational
+    cycle: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_ORBIT_STEPS
+    )
     period: int = Field(ge=1, le=MAX_ORBIT_STEPS)
     validated_cycle: Literal[True] = True
     complete: Literal[True] = True
@@ -416,9 +423,7 @@ class CycleMultiplierResult(StrictModel):
     @model_validator(mode="after")
     def bind_period_and_multiplier(self) -> Self:
         source = parse_polynomial_coefficients(self.source_coefficients)
-        points = tuple(
-            parse_canonical_rational(value, label="cycle point") for value in self.cycle
-        )
+        points = tuple(value.as_fraction() for value in self.cycle)
         if len(set(points)) != len(points) or any(
             _evaluate(source, point) != points[(index + 1) % len(points)]
             for index, point in enumerate(points)
@@ -426,13 +431,11 @@ class CycleMultiplierResult(StrictModel):
             raise ValueError("cycle must be a distinct ordered cycle of the bound map")
         if self.period != len(self.cycle):
             raise ValueError("period must match cycle length")
-        value = Fraction(self.multiplier)
-        if (
-            str(value) != self.multiplier
-            or len(str(abs(value.numerator))) > MAX_POLYNOMIAL_OUTPUT_DIGITS
-            or len(str(value.denominator)) > MAX_POLYNOMIAL_OUTPUT_DIGITS
-        ):
-            raise ValueError("multiplier must be a bounded canonical rational")
+        require_bounded_rational(
+            self.multiplier,
+            max_digits=MAX_POLYNOMIAL_OUTPUT_DIGITS,
+            label="multiplier",
+        )
         return self
 
 
@@ -514,14 +517,19 @@ def _evaluate(coefficients: tuple[Fraction, ...], point: Fraction) -> Fraction:
 
 
 def _require_bound_orbit(
-    source_coefficients: tuple[str, ...],
-    start: str,
-    orbit_values: tuple[str, ...],
+    source_coefficients: tuple[CanonicalRational, ...],
+    start: CanonicalRational,
+    orbit_values: tuple[CanonicalRational, ...],
 ) -> None:
     source = parse_polynomial_coefficients(source_coefficients)
-    initial = parse_canonical_rational(start, label="start")
+    initial = _bounded_fraction(start, max_digits=MAX_COEFFICIENT_DIGITS, label="start")
     orbit = tuple(
-        parse_canonical_rational(value, label="orbit value") for value in orbit_values
+        _bounded_fraction(
+            value,
+            max_digits=MAX_ORBIT_VALUE_DIGITS,
+            label="orbit value",
+        )
+        for value in orbit_values
     )
     if orbit[0] != initial:
         raise ValueError("orbit must begin at the bound start point")

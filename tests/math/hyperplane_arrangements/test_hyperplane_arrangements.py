@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.hyperplane_arrangements._models import (
     ChamberCountRequest,
     CharacteristicPolynomialRequest,
@@ -17,6 +18,10 @@ from jacobian.math.hyperplane_arrangements._operations import (
 from jacobian.math.hyperplane_arrangements._tools import TOOLS
 
 
+def _r(num: int, den: int = 1) -> CanonicalRational:
+    return CanonicalRational.from_integer_ratio(num, den)
+
+
 def test_catalog_contains_only_audited_operations() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "arrangement.construct",
@@ -29,8 +34,8 @@ def test_arrangement_central() -> None:
     request = HyperplaneArrangementRequest(
         ambient_dimension=2,
         hyperplanes=(
-            {"coefficients": ("1", "0"), "constant": "0"},
-            {"coefficients": ("0", "1"), "constant": "0"},
+            RationalHyperplane(coefficients=(_r(1), _r(0)), constant=_r(0)),
+            RationalHyperplane(coefficients=(_r(0), _r(1)), constant=_r(0)),
         ),
     )
     result = compute_arrangement(request)
@@ -42,8 +47,8 @@ def test_arrangement_noncentral() -> None:
     request = HyperplaneArrangementRequest(
         ambient_dimension=2,
         hyperplanes=(
-            {"coefficients": ("1", "0"), "constant": "0"},
-            {"coefficients": ("0", "1"), "constant": "1"},
+            RationalHyperplane(coefficients=(_r(1), _r(0)), constant=_r(0)),
+            RationalHyperplane(coefficients=(_r(0), _r(1)), constant=_r(1)),
         ),
     )
     result = compute_arrangement(request)
@@ -118,27 +123,33 @@ def test_chamber_count_zaslavsky_consistency() -> None:
 
 
 def test_rational_hyperplane_valid() -> None:
-    hp = RationalHyperplane(coefficients=("1", "0"), constant="0")
-    assert hp.coefficients == ("1", "0")
-    assert hp.constant == "0"
+    hp = RationalHyperplane(coefficients=(_r(1), _r(0)), constant=_r(0))
+    assert hp.coefficients == (_r(1), _r(0))
+    assert hp.constant == _r(0)
 
 
 def test_rational_hyperplane_rejects_non_rational() -> None:
     with pytest.raises(ValidationError):
-        RationalHyperplane(coefficients=("sqrt(2)", "0"), constant="0")
+        RationalHyperplane(
+            coefficients=("sqrt(2)", _r(0)),  # type: ignore[arg-type]
+            constant=_r(0),
+        )
 
 
 def test_rational_hyperplane_rejects_all_zero_coefficients() -> None:
     with pytest.raises(ValidationError):
-        RationalHyperplane(coefficients=("0", "0"), constant="0")
+        RationalHyperplane(coefficients=(_r(0), _r(0)), constant=_r(0))
 
 
 def test_rational_hyperplane_rejects_non_rational_constant() -> None:
     with pytest.raises(ValidationError):
-        RationalHyperplane(coefficients=("1", "0"), constant="abc")
+        RationalHyperplane(
+            coefficients=(_r(1), _r(0)),
+            constant="abc",  # type: ignore[arg-type]
+        )
 
 
 def test_rational_hyperplane_accepts_negative_rationals() -> None:
-    hp = RationalHyperplane(coefficients=("-1/2", "3/4"), constant="5/6")
-    assert hp.coefficients == ("-1/2", "3/4")
-    assert hp.constant == "5/6"
+    hp = RationalHyperplane(coefficients=(_r(-1, 2), _r(3, 4)), constant=_r(5, 6))
+    assert hp.coefficients == (_r(-1, 2), _r(3, 4))
+    assert hp.constant == _r(5, 6)

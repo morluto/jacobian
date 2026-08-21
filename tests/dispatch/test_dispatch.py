@@ -1,9 +1,37 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
+from jacobian._models import StrictModel
 from jacobian.catalog.catalog import Catalog
-from jacobian.dispatch import invoke_operation
+from jacobian.dispatch import OperationRequestValidationError, invoke_operation
+
+
+class _Request(StrictModel):
+    value: int
+
+
+class _Result(StrictModel):
+    value: int
+
+
+class _InvalidResultOperation:
+    operation_id = "test.invalid-result"
+    version = "1"
+    request_type = _Request
+
+    @staticmethod
+    def run(request: StrictModel) -> StrictModel:
+        del request
+        return _Result.model_validate({"value": "not-an-integer"})
+
+
+class _CatalogWithInvalidResult:
+    @staticmethod
+    def operation(operation_id: str) -> _InvalidResultOperation:
+        del operation_id
+        return _InvalidResultOperation()
 
 
 def test_invoke_operation_runs_determinant_directly() -> None:
@@ -37,3 +65,20 @@ def test_invoke_operation_reports_unknown_id() -> None:
             {"vertices": ["a"], "edges": []},
             catalog,
         )
+
+
+def test_dispatch_distinguishes_request_and_result_validation() -> None:
+    catalog = _CatalogWithInvalidResult()
+    with pytest.raises(OperationRequestValidationError):
+        invoke_operation("test.invalid-result", {"value": "bad"}, catalog)  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        invoke_operation("test.invalid-result", {"value": 1}, catalog)  # type: ignore[arg-type]
+
+
+def test_dispatch_classifies_noncanonical_json_as_request_validation() -> None:
+    catalog = _CatalogWithInvalidResult()
+
+    with pytest.raises(OperationRequestValidationError) as error:
+        invoke_operation("test.invalid-result", {"value": 1.5}, catalog)  # type: ignore[arg-type]
+
+    assert error.value.errors()[0]["type"] == "canonicalization_error"

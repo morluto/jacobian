@@ -23,6 +23,8 @@ caller composes the returned mathematical values.
 - [Tool surface](reference/tools.md) — exact MCP contracts.
 - [Domain operation library](reference/domain-operation-library.md) — design
   rules for public mathematical operations.
+- [Mathematical backends](reference/mathematical-backends.md) — adapter,
+  conversion, and external-process contracts.
 - [Public operation admission](reference/public-operation-admission.md) — what
   belongs in the agent-visible catalog.
 - [Native Python API](reference/python-api.md) — supported `jacobian.math`

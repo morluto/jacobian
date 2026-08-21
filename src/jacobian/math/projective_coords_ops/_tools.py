@@ -101,7 +101,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "projective.chart_transition.compute",
         "Compute the transition map between two charts",
-        "Compute the transition map from chart_i to chart_j for a projective point.",
+        "Return the complete target-chart coordinates for a projective point, "
+        "or OUTSIDE_TARGET_CHART when the target coordinate vanishes.",
         ChartTransitionRequest,
         ChartTransitionResult,
         compute_chart_transition,
@@ -125,6 +126,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
+        version="2",
     ),
 )
 

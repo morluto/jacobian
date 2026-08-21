@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from collections import deque
 
-from jacobian.math.petri_nets.values import Marking, PetriNet
+from jacobian.math.petri_nets.values import (
+    MAX_PETRI_MARKING,
+    Marking,
+    PetriNet,
+    require_reachability_bounds,
+)
 
 __all__ = [
     "compute_incidence_matrix",
@@ -64,17 +69,17 @@ def reachability_graph(
     list[tuple[int, ...]],
     list[tuple[int, int, int]],
     list[tuple[int, int, tuple[int, ...]]],
+    tuple[int, int, tuple[int, ...]] | None,
 ]:
     """Compute the bounded reachability graph via BFS.
 
-    Returns (states, edges, frontier).
+    Returns (states, edges, frontier, envelope_escape).
     Each edge is (source_index, transition, target_index).
     Each frontier record is an enabled firing whose target could not be
     admitted because ``max_states`` was exhausted.
     """
     _require_marking_size(net, initial_marking)
-    if not 1 <= max_states <= 100000:
-        raise ValueError("max_states must be between 1 and 100000")
+    require_reachability_bounds(net, max_states)
     initial = tuple(initial_marking.tokens)
     state_list: list[tuple[int, ...]] = [initial]
     state_index: dict[tuple[int, ...], int] = {initial: 0}
@@ -89,6 +94,8 @@ def reachability_graph(
             success, new_tokens = fire_transition(net, marking, t)
             if not success:
                 continue
+            if any(token > MAX_PETRI_MARKING for token in new_tokens):
+                return (state_list, edges, frontier, (idx, t, new_tokens))
             if new_tokens not in state_index:
                 if len(state_list) >= max_states:
                     frontier.append((idx, t, new_tokens))
@@ -97,7 +104,7 @@ def reachability_graph(
                 state_list.append(new_tokens)
                 queue.append(len(state_list) - 1)
             edges.append((idx, t, state_index[new_tokens]))
-    return (state_list, edges, frontier)
+    return (state_list, edges, frontier, None)
 
 
 def _require_marking_size(net: PetriNet, marking: Marking) -> None:

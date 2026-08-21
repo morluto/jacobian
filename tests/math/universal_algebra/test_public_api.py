@@ -7,10 +7,12 @@ from jacobian.math import universal_algebra
 
 def test_exact_public_api_symbols() -> None:
     expected = (
+        "ApplicationTerm",
         "FiniteAlgebra",
         "FlatTerm",
         "OperationSymbol",
         "Term",
+        "VariableTerm",
         "congruence_check",
         "equation_profile",
         "evaluate_term",

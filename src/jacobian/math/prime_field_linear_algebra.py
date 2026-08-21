@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import Any
+
+from pydantic import ConfigDict, StrictInt
+from pydantic.dataclasses import dataclass
 
 _MAX_DIMENSION = 256
 
@@ -18,13 +20,13 @@ __all__ = [
 ]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(config=ConfigDict(extra="forbid"), frozen=True, slots=True)
 class PrimeFieldMatrix:
     """An immutable matrix with an exact prime and explicit empty shape."""
 
-    prime: int
-    entries: tuple[tuple[int, ...], ...]
-    columns: int
+    prime: StrictInt
+    entries: tuple[tuple[StrictInt, ...], ...]
+    columns: StrictInt
 
     def __post_init__(self) -> None:
         if type(self.prime) is not int or self.prime < 2:

@@ -21,6 +21,26 @@ from jacobian.math.plane_algebraic_curves._operations import (
 )
 
 
+def _polynomial(
+    variables: tuple[str, ...],
+    *terms: tuple[int, tuple[int, ...]],
+) -> dict[str, Any]:
+    return {
+        "polynomial_schema_version": "1",
+        "domain": "QQ",
+        "variables": list(variables),
+        "polynomial": {
+            "terms": [
+                {
+                    "coefficient": {"num": str(coefficient), "den": "1"},
+                    "exponents": list(exponents),
+                }
+                for coefficient, exponents in terms
+            ]
+        },
+    }
+
+
 def _op[RequestT: StrictModel, ResultT: StrictModel](
     operation_id: str,
     title: str,
@@ -30,7 +50,7 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
+    version: str = "2",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
@@ -60,10 +80,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "circle",
-                "Check the unit circle x^2 + y^2 - 1 = 0.",
+                "Check the unit circle x^2 + y^2 - 1 = 0; an affine plane "
+                "curve polynomial must use exactly two ordered variables.",
                 {
-                    "variables": ["x", "y"],
-                    "polynomial": "x**2 + y**2 - 1",
+                    "polynomial": _polynomial(
+                        ("x", "y"),
+                        (1, (2, 0)),
+                        (1, (0, 2)),
+                        (-1, (0, 0)),
+                    ),
                 },
             ),
         ),
@@ -81,10 +106,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "circle_closure",
-                "Projective closure of x^2 + y^2 - 1.",
+                "Compute the projective closure of x^2 + y^2 - 1; the affine "
+                "axis must have two variables and leave z available.",
                 {
-                    "variables": ["x", "y"],
-                    "polynomial": "x**2 + y**2 - 1",
+                    "polynomial": _polynomial(
+                        ("x", "y"),
+                        (1, (2, 0)),
+                        (1, (0, 2)),
+                        (-1, (0, 0)),
+                    ),
                 },
             ),
         ),
@@ -103,10 +133,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "chart_z",
-                "Extract the z=1 chart of x^2 + y^2 - z^2.",
+                "Extract the z=1 chart of x^2 + y^2 - z^2; the canonical "
+                "projective polynomial must be homogeneous in three variables.",
                 {
-                    "variables": ["x", "y", "z"],
-                    "polynomial": "x**2 + y**2 - z**2",
+                    "polynomial": _polynomial(
+                        ("x", "y", "z"),
+                        (1, (2, 0, 0)),
+                        (1, (0, 2, 0)),
+                        (-1, (0, 0, 2)),
+                    ),
                     "chart_variable": "z",
                 },
             ),

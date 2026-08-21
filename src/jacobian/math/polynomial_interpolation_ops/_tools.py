@@ -45,12 +45,23 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
     )
 
 
+def _rational(numerator: int, denominator: int = 1) -> dict[str, str]:
+    return {"num": str(numerator), "den": str(denominator)}
+
+
+def _samples() -> dict[str, list[dict[str, str]]]:
+    return {
+        "nodes": [_rational(value) for value in (0, 1, 2)],
+        "values": [_rational(value) for value in (1, 2, 5)],
+    }
+
+
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "polynomial.interpolation.divided_differences.compute",
         "Compute Newton divided differences",
         "Compute the divided differences table from sample points using "
-        "exact rational arithmetic via SymPy.",
+        "bounded exact rational arithmetic.",
         DividedDifferencesRequest,
         DividedDifferencesResult,
         compute_divided_differences,
@@ -61,12 +72,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "three_points",
                 "Divided differences for points (0,1), (1,2), (2,5).",
-                {
-                    "nodes": ["0", "1", "2"],
-                    "values": ["1", "2", "5"],
-                },
+                {"samples": _samples()},
             ),
         ),
+        version="2",
     ),
     _op(
         "polynomial.interpolation.newton_form.compute",
@@ -83,18 +92,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "three_points",
                 "Newton form for points (0,1), (1,2), (2,5).",
-                {
-                    "nodes": ["0", "1", "2"],
-                    "values": ["1", "2", "5"],
-                },
+                {"samples": _samples()},
             ),
         ),
+        version="2",
     ),
     _op(
         "polynomial.interpolation.newton_evaluate.compute",
         "Evaluate a polynomial in Newton form at a point",
-        "Evaluate the interpolating polynomial in Newton form at a given "
-        "point using nested multiplication.",
+        "Evaluate a canonical NewtonForm directly at a rational point using "
+        "nested multiplication.",
         NewtonEvaluateRequest,
         NewtonEvaluateResult,
         compute_newton_evaluate,
@@ -106,12 +113,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "evaluate_at_3",
                 "Evaluate the interpolant of (0,1), (1,2), (2,5) at x=3.",
                 {
-                    "nodes": ["0", "1", "2"],
-                    "values": ["1", "2", "5"],
-                    "evaluation_point": "3",
+                    "newton_form": {
+                        "nodes": [_rational(value) for value in (0, 1, 2)],
+                        "coefficients": [_rational(1), _rational(1), _rational(1)],
+                    },
+                    "evaluation_point": _rational(3),
                 },
             ),
         ),
+        version="2",
     ),
 )
 

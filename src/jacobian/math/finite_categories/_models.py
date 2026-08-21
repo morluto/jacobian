@@ -7,6 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math._labels import OpaqueLabel
 
 MAX_OBJECTS = 20
 MAX_MORPHISMS = 100
@@ -16,9 +17,9 @@ MAX_COMPOSITIONS = 1000
 class MorphismSpec(StrictModel):
     """One morphism: source and target objects, plus a unique ID."""
 
-    morphism_id: str
-    source: str
-    target: str
+    morphism_id: OpaqueLabel
+    source: OpaqueLabel
+    target: OpaqueLabel
 
 
 def _morphism_index(
@@ -152,10 +153,14 @@ class FiniteCategoryRequest(StrictModel):
     laws are enforced once at the value boundary.
     """
 
-    objects: tuple[str, ...] = Field(min_length=1, max_length=MAX_OBJECTS)
+    objects: tuple[OpaqueLabel, ...] = Field(min_length=1, max_length=MAX_OBJECTS)
     morphisms: tuple[MorphismSpec, ...] = Field(max_length=MAX_MORPHISMS)
-    identities: tuple[tuple[str, str], ...] = Field(max_length=MAX_OBJECTS)
-    composition: tuple[tuple[str, str, str], ...] = Field(max_length=MAX_COMPOSITIONS)
+    identities: tuple[tuple[OpaqueLabel, OpaqueLabel], ...] = Field(
+        max_length=MAX_OBJECTS
+    )
+    composition: tuple[tuple[OpaqueLabel, OpaqueLabel, OpaqueLabel], ...] = Field(
+        max_length=MAX_COMPOSITIONS
+    )
 
     @model_validator(mode="after")
     def require_valid_category(self) -> Self:
@@ -166,21 +171,21 @@ class FiniteCategoryRequest(StrictModel):
 class CategoryProfileResult(StrictModel):
     """Profile of a finite category: hom-sets, endomorphisms, identities."""
 
-    objects: tuple[str, ...]
+    objects: tuple[OpaqueLabel, ...]
     num_objects: int
     num_morphisms: int
-    hom_sets: tuple[tuple[str, str, int], ...]
-    endomorphisms: tuple[tuple[str, int], ...]
-    identity_morphisms: tuple[tuple[str, str], ...]
+    hom_sets: tuple[tuple[OpaqueLabel, OpaqueLabel, int], ...]
+    endomorphisms: tuple[tuple[OpaqueLabel, int], ...]
+    identity_morphisms: tuple[tuple[OpaqueLabel, OpaqueLabel], ...]
 
 
 class OppositeCategoryResult(StrictModel):
     """The opposite category: reversed morphisms and reversed composition."""
 
-    objects: tuple[str, ...]
+    objects: tuple[OpaqueLabel, ...]
     morphisms: tuple[MorphismSpec, ...]
-    identities: tuple[tuple[str, str], ...]
-    composition: tuple[tuple[str, str, str], ...]
+    identities: tuple[tuple[OpaqueLabel, OpaqueLabel], ...]
+    composition: tuple[tuple[OpaqueLabel, OpaqueLabel, OpaqueLabel], ...]
 
     @model_validator(mode="after")
     def require_valid_opposite(self) -> Self:

@@ -49,6 +49,7 @@ def _op[
 
 
 _MATCH_EXAMPLE = {
+    "signature": {"arities": [2, 0, 0]},
     "pattern": {
         "is_variable": False,
         "symbol": 0,
@@ -68,6 +69,7 @@ _MATCH_EXAMPLE = {
 }
 
 _UNIFY_EXAMPLE = {
+    "signature": {"arities": [2, 0, 0]},
     "left": {
         "is_variable": False,
         "symbol": 0,
@@ -141,11 +143,12 @@ _TERM_REWRITING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "rewrite_f_to_g",
                 "Rewrite f(x) to g(x) in a simple term.",
                 {
+                    "signature": {"arities": [1, 1, 0]},
                     "term": {
                         "is_variable": False,
                         "symbol": 0,
                         "children": [
-                            {"is_variable": False, "symbol": 1, "children": []},
+                            {"is_variable": False, "symbol": 2, "children": []},
                         ],
                     },
                     "rules": [

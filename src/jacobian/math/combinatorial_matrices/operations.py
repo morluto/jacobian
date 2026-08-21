@@ -51,7 +51,7 @@ def gram_profile(matrix: SignMatrix) -> dict[str, object]:
     is_hadamard = n == m and all(
         gram[i][j] == (n if i == j else 0) for i in range(n) for j in range(n)
     )
-    residuals = tuple(gram[i][i] - m for i in range(min(n, m)))
+    residuals = tuple(gram[i][i] - m for i in range(n))
     nonzero_off = tuple(
         (i, j, gram[i][j]) for i in range(n) for j in range(i + 1, n) if gram[i][j] != 0
     )
@@ -64,7 +64,7 @@ def gram_profile(matrix: SignMatrix) -> dict[str, object]:
     }
 
 
-def normalize(matrix: SignMatrix) -> dict[str, object]:
+def normalize(matrix: HadamardMatrix | SignMatrix) -> dict[str, object]:
     """Return a deterministically normalized sign matrix whose first row and
     first column are all ``+1``, plus the exact row/column sign switches
     used. Normalization must preserve the full matrix and be idempotent."""

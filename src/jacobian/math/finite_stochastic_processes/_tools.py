@@ -55,8 +55,15 @@ def _op[
     )
 
 
+def _rational(numerator: int, denominator: int = 1) -> dict[str, str]:
+    return {"num": str(numerator), "den": str(denominator)}
+
+
 # A fair coin: samples {H, T}, masses 1/2, 1/2.
-_SPACE = {"samples": ["H", "T"], "masses": ["1/2", "1/2"]}
+_SPACE = {
+    "samples": ["H", "T"],
+    "masses": [_rational(1, 2), _rational(1, 2)],
+}
 
 FINIT_STOCHASTIC_PROCESS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
@@ -77,6 +84,7 @@ FINIT_STOCHASTIC_PROCESS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"space": _SPACE, "observation": ["heads", "tails"]},
             ),
         ),
+        version="2",
     ),
     _op(
         "probability.finite_sigma_algebra.join.compute",
@@ -100,6 +108,7 @@ FINIT_STOCHASTIC_PROCESS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
+        version="2",
     ),
     _op(
         "probability.conditional_expectation.finite.compute",
@@ -118,11 +127,15 @@ FINIT_STOCHASTIC_PROCESS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "coin_conditional_expectation",
                 "Conditional expectation of a coin payoff on the trivial sigma algebra.",
                 {
-                    "rv": {"space": _SPACE, "values": ["1", "0"]},
+                    "rv": {
+                        "space": _SPACE,
+                        "values": [_rational(1), _rational(0)],
+                    },
                     "sigma": {"space": _SPACE, "blocks": [["H", "T"]]},
                 },
             ),
         ),
+        version="2",
     ),
     _op(
         "probability.filtration.natural.compute",
@@ -142,13 +155,14 @@ FINIT_STOCHASTIC_PROCESS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"space": _SPACE, "observations": [["heads", "tails"]]},
             ),
         ),
+        version="2",
     ),
     _op(
         "probability.process.doob_martingale.compute",
         "Compute the Doob martingale M_t = E[payoff | F_t]",
         "Return the Doob martingale of a payoff random variable with respect "
         "to the natural filtration of observations. The result is one tuple "
-        "of rational strings per time step.",
+        "of canonical rational values per time step.",
         DoobMartingaleRequest,
         DoobMartingaleResult,
         compute_doob_martingale,
@@ -162,10 +176,11 @@ FINIT_STOCHASTIC_PROCESS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "space": _SPACE,
                     "observations": [["heads", "tails"]],
-                    "payoff": ["1", "0"],
+                    "payoff": [_rational(1), _rational(0)],
                 },
             ),
         ),
+        version="2",
     ),
 )
 

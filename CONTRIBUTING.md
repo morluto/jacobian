@@ -34,6 +34,20 @@ CI runs the complete fixed semantic matrix.
 Open the PR once it is green, and add any explicitly relevant specialist
 validation called out below.
 
+Route validation by the boundary changed:
+
+| Change | Required local handoff |
+| --- | --- |
+| Ordinary operation or model | `make check` plus the owning domain tests |
+| Public contract or catalog | Above plus the catalog conformance test |
+| Singular adapter or codec | Above plus `make test-singular` |
+| Shared process supervisor | Above plus `make test-process` |
+| Documentation | `make docs-linkcheck` |
+
+Singular is intentionally not part of `make check`: its pinned hosted-CI lane
+provides the required runtime evidence without making the executable a
+prerequisite for every developer loop.
+
 `make quick` is the cheaper loop: it omits mypy but runs the same Lean-free
 owner tests. The
 pre-push hook stays `make lint typecheck`. Focused debugging uses

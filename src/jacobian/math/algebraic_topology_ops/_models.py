@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -26,25 +26,35 @@ class EdgePath(StrictModel):
         return self
 
 
+class OrientedEdge(StrictModel):
+    edge_index: int = Field(ge=0)
+    orientation: Literal[-1, 1]
+
+
 class EdgePathWordRequest(StrictModel):
     """Compute the free group word for an edge path."""
 
     vertex_count: int = Field(ge=2)
     edges: tuple[tuple[int, int], ...] = Field(min_length=1, max_length=MAX_EDGES)
-    path: tuple[int, ...] = Field(min_length=2, max_length=MAX_WORD)
+    start_vertex: int = Field(ge=0)
+    path: tuple[OrientedEdge, ...] = Field(min_length=1, max_length=MAX_WORD)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
         for u, v in self.edges:
             if not (0 <= u < self.vertex_count and 0 <= v < self.vertex_count):
                 raise ValueError("edge vertices must be in 0..vertex_count-1")
-        if any(not 0 <= v < self.vertex_count for v in self.path):
-            raise ValueError("path vertices must be in 0..vertex_count-1")
-        edge_set = {frozenset((u, v)) for u, v in self.edges}
-        for i in range(len(self.path) - 1):
-            u, v = self.path[i], self.path[i + 1]
-            if frozenset((u, v)) not in edge_set:
-                raise ValueError(f"path step {u}->{v} is not an edge in the graph")
+        if self.start_vertex >= self.vertex_count:
+            raise ValueError("start vertex must be in 0..vertex_count-1")
+        current = self.start_vertex
+        for step in self.path:
+            if step.edge_index >= len(self.edges):
+                raise ValueError("path edge index is outside the graph")
+            left, right = self.edges[step.edge_index]
+            source, target = (left, right) if step.orientation == 1 else (right, left)
+            if source != current:
+                raise ValueError("oriented edge path is not continuous")
+            current = target
         return self
 
 

@@ -11,6 +11,7 @@ from jacobian.math.projective_coords_ops._models import (
     ChartTransitionResult,
     RationalPointConstructRequest,
     RationalPointConstructResult,
+    RationalProjectivePoint,
     StandardChartRequest,
     StandardChartResult,
 )
@@ -34,9 +35,8 @@ def compute_rational_point_construct(
             scale = _rational(inv)
             canonical = tuple(_rational(v.as_fraction() * inv) for v in coords)
             return RationalPointConstructResult(
-                canonical=canonical,
+                point=RationalProjectivePoint(coordinates=canonical),
                 scale=scale,
-                projective_dimension=len(coords) - 1,
             )
     raise ValueError("all coordinates are zero")
 
@@ -58,17 +58,26 @@ def compute_standard_chart(request: StandardChartRequest) -> StandardChartResult
 
 
 def compute_chart_transition(request: ChartTransitionRequest) -> ChartTransitionResult:
-    """Compute the transition map from chart_i to chart_j coordinates."""
+    """Return the complete target-chart coordinates for the projective point."""
     coords = request.point.coordinates
-    xi = coords[request.chart_i].as_fraction()
     xj = coords[request.chart_j].as_fraction()
+    if xj == 0:
+        return ChartTransitionResult(
+            status="OUTSIDE_TARGET_CHART",
+            transition=None,
+            chart_i=request.chart_i,
+            chart_j=request.chart_j,
+            projective_dimension=len(coords) - 1,
+        )
     ratios = tuple(
-        _rational(coords[i].as_fraction() * xi / xj)
+        _rational(coords[i].as_fraction() / xj)
         for i in range(len(coords))
-        if i != request.chart_i and i != request.chart_j
+        if i != request.chart_j
     )
     return ChartTransitionResult(
+        status="DEFINED",
         transition=ratios,
         chart_i=request.chart_i,
         chart_j=request.chart_j,
+        projective_dimension=len(coords) - 1,
     )

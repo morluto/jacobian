@@ -44,7 +44,7 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
     )
 
 
-_FORM_2D = {"matrix": [[1, 0], [0, 1]]}
+_FORM_2D = {"matrix": [["1", "0"], ["0", "1"]]}
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
@@ -63,7 +63,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "identity_2d_at_3_4",
                 "Evaluate x^T I x at (3, 4); "
                 "the matrix must be symmetric and the vector length must match.",
-                {"form": _FORM_2D, "vector": [3, 4]},
+                {"form": _FORM_2D, "vector": ["3", "4"]},
             ),
         ),
     ),

@@ -10,6 +10,7 @@ from jacobian._models import StrictModel
 from jacobian.math.root_systems._cartan import require_finite_type
 
 MAX_RANK = 8
+MAX_REFLECTION_COORDINATE = ((1 << 53) - 1) // (1 + 3 * MAX_RANK)
 
 
 class CartanMatrixRequest(StrictModel):
@@ -149,6 +150,12 @@ class SimpleReflectionRequest(StrictModel):
             raise ValueError("simple_index out of range")
         if len(self.vector) != n:
             raise ValueError("vector length must match rank")
+        if any(
+            abs(coordinate) > MAX_REFLECTION_COORDINATE for coordinate in self.vector
+        ):
+            raise ValueError(
+                "vector coordinates must fit the bounded reflected-coordinate domain"
+            )
         CartanMatrixRequest(matrix=self.matrix)
         return self
 

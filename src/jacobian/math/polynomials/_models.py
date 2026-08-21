@@ -17,8 +17,12 @@ from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_VARIABLES,
     PolynomialVariable,
     RationalPolynomial,
+    RationalPolynomialIdeal,
     require_polynomial_budget,
 )
+
+_MAX_RESULT_POLYNOMIAL_TERMS = 1_024
+"""Exact-result term boundary shared by the polynomial output converters."""
 
 _MAX_COEFFICIENT_DIGITS = 256
 _MAX_GCD_TERMS = 512
@@ -317,28 +321,47 @@ class PolynomialGroebnerBasisResult(StrictModel):
 
 
 class IdealMembershipRequest(StrictModel):
-    """Decide membership of one polynomial in a bounded polynomial ideal."""
+    """Decide membership of one polynomial in a bounded polynomial ideal.
 
-    generators: tuple[RationalPolynomial, ...] = Field(min_length=1, max_length=16)
+    Accepts the domain-owned canonical ``RationalPolynomialIdeal`` value so
+    serialized ideals compose without unpacking.  The request polynomial is
+    bounded to 1,024 terms because the zero ideal returns it unchanged as
+    the normal form and the exact-result contract caps at 1,024 terms.
+    """
+
+    ideal: RationalPolynomialIdeal = Field(
+        description=(
+            "A bounded polynomial ideal in one ordered QQ ring: at most 16 "
+            "generators with at most 256 aggregate terms, degree at most 12, "
+            "and coefficient components at most 128 digits."
+        ),
+    )
     polynomial: RationalPolynomial
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
 
     @model_validator(mode="after")
     def require_matching_rings(self) -> Self:
-        variables = self.generators[0].variables
-        if any(gen.variables != variables for gen in self.generators):
+        variables = self.ideal.variables
+        if any(gen.variables != variables for gen in self.ideal.generators):
             raise ValueError("all ideal generators must use the same ordered ring")
         if self.polynomial.variables != variables:
             raise ValueError("polynomial must use the same ordered ring as the ideal")
-        if sum(len(gen.polynomial.terms) for gen in self.generators) > 256:
+        if sum(len(gen.polynomial.terms) for gen in self.ideal.generators) > 256:
             raise ValueError("ideal generators exceed the aggregate term budget")
-        for gen in self.generators:
+        for gen in self.ideal.generators:
             require_polynomial_budget(
                 gen,
                 maximum_terms=MAX_POLYNOMIAL_TERMS,
                 maximum_exponent=12,
                 maximum_coefficient_digits=128,
                 label="ideal generator",
+            )
+        # The normal form of the zero ideal is the input polynomial itself;
+        # cap the input at the 1,024-term result boundary so an accepted
+        # request can never leak a result-budget host exception.
+        if len(self.polynomial.polynomial.terms) > _MAX_RESULT_POLYNOMIAL_TERMS:
+            raise ValueError(
+                "polynomial exceeds the 1,024-term exact-result limit"
             )
         require_polynomial_budget(
             self.polynomial,
@@ -358,10 +381,24 @@ class IdealNormalFormResult(StrictModel):
 
 
 class IdealMembershipResult(StrictModel):
-    """Whether a polynomial lies in an ideal, with the normal form."""
+    """Whether a polynomial lies in an ideal, with the normal form.
+
+    Membership is defined exactly as the normal form being zero; the two
+    fields are validated against each other so a contradictory payload can
+    never validate.
+    """
 
     in_ideal: bool
     normal_form: RationalPolynomial
+
+    @model_validator(mode="after")
+    def bind_membership_to_normal_form(self) -> Self:
+        remainder_is_zero = not self.normal_form.polynomial.terms
+        if self.in_ideal is not remainder_is_zero:
+            raise ValueError(
+                "in_ideal must equal (normal_form == 0)"
+            )
+        return self
 
 
 class IntegerPolynomial(StrictModel):

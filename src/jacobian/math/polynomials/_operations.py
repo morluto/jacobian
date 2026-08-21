@@ -227,11 +227,11 @@ def polynomial_ideal_normal_form(
 ) -> IdealNormalFormResult:
     """Reduce a polynomial modulo an ideal using a Groebner basis."""
 
-    variables = request.generators[0].variables
+    variables = request.ideal.variables
     symbols = symbols_for_variables(variables)
     generators = [
         rational_polynomial_to_sympy(generator).as_expr()
-        for generator in request.generators
+        for generator in request.ideal.generators
     ]
     basis = sympy.groebner(
         generators,

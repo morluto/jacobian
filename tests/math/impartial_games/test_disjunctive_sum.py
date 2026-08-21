@@ -5,11 +5,9 @@ from pydantic import ValidationError
 
 from jacobian.math.impartial_games._models import (
     DisjunctiveSumRequest,
-    DisjunctiveSumResult,
 )
 from jacobian.math.impartial_games._operations import compute_disjunctive_sum
 from jacobian.math.impartial_games._tools import TOOLS
-
 
 # -- helpers -----------------------------------------------------------------
 

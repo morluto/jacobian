@@ -1,10 +1,10 @@
 """Wire adapters for exact bounded impartial-game operations."""
 
 from jacobian.math.impartial_games._models import (
-    DisjunctiveSumRequest,
-    DisjunctiveSumResult,
     BirthdayRequest,
     BirthdayResult,
+    DisjunctiveSumRequest,
+    DisjunctiveSumResult,
     GrundyEntry,
     GrundyTableRequest,
     GrundyTableResult,
@@ -67,8 +67,8 @@ def compute_subtraction_grundy_prefix(
 
 
 __all__ = [
-    "compute_disjunctive_sum",
     "compute_birthday",
+    "compute_disjunctive_sum",
     "compute_grundy_table",
     "compute_subtraction_grundy_prefix",
 ]

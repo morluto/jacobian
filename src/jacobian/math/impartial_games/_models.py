@@ -221,3 +221,19 @@ class DisjunctiveSumResult(StrictModel):
     component_grundy_values: tuple[int, ...]
     is_p_position: bool
     component_count: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_exact_disjunctive_invariants(self) -> Self:
+        if self.component_count != len(self.component_grundy_values):
+            raise ValueError("component_count must match component_grundy_values length")
+        if any(value < 0 for value in self.component_grundy_values):
+            raise ValueError("component Grundy values must be nonnegative")
+        from functools import reduce
+        from operator import xor
+
+        expected = reduce(xor, self.component_grundy_values, 0)
+        if self.grundy_value != expected:
+            raise ValueError("grundy_value must be XOR of component_grundy_values")
+        if self.is_p_position != (expected == 0):
+            raise ValueError("is_p_position must agree with grundy_value == 0")
+        return self

@@ -5,6 +5,8 @@ from jacobian.math.finite_semigroups._models import (
     ElementPowerResult,
     GeneratedSubsemigroupRequest,
     GeneratedSubsemigroupResult,
+    GreenRelationsRequest,
+    GreenRelationsResult,
     IdempotentsRequest,
     IdempotentsResult,
     PowerProfileRequest,
@@ -197,4 +199,216 @@ def compute_principal_ideals(request: PrincipalIdealsRequest) -> PrincipalIdeals
         semigroup=request.semigroup,
         elements=request.elements,
         ideals=ideals,
+    )
+
+
+def _left_ideals(
+    elements: tuple[str, ...],
+    multiplication: tuple[tuple[str, ...], ...],
+) -> list[frozenset[str]]:
+    """Compute the principal left ideal S^1 a of each element."""
+
+    {label: i for i, label in enumerate(elements)}
+    n = len(elements)
+    ideals: list[frozenset[str]] = []
+    for i in range(n):
+        ideal = {elements[i]}
+        for j in range(n):
+            ideal.add(multiplication[j][i])
+        ideals.append(frozenset(ideal))
+    return ideals
+
+
+def _right_ideals(
+    elements: tuple[str, ...],
+    multiplication: tuple[tuple[str, ...], ...],
+) -> list[frozenset[str]]:
+    """Compute the principal right ideal a S^1 of each element."""
+
+    {label: i for i, label in enumerate(elements)}
+    n = len(elements)
+    ideals: list[frozenset[str]] = []
+    for i in range(n):
+        ideal = {elements[i]}
+        for j in range(n):
+            ideal.add(multiplication[i][j])
+        ideals.append(frozenset(ideal))
+    return ideals
+
+
+def _two_sided_ideals(
+    elements: tuple[str, ...],
+    multiplication: tuple[tuple[str, ...], ...],
+) -> list[frozenset[str]]:
+    """Compute the principal two-sided ideal S^1 a S^1 of each element."""
+
+    idx = {label: i for i, label in enumerate(elements)}
+    n = len(elements)
+    ideals: list[frozenset[str]] = []
+    for i in range(n):
+        ideal = {elements[i]}
+        for j in range(n):
+            ideal.add(multiplication[j][i])
+            ideal.add(multiplication[i][j])
+            for k in range(n):
+                ideal.add(multiplication[j][idx[multiplication[i][k]]])
+        ideals.append(frozenset(ideal))
+    return ideals
+
+
+def _partition_from_ideals(
+    elements: tuple[str, ...],
+    ideals: list[frozenset[str]],
+) -> tuple[tuple[str, ...], ...]:
+    """Group elements by equality of their principal ideals.
+
+    Returns a tuple of equivalence-class tuples in declared element order.
+    """
+
+    groups: list[list[str]] = []
+    assigned: list[bool] = [False] * len(elements)
+    for i in range(len(elements)):
+        if assigned[i]:
+            continue
+        group = [elements[i]]
+        assigned[i] = True
+        for j in range(i + 1, len(elements)):
+            if not assigned[j] and ideals[i] == ideals[j]:
+                group.append(elements[j])
+                assigned[j] = True
+        groups.append(group)
+    return tuple(tuple(g) for g in groups)
+
+
+def _green_relations(
+    elements: tuple[str, ...],
+    multiplication: tuple[tuple[str, ...], ...],
+) -> tuple[
+    tuple[tuple[str, ...], ...],
+    tuple[tuple[str, ...], ...],
+    tuple[tuple[str, ...], ...],
+    tuple[tuple[str, ...], ...],
+    tuple[tuple[str, ...], ...],
+]:
+    """Compute the Green relations L, R, H, D, J.
+
+    For a finite semigroup S:
+    - a L b iff S^1 a = S^1 b (principal left ideals agree)
+    - a R b iff a S^1 = b S^1 (principal right ideals agree)
+    - H = L ∩ R
+    - J is defined by principal two-sided ideals: a J b iff S^1 a S^1 = S^1 b S^1
+    - D = L ∨ R (the join), equivalently the relation whose blocks are the
+      connected components of the L-R intersection graph
+
+    Returns each as a tuple of equivalence-class tuples in declared element order.
+    """  # noqa: RUF002
+
+    left = _left_ideals(elements, multiplication)
+    right = _right_ideals(elements, multiplication)
+    two_sided = _two_sided_ideals(elements, multiplication)
+
+    L_classes = _partition_from_ideals(elements, left)  # noqa: N806
+    R_classes = _partition_from_ideals(elements, right)  # noqa: N806
+    J_classes = _partition_from_ideals(elements, two_sided)  # noqa: N806
+
+    # H = L ∩ R: two elements are H-related iff they are both L-related and R-related
+    H_classes = _intersection_partition(elements, L_classes, R_classes)  # noqa: N806
+
+    # D = L ∨ R: build a graph where two elements are connected if L-related or R-related  # noqa: RUF003
+    # then D-classes are the connected components
+    D_classes = _join_partition(elements, L_classes, R_classes)  # noqa: N806
+
+    return L_classes, R_classes, H_classes, D_classes, J_classes
+
+
+def _intersection_partition(
+    elements: tuple[str, ...],
+    partition_a: tuple[tuple[str, ...], ...],
+    partition_b: tuple[tuple[str, ...], ...],
+) -> tuple[tuple[str, ...], ...]:
+    """Compute the partition that is the intersection of two partitions."""
+
+    a_map: dict[str, int] = {}
+    b_map: dict[str, int] = {}
+    for i, cls in enumerate(partition_a):
+        for e in cls:
+            a_map[e] = i
+    for i, cls in enumerate(partition_b):
+        for e in cls:
+            b_map[e] = i
+    groups: dict[tuple[int, int], list[str]] = {}
+    for e in elements:
+        key = (a_map[e], b_map[e])
+        groups.setdefault(key, []).append(e)
+    # Return in declared element order
+    seen: set[str] = set()
+    result: list[tuple[str, ...]] = []
+    for e in elements:
+        if e in seen:
+            continue
+        key = (a_map[e], b_map[e])
+        result.append(tuple(groups[key]))
+        seen.update(groups[key])
+    return tuple(result)
+
+
+def _join_partition(  # noqa: C901
+    elements: tuple[str, ...],
+    partition_a: tuple[tuple[str, ...], ...],
+    partition_b: tuple[tuple[str, ...], ...],
+) -> tuple[tuple[str, ...], ...]:
+    """Compute the join (least upper bound) of two partitions via union-find."""
+
+    n = len(elements)
+    idx = {e: i for i, e in enumerate(elements)}
+    parent = list(range(n))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(x: int, y: int) -> None:
+        rx, ry = find(x), find(y)
+        if rx != ry:
+            parent[rx] = ry
+
+    for cls in partition_a:
+        for i in range(1, len(cls)):
+            union(idx[cls[0]], idx[cls[i]])
+    for cls in partition_b:
+        for i in range(1, len(cls)):
+            union(idx[cls[0]], idx[cls[i]])
+
+    groups: dict[int, list[str]] = {}
+    for e in elements:
+        groups.setdefault(find(idx[e]), []).append(e)
+    # Return in declared element order
+    seen: set[str] = set()
+    result: list[tuple[str, ...]] = []
+    for e in elements:
+        if e in seen:
+            continue
+        root = find(idx[e])
+        result.append(tuple(groups[root]))
+        seen.update(groups[root])
+    return tuple(result)
+
+
+def compute_green_relations(
+    request: "GreenRelationsRequest",
+) -> "GreenRelationsResult":
+    """Compute the Green relations of a finite semigroup."""
+
+    L, R, H, D, J = _green_relations(  # noqa: N806
+        request.semigroup.elements, request.semigroup.multiplication
+    )
+    return GreenRelationsResult(
+        semigroup=request.semigroup,
+        L=L,
+        R=R,
+        H=H,
+        D=D,
+        J=J,
     )

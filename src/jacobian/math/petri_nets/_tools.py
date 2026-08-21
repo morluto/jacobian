@@ -87,7 +87,9 @@ PETRI_NET_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Compute the bounded reachability graph of a Petri net",
         "Return an exact BFS reachability graph when exploration closes within "
         "max_states. If the bound is exhausted, return TRUNCATED with every "
-        "enabled omitted firing in an explicit replayable frontier.",
+        "enabled omitted firing in an explicit replayable frontier. If a firing "
+        "exceeds the marking envelope, return ESCAPES_DECLARED_ENVELOPE with "
+        "the exact firing witness.",
         ReachabilityRequest,
         ReachabilityResult,
         compute_reachability,

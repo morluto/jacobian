@@ -48,9 +48,7 @@ class GraphCharacteristicPolynomialResult(StrictModel):
 
     coefficients: tuple[CanonicalRational, ...] = Field(
         min_length=1,
-        description=(
-            "Monic polynomial coefficients in increasing degree over QQ."
-        ),
+        description=("Monic polynomial coefficients in increasing degree over QQ."),
     )
 
     @model_validator(mode="after")

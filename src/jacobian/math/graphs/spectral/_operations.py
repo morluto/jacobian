@@ -41,7 +41,8 @@ def compute_adjacency_characteristic_polynomial(
     coeffs = adjacency_characteristic_polynomial(request.graph)
     return GraphCharacteristicPolynomialResult(
         coefficients=tuple(
-            CanonicalRational.from_fraction(Fraction(n, d)) for n, d in coeffs),
+            CanonicalRational.from_fraction(Fraction(n, d)) for n, d in coeffs
+        ),
     )
 
 
@@ -54,5 +55,7 @@ def compute_laplacian_characteristic_polynomial(
 
     coeffs = laplacian_characteristic_polynomial(request.graph)
     return GraphCharacteristicPolynomialResult(
-        coefficients=tuple(CanonicalRational.from_fraction(Fraction(n, d)) for n, d in coeffs),
+        coefficients=tuple(
+            CanonicalRational.from_fraction(Fraction(n, d)) for n, d in coeffs
+        ),
     )

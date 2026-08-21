@@ -11,6 +11,8 @@ from jacobian.math.finite_semigroups._models import (
     ElementPowerResult,
     GeneratedSubsemigroupRequest,
     GeneratedSubsemigroupResult,
+    GreenRelationsRequest,
+    GreenRelationsResult,
     IdempotentsRequest,
     IdempotentsResult,
     PowerProfileRequest,
@@ -21,6 +23,7 @@ from jacobian.math.finite_semigroups._models import (
 from jacobian.math.finite_semigroups._operations import (
     compute_element_power,
     compute_generated_subsemigroup,
+    compute_green_relations,
     compute_idempotents,
     compute_power_profile,
     compute_principal_ideals,
@@ -179,5 +182,35 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
 )
+
+__all__ = ["TOOLS"]
+
+_TOOLS_LIST = list(TOOLS)
+_TOOLS_LIST.append(
+    _op(
+        "semigroup.green_relations.compute",
+        "Compute Green relations of a finite semigroup",
+        "Compute the Green relations L, R, H, D, and J of a finite semigroup. "
+        "L relates elements with the same principal left ideal, R with the "
+        "same principal right ideal, H = L ∩ R, D = L ∨ R (join), and J is "  # noqa: RUF001
+        "the two-sided Green relation defined by principal two-sided ideals.",
+        GreenRelationsRequest,
+        GreenRelationsResult,
+        compute_green_relations,
+        "algebra",
+        "semigroup",
+        "exact",
+        examples=(
+            example(
+                "green_relations_z3",
+                "Compute the Green relations of Z/3Z.",
+                {
+                    "semigroup": _SEMIGROUP,
+                },
+            ),
+        ),
+    )
+)
+TOOLS = tuple(_TOOLS_LIST)
 
 __all__ = ["TOOLS"]

@@ -236,3 +236,45 @@ class PrincipalIdealsResult(StrictModel):
                 "ideals must be the exact principal ideals of the elements"
             )
         return self
+
+
+class GreenRelationsRequest(StrictModel):
+    """Request the Green relations L, R, H, D, J of a finite semigroup."""
+
+    semigroup: FiniteSemigroup
+
+
+class GreenRelationsResult(StrictModel):
+    """Green relations of a finite semigroup.
+
+    Each relation is a tuple of equivalence-class tuples, in declared
+    element order, partitioning the semigroup elements.  ``L`` and ``R``
+    are Green's left and right equivalences; ``H = L ∩ R``;
+    ``D = L ∘ R`` (the join); ``J`` is the two-sided Green relation.
+    """
+
+    semigroup: FiniteSemigroup
+    L: tuple[tuple[str, ...], ...]
+    R: tuple[tuple[str, ...], ...]
+    H: tuple[tuple[str, ...], ...]
+    D: tuple[tuple[str, ...], ...]
+    J: tuple[tuple[str, ...], ...]
+
+    @model_validator(mode="after")
+    def bind_green_relations(self) -> Self:
+        from jacobian.math.finite_semigroups._operations import _green_relations
+
+        L, R, H, D, J = _green_relations(  # noqa: N806
+            self.semigroup.elements, self.semigroup.multiplication
+        )
+        if self.L != L:
+            raise ValueError("L must be the exact Green L-relation")
+        if self.R != R:
+            raise ValueError("R must be the exact Green R-relation")
+        if self.H != H:
+            raise ValueError("H must be the exact Green H-relation")
+        if self.D != D:
+            raise ValueError("D must be the exact Green D-relation")
+        if self.J != J:
+            raise ValueError("J must be the exact Green J-relation")
+        return self

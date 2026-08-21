@@ -278,8 +278,14 @@ class IdealSaturationResult(StrictModel):
 __all__ = [
     "MAX_OUTPUT_GENERATORS",
     "MAX_OUTPUT_TERMS",
+    "EliminationIdealRequest",
+    "EliminationIdealResult",
+    "GroebnerBasisRequest",
+    "GroebnerBasisResult",
     "IdealComputationBudget",
     "IdealExecutionOutcome",
+    "IdealNormalFormRequest",
+    "IdealNormalFormResult",
     "IdealQuotientRequest",
     "IdealQuotientResult",
     "IdealRadicalMembershipRequest",
@@ -289,3 +295,122 @@ __all__ = [
     "IdealSaturationRequest",
     "IdealSaturationResult",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Gröbner basis computation
+# ---------------------------------------------------------------------------
+
+
+class GroebnerBasisRequest(StrictModel):
+    """Compute a reduced Gröbner basis for a bounded ideal in QQ[variables]."""
+
+    ideal: RationalPolynomialIdeal
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
+
+    @model_validator(mode="after")
+    def require_backend_domain(self) -> Self:
+        _require_ideal_budget(self.ideal, label="ideal")
+        return self
+
+
+class GroebnerBasisResult(StrictModel):
+    """A reduced Gröbner basis and its exact metadata."""
+
+    basis: RationalPolynomialIdeal
+    generator_count: StrictInt = Field(ge=1, le=MAX_OUTPUT_GENERATORS)
+    monomial_order: Literal["lex", "grlex", "grevlex"]
+    backend: Literal["SYMPY"] = "SYMPY"
+
+    @model_validator(mode="after")
+    def require_consistent_count(self) -> Self:
+        if self.generator_count != len(self.basis.generators):
+            raise ValueError("generator_count must match the basis generator count")
+        return self
+
+
+# ---------------------------------------------------------------------------
+# Normal form / ideal membership
+# ---------------------------------------------------------------------------
+
+
+class IdealNormalFormRequest(StrictModel):
+    """Reduce one polynomial modulo an ideal's Gröbner basis."""
+
+    ideal: RationalPolynomialIdeal
+    polynomial: RationalPolynomial
+
+    @model_validator(mode="after")
+    def require_backend_domain(self) -> Self:
+        _require_ideal_budget(self.ideal, label="ideal")
+        if self.polynomial.variables != self.ideal.variables:
+            raise ValueError("polynomial must use the ideal's ordered ring")
+        require_polynomial_budget(
+            self.polynomial,
+            maximum_terms=MAX_INPUT_TERMS,
+            maximum_exponent=MAX_INPUT_EXPONENT,
+            maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
+            label="polynomial",
+        )
+        return self
+
+
+class IdealNormalFormResult(StrictModel):
+    """The exact remainder of a polynomial reduced modulo an ideal."""
+
+    remainder: RationalPolynomial
+    in_ideal: bool
+
+    @model_validator(mode="after")
+    def require_consistent_membership(self) -> Self:
+        if self.in_ideal and len(self.remainder.polynomial.terms) > 0:
+            raise ValueError("a polynomial in the ideal must have a zero remainder")
+        if not self.in_ideal and len(self.remainder.polynomial.terms) == 0:
+            raise ValueError("a polynomial not in the ideal must have a nonzero remainder")
+        return self
+
+
+# ---------------------------------------------------------------------------
+# Elimination ideal
+# ---------------------------------------------------------------------------
+
+
+class EliminationIdealRequest(StrictModel):
+    """Compute the elimination ideal I ∩ QQ[remaining variables]."""
+
+    ideal: RationalPolynomialIdeal
+    eliminated_variables: tuple[str, ...] = Field(min_length=1, max_length=MAX_VARS)
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
+
+    @model_validator(mode="after")
+    def require_backend_domain(self) -> Self:
+        _require_ideal_budget(self.ideal, label="ideal")
+        eliminated = set(self.eliminated_variables)
+        for var in eliminated:
+            if var not in self.ideal.variables:
+                raise ValueError(
+                    "eliminated variables must be a subset of the ideal's variables"
+                )
+        return self
+
+
+class EliminationIdealResult(StrictModel):
+    """The elimination ideal I ∩ QQ[remaining variables]."""
+
+    elimination_ideal: RationalPolynomialIdeal
+    eliminated_variables: tuple[str, ...] = Field(min_length=1, max_length=MAX_VARS)
+    backend: Literal["SYMPY"] = "SYMPY"
+
+    @model_validator(mode="after")
+    def require_consistent_result(self) -> Self:
+        for var in self.eliminated_variables:
+            if var in self.elimination_ideal.variables:
+                raise ValueError(
+                    "eliminated variables must not appear in the elimination ideal"
+                )
+        return self

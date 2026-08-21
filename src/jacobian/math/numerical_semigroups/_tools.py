@@ -34,8 +34,8 @@ from jacobian.math.numerical_semigroups._operations import (
     compute_betti_elements,
     compute_catenary_degree,
     compute_delta_set,
-    compute_element_elasticity,
     compute_elasticity,
+    compute_element_elasticity,
     compute_factorization_graph,
     compute_factorizations,
     compute_membership,
@@ -274,7 +274,8 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "elasticity_15_in_3_5",
-                "Elasticity of 15 in <3,5>.",
+                "Elasticity of 15 in <3,5> with minimal generators (distinct, "
+                "strictly increasing, gcd 1) and positive member value.",
                 {"generators": ["3", "5"], "value": "15"},
             ),
         ),
@@ -294,7 +295,8 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "global_elasticity_3_5",
-                "Global elasticity of <3,5>.",
+                "Global elasticity of <3,5> with minimal generators (distinct, "
+                "strictly increasing, gcd 1).",
                 {"generators": ["3", "5"]},
             ),
         ),

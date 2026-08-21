@@ -32,8 +32,9 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     ),
     OperationAdmission(
         "number_theory.numerical_semigroup.elasticity.global_compute",
-        AdmissionDecision.KEEP,
-        "global semigroup elasticity as the largest/smallest generator ratio",
+        AdmissionDecision.NATIVE_ONLY,
+        "cheap generator-ratio projection already available via summary and native elasticity",
+        native_symbol="jacobian.math.numerical_semigroups.elasticity",
     ),
     OperationAdmission(
         "number_theory.numerical_semigroup.factorization_graph.compute",

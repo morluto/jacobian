@@ -42,6 +42,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "quadratic_form.direct_sum.compute",
         AdmissionDecision.KEEP,
         "exact block diagonal direct sum of two quadratic forms",
-    ),)
+    ),
+)
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

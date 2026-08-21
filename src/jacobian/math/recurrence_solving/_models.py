@@ -109,7 +109,9 @@ class PrimeFieldRecurrenceFindRequest(StrictModel):
             raise ValueError("prime must be a prime integer")
         for value in self.sequence:
             if type(value) is not int or not 0 <= value < self.prime:
-                raise ValueError("sequence values must be canonical residues modulo the prime")
+                raise ValueError(
+                    "sequence values must be canonical residues modulo the prime"
+                )
         return self
 
 
@@ -126,10 +128,16 @@ class PrimeFieldRecurrenceFindResult(StrictModel):
     def require_status_consistent_coefficients(self) -> Self:
         if self.status == "FOUND":
             if self.order == 0 or len(self.coefficients) != self.order:
-                raise ValueError("a found recurrence must have one coefficient per order")
+                raise ValueError(
+                    "a found recurrence must have one coefficient per order"
+                )
             for value in self.coefficients:
                 if type(value) is not int or not 0 <= value < self.prime:
-                    raise ValueError("coefficients must be canonical residues modulo the prime")
+                    raise ValueError(
+                        "coefficients must be canonical residues modulo the prime"
+                    )
         elif self.order != 0 or self.coefficients:
-            raise ValueError("a missing recurrence must have zero order and no coefficients")
+            raise ValueError(
+                "a missing recurrence must have zero order and no coefficients"
+            )
         return self

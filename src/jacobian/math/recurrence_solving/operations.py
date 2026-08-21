@@ -7,7 +7,13 @@ from typing import Literal
 
 from jacobian._exact import CanonicalRational
 
-__all__ = ["ClosedForm", "Recurrence", "berlekamp_massey", "closed_form", "find_recurrence"]
+__all__ = [
+    "ClosedForm",
+    "Recurrence",
+    "berlekamp_massey",
+    "closed_form",
+    "find_recurrence",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,8 +112,8 @@ def berlekamp_massey(sequence: list[int], prime: int) -> list[int]:
     """
     s = [int(x) % prime for x in sequence]
     n = len(s)
-    coeffs = [1]          # C(x) = 1
-    b = [1]               # B(x) = 1
+    coeffs = [1]  # C(x) = 1
+    b = [1]  # B(x) = 1
     length = 0
     m = 1
     last_discrepancy = 1
@@ -127,7 +133,10 @@ def berlekamp_massey(sequence: list[int], prime: int) -> list[int]:
                 coeffs.extend([0] * (len(shifted) - len(coeffs)))
             elif len(shifted) < len(coeffs):
                 shifted.extend([0] * (len(coeffs) - len(shifted)))
-            coeffs = [(c + s_coeff) % prime for c, s_coeff in zip(coeffs, shifted, strict=True)]
+            coeffs = [
+                (c + s_coeff) % prime
+                for c, s_coeff in zip(coeffs, shifted, strict=True)
+            ]
             length = i + 1 - length
             b = temp
             last_discrepancy = discrepancy
@@ -139,7 +148,10 @@ def berlekamp_massey(sequence: list[int], prime: int) -> list[int]:
                 coeffs.extend([0] * (len(shifted) - len(coeffs)))
             elif len(shifted) < len(coeffs):
                 shifted.extend([0] * (len(coeffs) - len(shifted)))
-            coeffs = [(c + s_coeff) % prime for c, s_coeff in zip(coeffs, shifted, strict=True)]
+            coeffs = [
+                (c + s_coeff) % prime
+                for c, s_coeff in zip(coeffs, shifted, strict=True)
+            ]
             m += 1
 
     # The connection polynomial is C(x) = 1 + c_1 x + ... + c_L x^L.

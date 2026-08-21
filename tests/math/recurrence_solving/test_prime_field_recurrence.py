@@ -13,7 +13,9 @@ from jacobian.math.recurrence_solving._operations import (
 def _verify_recurrence(sequence, coefficients, prime):
     order = len(coefficients)
     for n in range(order, len(sequence)):
-        expected = sum(coefficients[i] * sequence[n - 1 - i] for i in range(order)) % prime
+        expected = (
+            sum(coefficients[i] * sequence[n - 1 - i] for i in range(order)) % prime
+        )
         assert sequence[n] == expected, (n, sequence[n], expected)
 
 

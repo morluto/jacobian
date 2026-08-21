@@ -437,3 +437,118 @@ class ConvexPolygonTriangulationResult(StrictModel):
     objective: Literal["NON_HULL_DIAGONAL_WEIGHT_SUM"] = "NON_HULL_DIAGONAL_WEIGHT_SUM"
     tie_break: Literal["LOWEST_SPLIT_INDEX"] = "LOWEST_SPLIT_INDEX"
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
+
+
+# ---------------------------------------------------------------------------
+# Configuration-level operations (issues #2107, #2106)
+# ---------------------------------------------------------------------------
+
+class GeneralPositionRequest(StrictModel):
+    """Search a bounded point configuration for collinear triples and concyclic quadruples."""
+
+    points: tuple[RationalPoint2D, ...] = Field(min_length=3, max_length=32)
+
+    @model_validator(mode="after")
+    def require_unique(self) -> Self:
+        keys = tuple(
+            (p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points
+        )
+        if len(keys) != len(set(keys)):
+            raise ValueError("point-set coordinates must be unique")
+        return self
+
+
+class CollinearTripleWitness(StrictModel):
+    indices: tuple[int, int, int]
+
+
+class ConcyclicQuadrupleWitness(StrictModel):
+    indices: tuple[int, int, int, int]
+
+
+class GeneralPositionResult(StrictModel):
+    """Complete search result for collinear triples and concyclic quadruples."""
+
+    num_points: int = Field(ge=0)
+    has_collinear_triple: bool
+    has_concyclic_quadruple: bool
+    collinear_triples: tuple[CollinearTripleWitness, ...] = Field(default=())
+    concyclic_quadruples: tuple[ConcyclicQuadrupleWitness, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_canonical(self) -> Self:
+        for witness in self.collinear_triples:
+            idx = witness.indices
+            if len(idx) != 3 or len(set(idx)) != 3:
+                raise ValueError("collinear triple indices must be 3 distinct values")
+            if idx != tuple(sorted(idx)):
+                raise ValueError("collinear triple indices must be sorted")
+            if any(i >= self.num_points for i in idx):
+                raise ValueError("index out of range")
+        for witness in self.concyclic_quadruples:
+            idx = witness.indices
+            if len(idx) != 4 or len(set(idx)) != 4:
+                raise ValueError("concyclic quadruple indices must be 4 distinct values")
+            if idx != tuple(sorted(idx)):
+                raise ValueError("concyclic quadruple indices must be sorted")
+            if any(i >= self.num_points for i in idx):
+                raise ValueError("index out of range")
+        if self.has_collinear_triple != bool(self.collinear_triples):
+            raise ValueError("has_collinear_triple must match collinear_triples")
+        if self.has_concyclic_quadruple != bool(self.concyclic_quadruples):
+            raise ValueError("has_concyclic_quadruple must match concyclic_quadruples")
+        return self
+
+
+class CircumradiusProfileRequest(StrictModel):
+    """Compute circumradius data for every unordered triple in a point configuration."""
+
+    points: tuple[RationalPoint2D, ...] = Field(min_length=3, max_length=32)
+
+    @model_validator(mode="after")
+    def require_unique(self) -> Self:
+        keys = tuple(
+            (p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points
+        )
+        if len(keys) != len(set(keys)):
+            raise ValueError("point-set coordinates must be unique")
+        return self
+
+
+class CircumradiusTripleEntry(StrictModel):
+    """One triple and its circumradius disposition."""
+
+    indices: tuple[int, int, int]
+    is_degenerate: bool
+    radius_squared: CanonicalRational | None = None
+
+    @model_validator(mode="after")
+    def require_canonical(self) -> Self:
+        idx = self.indices
+        if len(idx) != 3 or len(set(idx)) != 3:
+            raise ValueError("triple indices must be 3 distinct values")
+        if idx != tuple(sorted(idx)):
+            raise ValueError("triple indices must be sorted")
+        if self.is_degenerate and self.radius_squared is not None:
+            raise ValueError("degenerate triple cannot have a radius")
+        if not self.is_degenerate and self.radius_squared is None:
+            raise ValueError("non-degenerate triple must have a radius")
+        return self
+
+
+class CircumradiusProfileResult(StrictModel):
+    """Complete circumradius profile for every unordered triple."""
+
+    num_points: int = Field(ge=0)
+    entries: tuple[CircumradiusTripleEntry, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_canonical(self) -> Self:
+        if len(self.entries) != self.num_points * (self.num_points - 1) * (self.num_points - 2) // 6:
+            raise ValueError("entries must cover exactly C(n,3) triples")
+        seen: set[tuple[int, int, int]] = set()
+        for entry in self.entries:
+            if entry.indices in seen:
+                raise ValueError("duplicate triple in circumradius profile")
+            seen.add(entry.indices)
+        return self

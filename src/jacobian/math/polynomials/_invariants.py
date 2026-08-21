@@ -2,6 +2,9 @@
 
 from jacobian.catalog._examples import example
 from jacobian.math.polynomials._models import (
+    IdealMembershipRequest,
+    IdealMembershipResult,
+    IdealNormalFormResult,
     PolynomialDiscriminantRequest,
     PolynomialDiscriminantResult,
     PolynomialFactorizationResult,
@@ -17,6 +20,8 @@ from jacobian.math.polynomials._operations import (
     polynomial_discriminant,
     polynomial_factorization,
     polynomial_gcd,
+    polynomial_ideal_membership,
+    polynomial_ideal_normal_form,
     polynomial_resultant,
     polynomial_square_free_decomposition,
 )
@@ -240,6 +245,103 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
                             ]
                         },
                     }
+                },
+            ),
+        ),
+    ),
+    polynomial_operation(
+        "polynomial.ideal.membership.decide",
+        "Decide ideal membership and return the normal form",
+        "Decide whether a bounded rational polynomial lies in a bounded "
+        "ideal over QQ, and return the canonical remainder modulo the "
+        "ideal under an explicit monomial order.",
+        IdealMembershipRequest,
+        IdealMembershipResult,
+        polynomial_ideal_membership,
+        "ideal-membership",
+        "normal-form",
+        "exact",
+        examples=(
+            example(
+                "membership_x_squared",
+                "Decide if x lies in <x^2> in Q[x].",
+                {
+                    "generators": [
+                        {
+                            "polynomial_schema_version": "1",
+                            "domain": "QQ",
+                            "variables": ["x"],
+                            "polynomial": {
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "exponents": [2],
+                                    },
+                                ],
+                            },
+                        },
+                    ],
+                    "polynomial": {
+                        "polynomial_schema_version": "1",
+                        "domain": "QQ",
+                        "variables": ["x"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [1],
+                                },
+                            ],
+                        },
+                    },
+                },
+            ),
+        ),
+    ),
+    polynomial_operation(
+        "polynomial.ideal.normal_form.compute",
+        "Reduce a polynomial modulo an ideal",
+        "Compute the canonical remainder of a bounded rational polynomial "
+        "modulo a bounded ideal over QQ under an explicit monomial order.",
+        IdealMembershipRequest,
+        IdealNormalFormResult,
+        polynomial_ideal_normal_form,
+        "normal-form",
+        "ideal",
+        "exact",
+        examples=(
+            example(
+                "normal_form_x_mod_x_squared",
+                "Reduce x modulo <x^2> in Q[x]; the remainder is x.",
+                {
+                    "generators": [
+                        {
+                            "polynomial_schema_version": "1",
+                            "domain": "QQ",
+                            "variables": ["x"],
+                            "polynomial": {
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "exponents": [2],
+                                    },
+                                ],
+                            },
+                        },
+                    ],
+                    "polynomial": {
+                        "polynomial_schema_version": "1",
+                        "domain": "QQ",
+                        "variables": ["x"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [1],
+                                },
+                            ],
+                        },
+                    },
                 },
             ),
         ),

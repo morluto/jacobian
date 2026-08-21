@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import sympy
+
 from jacobian.math import polynomials
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
@@ -12,6 +14,9 @@ from jacobian.math.polynomials._conversions import (
     symbols_for_variables,
 )
 from jacobian.math.polynomials._models import (
+    IdealMembershipRequest,
+    IdealMembershipResult,
+    IdealNormalFormResult,
     PolynomialBezoutIdentity,
     PolynomialDiscriminantRequest,
     PolynomialDiscriminantResult,
@@ -214,4 +219,45 @@ def polynomial_groebner_basis(
         variables=variables,
         monomial_order=request.monomial_order,
         basis=wire_basis,
+    )
+
+
+def polynomial_ideal_normal_form(
+    request: IdealMembershipRequest,
+) -> IdealNormalFormResult:
+    """Reduce a polynomial modulo an ideal using a Groebner basis."""
+
+    variables = request.generators[0].variables
+    symbols = symbols_for_variables(variables)
+    generators = [
+        rational_polynomial_to_sympy(generator).as_expr()
+        for generator in request.generators
+    ]
+    basis = sympy.groebner(
+        generators,
+        *symbols,
+        order=request.monomial_order,
+        domain=sympy.QQ,
+    )
+    poly = rational_polynomial_to_sympy(request.polynomial).as_expr()
+    remainder = basis.reduce(poly)[1]
+    return IdealNormalFormResult(
+        remainder=_result_polynomial(
+            sympy.Poly(remainder, *symbols, domain=sympy.QQ),
+            variables,
+        ),
+        monomial_order=request.monomial_order,
+    )
+
+
+def polynomial_ideal_membership(
+    request: IdealMembershipRequest,
+) -> IdealMembershipResult:
+    """Decide whether a polynomial lies in an ideal."""
+
+    normal_form = polynomial_ideal_normal_form(request)
+    is_zero = len(normal_form.remainder.polynomial.terms) == 0
+    return IdealMembershipResult(
+        in_ideal=is_zero,
+        normal_form=normal_form.remainder,
     )

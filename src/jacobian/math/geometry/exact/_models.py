@@ -91,12 +91,68 @@ class DistanceGraphResult(StrictModel):
     edges: tuple[tuple[int, int], ...]
 
 
+
+
+# ---------------------------------------------------------------------------
+# Configuration-wide incidence search: collinear triples and concyclic quadruples
+# ---------------------------------------------------------------------------
+
+
+class CollinearTriplesRequest(StrictModel):
+    """Search a planar configuration for collinear triples."""
+
+    configuration: PointConfiguration
+
+    @model_validator(mode="after")
+    def require_planar(self) -> Self:
+        if not self.configuration.points:
+            return self
+        if len(self.configuration.points[0].coordinates) != 2:
+            raise ValueError("collinear-triple search requires a planar configuration")
+        return self
+
+
+class ConcyclicQuadruplesRequest(StrictModel):
+    """Search a planar configuration for concyclic quadruples."""
+
+    configuration: PointConfiguration
+
+    @model_validator(mode="after")
+    def require_planar(self) -> Self:
+        if not self.configuration.points:
+            return self
+        if len(self.configuration.points[0].coordinates) != 2:
+            raise ValueError("concyclic-quadruple search requires a planar configuration")
+        return self
+
+
+class IncidenceSearchResult(StrictModel):
+    """Witnesses to a forbidden planar incidence configuration, or none."""
+
+    dimension: int = Field(ge=2, le=2)
+    point_count: int = Field(ge=3)
+    holds: bool = Field(
+        description="True iff at least one witness incidence exists.",
+    )
+    witnesses: tuple[tuple[int, ...], ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_consistent_witnesses(self) -> Self:
+        if self.holds and not self.witnesses:
+            raise ValueError("a holds=True result must list at least one witness")
+        if not self.holds and self.witnesses:
+            raise ValueError("a holds=False result must list no witnesses")
+        return self
+
 __all__ = [
+    "CollinearTriplesRequest",
+    "ConcyclicQuadruplesRequest",
     "DistanceGraphRequest",
     "DistanceGraphResult",
     "DistanceMultiplicityEntry",
     "DistanceProfileRequest",
     "DistanceProfileResult",
+    "IncidenceSearchResult",
     "LabelledRationalPoint",
     "PointConfiguration",
 ]

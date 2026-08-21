@@ -52,6 +52,98 @@ MAX_SUBSYSTEM_SOLVES = 5_000_000
 MAX_HULL_SUBFACETS = 200_000
 
 
+def _hyperplane_normal(points: list[list[Rational]]) -> Matrix | None:
+    """Return a normal vector to the hyperplane through ``points``.
+
+    ``points`` holds exactly ``d`` points in ``d``-dimensional space.
+    The normal is any non-zero vector in the null space of the matrix
+    whose rows are ``points[i] - points[0]`` for ``i >= 1``. Returns
+    ``None`` when the points are affinely dependent (no unique
+    hyperplane).
+    """
+
+    d = len(points)
+    if d == 1:
+        return Matrix([Rational(1)])
+    diffs = Matrix(
+        [[points[i][k] - points[0][k] for k in range(d)] for i in range(1, d)]
+    )
+    basis = diffs.nullspace()
+    if not basis:
+        return None
+    return basis[0]
+
+
+def _facets_from_points(
+    verts: list[list[Rational]], dim: int
+) -> list[tuple[Matrix, Rational]]:
+    """Enumerate the facet half-spaces of the convex hull of ``verts``.
+
+    Each facet is returned as ``(normal, offset)`` with the orientation
+    ``normal . x <= offset`` satisfied by every vertex. Facets are
+    deduplicated by their (normal, offset) signature.
+    """
+
+    facets: list[tuple[Matrix, Rational]] = []
+    for combo in combinations(range(len(verts)), dim):
+        pts = [verts[i] for i in combo]
+        normal = _hyperplane_normal(pts)
+        if normal is None:
+            continue
+        offset = sum(normal[k] * pts[0][k] for k in range(dim))
+        residuals = [sum(normal[k] * v[k] for k in range(dim)) - offset for v in verts]
+        if all(v <= 0 for v in residuals):
+            facets.append((normal, offset))
+        elif all(v >= 0 for v in residuals):
+            facets.append((Matrix([-x for x in normal]), -offset))
+    seen: set[tuple[tuple[Rational, ...], Rational]] = set()
+    out: list[tuple[Matrix, Rational]] = []
+    for normal, offset in facets:
+        key = (tuple(Rational(x) for x in normal), offset)
+        if key not in seen:
+            seen.add(key)
+            out.append((normal, offset))
+    return out
+
+
+def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
+    """Decide whether ``{x : A x <= b}`` is bounded.
+
+    The polytope is bounded iff its recession cone ``{y : A y <= 0}`` is
+    ``{0}``, which holds iff the origin lies strictly in the interior of
+    the convex hull of the rows of ``A``. That interior test is an exact
+    facet enumeration of the row normals.
+    """
+
+    dim = len(halfspaces[0].coefficients)
+    if dim == 1:
+        positive = any(
+            Rational(hs.coefficients[0].num, hs.coefficients[0].den) > 0
+            for hs in halfspaces
+        )
+        negative = any(
+            Rational(hs.coefficients[0].num, hs.coefficients[0].den) < 0
+            for hs in halfspaces
+        )
+        return positive and negative
+    normals: list[list[Rational]] = [
+        [Rational(c.num, c.den) for c in hs.coefficients] for hs in halfspaces
+    ]
+    # Guard the exact facet enumeration of the row normals.
+    try:
+        combo_count = math.comb(len(normals), dim)
+    except ValueError:
+        combo_count = 10**18
+    if combo_count > 700_000:
+        raise ValueError(
+            "H-representation boundedness check exceeds the 700k-combination budget"
+        )
+    hull_facets = _facets_from_points(normals, dim)
+    if not hull_facets:
+        return False
+    return all(Rational(0) < offset for _, offset in hull_facets)
+
+
 def _format_rational(value: Rational) -> str:
     """Render a SymPy ``Rational`` as a canonical ``num/den`` string."""
     if value.denominator == 1:
@@ -165,6 +257,51 @@ def _max_facets(points: list[list[Rational]], dim: int) -> list[list[int]]:
     return [sorted(members) for members in groups.values()]
 
 
+def _filter_redundant_vertices(
+    points: list[list[Rational]], dim: int
+) -> list[list[Rational]]:
+    """Return the extreme hull vertices, dropping redundant boundary points.
+
+    A bounded convex polytope's vertices are those points that belong to at
+    least ``dim`` maximal (d-1)-facets. Redundant collinear edge points or
+    interior face points belong to fewer facets and are removed. This
+    prevents the 2-D adjacency graph from becoming non-simple (e.g., a
+    3x3 square with all 12 boundary integer points would otherwise give
+    every node degree >2 and cause triangulation to fail).
+    """
+
+    if len(points) <= dim + 1:
+        return points
+    # Guard the facet enumeration that the filter itself requires.
+    subfacet_count = math.comb(len(points), dim)
+    if subfacet_count > MAX_HULL_SUBFACETS:
+        # Too many to enumerate exactly; fall back to no filtering and let
+        # the caller raise the budget error. Filtering is an optimization
+        # for the small, non-budget-exhausting cases that the operation
+        # admits.
+        return points
+    facets = _max_facets(points, dim)
+    if not facets:
+        return points
+    counts = [0] * len(points)
+    for facet in facets:
+        for idx in facet:
+            if 0 <= idx < len(points):
+                counts[idx] += 1
+    threshold = dim if dim > 1 else 1
+    keep_indices = [i for i, c in enumerate(counts) if c >= threshold]
+    # If filtering would discard too much (e.g., degenerate or numeric
+    # failure), keep the hull boundary instead of collapsing.
+    if len(keep_indices) < dim + 1:
+        hull_indices = [i for i, c in enumerate(counts) if c > 0]
+        if len(hull_indices) >= dim + 1:
+            keep_indices = hull_indices
+        else:
+            return points
+    keep_set = set(keep_indices)
+    return [pt for i, pt in enumerate(points) if i in keep_set]
+
+
 def _project_facet(
     facet_points: list[list[Rational]], dim: int
 ) -> list[list[Rational]]:
@@ -269,6 +406,10 @@ def _extreme_vertex(points: list[list[Rational]], dim: int) -> int | None:
 
 def _polytope_volume(points: list[list[Rational]], dim: int) -> Rational:
     """Exact volume of the convex hull of ``points`` in ``dim`` dimensions."""
+    # Remove redundant boundary points before triangulating (P2): keeps
+    # only extreme hull vertices, avoiding double-counting and degenerate
+    # adjacency (e.g., 3x3 square with collinear edge points).
+    points = _filter_redundant_vertices(points, dim)
     n = len(points)
     if n < dim + 1:
         return Rational(0)
@@ -446,7 +587,14 @@ def compute_polytope_volume(
             "but the input vertices do not span the ambient dimension"
         )
 
-    points: list[list[Rational]] = [list(v) for v in unique_vertices]
+    # Remove redundant boundary points (P2) before triangulating: keep only
+    # extreme hull vertices to avoid double-counting and degenerate fans.
+    # Duplicates are already removed; this also drops collinear edge
+    # interior points that would otherwise make the 2-D adjacency graph
+    # non-simple (e.g., a 3x3 square with all 12 boundary points).
+    points_candidate: list[list[Rational]] = [list(v) for v in unique_vertices]
+    filtered_points = _filter_redundant_vertices(points_candidate, dim)
+    points = filtered_points if len(filtered_points) >= dim + 1 else points_candidate
     volume = _polytope_volume(points, dim)
     if volume == 0:
         raise ValueError(

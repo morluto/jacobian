@@ -110,7 +110,7 @@ def _validate_vertices(vertices: tuple[Vertex, ...], dimension_bound: int) -> No
             raise ValueError("all vertices must share one dimension")
 
 
-def _validate_halfspaces(
+def _validate_halfspaces(  # noqa: C901
     halfspaces: tuple[Halfspace, ...], dimension_bound: int
 ) -> None:
     """Validate an H-representation: count, per-component, and dimension bounds."""
@@ -138,6 +138,26 @@ def _validate_halfspaces(
     for halfspace in halfspaces:
         if len(halfspace.coefficients) != dim:
             raise ValueError("all half-spaces must share one dimension")
+    for halfspace in halfspaces:
+        if all(c.as_fraction() == 0 for c in halfspace.coefficients):
+            raise ValueError("half-space coefficients must not all be zero")
+    # Bounded-ness and non-emptiness must be decided before any exact
+    # enumeration. These checks are the operation's domain filter: an
+    # unbounded or empty H-polytope is not a valid request, so it is
+    # rejected here as ``ValidationError`` rather than as a host exception
+    # after acceptance.
+    from jacobian.math.polytope._operations import (
+        _is_bounded_h,
+        _vertices_from_h_representation,
+    )
+
+    if not _is_bounded_h(halfspaces):
+        raise ValueError(
+            "the H-representation is unbounded; polytope volume requires a bounded polytope"
+        )
+    verts, _ = _vertices_from_h_representation(halfspaces)
+    if not verts:
+        raise ValueError("the H-representation defines an empty polytope")
 
 
 class PolytopeVolumeResult(StrictModel):

@@ -26,7 +26,16 @@ from jacobian._models import StrictModel
 
 _MAX_INTEGER_LENGTH = 256
 _MAX_FACTORIZATION_LENGTH = 12
-_MAX_CERTIFIED_FACTORIZATION_LENGTH = 80
+# Certified factoring uses SymPy's ``factorint`` (Pollard rho, Pollard p-1,
+# ECM) on the input and recursively on ``p - 1`` for Pratt certificates.
+# The 30-digit bound (~100 bits) is a real work bound: it keeps worst-case
+# synchronous factoring of hard semiprimes (e.g., two ~15-digit primes) and
+# Pratt ``p - 1`` factorization bounded to well under one second, while
+# still covering the 21-digit subexponential test vector.  An 80-digit cap
+# would admit inputs whose Pollard rho/ECM work is unbounded for a
+# synchronous ``math.run`` worker, so the admitted domain is narrowed here
+# and documented as an algorithmic budget.
+_MAX_CERTIFIED_FACTORIZATION_LENGTH = 30
 # These small bounds deliberately keep arithmetic functions that may factor
 # their input (totient, Möbius, divisor sigma, square-free predicates, and
 # multiplicative order) safe for in-process SymPy execution.
@@ -769,6 +778,30 @@ class DiscreteLogarithmResult(StrictModel):
 # ---------------------------------------------------------------------------
 
 
+def _verify_pratt_identities(p: int, witness: int, sub_primes: tuple[int, ...]) -> None:
+    """Verify the Pratt identities for one certificate node.
+
+    Checks ``witness^(p-1) ≡ 1 (mod p)``, ``witness^((p-1)/q) ≢ 1 (mod p)``
+    for each prime factor ``q`` of ``p - 1``, and that ``sub_primes``
+    exactly covers the distinct prime factors of ``p - 1``.
+    """
+
+    if pow(witness, p - 1, p) != 1:
+        raise ValueError("Pratt witness fails a^(p-1) ≡ 1 (mod p)")
+    for q in sub_primes:
+        if (p - 1) % q != 0:
+            raise ValueError("sub-certificate prime must divide p-1")
+        if pow(witness, (p - 1) // q, p) == 1:
+            raise ValueError("Pratt witness fails a^((p-1)/q) ≢ 1 (mod p)")
+    from sympy import factorint
+
+    expected = set(factorint(p - 1).keys())
+    if set(sub_primes) != expected:
+        raise ValueError(
+            "sub-certificates must exactly cover the distinct prime factors of p-1"
+        )
+
+
 class PrattCertificateNode(StrictModel):
     """One node in a Pratt primality certificate tree.
 
@@ -804,18 +837,26 @@ class PrattCertificateNode(StrictModel):
             return self
         if self.witness is None:
             raise ValueError("non-base-case certificate requires a witness")
-        witnesses = {item.prime for item in self.sub_certificates}
-        if len(witnesses) != len(self.sub_certificates):
+        sub_primes_str = [item.prime for item in self.sub_certificates]
+        if len(set(sub_primes_str)) != len(self.sub_certificates):
             raise ValueError("sub-certificate primes must be unique")
+        w = parse_canonical_integer(self.witness)
+        if w < 2 or w >= p:
+            raise ValueError("witness must be between 2 and p-1")
+        sub_primes = tuple(
+            parse_canonical_integer(sub.prime) for sub in self.sub_certificates
+        )
+        _verify_pratt_identities(p, w, sub_primes)
         return self
 
 
 class CertifiedFactorizationRequest(StrictModel):
     """One positive integer for subexponential certified factorization.
 
-    The integer is bounded to ``_MAX_CERTIFIED_FACTORIZATION_LENGTH`` digits
-    so that SymPy's ``factorint`` (Pollard rho, p-1, ECM) can complete the
-    full factorization within a bounded wall-clock budget.
+    The integer is bounded to 30 digits (~100 bits) so that SymPy's
+    ``factorint`` (Pollard rho, p-1, ECM) and recursive Pratt ``p - 1``
+    factorization complete within a bounded synchronous budget.  See
+    ``_MAX_CERTIFIED_FACTORIZATION_LENGTH`` for the work-bound rationale.
     """
 
     value: CertifiedFactorizationInteger
@@ -861,6 +902,11 @@ class CertifiedFactorizationResult(StrictModel):
             raise ValueError("factor primes must be ascending")
         if len(set(primes)) != len(primes):
             raise ValueError("factor primes must be unique")
+        for item in self.factors:
+            cert_prime = parse_canonical_integer(item.certificate.prime)
+            factor_prime = parse_canonical_integer(item.prime)
+            if cert_prime != factor_prime:
+                raise ValueError("factor certificate prime must equal the factor prime")
         return self
 
 
@@ -893,12 +939,21 @@ class PrimalityCertificateResult(StrictModel):
             raise ValueError("CERTIFIED status requires a certificate")
         if self.status == "COMPOSITE" and self.certificate is not None:
             raise ValueError("COMPOSITE status must not carry a certificate")
+        value_int = parse_canonical_integer(self.value)
+        if self.status == "COMPOSITE":
+            from sympy import isprime
+
+            if isprime(value_int):
+                raise ValueError("COMPOSITE status requires a composite value")
         if self.status == "CERTIFIED":
             assert self.certificate is not None
             cert_prime = parse_canonical_integer(self.certificate.prime)
-            value = parse_canonical_integer(self.value)
-            if cert_prime != value:
+            if cert_prime != value_int:
                 raise ValueError("certificate prime must match the candidate value")
+            from sympy import isprime
+
+            if not isprime(value_int):
+                raise ValueError("CERTIFIED status requires a prime value")
         return self
 
 

@@ -159,8 +159,20 @@ def test_certified_result_rejects_non_matching_certificate() -> None:
             value="101",
             certificate=PrattCertificateNode(
                 prime="103",
-                witness="2",
-                sub_certificates=(PrattCertificateNode(prime="2"),),
+                witness="5",
+                sub_certificates=(
+                    PrattCertificateNode(prime="2"),
+                    PrattCertificateNode(
+                        prime="3",
+                        witness="2",
+                        sub_certificates=(PrattCertificateNode(prime="2"),),
+                    ),
+                    PrattCertificateNode(
+                        prime="17",
+                        witness="3",
+                        sub_certificates=(PrattCertificateNode(prime="2"),),
+                    ),
+                ),
             ),
         )
 

@@ -110,7 +110,7 @@ FACTORIZATION_OPERATIONS = (
     _operation(
         operation_id="integer.factor.certified_compute",
         title="Compute a certified integer factorization",
-        description="Factor one bounded 80-digit integer using subexponential methods (Pollard rho, Pollard p-1, ECM via sympy.ntheory.factorint), returning the complete prime-power factorization with per-factor Pratt primality certificates.",
+        description="Factor one bounded 30-digit integer (~100 bits) using subexponential methods (Pollard rho, Pollard p-1, ECM via sympy.ntheory.factorint), returning the complete prime-power factorization with per-factor Pratt primality certificates.",
         request_model=CertifiedFactorizationRequest,
         result_model=CertifiedFactorizationResult,
         implementation=_compute_certified_factorization,

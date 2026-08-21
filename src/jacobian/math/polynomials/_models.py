@@ -316,6 +316,54 @@ class PolynomialGroebnerBasisResult(StrictModel):
         return self
 
 
+class IdealMembershipRequest(StrictModel):
+    """Decide membership of one polynomial in a bounded polynomial ideal."""
+
+    generators: tuple[RationalPolynomial, ...] = Field(min_length=1, max_length=16)
+    polynomial: RationalPolynomial
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
+
+    @model_validator(mode="after")
+    def require_matching_rings(self) -> Self:
+        variables = self.generators[0].variables
+        if any(gen.variables != variables for gen in self.generators):
+            raise ValueError("all ideal generators must use the same ordered ring")
+        if self.polynomial.variables != variables:
+            raise ValueError("polynomial must use the same ordered ring as the ideal")
+        if sum(len(gen.polynomial.terms) for gen in self.generators) > 256:
+            raise ValueError("ideal generators exceed the aggregate term budget")
+        for gen in self.generators:
+            require_polynomial_budget(
+                gen,
+                maximum_terms=MAX_POLYNOMIAL_TERMS,
+                maximum_exponent=12,
+                maximum_coefficient_digits=128,
+                label="ideal generator",
+            )
+        require_polynomial_budget(
+            self.polynomial,
+            maximum_terms=MAX_POLYNOMIAL_TERMS,
+            maximum_exponent=12,
+            maximum_coefficient_digits=128,
+            label="polynomial",
+        )
+        return self
+
+
+class IdealNormalFormResult(StrictModel):
+    """The canonical remainder of one polynomial modulo an ideal."""
+
+    remainder: RationalPolynomial
+    monomial_order: Literal["lex", "grlex", "grevlex"]
+
+
+class IdealMembershipResult(StrictModel):
+    """Whether a polynomial lies in an ideal, with the normal form."""
+
+    in_ideal: bool
+    normal_form: RationalPolynomial
+
+
 class IntegerPolynomial(StrictModel):
     """Canonical dense polynomial in ``ZZ[x]``, highest degree first."""
 
@@ -526,6 +574,9 @@ class RationalPartialFractionResult(StrictModel):
 
 
 __all__ = [
+    "IdealMembershipRequest",
+    "IdealMembershipResult",
+    "IdealNormalFormResult",
     "IntegerPolynomial",
     "IntegerPolynomialCompositionRequest",
     "IntegerPolynomialCompositionResult",

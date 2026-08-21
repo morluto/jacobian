@@ -222,10 +222,15 @@ def polynomial_groebner_basis(
     )
 
 
-def polynomial_ideal_normal_form(
+def _compute_membership_context(
     request: IdealMembershipRequest,
-) -> IdealNormalFormResult:
-    """Reduce a polynomial modulo an ideal using a Groebner basis."""
+) -> tuple[tuple[RationalPolynomial, ...] | None, Any]:
+    """Compute the Gröbner basis and return its wire form with the SymPy basis.
+
+    The wire basis is ``None`` when the computed basis itself exceeds the
+    1,024-term aggregate output boundary; the caller then reports the typed
+    budget outcome instead of a partial exact artifact.
+    """
 
     variables = request.ideal.variables
     symbols = symbols_for_variables(variables)
@@ -239,14 +244,57 @@ def polynomial_ideal_normal_form(
         order=request.monomial_order,
         domain=sympy.QQ,
     )
+    try:
+        wire_basis = tuple(
+            _result_polynomial(
+                sympy.Poly(expr.as_expr(), *symbols, domain=sympy.QQ), variables
+            )
+            for expr in basis.exprs
+        )
+    except PolynomialOutputBudgetError:
+        return None, basis
+    if sum(len(element.polynomial.terms) for element in wire_basis) > 1024:
+        return None, basis
+    return wire_basis, basis
+
+
+def polynomial_ideal_normal_form(
+    request: IdealMembershipRequest,
+) -> IdealNormalFormResult:
+    """Reduce a polynomial modulo an ideal using a Groebner basis."""
+
+    variables = request.ideal.variables
+    symbols = symbols_for_variables(variables)
+    wire_basis, basis = _compute_membership_context(request)
+    source = {"ideal": request.ideal, "polynomial": request.polynomial}
+    if wire_basis is None:
+        return IdealNormalFormResult(
+            **source,
+            monomial_order=request.monomial_order,
+            status="BUDGET_EXCEEDED",
+            groebner_basis=None,
+            remainder=None,
+        )
     poly = rational_polynomial_to_sympy(request.polynomial).as_expr()
-    remainder = basis.reduce(poly)[1]
-    return IdealNormalFormResult(
-        remainder=_result_polynomial(
-            sympy.Poly(remainder, *symbols, domain=sympy.QQ),
+    try:
+        remainder = _result_polynomial(
+            sympy.Poly(basis.reduce(poly)[1], *symbols, domain=sympy.QQ),
             variables,
-        ),
+        )
+    except PolynomialOutputBudgetError:
+        return IdealNormalFormResult(
+            **source,
+            monomial_order=request.monomial_order,
+            status="BUDGET_EXCEEDED",
+            groebner_basis=wire_basis,
+            remainder=None,
+        )
+    return IdealNormalFormResult(
+        **source,
         monomial_order=request.monomial_order,
+        status="COMPUTED",
+        groebner_basis=wire_basis,
+        remainder=remainder,
     )
 
 
@@ -256,8 +304,21 @@ def polynomial_ideal_membership(
     """Decide whether a polynomial lies in an ideal."""
 
     normal_form = polynomial_ideal_normal_form(request)
+    source = {
+        "ideal": normal_form.ideal,
+        "polynomial": normal_form.polynomial,
+        "monomial_order": normal_form.monomial_order,
+        "groebner_basis": normal_form.groebner_basis,
+    }
+    if normal_form.status == "BUDGET_EXCEEDED":
+        return IdealMembershipResult(
+            **source,
+            status="BUDGET_EXCEEDED",
+            normal_form=None,
+        )
     is_zero = len(normal_form.remainder.polynomial.terms) == 0
     return IdealMembershipResult(
-        in_ideal=is_zero,
+        **source,
+        status="IN_IDEAL" if is_zero else "NOT_IN_IDEAL",
         normal_form=normal_form.remainder,
     )

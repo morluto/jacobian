@@ -212,6 +212,7 @@ def compute_ordered_difference_profile(
                 break
 
     return OrderedDifferenceProfileResult(
+        vectors=tuple(tuple(int(coord) for coord in vec) for vec in vectors),
         dimension=dimension,
         set_size=n,
         total_ordered_pairs=total_pairs,

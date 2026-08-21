@@ -11,6 +11,9 @@ from jacobian.math.polynomials._conversions import (
 )
 from jacobian.math.polynomials.multivariate._models import (
     MultivariateDivisionRequest,
+    MultivariateFactorRequest,
+    MultivariateFactorResult,
+    MultivariateIrreducibleFactor,
     MultivariateDivisionResult,
     MultivariateGcdRequest,
     MultivariateGcdResult,
@@ -147,3 +150,66 @@ def _to_poly(ring_element: Any, symbols: tuple[Any, ...]) -> Any:
     from sympy import QQ, Poly
 
     return Poly(ring_element.as_expr(), *symbols, domain=QQ)
+
+
+def _sympy_factorization(source: Any) -> tuple[Any, tuple[tuple[Any, int], ...], Any]:
+    """Run SymPy's factor_list and verify reconstruction."""
+    from jacobian.math.polynomials._sympy import _monic_decomposition
+
+    return _monic_decomposition(
+        source,
+        source.factor_list(),
+        label="multivariate factorization",
+    )
+
+
+def multivariate_factor(request: MultivariateFactorRequest) -> MultivariateFactorResult:
+    """Exact factorization over ``QQ[variables]`` via SymPy's ``factor_list``."""
+
+    from fractions import Fraction
+    from jacobian._exact import CanonicalRational
+
+    source = rational_polynomial_to_sympy(request.polynomial)
+    coefficient, raw_factors, reconstructed = _sympy_factorization(source)
+
+    if hasattr(coefficient, "LC"):
+        coeff_rational = coefficient.LC()
+        coeff_fraction = Fraction(int(coeff_rational.p), int(coeff_rational.q))
+    else:
+        from sympy import Rational as SymPyRational
+        coeff_value = SymPyRational(coefficient)
+        coeff_fraction = Fraction(int(coeff_value.p), int(coeff_value.q))
+    coefficient_value = CanonicalRational.from_fraction(coeff_fraction)
+
+    factors_list = []
+    for factor, multiplicity in raw_factors:
+        factors_list.append(
+            MultivariateIrreducibleFactor(
+                factor=_result_polynomial(factor, request.polynomial.variables),
+                multiplicity=multiplicity,
+            )
+        )
+    factors_list.sort(
+        key=lambda record: (
+            record.multiplicity,
+            max(
+                (sum(term.exponents) for term in record.factor.polynomial.terms),
+                default=0,
+            ),
+            tuple(
+                (term.exponents, term.coefficient.num, term.coefficient.den)
+                for term in record.factor.polynomial.terms
+            ),
+        )
+    )
+    factors = tuple(factors_list)
+
+    reconstructed_poly = _result_polynomial(
+        reconstructed, request.polynomial.variables
+    )
+
+    return MultivariateFactorResult(
+        coefficient=coefficient_value,
+        factors=factors,
+        reconstructed=reconstructed_poly,
+    )

@@ -216,6 +216,66 @@ class MultivariateResultantResult(StrictModel):
     convention: Literal["SYLVESTER_DETERMINANT"] = "SYLVESTER_DETERMINANT"
 
 
+class MultivariateFactorRequest(StrictModel):
+    """Exact factorization request over ``QQ[variables]``."""
+
+    polynomial: RationalPolynomial
+
+    @model_validator(mode="after")
+    def require_factor_budget(self) -> Self:
+        if len(self.polynomial.variables) < 1:
+            raise ValueError("factorization requires at least one variable")
+        require_polynomial_budget(
+            self.polynomial,
+            maximum_terms=_MAX_MULTIVARIATE_TERMS,
+            maximum_exponent=_MAX_MULTIVARIATE_EXPONENT,
+            maximum_coefficient_digits=_MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
+        )
+        return self
+
+
+class MultivariateIrreducibleFactor(StrictModel):
+    factor: RationalPolynomial
+    multiplicity: int = Field(ge=1, le=_MAX_MULTIVARIATE_EXPONENT)
+
+
+class MultivariateFactorResult(StrictModel):
+    coefficient: CanonicalRational
+    factors: tuple[MultivariateIrreducibleFactor, ...] = Field(max_length=64)
+    reconstructed: RationalPolynomial
+    normalization: Literal["CONTENT_AND_MONIC_IRREDUCIBLES"] = (
+        "CONTENT_AND_MONIC_IRREDUCIBLES"
+    )
+    product_reconstruction: Literal["EXACT"] = "EXACT"
+
+    @model_validator(mode="after")
+    def require_canonical(self) -> Self:
+        if any(
+            factor.factor.variables != self.reconstructed.variables
+            for factor in self.factors
+        ):
+            raise ValueError("irreducible factors must use the source ring")
+        ordered = tuple(
+            sorted(
+                self.factors,
+                key=lambda record: (
+                    record.multiplicity,
+                    max(
+                        (sum(term.exponents) for term in record.factor.polynomial.terms),
+                        default=0,
+                    ),
+                    tuple(
+                        (term.exponents, term.coefficient.num, term.coefficient.den)
+                        for term in record.factor.polynomial.terms
+                    ),
+                ),
+            )
+        )
+        if self.factors != ordered:
+            raise ValueError("irreducible factors must use canonical order")
+        return self
+
+
 __all__ = [
     "MonomialOrder",
     "MultivariateDivisionRequest",
@@ -227,4 +287,7 @@ __all__ = [
     "MultivariateResultantRequest",
     "MultivariateResultantResult",
     "MultivariateScalarValue",
+    "MultivariateFactorRequest",
+    "MultivariateFactorResult",
+    "MultivariateIrreducibleFactor",
 ]

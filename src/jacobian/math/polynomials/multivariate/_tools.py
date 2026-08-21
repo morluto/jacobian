@@ -9,6 +9,8 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials.multivariate._models import (
     MultivariateDivisionRequest,
     MultivariateDivisionResult,
+    MultivariateFactorRequest,
+    MultivariateFactorResult,
     MultivariateGcdRequest,
     MultivariateGcdResult,
     MultivariateResultantRequest,
@@ -18,6 +20,7 @@ from jacobian.math.polynomials.multivariate._operations import (
     compute_multivariate_division,
     compute_multivariate_gcd,
     compute_multivariate_resultant,
+    multivariate_factor,
 )
 
 
@@ -227,8 +230,50 @@ MULTIVARIATE_POLYNOMIAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "elimination",
         examples=(_RESULTANT_EXAMPLE,),
     ),
+    multivariate_polynomial_operation(
+        "polynomial.multivariate.factor.compute",
+        "Factor a multivariate polynomial over QQ",
+        (
+            "Return the exact rational content and complete "
+            "multiplicity-bearing irreducible factorization of one bounded "
+            "multivariate polynomial over QQ[x_1, ..., x_n].  Backed by "
+            "SymPy's factor_list."
+        ),
+        MultivariateFactorRequest,
+        MultivariateFactorResult,
+        multivariate_factor,
+        "polynomial",
+        "factorization",
+        "multivariate",
+        "rational",
+        examples=(
+            example(
+                "factor_xy_squared_minus_x",
+                "Factor x^2*y - x in Q[x,y]; the polynomial must use "
+                "the same canonical ordered QQ ring.",
+                {
+                    "polynomial": {
+                        "polynomial_schema_version": "1",
+                        "domain": "QQ",
+                        "variables": ["x", "y"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [2, 1],
+                                },
+                                {
+                                    "coefficient": {"num": "-1", "den": "1"},
+                                    "exponents": [1, 0],
+                                },
+                            ]
+                        },
+                    },
+                },
+            ),
+        ),
+    ),
 )
-
 
 TOOLS = MULTIVARIATE_POLYNOMIAL_OPERATIONS
 

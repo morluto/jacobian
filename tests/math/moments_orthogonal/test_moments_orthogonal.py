@@ -132,13 +132,14 @@ class TestJacobiMatrix:
         beta = (_frac(1, 1), _frac(1, 12), _frac(1, 15))
         result = jacobi_matrix(alpha, beta)
         assert result.diagonal == (_frac(1, 2), _frac(1, 2))
-        assert result.off_diagonal == (_frac(1, 1), _frac(1, 12), _frac(1, 15))
+        # beta_0 is the zeroth moment; the subdiagonal carries beta_1 only.
+        assert result.off_diagonal == (_frac(1, 12),)
 
     def test_empty_alpha(self) -> None:
         beta = (_frac(1, 1),)
         result = jacobi_matrix((), beta)
         assert result.diagonal == ()
-        assert result.off_diagonal == (_frac(1, 1),)
+        assert result.off_diagonal == ()
 
     def test_zero_beta_rejected(self) -> None:
         with pytest.raises(ValueError, match="nonzero"):

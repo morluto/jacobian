@@ -10,7 +10,6 @@ from jacobian._models import StrictModel
 from jacobian.math.prime_field_linear_algebra import (
     PrimeFieldMatrix,
     nullspace,
-    rank,
     rref,
 )
 

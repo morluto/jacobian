@@ -106,7 +106,7 @@ class TestNullspace:
         # Verify A*v = 0 mod p
         ns = result.nullspace_rows[0]
         for row in req.entries:
-            dot = sum(a * b for a, b in zip(row, ns)) % req.prime
+            dot = sum(a * b for a, b in zip(row, ns, strict=False)) % req.prime
             assert dot == 0
 
     def test_full_rank_no_nullspace(self) -> None:

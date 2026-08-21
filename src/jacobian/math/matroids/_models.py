@@ -8,9 +8,17 @@ from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
 
-
 MAX_GROUND_SIZE = 32
 MAX_ROWS = 16
+
+
+def _require_prime(value: int) -> None:
+    """Reject composite moduli: the kernel claims GF(p) Fermat inverses."""
+    if value < 2 or any(
+        value % divisor == 0
+        for divisor in range(2, int(value**0.5) + 1)
+    ):
+        raise ValueError("prime must be a prime field modulus")
 
 
 class LinearMatroid(StrictModel):
@@ -26,6 +34,7 @@ class LinearMatroid(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_columns(self) -> Self:
+        _require_prime(self.prime)
         if len(self.columns) < 1:
             raise ValueError("at least one column is required")
         for col in self.columns:

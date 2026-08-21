@@ -240,8 +240,7 @@ class DisjunctiveSumResult(StrictModel):
             for value in self.component_grundy_values
         ):
             raise ValueError(
-                f"component Grundy values must be between 0 and "
-                f"{MAX_COMPONENT_GRUNDY}"
+                f"component Grundy values must be between 0 and {MAX_COMPONENT_GRUNDY}"
             )
         from functools import reduce
         from operator import xor

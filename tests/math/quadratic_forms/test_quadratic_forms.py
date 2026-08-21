@@ -95,7 +95,9 @@ class TestRepresentationNumbers:
             RepresentationNumbersRequest,
             SymmetricMatrix,
         )
-        from jacobian.math.quadratic_forms._operations import compute_representation_numbers
+        from jacobian.math.quadratic_forms._operations import (
+            compute_representation_numbers,
+        )
 
         form = SymmetricMatrix(matrix=((1,),))
         result = compute_representation_numbers(
@@ -113,7 +115,9 @@ class TestRepresentationNumbers:
             RepresentationNumbersRequest,
             SymmetricMatrix,
         )
-        from jacobian.math.quadratic_forms._operations import compute_representation_numbers
+        from jacobian.math.quadratic_forms._operations import (
+            compute_representation_numbers,
+        )
 
         form = SymmetricMatrix(matrix=((1, 0), (0, 1)))
         result = compute_representation_numbers(
@@ -128,7 +132,10 @@ class TestScaling:
     """Tests for form scaling."""
 
     def test_scale_identity(self) -> None:
-        from jacobian.math.quadratic_forms._models import ScalingRequest, SymmetricMatrix
+        from jacobian.math.quadratic_forms._models import (
+            ScalingRequest,
+            SymmetricMatrix,
+        )
         from jacobian.math.quadratic_forms._operations import compute_scaling
 
         form = SymmetricMatrix(matrix=((1, 0), (0, 1)))

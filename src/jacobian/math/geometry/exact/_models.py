@@ -12,6 +12,8 @@ from jacobian._models import StrictModel
 
 MAX_POINTS = 64
 MAX_DIMENSION = 20
+COORDINATE_DIGITS = 256
+"""Per-coordinate digit bound so exact squared distances stay representable."""
 
 
 class LabelledRationalPoint(StrictModel):
@@ -22,8 +24,14 @@ class LabelledRationalPoint(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_dimension(self) -> Self:
+        from jacobian._exact import require_bounded_rational
+
         if len(self.coordinates) > MAX_DIMENSION:
             raise ValueError("dimension exceeds bound")
+        for coord in self.coordinates:
+            require_bounded_rational(
+                coord, max_digits=COORDINATE_DIGITS, label="point coordinate"
+            )
         return self
 
 
@@ -162,25 +170,54 @@ class PinnedLineEntry(StrictModel):
 class PinnedLineDistanceResult(StrictModel):
     """Complete pinned line-distance profile for a point configuration."""
 
+    configuration: PointConfiguration
+    anchor: tuple[CanonicalRational, ...] = Field(min_length=1)
     dimension: int = Field(ge=2, le=2)
-    point_count: int = Field(ge=2)
+    point_count: int = Field(ge=2, le=MAX_POINTS)
     lines: tuple[PinnedLineEntry, ...]
     distance_multiplicities: tuple[tuple[CanonicalRational, int], ...]
 
     @model_validator(mode="after")
-    def require_consistent_profile(self) -> Self:
+    def require_consistent_profile(self) -> Self:  # noqa: C901
         from itertools import combinations
 
-        expected_pairs = len(list(combinations(range(self.point_count), 2)))
-        total_pairs = sum(len(entry.pairs) for entry in self.lines)
-        if total_pairs != expected_pairs:
-            raise ValueError("every source pair must be assigned to exactly one line")
-        # distance multiplicities must partition the lines by squared distance
+        # Bind the profile to its source geometry before any pair accounting.
+        if len(self.configuration.points) != self.point_count:
+            raise ValueError("point_count must match the retained configuration")
+        if len(self.anchor) != 2:
+            raise ValueError("the retained anchor must be a planar rational point")
+        coords = {
+            tuple(c.as_fraction() for c in pt.coordinates)
+            for pt in self.configuration.points
+        }
+        if len(coords) != len(self.configuration.points):
+            raise ValueError(
+                "retained configuration points must have distinct coordinates"
+            )
+
+        # Cap point_count before enumerating expected pairs (schema-visible too).
+        if self.point_count > MAX_POINTS:
+            raise ValueError("point_count exceeds the configuration bound")
+
+        expected_pairs = sorted(combinations(range(self.point_count), 2))
+        seen_pairs: list[tuple[int, int]] = []
+        seen_lines: set[tuple[Fraction, ...]] = set()
         mult: dict[Fraction, int] = {}
         for entry in self.lines:
-            mult[entry.squared_distance.as_fraction()] = (
-                mult.get(entry.squared_distance.as_fraction(), 0) + 1
-            )
+            coeffs = tuple(c.as_fraction() for c in entry.line_coefficients)
+            if coeffs in seen_lines:
+                raise ValueError("duplicate lines must be collapsed into one entry")
+            seen_lines.add(coeffs)
+            for i, j in entry.pairs:
+                if not 0 <= i < j < self.point_count:
+                    raise ValueError("source pairs must reference valid point indices")
+                seen_pairs.append((i, j))
+            d = entry.squared_distance.as_fraction()
+            mult[d] = mult.get(d, 0) + 1
+        if sorted(seen_pairs) != expected_pairs or len(seen_pairs) != len(
+            set(seen_pairs)
+        ):
+            raise ValueError("lines must cover exactly the set of source pairs once")
         reconstructed = tuple(
             (
                 CanonicalRational.from_fraction(d),

@@ -8,6 +8,8 @@ from jacobian.math.polynomials._models import (
     PolynomialFactorRequest,
     PolynomialGcdRequest,
     PolynomialGcdResult,
+    PolynomialGroebnerBasisRequest,
+    PolynomialGroebnerBasisResult,
     PolynomialResultantRequest,
     PolynomialResultantResult,
     PolynomialSquareFreeDecompositionResult,
@@ -17,6 +19,7 @@ from jacobian.math.polynomials._operations import (
     polynomial_discriminant,
     polynomial_factorization,
     polynomial_gcd,
+    polynomial_groebner_basis,
     polynomial_resultant,
     polynomial_square_free_decomposition,
 )
@@ -240,6 +243,64 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
                             ]
                         },
                     }
+                },
+            ),
+        ),
+    ),
+    polynomial_operation(
+        "polynomial.ideal.groebner_basis.compute",
+        "Compute a reduced Gröbner basis",
+        "Compute the exact reduced monic Gröbner basis of a bounded "
+        "polynomial ideal over QQ under an explicit monomial order.",
+        PolynomialGroebnerBasisRequest,
+        PolynomialGroebnerBasisResult,
+        polynomial_groebner_basis,
+        "groebner-basis",
+        "ideal",
+        "exact",
+        examples=(
+            example(
+                "groebner_basis_xy",
+                "Compute the Gröbner basis of <x^2 - y, xy - 1> in "
+                "Q[x, y] under grevlex order.",
+                {
+                    "generators": [
+                        {
+                            "polynomial_schema_version": "1",
+                            "domain": "QQ",
+                            "variables": ["x", "y"],
+                            "polynomial": {
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "exponents": [2, 0],
+                                    },
+                                    {
+                                        "coefficient": {"num": "-1", "den": "1"},
+                                        "exponents": [0, 1],
+                                    },
+                                ],
+                            },
+                        },
+                        {
+                            "polynomial_schema_version": "1",
+                            "domain": "QQ",
+                            "variables": ["x", "y"],
+                            "polynomial": {
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "exponents": [1, 1],
+                                    },
+                                    {
+                                        "coefficient": {"num": "-1", "den": "1"},
+                                        "exponents": [0, 0],
+                                    },
+                                ],
+                            },
+                        },
+                    ],
+                    "monomial_order": "grevlex",
                 },
             ),
         ),

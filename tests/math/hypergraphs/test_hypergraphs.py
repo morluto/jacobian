@@ -19,7 +19,6 @@ from jacobian.math.hypergraphs._operations import (
     compute_vertex_degrees,
 )
 
-
 # ---- Fixtures ----------------------------------------------------------------
 
 HYPERGRAPH = {
@@ -72,9 +71,7 @@ class TestFiniteHypergraph:
 
     def test_undeclared_member_rejected(self) -> None:
         with pytest.raises(ValidationError, match="every edge member"):
-            FiniteHypergraph(
-                vertices=["a", "b"], edges=[["e", ["a", "z"]]]
-            )
+            FiniteHypergraph(vertices=["a", "b"], edges=[["e", ["a", "z"]]])
 
     def test_duplicate_edge_ids_rejected(self) -> None:
         with pytest.raises(ValidationError, match="edge ids must be distinct"):
@@ -85,9 +82,7 @@ class TestFiniteHypergraph:
 
     def test_duplicate_members_in_edge_rejected(self) -> None:
         with pytest.raises(ValidationError, match="edge members must be distinct"):
-            FiniteHypergraph(
-                vertices=["a", "b"], edges=[["e", ["a", "a"]]]
-            )
+            FiniteHypergraph(vertices=["a", "b"], edges=[["e", ["a", "a"]]])
 
 
 class TestParameters:
@@ -211,9 +206,7 @@ class TestDual:
 
 class TestIncidenceGraph:
     def test_incidence(self) -> None:
-        r = compute_incidence_graph(
-            IncidenceGraphRequest(hypergraph=HYPERGRAPH)
-        )
+        r = compute_incidence_graph(IncidenceGraphRequest(hypergraph=HYPERGRAPH))
         vi = dict(r.vertex_incidence)
         assert vi["a"] == ("e1", "e3")
         assert vi["b"] == ("e1", "e2")
@@ -224,16 +217,18 @@ class TestIncidenceGraph:
         assert ei["e2"] == ("b", "c", "d")
         assert ei["e3"] == ("a", "d")
         assert set(r.edges) == {
-            ("a", "e1"), ("a", "e3"),
-            ("b", "e1"), ("b", "e2"),
-            ("c", "e1"), ("c", "e2"),
-            ("d", "e2"), ("d", "e3"),
+            ("a", "e1"),
+            ("a", "e3"),
+            ("b", "e1"),
+            ("b", "e2"),
+            ("c", "e1"),
+            ("c", "e2"),
+            ("d", "e2"),
+            ("d", "e3"),
         }
 
     def test_no_edges(self) -> None:
-        r = compute_incidence_graph(
-            IncidenceGraphRequest(hypergraph=NO_EDGES)
-        )
+        r = compute_incidence_graph(IncidenceGraphRequest(hypergraph=NO_EDGES))
         assert dict(r.vertex_incidence) == {"a": (), "b": ()}
         assert r.edge_incidence == ()
         assert r.edges == ()
@@ -261,9 +256,7 @@ class TestIncidenceGraph:
 
 class TestCliqueExpansion:
     def test_basic(self) -> None:
-        r = compute_clique_expansion(
-            CliqueExpansionRequest(hypergraph=HYPERGRAPH)
-        )
+        r = compute_clique_expansion(CliqueExpansionRequest(hypergraph=HYPERGRAPH))
         assert r.vertices == ("a", "b", "c", "d")
         adj = dict(r.adjacency)
         assert adj["a"] == ("b", "c", "d")
@@ -272,12 +265,13 @@ class TestCliqueExpansion:
         assert adj["d"] == ("a", "b", "c")
 
     def test_edges(self) -> None:
-        r = compute_clique_expansion(
-            CliqueExpansionRequest(hypergraph=HYPERGRAPH)
-        )
+        r = compute_clique_expansion(CliqueExpansionRequest(hypergraph=HYPERGRAPH))
         assert set(r.edges) == {
-            ("a", "b"), ("a", "c"), ("a", "d"),
-            ("b", "c"), ("b", "d"),
+            ("a", "b"),
+            ("a", "c"),
+            ("a", "d"),
+            ("b", "c"),
+            ("b", "d"),
             ("c", "d"),
         }
 
@@ -298,16 +292,12 @@ class TestCliqueExpansion:
         assert set(r.edges) == {("a", "b"), ("c", "d")}
 
     def test_no_edges_no_adjacency(self) -> None:
-        r = compute_clique_expansion(
-            CliqueExpansionRequest(hypergraph=NO_EDGES)
-        )
+        r = compute_clique_expansion(CliqueExpansionRequest(hypergraph=NO_EDGES))
         assert dict(r.adjacency) == {"a": (), "b": ()}
         assert r.edges == ()
 
     def test_singleton(self) -> None:
-        r = compute_clique_expansion(
-            CliqueExpansionRequest(hypergraph=SINGLETON)
-        )
+        r = compute_clique_expansion(CliqueExpansionRequest(hypergraph=SINGLETON))
         assert dict(r.adjacency) == {"v": ()}
         assert r.edges == ()
 
@@ -378,7 +368,11 @@ class TestBindingSafety:
                     ("d", ("a", "b", "c")),
                 ),
                 edges=(
-                    ("a", "b"), ("a", "c"), ("a", "d"),
-                    ("b", "c"), ("b", "d"), ("c", "d"),
+                    ("a", "b"),
+                    ("a", "c"),
+                    ("a", "d"),
+                    ("b", "c"),
+                    ("b", "d"),
+                    ("c", "d"),
                 ),
             )

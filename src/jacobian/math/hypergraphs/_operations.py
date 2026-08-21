@@ -5,6 +5,7 @@ from jacobian.math.hypergraphs._models import (
     CliqueExpansionResult,
     DualRequest,
     DualResult,
+    FiniteHypergraph,
     IncidenceGraphRequest,
     IncidenceGraphResult,
     ParametersRequest,
@@ -12,7 +13,6 @@ from jacobian.math.hypergraphs._models import (
     VertexDegreesRequest,
     VertexDegreesResult,
 )
-from jacobian.math.hypergraphs._models import FiniteHypergraph
 
 
 def _canonical_edges(
@@ -43,10 +43,7 @@ def _parameters_data(
         rank = max(sizes)
         corank = min(sizes)
         total = sum(sizes)
-        if all(size == sizes[0] for size in sizes):
-            uniform_size = sizes[0]
-        else:
-            uniform_size = None
+        uniform_size = sizes[0] if all(size == sizes[0] for size in sizes) else None
     return vertex_count, edge_count, rank, corank, uniform_size, total
 
 
@@ -60,13 +57,11 @@ def _vertex_degrees_data(
     sorted by degree ascending.
     """
 
-    degrees: dict[str, int] = {vertex: 0 for vertex in hypergraph.vertices}
+    degrees: dict[str, int] = dict.fromkeys(hypergraph.vertices, 0)
     for _, members in _canonical_edges(hypergraph):
         for member in members:
             degrees[member] += 1
-    degree_map = tuple(
-        (vertex, degrees[vertex]) for vertex in hypergraph.vertices
-    )
+    degree_map = tuple((vertex, degrees[vertex]) for vertex in hypergraph.vertices)
     histogram_map: dict[int, int] = {}
     for count in degrees.values():
         histogram_map[count] = histogram_map.get(count, 0) + 1
@@ -83,15 +78,12 @@ def _dual_data(hypergraph: FiniteHypergraph) -> FiniteHypergraph:
     """
 
     dual_vertices = tuple(edge_id for edge_id, _ in _canonical_edges(hypergraph))
-    membership: dict[str, list[str]] = {
-        vertex: [] for vertex in hypergraph.vertices
-    }
+    membership: dict[str, list[str]] = {vertex: [] for vertex in hypergraph.vertices}
     for edge_id, members in _canonical_edges(hypergraph):
         for member in members:
             membership[member].append(edge_id)
     dual_edges = tuple(
-        (vertex, tuple(sorted(membership[vertex])))
-        for vertex in hypergraph.vertices
+        (vertex, tuple(sorted(membership[vertex]))) for vertex in hypergraph.vertices
     )
     return FiniteHypergraph(vertices=dual_vertices, edges=dual_edges)
 
@@ -119,12 +111,9 @@ def _incidence_graph_data(
         for member in members:
             vertex_incidence[member].append(edge_id)
     vertex_incidence_pairs = tuple(
-        (vertex, tuple(vertex_incidence[vertex]))
-        for vertex in hypergraph.vertices
+        (vertex, tuple(vertex_incidence[vertex])) for vertex in hypergraph.vertices
     )
-    edge_incidence_pairs = tuple(
-        (edge_id, members) for edge_id, members in edges
-    )
+    edge_incidence_pairs = tuple((edge_id, members) for edge_id, members in edges)
     incidence_edges = tuple(
         (vertex, edge_id)
         for vertex, members in vertex_incidence_pairs
@@ -135,7 +124,11 @@ def _incidence_graph_data(
 
 def _clique_expansion_data(
     hypergraph: FiniteHypergraph,
-) -> tuple[tuple[str, ...], tuple[tuple[str, tuple[str, ...]], ...], tuple[tuple[str, str], ...]]:
+) -> tuple[
+    tuple[str, ...],
+    tuple[tuple[str, tuple[str, ...]], ...],
+    tuple[tuple[str, str], ...],
+]:
     """Compute the 2-section (primal/clique expansion) graph.
 
     Two distinct vertices are adjacent if they share at least one hyperedge.
@@ -223,9 +216,7 @@ def compute_incidence_graph(
 ) -> IncidenceGraphResult:
     """Compute the bipartite incidence graph (Levi graph) of a hypergraph."""
 
-    vertex_incidence, edge_incidence, edges = _incidence_graph_data(
-        request.hypergraph
-    )
+    vertex_incidence, edge_incidence, edges = _incidence_graph_data(request.hypergraph)
     return IncidenceGraphResult(
         hypergraph=request.hypergraph,
         vertex_incidence=vertex_incidence,

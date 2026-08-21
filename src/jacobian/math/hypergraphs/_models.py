@@ -25,9 +25,7 @@ class FiniteHypergraph(StrictModel):
     """
 
     vertices: tuple[str, ...] = Field(max_length=MAX_VERTICES)
-    edges: tuple[tuple[str, tuple[str, ...]], ...] = Field(
-        max_length=MAX_EDGES
-    )
+    edges: tuple[tuple[str, tuple[str, ...]], ...] = Field(max_length=MAX_EDGES)
 
     @model_validator(mode="after")
     def require_valid_hypergraph(self) -> Self:
@@ -196,17 +194,11 @@ class IncidenceGraphResult(StrictModel):
     def bind_incidence_graph(self) -> Self:
         from jacobian.math.hypergraphs._operations import _incidence_graph_data
 
-        vertex_incidence, edge_incidence, edges = _incidence_graph_data(
-            self.hypergraph
-        )
+        vertex_incidence, edge_incidence, edges = _incidence_graph_data(self.hypergraph)
         if self.vertex_incidence != vertex_incidence:
-            raise ValueError(
-                "vertex_incidence must be the exact vertex-to-edges map"
-            )
+            raise ValueError("vertex_incidence must be the exact vertex-to-edges map")
         if self.edge_incidence != edge_incidence:
-            raise ValueError(
-                "edge_incidence must be the exact edge-to-vertices map"
-            )
+            raise ValueError("edge_incidence must be the exact edge-to-vertices map")
         if self.edges != edges:
             raise ValueError("edges must be the exact incidence pairs")
         return self

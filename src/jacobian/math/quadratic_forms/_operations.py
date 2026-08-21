@@ -110,9 +110,7 @@ def _representation_numbers(
         if dim == n:
             # Compute q(vec)
             q = sum(
-                integer_form[i][j] * vec[i] * vec[j]
-                for i in range(n)
-                for j in range(n)
+                integer_form[i][j] * vec[i] * vec[j] for i in range(n) for j in range(n)
             )
             if 0 <= q <= bound:
                 counts[q] += 1

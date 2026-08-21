@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -159,6 +160,33 @@ class LatticePolytopeRequest(StrictModel):
         for halfspace in self.halfspaces:
             if len(halfspace.coefficients) != dim:
                 raise ValueError("all half-spaces must share one dimension")
+        # Bounded-ness and non-emptiness must be decided before any
+        # exact enumeration.  These checks are the operation's domain
+        # filter: an unbounded or empty H-polytope is not a valid
+        # request, so it is rejected here as ``ValidationError`` rather
+        # than as a host exception after acceptance.
+        from jacobian.math.lattice_polytopes._operations import (
+            _is_bounded_h,
+            _vertices_from_h_representation,
+        )
+
+        halfspaces_list: list[tuple[list[Fraction], Fraction]] = [
+            (
+                [c.as_fraction() for c in hs.coefficients],
+                hs.offset.as_fraction(),
+            )
+            for hs in self.halfspaces
+        ]
+        # ``Fraction`` values are accepted by the sympy-based helpers
+        # via implicit conversion.
+        if not _is_bounded_h(halfspaces_list, dim):
+            raise ValueError(
+                "the H-representation is unbounded; lattice-point enumeration "
+                "requires a bounded polytope"
+            )
+        verts, _ = _vertices_from_h_representation(halfspaces_list)
+        if not verts:
+            raise ValueError("the H-representation defines an empty polytope")
 
     def dimension(self) -> int:
         """Return the ambient dimension implied by the chosen representation."""

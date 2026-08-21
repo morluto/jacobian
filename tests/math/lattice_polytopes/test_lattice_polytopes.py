@@ -194,22 +194,20 @@ class TestCount:
 class TestRejection:
     def test_unbounded_halfspace_representation_is_rejected(self) -> None:
         # Only x <= 1: the polytope is unbounded in every other direction.
-        request = LatticePolytopeRequest(
-            halfspaces=(_hs((("1", "1"), ("0", "1")), ("1", "1")),)
-        )
-        with pytest.raises(ValueError, match="unbounded"):
-            count_lattice_points(request)
+        with pytest.raises(ValidationError, match="unbounded"):
+            LatticePolytopeRequest(
+                halfspaces=(_hs((("1", "1"), ("0", "1")), ("1", "1")),)
+            )
 
     def test_unbounded_quadrant_is_rejected(self) -> None:
         # x >= 0 and y >= 0 only: unbounded.
-        request = LatticePolytopeRequest(
-            halfspaces=(
-                _hs((("-1", "1"), ("0", "1")), ("0", "1")),
-                _hs((("0", "1"), ("-1", "1")), ("0", "1")),
+        with pytest.raises(ValidationError, match="unbounded"):
+            LatticePolytopeRequest(
+                halfspaces=(
+                    _hs((("-1", "1"), ("0", "1")), ("0", "1")),
+                    _hs((("0", "1"), ("-1", "1")), ("0", "1")),
+                ),
             )
-        )
-        with pytest.raises(ValueError, match="unbounded"):
-            enumerate_lattice_points(request)
 
     def test_dimension_exceeds_bound(self) -> None:
         with pytest.raises(ValidationError):
@@ -243,14 +241,13 @@ class TestRejection:
 
     def test_empty_halfspace_polytope_rejected(self) -> None:
         # x <= 0 and -x <= -1 (i.e. x >= 1): no feasible point.
-        request = LatticePolytopeRequest(
-            halfspaces=(
-                _hs((("1", "1"),), ("0", "1")),
-                _hs((("-1", "1"),), ("-1", "1")),
+        with pytest.raises(ValidationError, match="empty"):
+            LatticePolytopeRequest(
+                halfspaces=(
+                    _hs((("1", "1"),), ("0", "1")),
+                    _hs((("-1", "1"),), ("-1", "1")),
+                ),
             )
-        )
-        with pytest.raises(ValueError, match="empty"):
-            count_lattice_points(request)
 
     def test_all_zero_halfspace_normal_rejected(self) -> None:
         with pytest.raises(ValidationError, match="must not all be zero"):

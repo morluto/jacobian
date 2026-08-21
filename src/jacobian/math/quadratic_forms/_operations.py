@@ -1,14 +1,23 @@
 """Exact quadratic form operations using SymPy for linear algebra."""
 
+from jacobian._exact import CanonicalInteger
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math._exact_linear_algebra import symmetric_inertia
 from jacobian.math.quadratic_forms._models import (
+    DirectSumRequest,
+    DirectSumResult,
     DiscriminantRequest,
     DiscriminantResult,
     EvaluationRequest,
     EvaluationResult,
+    RepresentationNumbersRequest,
+    RepresentationNumbersResult,
+    ScalingRequest,
+    ScalingResult,
     SignatureRequest,
     SignatureResult,
+    ThetaSeriesPrefixRequest,
+    ThetaSeriesPrefixResult,
 )
 
 
@@ -61,14 +70,16 @@ def compute_signature(request: SignatureRequest) -> SignatureResult:
 
 
 def _representation_numbers(
-    form: tuple[tuple[int, ...], ...], bound: int
+    form: tuple[tuple[CanonicalInteger, ...], ...], bound: int
 ) -> tuple[int, ...]:
     """Compute r(n) for n = 0, 1, ..., bound.
 
     Brute-force enumeration over a bounded integer box.
     """
-    form = tuple(tuple(parse_canonical_integer(entry) for entry in row) for row in form)
-    n = len(form)
+    integer_form = tuple(
+        tuple(parse_canonical_integer(entry) for entry in row) for row in form
+    )
+    n = len(integer_form)
     counts = [0] * (bound + 1)
 
     # Compute bounding box from the form
@@ -76,7 +87,7 @@ def _representation_numbers(
     # Use the diagonal to estimate bounds
     from sympy import Matrix
 
-    m = Matrix(form)
+    m = Matrix(integer_form)
     eigenvals = m.eigenvals()
 
     # Find the minimum positive eigenvalue for bounding
@@ -95,10 +106,14 @@ def _representation_numbers(
     box_bound = int(math.sqrt(bound / min_eig)) + 2 if bound > 0 else 0
 
     # Enumerate all integer vectors in the box
-    def enumerate_dim(dim, vec):
+    def enumerate_dim(dim: int, vec: list[int]) -> None:
         if dim == n:
             # Compute q(vec)
-            q = sum(form[i][j] * vec[i] * vec[j] for i in range(n) for j in range(n))
+            q = sum(
+                integer_form[i][j] * vec[i] * vec[j]
+                for i in range(n)
+                for j in range(n)
+            )
             if 0 <= q <= bound:
                 counts[q] += 1
             return
@@ -112,8 +127,8 @@ def _representation_numbers(
 
 
 def _scale_form(
-    form: tuple[tuple[int, ...], ...], factor: int
-) -> tuple[tuple[int, ...], ...]:
+    form: tuple[tuple[CanonicalInteger, ...], ...], factor: int
+) -> tuple[tuple[CanonicalInteger, ...], ...]:
     """Scale a form by an integer factor."""
     n = len(form)
     return tuple(
@@ -126,27 +141,34 @@ def _scale_form(
 
 
 def _direct_sum(
-    form1: tuple[tuple[int, ...], ...], form2: tuple[tuple[int, ...], ...]
-) -> tuple[tuple[int, ...], ...]:
+    form1: tuple[tuple[CanonicalInteger, ...], ...],
+    form2: tuple[tuple[CanonicalInteger, ...], ...],
+) -> tuple[tuple[CanonicalInteger, ...], ...]:
     """Block diagonal direct sum A ⊕ B."""
-    form1 = tuple(tuple(parse_canonical_integer(x) for x in row) for row in form1)
-    form2 = tuple(tuple(parse_canonical_integer(x) for x in row) for row in form2)
-    n1 = len(form1)
-    n2 = len(form2)
-    result = []
+    integer_form1 = tuple(
+        tuple(parse_canonical_integer(x) for x in row) for row in form1
+    )
+    integer_form2 = tuple(
+        tuple(parse_canonical_integer(x) for x in row) for row in form2
+    )
+    n1 = len(integer_form1)
+    n2 = len(integer_form2)
+    result: list[tuple[int, ...]] = []
     for i in range(n1 + n2):
         row = [0] * (n1 + n2)
         if i < n1:
             for j in range(n1):
-                row[j] = form1[i][j]
+                row[j] = integer_form1[i][j]
         else:
             for j in range(n2):
-                row[n1 + j] = form2[i - n1][j]
+                row[n1 + j] = integer_form2[i - n1][j]
         result.append(tuple(row))
     return tuple(tuple(format_canonical_integer(x) for x in row) for row in result)
 
 
-def compute_representation_numbers(request):
+def compute_representation_numbers(
+    request: RepresentationNumbersRequest,
+) -> RepresentationNumbersResult:
     """Compute representation numbers r(0), ..., r(bound)."""
     from jacobian.math.quadratic_forms._models import RepresentationNumbersResult
 
@@ -156,7 +178,9 @@ def compute_representation_numbers(request):
     )
 
 
-def compute_theta_series_prefix(request):
+def compute_theta_series_prefix(
+    request: ThetaSeriesPrefixRequest,
+) -> ThetaSeriesPrefixResult:
     """Compute the theta series prefix q^0 through q^bound."""
     from jacobian.math.quadratic_forms._models import ThetaSeriesPrefixResult
 
@@ -166,7 +190,7 @@ def compute_theta_series_prefix(request):
     )
 
 
-def compute_scaling(request):
+def compute_scaling(request: ScalingRequest) -> ScalingResult:
     """Scale a quadratic form by an integer factor."""
     from jacobian.math.quadratic_forms._models import ScalingResult, SymmetricMatrix
 
@@ -178,7 +202,7 @@ def compute_scaling(request):
     )
 
 
-def compute_direct_sum(request):
+def compute_direct_sum(request: DirectSumRequest) -> DirectSumResult:
     """Compute the block diagonal direct sum of two quadratic forms."""
     from jacobian.math.quadratic_forms._models import DirectSumResult, SymmetricMatrix
 

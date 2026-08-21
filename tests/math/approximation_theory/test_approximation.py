@@ -5,7 +5,9 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.approximation_theory._models import (
     LagrangeBasisRequest,
     LagrangeInterpolationRequest,
@@ -19,6 +21,34 @@ from jacobian.math.approximation_theory._operations import (
 
 def _node(num: str, den: str = "1") -> dict:
     return {"num": num, "den": den}
+
+
+class TestDerivedGrowthBudget:
+    """Admission must keep derived results inside the canonical digit limit."""
+
+    def test_huge_denominator_nodes_rejected(self):
+        # (10^2000 + k)/10^2000 is already reduced and has a 2001-digit
+        # denominator per node; four such nodes blow the component budget.
+        nodes = [
+            _node(str(10**2000 + k), "1" + "0" * 2000) for k in (1, 3, 7, 9)
+        ]
+        with pytest.raises(ValidationError, match="component budget"):
+            RationalNodeSet(nodes=tuple(CanonicalRational.model_validate(n) for n in nodes))
+
+    def test_many_moderate_nodes_accepted(self):
+        primes = [
+            11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71,
+            73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139,
+            149, 151,
+        ]
+        nodes = [_node(str(p), str(10**14)) for p in primes]
+        request = LagrangeBasisRequest(
+            nodes=RationalNodeSet(
+                nodes=tuple(CanonicalRational.model_validate(n) for n in nodes)
+            )
+        )
+        result = compute_lagrange_basis(request)
+        assert result.node_count == 32
 
 
 class TestLagrangeBasis:

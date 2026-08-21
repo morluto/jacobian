@@ -132,7 +132,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "rep_numbers_identity_2d_bound_2",
                 "Representation numbers of I_2 up to 2 (positive-definite).",
-                {"form": {"matrix": [[1, 0], [0, 1]]}, "bound": 2},
+                {"form": {"matrix": [["1", "0"], ["0", "1"]]}, "bound": 2},
             ),
         ),
     ),
@@ -149,7 +149,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "theta_prefix_identity_2d_bound_2",
                 "Theta prefix of I_2 up to 2.",
-                {"form": {"matrix": [[1, 0], [0, 1]]}, "bound": 2},
+                {"form": {"matrix": [["1", "0"], ["0", "1"]]}, "bound": 2},
             ),
         ),
     ),
@@ -166,7 +166,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "scale-i2-by-2",
                 "Scale 2D identity by 2.",
-                {"form": {"matrix": [[1, 0], [0, 1]]}, "factor": 2},
+                {"form": {"matrix": [["1", "0"], ["0", "1"]]}, "factor": 2},
             ),
         ),
     ),
@@ -183,7 +183,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "direct-sum-i1-i1",
                 "Direct sum of two 1D forms [[1]] oplus [[1]].",
-                {"form1": {"matrix": [[1]]}, "form2": {"matrix": [[1]]}},
+                {"form1": {"matrix": [["1"]]}, "form2": {"matrix": [["1"]]}},
             ),
         ),
     ),

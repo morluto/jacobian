@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.petri_nets.values import (
+    MAX_PETRI_MARKING,
     MAX_REACHABILITY_STATES,
     Marking,
     PetriNet,
@@ -53,8 +54,20 @@ class FireTransitionRequest(StrictModel):
 class FireTransitionResult(StrictModel):
     """Result of firing a transition."""
 
-    fired: bool
-    new_marking: Marking = Field(default=Marking(tokens=()))
+    status: Literal["FIRED", "NOT_ENABLED", "ESCAPES_DECLARED_ENVELOPE"]
+    new_marking: Marking | None = None
+    envelope_escape: tuple[int, ...] | None = None
+
+    @model_validator(mode="after")
+    def require_consistent_outcome(self) -> Self:
+        if self.status == "ESCAPES_DECLARED_ENVELOPE":
+            if self.new_marking is not None or self.envelope_escape is None:
+                raise ValueError("envelope escape must carry only the successor")
+            if all(token <= MAX_PETRI_MARKING for token in self.envelope_escape):
+                raise ValueError("envelope escape must exceed the marking bound")
+        elif self.new_marking is None or self.envelope_escape is not None:
+            raise ValueError("ordinary firing outcomes must carry only a marking")
+        return self
 
 
 class IncidenceMatrixRequest(StrictModel):

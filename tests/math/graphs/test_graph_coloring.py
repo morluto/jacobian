@@ -132,7 +132,23 @@ class TestEdgeKColorability:
     def _petersen(self):
         from jacobian.math.graphs.coloring._models import GraphEdgeList
 
-        edges = [(0,1),(1,2),(2,3),(3,4),(4,0),(5,7),(7,9),(9,6),(6,8),(8,5),(0,5),(1,6),(2,7),(3,8),(4,9)]
+        edges = [
+            (0, 1),
+            (1, 2),
+            (2, 3),
+            (3, 4),
+            (4, 0),
+            (5, 7),
+            (7, 9),
+            (9, 6),
+            (6, 8),
+            (8, 5),
+            (0, 5),
+            (1, 6),
+            (2, 7),
+            (3, 8),
+            (4, 9),
+        ]
         return GraphEdgeList(vertex_count=10, edges=tuple(edges))
 
     def test_petersen_not_3_edge_colorable(self):
@@ -158,7 +174,9 @@ class TestEdgeKColorability:
         )
 
         g = self._petersen()
-        result = compute_edge_k_colorability(EdgeKColorabilityRequest(graph=g, colors=4))
+        result = compute_edge_k_colorability(
+            EdgeKColorabilityRequest(graph=g, colors=4)
+        )
         assert result.colorable is True
         assert len(result.coloring) == 15
         check = compute_edge_coloring_check(
@@ -176,15 +194,41 @@ class TestEdgeKColorability:
         )
 
         g = GraphEdgeList(vertex_count=3, edges=((0, 1), (1, 2), (0, 2)))
-        assert compute_edge_k_colorability(EdgeKColorabilityRequest(graph=g, colors=2)).colorable is False
-        assert compute_edge_k_colorability(EdgeKColorabilityRequest(graph=g, colors=3)).colorable is True
+        assert (
+            compute_edge_k_colorability(
+                EdgeKColorabilityRequest(graph=g, colors=2)
+            ).colorable
+            is False
+        )
+        assert (
+            compute_edge_k_colorability(
+                EdgeKColorabilityRequest(graph=g, colors=3)
+            ).colorable
+            is True
+        )
 
 
 class TestEdgeColoringCheck:
     def _petersen(self):
         from jacobian.math.graphs.coloring._models import GraphEdgeList
 
-        edges = [(0,1),(1,2),(2,3),(3,4),(4,0),(5,7),(7,9),(9,6),(6,8),(8,5),(0,5),(1,6),(2,7),(3,8),(4,9)]
+        edges = [
+            (0, 1),
+            (1, 2),
+            (2, 3),
+            (3, 4),
+            (4, 0),
+            (5, 7),
+            (7, 9),
+            (9, 6),
+            (6, 8),
+            (8, 5),
+            (0, 5),
+            (1, 6),
+            (2, 7),
+            (3, 8),
+            (4, 9),
+        ]
         return GraphEdgeList(vertex_count=10, edges=tuple(edges))
 
     def test_proper_coloring_accepted(self):

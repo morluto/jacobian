@@ -51,8 +51,28 @@ def graph_coloring_operation[
     )
 
 
-
-PETERSEN_GRAPH = {'graph': {'vertex_count': 10, 'edges': [[0, 1], [1, 2], [2, 3], [3, 4], [4, 0], [5, 7], [7, 9], [9, 6], [6, 8], [8, 5], [0, 5], [1, 6], [2, 7], [3, 8], [4, 9]]}}
+PETERSEN_GRAPH = {
+    "graph": {
+        "vertex_count": 10,
+        "edges": [
+            [0, 1],
+            [1, 2],
+            [2, 3],
+            [3, 4],
+            [4, 0],
+            [5, 7],
+            [7, 9],
+            [9, 6],
+            [6, 8],
+            [8, 5],
+            [0, 5],
+            [1, 6],
+            [2, 7],
+            [3, 8],
+            [4, 9],
+        ],
+    }
+}
 
 GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     graph_coloring_operation(
@@ -151,7 +171,11 @@ GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     "A 4-edge-coloring of the Petersen graph validates as proper. "
                     "The assignment must assign one color per edge in 0..colors-1."
                 ),
-                {**PETERSEN_GRAPH, "colors": 4, "coloring": [1, 0, 1, 3, 2, 3, 0, 3, 1, 2, 0, 2, 2, 0, 1]},
+                {
+                    **PETERSEN_GRAPH,
+                    "colors": 4,
+                    "coloring": [1, 0, 1, 3, 2, 3, 0, 3, 1, 2, 0, 2, 2, 0, 1],
+                },
             ),
         ),
     ),

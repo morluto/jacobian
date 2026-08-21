@@ -78,7 +78,9 @@ def _incident_edge_index_pairs(graph: GraphEdgeList) -> list[tuple[int, int]]:
     return pairs
 
 
-def compute_edge_k_colorability(request: EdgeKColorabilityRequest) -> EdgeKColorabilityResult:
+def compute_edge_k_colorability(
+    request: EdgeKColorabilityRequest,
+) -> EdgeKColorabilityResult:
     """Decide whether a simple graph admits a proper ``k``-edge-coloring.
 
     A proper edge coloring assigns each edge a color in ``0..k-1`` such that
@@ -116,7 +118,9 @@ def compute_edge_k_colorability(request: EdgeKColorabilityRequest) -> EdgeKColor
     )
 
 
-def compute_edge_coloring_check(request: EdgeColoringCheckRequest) -> EdgeColoringCheckResult:
+def compute_edge_coloring_check(
+    request: EdgeColoringCheckRequest,
+) -> EdgeColoringCheckResult:
     """Validate a submitted edge-to-color assignment as a proper edge coloring."""
     edges = request.graph.edges
     coloring = request.coloring

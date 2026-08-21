@@ -98,8 +98,8 @@ def compute_gaussian_quadrature(
     return GaussianQuadratureResult(
         alpha=request.alpha,
         beta=request.beta,
-        nodes=result.nodes,
-        weights=result.weights,
+        nodes=_from_fractions(result.nodes),
+        weights=_from_fractions(result.weights),
     )
 
 

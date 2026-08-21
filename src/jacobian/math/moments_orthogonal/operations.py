@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from fractions import Fraction
-from typing import Sequence
 
 from jacobian.math.moments_orthogonal.values import (
-    ChristoffelDarbouxKernel,
-    GaussianQuadrature,
-    HankelMatrix,
-    JacobiMatrix,
     MAX_HANKEL_DIMENSION,
     MAX_MOMENTS,
     MAX_POLYNOMIAL_COUNT,
     MAX_QUADRATURE_POINTS,
     MAX_RECURRENCE_ORDER,
+    ChristoffelDarbouxKernel,
+    GaussianQuadrature,
+    HankelMatrix,
+    JacobiMatrix,
     RecurrenceCoefficients,
 )
 
@@ -145,7 +145,7 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
         raise ValueError("the zeroth moment must be nonzero")
     max_order = min(MAX_RECURRENCE_ORDER, (m - 1) // 2)
     if max_order < 1:
-        return RecurrenceCoefficients(alpha=tuple(), beta=(moments[0],))
+        return RecurrenceCoefficients(alpha=(), beta=(moments[0],))
     alpha, beta = _monic_orthogonal_recurrence(moments, max_order)
     return RecurrenceCoefficients(alpha=tuple(alpha), beta=tuple(beta))
 
@@ -175,7 +175,9 @@ def jacobi_matrix(
         raise ValueError("beta_0 (the zeroth moment) must be nonzero")
     return JacobiMatrix(
         diagonal=tuple(alpha),
-        off_diagonal=tuple(beta),
+        # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is
+        # the zeroth moment and never occupies an off-diagonal position.
+        off_diagonal=tuple(beta)[1 : len(alpha)],
     )
 
 
@@ -222,14 +224,20 @@ def christoffel_darboux(
     evaluated: list[Fraction] = [Fraction(1)]
     for k in range(n - 1):
         alpha_k = alpha[k]
-        beta_k = beta[k + 1] if (k + 1) < len(beta) else Fraction(0)
-        px_next = (x - alpha_k) * px_curr - beta_k * px_prev
-        py_next = (y - alpha_k) * py_curr - beta_k * py_prev
+        # Step k forms p_{k+1} using the recurrence coefficient beta_k = beta[k]
+        # (beta_0 is mu_0 and the k = 0 step multiplies p_{-1} = 0).
+        rec_beta = Fraction(0) if k == 0 else beta[k]
+        px_next = (x - alpha_k) * px_curr - rec_beta * px_prev
+        py_next = (y - alpha_k) * py_curr - rec_beta * py_prev
         px_prev, px_curr = px_curr, px_next
         py_prev, py_curr = py_curr, py_next
-        if beta_k == 0:
-            break
-        h = beta_k * h
+        # Advancing the squared norm to h_{k+1} uses beta_{k+1} = beta[k + 1].
+        if k + 1 >= len(beta) or beta[k + 1] == 0:
+            raise ValueError(
+                "recurrence coefficients do not define the requested kernel"
+            )
+        next_beta = beta[k + 1]
+        h = next_beta * h
         kernel += px_curr * py_curr / h
         evaluated.append(px_curr)
     return ChristoffelDarbouxKernel(
@@ -275,9 +283,11 @@ def gaussian_quadrature(
     eigenvalues, eigenvectors = np.linalg.eigh(jacobi)
     mu0 = float(beta[0])
     weights = mu0 * eigenvectors[0, :] ** 2
+    # Each double is carried as its exact dyadic rational image so the result
+    # stays canonical and reconstructible without JSON floating points.
     return GaussianQuadrature(
-        nodes=tuple(float(v) for v in eigenvalues),
-        weights=tuple(float(w) for w in weights),
+        nodes=tuple(Fraction(float(v)) for v in eigenvalues),
+        weights=tuple(Fraction(float(w)) for w in weights),
     )
 
 

@@ -36,52 +36,49 @@ def _hensel_lift_root(
     p: int,
     r: int,
     k: int,
-) -> tuple[int, bool]:
-    """Lift a root r of f mod p to a root mod p^k using Hensel's lemma.
+) -> int:
+    """Lift the simple root r of f mod p to its unique root mod p^k.
 
-    Returns (lifted_root, is_simple_root).
-    If f'(r) ≡ 0 mod p, the root is not simple and lifting may fail.
-
-    Uses Newton's method: r_{n+1} = r_n - f(r_n) * (f'(r_n))^{-1} (mod p^{2^n})
+    The caller must have established f(r) = 0 and f'(r) != 0 (mod p); Hensel's
+    lemma then guarantees a unique lift, constructed step by step.
     """
     f_r = _eval_poly(coeffs, r, p)
     if f_r != 0:
         raise ValueError(f"{r} is not a root mod {p}")
-
     fp_r = _eval_deriv(coeffs, r, p)
     if fp_r % p == 0:
-        return r, False
+        raise ValueError("root is not simple; Hensel lifting does not apply")
 
-    inv_fp = pow(fp_r % p, -1, p)
+    pow(fp_r % p, -1, p)
 
     current = r
     current_mod = p
-    for i in range(1, k):
+    for _ in range(1, k):
         next_mod = current_mod * p
         f_val = _eval_poly(coeffs, current, next_mod)
-        # Newton's method: r_{next} = r - f(r) * (f'(r))^{-1} mod next_mod
+        # Newton step: r_next = r - f(r) * (f'(r))^{-1} mod next_mod
         fp_val = _eval_deriv(coeffs, current, next_mod)
-        if fp_val % current_mod == 0:
-            return current, True  # Can't lift further
+        if fp_val % next_mod == 0:
+            raise ValueError("derivative vanished during lifting")
         inv_fp_val = pow(int(fp_val), -1, next_mod)
         correction = (f_val * inv_fp_val) % next_mod
         current = (current - correction) % next_mod
         current_mod = next_mod
 
-    return current, True
+    return current
 
 
 def hensel_lift_root(request: HenselRootRequest) -> HenselRootResult:
-    """Lift a simple root of f(x) mod p to a root mod p^k."""
+    """Lift the simple root of f(x) mod p validated by the request model."""
     coeffs = request.polynomial.coefficients
-    lifted, is_simple = _hensel_lift_root(
+    lifted = _hensel_lift_root(
         coeffs, request.prime, request.root_mod_p, request.precision
     )
     return HenselRootResult(
         lifted_root=lifted,
         prime=request.prime,
         precision=request.precision,
-        is_simple_root=is_simple,
+        is_simple_root=True,
     )
 
 
@@ -132,39 +129,35 @@ def hensel_lift_factors(request: HenselFactorLiftRequest) -> HenselFactorLiftRes
 
 
 def find_padic_roots(request: PAdicRootsRequest) -> PAdicRootsResult:
-    """Find all roots of f(x) mod p^k via Hensel lifting.
+    """Find every simple root of f(x) mod p^k via Hensel lifting.
 
-    Finds all roots mod p by brute force, then lifts each simple root.
+    Roots are found mod p by brute force. Each residue with nonzero
+    derivative lifts uniquely to an exact root modulo p^k. Residues whose
+    derivative also vanishes are reported unlifted in ``multiple_residues``:
+    their mod-p^k solution sets can grow unboundedly (x^2 has five roots mod
+    25), so enumerating them would not be bounded.
     """
     coeffs = request.polynomial.coefficients
     p = request.prime
     k = request.precision
 
-    roots_mod_p = []
-    for r in range(p):
-        if _eval_poly(coeffs, r, p) == 0:
-            roots_mod_p.append(r)
-
     lifted_roots: list[PAdicRootEntry] = []
-    for r in roots_mod_p:
-        try:
-            lifted, is_simple = _hensel_lift_root(coeffs, p, r, k)
-            lifted_roots.append(
-                PAdicRootEntry(
-                    root=lifted,
-                    root_type="SIMPLE" if is_simple else "MULTIPLE",
-                )
-            )
-        except ValueError:
-            lifted_roots.append(
-                PAdicRootEntry(root=r, root_type="MULTIPLE")
-            )
+    multiple_residues: list[int] = []
+    for r in range(p):
+        if _eval_poly(coeffs, r, p) != 0:
+            continue
+        if _eval_deriv(coeffs, r, p) % p == 0:
+            multiple_residues.append(r)
+            continue
+        lifted = _hensel_lift_root(coeffs, p, r, k)
+        lifted_roots.append(PAdicRootEntry(root=lifted, root_type="SIMPLE"))
 
     return PAdicRootsResult(
         roots=tuple(lifted_roots),
         prime=p,
         precision=k,
         root_count=len(lifted_roots),
+        multiple_residues=tuple(multiple_residues),
     )
 
 

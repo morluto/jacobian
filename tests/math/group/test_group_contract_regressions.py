@@ -47,7 +47,9 @@ def test_group_conjugacy_classes_abelian_group_is_singletons() -> None:
     result = compute_group_conjugacy_classes(
         GroupConjugacyClassesRequest(degree=3, generators=gens),
     )
-    order = int(compute_group_order(PermutationGroupRequest(degree=3, generators=gens)).order)
+    order = int(
+        compute_group_order(PermutationGroupRequest(degree=3, generators=gens)).order
+    )
     assert order == 3
     assert len(result.classes) == 3
     for cls in result.classes:

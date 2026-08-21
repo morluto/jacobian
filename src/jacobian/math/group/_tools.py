@@ -51,8 +51,7 @@ def group_operation[
     )
 
 
-
-S3_GENERATORS = {'degree': 3, 'generators': [[1, 2, 0], [1, 0, 2]]}
+S3_GENERATORS = {"degree": 3, "generators": [[1, 2, 0], [1, 0, 2]]}
 
 GROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     group_operation(

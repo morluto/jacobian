@@ -164,7 +164,7 @@ def _weyl_group_data(cartan: list[list[int]]) -> tuple[int, tuple[int, ...], int
         """Apply s_i on the right of a Weyl group element (as a permutation of roots)."""
         # The Weyl group acts on roots, but we track elements as reduced words
         # For order computation, we can use the formula:
-        # |W| = n! * product of (e_i + 1) / ... 
+        # |W| = n! * product of (e_i + 1) / ...
         # Actually, let's just count elements by BFS on simple reflections
         # Each element is identified by its action on simple roots
         result = list(perm)
@@ -219,10 +219,11 @@ def _weyl_group_data(cartan: list[list[int]]) -> tuple[int, tuple[int, ...], int
         # For simplicity, find the element with maximum height sum
         longest_element = max(elements, key=lambda e: sum(sum(v) for v in e))
 
-    # Coxeter number: h = number of positive roots / n * 2 / n ... 
+    # Coxeter number: h = number of positive roots / n * 2 / n ...
     # Actually h = (sum of highest root coefficients) + 1
     # Let's compute it from the positive roots
     from jacobian.math.root_systems._models import CartanMatrixRequest
+
     cartan_tuple = tuple(tuple(row) for row in cartan)
     req = CartanMatrixRequest(matrix=cartan_tuple)
     pos_result = compute_positive_roots(req)

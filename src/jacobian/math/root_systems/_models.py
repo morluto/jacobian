@@ -106,8 +106,6 @@ class RootSystemDataResult(StrictModel):
     coxeter_number: int
 
 
-
-
 class SimpleReflectionRequest(StrictModel):
     """Request to apply a simple reflection s_i to a root lattice vector."""
 
@@ -171,9 +169,7 @@ class WeylGroupDataResult(StrictModel):
     def bind_weyl_data(self) -> Self:
         from jacobian.math.root_systems._operations import _weyl_group_data
 
-        order, longest, coxeter = _weyl_group_data(
-            [list(row) for row in self.matrix]
-        )
+        order, longest, coxeter = _weyl_group_data([list(row) for row in self.matrix])
         if self.group_order != order:
             raise ValueError("group_order must be |W|")
         if self.longest_element != longest:

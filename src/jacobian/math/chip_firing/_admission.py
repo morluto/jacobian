@@ -44,11 +44,6 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "q-reduced canonical normal form with exact firing vector",
     ),
     OperationAdmission(
-        "graph.chip_firing.degree.compute",
-        AdmissionDecision.KEEP,
-        "exact typed projection of the divisor degree sum",
-    ),
-    OperationAdmission(
         "graph.chip_firing.canonical_divisor.compute",
         AdmissionDecision.KEEP,
         "exact graph canonical divisor K(v) = deg(v) - 2",

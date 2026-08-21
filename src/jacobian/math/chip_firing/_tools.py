@@ -231,24 +231,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     _op(
-        "graph.chip_firing.degree.compute",
-        "Degree of a graph divisor",
-        "Return the exact degree sum_v D(v) of a graph divisor.",
-        DegreeRequest,
-        DegreeResult,
-        compute_degree,
-        "graph-theory",
-        "chip-firing",
-        "exact",
-        examples=(
-            example(
-                "degree_example",
-                "Compute the degree of a 3-vertex divisor.",
-                {"divisor": [3, 0, 1]},
-            ),
-        ),
-    ),
-    _op(
         "graph.chip_firing.canonical_divisor.compute",
         "Graph canonical divisor",
         "Compute the graph canonical divisor K(v) = degree(v) - 2 "

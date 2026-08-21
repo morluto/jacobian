@@ -11,6 +11,7 @@ from jacobian._models import StrictModel
 MAX_VERTICES = 50
 MAX_DEGREE = 100
 MAX_COEFFICIENT_DIGITS = 1_000
+MAX_STABILIZATION_CHIPS = 1_000_000
 
 
 def _validate_divisor(
@@ -160,6 +161,11 @@ class SinkConfiguration(StrictModel):
         nonsink = [i for i, v in enumerate(vertices) if v != self.sink]
         if any(self.configuration[i] < 0 for i in nonsink):
             raise ValueError("nonsink configuration must be nonnegative")
+        if sum(self.configuration[i] for i in nonsink) > MAX_STABILIZATION_CHIPS:
+            raise ValueError(
+                f"nonsink configuration exceeds stabilization bound "
+                f"{MAX_STABILIZATION_CHIPS}"
+            )
         return self
 
 
@@ -273,6 +279,8 @@ class AbelJacobiRequest(StrictModel):
         _validate_sink(self.graph.vertices, self.sink)
         if len(self.divisor) != n:
             raise ValueError("divisor length must match vertex count")
+        if sum(self.divisor) != 0:
+            raise ValueError("divisor must have degree zero")
         return self
 
 

@@ -84,3 +84,32 @@ class GroupOrbitResult(StrictModel):
 
     orbit: tuple[int, ...] = Field(min_length=1, max_length=MAX_GROUP_DEGREE)
     point: int = Field(ge=0, le=MAX_GROUP_DEGREE - 1)
+
+
+class GroupStabilizerRequest(StrictModel):
+    """Request generators of the stabilizer of a point in a permutation group."""
+
+    degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
+    generators: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_GROUP_DEGREE
+    )
+    point: int = Field(ge=0, le=MAX_GROUP_DEGREE - 1)
+
+    @model_validator(mode="after")
+    def require_valid_generators(self) -> Self:
+        if not 0 <= self.point < self.degree:
+            raise ValueError("point must be in 0..degree-1")
+        for perm in self.generators:
+            if len(perm) != self.degree:
+                raise ValueError("each generator must have length equal to degree")
+            if sorted(perm) != list(range(self.degree)):
+                raise ValueError("each generator must be a permutation of 0..n-1")
+        return self
+
+
+class GroupStabilizerResult(StrictModel):
+    """Generators of the point stabilizer subgroup."""
+
+    point: int = Field(ge=0)
+    generators: tuple[tuple[int, ...], ...]
+    method: Literal["SYMPY_STABILIZER"] = "SYMPY_STABILIZER"

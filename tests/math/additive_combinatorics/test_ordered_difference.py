@@ -32,9 +32,7 @@ class TestOrderedDifferenceProfile:
 
     def test_repeated_difference(self):
         """Four points forming a parallelogram have repeated differences."""
-        req = OrderedDifferenceProfileRequest(
-            vectors=([0, 0], [1, 0], [0, 1], [1, 1])
-        )
+        req = OrderedDifferenceProfileRequest(vectors=([0, 0], [1, 0], [0, 1], [1, 1]))
         result = compute_ordered_difference_profile(req)
         assert result.has_repeated_difference
         assert result.first_collision is not None
@@ -65,5 +63,5 @@ class TestOrderedDifferenceProfile:
 
     def test_mismatched_dimensions_rejected(self):
         """Vectors with different dimensions should raise."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             OrderedDifferenceProfileRequest(vectors=([0, 0], [1]))

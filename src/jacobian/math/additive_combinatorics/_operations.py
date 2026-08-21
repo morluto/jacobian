@@ -152,10 +152,10 @@ def decide_direct_sum_predicate(
 
 __all__ = [
     "compute_additive_energy",
+    "compute_ordered_difference_profile",
     "compute_representation_profile",
     "compute_sumset_cardinality",
     "decide_direct_sum_predicate",
-    "compute_ordered_difference_profile",
 ]
 
 

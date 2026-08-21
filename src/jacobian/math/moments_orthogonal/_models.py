@@ -10,14 +10,18 @@ from pydantic import Field, model_validator
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math.moments_orthogonal.values import (
-    MAX_HANKEL_DIMENSION,
     MAX_MOMENTS,
-    MAX_POLYNOMIAL_COUNT,
     MAX_QUADRATURE_POINTS,
     MAX_RECURRENCE_ORDER,
 )
 
 MAX_RATIONAL_DIGITS = 4_096
+
+# Golub-Welsch converts admitted rationals to IEEE doubles; every accepted
+# coefficient must convert to a finite double and every subdiagonal entry must
+# stay far from both overflow and underflow so its square root is exact enough.
+MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
+MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10 ** 300)
 
 
 def _to_fractions(
@@ -49,8 +53,17 @@ def _validate_alpha_beta(
         raise ValueError("alpha out of range")
     if len(alpha) != len(beta) and len(alpha) != len(beta) - 1:
         raise ValueError("alpha must have length len(beta)-1 or len(beta)")
-    if beta[0].num == "0":
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    if beta[0].num == "0" or beta[0].num.startswith("-"):
+        raise ValueError(
+            "beta_0 (the zeroth moment of a positive functional) must be positive"
+        )
+    # beta_1, ..., beta_{n-1} are squared-norm ratios of a positive-definite
+    # sequence and occupy the Jacobi subdiagonal; each must be positive.
+    for index in range(1, min(len(alpha), len(beta))):
+        if beta[index].num.startswith("-") or beta[index].num == "0":
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
     for value in (*alpha, *beta):
         require_bounded_rational(
             value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient"
@@ -104,6 +117,14 @@ class RecurrenceCoefficientsRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_moments(self) -> Self:
         _validate_moments(self.moments)
+        # The Gram-Schmidt kernel requires a positive-definite moment
+        # functional; admit exactly the sequences it accepts so an accepted
+        # request cannot fail inside execution.
+        from jacobian.math.moments_orthogonal.operations import (
+            recurrence_coefficients,
+        )
+
+        recurrence_coefficients(_to_fractions(self.moments))
         return self
 
 
@@ -236,18 +257,38 @@ class GaussianQuadratureRequest(StrictModel):
             and len(self.beta) != len(self.alpha) + 1
         ):
             raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-        if self.beta[0].num == "0":
-            raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+        beta_zero = self.beta[0].as_fraction()
+        if beta_zero <= 0:
+            raise ValueError(
+                "beta_0 (the zeroth moment of a positive functional) must be positive"
+            )
+        # Subdiagonal entries feed math.sqrt after float conversion; they must
+        # be positive and safely inside the finite IEEE-double range, and the
+        # diagonal and mu_0 must convert to finite doubles without overflow.
+        for index in range(1, min(len(self.alpha), len(self.beta))):
+            sub = self.beta[index].as_fraction()
+            if sub <= 0:
+                raise ValueError(
+                    "subdiagonal beta entries must be positive squared-norm ratios"
+                )
+            if sub < MIN_QUADRATURE_SUBDIAGONAL:
+                raise ValueError(
+                    "subdiagonal beta entries fall below the quadrature underflow bound"
+                )
         for value in (*self.alpha, *self.beta):
             require_bounded_rational(
                 value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient"
             )
+            if abs(value.as_fraction()) > MAX_QUADRATURE_MAGNITUDE:
+                raise ValueError(
+                    "quadrature coefficients exceed the finite-float magnitude bound"
+                )
         return self
 
 
 class GaussianQuadratureResult(GaussianQuadratureRequest):
-    nodes: tuple[float, ...]
-    weights: tuple[float, ...]
+    nodes: tuple[CanonicalRational, ...]
+    weights: tuple[CanonicalRational, ...]
     complete: Literal[True] = True
     method: Literal["GOLUB_WELSCH"] = "GOLUB_WELSCH"
 
@@ -260,9 +301,9 @@ class GaussianQuadratureResult(GaussianQuadratureRequest):
         result = gaussian_quadrature(
             _to_fractions(self.alpha), _to_fractions(self.beta)
         )
-        if self.nodes != result.nodes:
+        if self.nodes != _from_fractions(result.nodes):
             raise ValueError("nodes must match the Golub-Welsch eigenvalues")
-        if self.weights != result.weights:
+        if self.weights != _from_fractions(result.weights):
             raise ValueError("weights must match the Golub-Welsch weights")
         return self
 

@@ -22,7 +22,6 @@ from jacobian.math.impartial_games.values import (
     ImpartialGame,
 )
 
-
 MAX_COMPONENT_GRUNDY = MAX_POSITIONS - 1
 MAX_DISJUNCTIVE_GRUNDY = (1 << MAX_COMPONENT_GRUNDY.bit_length()) - 1
 

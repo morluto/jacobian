@@ -221,7 +221,7 @@ class PolyaInventoryResult(StrictModel):
     """
 
     action: FinitePermutationAction
-    colors: int
+    colors: int = Field(ge=1, le=MAX_COLORS)
     degree: int
     terms: tuple[tuple[tuple[int, ...], int], ...]
 

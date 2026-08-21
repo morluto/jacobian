@@ -182,14 +182,14 @@ class ScalingRequest(StrictModel):
     """Request scaling of a quadratic form by an integer factor."""
 
     form: SymmetricMatrix
-    factor: int = Field(ge=1, le=1000)
+    factor: int = Field(ge=-1000, le=1000)
 
 
 class ScalingResult(StrictModel):
     """The scaled quadratic form factor * A."""
 
     form: SymmetricMatrix
-    factor: int
+    factor: int = Field(ge=-1000, le=1000)
     scaled_form: SymmetricMatrix
 
     @model_validator(mode="after")

@@ -116,10 +116,10 @@ class TestCircleInversion:
             )
 
     def test_rejects_output_that_exceeds_canonical_digits(self):
-        # center=(0,0), power=(10^20000+1)/1, point=(10^{-20000}, 0) is
-        # within the 32,768-digit input cap, but I_x has a 40,001-digit
-        # numerator.
-        with pytest.raises(ValidationError, match="digit result bound"):
+        # center=(0,0), power=(10^20000+1)/1, point=(10^{-20000}, 0) now
+        # trips the symmetric input admission bound first (20001 digits >
+        # the half-limit), which also guarantees the output stays bounded.
+        with pytest.raises(ValidationError, match="symmetric admission bound"):
             CircleInversionRequest(
                 center=_pt(0, 0),
                 power=_cr(format_canonical_integer(10**20000 + 1), "1"),

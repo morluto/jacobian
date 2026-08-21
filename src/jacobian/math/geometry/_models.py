@@ -152,7 +152,15 @@ def _circle_inversion_result_heights(
     power: CanonicalRational,
     point: RationalPoint2D,
 ) -> tuple[RationalHeight, RationalHeight]:
-    """Conservative height of ``I(p) = c + s(p - c)/||p - c||^2`` before reduction."""
+    """Conservative height of ``I(p) = c + s(p - c)/||p - c||^2`` before reduction.
+
+    The admitted domain must be symmetric under unit inversion so every
+    accepted result can be consumed unchanged.  For the origin-centered unit
+    inversion, ``I(I(p)) == p`` exactly, and each application squares
+    numerator/denominator digit counts; bounding the input height by half the
+    canonical limit makes two successive accepted invocations stay within one
+    canonical limit, which the squaring growth dominates.
+    """
 
     dx = _displacement_height(point.x, center.x)
     dy = _displacement_height(point.y, center.y)
@@ -165,6 +173,9 @@ def _circle_inversion_result_heights(
         (RationalHeight.from_canonical(center.y), scale.product(dy))
     )
     return inverted_x, inverted_y
+
+
+_HALF_CANONICAL_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS // 2
 
 
 class CircleInversionRequest(StrictModel):
@@ -201,6 +212,28 @@ class CircleInversionRequest(StrictModel):
             raise ValueError("inversion power must be a positive rational")
         if self.point == self.center:
             raise ValueError("the point to invert must differ from the center")
+
+        def input_height(value: CanonicalRational) -> RationalHeight:
+            return RationalHeight.from_canonical(value)
+
+        # Admit only inputs whose own height is at most half the canonical
+        # limit.  Unit inversion squares digit counts, so I(I(p)) for an
+        # admitted p is again admitted: the domain is symmetric under the
+        # advertised involution and every accepted result can be fed back.
+        for rational in (
+            self.center.x,
+            self.center.y,
+            self.point.x,
+            self.point.y,
+            self.power,
+        ):
+            height = input_height(rational)
+            if height.exceeds(_HALF_CANONICAL_DIGITS):
+                raise ValueError(
+                    "circle inversion inputs must stay within the "
+                    f"{_HALF_CANONICAL_DIGITS}-digit symmetric admission bound"
+                )
+
         inverted_x, inverted_y = _circle_inversion_result_heights(
             self.center, self.power, self.point
         )

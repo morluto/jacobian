@@ -12,6 +12,10 @@ from jacobian.math.additive_combinatorics._models import (
     DirectSumPredicateRequest,
     DirectSumPredicateResult,
     FiniteIntegerSet,
+    OrderedDifferenceClass,
+    OrderedDifferencePair,
+    OrderedDifferenceProfileRequest,
+    OrderedDifferenceProfileResult,
     RepresentationProfileEntry,
     RepresentationProfileRequest,
     RepresentationProfileResult,
@@ -148,7 +152,70 @@ def decide_direct_sum_predicate(
 
 __all__ = [
     "compute_additive_energy",
+    "compute_ordered_difference_profile",
     "compute_representation_profile",
     "compute_sumset_cardinality",
     "decide_direct_sum_predicate",
 ]
+
+
+def compute_ordered_difference_profile(
+    request: OrderedDifferenceProfileRequest,
+) -> OrderedDifferenceProfileResult:
+    """Compute the complete ordered-difference profile ``r_{A-A}`` of one set.
+
+    For a finite set ``A`` of integer vectors, returns every nonzero ordered
+    difference ``x - y`` (``x != y``) grouped by difference vector, retaining
+    every ordered source pair ``(x, y)`` in each class.  The result also reports
+    the total ordered-pair count ``|A|(|A|-1)``, the support size, the maximum
+    multiplicity, and a first repeated-difference witness when one exists.
+    """
+    vectors = request.vectors
+    n = len(vectors.vectors)
+    dim = len(vectors.vectors[0].coordinates)
+    points = [
+        tuple(parse_canonical_integer(c) for c in vec.coordinates)
+        for vec in vectors.vectors
+    ]
+
+    classes: dict[tuple[int, ...], list[OrderedDifferencePair]] = {}
+    for i in range(n):
+        for j in range(n):
+            if i == j:
+                continue
+            diff = tuple(points[i][k] - points[j][k] for k in range(dim))
+            if all(d == 0 for d in diff):
+                continue
+            classes.setdefault(diff, []).append(
+                OrderedDifferencePair(minuend_index=i, subtrahend_index=j),
+            )
+
+    # Sort classes by difference vector (lexicographic on numeric values).
+    sorted_diffs = sorted(classes.keys())
+    has_repeated = any(len(classes[d]) > 1 for d in sorted_diffs)
+    first_repeated: tuple[str, ...] | None = None
+    if has_repeated:
+        for d in sorted_diffs:
+            if len(classes[d]) > 1:
+                first_repeated = tuple(format_canonical_integer(c) for c in d)
+                break
+
+    result_classes = tuple(
+        OrderedDifferenceClass(
+            difference=tuple(format_canonical_integer(c) for c in d),
+            pairs=tuple(classes[d]),
+        )
+        for d in sorted_diffs
+    )
+    total_pairs = sum(len(cls.pairs) for cls in result_classes)
+    max_mult = max((len(cls.pairs) for cls in result_classes), default=0)
+    return OrderedDifferenceProfileResult(
+        dimension=dim,
+        set_size=n,
+        classes=result_classes,
+        ordered_pair_count=total_pairs,
+        support_size=len(result_classes),
+        max_multiplicity=max_mult,
+        has_repeated_difference=has_repeated,
+        first_repeated_difference=first_repeated,
+    )

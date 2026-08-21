@@ -11,6 +11,11 @@ from jacobian.math.additive_combinatorics._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "additive.ordered_difference_profile.compute",
+        AdmissionDecision.KEEP,
+        "one complete exact ordered-difference profile of a bounded integer-vector set retaining every source pair",
+    ),
+    OperationAdmission(
         "additive.direct_sum_predicate.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

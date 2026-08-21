@@ -175,6 +175,134 @@ class DirectSumPredicateResult(StrictModel):
         return self
 
 
+
+
+# ---------------------------------------------------------------------------
+# Ordered-difference profile for integer-vector sets
+# ---------------------------------------------------------------------------
+
+_MAX_VECTOR_DIMENSION = 8
+_MAX_VECTOR_SET_SIZE = 64
+_MAX_VECTOR_COORDINATE_DIGITS = 64
+# A difference coordinate can grow by one digit (sum of two bounded integers).
+_MAX_VECTOR_DIFFERENCE_DIGITS = _MAX_VECTOR_COORDINATE_DIGITS + 1
+_MAX_ORDERED_PAIRS = _MAX_VECTOR_SET_SIZE * (_MAX_VECTOR_SET_SIZE - 1)
+
+
+class IntegerVector(StrictModel):
+    """One integer vector in a bounded common dimension."""
+
+    coordinates: tuple[CanonicalInteger, ...] = Field(
+        min_length=1,
+        max_length=_MAX_VECTOR_DIMENSION,
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_coordinates(self) -> Self:
+        for value in self.coordinates:
+            if len(value.lstrip("-")) > _MAX_VECTOR_COORDINATE_DIGITS:
+                raise ValueError("vector coordinate exceeds the digit bound")
+        return self
+
+
+class IntegerVectorSet(StrictModel):
+    """A finite set of distinct integer vectors in a fixed dimension."""
+
+    vectors: tuple[IntegerVector, ...] = Field(
+        min_length=1,
+        max_length=_MAX_VECTOR_SET_SIZE,
+    )
+
+    @model_validator(mode="after")
+    def require_uniform_and_distinct(self) -> Self:
+        if not self.vectors:
+            return self
+        dim = len(self.vectors[0].coordinates)
+        for vec in self.vectors[1:]:
+            if len(vec.coordinates) != dim:
+                raise ValueError("all vectors must share the same dimension")
+        seen: set[tuple[int, ...]] = set()
+        for vec in self.vectors:
+            key = tuple(parse_canonical_integer(c) for c in vec.coordinates)
+            if key in seen:
+                raise ValueError("vector set elements must be distinct")
+            seen.add(key)
+        return self
+
+
+class OrderedDifferenceProfileRequest(StrictModel):
+    """Compute the complete ordered-difference profile ``r_{A-A}`` of one set."""
+
+    vectors: IntegerVectorSet
+
+
+class OrderedDifferencePair(StrictModel):
+    """One ordered source pair realizing a difference vector."""
+
+    minuend_index: int = Field(ge=0)
+    subtrahend_index: int = Field(ge=0)
+
+
+class OrderedDifferenceClass(StrictModel):
+    """One nonzero difference vector and every ordered pair realizing it."""
+
+    difference: tuple[CanonicalInteger, ...] = Field(min_length=1)
+    pairs: tuple[OrderedDifferencePair, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_nonzero_difference(self) -> Self:
+        if all(parse_canonical_integer(c) == 0 for c in self.difference):
+            raise ValueError("the zero difference class is not reported")
+        if any(
+            len(c.lstrip("-")) > _MAX_VECTOR_DIFFERENCE_DIGITS for c in self.difference
+        ):
+            raise ValueError("difference coordinate exceeds the digit bound")
+        for pair in self.pairs:
+            if pair.minuend_index == pair.subtrahend_index:
+                raise ValueError("an ordered difference pair must be distinct")
+        return self
+
+
+class OrderedDifferenceProfileResult(StrictModel):
+    """Complete ordered-difference profile of a bounded integer-vector set."""
+
+    dimension: int = Field(ge=1, le=_MAX_VECTOR_DIMENSION)
+    set_size: int = Field(ge=1, le=_MAX_VECTOR_SET_SIZE)
+    classes: tuple[OrderedDifferenceClass, ...] = Field(
+        max_length=_MAX_ORDERED_PAIRS,
+    )
+    ordered_pair_count: int = Field(ge=0)
+    support_size: int = Field(ge=0)
+    max_multiplicity: int = Field(ge=0)
+    has_repeated_difference: bool
+    first_repeated_difference: tuple[CanonicalInteger, ...] | None = Field(
+        default=None,
+    )
+
+    @model_validator(mode="after")
+    def require_consistent_profile(self) -> Self:
+        expected_pairs = self.set_size * (self.set_size - 1)
+        total_pairs = sum(len(cls.pairs) for cls in self.classes)
+        if total_pairs != expected_pairs:
+            raise ValueError(
+                "ordered pair total must equal set_size * (set_size - 1)",
+            )
+        if self.ordered_pair_count != expected_pairs:
+            raise ValueError("ordered_pair_count must equal the realized pair total")
+        if self.support_size != len(self.classes):
+            raise ValueError("support_size must equal the number of difference classes")
+        max_mult = max((len(cls.pairs) for cls in self.classes), default=0)
+        if self.max_multiplicity != max_mult:
+            raise ValueError("max_multiplicity must equal the largest class size")
+        if self.has_repeated_difference and self.first_repeated_difference is None:
+            raise ValueError(
+                "a repeated difference must supply a first repeated difference witness",
+            )
+        if not self.has_repeated_difference and self.first_repeated_difference is not None:
+            raise ValueError(
+                "first_repeated_difference must be absent when no difference repeats",
+            )
+        return self
 __all__ = [
     "AdditiveEnergyRequest",
     "AdditiveEnergyResult",
@@ -182,6 +310,12 @@ __all__ = [
     "DirectSumPredicateResult",
     "FiniteCyclicGroup",
     "FiniteIntegerSet",
+    "IntegerVector",
+    "IntegerVectorSet",
+    "OrderedDifferenceClass",
+    "OrderedDifferencePair",
+    "OrderedDifferenceProfileRequest",
+    "OrderedDifferenceProfileResult",
     "RepresentationProfileEntry",
     "RepresentationProfileRequest",
     "RepresentationProfileResult",

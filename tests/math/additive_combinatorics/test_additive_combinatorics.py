@@ -170,3 +170,132 @@ class TestDirectSumPredicate:
         result = decide_direct_sum_predicate(req)
         assert result.holds is False
         assert result.missing == tuple(str(value) for value in range(12))
+
+
+class TestOrderedDifferenceProfile:
+    def _req(self, vecs):
+        from jacobian.math.additive_combinatorics._models import (
+            IntegerVector,
+            IntegerVectorSet,
+            OrderedDifferenceProfileRequest,
+        )
+
+        return OrderedDifferenceProfileRequest(
+            vectors=IntegerVectorSet(
+                vectors=tuple(
+                    IntegerVector(coordinates=tuple(str(c) for c in v))
+                    for v in vecs
+                ),
+            ),
+        )
+
+    def test_rectangle_repeated_difference(self):
+        from jacobian.math.additive_combinatorics._operations import (
+            compute_ordered_difference_profile,
+        )
+
+        result = compute_ordered_difference_profile(
+            self._req([(0, 0), (1, 0), (1, 1), (0, 1)]),
+        )
+        assert result.set_size == 4
+        assert result.ordered_pair_count == 12  # 4 * 3
+        assert result.has_repeated_difference
+        assert result.max_multiplicity == 2
+        # The difference (1,0) is realized by two ordered pairs.
+        diff_10 = [
+            c for c in result.classes if tuple(c.difference) == ("1", "0")
+        ]
+        assert len(diff_10) == 1
+        assert len(diff_10[0].pairs) == 2
+        assert {p.minuend_index for p in diff_10[0].pairs} == {1, 2}
+
+    def test_triangle_is_sidon(self):
+        from jacobian.math.additive_combinatorics._operations import (
+            compute_ordered_difference_profile,
+        )
+
+        result = compute_ordered_difference_profile(
+            self._req([(0, 0), (1, 0), (0, 1)]),
+        )
+        assert result.set_size == 3
+        assert result.ordered_pair_count == 6
+        assert not result.has_repeated_difference
+        assert result.first_repeated_difference is None
+        assert result.support_size == 6  # all 6 nonzero ordered differences distinct
+        assert result.max_multiplicity == 1
+
+    def test_one_dimension_agrees_with_sidon(self):
+        from jacobian.math.additive_combinatorics._operations import (
+            compute_ordered_difference_profile,
+        )
+
+        # A 1D Sidon set {0,1,3} has all ordered differences distinct.
+        result = compute_ordered_difference_profile(
+            self._req([(0,), (1,), (3,)]),
+        )
+        assert result.dimension == 1
+        assert result.ordered_pair_count == 6
+        assert not result.has_repeated_difference
+        diffs = {tuple(c.difference) for c in result.classes}
+        assert diffs == {("1",), ("3",), ("2",), ("-1",), ("-3",), ("-2",)}
+
+    def test_translation_invariance(self):
+        from jacobian.math.additive_combinatorics._operations import (
+            compute_ordered_difference_profile,
+        )
+
+        base = compute_ordered_difference_profile(
+            self._req([(0, 0), (1, 0), (0, 1)]),
+        )
+        shifted = compute_ordered_difference_profile(
+            self._req([(5, -3), (6, -3), (5, -2)]),
+        )
+        base_diffs = {tuple(c.difference): len(c.pairs) for c in base.classes}
+        shifted_diffs = {tuple(c.difference): len(c.pairs) for c in shifted.classes}
+        assert base_diffs == shifted_diffs
+
+    def test_sign_reversal(self):
+        from jacobian.math.additive_combinatorics._operations import (
+            compute_ordered_difference_profile,
+        )
+
+        result = compute_ordered_difference_profile(
+            self._req([(0, 0), (1, 0), (0, 1), (1, 1)]),
+        )
+        diffs = {tuple(c.difference): len(c.pairs) for c in result.classes}
+        # For every difference v, the multiplicity of -v must equal that of v.
+        for d, count in diffs.items():
+            neg = tuple(str(-int(x)) for x in d)
+            assert diffs[neg] == count
+
+    def test_rejects_duplicate_vectors(self):
+        import pytest
+
+        from jacobian.math.additive_combinatorics._models import (
+            IntegerVector,
+            IntegerVectorSet,
+        )
+
+        with pytest.raises(ValueError, match="distinct"):
+            IntegerVectorSet(
+                vectors=(
+                    IntegerVector(coordinates=("0", "0")),
+                    IntegerVector(coordinates=("0", "0")),
+                ),
+            )
+
+    def test_rejects_mixed_dimensions(self):
+        import pytest
+
+        from jacobian.math.additive_combinatorics._models import (
+            IntegerVector,
+            IntegerVectorSet,
+        )
+
+        with pytest.raises(ValueError, match="dimension"):
+            IntegerVectorSet(
+                vectors=(
+                    IntegerVector(coordinates=("0", "0")),
+                    IntegerVector(coordinates=("0",)),
+                ),
+            )

@@ -7,6 +7,8 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.additive_combinatorics._models import (
+    OrderedDifferenceProfileRequest,
+    OrderedDifferenceProfileResult,
     AdditiveEnergyRequest,
     AdditiveEnergyResult,
     DirectSumPredicateRequest,
@@ -19,6 +21,7 @@ from jacobian.math.additive_combinatorics._models import (
     SumsetCardinalityResult,
 )
 from jacobian.math.additive_combinatorics._operations import (
+    compute_ordered_difference_profile,
     compute_additive_energy,
     compute_ordered_difference_profile,
     compute_representation_profile,
@@ -206,44 +209,34 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     additive_combinatorics_operation(
         "additive.ordered_difference_profile.compute",
-        "Compute the ordered-difference profile of an integer-vector set",
-        "Given one bounded finite set A of distinct integer vectors in Z^d, "
-        "return the complete exact profile r_{A-A}(v) = |{(x,y) in A^2 : "
-        "x != y, x - y = v}| for every nonzero difference vector v, "
-        "retaining every ordered source pair in each class. Reports the total "
-        "ordered-pair count |A|(|A|-1), support size, maximum multiplicity, and "
-        "a first repeated-difference witness when one exists. A Sidon decision, "
-        "additive energy, or collision count is a cheap projection of this "
-        "complete profile.",
+        "Compute the ordered-difference profile of a finite integer-vector set",
+        "Given one bounded finite set A subset Z^d, return the complete exact "
+        "profile r_{A-A}(v) = |{(x,y) in A^2 : x != y, x-y = v}| for every "
+        "nonzero difference vector v, preserving every ordered source pair.",
         OrderedDifferenceProfileRequest,
         OrderedDifferenceProfileResult,
         compute_ordered_difference_profile,
         "additive-combinatorics",
-        "ordered-differences",
-        "integer-vectors",
+        "difference-profile",
         "exact",
         examples=(
             example(
-                "rectangle_repeated_difference",
-                (
-                    "Rectangle {(0,0),(1,0),(1,1),(0,1)}: the difference (1,0) "
-                    "is realized by two ordered pairs, so a repeated difference "
-                    "exists. Vectors must be distinct and share one dimension."
-                ),
-                _ORDERED_DIFFERENCE_RECT_EXAMPLE,
-            ),
-            example(
-                "triangle_sidon",
-                (
-                    "Three non-collinear lattice points with every nonzero "
-                    "ordered difference distinct: no repeated difference exists."
-                ),
-                _ORDERED_DIFFERENCE_SIDON_EXAMPLE,
+                "parallelogram_detection",
+                "Four points forming a parallelogram have a repeated difference.",
+                {
+                    "vectors": {
+                        "vectors": [
+                            [0, 0],
+                            [1, 0],
+                            [0, 1],
+                            [1, 1],
+                        ],
+                    },
+                },
             ),
         ),
     ),
 )
-
 
 TOOLS = ADDITIVE_COMBINATORICS_OPERATIONS
 

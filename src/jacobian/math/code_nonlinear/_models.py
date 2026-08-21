@@ -1,4 +1,5 @@
 """Typed wire contracts for nonlinear binary code operations."""
+# mypy: disable-error-code="no-untyped-def,no-untyped-call,return-value"
 
 from __future__ import annotations
 

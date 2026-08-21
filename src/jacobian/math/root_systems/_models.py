@@ -181,7 +181,7 @@ class SimpleReflectionResult(StrictModel):  # noqa: F811
         return self
 
 
-class WeylGroupDataRequest(StrictModel):
+class WeylGroupDataRequest(CartanMatrixRequest):
     """Request Weyl group data from a Cartan matrix."""
 
     matrix: tuple[tuple[int, ...], ...]

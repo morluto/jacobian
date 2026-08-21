@@ -172,7 +172,9 @@ class DerivedResidualRequest(StrictModel):
         if self.kind not in ("derived", "residual"):
             raise ValueError("kind must be 'derived' or 'residual'")
         if self.point not in self.incidence.points:
-            raise ValueError("point must be a declared point in the incidence structure")
+            raise ValueError(
+                "point must be a declared point in the incidence structure"
+            )
         return self
 
 

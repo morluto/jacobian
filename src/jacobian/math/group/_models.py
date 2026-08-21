@@ -11,6 +11,13 @@ from jacobian._models import StrictModel
 
 MAX_GROUP_DEGREE = 64
 
+# Conjugacy classes materialize every group element as an array form
+# (``|G|`` permutations of length ``degree``).  The degree cap alone does
+# not bound this enumeration: S12 already has 479M elements.  Use a
+# conservative group-order bound derived before backend expansion via
+# Schreier-Sims (cheap) rather than after enumeration.
+MAX_CONJUGACY_CLASSES_GROUP_ORDER = 5000
+
 
 class PermutationGroupRequest(StrictModel):
     """A finite permutation group given by generator permutations on {0,...,n-1}."""
@@ -101,6 +108,22 @@ class GroupConjugacyClassesRequest(StrictModel):
                 raise ValueError("each generator must have length equal to degree")
             if sorted(perm) != list(range(self.degree)):
                 raise ValueError("each generator must be a permutation of 0..n-1")
+        # Bound enumeration by the generated group's order before invoking
+        # the SymPy backend which materializes every element.  The degree
+        # cap alone does not bound work: S12 has order 479M and would
+        # exhaust memory; compute |G| cheaply via Schreier-Sims and reject
+        # when it exceeds the conservative limit.
+        from sympy.combinatorics import Permutation, PermutationGroup
+
+        perms = [Permutation(list(p)) for p in self.generators]
+        group = PermutationGroup(perms)
+        order = int(group.order())
+        if order > MAX_CONJUGACY_CLASSES_GROUP_ORDER:
+            raise ValueError(
+                f"group order {order} exceeds the bounded maximum "
+                f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER} for conjugacy classes "
+                f"(would materialize |G|={order} elements)"
+            )
         return self
 
 

@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-__all__ = ["element_order", "group_orbit", "group_order"]
+__all__ = [
+    "element_order",
+    "group_conjugacy_classes",
+    "group_orbit",
+    "group_order",
+]
 
 
 def group_order(degree: int, generators: list[list[int]]) -> int:
@@ -68,5 +73,16 @@ def group_conjugacy_classes(
             raise ValueError("each generator must be a permutation of 0..n-1")
         perms.append(Permutation(list(perm)))
     group = PermutationGroup(perms)
+    # Bound enumeration by group order before materializing all |G| elements.
+    # S12 has order 479M and would exhaust memory; reject conservatively.
+    from jacobian.math.group._models import MAX_CONJUGACY_CLASSES_GROUP_ORDER
+
+    order = int(group.order())
+    if order > MAX_CONJUGACY_CLASSES_GROUP_ORDER:
+        raise ValueError(
+            f"group order {order} exceeds the bounded maximum "
+            f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER} for conjugacy classes "
+            f"(would materialize |G|={order} elements)"
+        )
     classes = group.conjugacy_classes()
     return [[list(p.array_form) for p in cls] for cls in classes]

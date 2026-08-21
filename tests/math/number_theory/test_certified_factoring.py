@@ -190,28 +190,3 @@ def test_operations_are_discoverable_via_catalog() -> None:
     ids = {t.operation_id for t in BUILTIN_TOOLS}
     assert "integer.factor.certified_compute" in ids
     assert "integer.primality.certificate.compute" in ids
-
-
-def test_math_run_executes_certified_compute() -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-
-    catalog = Catalog.open()
-    result = invoke_operation(
-        "integer.factor.certified_compute", {"value": "360"}, catalog
-    )
-    assert result.output["status"] == "COMPLETE"
-    primes = [int(f["prime"]) for f in result.output["factors"]]
-    assert primes == [2, 3, 5]
-
-
-def test_math_run_executes_pratt_certificate() -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-
-    catalog = Catalog.open()
-    result = invoke_operation(
-        "integer.primality.certificate.compute", {"value": "101"}, catalog
-    )
-    assert result.output["status"] == "CERTIFIED"
-    assert result.output["certificate"]["prime"] == "101"

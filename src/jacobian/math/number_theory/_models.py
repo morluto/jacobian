@@ -894,6 +894,7 @@ class PrimalityCertificateResult(StrictModel):
         if self.status == "COMPOSITE" and self.certificate is not None:
             raise ValueError("COMPOSITE status must not carry a certificate")
         if self.status == "CERTIFIED":
+            assert self.certificate is not None
             cert_prime = parse_canonical_integer(self.certificate.prime)
             value = parse_canonical_integer(self.value)
             if cert_prime != value:

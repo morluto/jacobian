@@ -1,13 +1,17 @@
 """Tests for Berlekamp-Massey recurrence finding over prime fields."""
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.recurrence_solving._models import (
     PrimeFieldRecurrenceFindRequest,
+    PrimeFieldRecurrenceFindResult,
 )
 from jacobian.math.recurrence_solving._operations import (
     compute_prime_field_find_recurrence,
 )
+
+FIBONACCI_MOD_7 = (0, 1, 1, 2, 3, 5, 1, 6, 0)
 
 
 def _verify_recurrence(sequence, coefficients, prime):
@@ -21,14 +25,13 @@ def _verify_recurrence(sequence, coefficients, prime):
 
 class TestPrimeFieldRecurrenceFind:
     def test_fibonacci_mod_7(self):
-        fib = [0, 1, 1, 2, 3, 5, 1, 6, 0]
         result = compute_prime_field_find_recurrence(
-            PrimeFieldRecurrenceFindRequest(prime=7, sequence=tuple(fib)),
+            PrimeFieldRecurrenceFindRequest(prime=7, sequence=FIBONACCI_MOD_7),
         )
         assert result.status == "FOUND"
         assert result.order == 2
         assert tuple(result.coefficients) == (1, 1)
-        _verify_recurrence(fib, result.coefficients, 7)
+        _verify_recurrence(FIBONACCI_MOD_7, result.coefficients, 7)
 
     def test_geometric_sequence(self):
         # 1,2,4,1,2,4 mod 7 -> s_n = 2 s_{n-1}.
@@ -75,3 +78,62 @@ class TestPrimeFieldRecurrenceFind:
     def test_rejects_out_of_range_value(self):
         with pytest.raises(ValueError, match="residues"):
             PrimeFieldRecurrenceFindRequest(prime=3, sequence=(1, 3, 2))
+
+    def test_result_accepts_minimal_fibonacci_recurrence(self):
+        result = PrimeFieldRecurrenceFindResult(
+            prime=7,
+            sequence=FIBONACCI_MOD_7,
+            coefficients=(1, 1),
+            order=2,
+            status="FOUND",
+        )
+        assert result.status == "FOUND"
+        assert result.order == 2
+        assert result.coefficients == (1, 1)
+
+    def test_result_rejects_non_minimal_fibonacci_recurrence(self):
+        with pytest.raises(ValidationError, match="Berlekamp-Massey"):
+            PrimeFieldRecurrenceFindResult(
+                prime=7,
+                sequence=FIBONACCI_MOD_7,
+                coefficients=(1, 1, 0),
+                order=3,
+                status="FOUND",
+            )
+
+    def test_result_rejects_false_no_fitting_recurrence(self):
+        with pytest.raises(ValidationError, match="Berlekamp-Massey"):
+            PrimeFieldRecurrenceFindResult(
+                prime=7,
+                sequence=FIBONACCI_MOD_7,
+                coefficients=(),
+                order=0,
+                status="NO_FITTING_RECURRENCE",
+            )
+
+    def test_result_rejects_wrong_coefficients_at_minimal_order(self):
+        with pytest.raises(ValidationError, match="Berlekamp-Massey"):
+            PrimeFieldRecurrenceFindResult(
+                prime=7,
+                sequence=FIBONACCI_MOD_7,
+                coefficients=(1, 2),
+                order=2,
+                status="FOUND",
+            )
+
+    def test_impulse_sequence_is_the_minimal_order_n_recurrence(self):
+        sequence = (0, 0, 0, 1)
+        result = compute_prime_field_find_recurrence(
+            PrimeFieldRecurrenceFindRequest(prime=2, sequence=sequence),
+        )
+        assert result.status == "FOUND"
+        assert result.order == len(sequence)
+        PrimeFieldRecurrenceFindResult.model_validate(result.model_dump())
+        with pytest.raises(ValidationError, match="Berlekamp-Massey"):
+            PrimeFieldRecurrenceFindResult(
+                prime=2,
+                sequence=sequence,
+                coefficients=(),
+                order=0,
+                status="NO_FITTING_RECURRENCE",
+            )

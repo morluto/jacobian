@@ -112,31 +112,6 @@ def _require_canonical_residues(
             raise ValueError(f"{label} must be canonical residues modulo the prime")
 
 
-def _require_found_prime_recurrence(
-    prime: int,
-    sequence: tuple[int, ...],
-    coefficients: tuple[int, ...],
-    order: int,
-) -> None:
-    if len(coefficients) != order:
-        raise ValueError("a found recurrence must have one coefficient per order")
-    _require_canonical_residues(coefficients, prime, "coefficients")
-    if order == 0:
-        if coefficients:
-            raise ValueError("order-zero recurrence must have no coefficients")
-        if any(value != 0 for value in sequence):
-            raise ValueError("order-zero recurrence only fits the all-zero sequence")
-        return
-    for n in range(order, len(sequence)):
-        expected = (
-            sum(coefficients[i] * sequence[n - 1 - i] for i in range(order)) % prime
-        )
-        if sequence[n] != expected:
-            raise ValueError(
-                "coefficients do not reproduce the source sequence over GF(p)"
-            )
-
-
 class PrimeFieldRecurrenceFindRequest(StrictModel):
     """Find the minimal linear recurrence of a sequence over ``GF(p)``."""
 
@@ -170,12 +145,16 @@ class PrimeFieldRecurrenceFindResult(StrictModel):
     def require_status_consistent_coefficients(self) -> Self:
         _require_bounded_prime(self.prime)
         _require_canonical_residues(self.sequence, self.prime, "sequence values")
-        if self.status == "FOUND":
-            _require_found_prime_recurrence(
-                self.prime, self.sequence, self.coefficients, self.order
-            )
-        elif self.order != 0 or self.coefficients:
+        from jacobian.math.recurrence_solving.operations import berlekamp_massey
+
+        expected = berlekamp_massey(list(self.sequence), self.prime)
+        if (
+            self.prime != expected.prime
+            or self.status != expected.status
+            or self.order != expected.order
+            or self.coefficients != expected.coefficients
+        ):
             raise ValueError(
-                "a missing recurrence must have zero order and no coefficients"
+                "result must match the exact bound Berlekamp-Massey recurrence"
             )
         return self

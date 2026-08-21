@@ -7,10 +7,12 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.frames._models import (
+    CoherenceRequest,
     CoherenceResult,
+    FiniteFrameRequest,
     FramePotentialResult,
-    FrameRequest,
     GramResult,
+    VectorFamilyRequest,
 )
 from jacobian.math.frames._operations import (
     compute_coherence,
@@ -48,7 +50,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "frame.gram.compute",
         "Compute the Gram matrix of a frame",
         "Compute the Gram matrix G with G_ij = <v_i, v_j> for a finite frame.",
-        FrameRequest,
+        VectorFamilyRequest,
         GramResult,
         compute_gram,
         "frame",
@@ -66,7 +68,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "frame.coherence.compute",
         "Compute the coherence of a frame",
         "Compute the frame coherence as the maximum normalized off-diagonal Gram entry.",
-        FrameRequest,
+        CoherenceRequest,
         CoherenceResult,
         compute_coherence,
         "frame",
@@ -84,7 +86,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "frame.potential.compute",
         "Compute the frame potential",
         "Compute the frame potential sum_{i,j} |<v_i, v_j>|^2.",
-        FrameRequest,
+        FiniteFrameRequest,
         FramePotentialResult,
         compute_frame_potential,
         "frame",

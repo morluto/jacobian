@@ -42,6 +42,10 @@ def test_native_code_api_enforces_the_prime_field_contract() -> None:
         minimum_distance(((1,),), 4)
 
 
+def test_zero_code_uses_length_convention_for_minimum_distance() -> None:
+    assert minimum_distance(((0, 0, 0, 0),), 2) == 4
+
+
 @pytest.mark.parametrize("generator_matrix", [(), ((1, 0), (1,))])
 def test_native_code_api_rejects_invalid_generator_shapes(
     generator_matrix: tuple[tuple[int, ...], ...],

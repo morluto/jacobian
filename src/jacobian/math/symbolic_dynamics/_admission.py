@@ -13,7 +13,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "symbolic_dynamics.block_language.compute",
         AdmissionDecision.KEEP,
-        "complete block language of a bounded shift presentation",
+        "complete occurring-block language of a bounded shift presentation",
     ),
     OperationAdmission(
         "symbolic_dynamics.finite_type_shift.construct",

@@ -7,11 +7,11 @@ from collections.abc import Sequence
 from fractions import Fraction
 from itertools import combinations
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.graphical_models.values import (
     MAX_FACTOR_COUNT,
     MAX_MODEL_VARS,
     Factor,
-    parse_canonical_rational,
     scope_size,
 )
 
@@ -22,7 +22,7 @@ def factor_multiply(left: Factor, right: Factor) -> Factor:
     _require_compatible_domains((left, right), left.domain_sizes)
     variables = tuple(sorted(set(left.variables) | set(right.variables)))
     total = scope_size(variables, left.domain_sizes)
-    table: list[str] = []
+    table: list[CanonicalRational] = []
     for index in range(total):
         assignment = _index_to_assignment(index, variables, left.domain_sizes)
         left_index = _projected_index(
@@ -31,10 +31,11 @@ def factor_multiply(left: Factor, right: Factor) -> Factor:
         right_index = _projected_index(
             assignment, variables, right.variables, right.domain_sizes
         )
-        value = parse_canonical_rational(
-            left.table[left_index]
-        ) * parse_canonical_rational(right.table[right_index])
-        table.append(str(value))
+        value = (
+            left.table[left_index].as_fraction()
+            * right.table[right_index].as_fraction()
+        )
+        table.append(CanonicalRational.from_fraction(value))
     return Factor(
         variables=variables,
         domain_sizes=left.domain_sizes,
@@ -48,7 +49,7 @@ def factor_marginalize(factor: Factor, variable: int) -> Factor:
     if variable not in factor.variables:
         raise ValueError("variable is not in factor")
     variables = tuple(item for item in factor.variables if item != variable)
-    table: list[str] = []
+    table: list[CanonicalRational] = []
     for index in range(scope_size(variables, factor.domain_sizes)):
         assignment = _index_to_assignment(index, variables, factor.domain_sizes)
         total = Fraction(0)
@@ -60,8 +61,8 @@ def factor_marginalize(factor: Factor, variable: int) -> Factor:
                 factor.variables,
                 factor.domain_sizes,
             )
-            total += parse_canonical_rational(factor.table[source_index])
-        table.append(str(total))
+            total += factor.table[source_index].as_fraction()
+        table.append(CanonicalRational.from_fraction(total))
     return Factor(
         variables=variables,
         domain_sizes=factor.domain_sizes,

@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math._labels import OpaqueLabel
 
 MAX_HYPOTHESES = 1000
 
@@ -15,7 +16,7 @@ MAX_HYPOTHESES = 1000
 class HypothesisSpec(StrictModel):
     """One labelled p-value."""
 
-    hypothesis_id: str = Field(min_length=1, max_length=64)
+    hypothesis_id: OpaqueLabel
     p_value: CanonicalRational
 
     @model_validator(mode="after")
@@ -50,15 +51,15 @@ class BHStepUpResult(StrictModel):
 
     critical_index: int = Field(ge=0)
     cutoff_threshold: str
-    rejected: tuple[str, ...]
+    rejected: tuple[OpaqueLabel, ...]
     total_hypotheses: int = Field(ge=1)
 
 
 class FDPRequest(StrictModel):
     """False discovery proportion computation."""
 
-    rejected_ids: tuple[str, ...] = Field(default=())
-    true_null_ids: tuple[str, ...] = Field(default=())
+    rejected_ids: tuple[OpaqueLabel, ...] = Field(default=())
+    true_null_ids: tuple[OpaqueLabel, ...] = Field(default=())
 
 
 class FDPResult(StrictModel):

@@ -9,9 +9,15 @@ from jacobian.math.term_rewriting.operations import (
     term_at_position,
     unify,
 )
-from jacobian.math.term_rewriting.values import RewriteApplication, RewriteRule, Term
+from jacobian.math.term_rewriting.values import (
+    RankedSignature,
+    RewriteApplication,
+    RewriteRule,
+    Term,
+)
 
 __all__ = [
+    "RankedSignature",
     "RewriteApplication",
     "RewriteRule",
     "Term",

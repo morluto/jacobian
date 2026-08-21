@@ -2,148 +2,103 @@
 
 from __future__ import annotations
 
-import keyword
 from typing import Literal, Self
 
-import sympy
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
+from jacobian.math.polynomials.values import (
+    PolynomialVariable,
+    RationalPolynomial,
+    require_polynomial_budget,
+)
 
 MAX_VARS = 3
-MAX_COEFF = 4096
 HOMOGENIZING_COORDINATE = "z"
+_MAX_TERMS = 256
+_MAX_EXPONENT = 64
+_MAX_COEFFICIENT_DIGITS = 128
 
 
-def _require_valid_variables(variables: tuple[str, ...]) -> None:
-    """Reject duplicate, empty, reserved, or non-identifier variable names."""
-    seen: set[str] = set()
-    for name in variables:
-        if not name or not name.isidentifier():
-            raise ValueError("variable names must be valid identifiers")
-        if keyword.iskeyword(name):
-            raise ValueError("variable names must not be Python keywords")
-        if name in seen:
-            raise ValueError("variable names must be unique")
-        seen.add(name)
-
-
-def _parse_polynomial(raw: str, variables: tuple[str, ...]) -> sympy.Basic:
-    """Parse *raw* as a sympy polynomial over *variables* with rational coefficients.
-
-    Converts parse failures and non-polynomial expressions into ValueError so
-    that a request the model accepts always yields a typed domain result.
-    Coefficients must be rational numbers (integers or rationals over QQ);
-    transcendental or symbolic constants such as pi are rejected.
-    """
-    var_symbols = sympy.symbols(variables)
-    var_map = dict(zip(variables, var_symbols, strict=True))
-    try:
-        expression = sympy.sympify(raw, locals=var_map)
-    except (sympy.SympifyError, TypeError, SyntaxError) as exc:
-        raise ValueError("polynomial must be a valid expression") from exc
-    free = {str(symbol) for symbol in expression.free_symbols}
-    undeclared = free - set(variables)
-    if undeclared:
-        raise ValueError(
-            f"polynomial references undeclared variables: {sorted(undeclared)}"
-        )
-    if not expression.is_polynomial(*var_symbols):
-        raise ValueError("polynomial expression must be a polynomial")
-    # Validate coefficients are rational (over QQ)
-    try:
-        poly = sympy.Poly(expression, *var_symbols, domain=sympy.QQ)
-    except sympy.CoercionFailed as exc:
-        raise ValueError("polynomial coefficients must be rational") from exc
-    if poly.domain != sympy.QQ:
-        raise ValueError(
-            f"polynomial coefficients must be rational, got domain {poly.domain}"
-        )
-    return expression
-
-
-def _require_polynomial(raw: str, variables: tuple[str, ...]) -> sympy.Basic:
-    _require_valid_variables(variables)
-    return _parse_polynomial(raw, variables)
+def _require_curve_polynomial(polynomial: RationalPolynomial) -> None:
+    require_polynomial_budget(
+        polynomial,
+        maximum_terms=_MAX_TERMS,
+        maximum_exponent=_MAX_EXPONENT,
+        maximum_coefficient_digits=_MAX_COEFFICIENT_DIGITS,
+        label="curve polynomial",
+    )
+    if any(sum(term.exponents) > _MAX_EXPONENT for term in polynomial.polynomial.terms):
+        raise ValueError(f"curve polynomial exceeds total degree {_MAX_EXPONENT}")
 
 
 class AffineCurveRequest(StrictModel):
-    """An affine plane curve f(x, y) = 0."""
+    """An affine plane curve ``f(x, y) = 0`` over ``QQ``."""
 
-    variables: tuple[str, ...] = Field(min_length=2, max_length=2)
-    polynomial: str = Field(min_length=1, max_length=MAX_COEFF)
+    polynomial: RationalPolynomial
 
     @model_validator(mode="after")
-    def require_valid_polynomial(self) -> Self:
-        _require_polynomial(self.polynomial, self.variables)
+    def require_affine_plane(self) -> Self:
+        _require_curve_polynomial(self.polynomial)
+        if len(self.polynomial.variables) != 2:
+            raise ValueError("affine plane curves require exactly two variables")
         return self
 
 
 class ProjectiveClosureRequest(StrictModel):
-    """Compute the projective closure of an affine curve."""
+    """Homogenize an affine plane curve with the reserved coordinate ``z``."""
 
-    variables: tuple[str, ...] = Field(min_length=2, max_length=2)
-    polynomial: str = Field(min_length=1, max_length=MAX_COEFF)
+    polynomial: RationalPolynomial
 
     @model_validator(mode="after")
-    def require_valid_polynomial(self) -> Self:
-        _require_valid_variables(self.variables)
-        if HOMOGENIZING_COORDINATE in self.variables:
+    def require_available_homogenizing_coordinate(self) -> Self:
+        _require_curve_polynomial(self.polynomial)
+        if len(self.polynomial.variables) != 2:
+            raise ValueError("projective closure requires exactly two variables")
+        if HOMOGENIZING_COORDINATE in self.polynomial.variables:
             raise ValueError(
-                f"variable names must not include the reserved homogenizing "
-                f"coordinate '{HOMOGENIZING_COORDINATE}'"
+                "affine variable axis must not contain the reserved "
+                f"homogenizing coordinate {HOMOGENIZING_COORDINATE!r}"
             )
-        _parse_polynomial(self.polynomial, self.variables)
         return self
 
 
 class AffineChartRequest(StrictModel):
-    """Extract an affine chart from a projective curve."""
+    """Dehomogenize a homogeneous projective plane curve on one chart."""
 
-    variables: tuple[str, ...] = Field(min_length=3, max_length=3)
-    polynomial: str = Field(min_length=1, max_length=MAX_COEFF)
-    chart_variable: str = Field(min_length=1, max_length=64)
+    polynomial: RationalPolynomial
+    chart_variable: PolynomialVariable
 
     @model_validator(mode="after")
-    def require_valid_chart(self) -> Self:
-        _require_polynomial(self.polynomial, self.variables)
-        if self.chart_variable not in self.variables:
-            raise ValueError("chart_variable must be one of the projective variables")
-        # Validate that the polynomial is homogeneous (all terms have the same total degree)
-        var_symbols = sympy.symbols(self.variables)
-        poly = sympy.Poly(
-            _parse_polynomial(self.polynomial, self.variables),
-            *var_symbols,
-            domain=sympy.QQ,
-        )
-        if not poly.is_homogeneous:
+    def require_homogeneous_projective_plane(self) -> Self:
+        _require_curve_polynomial(self.polynomial)
+        if len(self.polynomial.variables) != 3:
+            raise ValueError("projective plane curves require exactly three variables")
+        if self.chart_variable not in self.polynomial.variables:
+            raise ValueError("chart_variable must belong to the polynomial axis")
+        if not rational_polynomial_to_sympy(self.polynomial).is_homogeneous:
             raise ValueError("projective polynomial must be homogeneous")
         return self
 
 
-# Results
-
-
 class AffineCurveResult(StrictModel):
     is_valid: bool
-    degree: int = Field(ge=0)
+    degree: int = Field(ge=0, le=_MAX_EXPONENT)
     method: Literal["SYMPY_CURVE_CHECK"] = "SYMPY_CURVE_CHECK"
 
 
 class ProjectiveClosureResult(StrictModel):
-    polynomial: str
-    variables: tuple[str, ...]
+    polynomial: RationalPolynomial
     method: Literal["HOMOGENIZATION"] = "HOMOGENIZATION"
 
 
 class AffineChartResult(StrictModel):
-    polynomial: str
-    variables: tuple[str, ...]
+    polynomial: RationalPolynomial
     method: Literal["DEHOMOGENIZATION"] = "DEHOMOGENIZATION"
 
 
 __all__ = [
-    "MAX_COEFF",
     "MAX_VARS",
     "AffineChartRequest",
     "AffineChartResult",

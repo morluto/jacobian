@@ -9,7 +9,7 @@ is introduced.
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -18,6 +18,9 @@ from jacobian._models import StrictModel
 MAX_CARRIER_SIZE = 32
 MAX_SIGNATURE_SIZE = 16
 MAX_ARITY = 4
+MAX_TERM_NODES = 256
+MAX_TERM_DEPTH = 64
+MAX_TABLE_CELLS = 65_536
 
 
 class OperationSymbol(StrictModel):
@@ -49,6 +52,12 @@ class FiniteAlgebra(StrictModel):
             raise ValueError("carrier labels must be unique")
         if len(self.tables) != len(self.operations):
             raise ValueError("tables must have one entry per operation symbol")
+        if len({symbol.operation_id for symbol in self.operations}) != len(
+            self.operations
+        ):
+            raise ValueError("operation identifiers must be unique")
+        if sum(len(table) for table in self.tables) > MAX_TABLE_CELLS:
+            raise ValueError("operation tables exceed the bounded cell budget")
         for symbol, table in zip(self.operations, self.tables, strict=True):
             expected_cells = len(self.carrier) ** symbol.arity
             if len(table) != expected_cells:
@@ -61,42 +70,96 @@ class FiniteAlgebra(StrictModel):
         return self
 
 
-class Term(StrictModel):
-    """A closed source-bound AST node for a finite-algebra term.
+class VariableTerm(StrictModel):
+    kind: Literal["variable"]
+    variable_id: int = Field(ge=0, le=255, strict=True)
 
-    ``kind`` is ``"variable"`` or ``"application"``.  For variables,
-    ``variable_id`` is the variable index.  For applications, ``operation`` is
-    the operation index in the algebra's signature, and ``children`` are child
-    term indices (recursively, but Pydantic does not allow recursive models
-    directly — use a flat node list with parent/child indices instead).
-    """
 
-    kind: str
-    variable_id: int | None = None
-    operation: int | None = None
-    children: tuple[int, ...] = ()
+class ApplicationTerm(StrictModel):
+    kind: Literal["application"]
+    operation: int = Field(ge=0, le=MAX_SIGNATURE_SIZE - 1, strict=True)
+    children: tuple[int, ...] = Field(default=(), max_length=MAX_ARITY)
+
+
+Term = Annotated[VariableTerm | ApplicationTerm, Field(discriminator="kind")]
 
 
 class FlatTerm(StrictModel):
     """A flat term representation: a list of nodes where each application node
     references its children by index."""
 
-    nodes: tuple[Term, ...] = Field(min_length=1)
+    nodes: tuple[Term, ...] = Field(min_length=1, max_length=MAX_TERM_NODES)
     root: int = Field(ge=0)
 
     @model_validator(mode="after")
-    def require_valid_root(self) -> Self:
+    def require_closed_acyclic_ast(self) -> Self:
         if self.root >= len(self.nodes):
             raise ValueError("root index out of range")
+        for index, node in enumerate(self.nodes):
+            if isinstance(node, ApplicationTerm) and any(
+                child < 0 or child >= index for child in node.children
+            ):
+                raise ValueError("application children must reference earlier nodes")
+        reachable = _reachable_nodes(self.nodes, self.root)
+        if reachable != set(range(len(self.nodes))):
+            raise ValueError("every term node must be reachable from the root")
+        if _term_depths(self.nodes)[self.root] > MAX_TERM_DEPTH:
+            raise ValueError("term depth exceeds the bounded budget")
         return self
+
+    @property
+    def variable_count(self) -> int:
+        identifiers = tuple(
+            node.variable_id for node in self.nodes if isinstance(node, VariableTerm)
+        )
+        return max(identifiers, default=-1) + 1
+
+
+def _reachable_nodes(nodes: tuple[Term, ...], root: int) -> set[int]:
+    reachable: set[int] = set()
+    pending = [root]
+    while pending:
+        index = pending.pop()
+        if index in reachable:
+            continue
+        reachable.add(index)
+        node = nodes[index]
+        if isinstance(node, ApplicationTerm):
+            pending.extend(node.children)
+    return reachable
+
+
+def _term_depths(nodes: tuple[Term, ...]) -> tuple[int, ...]:
+    depths: list[int] = []
+    for node in nodes:
+        if isinstance(node, VariableTerm) or not node.children:
+            depths.append(1)
+        else:
+            depths.append(1 + max(depths[child] for child in node.children))
+    return tuple(depths)
+
+
+def require_term_for_algebra(term: FlatTerm, algebra: FiniteAlgebra) -> None:
+    """Bind application nodes to one finite signature before evaluation."""
+
+    for node in term.nodes:
+        if not isinstance(node, ApplicationTerm):
+            continue
+        if node.operation >= len(algebra.operations):
+            raise ValueError("term operation index out of range")
+        if len(node.children) != algebra.operations[node.operation].arity:
+            raise ValueError("term application arity does not match the operation")
 
 
 __all__ = [
     "MAX_ARITY",
     "MAX_CARRIER_SIZE",
     "MAX_SIGNATURE_SIZE",
+    "ApplicationTerm",
     "FiniteAlgebra",
     "FlatTerm",
     "OperationSymbol",
     "Term",
+    "VariableTerm",
+    "require_term_for_algebra",
 ]

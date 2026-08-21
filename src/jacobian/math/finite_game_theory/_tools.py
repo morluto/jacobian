@@ -78,6 +78,7 @@ FINITE_GAME_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 GAME_EXAMPLE,
             ),
         ),
+        version="2",
     ),
     _op(
         "game_theory.nash_equilibrium.compute",

@@ -1,60 +1,54 @@
-"""Domain functions for frame operations."""
+"""Exact domain functions for finite vector families and frames."""
 
-from __future__ import annotations
+from fractions import Fraction
 
-import math
-
+from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.frames._models import (
+    CoherenceRequest,
     CoherenceResult,
+    FiniteFrameRequest,
     FramePotentialResult,
-    FrameRequest,
     GramResult,
+    VectorFamilyRequest,
 )
 
 
-def compute_gram(request: FrameRequest) -> GramResult:
-    """Compute the Gram matrix G = <v_i, v_j>."""
-    vectors = request.vectors
-    n = len(vectors)
-    gram = []
-    for i in range(n):
-        row = []
-        for j in range(n):
-            dot = sum(a * b for a, b in zip(vectors[i], vectors[j], strict=True))
-            row.append(dot)
-        gram.append(tuple(row))
-    return GramResult(gram=tuple(gram), dimension=len(vectors[0]))
+def _dot(left: tuple[int, ...], right: tuple[int, ...]) -> int:
+    return sum(a * b for a, b in zip(left, right, strict=True))
 
 
-def compute_coherence(request: FrameRequest) -> CoherenceResult:
-    """Compute frame coherence: max off-diagonal |<v_i, v_j>| / (||v_i|| ||v_j||)."""
-    vectors = request.vectors
-    n = len(vectors)
-    if n < 2:
-        return CoherenceResult(coherence=0.0)
-    max_off = 0.0
-    for i in range(n):
-        norm_i = math.sqrt(sum(x * x for x in vectors[i]))
-        if norm_i == 0:
-            continue
-        for j in range(i + 1, n):
-            norm_j = math.sqrt(sum(x * x for x in vectors[j]))
-            if norm_j == 0:
-                continue
-            dot = sum(a * b for a, b in zip(vectors[i], vectors[j], strict=True))
-            val = abs(dot) / (norm_i * norm_j)
-            if val > max_off:
-                max_off = val
-    return CoherenceResult(coherence=max_off)
+def compute_gram(request: VectorFamilyRequest) -> GramResult:
+    gram = tuple(
+        tuple(_dot(left, right) for right in request.vectors)
+        for left in request.vectors
+    )
+    return GramResult(
+        **request.model_dump(), gram=gram, dimension=len(request.vectors[0])
+    )
 
 
-def compute_frame_potential(request: FrameRequest) -> FramePotentialResult:
-    """Compute frame potential: sum_{i,j} |<v_i, v_j>|^2."""
-    vectors = request.vectors
-    n = len(vectors)
-    total = 0.0
-    for i in range(n):
-        for j in range(n):
-            dot = sum(a * b for a, b in zip(vectors[i], vectors[j], strict=True))
-            total += dot * dot
-    return FramePotentialResult(potential=total)
+def compute_coherence(request: CoherenceRequest) -> CoherenceResult:
+    candidates = []
+    for left in range(len(request.vectors)):
+        for right in range(left + 1, len(request.vectors)):
+            dot = _dot(request.vectors[left], request.vectors[right])
+            denominator = _dot(request.vectors[left], request.vectors[left]) * _dot(
+                request.vectors[right], request.vectors[right]
+            )
+            candidates.append((Fraction(dot * dot, denominator), (left, right)))
+    value, pair = max(candidates, default=(Fraction(0), None))
+    return CoherenceResult(
+        **request.model_dump(),
+        coherence_squared=CanonicalRational.from_fraction(value),
+        maximizing_pair=pair,
+    )
+
+
+def compute_frame_potential(request: FiniteFrameRequest) -> FramePotentialResult:
+    total = sum(
+        _dot(left, right) ** 2 for left in request.vectors for right in request.vectors
+    )
+    return FramePotentialResult(
+        **request.model_dump(), potential=format_canonical_integer(total)
+    )

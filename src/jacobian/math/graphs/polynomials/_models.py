@@ -112,11 +112,44 @@ class GraphPolynomialResult(StrictModel):
         return self
 
 
+class MultivariatePolynomialTerm(StrictModel):
+    coefficient: int
+    exponents: tuple[int, ...]
+
+    @model_validator(mode="after")
+    def require_nonzero_nonnegative_term(self) -> Self:
+        if self.coefficient == 0 or any(exponent < 0 for exponent in self.exponents):
+            raise ValueError(
+                "multivariate terms require nonzero coefficients and nonnegative exponents"
+            )
+        return self
+
+
+class SparseMultivariatePolynomial(StrictModel):
+    variables: tuple[str, ...] = Field(min_length=1)
+    terms: tuple[MultivariatePolynomialTerm, ...]
+
+    @model_validator(mode="after")
+    def require_canonical_terms(self) -> Self:
+        if len(set(self.variables)) != len(self.variables):
+            raise ValueError("polynomial variables must be unique")
+        exponents = [term.exponents for term in self.terms]
+        if any(len(item) != len(self.variables) for item in exponents):
+            raise ValueError("every exponent tuple must match the variable axis")
+        if exponents != sorted(exponents) or len(set(exponents)) != len(exponents):
+            raise ValueError(
+                "multivariate terms must have unique sorted exponent tuples"
+            )
+        return self
+
+
 __all__ = [
     "GraphEdge",
     "GraphPolynomialRequest",
     "GraphPolynomialResult",
     "GraphSpec",
     "MatchingPolynomialRequest",
+    "MultivariatePolynomialTerm",
     "PolynomialTerm",
+    "SparseMultivariatePolynomial",
 ]

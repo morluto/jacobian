@@ -57,9 +57,26 @@ RECURRENCE_SOLVING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "fib_find",
                 "Find the recurrence of the Fibonacci sequence.",
-                {"sequence": ["1", "1", "2", "3", "5", "8", "13", "21", "34", "55"]},
+                {
+                    "sequence": [
+                        {"num": value, "den": "1"}
+                        for value in (
+                            "1",
+                            "1",
+                            "2",
+                            "3",
+                            "5",
+                            "8",
+                            "13",
+                            "21",
+                            "34",
+                            "55",
+                        )
+                    ]
+                },
             ),
         ),
+        version="2",
     ),
     rs_operation(
         "sequence.recurrence.closed_form.compute",
@@ -77,11 +94,19 @@ RECURRENCE_SOLVING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "repeated_root",
                 "Solve the recurrence with characteristic polynomial (x-1)^2.",
                 {
-                    "characteristic_coefficients": ["1", "-2", "1"],
-                    "initial_values": ["2", "5"],
+                    "characteristic_coefficients": [
+                        {"num": "1", "den": "1"},
+                        {"num": "-2", "den": "1"},
+                        {"num": "1", "den": "1"},
+                    ],
+                    "initial_values": [
+                        {"num": "2", "den": "1"},
+                        {"num": "5", "den": "1"},
+                    ],
                 },
             ),
         ),
+        version="2",
     ),
 )
 

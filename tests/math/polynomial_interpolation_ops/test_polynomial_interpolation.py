@@ -1,10 +1,12 @@
-"""Tests for polynomial interpolation operations."""
+"""Exact contract and reconstruction tests for Newton interpolation."""
 
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.polynomial_interpolation_ops._models import (
     DividedDifferencesRequest,
+    InterpolationSamples,
     NewtonEvaluateRequest,
     NewtonFormRequest,
 )
@@ -16,6 +18,17 @@ from jacobian.math.polynomial_interpolation_ops._operations import (
 from jacobian.math.polynomial_interpolation_ops._tools import TOOLS
 
 
+def _q(numerator: int, denominator: int = 1) -> CanonicalRational:
+    return CanonicalRational.from_integer_ratio(numerator, denominator)
+
+
+def _samples(
+    nodes: tuple[CanonicalRational, ...] = (_q(0), _q(1), _q(2)),
+    values: tuple[CanonicalRational, ...] = (_q(1), _q(2), _q(5)),
+) -> InterpolationSamples:
+    return InterpolationSamples(nodes=nodes, values=values)
+
+
 def test_catalog_contains_only_audited_operations() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "polynomial.interpolation.divided_differences.compute",
@@ -24,111 +37,86 @@ def test_catalog_contains_only_audited_operations() -> None:
     }
 
 
-def test_divided_differences_basic() -> None:
-    request = DividedDifferencesRequest(nodes=("0", "1", "2"), values=("1", "2", "5"))
-    result = compute_divided_differences(request)
-    assert result.coefficients == ("1", "1", "1")
+def test_divided_differences_are_canonical_rationals() -> None:
+    result = compute_divided_differences(DividedDifferencesRequest(samples=_samples()))
+    assert result.coefficients == (_q(1), _q(1), _q(1))
 
 
-def test_newton_form_basic() -> None:
-    request = NewtonFormRequest(nodes=("0", "1", "2"), values=("1", "2", "5"))
-    result = compute_newton_form(request)
-    assert result.coefficients == ("1", "1", "1")
-    assert result.nodes == ("0", "1", "2")
-
-
-def test_newton_evaluate_at_3() -> None:
-    request = NewtonEvaluateRequest(
-        nodes=("0", "1", "2"),
-        values=("1", "2", "5"),
-        evaluation_point="3",
+def test_newton_form_is_directly_evaluable() -> None:
+    form = compute_newton_form(NewtonFormRequest(samples=_samples()))
+    assert form.coefficients == (_q(1), _q(1), _q(1))
+    result = compute_newton_evaluate(
+        NewtonEvaluateRequest(newton_form=form, evaluation_point=_q(3))
     )
-    result = compute_newton_evaluate(request)
-    assert result.result == "10"
+    assert result.result == _q(10)
 
 
-def test_newton_evaluate_at_node() -> None:
-    request = NewtonEvaluateRequest(
-        nodes=("0", "1", "2"),
-        values=("1", "2", "5"),
-        evaluation_point="1",
+def test_interpolation_reconstructs_every_sample() -> None:
+    samples = _samples(
+        nodes=(_q(0), _q(1, 2), _q(1), _q(3, 2)),
+        values=(_q(1), _q(3, 2), _q(2), _q(11, 4)),
     )
-    result = compute_newton_evaluate(request)
-    assert result.result == "2"
+    form = compute_newton_form(NewtonFormRequest(samples=samples))
+    for node, expected in zip(samples.nodes, samples.values, strict=True):
+        result = compute_newton_evaluate(
+            NewtonEvaluateRequest(newton_form=form, evaluation_point=node)
+        )
+        assert result.result == expected
 
 
-# --- Issue 1: require pairwise-distinct nodes ---
+def test_rational_interpolation_has_exact_coefficients_and_evaluation() -> None:
+    samples = _samples(
+        nodes=(_q(0), _q(1, 2), _q(1)),
+        values=(_q(1), _q(3, 2), _q(2)),
+    )
+    form = compute_newton_form(NewtonFormRequest(samples=samples))
+    assert form.coefficients == (_q(1), _q(1), _q(0))
+    result = compute_newton_evaluate(
+        NewtonEvaluateRequest(newton_form=form, evaluation_point=_q(3, 4))
+    )
+    assert result.result == _q(7, 4)
 
 
-def test_divided_differences_rejects_repeated_nodes() -> None:
-    with pytest.raises(ValidationError):
-        DividedDifferencesRequest(nodes=("0", "1", "1"), values=("1", "2", "5"))
+def test_newton_coefficients_may_grow_beyond_input_digit_bound() -> None:
+    left = 10**255 + 19
+    right = 10**255 + 21
+    form = compute_newton_form(
+        NewtonFormRequest(
+            samples=_samples(
+                nodes=(_q(0), _q(1)),
+                values=(_q(1, left), _q(1, right)),
+            )
+        )
+    )
+
+    assert len(form.coefficients[1].den) > 256
 
 
-def test_newton_form_rejects_repeated_nodes() -> None:
-    with pytest.raises(ValidationError):
-        NewtonFormRequest(nodes=("0", "1", "1"), values=("1", "2", "5"))
-
-
-def test_newton_evaluate_rejects_repeated_nodes() -> None:
-    with pytest.raises(ValidationError):
-        NewtonEvaluateRequest(
-            nodes=("0", "1", "1"), values=("1", "2", "5"), evaluation_point="3"
+def test_equal_rational_nodes_are_rejected_before_division() -> None:
+    with pytest.raises(ValidationError, match="pairwise distinct"):
+        InterpolationSamples(
+            nodes=(_q(0), _q(1, 2), _q(1, 2)),
+            values=(_q(1), _q(2), _q(3)),
         )
 
 
-# --- Issue 2: require len(nodes) == len(values) ---
+def test_samples_require_equal_lengths() -> None:
+    with pytest.raises(ValidationError, match="same length"):
+        InterpolationSamples(nodes=(_q(0), _q(1)), values=(_q(1),))
 
 
-def test_newton_form_requires_equal_length() -> None:
+@pytest.mark.parametrize(
+    "bad_rational",
+    ["1/2", {"num": "1", "den": "0"}, {"num": "2", "den": "4"}],
+)
+def test_noncanonical_rational_inputs_are_rejected(bad_rational: object) -> None:
     with pytest.raises(ValidationError):
-        NewtonFormRequest(nodes=("0", "1", "2"), values=("1", "2"))
-
-
-def test_newton_evaluate_requires_equal_length() -> None:
-    with pytest.raises(ValidationError):
-        NewtonEvaluateRequest(
-            nodes=("0", "1", "2"), values=("1", "2"), evaluation_point="3"
-        )
-
-
-# --- Issue 3: consistent scalar domain (all operations use exact rationals) ---
-
-
-def test_divided_differences_with_rationals() -> None:
-    request = DividedDifferencesRequest(
-        nodes=("0", "1/2", "1"), values=("1", "3/2", "2")
-    )
-    result = compute_divided_differences(request)
-    assert result.coefficients == ("1", "1", "0")
-
-
-def test_newton_form_with_rationals() -> None:
-    request = NewtonFormRequest(nodes=("0", "1/2", "1"), values=("1", "3/2", "2"))
-    result = compute_newton_form(request)
-    assert result.coefficients == ("1", "1", "0")
-
-
-def test_newton_evaluate_with_rationals() -> None:
-    request = NewtonEvaluateRequest(
-        nodes=("0", "1/2", "1"),
-        values=("1", "3/2", "2"),
-        evaluation_point="3/4",
-    )
-    result = compute_newton_evaluate(request)
-    assert result.result == "7/4"
-
-
-# --- Interpolation correctness ---
-
-
-def test_interpolation_passes_through_sample_points() -> None:
-    """Newton evaluation at every node must return the corresponding value."""
-    nodes = ("0", "1", "2", "3")
-    values = ("1", "2", "5", "10")
-    for i, (n, v) in enumerate(zip(nodes, values, strict=True)):
-        request = NewtonEvaluateRequest(nodes=nodes, values=values, evaluation_point=n)
-        result = compute_newton_evaluate(request)
-        assert result.result == v, (
-            f"interpolation mismatch at node {i}: expected {v}, got {result.result}"
+        InterpolationSamples.model_validate(
+            {
+                "nodes": [{"num": "0", "den": "1"}, bad_rational],
+                "values": [
+                    {"num": "1", "den": "1"},
+                    {"num": "2", "den": "1"},
+                ],
+            }
         )

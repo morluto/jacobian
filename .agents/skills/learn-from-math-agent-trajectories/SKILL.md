@@ -56,6 +56,15 @@ algebraic branches, and source hypotheses. When a later exact replay rejects a
 rounded numerical point, distinguish “this reported point is not a witness”
 from “no nearby exact witness exists.”
 
+When a symbolic derivation clears denominators or assumes polynomial factors
+are nonzero, record the equation ideal and the excluded locus separately. A
+Gröbner basis of the cleared numerators describes a closure that may retain
+components supported entirely on forbidden factors; do not treat it as the
+original rational system without saturation or equivalent exclusion evidence.
+Likewise, a rank computed over a rational-function field with algebraically
+independent parameters does not establish the rank after imposing polynomial
+relations among those parameters.
+
 For numerical searches, require enough retained state to reproduce and certify
 the candidate: equations, variable order and normalization, side conditions,
 solver and status, random seeds, full-precision values, residual definition,
@@ -88,10 +97,26 @@ Then inspect the session-visible Jacobian surface when possible:
 4. Was it selected and called with a valid payload?
 5. Was its typed result used within its stated scope?
 
+Select operations against the downstream evidence the trajectory needed, not
+only the operation title or primary scalar value. When neighboring operations
+differ by transformations, bases, representatives, reconstruction data, or
+certificates, determine whether later work needed that stronger result. If a
+certificate-bearing operation was available, rebuilding its missing evidence
+from a lossy sibling is a selection failure rather than an operation gap.
+
 Do not infer use from a generic “called tool” marker. Compare repeated scalar
 calls, manual all-pairs or all-subsets loops, and custom symbolic or solver code
 against available aggregate operations. An N+1 trace can suggest a missing
 profile operation, but verify the catalog before proposing one.
+
+At a SAT, SMT, optimization, or other solver escape, separate the solver engine
+from the mathematical result being sought. A generic bounded solver operation
+may be the correct tool for one investigation, while a repository gap may
+instead be a typed domain result such as a solution family, embedding, or
+factorization with the solver kept private. Do not propose public blocking
+clauses, search sessions, or model-enumeration mechanics merely because the
+scratch implementation used them; also do not reject a solver-backed operation
+when its public postcondition is stable, bounded, and mathematical.
 
 Audit literature work by source quality and theorem fit, not by the number of
 searches or websites. Verify precise hypotheses and dates against primary
@@ -124,6 +149,17 @@ postcondition with typed inputs and an exact, incomplete, or unknown result. It
 must not encode the motivating conjecture, prescribe a proof strategy, or
 claim an asymptotic theorem that still requires model reasoning.
 
+Separate gap diagnosis from public-operation admission. First decide whether
+the trajectory establishes a reusable missing mathematical postcondition on
+the inspected surface. Recording that gap does not assert that the result
+belongs in the agent-visible catalog. Then report the admission evidence
+separately: it may support public consideration, suggest a native-only helper,
+or leave the disposition unresolved. Public-admission concerns such as weak
+leverage over ordinary Python or a cheap projection can change the eventual
+disposition without erasing an otherwise well-evidenced gap. Conversely, an
+absent convenience is not an operation gap unless the missing postcondition is
+independently canonical or reusable.
+
 ## Turn observations into repository learning
 
 Choose the smallest durable action supported by the evidence:
@@ -131,7 +167,9 @@ Choose the smallest durable action supported by the evidence:
 - update a repo-local skill for a reusable agent decision rule;
 - improve discovery metadata when an existing operation was hard to find;
 - repair an operation contract when a selected tool was hard to call or use;
-- propose a new operation for a repeated, stable bounded postcondition;
+- record an operation gap for a repeated, stable bounded postcondition, and
+  propose public admission only when the separate admission evidence supports
+  it;
 - update product documentation only for a public contract or durable product
   behavior that users need outside agent instructions;
 - preserve a trajectory as an evaluation when it has a frozen input,
@@ -162,6 +200,9 @@ Lead with what the trajectory teaches, not a chronological replay. Include:
 - focused skill, operation, discovery, contract, documentation, or evaluation
   actions; and
 - unresolved mathematical work that still requires proof or human judgment.
+
+For each operation-gap finding, state the gap verdict and the admission posture
+separately. Do not make a reader infer one from the other.
 
 Keep confirmed facts, plausible hypotheses, and open questions visibly
 separate. The retrospective succeeds when another agent or maintainer can

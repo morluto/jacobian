@@ -47,19 +47,19 @@ class GramProfileResult(StrictModel):
 class NormalizeRequest(StrictModel):
     """Normalize a sign matrix so first row/column are all +1."""
 
-    matrix: SignMatrix
+    matrix: HadamardMatrix | SignMatrix
 
 
 class NormalizeResult(StrictModel):
     """The normalized matrix and row/column sign switches used."""
 
-    normalized: tuple[tuple[int, ...], ...]
+    normalized: HadamardMatrix | SignMatrix
     row_switches: tuple[int, ...]
     column_switches: tuple[int, ...]
 
     @model_validator(mode="after")
     def bind_normalize(self) -> Self:
-        for row in self.normalized:
+        for row in self.normalized.rows:
             for entry in row:
                 if entry not in (-1, 1):
                     raise ValueError("normalized entries must be -1 or +1")
@@ -90,7 +90,7 @@ class SylvesterRequest(StrictModel):
 class SylvesterResult(StrictModel):
     """The constructed Sylvester matrix, construction name, and order."""
 
-    matrix: tuple[tuple[int, ...], ...]
+    matrix: HadamardMatrix
     construction: str
     order: int = Field(ge=1)
 

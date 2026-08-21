@@ -1,13 +1,15 @@
 """Exact symbolic matrix operation declarations."""
 
 from collections.abc import Callable
+from typing import Any
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.matrices.symbolic._models import (
-    SquareSymbolicMatrixRequest,
+    SymbolicCharacteristicPolynomialRequest,
     SymbolicCharacteristicPolynomialResult,
+    SymbolicDeterminantRequest,
     SymbolicDeterminantResult,
     SymbolicEigenvaluesResult,
     SymbolicMatrixRequest,
@@ -33,7 +35,7 @@ def symbolic_matrix_operation[
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
+    version: str = "2",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
@@ -48,12 +50,55 @@ def symbolic_matrix_operation[
     )
 
 
+def _rational_function(
+    variables: tuple[str, ...],
+    *numerator_terms: tuple[int, tuple[int, ...]],
+) -> dict[str, Any]:
+    def polynomial(
+        terms: tuple[tuple[int, tuple[int, ...]], ...],
+    ) -> dict[str, Any]:
+        return {
+            "terms": [
+                {
+                    "coefficient": {"num": str(coefficient), "den": "1"},
+                    "exponents": list(exponents),
+                }
+                for coefficient, exponents in terms
+            ]
+        }
+
+    return {
+        "rational_function_schema_version": "1",
+        "domain": "QQ",
+        "variables": list(variables),
+        "numerator": polynomial(numerator_terms),
+        "denominator": polynomial(((1, (0,) * len(variables)),)),
+    }
+
+
+def _generic_two_by_two() -> dict[str, Any]:
+    variables = ("a", "b", "c", "d")
+    return {
+        "variables": list(variables),
+        "entries": [
+            [
+                _rational_function(variables, (1, (1, 0, 0, 0))),
+                _rational_function(variables, (1, (0, 0, 1, 0))),
+            ],
+            [
+                _rational_function(variables, (1, (0, 1, 0, 0))),
+                _rational_function(variables, (1, (0, 0, 0, 1))),
+            ],
+        ],
+    }
+
+
 SYMBOLIC_MATRIX_OPERATIONS = (
     symbolic_matrix_operation(
         "matrix.symbolic.determinant.compute",
         "Compute an exact symbolic matrix determinant (det) over QQ(t_1, ..., t_n)",
         "Compute the determinant of a square matrix whose entries are rational functions in declared algebraically independent variables, using SymPy's exact fraction-free Bareiss algorithm.",
-        SquareSymbolicMatrixRequest,
+        SymbolicDeterminantRequest,
         SymbolicDeterminantResult,
         compute_symbolic_determinant,
         "matrix",
@@ -66,10 +111,7 @@ SYMBOLIC_MATRIX_OPERATIONS = (
                 "symbolic_determinant_two_by_two",
                 "Compute the determinant of [[a, c], [b, d]]; the matrix must be square and rectangular over declared variables.",
                 {
-                    "matrix": {
-                        "variables": ["a", "b", "c", "d"],
-                        "entries": [["a", "c"], ["b", "d"]],
-                    }
+                    "matrix": _generic_two_by_two(),
                 },
             ),
         ),
@@ -92,10 +134,7 @@ SYMBOLIC_MATRIX_OPERATIONS = (
                 "symbolic_rank_full",
                 "Compute the rank of a 2x2 symbolic matrix; rows must be nonempty and equal length over declared variables.",
                 {
-                    "matrix": {
-                        "variables": ["a", "b", "c", "d"],
-                        "entries": [["a", "c"], ["b", "d"]],
-                    }
+                    "matrix": _generic_two_by_two(),
                 },
             ),
         ),
@@ -104,7 +143,7 @@ SYMBOLIC_MATRIX_OPERATIONS = (
         "matrix.symbolic.characteristic_polynomial.compute",
         "Compute an exact symbolic characteristic polynomial",
         "Compute the dense monic coefficients of det(lambda I - A) for a square symbolic matrix whose entries are rational functions in declared algebraically independent variables.",
-        SquareSymbolicMatrixRequest,
+        SymbolicCharacteristicPolynomialRequest,
         SymbolicCharacteristicPolynomialResult,
         compute_symbolic_characteristic_polynomial,
         "matrix",
@@ -117,10 +156,7 @@ SYMBOLIC_MATRIX_OPERATIONS = (
                 "symbolic_charpoly_two_by_two",
                 "Compute the characteristic polynomial of [[a, c], [b, d]]; the matrix must be square and rectangular.",
                 {
-                    "matrix": {
-                        "variables": ["a", "b", "c", "d"],
-                        "entries": [["a", "c"], ["b", "d"]],
-                    }
+                    "matrix": _generic_two_by_two(),
                 },
             ),
         ),
@@ -130,7 +166,7 @@ SYMBOLIC_MATRIX_OPERATIONS = (
         "matrix.symbolic.eigenvalues.compute",
         "Compute exact symbolic eigenvalues",
         "Compute the exact eigenvalues with algebraic multiplicities of a square symbolic matrix using SymPy's eigenvals. Entries may be rational functions in declared algebraically independent variables; eigenvalues are returned as canonical SymPy expression strings.",
-        SquareSymbolicMatrixRequest,
+        SymbolicCharacteristicPolynomialRequest,
         SymbolicEigenvaluesResult,
         compute_symbolic_eigenvalues,
         "matrix",
@@ -145,7 +181,16 @@ SYMBOLIC_MATRIX_OPERATIONS = (
                 {
                     "matrix": {
                         "variables": [],
-                        "entries": [["1", "2"], ["3", "4"]],
+                        "entries": [
+                            [
+                                _rational_function((), (1, ())),
+                                _rational_function((), (2, ())),
+                            ],
+                            [
+                                _rational_function((), (3, ())),
+                                _rational_function((), (4, ())),
+                            ],
+                        ],
                     }
                 },
             ),

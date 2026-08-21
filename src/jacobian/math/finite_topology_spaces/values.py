@@ -7,8 +7,14 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math._labels import OpaqueLabel
 
 MAX_POINTS = 64
+
+
+def _require_distinct_points(points: tuple[str, ...]) -> None:
+    if len(set(points)) != len(points):
+        raise ValueError("point labels must be distinct")
 
 
 class FiniteTopologicalSpace(StrictModel):
@@ -24,11 +30,12 @@ class FiniteTopologicalSpace(StrictModel):
     point.
     """
 
-    points: tuple[str, ...] = Field(min_length=1, max_length=MAX_POINTS)
+    points: tuple[OpaqueLabel, ...] = Field(min_length=1, max_length=MAX_POINTS)
     preorder: tuple[tuple[int, ...], ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def require_well_formed(self) -> Self:
+        _require_distinct_points(self.points)
         if len(self.preorder) != len(self.points):
             raise ValueError("preorder must have one row per point")
         for row in self.preorder:

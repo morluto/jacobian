@@ -1,14 +1,26 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import encode_strict_json
 from jacobian.math.formal_power_series._models import (
+    MAX_RATIONAL_DIGITS,
+    MAX_TRUNCATION_ORDER,
     InputTruncatedSeries,
     SeriesComposeRequest,
     SeriesDivideRequest,
+    SeriesDivideResult,
+    SeriesInverseResult,
+    SeriesMultiplyResult,
     SeriesPowerRequest,
     SeriesReversionRequest,
+    SeriesReversionResult,
     _SeriesAddSubtractRequest,
     _SeriesMultiplyRequest,
+)
+from jacobian.math.formal_power_series._operations import (
+    compute_divide,
+    compute_inverse,
+    compute_multiply,
 )
 
 
@@ -94,3 +106,70 @@ def test_small_requests_remain_admitted() -> None:
         _series(2, [_coefficient("1"), _coefficient("1")])
     )
     assert SeriesPowerRequest(series=series, exponent=3)
+
+
+def test_largest_multiplication_result_fits_shared_output_envelope() -> None:
+    numerator = "9" * MAX_RATIONAL_DIGITS
+    denominator = "1" + "0" * (MAX_RATIONAL_DIGITS - 1)
+    coefficient = _coefficient(numerator, denominator)
+    series = InputTruncatedSeries.model_validate(
+        _series(MAX_TRUNCATION_ORDER, [coefficient] * MAX_TRUNCATION_ORDER)
+    )
+    result = compute_multiply(series, series)
+
+    assert encode_strict_json(result.model_dump(mode="json"))
+
+
+def test_reversion_result_rejects_fabricated_conclusion_with_zero_residuals() -> None:
+    zero = _coefficient("0")
+    one = _coefficient("1")
+    source = _series(2, [zero, one])
+    fabricated = _series(2, [zero, zero])
+
+    with pytest.raises(ValidationError, match="source composed with result"):
+        SeriesReversionResult.model_validate(
+            {
+                "source": source,
+                "result": fabricated,
+                "left_residual": [zero, zero],
+                "right_residual": [zero, zero],
+            }
+        )
+
+
+def test_multiplication_result_rejects_fabricated_conclusion_and_ledger() -> None:
+    series = InputTruncatedSeries.model_validate(
+        _series(2, [_coefficient("1"), _coefficient("1")])
+    )
+    payload = compute_multiply(series, series).model_dump(mode="json")
+    fabricated = [_coefficient("0"), _coefficient("0")]
+    payload["result"]["coefficients"] = fabricated
+    payload["convolution_ledger"] = fabricated
+
+    with pytest.raises(ValidationError, match="source convolution"):
+        SeriesMultiplyResult.model_validate(payload)
+
+
+def test_inverse_result_rejects_fabricated_conclusion_with_zero_residual() -> None:
+    series = InputTruncatedSeries.model_validate(
+        _series(2, [_coefficient("1"), _coefficient("1")])
+    )
+    payload = compute_inverse(series).model_dump(mode="json")
+    payload["result"]["coefficients"] = [_coefficient("1"), _coefficient("0")]
+
+    with pytest.raises(ValidationError, match="source times result"):
+        SeriesInverseResult.model_validate(payload)
+
+
+def test_division_result_rejects_fabricated_conclusion_with_zero_residual() -> None:
+    numerator = InputTruncatedSeries.model_validate(
+        _series(2, [_coefficient("1"), _coefficient("0")])
+    )
+    denominator = InputTruncatedSeries.model_validate(
+        _series(2, [_coefficient("1"), _coefficient("1")])
+    )
+    payload = compute_divide(numerator, denominator).model_dump(mode="json")
+    payload["quotient"]["coefficients"] = [_coefficient("1"), _coefficient("0")]
+
+    with pytest.raises(ValidationError, match="denominator times quotient"):
+        SeriesDivideResult.model_validate(payload)

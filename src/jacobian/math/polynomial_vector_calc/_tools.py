@@ -7,6 +7,7 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomial_vector_calc._models import (
+    CurlRequest,
     DirectionalDerivativeRequest,
     ScalarFieldRequest,
     ScalarResult,
@@ -22,6 +23,26 @@ from jacobian.math.polynomial_vector_calc._operations import (
 )
 
 
+def _polynomial(
+    variables: tuple[str, ...],
+    *terms: tuple[int, tuple[int, ...]],
+) -> dict[str, Any]:
+    return {
+        "polynomial_schema_version": "1",
+        "domain": "QQ",
+        "variables": list(variables),
+        "polynomial": {
+            "terms": [
+                {
+                    "coefficient": {"num": str(coefficient), "den": "1"},
+                    "exponents": list(exponents),
+                }
+                for coefficient, exponents in terms
+            ]
+        },
+    }
+
+
 def _op[RequestT: StrictModel, ResultT: StrictModel](
     operation_id: str,
     title: str,
@@ -31,7 +52,7 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
     operation: Callable[[RequestT], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
-    version: str = "1",
+    version: str = "2",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
@@ -61,8 +82,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "gradient_x2_y2",
-                "Gradient of x^2 + y^2 in (x, y).",
-                {"variables": ["x", "y"], "polynomial": "x**2 + y**2"},
+                "Compute the gradient of x^2 + y^2; the canonical polynomial "
+                "carries the complete ordered axis (x, y).",
+                {
+                    "polynomial": _polynomial(
+                        ("x", "y"),
+                        (1, (2, 0)),
+                        (1, (0, 2)),
+                    )
+                },
             ),
         ),
     ),
@@ -80,8 +108,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "laplacian_x2_y2",
-                "Laplacian of x^2 + y^2 in (x, y).",
-                {"variables": ["x", "y"], "polynomial": "x**2 + y**2"},
+                "Compute the Laplacian of x^2 + y^2; the canonical polynomial "
+                "carries the complete ordered axis (x, y).",
+                {
+                    "polynomial": _polynomial(
+                        ("x", "y"),
+                        (1, (2, 0)),
+                        (1, (0, 2)),
+                    )
+                },
             ),
         ),
     ),
@@ -99,11 +134,18 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "directional_deriv_x2_y2",
-                "Directional derivative of x^2 + y^2 along (1, 1).",
+                "Compute the directional derivative of x^2 + y^2 along the "
+                "exact constant vector (1, 1); its length must match the axis.",
                 {
-                    "variables": ["x", "y"],
-                    "polynomial": "x**2 + y**2",
-                    "direction": ["1", "1"],
+                    "polynomial": _polynomial(
+                        ("x", "y"),
+                        (1, (2, 0)),
+                        (1, (0, 2)),
+                    ),
+                    "direction": [
+                        {"num": "1", "den": "1"},
+                        {"num": "1", "den": "1"},
+                    ],
                 },
             ),
         ),
@@ -122,10 +164,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "divergence_xy",
-                "Divergence of [x^2, y^2] in (x, y).",
+                "Compute the divergence of [x^2, y^2]; each component must "
+                "use the same complete ordered axis (x, y).",
                 {
-                    "variables": ["x", "y"],
-                    "components": ["x**2", "y**2"],
+                    "components": [
+                        _polynomial(("x", "y"), (1, (2, 0))),
+                        _polynomial(("x", "y"), (1, (0, 2))),
+                    ],
                 },
             ),
         ),
@@ -135,7 +180,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute the curl of a 3D vector field",
         "Compute the curl of a 3D multivariate polynomial vector field "
         "using exact symbolic differentiation.",
-        VectorFieldRequest,
+        CurlRequest,
         VectorResult,
         compute_curl,
         "polynomial",
@@ -144,10 +189,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "curl_constant_field",
-                "Curl of [y, 0, 0] in (x, y, z).",
+                "Compute the curl of [y, 0, 0]; curl requires exactly three "
+                "components on the ordered axis (x, y, z).",
                 {
-                    "variables": ["x", "y", "z"],
-                    "components": ["y", "0", "0"],
+                    "components": [
+                        _polynomial(("x", "y", "z"), (1, (0, 1, 0))),
+                        _polynomial(("x", "y", "z")),
+                        _polynomial(("x", "y", "z")),
+                    ],
                 },
             ),
         ),

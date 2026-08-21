@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import Any
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.arithmetic_dynamics._models import (
     CycleMultiplierRequest,
     CycleMultiplierResult,
@@ -34,11 +34,11 @@ def _polynomial(request: PolynomialCoefficientRequest) -> Any:
     return polynomial_from_coefficients(request.coefficient_values())
 
 
-def _format_coefficients(polynomial: Any) -> tuple[str, ...]:
-    values = tuple(str(value) for value in polynomial_coefficients(polynomial))
-    if any(len(value) > 65_538 for value in values):
-        raise ValueError("polynomial coefficient output exceeds digit bound")
-    return values
+def _format_coefficients(polynomial: Any) -> tuple[CanonicalRational, ...]:
+    return tuple(
+        CanonicalRational.from_fraction(value)
+        for value in polynomial_coefficients(polynomial)
+    )
 
 
 def compute_map_iterate(request: MapIterateRequest) -> MapIterateResult:
@@ -54,7 +54,7 @@ def compute_map_iterate(request: MapIterateRequest) -> MapIterateResult:
 def compute_orbit_prefix(request: OrbitPrefixRequest) -> OrbitPrefixResult:
     result = orbit_prefix(
         _polynomial(request),
-        Fraction(request.start),
+        request.start.as_fraction(),
         request.max_steps,
     )
     repeat = (
@@ -71,7 +71,7 @@ def compute_orbit_prefix(request: OrbitPrefixRequest) -> OrbitPrefixResult:
     return OrbitPrefixResult(
         source_coefficients=request.coefficients,
         start=request.start,
-        orbit=tuple(str(value) for value in result.orbit),
+        orbit=tuple(CanonicalRational.from_fraction(value) for value in result.orbit),
         requested_steps=request.max_steps,
         computed_steps=len(result.orbit) - 1,
         termination=result.termination,
@@ -96,10 +96,12 @@ def compute_dynatomic_polynomial(
 def compute_cycle_multiplier(
     request: CycleMultiplierRequest,
 ) -> CycleMultiplierResult:
-    points = tuple(Fraction(value) for value in request.cycle)
+    points = tuple(value.as_fraction() for value in request.cycle)
     return CycleMultiplierResult(
         source_coefficients=request.coefficients,
-        multiplier=str(cycle_multiplier(_polynomial(request), points)),
+        multiplier=CanonicalRational.from_fraction(
+            cycle_multiplier(_polynomial(request), points)
+        ),
         cycle=request.cycle,
         period=len(points),
     )

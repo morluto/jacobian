@@ -82,21 +82,17 @@ def test_projective_enumeration_refuses_large_output_before_allocation() -> None
 
 
 def test_finite_map_table_refuses_excessive_polynomial_work() -> None:
-    operation = TOOLS[5]
     presentation = finite_field(2, (1, 1, 0, 1, 1, 0, 0, 0, 1))
     one = element(presentation, (1,) + (0,) * 7)
-    request = FiniteMapTableRequest(
-        polynomial_map=finite_polynomial_map(
-            finite_polynomial(presentation, (one,) * 512)
+    with pytest.raises(ValidationError, match="finite map exceeds"):
+        FiniteMapTableRequest(
+            polynomial_map=finite_polynomial_map(
+                finite_polynomial(presentation, (one,) * 512)
+            )
         )
-    )
-
-    with pytest.raises(ValueError, match="finite map work"):
-        operation.run(request)
 
 
 def test_direction_rank_ledger_refuses_excessive_aggregate_work() -> None:
-    operation = TOOLS[3]
     presentation = finite_field(2, (1, 1, 1))
     row_axis = Axis(name="rows", labels=("r0", "r1"))
     column_axis = Axis(
@@ -121,17 +117,15 @@ def test_direction_rank_ledger_refuses_excessive_aggregate_work() -> None:
         )
         for index in range(64)
     )
-    request = DirectionRankLedgerRequest(
-        subspace=FiniteDimensionalSubspace(
-            presentation=presentation,
-            basis_axis=basis_axis,
-            basis=basis,
-        ),
-        directions=projective_line(presentation, row_axis),
-    )
-
-    with pytest.raises(ValueError, match="direction-rank work"):
-        operation.run(request)
+    with pytest.raises(ValidationError, match="direction-rank ledger exceeds"):
+        DirectionRankLedgerRequest(
+            subspace=FiniteDimensionalSubspace(
+                presentation=presentation,
+                basis_axis=basis_axis,
+                basis=basis,
+            ),
+            directions=projective_line(presentation, row_axis),
+        )
 
 
 def test_oversized_presentation_rejects_during_request_parsing() -> None:

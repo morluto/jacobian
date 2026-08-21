@@ -12,6 +12,7 @@ from jacobian.math.code_linear._models import (
     GeneratorMatrixRequest,
     MacWilliamsRequest,
     MacWilliamsResult,
+    ParityCheckMatrix,
     ParityCheckRequest,
     ParityCheckResult,
     PunctureRequest,
@@ -119,6 +120,11 @@ def compute_dual_code(request: GeneratorMatrixRequest) -> DualCodeResult:
     length = len(request.generator_matrix[0])
     return DualCodeResult(
         dual_generator=tuple(tuple(row) for row in null),
+        parity_check=ParityCheckMatrix(
+            field_order=request.field_order,
+            column_count=length,
+            rows=tuple(map(tuple, null)),
+        ),
         dimension=rank,
         dual_dimension=length - rank,
         length=length,
@@ -131,7 +137,11 @@ def compute_parity_check(request: ParityCheckRequest) -> ParityCheckResult:
     null = _nullspace(matrix, request.field_order)
     length = len(request.generator_matrix[0])
     return ParityCheckResult(
-        parity_check=tuple(tuple(row) for row in null),
+        parity_check=ParityCheckMatrix(
+            field_order=request.field_order,
+            column_count=length,
+            rows=tuple(map(tuple, null)),
+        ),
         dimension=rank,
         rank_h=length - rank,
         length=length,
@@ -191,9 +201,9 @@ def compute_codeword_check(
 
 
 def compute_syndrome(request: SyndromeRequest) -> SyndromeResult:
-    h = [list(row) for row in request.parity_check_matrix]
+    h = [list(row) for row in request.parity_check.rows]
     word = list(request.word)
-    q = request.field_order
+    q = request.parity_check.field_order
     syndrome = _mat_mul_vec(h, word, q)
     is_member = all(v == 0 for v in syndrome)
     return SyndromeResult(

@@ -1,8 +1,11 @@
 """Known-answer and adversarial tests for finite graphical models."""
 
+from fractions import Fraction
+
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.graphical_models import (
     Factor,
     d_separation,
@@ -29,7 +32,19 @@ def _factor(
     table: tuple[str, ...],
     domain_sizes: tuple[int, ...] = (2, 2, 2),
 ) -> Factor:
-    return Factor(variables=variables, domain_sizes=domain_sizes, table=table)
+    return Factor(
+        variables=variables,
+        domain_sizes=domain_sizes,
+        table=_table(*table),
+    )
+
+
+def _table(*values: str) -> tuple[CanonicalRational, ...]:
+    return tuple(CanonicalRational.from_fraction(Fraction(value)) for value in values)
+
+
+def _strings(values: tuple[CanonicalRational, ...]) -> tuple[str, ...]:
+    return tuple(str(value.as_fraction()) for value in values)
 
 
 class TestFactorValuesAndOperations:
@@ -40,7 +55,7 @@ class TestFactorValuesAndOperations:
         result = factor_multiply(left, right)
 
         assert result.variables == (0, 1)
-        assert result.table == ("1/6", "1/3", "1/6", "1/3")
+        assert _strings(result.table) == ("1/6", "1/3", "1/6", "1/3")
 
     def test_multiply_projects_noncanonical_input_scope_orders(self) -> None:
         left = _factor((1, 0), ("1", "2", "3", "4"))
@@ -49,24 +64,35 @@ class TestFactorValuesAndOperations:
         result = factor_multiply(left, right)
 
         assert result.variables == (0, 1, 2)
-        assert result.table == ("5", "7", "18", "24", "10", "14", "24", "32")
+        assert _strings(result.table) == (
+            "5",
+            "7",
+            "18",
+            "24",
+            "10",
+            "14",
+            "24",
+            "32",
+        )
 
     def test_marginalize_one_variable(self) -> None:
         result = factor_marginalize(_factor((0, 1), ("1/4", "1/4", "1/4", "1/4")), 0)
 
         assert result.variables == (1,)
-        assert result.table == ("1/2", "1/2")
+        assert _strings(result.table) == ("1/2", "1/2")
 
     def test_marginalize_last_variable_returns_exact_scalar(self) -> None:
         result = factor_marginalize(_factor((0,), ("1/3", "2/3")), 0)
 
         assert result.variables == ()
-        assert result.table == ("1",)
+        assert _strings(result.table) == ("1",)
 
     @pytest.mark.parametrize("value", ["01", "+1", "2/4", "1.0"])
     def test_factor_entries_must_be_canonical_rationals(self, value: str) -> None:
-        with pytest.raises(ValidationError, match="canonical"):
-            _factor((), (value,))
+        with pytest.raises(ValidationError, match="valid dictionary"):
+            Factor.model_validate(
+                {"variables": (), "domain_sizes": (2,), "table": (value,)}
+            )
 
     def test_duplicate_factor_variables_are_rejected(self) -> None:
         with pytest.raises(ValidationError, match="distinct"):
@@ -74,7 +100,7 @@ class TestFactorValuesAndOperations:
 
     def test_zero_domain_size_is_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            Factor(variables=(0,), domain_sizes=(0,), table=("1",))
+            Factor(variables=(0,), domain_sizes=(0,), table=_table("1"))
 
     def test_wrong_table_size_is_rejected(self) -> None:
         with pytest.raises(ValidationError, match="table size"):
@@ -89,6 +115,17 @@ class TestFactorValuesAndOperations:
 
 
 class TestBoundResultContracts:
+    def test_factor_multiply_contract_version_tracks_wire_shape(self) -> None:
+        from jacobian.math.graphical_models._tools import TOOLS
+
+        operation = next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id == "graphical_model.factor.multiply"
+        )
+
+        assert operation.version == "2"
+
     def test_multiply_adapter_binds_operands(self) -> None:
         request = FactorMultiplyRequest(
             left=_factor((0,), ("1", "2")),
@@ -99,7 +136,7 @@ class TestBoundResultContracts:
 
         assert result.left == request.left
         assert result.right == request.right
-        assert result.factor.table == ("3", "8")
+        assert _strings(result.factor.table) == ("3", "8")
 
     def test_false_product_is_rejected(self) -> None:
         left = _factor((0,), ("1", "2"))
@@ -116,7 +153,7 @@ class TestBoundResultContracts:
 
         assert result.source_factor == source
         assert result.variable == 0
-        assert result.factor.table == ("3",)
+        assert _strings(result.factor.table) == ("3",)
 
 
 class TestVariableElimination:
@@ -131,7 +168,7 @@ class TestVariableElimination:
         )
 
         assert result.variables == (1,)
-        assert result.table == ("3/8", "5/8")
+        assert _strings(result.table) == ("3/8", "5/8")
 
     def test_eliminating_all_variables_returns_partition_scalar(self) -> None:
         result = variable_elimination(
@@ -142,7 +179,7 @@ class TestVariableElimination:
         )
 
         assert result.variables == ()
-        assert result.table == ("5",)
+        assert _strings(result.table) == ("5",)
 
     def test_incomplete_elimination_order_is_rejected_before_computation(self) -> None:
         with pytest.raises(ValueError, match="every non-query"):
@@ -167,12 +204,12 @@ class TestVariableElimination:
         left = Factor(
             variables=tuple(range(8)),
             domain_sizes=domain_sizes,
-            table=("1",) * 256,
+            table=_table(*(("1",) * 256)),
         )
         right = Factor(
             variables=tuple(range(8, 16)),
             domain_sizes=domain_sizes,
-            table=("1",) * 256,
+            table=_table(*(("1",) * 256)),
         )
 
         with pytest.raises(ValueError, match="size bound"):

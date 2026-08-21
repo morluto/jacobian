@@ -10,18 +10,31 @@ from jacobian._models import StrictModel
 from jacobian.math.formal_concept_analysis.values import FormalContext
 
 
-class DerivationRequest(StrictModel):
-    """Derive A' (objects) or B' (attributes)."""
-
+class _SubsetRequest(StrictModel):
     context: FormalContext
     subset: tuple[int, ...] = Field(default=())
 
+    def _require_indices(self, size: int, side: str) -> None:
+        for i in self.subset:
+            if not 0 <= i < size:
+                raise ValueError(f"{side} subset index out of range")
+
+
+class ObjectSubsetRequest(_SubsetRequest):
+    """A subset of the context's object axis."""
+
     @model_validator(mode="after")
     def require_valid_indices(self) -> Self:
-        max_idx = max(len(self.context.objects), len(self.context.attributes))
-        for i in self.subset:
-            if not 0 <= i < max_idx:
-                raise ValueError("subset index out of range")
+        self._require_indices(len(self.context.objects), "object")
+        return self
+
+
+class AttributeSubsetRequest(_SubsetRequest):
+    """A subset of the context's attribute axis."""
+
+    @model_validator(mode="after")
+    def require_valid_indices(self) -> Self:
+        self._require_indices(len(self.context.attributes), "attribute")
         return self
 
 
@@ -38,21 +51,6 @@ class ClosureResult(StrictModel):
     derived: tuple[int, ...]
     added: tuple[int, ...]
     is_closed: bool
-
-
-class ConceptRequest(StrictModel):
-    """Construct a concept from objects or attributes."""
-
-    context: FormalContext
-    subset: tuple[int, ...] = Field(default=())
-
-    @model_validator(mode="after")
-    def require_valid_indices(self) -> Self:
-        max_idx = max(len(self.context.objects), len(self.context.attributes))
-        for i in self.subset:
-            if not 0 <= i < max_idx:
-                raise ValueError("subset index out of range")
-        return self
 
 
 class ConceptResult(StrictModel):
@@ -104,12 +102,12 @@ class ConceptLatticeResult(StrictModel):
 __all__ = [
     "MAX_CONCEPTS",
     "MAX_CONCEPT_ATTRIBUTES",
+    "AttributeSubsetRequest",
     "ClosureResult",
     "ConceptLatticeResult",
-    "ConceptRequest",
     "ConceptResult",
-    "DerivationRequest",
     "DerivationResult",
     "EnumerateConceptsRequest",
     "EnumerateConceptsResult",
+    "ObjectSubsetRequest",
 ]

@@ -174,6 +174,13 @@ class TestRestrict:
         # {a,b} becomes {a,b}. The redundant single-element bag {b} should be
         # pruned if it is contained in its neighbor {a,b}.
 
+    def test_rejects_vertices_outside_the_source_graph(self) -> None:
+        with pytest.raises(ValidationError, match="declared source vertices"):
+            RestrictRequest(
+                decomposition=_path_decomposition(),
+                subset=("a", "missing"),
+            )
+
 
 # ---------------------------------------------------------------------------
 # Bag intersection graph

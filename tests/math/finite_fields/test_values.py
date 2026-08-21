@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.finite_fields import (
     Axis,
@@ -10,7 +11,6 @@ from jacobian.math.finite_fields import (
     FiniteFieldPresentation,
     FiniteLinearMap,
     ProjectivePoint,
-    RankResult,
 )
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
@@ -84,12 +84,43 @@ def test_values_reject_same_shape_substitutions_with_wrong_parent_or_axis() -> N
             target_axis=wrong_axis,
             matrix=PrimeFieldMatrix(2, ((1, 0),), 2),
         )
-    point = ProjectivePoint(
-        presentation=presentation,
-        axis=row_axis,
-        coordinates=(one, zero),
-    )
-    assert RankResult(direction=point, linear_map=matrix, rank=2).rank == 2
+    assert matrix.matrix.prime == presentation.characteristic
+
+
+def test_malformed_prime_field_matrix_reports_nested_validation_error() -> None:
+    with pytest.raises(ValidationError) as error:
+        FiniteLinearMap.model_validate(
+            {
+                "source_axis": {"name": "source", "labels": ["x", "y"]},
+                "target_axis": {"name": "target", "labels": ["z"]},
+                "matrix": {"prime": 2, "entries": [[1]], "columns": 2},
+            }
+        )
+
+    assert error.value.errors(include_url=False, include_context=False) == [
+        {
+            "type": "value_error",
+            "loc": ("matrix",),
+            "msg": (
+                "Value error, every matrix row must match the declared column count"
+            ),
+            "input": {"prime": 2, "entries": [[1]], "columns": 2},
+        }
+    ]
+
+    with pytest.raises(ValidationError, match="Unexpected keyword argument"):
+        FiniteLinearMap.model_validate(
+            {
+                "source_axis": {"name": "source", "labels": ["x"]},
+                "target_axis": {"name": "target", "labels": ["z"]},
+                "matrix": {
+                    "prime": 2,
+                    "entries": [[1]],
+                    "columns": 1,
+                    "unexpected": True,
+                },
+            }
+        )
 
 
 def test_subspace_rejects_dependent_basis_matrices() -> None:
@@ -112,27 +143,6 @@ def test_subspace_rejects_dependent_basis_matrices() -> None:
             basis_axis=basis_axis,
             basis=(matrix, matrix),
         )
-
-
-def test_rank_result_rejects_a_map_over_the_wrong_prime_field() -> None:
-    presentation = _presentation()
-    rows = Axis(name="rows", labels=("r1", "r2"))
-    basis_axis = Axis(name="basis", labels=("B1",))
-    zero = _element(presentation, (0, 0, 0))
-    one = _element(presentation, (1, 0, 0))
-    direction = ProjectivePoint(
-        presentation=presentation,
-        axis=rows,
-        coordinates=(one, zero),
-    )
-    wrong_prime_map = FiniteLinearMap(
-        source_axis=basis_axis,
-        target_axis=Axis(name="target", labels=("t1", "t2")),
-        matrix=PrimeFieldMatrix(3, ((1,), (0,)), 1),
-    )
-
-    with pytest.raises(ValueError, match="prime field"):
-        RankResult(direction=direction, linear_map=wrong_prime_map, rank=1)
 
 
 def test_presentation_rejects_oversized_characteristic_before_primality() -> None:

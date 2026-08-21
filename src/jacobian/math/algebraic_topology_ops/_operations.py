@@ -16,23 +16,10 @@ def compute_edge_path_word(request: EdgePathWordRequest) -> EdgePathWordResult:
     Each edge in the graph is assigned a generator label e_i.
     Traversing edge i forward adds e_i, backward adds e_i^{-1}.
     """
-    edges = list(request.edges)
-    path = list(request.path)
-    word: list[str] = []
-    for i in range(len(path) - 1):
-        u, v = path[i], path[i + 1]
-        found = False
-        for j, (eu, ev) in enumerate(edges):
-            if u == eu and v == ev:
-                word.append(f"e{j + 1}")
-                found = True
-                break
-            if u == ev and v == eu:
-                word.append(f"e{j + 1}^-1")
-                found = True
-                break
-        if not found:
-            raise ValueError(f"path step {u}->{v} is not an edge in the graph")
+    word = [
+        f"e{step.edge_index + 1}" + ("" if step.orientation == 1 else "^-1")
+        for step in request.path
+    ]
     return EdgePathWordResult(
         word=tuple(word),
         length=len(word),

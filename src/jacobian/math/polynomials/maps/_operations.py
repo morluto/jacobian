@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import sympy
-from sympy import Symbol, simplify, sympify
 
+from jacobian.math.polynomials._conversions import (
+    rational_from_sympy,
+    rational_polynomial_from_sympy,
+    rational_polynomial_to_sympy,
+    symbols_for_variables,
+)
 from jacobian.math.polynomials.maps._models import (
     CompositionRequest,
     CompositionResult,
@@ -16,54 +21,63 @@ from jacobian.math.polynomials.maps._models import (
 
 
 def evaluate_polynomial(request: EvalRequest) -> EvalResult:
-    """Evaluate a polynomial at a rational point using SymPy."""
-    expr = sympify(request.polynomial.expression)
-    substitutions = {}
-    for var_name, var_value in zip(
-        request.point.variables,
-        request.point.values,
-        strict=True,
-    ):
-        sym = Symbol(var_name)
-        substitutions[sym] = var_value.as_fraction()
+    """Evaluate one exact polynomial at its complete ordered rational point."""
 
-    result = simplify(expr.subs(substitutions))
-    if result.free_symbols:
-        raise ValueError("evaluation point must cover every free variable")
-    return EvalResult(value=str(result))
+    polynomial = rational_polynomial_to_sympy(request.polynomial)
+    substitutions = dict(
+        zip(
+            symbols_for_variables(request.point.variables),
+            (value.as_fraction() for value in request.point.values),
+            strict=True,
+        )
+    )
+    value = polynomial.as_expr().subs(substitutions)
+    return EvalResult(value=rational_from_sympy(value))
 
 
 def compute_jacobian(request: JacobianRequest) -> JacobianResult:
-    """Compute the Jacobian matrix of a polynomial map using SymPy."""
-    input_vars = [Symbol(v) for v in request.input_variables]
-    outputs = [sympify(p.expression) for p in request.output_polynomials]
+    """Compute a row-major Jacobian over the map's source ring."""
 
-    n_outputs = len(outputs)
-    n_inputs = len(input_vars)
-
-    entries = []
-    for i in range(n_outputs):
-        for j in range(n_inputs):
-            derivative = sympy.diff(outputs[i], input_vars[j])
-            entries.append(str(derivative))
-
+    variables = symbols_for_variables(request.input_variables)
+    outputs = [
+        rational_polynomial_to_sympy(polynomial).as_expr()
+        for polynomial in request.output_polynomials
+    ]
+    entries = tuple(
+        rational_polynomial_from_sympy(
+            sympy.Poly(sympy.diff(output, variable), *variables, domain=sympy.QQ),
+            request.input_variables,
+            maximum_terms=256,
+        )
+        for output in outputs
+        for variable in variables
+    )
     return JacobianResult(
-        n_inputs=n_inputs,
-        n_outputs=n_outputs,
-        entries=tuple(entries),
+        n_inputs=len(variables),
+        n_outputs=len(outputs),
+        entries=entries,
     )
 
 
 def compose_polynomials(request: CompositionRequest) -> CompositionResult:
-    """Compose outer(inner(x)) using SymPy substitution."""
-    outer_expr = sympify(request.outer.expression)
-    inner_expr = sympify(request.inner.expression)
-    outer_var = Symbol(request.outer_variable)
+    """Substitute the inner univariate polynomial into the outer polynomial."""
 
-    composed = outer_expr.subs(outer_var, inner_expr)
-    composed = simplify(composed)
-
-    return CompositionResult(expression=str(composed))
+    outer = rational_polynomial_to_sympy(request.outer).as_expr()
+    inner = rational_polynomial_to_sympy(request.inner).as_expr()
+    outer_variable = symbols_for_variables(request.outer.variables)[0]
+    inner_variable = symbols_for_variables(request.inner.variables)[0]
+    composition = sympy.Poly(
+        sympy.expand(outer.subs(outer_variable, inner)),
+        inner_variable,
+        domain=sympy.QQ,
+    )
+    return CompositionResult(
+        polynomial=rational_polynomial_from_sympy(
+            composition,
+            request.inner.variables,
+            maximum_terms=256,
+        )
+    )
 
 
 __all__ = ["compose_polynomials", "compute_jacobian", "evaluate_polynomial"]

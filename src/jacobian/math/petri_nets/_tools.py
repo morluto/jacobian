@@ -61,9 +61,9 @@ PETRI_NET_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "petri_net.fire_transition.compute",
         "Fire one transition in a Petri net",
-        "Fire a single transition at the given marking and return whether it "
-        "succeeded and the resulting marking. If the transition is not "
-        "enabled, it does not fire.",
+        "Fire a single transition at the given marking. Return the canonical "
+        "resulting marking, report that the transition is not enabled, or "
+        "return the exact successor when it leaves the declared envelope.",
         FireTransitionRequest,
         FireTransitionResult,
         compute_fire_transition,
@@ -87,7 +87,9 @@ PETRI_NET_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Compute the bounded reachability graph of a Petri net",
         "Return an exact BFS reachability graph when exploration closes within "
         "max_states. If the bound is exhausted, return TRUNCATED with every "
-        "enabled omitted firing in an explicit replayable frontier.",
+        "enabled omitted firing in an explicit replayable frontier. If a firing "
+        "exceeds the marking envelope, return ESCAPES_DECLARED_ENVELOPE with "
+        "the exact firing witness.",
         ReachabilityRequest,
         ReachabilityResult,
         compute_reachability,

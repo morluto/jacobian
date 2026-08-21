@@ -36,20 +36,30 @@ class ZeroSumGameRequest(StrictModel):
 
     payoff_matrix: PayoffMatrix
 
+    @model_validator(mode="after")
+    def require_bounded_exact_equilibrium(self) -> Self:
+        matrix = self.payoff_matrix
+        denominator_digits = sum(len(value.den) for value in matrix.entries)
+        numerator_digits = max(len(value.num.lstrip("-")) for value in matrix.entries)
+        elimination_dimension = max(matrix.n_rows, matrix.n_cols) + 2
+        if elimination_dimension * (denominator_digits + numerator_digits) > 32_768:
+            raise ValueError("payoffs exceed the exact-equilibrium result budget")
+        return self
+
 
 class BestResponseResult(StrictModel):
     """Best response values for the row player."""
 
-    value: str
+    value: CanonicalRational
     best_row: int = Field(ge=0)
 
 
 class NashEquilibriumResult(StrictModel):
     """Nash equilibrium of a 2-player zero-sum game."""
 
-    row_strategy: tuple[str, ...]
-    col_strategy: tuple[str, ...]
-    value: str
+    row_strategy: tuple[CanonicalRational, ...]
+    col_strategy: tuple[CanonicalRational, ...]
+    value: CanonicalRational
 
 
 __all__ = [

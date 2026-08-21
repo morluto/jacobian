@@ -5,11 +5,13 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.catalog import Catalog
+from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.formal_concept_analysis import FormalContext
 from jacobian.math.formal_concept_analysis._models import (
-    ConceptRequest,
-    DerivationRequest,
+    AttributeSubsetRequest,
     EnumerateConceptsRequest,
+    ObjectSubsetRequest,
 )
 from jacobian.math.formal_concept_analysis._operations import (
     compute_attribute_derivation,
@@ -70,19 +72,19 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
 class TestDerivation:
     def test_empty_object_set_derives_all_attributes(self) -> None:
         result = compute_object_derivation(
-            DerivationRequest(context=_cross_context(), subset=())
+            ObjectSubsetRequest(context=_cross_context(), subset=())
         )
         assert result.derived == (0, 1)
 
     def test_o0_derives_a0_only(self) -> None:
         result = compute_object_derivation(
-            DerivationRequest(context=_cross_context(), subset=(0,))
+            ObjectSubsetRequest(context=_cross_context(), subset=(0,))
         )
         assert result.derived == (0,)
 
     def test_empty_attribute_set_derives_all_objects(self) -> None:
         result = compute_attribute_derivation(
-            DerivationRequest(context=_cross_context(), subset=())
+            AttributeSubsetRequest(context=_cross_context(), subset=())
         )
         assert result.derived == (0, 1)
 
@@ -95,7 +97,7 @@ class TestDerivation:
 class TestClosure:
     def test_empty_object_set_closure(self) -> None:
         result = compute_object_closure(
-            DerivationRequest(context=_cross_context(), subset=())
+            ObjectSubsetRequest(context=_cross_context(), subset=())
         )
         # A = {}, A' = {a0, a1}, A'' = {} (no object has both attributes).
         # Empty set is closed: A == A'' = {}.
@@ -105,7 +107,7 @@ class TestClosure:
 
     def test_o0_closure(self) -> None:
         result = compute_object_closure(
-            DerivationRequest(context=_cross_context(), subset=(0,))
+            ObjectSubsetRequest(context=_cross_context(), subset=(0,))
         )
         # A = {o0}, A' = {a0}, A'' = {g : has a0} = {o0}. So A'' = {o0}, closed.
         assert result.is_closed is True
@@ -120,24 +122,24 @@ class TestClosure:
 class TestConcept:
     def test_concept_from_o0(self) -> None:
         result = compute_concept_from_objects(
-            ConceptRequest(context=_cross_context(), subset=(0,))
+            ObjectSubsetRequest(context=_cross_context(), subset=(0,))
         )
         assert result.extent == (0,)
         assert result.intent == (0,)
 
     def test_concept_from_a0(self) -> None:
         result = compute_concept_from_attributes(
-            ConceptRequest(context=_cross_context(), subset=(0,))
+            AttributeSubsetRequest(context=_cross_context(), subset=(0,))
         )
         assert result.extent == (0,)
         assert result.intent == (0,)
 
     def test_concepts_agree(self) -> None:
         from_objects = compute_concept_from_objects(
-            ConceptRequest(context=_cross_context(), subset=(0,))
+            ObjectSubsetRequest(context=_cross_context(), subset=(0,))
         )
         from_attrs = compute_concept_from_attributes(
-            ConceptRequest(context=_cross_context(), subset=(0,))
+            AttributeSubsetRequest(context=_cross_context(), subset=(0,))
         )
         assert from_objects == from_attrs
 
@@ -185,6 +187,45 @@ class TestConceptLattice:
 
 
 class TestValidation:
+    @pytest.mark.parametrize(
+        ("operation_id", "context"),
+        (
+            (
+                "formal_context.attributes.derivation.compute",
+                {
+                    "objects": ["o0", "o1"],
+                    "attributes": ["a0"],
+                    "incidence": [[0, 0], [1, 0]],
+                },
+            ),
+            (
+                "formal_context.concept.from_attributes.compute",
+                {
+                    "objects": ["o0", "o1"],
+                    "attributes": ["a0"],
+                    "incidence": [[0, 0], [1, 0]],
+                },
+            ),
+            (
+                "formal_context.objects.derivation.compute",
+                {
+                    "objects": ["o0"],
+                    "attributes": ["a0", "a1"],
+                    "incidence": [[0, 0], [0, 1]],
+                },
+            ),
+        ),
+    )
+    def test_public_operations_reject_indices_outside_their_axis(
+        self, operation_id: str, context: dict[str, object]
+    ) -> None:
+        with pytest.raises(OperationRequestValidationError):
+            invoke_operation(
+                operation_id,
+                {"context": context, "subset": [1]},
+                Catalog.open(),
+            )
+
     def test_duplicate_objects_rejected(self) -> None:
         with pytest.raises(ValidationError, match="unique"):
             FormalContext(

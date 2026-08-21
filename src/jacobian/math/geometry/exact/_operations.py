@@ -151,7 +151,9 @@ def _squared_point_line_distance(
     return (cross * cross) / norm_sq
 
 
-def compute_pinned_line_distance_profile(request: PinnedLineDistanceRequest) -> PinnedLineDistanceResult:
+def compute_pinned_line_distance_profile(
+    request: PinnedLineDistanceRequest,
+) -> PinnedLineDistanceResult:
     """Compute the pinned line-distance profile of a point configuration.
 
     For every unordered pair of configuration points, take the geometric line it
@@ -175,7 +177,9 @@ def compute_pinned_line_distance_profile(request: PinnedLineDistanceRequest) -> 
         coeffs = _canonical_line_coefficients(points[i], points[j])
         lines.setdefault(coeffs, []).append((i, j))
         if coeffs not in distances:
-            distances[coeffs] = _squared_point_line_distance(anchor, points[i], points[j])
+            distances[coeffs] = _squared_point_line_distance(
+                anchor, points[i], points[j]
+            )
 
     # Sort distinct lines by (squared distance, coefficients) for determinism.
     ordered = sorted(lines.keys(), key=lambda c: (distances[c], c))

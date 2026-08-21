@@ -135,7 +135,11 @@ class TestPinnedLineDistance:
         )
 
         cfg = self._cfg(
-            [("b", Fraction(1, 4), Fraction(0)), ("c", Fraction(1, 5), Fraction(2, 5)), ("h", Fraction(4, 13), Fraction(6, 13))],
+            [
+                ("b", Fraction(1, 4), Fraction(0)),
+                ("c", Fraction(1, 5), Fraction(2, 5)),
+                ("h", Fraction(4, 13), Fraction(6, 13)),
+            ],
         )
         result = compute_pinned_line_distance_profile(
             PinnedLineDistanceRequest(configuration=cfg, anchor=self._anchor(0, 0)),
@@ -168,7 +172,9 @@ class TestPinnedLineDistance:
         total_pairs = sum(len(entry.pairs) for entry in result.lines)
         assert total_pairs == 6
         # The anchor (0,0) lies on lines a-b (y=0) and a-c (x=0): distance 0.
-        zero_lines = [e for e in result.lines if e.squared_distance.as_fraction() == Fraction(0)]
+        zero_lines = [
+            e for e in result.lines if e.squared_distance.as_fraction() == Fraction(0)
+        ]
         assert len(zero_lines) == 3
 
     def test_collinear_pairs_collapse_to_one_line(self):
@@ -210,8 +216,12 @@ class TestPinnedLineDistance:
         rb = compute_pinned_line_distance_profile(
             PinnedLineDistanceRequest(configuration=cfg_b, anchor=self._anchor(0, 0)),
         )
-        coeffs_a = {tuple(c.as_fraction() for c in e.line_coefficients) for e in ra.lines}
-        coeffs_b = {tuple(c.as_fraction() for c in e.line_coefficients) for e in rb.lines}
+        coeffs_a = {
+            tuple(c.as_fraction() for c in e.line_coefficients) for e in ra.lines
+        }
+        coeffs_b = {
+            tuple(c.as_fraction() for c in e.line_coefficients) for e in rb.lines
+        }
         assert coeffs_a == coeffs_b
 
     def test_rejects_nonplanar(self):

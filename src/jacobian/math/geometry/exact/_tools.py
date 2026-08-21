@@ -72,9 +72,48 @@ UNIT_SQUARE = {
 }
 
 
-
-INVERTED_ORTHOCENTRIC = {'configuration': {'points': [{'label': 'b', 'coordinates': [{'num': '1', 'den': '4'}, {'num': '0', 'den': '1'}]}, {'label': 'c', 'coordinates': [{'num': '1', 'den': '5'}, {'num': '2', 'den': '5'}]}, {'label': 'h', 'coordinates': [{'num': '4', 'den': '13'}, {'num': '6', 'den': '13'}]}]}, 'anchor': [{'num': '0', 'den': '1'}, {'num': '0', 'den': '1'}]}
-UNIT_SQUARE_ORIGIN = {'configuration': {'points': [{'label': 'a', 'coordinates': [{'num': '0', 'den': '1'}, {'num': '0', 'den': '1'}]}, {'label': 'b', 'coordinates': [{'num': '1', 'den': '1'}, {'num': '0', 'den': '1'}]}, {'label': 'c', 'coordinates': [{'num': '0', 'den': '1'}, {'num': '1', 'den': '1'}]}, {'label': 'd', 'coordinates': [{'num': '1', 'den': '1'}, {'num': '1', 'den': '1'}]}]}, 'anchor': [{'num': '0', 'den': '1'}, {'num': '0', 'den': '1'}]}
+INVERTED_ORTHOCENTRIC = {
+    "configuration": {
+        "points": [
+            {
+                "label": "b",
+                "coordinates": [{"num": "1", "den": "4"}, {"num": "0", "den": "1"}],
+            },
+            {
+                "label": "c",
+                "coordinates": [{"num": "1", "den": "5"}, {"num": "2", "den": "5"}],
+            },
+            {
+                "label": "h",
+                "coordinates": [{"num": "4", "den": "13"}, {"num": "6", "den": "13"}],
+            },
+        ]
+    },
+    "anchor": [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
+}
+UNIT_SQUARE_ORIGIN = {
+    "configuration": {
+        "points": [
+            {
+                "label": "a",
+                "coordinates": [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
+            },
+            {
+                "label": "b",
+                "coordinates": [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+            },
+            {
+                "label": "c",
+                "coordinates": [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+            },
+            {
+                "label": "d",
+                "coordinates": [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}],
+            },
+        ]
+    },
+    "anchor": [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
+}
 
 EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(

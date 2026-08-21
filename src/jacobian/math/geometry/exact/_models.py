@@ -122,7 +122,9 @@ class PinnedLineDistanceRequest(StrictModel):
         if not self.configuration.points:
             return self
         if len(self.configuration.points[0].coordinates) != 2:
-            raise ValueError("pinned line-distance profile requires a planar configuration")
+            raise ValueError(
+                "pinned line-distance profile requires a planar configuration"
+            )
         if len(self.anchor) != 2:
             raise ValueError("the anchor must be a planar rational point")
         # A pair of coincident points does not span a line; require distinct
@@ -176,9 +178,9 @@ class PinnedLineDistanceResult(StrictModel):
         # distance multiplicities must partition the lines by squared distance
         mult: dict[Fraction, int] = {}
         for entry in self.lines:
-            mult[entry.squared_distance.as_fraction()] = mult.get(
-                entry.squared_distance.as_fraction(), 0
-            ) + 1
+            mult[entry.squared_distance.as_fraction()] = (
+                mult.get(entry.squared_distance.as_fraction(), 0) + 1
+            )
         reconstructed = tuple(
             (
                 CanonicalRational.from_fraction(d),
@@ -187,5 +189,7 @@ class PinnedLineDistanceResult(StrictModel):
             for d, count in sorted(mult.items())
         )
         if reconstructed != self.distance_multiplicities:
-            raise ValueError("distance multiplicities must partition the lines and be sorted")
+            raise ValueError(
+                "distance multiplicities must partition the lines and be sorted"
+            )
         return self

@@ -7,8 +7,9 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math._rational_height import RationalHeight, sum_heights
 
 
 class RationalPoint2D(StrictModel):
@@ -138,17 +139,61 @@ class PointLineRequest(StrictModel):
     line: LineRequest
 
 
-class CircleInversionRequest(StrictModel):
-    """Invert one rational planar point in a circle of squared radius ``s``."""
+def _displacement_height(
+    left: CanonicalRational, right: CanonicalRational
+) -> RationalHeight:
+    return sum_heights(
+        (RationalHeight.from_canonical(left), RationalHeight.from_canonical(right))
+    )
 
-    center: RationalPoint2D
+
+def _circle_inversion_result_heights(
+    center: RationalPoint2D,
+    power: CanonicalRational,
+    point: RationalPoint2D,
+) -> tuple[RationalHeight, RationalHeight]:
+    """Conservative height of ``I(p) = c + s(p - c)/||p - c||^2`` before reduction."""
+
+    dx = _displacement_height(point.x, center.x)
+    dy = _displacement_height(point.y, center.y)
+    norm_squared = sum_heights((dx.product(dx), dy.product(dy)))
+    scale = RationalHeight.from_canonical(power).quotient(norm_squared)
+    inverted_x = sum_heights(
+        (RationalHeight.from_canonical(center.x), scale.product(dx))
+    )
+    inverted_y = sum_heights(
+        (RationalHeight.from_canonical(center.y), scale.product(dy))
+    )
+    return inverted_x, inverted_y
+
+
+class CircleInversionRequest(StrictModel):
+    """Invert a rational planar point ``p`` in a circle.
+
+    The circle has center ``c`` and positive squared radius ``s``. Requires
+    ``p != c``. A conservative height bound from
+    ``I(p) = c + s(p - c)/||p - c||^2`` keeps each inverted coordinate within
+    the 32,768-digit canonical-rational limit.
+    """
+
+    center: RationalPoint2D = Field(
+        description=(
+            "Rational planar inversion center c. The point to invert must "
+            "satisfy p != c."
+        ),
+    )
     power: CanonicalRational = Field(
         description=(
             "Positive rational inversion power, interpreted as the squared "
             "inversion radius. Must be strictly positive."
         ),
     )
-    point: RationalPoint2D
+    point: RationalPoint2D = Field(
+        description=(
+            "Rational planar point p to invert. Must satisfy p != c; "
+            "inversion of the center is undefined."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_positive_power_and_distinct_point(self) -> Self:
@@ -156,6 +201,16 @@ class CircleInversionRequest(StrictModel):
             raise ValueError("inversion power must be a positive rational")
         if self.point == self.center:
             raise ValueError("the point to invert must differ from the center")
+        inverted_x, inverted_y = _circle_inversion_result_heights(
+            self.center, self.power, self.point
+        )
+        if inverted_x.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) or inverted_y.exceeds(
+            MAX_CANONICAL_RATIONAL_DIGITS
+        ):
+            raise ValueError(
+                "circle inversion rational height exceeds the "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound"
+            )
         return self
 
 

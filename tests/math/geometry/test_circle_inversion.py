@@ -2,7 +2,11 @@
 
 from fractions import Fraction
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry._models import (
     CircleInversionRequest,
     GeometryPointResult,
@@ -90,9 +94,7 @@ class TestCircleInversion:
         assert second.point.y.as_fraction() == Fraction(1, 1)
 
     def test_rejects_point_at_center(self):
-        import pytest
-
-        with pytest.raises(ValueError, match="differ from the center"):
+        with pytest.raises(ValidationError, match="differ from the center"):
             CircleInversionRequest(
                 center=_pt(1, 1),
                 power=_cr("1", "1"),
@@ -100,17 +102,35 @@ class TestCircleInversion:
             )
 
     def test_rejects_nonpositive_power(self):
-        import pytest
-
-        with pytest.raises(ValueError, match="positive"):
+        with pytest.raises(ValidationError, match="positive"):
             CircleInversionRequest(
                 center=_pt(0, 0),
                 power=_cr("0", "1"),
                 point=_pt(1, 0),
             )
-        with pytest.raises(ValueError, match="positive"):
+        with pytest.raises(ValidationError, match="positive"):
             CircleInversionRequest(
                 center=_pt(0, 0),
                 power=_cr("-1", "1"),
                 point=_pt(1, 0),
             )
+
+    def test_rejects_output_that_exceeds_canonical_digits(self):
+        # center=(0,0), power=(10^20000+1)/1, point=(10^{-20000}, 0) is
+        # within the 32,768-digit input cap, but I_x has a 40,001-digit
+        # numerator.
+        with pytest.raises(ValidationError, match="digit result bound"):
+            CircleInversionRequest(
+                center=_pt(0, 0),
+                power=_cr(format_canonical_integer(10**20000 + 1), "1"),
+                point=RationalPoint2D(
+                    x=_cr("1", format_canonical_integer(10**20000)),
+                    y=_cr("0", "1"),
+                ),
+            )
+
+    def test_schema_documents_point_not_equal_center(self):
+        schema = CircleInversionRequest.model_json_schema()
+        assert "p != c" in schema.get("description", "")
+        assert "p != c" in schema["properties"]["center"]["description"]
+        assert "p != c" in schema["properties"]["point"]["description"]

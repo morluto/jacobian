@@ -1,10 +1,17 @@
 """Supported exact finite group API."""
 
 from jacobian.math.group.operations import (
+    conjugacy_classes,
     element_order,
-    group_conjugacy_classes,
     group_orbit,
     group_order,
+    subgroup_lattice,
 )
 
-__all__ = ["element_order", "group_conjugacy_classes", "group_orbit", "group_order"]
+__all__ = [
+    "conjugacy_classes",
+    "element_order",
+    "group_orbit",
+    "group_order",
+    "subgroup_lattice",
+]

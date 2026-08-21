@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 __all__ = [
+    "conjugacy_classes",
     "element_order",
-    "group_conjugacy_classes",
     "group_orbit",
     "group_order",
+    "subgroup_lattice",
 ]
 
 
@@ -52,19 +53,13 @@ def group_orbit(degree: int, generators: list[list[int]], point: int) -> list[in
     return sorted(orbit)
 
 
-def group_conjugacy_classes(
+def conjugacy_classes(
     degree: int, generators: list[list[int]]
-) -> list[list[list[int]]]:
-    """Return conjugacy classes as lists of permutation array forms.
+) -> list[tuple[list[list[int]], int]]:
+    """Return conjugacy classes of a permutation group.
 
-    Two elements are conjugate iff they lie in the same class.  The returned
-    classes partition the group; each class is a list of permutations (as
-    array forms over ``0..n-1``). The result is canonically ordered: members
-    of each class are sorted lexicographically and classes are sorted by
-    their smallest member, so equal groups serialize identically. The
-    generated group must have order at most 5000 (degree up to 64 alone
-    does not bound enumeration; e.g., S8 has order 40320); larger groups
-    are rejected before enumeration.
+    Returns a list of (class_elements, class_size) tuples where each
+    class_element is a list of permutation lists.
     """
     from sympy.combinatorics import Permutation, PermutationGroup
 
@@ -78,18 +73,51 @@ def group_conjugacy_classes(
             raise ValueError("each generator must be a permutation of 0..n-1")
         perms.append(Permutation(list(perm)))
     group = PermutationGroup(perms)
-    # Bound enumeration by group order before materializing all |G| elements.
-    # S12 has order 479M and would exhaust memory; reject conservatively.
-    from jacobian.math.group._models import MAX_CONJUGACY_CLASSES_GROUP_ORDER
-
-    order = int(group.order())
-    if order > MAX_CONJUGACY_CLASSES_GROUP_ORDER:
-        raise ValueError(
-            f"group order {order} exceeds the bounded maximum "
-            f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER} for conjugacy classes "
-            f"(would materialize |G|={order} elements)"
-        )
     classes = group.conjugacy_classes()
-    canonical = [sorted(list(p.array_form) for p in cls) for cls in classes]
-    canonical.sort(key=lambda cls: tuple(cls[0]))
-    return canonical
+    result = []
+    for cls in classes:
+        elements = [list(p.array_form) for p in cls]
+        result.append((elements, len(cls)))
+    return result
+
+
+def subgroup_lattice(
+    degree: int, generators: list[list[int]]
+) -> list[tuple[list[list[int]], int]]:
+    """Return all subgroups of a permutation group.
+
+    Returns a list of (generators_of_subgroup, subgroup_order) tuples.
+    Bounded to groups of order at most 512 to avoid exponential blowup.
+    """
+    from itertools import combinations
+
+    from sympy.combinatorics import Permutation, PermutationGroup
+
+    if not 1 <= degree <= 64:
+        raise ValueError("group degree must be between 1 and 64")
+    if not generators:
+        raise ValueError("at least one generator is required")
+    perms = []
+    for perm in generators:
+        if len(perm) != degree or sorted(perm) != list(range(degree)):
+            raise ValueError("each generator must be a permutation of 0..n-1")
+        perms.append(Permutation(list(perm)))
+    group = PermutationGroup(perms)
+    order = int(group.order())
+    if order > 512:
+        raise ValueError(
+            "subgroup lattice computation is bounded to groups of order at most 512"
+        )
+    elements = list(group.elements)
+    subgroup_keys: set[frozenset] = set()
+    result: list[tuple[list[list[int]], int]] = []
+    for size in range(1, len(elements) + 1):
+        for subset in combinations(elements, size):
+            sg = group.subgroup(list(subset))
+            key = frozenset(tuple(p.array_form) for p in sg.elements)
+            if key not in subgroup_keys:
+                subgroup_keys.add(key)
+                result.append(
+                    ([list(p.array_form) for p in sg.generators], int(sg.order()))
+                )
+    return result

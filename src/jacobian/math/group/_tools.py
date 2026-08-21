@@ -14,13 +14,16 @@ from jacobian.math.group._models import (
     GroupOrbitRequest,
     GroupOrbitResult,
     GroupOrderResult,
+    GroupSubgroupLatticeRequest,
+    GroupSubgroupLatticeResult,
     PermutationGroupRequest,
 )
 from jacobian.math.group._operations import (
+    compute_conjugacy_classes,
     compute_element_order,
-    compute_group_conjugacy_classes,
     compute_group_orbit,
     compute_group_order,
+    compute_subgroup_lattice,
 )
 
 
@@ -50,8 +53,6 @@ def group_operation[
         examples=examples,
     )
 
-
-S3_GENERATORS = {"degree": 3, "generators": [[1, 2, 0], [1, 0, 2]]}
 
 GROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     group_operation(
@@ -124,30 +125,48 @@ GROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     group_operation(
         "group.conjugacy_classes.compute",
         "Compute conjugacy classes of a permutation group",
-        "Given a permutation group by generators, return its conjugacy classes "
-        "(the partition into conjugacy classes) as permutation array forms, "
-        "using SymPy. Each class lists the elements conjugate to a "
-        "representative; class sizes are orbit sizes under conjugation. "
-        "Classes are canonically ordered (members sorted, classes sorted by "
-        "smallest member), so the same group always yields an identical "
-        "result. The generated group must have order at most 5000; larger "
-        "groups are rejected before enumeration.",
+        "Compute the exact conjugacy classes and class sizes of a bounded "
+        "permutation group via SymPy. Each class is returned with its "
+        "representative elements and size.",
         GroupConjugacyClassesRequest,
         GroupConjugacyClassesResult,
-        compute_group_conjugacy_classes,
+        compute_conjugacy_classes,
         "group",
-        "permutation",
         "conjugacy",
+        "permutation",
         "exact",
         examples=(
             example(
                 "s3_conjugacy_classes",
-                (
-                    "Conjugacy classes of S3 (generators (1,2,0) and (1,0,2)); "
-                    "S3 has three classes of sizes 1, 2, 3 (identity, 3-cycles, "
-                    "transpositions). Generators must be permutations of 0..n-1."
-                ),
-                S3_GENERATORS,
+                "Compute conjugacy classes of S3; generators must be bijections.",
+                {
+                    "degree": 3,
+                    "generators": [[1, 0, 2], [0, 2, 1]],
+                },
+            ),
+        ),
+    ),
+    group_operation(
+        "group.subgroup_lattice.compute",
+        "Enumerate all subgroups of a bounded permutation group",
+        "Enumerate all subgroups of a bounded permutation group via SymPy. "
+        "Each subgroup is returned with its generators and order. Bounded "
+        "to groups of order at most 512.",
+        GroupSubgroupLatticeRequest,
+        GroupSubgroupLatticeResult,
+        compute_subgroup_lattice,
+        "group",
+        "subgroup",
+        "permutation",
+        "exact",
+        examples=(
+            example(
+                "c4_subgroups",
+                "Enumerate all subgroups of C4; generators must be bijections.",
+                {
+                    "degree": 4,
+                    "generators": [[1, 2, 3, 0]],
+                },
             ),
         ),
     ),

@@ -3,15 +3,8 @@
 from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer
-from jacobian.math.group import (
-    element_order,
-    group_conjugacy_classes,
-    group_orbit,
-    group_order,
-)
+from jacobian.math.group import conjugacy_classes, element_order, group_orbit, group_order, subgroup_lattice
 from jacobian.math.group._models import (
-    GroupConjugacyClassesRequest,
-    GroupConjugacyClassesResult,
     GroupElementOrderRequest,
     GroupElementOrderResult,
     GroupOrbitRequest,
@@ -40,13 +33,45 @@ def compute_group_orbit(request: GroupOrbitRequest) -> GroupOrbitResult:
     return GroupOrbitResult(orbit=tuple(orbit), point=request.point)
 
 
-def compute_group_conjugacy_classes(
-    request: GroupConjugacyClassesRequest,
-) -> GroupConjugacyClassesResult:
-    classes = group_conjugacy_classes(
-        request.degree,
-        [list(g) for g in request.generators],
+def compute_conjugacy_classes(request: "GroupConjugacyClassesRequest") -> "GroupConjugacyClassesResult":
+    """Compute the conjugacy classes of a permutation group."""
+    from jacobian.math.group._models import (
+        GroupConjugacyClassesResult,
+        ConjugacyClass,
+        GroupConjugacyClassesRequest,
+    )
+
+    classes = conjugacy_classes(request.degree, [list(g) for g in request.generators])
+    class_entries = tuple(
+        ConjugacyClass(
+            elements=tuple(tuple(e) for e, _ in [(elem, 0) for elem in cl[0]]),
+            size=cl[1],
+        )
+        for cl in classes
     )
     return GroupConjugacyClassesResult(
-        classes=tuple(tuple(tuple(p) for p in cls) for cls in classes),
+        classes=class_entries,
+        class_count=len(class_entries),
+    )
+
+
+def compute_subgroup_lattice(request: "GroupSubgroupLatticeRequest") -> "GroupSubgroupLatticeResult":
+    """Enumerate all subgroups of a bounded permutation group."""
+    from jacobian.math.group._models import (
+        GroupSubgroupLatticeResult,
+        SubgroupEntry,
+        GroupSubgroupLatticeRequest,
+    )
+
+    subgroups = subgroup_lattice(request.degree, [list(g) for g in request.generators])
+    entries = tuple(
+        SubgroupEntry(
+            generators=tuple(tuple(g) for g in sg[0]),
+            order=sg[1],
+        )
+        for sg in subgroups
+    )
+    return GroupSubgroupLatticeResult(
+        subgroups=entries,
+        subgroup_count=len(entries),
     )

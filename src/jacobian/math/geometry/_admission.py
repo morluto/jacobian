@@ -95,6 +95,20 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.DROP,
         "elementary exact formula without material leverage over direct Python",
     ),
+    OperationAdmission(
+        "geometry.circumradius.profile.compute",
+        AdmissionDecision.KEEP,
+        "complete exact circumradius profile with source-bound triple identity for bounded point configurations",
+    ),
+    OperationAdmission(
+        "geometry.configuration.forbidden_patterns.check",
+        AdmissionDecision.KEEP,
+        "exact exhaustive search for collinear triples and concyclic quadruples with typed witnesses",
+    ),
+    OperationAdmission(
+        "geometry.points.compute.pinned_distances",
+        AdmissionDecision.KEEP,
+        "complete exact pinned-distance profile with source-bound line ledger for bounded point configurations",
+    ),
 )
-
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

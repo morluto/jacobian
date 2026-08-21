@@ -1,7 +1,8 @@
 """Wire adapters for circle inversion operations."""
 
-from jacobian._exact import CanonicalRational
 from fractions import Fraction
+
+from jacobian._exact import CanonicalRational
 from jacobian.math.geometry.inversion._models import (
     CircleInversionRequest,
     CircleInversionResult,

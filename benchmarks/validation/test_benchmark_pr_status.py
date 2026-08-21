@@ -5,13 +5,13 @@ import json
 import zipfile
 from collections.abc import Sequence
 
-from benchmarks.tooling.command_runner import (
+from tools import benchmark_pr_status
+from tools.benchmark_pr_status import GitHubReader, build_status, render_human
+from tools.command_runner import (
     ToolCommandResult,
     ToolCommandStatus,
     operator_environment,
 )
-from tools import benchmark_pr_status
-from tools.benchmark_pr_status import GitHubReader, build_status, render_human
 
 
 def _zip_plan(digest: str = "sha256:abc") -> bytes:

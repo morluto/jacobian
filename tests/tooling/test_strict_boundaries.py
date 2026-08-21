@@ -14,18 +14,22 @@ from pathlib import Path
 
 import pytest
 import tomli_w
+from benchmarks.tooling.benchmark_job_models import (
+    HarborJobDatasetEntry,
+    HarborJobSelection,
+)
 from benchmarks.tooling.harbor_suite import (
     HarborSuiteError,
     load_environment_profiles,
     validate_task_topology,
 )
-from benchmarks.tooling.heldout_runner import _validated_plan
-from benchmarks.tooling.strict_boundaries import (
-    HarborJobDatasetEntry,
-    HarborJobSelection,
-    HeldoutRunPlan,
+from benchmarks.tooling.harbor_task_contract import (
     TaskEnvironmentSection,
     TaskManifestSections,
+)
+from benchmarks.tooling.heldout_plan_models import HeldoutRunPlan
+from benchmarks.tooling.heldout_runner import _validated_plan
+from benchmarks.tooling.strict_boundaries import (
     format_strict_errors,
     raise_strict_model,
     strict_model_failures,
@@ -187,7 +191,7 @@ def test_raise_strict_model_raises_harbor_suite_error() -> None:
 
 
 def test_topology_reports_strict_failure_for_extra_environment_field(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     suite, task = _make_suite_with_task(tmp_path)
     task_toml = (task / "task.toml").read_text()
@@ -201,7 +205,7 @@ def test_topology_reports_strict_failure_for_extra_environment_field(
 
 
 def test_topology_reports_strict_failure_for_non_float_agent_timeout(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     suite, task = _make_suite_with_task(tmp_path)
     task_toml = (task / "task.toml").read_text()
@@ -212,7 +216,7 @@ def test_topology_reports_strict_failure_for_non_float_agent_timeout(
 
 
 def test_topology_passes_for_valid_minimal_task(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     suite, task = _make_suite_with_task(tmp_path)
     assert validate_task_topology(suite, task) == []

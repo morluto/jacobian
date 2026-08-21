@@ -7,13 +7,34 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.numerical_semigroups._models import (
+    BettiElementsRequest,
+    BettiElementsResult,
+    CatenaryDegreeRequest,
+    CatenaryDegreeResult,
+    DeltaSetRequest,
+    DeltaSetResult,
+    FactorizationComputeRequest,
+    FactorizationComputeResult,
+    FactorizationGraphComputeRequest,
+    FactorizationGraphComputeResult,
+    MinimalPresentationRequest,
+    MinimalPresentationResult,
     NumericalSemigroupSummaryRequest,
     NumericalSemigroupSummaryResult,
+    PresentationBinomialsRequest,
+    PresentationBinomialsResult,
     SemigroupMembershipRequest,
     SemigroupMembershipResult,
 )
 from jacobian.math.numerical_semigroups._operations import (
+    compute_betti_elements,
+    compute_catenary_degree,
+    compute_delta_set,
+    compute_factorization_graph,
+    compute_factorizations,
     compute_membership,
+    compute_minimal_presentation,
+    compute_presentation_binomials,
     compute_summary,
 )
 
@@ -82,6 +103,152 @@ NUMERICAL_SEMIGROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "membership_8_in_3_5",
                 "Check if 8 is in <3,5>.",
                 {"generators": ["3", "5"], "value": "8"},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.factorizations.compute",
+        "Compute complete factorization family Z(s)",
+        "Given an ordered minimal generating system and an element, compute "
+        "the complete bounded factorization family Z(s), expressed as tuples "
+        "of generator multiplicities. Oversized exact outputs fail request "
+        "validation before computation.",
+        FactorizationComputeRequest,
+        FactorizationComputeResult,
+        compute_factorizations,
+        "number-theory",
+        "numerical-semigroup",
+        "factorization",
+        "exact",
+        examples=(
+            example(
+                "factorizations_15_in_3_5",
+                "Factorizations of 15 in <3,5>.",
+                {"generators": ["3", "5"], "value": "15"},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.factorization_graph.compute",
+        "Compute factorization graph with connected components",
+        "Build the standard factorization graph where two factorizations "
+        "are connected if they share a common atom (coordinatewise gcd is "
+        "nonzero). Returns edges and connected components.",
+        FactorizationGraphComputeRequest,
+        FactorizationGraphComputeResult,
+        compute_factorization_graph,
+        "number-theory",
+        "numerical-semigroup",
+        "factorization",
+        "exact",
+        examples=(
+            example(
+                "graph_15_in_3_5",
+                "Factorization graph of 15 in <3,5>.",
+                {"generators": ["3", "5"], "value": "15"},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.betti_elements.compute",
+        "Compute Betti elements of a numerical semigroup",
+        "Compute the Betti elements of a numerical semigroup - elements "
+        "whose factorization graph is disconnected.",
+        BettiElementsRequest,
+        BettiElementsResult,
+        compute_betti_elements,
+        "number-theory",
+        "numerical-semigroup",
+        "exact",
+        examples=(
+            example(
+                "betti_3_5",
+                "Betti elements of <3,5>.",
+                {"generators": ["3", "5"]},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.minimal_presentation.compute",
+        "Compute a minimal presentation",
+        "Compute one minimal presentation of a numerical semigroup, "
+        "returning exactly r-1 relations spanning the r factorization "
+        "components at each Betti element.",
+        MinimalPresentationRequest,
+        MinimalPresentationResult,
+        compute_minimal_presentation,
+        "number-theory",
+        "numerical-semigroup",
+        "exact",
+        examples=(
+            example(
+                "presentation_3_5",
+                "Minimal presentation of <3,5>.",
+                {"generators": ["3", "5"]},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.presentation_binomials.compute",
+        "Convert presentation to sparse binomials",
+        "Validate presentation relations against the declared minimal "
+        "generators and convert each relation (u,v) to the toric binomial "
+        "X^u-X^v with coefficients 1 and -1.",
+        PresentationBinomialsRequest,
+        PresentationBinomialsResult,
+        compute_presentation_binomials,
+        "number-theory",
+        "numerical-semigroup",
+        "exact",
+        examples=(
+            example(
+                "binomials_3_5",
+                "Sparse binomials of <3,5>.",
+                {
+                    "generators": ["3", "5"],
+                    "relations": [
+                        {"first": [5, 0], "second": [0, 3]},
+                    ],
+                },
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.delta_set.compute",
+        "Compute global delta set",
+        "Compute the complete global delta set through the theorem-backed "
+        "eventual-periodicity bound, returning the bound and exact checked "
+        "range as completeness evidence.",
+        DeltaSetRequest,
+        DeltaSetResult,
+        compute_delta_set,
+        "number-theory",
+        "numerical-semigroup",
+        "exact",
+        examples=(
+            example(
+                "global_delta_3_5",
+                "Global delta set of <3,5>.",
+                {"generators": ["3", "5"]},
+            ),
+        ),
+    ),
+    _operation(
+        "number_theory.numerical_semigroup.catenary_degree.compute",
+        "Compute global catenary degree",
+        "Compute the global catenary degree as the maximum over the complete "
+        "Betti set, returning per-Betti degrees and maximizing witnesses.",
+        CatenaryDegreeRequest,
+        CatenaryDegreeResult,
+        compute_catenary_degree,
+        "number-theory",
+        "numerical-semigroup",
+        "exact",
+        examples=(
+            example(
+                "global_catenary_3_5",
+                "Global catenary degree of <3,5>.",
+                {"generators": ["3", "5"]},
             ),
         ),
     ),

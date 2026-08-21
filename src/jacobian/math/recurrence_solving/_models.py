@@ -6,30 +6,32 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
+
+MAX_RATIONAL_DIGITS = 256
+
+
+def _require_rationals(values: tuple[CanonicalRational, ...], *, label: str) -> None:
+    for value in values:
+        require_bounded_rational(value, max_digits=MAX_RATIONAL_DIGITS, label=label)
 
 
 class RecurrenceFindRequest(StrictModel):
     """Find the minimal linear recurrence of a sequence over QQ."""
 
-    sequence: tuple[str, ...] = Field(min_length=2, max_length=256)
+    sequence: tuple[CanonicalRational, ...] = Field(min_length=2, max_length=256)
 
     @model_validator(mode="after")
     def require_rational_sequence(self) -> Self:
-        from sympy import Rational
-
-        try:
-            tuple(Rational(parse_canonical_integer(value)) for value in self.sequence)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("sequence values must be rational numbers") from exc
+        _require_rationals(self.sequence, label="sequence value")
         return self
 
 
 class RecurrenceFindResult(StrictModel):
     """A fitted recurrence or an explicit finite-prefix missing outcome."""
 
-    coefficients: tuple[str, ...] = Field(max_length=255)
+    coefficients: tuple[CanonicalRational, ...] = Field(max_length=255)
     order: int = Field(ge=0, le=255)
     status: Literal["FOUND", "NO_FITTING_RECURRENCE"]
     method: Literal["RATIONAL_INTERPOLATION"] = "RATIONAL_INTERPOLATION"
@@ -51,36 +53,25 @@ class RecurrenceFindResult(StrictModel):
 class ClosedFormRequest(StrictModel):
     """Compute a SymPy-expression closed form for a recurrence of degree at most four."""
 
-    characteristic_coefficients: tuple[str, ...] = Field(
+    characteristic_coefficients: tuple[CanonicalRational, ...] = Field(
         min_length=1,
         max_length=5,
         description="Characteristic polynomial coefficients in descending order, with degree at most four.",
     )
-    initial_values: tuple[str, ...] = Field(min_length=1, max_length=4)
+    initial_values: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=4)
 
     @model_validator(mode="after")
     def require_initial_values_for_order(self) -> Self:
-        from sympy import Rational
-
         order = len(self.characteristic_coefficients) - 1
         if order < 1:
             raise ValueError("characteristic polynomial must have positive degree")
         if len(self.initial_values) != order:
             raise ValueError("initial value count must match the recurrence order")
-        try:
-            coefficients = tuple(
-                Rational(parse_canonical_integer(value))
-                for value in self.characteristic_coefficients
-            )
-            tuple(
-                Rational(parse_canonical_integer(value))
-                for value in self.initial_values
-            )
-        except (TypeError, ValueError) as exc:
-            raise ValueError(
-                "recurrence coefficients and initial values must be rational"
-            ) from exc
-        if coefficients[0] == 0:
+        _require_rationals(
+            self.characteristic_coefficients, label="characteristic coefficient"
+        )
+        _require_rationals(self.initial_values, label="initial value")
+        if self.characteristic_coefficients[0].as_fraction() == 0:
             raise ValueError(
                 "characteristic polynomial must have nonzero leading coefficient"
             )

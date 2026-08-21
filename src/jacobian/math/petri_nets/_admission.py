@@ -1,0 +1,25 @@
+"""Owner-local admission decisions for built-in math operations."""
+
+from __future__ import annotations
+
+from jacobian.catalog.admission import (
+    AdmissionDecision,
+    OperationAdmission,
+    OperationRegistration,
+)
+from jacobian.math.petri_nets._tools import TOOLS
+
+ADMISSIONS: tuple[OperationAdmission, ...] = (
+    OperationAdmission(
+        "petri_net.fire_transition.compute",
+        AdmissionDecision.KEEP,
+        "exact transition firing with typed marking semantics",
+    ),
+    OperationAdmission(
+        "petri_net.reachability_graph.compute",
+        AdmissionDecision.KEEP,
+        "aggregate-bounded reachability with exact frontier and marking-envelope escape witnesses",
+    ),
+)
+
+REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

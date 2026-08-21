@@ -1,5 +1,6 @@
 """Tests for truncated formal power series operations."""
 
+from jacobian.math.formal_power_series import derivative, multiply
 from jacobian.math.formal_power_series._models import (
     MAX_RATIONAL_DIGITS,
     InputTruncatedSeries,
@@ -25,6 +26,17 @@ def test_derivative_of_order_one_is_zero() -> None:
     result = compute_derivative(series)
     assert result.result.truncation_order == 1
     assert result.result.coefficients[0].as_fraction() == 0
+
+
+def test_native_projection_aliases_call_the_shared_typed_kernels() -> None:
+    series = TruncatedSeries(
+        variable="x",
+        truncation_order=2,
+        coefficients=(_coeff("1"), _coeff("2")),
+    )
+
+    assert derivative(series) == compute_derivative(series)
+    assert multiply(series, series) == compute_multiply(series, series)
 
 
 def test_power_rejects_result_digit_overflow() -> None:

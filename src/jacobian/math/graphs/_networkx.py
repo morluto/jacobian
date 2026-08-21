@@ -33,6 +33,32 @@ def diameter(graph: nx.Graph[Any]) -> int:
     return int(nx.diameter(value))
 
 
+def radius(graph: nx.Graph[Any]) -> int:
+    value = simple_graph(graph)
+    if not value or not nx.is_connected(value):
+        raise ValueError("radius requires a nonempty connected graph")
+    return int(nx.radius(value))
+
+
+def biconnected_components(graph: nx.Graph[Any]) -> tuple[frozenset[Any], ...]:
+    value = simple_graph(graph)
+    return tuple(frozenset(component) for component in nx.biconnected_components(value))
+
+
+def strongly_connected_components(
+    graph: nx.DiGraph[Any],
+) -> tuple[frozenset[Any], ...]:
+    if not isinstance(graph, nx.DiGraph):
+        raise TypeError("graph must be a NetworkX DiGraph")
+    if not graph.is_directed() or graph.is_multigraph():
+        raise ValueError("graph must be directed and simple")
+    if graph.number_of_nodes() > 32:
+        raise ValueError("graph may contain at most 32 vertices")
+    return tuple(
+        frozenset(component) for component in nx.strongly_connected_components(graph)
+    )
+
+
 def is_eulerian(graph: nx.Graph[Any]) -> bool:
     g = simple_graph(graph)
     if len(g) == 0:

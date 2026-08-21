@@ -26,6 +26,7 @@ from jacobian._models import StrictModel
 
 _MAX_INTEGER_LENGTH = 256
 _MAX_FACTORIZATION_LENGTH = 12
+_MAX_BUDGETED_FACTORIZATION_LENGTH = 15
 # These small bounds deliberately keep arithmetic functions that may factor
 # their input (totient, Möbius, divisor sigma, square-free predicates, and
 # multiplicative order) safe for in-process SymPy execution.
@@ -54,6 +55,14 @@ FactorizationInteger = Annotated[
     StringConstraints(
         pattern=r"^-?(?:0|[1-9][0-9]*)$",
         max_length=_MAX_FACTORIZATION_LENGTH,
+        strict=True,
+    ),
+]
+BudgetedFactorizationInteger = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^-?(?:0|[1-9][0-9]*)$",
+        max_length=_MAX_BUDGETED_FACTORIZATION_LENGTH,
         strict=True,
     ),
 ]
@@ -406,6 +415,23 @@ class IntegerValueResult(StrictModel):
     value: BoundedInteger
 
 
+_MAX_PRIMORIAL_DIGITS = 3_400
+PrimorialInteger = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^(?:0|[1-9][0-9]*)$",
+        max_length=_MAX_PRIMORIAL_DIGITS,
+        strict=True,
+    ),
+]
+
+
+class PrimorialResult(StrictModel):
+    """The primorial (product of the first n primes)."""
+
+    value: PrimorialInteger
+
+
 class ExtendedGcdResult(StrictModel):
     """A gcd together with exact Bezout coefficients."""
 
@@ -462,6 +488,62 @@ class PrimeFactorizationResult(StrictModel):
         primes = [factor.prime for factor in self.factors]
         if len(set(primes)) != len(primes):
             raise ValueError("prime factors must be unique")
+        return self
+
+
+class BudgetedFactorizationRequest(StrictModel):
+    """One small positive integer and an explicit bounded factor-search limit."""
+
+    value: BudgetedFactorizationInteger
+    factor_limit: StrictInt = Field(default=100_000, ge=4, le=1_000_000)
+
+    @model_validator(mode="after")
+    def require_composite_domain(self) -> Self:
+        from jacobian.canonical import parse_canonical_integer
+
+        if parse_canonical_integer(self.value) < 2:
+            raise ValueError("budgeted factorization requires an integer at least 2")
+        return self
+
+
+class CertifiedFactorComponent(StrictModel):
+    value: BudgetedFactorizationInteger
+    exponent: StrictInt = Field(ge=1, le=1024)
+    status: Literal["CERTIFIED_PRIME", "UNFACTORED_COMPOSITE"]
+
+
+class BudgetedFactorizationResult(StrictModel):
+    status: Literal["COMPLETE", "INCOMPLETE"]
+    value: BudgetedFactorizationInteger
+    factor_limit: StrictInt = Field(ge=4, le=1_000_000)
+    factors: tuple[CertifiedFactorComponent, ...] = Field(min_length=1, max_length=256)
+
+    @model_validator(mode="after")
+    def bind_decomposition(self) -> Self:
+        from flint import fmpz
+
+        from jacobian.canonical import parse_canonical_integer
+
+        product = math.prod(
+            parse_canonical_integer(item.value) ** item.exponent
+            for item in self.factors
+        )
+        if product != parse_canonical_integer(self.value):
+            raise ValueError("factor components must multiply to the requested integer")
+        complete = all(item.status == "CERTIFIED_PRIME" for item in self.factors)
+        if complete != (self.status == "COMPLETE"):
+            raise ValueError(
+                "complete status must match the per-factor primality statuses"
+            )
+        values = [parse_canonical_integer(item.value) for item in self.factors]
+        if values != sorted(values) or len(values) != len(set(values)):
+            raise ValueError("factor components must be unique and ascending")
+        for item, component in zip(self.factors, values, strict=True):
+            is_prime = fmpz(component).is_prime()
+            if item.status == "CERTIFIED_PRIME" and not is_prime:
+                raise ValueError("CERTIFIED_PRIME components must be prime")
+            if item.status == "UNFACTORED_COMPOSITE" and is_prime:
+                raise ValueError("UNFACTORED_COMPOSITE components must be composite")
         return self
 
 

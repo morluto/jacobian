@@ -11,8 +11,8 @@ from benchmarks.tooling.benchmark_contracts import (
     collect_contract_failures,
     validate_job_contract,
 )
-from benchmarks.tooling.command_runner import ToolCommandStatus, run_operator_command
 from benchmarks.tooling.harbor_suite import load_registry
+from tools.command_runner import ToolCommandStatus, run_operator_command
 
 ROOT = Path(__file__).parents[2]
 

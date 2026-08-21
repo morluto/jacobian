@@ -79,7 +79,7 @@ def matrix_operation[
 
 MATRIX_DETERMINANT_COMPUTE = matrix_operation(
     "matrix.determinant.compute",
-    "Compute an exact rational matrix determinant",
+    "Compute an exact rational matrix determinant (det)",
     "Compute the determinant of one square matrix over QQ through order 64 with SymPy's exact Bareiss algorithm.",
     MatrixDeterminantRequest,
     MatrixDeterminantResult,
@@ -182,7 +182,8 @@ MATRIX_OPERATIONS = (
     matrix_operation(
         "matrix.rational_linear_system.solve",
         "Solve an exact rational linear system",
-        "Compute the unique solution to a bounded square system Ax=b over QQ.",
+        "Classify and solve a bounded square system Ax=b over QQ, returning a "
+        "unique solution only when one exists.",
         RationalLinearSolveRequest,
         RationalLinearSolveResult,
         compute_rational_linear_solve,
@@ -234,6 +235,7 @@ MATRIX_OPERATIONS = (
                 },
             ),
         ),
+        version="2",
     ),
     matrix_operation(
         "matrix.adjugate.compute",

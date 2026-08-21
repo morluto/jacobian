@@ -40,7 +40,17 @@ def test_bounded_process_gateway_requires_external_tool_owner(tmp_path: Path) ->
         "from jacobian.process import run_bounded_process\n"
         "run_bounded_process(['tool'])\n"
     )
+    _write(
+        tmp_path,
+        "src/jacobian/math/commutative_algebra_ops/_singular.py",
+        source,
+    )
     _write(tmp_path, "src/jacobian/math/logic/_operations.py", source)
+    _write(
+        tmp_path,
+        "src/jacobian/math/commutative_algebra_ops/_singular.py",
+        source,
+    )
     _write(tmp_path, "src/jacobian/math/example/_operations.py", source)
 
     assert _violations(tmp_path, "bounded-process-gateway") == [
@@ -84,6 +94,56 @@ def test_direct_canonical_wire_conversion_is_rejected(tmp_path: Path) -> None:
         "src/jacobian/math/example.py",
         "src/jacobian/math/example.py",
     ]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "sympify(caller_input)\n",
+        "sympy.sympify(caller_input)\n",
+        "parse_expr(caller_input)\n",
+        "eval(caller_input)\n",
+        "exec(caller_input)\n",
+        "lambdify(axis, caller_input)\n",
+        "import builtins\nbuiltins.eval(caller_input)\n",
+        "import builtins as b\nb.exec(caller_input)\n",
+        "from builtins import eval as evaluate\nevaluate(caller_input)\n",
+        "from sympy import sympify as parse\nparse(caller_input)\n",
+        "import builtins\nevaluate = builtins.eval\nevaluate(caller_input)\n",
+        (
+            "import builtins\n"
+            "evaluate = execute = builtins.eval\n"
+            "evaluate(caller_input)\n"
+        ),
+        "import sympy\nparse = sympy.sympify\nparse(caller_input)\n",
+        (
+            "from sympy import sympify as parse\n"
+            "evaluate: object = parse\n"
+            "evaluate(caller_input)\n"
+        ),
+    ],
+)
+def test_evaluator_capable_parsers_are_forbidden_in_math_tree(
+    tmp_path: Path, source: str
+) -> None:
+    _write(tmp_path, "src/jacobian/math/example.py", source)
+
+    assert _violations(tmp_path, "evaluator-capable-parser") == [
+        "src/jacobian/math/example.py"
+    ]
+
+
+def test_backend_eval_methods_are_not_confused_with_python_eval(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/math/example.py",
+        "value = polynomial.eval(point)\n"
+        "result = model.eval(variable)\n"
+        "items.append(value)\n"
+        "mapping.keys()\n",
+    )
+
+    assert check_architecture(tmp_path).ok
 
 
 def test_direct_rational_result_formatting_is_rejected(tmp_path: Path) -> None:

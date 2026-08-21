@@ -33,7 +33,7 @@ def test_load_registry_returns_unique_well_formed_datasets() -> None:
 
 
 def test_load_registry_rejects_wrong_schema_version(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     reg = tmp_path / "registry.toml"
     reg.write_text('schema_version = "99"\ndatasets = []')
@@ -42,7 +42,7 @@ def test_load_registry_rejects_wrong_schema_version(
 
 
 def test_load_registry_fails_closed_on_missing_suite_toml(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     ds_path = tmp_path / "test-v1"
     ds_path.mkdir()
@@ -57,7 +57,7 @@ def test_load_registry_fails_closed_on_missing_suite_toml(
 
 
 def test_suite_loads_tasks_when_suite_toml_exists(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     ds_path = tmp_path / "test-v1"
     _make_canonical_task(tmp_path)
@@ -87,7 +87,7 @@ def test_suite_loads_tasks_when_suite_toml_exists(
 
 
 def test_suite_parses_tasks_without_assurance_ceiling(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     ds_path = tmp_path / "test-v1"
     _make_canonical_task(tmp_path)
@@ -111,7 +111,7 @@ def test_suite_parses_tasks_without_assurance_ceiling(
     assert suite.tasks[0].required_provider == "core"
 
 
-def test_suite_allows_empty_tasks(tmp_path: Path, patched_root: Path) -> None:
+def test_suite_allows_empty_tasks(tmp_path: Path, synthetic_harbor_root: Path) -> None:
     ds_path = tmp_path / "test-v1"
     ds_path.mkdir()
     (ds_path / "jobs").mkdir()
@@ -126,7 +126,7 @@ def test_suite_allows_empty_tasks(tmp_path: Path, patched_root: Path) -> None:
 
 
 def test_suite_rejects_task_path_outside_tasks_root(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     ds_path = tmp_path / "test-v1"
     (ds_path / "jobs").mkdir(parents=True)
@@ -146,7 +146,9 @@ def test_suite_rejects_task_path_outside_tasks_root(
         load_registry(reg)
 
 
-def test_suite_rejects_symlinked_task_path(tmp_path: Path, patched_root: Path) -> None:
+def test_suite_rejects_symlinked_task_path(
+    tmp_path: Path, synthetic_harbor_root: Path
+) -> None:
     ds_path = tmp_path / "test-v1"
     _make_canonical_task(tmp_path)
     (ds_path / "jobs").mkdir(parents=True)
@@ -164,7 +166,9 @@ def test_suite_rejects_symlinked_task_path(tmp_path: Path, patched_root: Path) -
         load_registry(reg)
 
 
-def test_suite_rejects_noncanonical_task_id(tmp_path: Path, patched_root: Path) -> None:
+def test_suite_rejects_noncanonical_task_id(
+    tmp_path: Path, synthetic_harbor_root: Path
+) -> None:
     ds_path = tmp_path / "test-v1"
     ds_path.mkdir()
     (ds_path / "jobs").mkdir()
@@ -188,7 +192,7 @@ def test_suite_rejects_noncanonical_task_id(tmp_path: Path, patched_root: Path) 
 
 
 def test_registry_rejects_nested_canonical_task_bundle(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     ds_path = tmp_path / "test-v1"
     (ds_path / "jobs").mkdir(parents=True)
@@ -205,7 +209,7 @@ def test_registry_rejects_nested_canonical_task_bundle(
 
 
 def test_registry_rejects_incomplete_canonical_task_directory(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     ds_path = tmp_path / "test-v1"
     (ds_path / "jobs").mkdir(parents=True)
@@ -219,7 +223,7 @@ def test_registry_rejects_incomplete_canonical_task_directory(
 
 
 def test_registry_rejects_unowned_direct_task_bundle(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     ds_path = tmp_path / "test-v1"
     _make_canonical_task(tmp_path)

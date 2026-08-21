@@ -84,7 +84,7 @@ class MetricProfileResult(StrictModel):
     eccentricities: tuple[EccentricityResult, ...] = Field(min_length=2)
     centers: tuple[int, ...] = Field(min_length=1)
     periphery: tuple[int, ...] = Field(min_length=0)
-    method: Literal["FLOYD_WARSHALL"] = "FLOYD_WARSHALL"
+    method: Literal["DIRECT_DISTANCE_MATRIX_SCAN"] = "DIRECT_DISTANCE_MATRIX_SCAN"
 
 
 class BallRequest(StrictModel):

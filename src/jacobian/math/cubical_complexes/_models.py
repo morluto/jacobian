@@ -1,0 +1,59 @@
+"""Typed wire contracts for cubical complex operations."""
+
+from __future__ import annotations
+
+from typing import Self
+
+from pydantic import Field, model_validator
+
+from jacobian._models import StrictModel
+
+MAX_DIM = 5
+MAX_CELLS = 200
+
+
+class CubicalCell(StrictModel):
+    """An elementary cube: a tuple of intervals [a_i, b_i] on integer lattice."""
+
+    intervals: tuple[tuple[int, int], ...] = Field(min_length=1, max_length=MAX_DIM)
+
+    @model_validator(mode="after")
+    def require_valid_intervals(self) -> Self:
+        for a, b in self.intervals:
+            if a > b:
+                raise ValueError("each interval must have a <= b (interval is [a, b])")
+            if b - a > 1:
+                raise ValueError("each interval must have length 0 or 1 (b <= a + 1)")
+        return self
+
+    @property
+    def dimension(self) -> int:
+        return sum(1 for a, b in self.intervals if b > a)
+
+
+class CubicalComplexRequest(StrictModel):
+    """A finite cubical complex: a set of elementary cubes."""
+
+    cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
+
+
+class FVectorResult(StrictModel):
+    """The f-vector and Euler characteristic of a cubical complex."""
+
+    dimension: int
+    f_vector: tuple[int, ...]
+    euler_characteristic: int
+
+
+class FaceClosureRequest(StrictModel):
+    """Compute the full face closure of a set of cells."""
+
+    cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
+
+
+class FaceClosureResult(StrictModel):
+    """Result of face closure computation."""
+
+    original_cells: int
+    total_cells: int
+    cells_by_dimension: tuple[int, ...]

@@ -46,15 +46,6 @@ class KColorabilityResult(StrictModel):
     colors: int = Field(ge=1, le=20)
 
 
-class MaximumIndependentSetRequest(StrictModel):
-    graph: GraphEdgeList
-
-
-class MaximumIndependentSetResult(StrictModel):
-    independent_set: tuple[int, ...]
-    cardinality: int = Field(ge=0, le=20)
-
-
 class MaximalIndependentSetRequest(StrictModel):
     """One canonical candidate set in a bounded simple graph."""
 

@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from benchmarks.tooling.codex_visibility import (
     AdoptionExpectation,
     CueLevel,
     VisibilityCase,
     classify_visibility,
+    load_suite,
     surface_snapshot_digest,
 )
+
+from jacobian.catalog.builtins import BUILTIN_TOOLS
 
 
 def test_completed_math_run_satisfies_visibility_without_a_verification_record() -> (
@@ -55,3 +60,21 @@ def test_surface_snapshot_digest_accepts_the_current_catalog_shape() -> None:
     }
 
     assert surface_snapshot_digest(surface).startswith("sha256:")
+
+
+def test_checked_in_visibility_suites_reference_public_operations() -> None:
+    public_ids = {tool.operation_id for tool in BUILTIN_TOOLS}
+    config_dir = Path(__file__).parents[1] / "config"
+
+    for name in (
+        "codex-visibility-v2.json",
+        "schema-bound-selection-v1.json",
+        "typed-checker-handoff-v1.json",
+    ):
+        suite = load_suite(config_dir / name)
+        expected_ids = {
+            operation_id
+            for case in suite.cases
+            for operation_id in case.expected_operation_ids
+        }
+        assert expected_ids <= public_ids, name

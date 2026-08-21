@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 import pytest
-from benchmarks.tooling.command_runner import (
+from tools.command_runner import (
     ToolInteractiveCommand,
     ToolInteractiveRequest,
     ToolInteractiveStatus,

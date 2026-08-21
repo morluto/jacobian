@@ -189,7 +189,7 @@ def local_provenance(
 ) -> ExecutionProvenance:
     """Bind a local run to HEAD, planner sources, and the selected matrix."""
 
-    from benchmarks.tooling.command_runner import git_head_sha
+    from tools.command_runner import git_head_sha
 
     execution_sha = git_head_sha(root)
     if execution_sha is None:
@@ -216,7 +216,7 @@ def verify_execution_sha(root: Path, expected: str) -> str:
     """Require the checked-out tree to match the workflow execution identity."""
 
     expected = _require_sha(expected, "execution SHA")
-    from benchmarks.tooling.command_runner import git_head_sha
+    from tools.command_runner import git_head_sha
 
     if git_head_sha(root) != expected:
         raise HarborSuiteError(

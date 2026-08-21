@@ -4,6 +4,7 @@
 
 const { spawn } = require("node:child_process");
 const { stderr } = require("node:process");
+const { MANAGED_SETUP_ARGUMENT, SetupError, runSetup } = require("../lib/setup.cjs");
 
 /**
  * Jacobian npm carrier.
@@ -25,6 +26,8 @@ const HELP = `Jacobian — MCP server carrier for AI agents.
 Usage:
   jacobian mcp [args...]
     Run the canonical Jacobian MCP server over stdio.
+  jacobian setup [options]
+    Configure selected agents to use the Jacobian MCP server.
 
 The carrier invokes the exact Python MCP command:
   uvx --from jacobian==<version> jacobian-mcp [args...]
@@ -70,7 +73,12 @@ function launchMcp(extraArgs) {
   const uv = process.env.JACOBIAN_UV_BIN || "uvx";
   const child = spawn(
     uv,
-    ["--from", packageSpec(), "jacobian-mcp", ...extraArgs],
+    [
+      "--from",
+      packageSpec(),
+      "jacobian-mcp",
+      ...extraArgs.filter((argument) => argument !== MANAGED_SETUP_ARGUMENT),
+    ],
     {
       stdio: "inherit",
       env: { ...process.env },
@@ -110,7 +118,7 @@ function launchMcp(extraArgs) {
   });
 }
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
 
@@ -129,6 +137,11 @@ function main() {
     return;
   }
 
+  if (command === "setup") {
+    await runSetup(args.slice(1), require("../package.json").version);
+    return;
+  }
+
   stderr.write(`Unknown command: ${command}\n\n${HELP}`);
   process.exitCode = 1;
 }
@@ -136,5 +149,9 @@ function main() {
 module.exports = { pythonVersionFromNpmVersion, packageSpec };
 
 if (require.main === module) {
-  main();
+  main().catch((error) => {
+    const message = error instanceof SetupError ? error.message : `Jacobian setup failed: ${error.message}`;
+    stderr.write(`${message}\n`);
+    process.exitCode = 1;
+  });
 }

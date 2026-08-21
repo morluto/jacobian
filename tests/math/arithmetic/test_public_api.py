@@ -44,3 +44,20 @@ def test_primitive_integer_vector_rejects_zero_vector() -> None:
 def test_zero_division_is_explicit(operation: object) -> None:
     with pytest.raises(ZeroDivisionError, match=r"zero|division by zero"):
         operation(0)  # type: ignore[operator]
+
+
+def test_exact_public_api_symbols() -> None:
+    """Exact owner-local contract for the arithmetic public API."""
+    expected = (
+        "absolute_value",
+        "integerize_rational_vector",
+        "primitive_integer_vector",
+        "quotient",
+        "reciprocal",
+        "sign",
+        "sum_rationals",
+    )
+    assert tuple(arithmetic.__all__) == expected
+    assert len(arithmetic.__all__) == len(set(arithmetic.__all__))
+    assert all(not name.startswith("_") for name in arithmetic.__all__)
+    assert all(hasattr(arithmetic, name) for name in arithmetic.__all__)

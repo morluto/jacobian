@@ -10,8 +10,9 @@ RUN mkdir -p /opt/provider && \
 WORKDIR /app
 COPY benchmarks/__init__.py /opt/benchmarks/__init__.py
 COPY benchmarks/tooling/__init__.py /opt/benchmarks/tooling/__init__.py
-COPY benchmarks/tooling/command_runner.py /opt/benchmarks/tooling/command_runner.py
+COPY tools/command_runner.py /opt/tools/command_runner.py
 COPY benchmarks/tooling/spike_utils.py /opt/benchmarks/tooling/spike_utils.py
-COPY tests/fixtures/providers/nauty/input.json tests/fixtures/providers/nauty/nauty_provider_pin.json tests/fixtures/providers/nauty/spike.py /app/
+COPY tests/fixtures/providers/nauty/input.json tests/fixtures/providers/nauty/nauty_provider_pin.json /app/
+COPY benchmarks/tooling/providers/nauty.py /app/spike.py
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/opt

@@ -78,12 +78,13 @@ FINITE_GAME_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 GAME_EXAMPLE,
             ),
         ),
+        version="2",
     ),
     _op(
         "game_theory.nash_equilibrium.compute",
         "Compute Nash equilibrium of a zero-sum game",
         "Find the Nash equilibrium of a 2-player zero-sum game using "
-        "exact rational arithmetic via support enumeration.",
+        "exact rational primal and dual linear programs.",
         ZeroSumGameRequest,
         NashEquilibriumResult,
         compute_nash_equilibrium,
@@ -98,6 +99,7 @@ FINITE_GAME_THEORY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 GAME_EXAMPLE,
             ),
         ),
+        version="2",
     ),
 )
 

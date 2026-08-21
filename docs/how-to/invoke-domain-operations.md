@@ -7,7 +7,7 @@ unfamiliar domain, and `inspect` for the selected operation's exact typed reques
 result, and valid examples. For example:
 
 ```json
-{"operation_id":"integer.compute.gcd","payload":{"left":"84","right":"30"}}
+{"operation_id":"integer.compute.extended_gcd","payload":{"left":"84","right":"30"}}
 ```
 
 The result is returned directly. To continue a calculation, retain the relevant

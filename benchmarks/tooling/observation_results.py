@@ -32,13 +32,14 @@ from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
+from tools.command_runner import git_head_sha
 
 from benchmarks.tooling import (
     observation_artifacts,
     observation_comparison,
     observation_selection,
 )
-from benchmarks.tooling.command_runner import git_head_sha
+from benchmarks.tooling.benchmark_job_models import HarborJobSelection
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.harbor_suite import (
     ROOT,
@@ -46,10 +47,7 @@ from benchmarks.tooling.harbor_suite import (
     task_digest,
 )
 from benchmarks.tooling.observation_ingestion import load_harbor_result
-from benchmarks.tooling.strict_boundaries import (
-    HarborJobSelection,
-    raise_strict_model,
-)
+from benchmarks.tooling.strict_boundaries import raise_strict_model
 
 
 def _read_json(path: Path) -> Any:

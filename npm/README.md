@@ -6,13 +6,13 @@ Python library that exposes a portfolio of composable operations with
 mathematically atomic, agent-visible outcomes to AI agents investigating
 conjectures and other mathematical problems.
 
-This package does not implement the kernel, install Python, manage
-environments, edit MCP client configuration, or forward the full Python CLI.
-It exists because the
+This package does not implement the kernel, install Python, or manage
+environments. Its `mcp` command is a thin deterministic carrier; its separate
+`setup` command configures a reviewed, explicitly selected set of MCP client
+registrations. It exists because the
 [MCP Registry](https://github.com/modelcontextprotocol/registry) metadata
 (`server.json`) publishes `npx jacobian mcp` as the installable carrier for the
-stdio server. The carrier invokes exactly one canonical Python command and
-nothing else.
+stdio server. The carrier invokes exactly one canonical Python command.
 
 ## Requirements
 
@@ -25,15 +25,39 @@ nothing else.
 npm install -g jacobian
 ```
 
-Install, upgrade, and remove this carrier with npm. Configure MCP clients with
-the published command snippet; this package does not mutate client
-configuration.
+Install, upgrade, and remove this carrier with npm.
+
+## Set up agents
+
+Set up Jacobian for your agents with a single command. It requires Node.js 18
+or newer and `uvx` on your `PATH`.
+
+```sh
+npx jacobian@latest setup
+```
+
+Choose detected agents and review the changes before they are written. Setup
+writes only a `jacobian` MCP entry for selected agents; existing unowned
+entries are protected unless you explicitly pass `--force`.
+
+The generated launcher pins the Jacobian version that ran setup. Setup itself
+does not install or upgrade Node.js, `uv`, Python, or an agent.
+
+For automation, make selection and consent explicit:
+
+```sh
+npx jacobian@latest setup --codex --dry-run
+npx jacobian@latest setup --codex --yes
+```
 
 ## Usage
 
 ```sh
 jacobian mcp [args...]
   Run the canonical Jacobian MCP server over stdio.
+
+jacobian setup [options]
+  Configure selected agents to use the Jacobian MCP server.
 ```
 
 `jacobian mcp` execs the exact canonical command:

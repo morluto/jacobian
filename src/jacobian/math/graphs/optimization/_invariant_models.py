@@ -219,19 +219,10 @@ class GraphCliqueNumberResult(GraphCardinalityMaximumResult):
     )
 
 
-class GraphIndependenceNumberResult(GraphCardinalityMaximumResult):
-    convention: Literal["MAXIMUM_EDGE_FREE_VERTEX_SUBSET"] = (
-        "MAXIMUM_EDGE_FREE_VERTEX_SUBSET"
-    )
-
-
 class GraphCardinalityMaximumObligation(StrictModel):
     obligation_schema_version: Literal["1"] = "1"
     graph: ChromaticGraph
-    predicate: Literal[
-        "GRAPH_CLIQUE_NUMBER_OPTIMALITY",
-        "GRAPH_INDEPENDENCE_NUMBER_OPTIMALITY",
-    ]
+    predicate: Literal["GRAPH_CLIQUE_NUMBER_OPTIMALITY",]
     status: OptimizationStatus
     claimed_value: StrictInt | None = Field(default=None, ge=0, le=32)
     lower_bound: StrictInt = Field(ge=0, le=32)

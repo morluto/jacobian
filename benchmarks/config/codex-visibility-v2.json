@@ -29,10 +29,9 @@
     {
       "case_id": "latent-integer-gcd",
       "cue_level": "LATENT",
+      "expectation": "ABSTAIN",
       "prompt": "Compute the exact greatest common divisor of 1234567890 and 987654321. Return only the gcd and a one-sentence method summary.",
-      "expected_operation_ids": [
-        "integer.compute.gcd"
-      ]
+      "expected_operation_ids": []
     },
     {
       "case_id": "latent-euler-totient-fallback",

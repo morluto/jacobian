@@ -15,9 +15,9 @@ INDEPENDENCE_NUMBER_OPERATION = MathTool(
     version="2",
     title="Independence number",
     description=(
-        "Compute a maximum edge-free vertex subset through order 128. Return "
-        "either the exact optimum or a feasible incumbent with explicit lower "
-        "and upper bounds when the wall-clock budget expires."
+        "Compute a maximum independent set (independence number) through order "
+        "128. Return either the exact optimum or a feasible incumbent with "
+        "explicit lower and upper bounds when the wall-clock budget expires."
     ),
     request_type=IndependenceNumberRequest,
     result_type=IndependenceNumberResult,
@@ -26,6 +26,7 @@ INDEPENDENCE_NUMBER_OPERATION = MathTool(
         "graph",
         "invariant",
         "independent-set",
+        "maximum-independent-set",
         "independence-number",
         "maximum",
         "bounded",

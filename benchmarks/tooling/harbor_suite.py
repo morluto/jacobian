@@ -19,7 +19,8 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from benchmarks.tooling.command_runner import ToolCommandStatus, run_operator_command
+from tools.command_runner import ToolCommandStatus, run_operator_command
+
 from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.harbor_digest import (
     HarborDigestError,
@@ -30,11 +31,9 @@ from benchmarks.tooling.harbor_digest import (
 from benchmarks.tooling.harbor_digest import (
     task_digest as _native_task_digest,
 )
+from benchmarks.tooling.harbor_task_contract import TaskManifestSections
 from benchmarks.tooling.public_contract import check as _check_public_contract
-from benchmarks.tooling.strict_boundaries import (
-    TaskManifestSections,
-    strict_model_failures,
-)
+from benchmarks.tooling.strict_boundaries import strict_model_failures
 
 ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = ROOT / "benchmarks"
@@ -1155,6 +1154,7 @@ def report_ok(message: str) -> None:
 
 
 __all__ = [
+    "HarborSuiteError",
     "Suite",
     "TaskRef",
     "check_selected_tasks",

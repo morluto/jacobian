@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 import pytest
+from mcp.shared.exceptions import MCPError
 
 from jacobian.mcp.server import create_server
 
@@ -28,19 +29,21 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                 {
                     "request": {
                         "op": "inspect",
-                        "operation_id": "integer.compute.gcd",
+                        "operation_id": "integer.compute.extended_gcd",
                     }
                 },
             )
             assert isinstance(described.structured_content, dict)
             contract = described.structured_content
-            assert contract["operation"]["operation_id"] == "integer.compute.gcd"
+            assert (
+                contract["operation"]["operation_id"] == "integer.compute.extended_gcd"
+            )
             assert "output_schema" in contract["operation"]
 
             result = await client.call_tool(
                 "math.run",
                 {
-                    "operation_id": "integer.compute.gcd",
+                    "operation_id": "integer.compute.extended_gcd",
                     "payload": {"left": "84", "right": "30"},
                 },
             )
@@ -50,6 +53,11 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
             assert isinstance(result.structured_content, dict)
             assert "mcp_projection" not in result.structured_content
             assert result.structured_content["output"] == response["output"]
+            assert result.structured_content["output"] == {
+                "gcd": "6",
+                "left_coefficient": "-1",
+                "right_coefficient": "3",
+            }
             assert "provider" not in result.structured_content
             assert "provider_digest" not in result.structured_content
 
@@ -83,16 +91,111 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                 "first_unsatisfied_clause": None,
             }
 
-            invalid = await client.call_tool(
-                "math.run",
+            with pytest.raises(MCPError) as invalid_error:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": "integer.compute.extended_gcd",
+                        "payload": {
+                            "left": "84",
+                            "right": "30",
+                            "private": "reject-this-private-value",
+                        },
+                    },
+                )
+            assert invalid_error.value.code == -32602
+            assert invalid_error.value.message == "operation payload failed validation"
+            assert invalid_error.value.data == {
+                "code": "INVALID_REQUEST",
+                "stage": "operation_validation",
+                "operation_id": "integer.compute.extended_gcd",
+                "errors": [
+                    {
+                        "location": ["private"],
+                        "code": "extra_forbidden",
+                        "message": "Extra inputs are not permitted",
+                        "input": "reject-this-private-value",
+                    }
+                ],
+                "hint": (
+                    "Inspect the operation with math.find and correct the fields at "
+                    "the reported locations before retrying."
+                ),
+            }
+            assert "reject-this-private-value" not in invalid_error.value.message
+
+            with pytest.raises(MCPError) as noncanonical_error:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": "integer.compute.extended_gcd",
+                        "payload": {"left": 1.5, "right": "30"},
+                    },
+                )
+            assert noncanonical_error.value.code == -32602
+            assert noncanonical_error.value.data["errors"] == [
                 {
-                    "operation_id": "integer.compute.gcd",
-                    "payload": {"left": "84", "unexpected": "30"},
-                },
+                    "location": [],
+                    "code": "canonicalization_error",
+                    "message": "JSON floating-point numbers are not allowed",
+                    "input": None,
+                }
+            ]
+
+            with pytest.raises(MCPError) as oversized_error:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": "universal_algebra.term.evaluate.compute",
+                        "payload": {
+                            "term": {
+                                "nodes": [{"kind": "x" * 4_096}],
+                                "root": 0,
+                            }
+                        },
+                    },
+                )
+            assert oversized_error.value.code == -32602
+            assert all(
+                len(issue["message"]) <= 1_024
+                for issue in oversized_error.value.data["errors"]
             )
-            assert invalid.is_error is True
-            assert invalid.structured_content is None
-            assert "Extra inputs are not permitted" in invalid.content[0].text
+
+            oversized_fields = {
+                f"{'x' * 4_096}{index}": "y" * 2_000 for index in range(64)
+            }
+            with pytest.raises(MCPError) as bounded_locations_error:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": "integer.compute.extended_gcd",
+                        "payload": {
+                            "left": "84",
+                            "right": "30",
+                            **oversized_fields,
+                        },
+                    },
+                )
+            bounded_data = bounded_locations_error.value.data
+            assert all(
+                len(component) <= 128
+                for issue in bounded_data["errors"]
+                for component in issue["location"]
+                if isinstance(component, str)
+            )
+            assert len(json.dumps(bounded_data).encode("utf-8")) <= 64 * 1_024
+
+            with pytest.raises(MCPError) as multiple_errors:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": "integer.compute.extended_gcd",
+                        "payload": {"left": "01", "right": "not-an-integer"},
+                    },
+                )
+            assert [
+                error["location"] for error in multiple_errors.value.data["errors"]
+            ] == [["left"], ["right"]]
 
             matching_description = await client.call_tool(
                 "math.find",
@@ -125,8 +228,8 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
     asyncio.run(scenario())
 
 
-@pytest.mark.requires_provider("flint")
-def test_mcp_composes_finite_field_values_by_inline_typed_payload(
+@pytest.mark.requires_backend("flint")
+def test_mcp_composes_public_finite_field_values_with_native_projections(
     tmp_path: Path,
 ) -> None:
     async def scenario() -> None:
@@ -134,7 +237,11 @@ def test_mcp_composes_finite_field_values_by_inline_typed_payload(
             Axis,
             AxisBoundMatrix,
             FiniteDimensionalSubspace,
+            FiniteMapTable,
+            ProjectiveLine,
+            direction_rank_ledger,
             element,
+            fiber_partition,
             finite_field,
             finite_polynomial,
             finite_polynomial_map,
@@ -152,7 +259,7 @@ def test_mcp_composes_finite_field_values_by_inline_typed_payload(
             create_server(),
             raise_exceptions=True,
         ) as client:
-            inspected = await client.call_tool(
+            excluded = await client.call_tool(
                 "math.find",
                 {
                     "request": {
@@ -161,7 +268,21 @@ def test_mcp_composes_finite_field_values_by_inline_typed_payload(
                     }
                 },
             )
-            assert isinstance(inspected.structured_content, dict)
+            assert excluded.is_error is False
+            assert excluded.structured_content == {
+                "kind": "error",
+                "error": {
+                    "code": "UNKNOWN_OPERATION",
+                    "stage": "operation_resolution",
+                    "message": (
+                        "Unknown operation: finite_field.polynomial_map.fibers.compute"
+                    ),
+                    "hint": (
+                        "Call math.find with a mathematical query to search "
+                        "installed operations."
+                    ),
+                },
+            }
 
             table_call = await client.call_tool(
                 "math.run",
@@ -178,19 +299,10 @@ def test_mcp_composes_finite_field_values_by_inline_typed_payload(
             assert "value_refs" not in table_output
             table_value = table_output
 
-            fibers_call = await client.call_tool(
-                "math.run",
-                {
-                    "operation_id": "finite_field.polynomial_map.fibers.compute",
-                    "payload": {"table": table_value},
-                },
-            )
-            assert isinstance(fibers_call.structured_content, dict)
-            fibers_output = fibers_call.structured_content["output"]
-            assert fibers_output["table"] == table_value
-            assert sorted(
-                len(sources) for _image, sources in fibers_output["fibers"]
-            ) == [1, 3]
+            table = FiniteMapTable.model_validate(table_value)
+            fibers = fiber_partition(table)
+            assert fibers.table == table
+            assert sorted(len(sources) for _image, sources in fibers.fibers) == [1, 3]
 
             rows = Axis(name="b", labels=("b1", "b2"))
             columns = Axis(name="image", labels=("y1",))
@@ -223,29 +335,8 @@ def test_mcp_composes_finite_field_values_by_inline_typed_payload(
             assert "value_refs" not in directions_output
             directions_value = directions_output
 
-            incomplete_call = await client.call_tool(
-                "math.run",
-                {
-                    "operation_id": "finite_field.direction_rank_ledger.compute",
-                    "payload": {"directions": directions_value},
-                },
-            )
-            assert incomplete_call.is_error is True
-            assert incomplete_call.structured_content is None
-
-            ledger_call = await client.call_tool(
-                "math.run",
-                {
-                    "operation_id": "finite_field.direction_rank_ledger.compute",
-                    "payload": {
-                        "subspace": subspace.model_dump(mode="json"),
-                        "directions": directions_value,
-                    },
-                },
-            )
-            assert isinstance(ledger_call.structured_content, dict)
-            ledger_output = ledger_call.structured_content["output"]
-            assert ledger_call.structured_content["runtime_ms"] >= 0
-            assert len(ledger_output["entries"]) == 5
+            directions = ProjectiveLine.model_validate(directions_value)
+            ledger = direction_rank_ledger(subspace, directions)
+            assert len(ledger.entries) == 5
 
     asyncio.run(scenario())

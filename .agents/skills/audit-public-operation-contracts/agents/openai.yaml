@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audit Public Operation Contracts"
+  short_description: "Audit Jacobian mathematical operation contracts"
+  default_prompt: "Use $audit-public-operation-contracts to audit these Jacobian operations and search their owner domains for the same root mechanism."

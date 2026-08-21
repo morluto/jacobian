@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
-from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
+from tools.command_runner import (
+    ToolCommandRequest,
+    ToolCommandResult,
+    ToolCommandStatus,
+)
 
 
 def _sha256(payload: bytes) -> str:
@@ -44,12 +51,81 @@ def _result(
     )
 
 
-def _runner(
-    outcomes: Sequence[ToolCommandResult],
-) -> Callable[..., ToolCommandResult]:
-    remaining = iter(outcomes)
+@dataclass(slots=True)
+class _ExpectedRunner:
+    outcomes: tuple[ToolCommandResult, ...]
+    requests: list[ToolCommandRequest]
+    expected_requests: tuple[ToolCommandRequest, ...] = ()
+    on_call: Callable[[int, ToolCommandRequest], None] | None = None
+    _index: int = 0
 
-    def run(*_args: object, **_kwargs: object) -> ToolCommandResult:
-        return next(remaining)
+    def __call__(self, request: ToolCommandRequest) -> ToolCommandResult:
+        if not isinstance(request, ToolCommandRequest):
+            raise AssertionError("provider spike must submit one ToolCommandRequest")
+        if self._index >= len(self.outcomes):
+            raise AssertionError(f"unexpected provider command: {request!r}")
+        if not self.expected_requests:
+            raise AssertionError("strict runner expectations were not configured")
+        expected = self.expected_requests[self._index]
+        if request != expected:
+            raise AssertionError(
+                f"provider command {self._index + 1} mismatch:\n"
+                f"expected {expected!r}\nactual   {request!r}"
+            )
+        self.requests.append(request)
+        outcome = self.outcomes[self._index]
+        self._index += 1
+        if self.on_call is not None:
+            self.on_call(self._index, request)
+        return outcome
 
-    return run
+    def assert_finished(self) -> None:
+        remaining = len(self.outcomes) - self._index
+        if remaining:
+            raise AssertionError(
+                f"{remaining} expected provider command(s) were not run"
+            )
+
+    def expect(self, requests: Sequence[ToolCommandRequest]) -> None:
+        expected = tuple(requests)
+        if len(expected) != len(self.outcomes):
+            raise AssertionError("request and outcome expectation counts must match")
+        self.expected_requests = expected
+
+
+def _runner(outcomes: Sequence[ToolCommandResult]) -> _ExpectedRunner:
+    return _ExpectedRunner(tuple(outcomes), [])
+
+
+def _request(
+    executable: Path,
+    arguments: Sequence[str],
+    *,
+    environment: Mapping[str, str],
+    cwd: Path,
+    timeout_seconds: float,
+    stdin_bytes: bytes = b"",
+    stdout_limit_bytes: int,
+    stderr_limit_bytes: int,
+) -> ToolCommandRequest:
+    return ToolCommandRequest(
+        executable=str(executable.resolve(strict=True)),
+        arguments=tuple(arguments),
+        environment=environment,
+        cwd=str(cwd.resolve()),
+        timeout_seconds=timeout_seconds,
+        stdin_bytes=stdin_bytes,
+        stdout_limit_bytes=stdout_limit_bytes,
+        stderr_limit_bytes=stderr_limit_bytes,
+    )
+
+
+def _run_expected(
+    run: Callable[[], dict[str, Any]],
+    runner: _ExpectedRunner,
+    requests: Sequence[ToolCommandRequest],
+) -> dict[str, Any]:
+    runner.expect(tuple(requests)[: len(runner.outcomes)])
+    result = run()
+    runner.assert_finished()
+    return result

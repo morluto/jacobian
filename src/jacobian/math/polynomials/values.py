@@ -21,7 +21,7 @@ MAX_POLYNOMIAL_EXPONENT = 32_768
 class RationalPolynomialTerm(StrictModel):
     coefficient: CanonicalRational
     exponents: tuple[int, ...] = Field(
-        min_length=1, max_length=MAX_POLYNOMIAL_VARIABLES
+        min_length=0, max_length=MAX_POLYNOMIAL_VARIABLES
     )
 
     @model_validator(mode="after")
@@ -92,6 +92,121 @@ class RationalPolynomial(StrictModel):
         return self
 
 
+class RationalPolynomialIdeal(StrictModel):
+    """A finitely generated ideal in one explicitly ordered ``QQ`` ring.
+
+    Generator lists are presentations, not canonical bases.  Every generator
+    nevertheless carries the same authoritative ring so ideals can pass
+    directly between operations without rendering or reparsing expressions.
+    """
+
+    variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=1,
+        max_length=MAX_POLYNOMIAL_VARIABLES,
+    )
+    generators: tuple[RationalPolynomial, ...] = Field(
+        min_length=1,
+        max_length=64,
+    )
+
+    @model_validator(mode="after")
+    def require_one_ordered_ring(self) -> Self:
+        if len(set(self.variables)) != len(self.variables):
+            raise ValueError("ideal variables must be unique")
+        if any(generator.variables != self.variables for generator in self.generators):
+            raise ValueError("every ideal generator must use the declared ordered ring")
+        return self
+
+
+class RationalFunction(StrictModel):
+    """One reduced element of ``QQ(t_1, ..., t_n)``.
+
+    The denominator is monic and the numerator and denominator are coprime.
+    This makes the sparse representation unique for the declared variable
+    order.  With no variables, the value is a canonical rational represented
+    by one constant numerator over the constant denominator one.
+    """
+
+    rational_function_schema_version: Literal["1"] = "1"
+    domain: Literal["QQ"] = "QQ"
+    variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=0,
+        max_length=MAX_POLYNOMIAL_VARIABLES,
+    )
+    numerator: SparseRationalPolynomial
+    denominator: SparseRationalPolynomial
+
+    @model_validator(mode="after")
+    def require_canonical_fraction(self) -> Self:
+        _require_rational_function_shapes(self)
+        _require_rational_function_normal_form(self)
+        return self
+
+
+def _rational_function_one(variable_count: int) -> SparseRationalPolynomial:
+    return SparseRationalPolynomial(
+        terms=(
+            RationalPolynomialTerm(
+                coefficient=CanonicalRational(num="1", den="1"),
+                exponents=(0,) * variable_count,
+            ),
+        )
+    )
+
+
+def _require_rational_function_shapes(value: RationalFunction) -> None:
+    if len(set(value.variables)) != len(value.variables):
+        raise ValueError("rational-function variables must be unique")
+    for label, polynomial in (
+        ("numerator", value.numerator),
+        ("denominator", value.denominator),
+    ):
+        if any(
+            len(term.exponents) != len(value.variables) for term in polynomial.terms
+        ):
+            raise ValueError(
+                f"every {label} monomial must match the declared variable order"
+            )
+        require_sparse_polynomial_budget(
+            polynomial,
+            maximum_terms=256,
+            maximum_exponent=64,
+            maximum_coefficient_digits=128,
+            label=f"rational-function {label}",
+        )
+
+
+def _require_rational_function_normal_form(value: RationalFunction) -> None:
+    if not value.denominator.terms:
+        raise ValueError("rational-function denominator cannot be zero")
+    one = _rational_function_one(len(value.variables))
+    if not value.numerator.terms:
+        if value.denominator != one:
+            raise ValueError("canonical zero must have denominator one")
+        return
+    if not value.variables:
+        if value.denominator != one or len(value.numerator.terms) != 1:
+            raise ValueError(
+                "a rational function without variables must be a canonical rational"
+            )
+        return
+
+    # Construct exact polynomials from already validated term data. No caller
+    # text is parsed or evaluated at this boundary.
+    from jacobian.math.polynomials._conversions import (
+        sparse_rational_polynomial_to_sympy,
+    )
+
+    numerator = sparse_rational_polynomial_to_sympy(value.numerator, value.variables)
+    denominator = sparse_rational_polynomial_to_sympy(
+        value.denominator, value.variables
+    )
+    if denominator.LC() != 1:
+        raise ValueError("rational-function denominator must be monic")
+    if not numerator.gcd(denominator).is_one:
+        raise ValueError("rational-function numerator and denominator must be coprime")
+
+
 def require_sparse_polynomial_budget(
     polynomial: SparseRationalPolynomial,
     *,
@@ -140,7 +255,9 @@ __all__ = [
     "MAX_POLYNOMIAL_TERMS",
     "MAX_POLYNOMIAL_VARIABLES",
     "PolynomialVariable",
+    "RationalFunction",
     "RationalPolynomial",
+    "RationalPolynomialIdeal",
     "RationalPolynomialTerm",
     "SparseRationalPolynomial",
     "require_polynomial_budget",

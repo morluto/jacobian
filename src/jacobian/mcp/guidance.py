@@ -52,5 +52,5 @@ Timeout, incomplete search, and missing witnesses appear only in the concrete do
 result that owns them; none is a mathematical conclusion by itself.
 
 Examples:
-- `{"operation_id":"integer.compute.gcd","payload":{"left":"84","right":"30"}}`
+- `{"operation_id":"integer.compute.extended_gcd","payload":{"left":"84","right":"30"}}`
 """

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import pytest
 from flint import nmod_mat
+from pydantic import ValidationError
 
+from jacobian.math import finite_fields
 from jacobian.math.finite_fields import (
     Axis,
     AxisBoundMatrix,
@@ -21,7 +23,7 @@ from jacobian.math.finite_fields import (
 from jacobian.math.finite_fields._tools import TOOLS
 from jacobian.math.prime_field_linear_algebra import rank
 
-pytestmark = pytest.mark.requires_provider("flint")
+pytestmark = pytest.mark.requires_backend("flint")
 
 
 def _slice_a_values() -> tuple[
@@ -176,32 +178,24 @@ def test_orbit_distribution_rejects_a_forged_in_range_rank() -> None:
     subspace, directions = _slice_a_values()
     ledger_payload = direction_rank_ledger(subspace, directions).model_dump(mode="json")
     ledger_payload["entries"][0]["rank"] = 0
-    forged = DirectionRankLedger.model_validate(ledger_payload)
-
-    with pytest.raises(ValueError, match="rank does not match"):
-        orbit_distribution(forged)
+    with pytest.raises(ValidationError, match="rank must match"):
+        DirectionRankLedger.model_validate(ledger_payload)
 
 
-def test_slice_a_composes_restriction_into_rank_without_wire_conversion() -> None:
+def test_slice_a_rank_derives_the_restriction_from_its_source() -> None:
     subspace, directions = _slice_a_values()
     direction = directions.points[0]
-    _, restrict_operation, rank_operation, *_ = TOOLS
+    _, _, rank_operation, *_ = TOOLS
 
-    linear_map = restrict_operation.run(
-        restrict_operation.request_type.model_validate(
+    result = rank_operation.run(
+        rank_operation.request_type.model_validate(
             {"subspace": subspace, "direction": direction}
         )
     )
 
-    result = rank_operation.run(
-        rank_operation.request_type.model_validate(
-            {"direction": direction, "linear_map": linear_map}
-        )
-    )
-
     assert result.rank == 3
+    assert result.subspace is subspace
     assert result.direction is direction
-    assert result.linear_map is linear_map
 
 
 def test_slice_a_composes_projective_line_into_orbit_distribution() -> None:
@@ -252,3 +246,91 @@ def test_slice_a_rejects_wrong_presentation_and_axis() -> None:
         restrict_scalars(subspace, wrong_parent_direction)
     with pytest.raises(ValueError, match="axis"):
         restrict_scalars(subspace, wrong_axis_direction)
+
+
+def test_permuting_a_declared_row_axis_preserves_restriction_ranks() -> None:
+    subspace, directions = _slice_a_values()
+    permuted_axis = Axis(
+        name=subspace.row_axis.name,
+        labels=tuple(reversed(subspace.row_axis.labels)),
+    )
+    permuted_subspace = FiniteDimensionalSubspace(
+        presentation=subspace.presentation,
+        basis_axis=subspace.basis_axis,
+        basis=tuple(
+            AxisBoundMatrix(
+                presentation=matrix.presentation,
+                row_axis=permuted_axis,
+                column_axis=matrix.column_axis,
+                entries=tuple(reversed(matrix.entries)),
+            )
+            for matrix in subspace.basis
+        ),
+    )
+    for direction in directions.points:
+        original = restrict_scalars(subspace, direction)
+        permuted_direction = projective_point(
+            subspace.presentation,
+            permuted_axis,
+            tuple(reversed(direction.coordinates)),
+        )
+        transported = restrict_scalars(permuted_subspace, permuted_direction)
+
+        assert transported.source_axis == original.source_axis
+        assert transported.target_axis == original.target_axis
+        assert rank(transported.matrix) == rank(original.matrix)
+
+    fixed_direction = directions.points[2]
+    assert fixed_direction.coordinates == tuple(reversed(fixed_direction.coordinates))
+    fixed_original = restrict_scalars(subspace, fixed_direction)
+    fixed_transport = restrict_scalars(
+        permuted_subspace,
+        projective_point(
+            subspace.presentation,
+            permuted_axis,
+            tuple(reversed(fixed_direction.coordinates)),
+        ),
+    )
+    assert fixed_transport.matrix == fixed_original.matrix
+
+
+def test_exact_public_api_symbols() -> None:
+    """Exact owner-local contract for the finite_fields public API."""
+    expected = (
+        "Axis",
+        "AxisBoundMatrix",
+        "CollisionResult",
+        "DirectionRankLedger",
+        "FiberPartition",
+        "FiniteDimensionalSubspace",
+        "FiniteFieldElement",
+        "FiniteFieldPresentation",
+        "FiniteLinearMap",
+        "FiniteMapTable",
+        "FinitePolynomial",
+        "FinitePolynomialMap",
+        "OrbitDistribution",
+        "PermutationResult",
+        "ProjectiveLine",
+        "ProjectivePoint",
+        "RankResult",
+        "analyze_collisions",
+        "analyze_permutation",
+        "direction_rank_ledger",
+        "element",
+        "evaluate_finite_polynomial",
+        "fiber_partition",
+        "finite_field",
+        "finite_map_table",
+        "finite_polynomial",
+        "finite_polynomial_map",
+        "linear_map_rank",
+        "orbit_distribution",
+        "projective_line",
+        "projective_point",
+        "restrict_scalars",
+    )
+    assert tuple(finite_fields.__all__) == expected
+    assert len(finite_fields.__all__) == len(set(finite_fields.__all__))
+    assert all(not name.startswith("_") for name in finite_fields.__all__)
+    assert all(hasattr(finite_fields, name) for name in finite_fields.__all__)

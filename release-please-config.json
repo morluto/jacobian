@@ -10,6 +10,14 @@
           "type": "json",
           "path": "server.json",
           "jsonpath": "$..version"
+        },
+        {
+          "type": "generic",
+          "path": "README.md"
+        },
+        {
+          "type": "generic",
+          "path": "README.zh-CN.md"
         }
       ]
     }

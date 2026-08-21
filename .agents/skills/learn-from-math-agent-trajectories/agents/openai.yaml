@@ -1,0 +1,4 @@
+interface:
+  display_name: "Learn from Math Agent Trajectories"
+  short_description: "Extract lessons from mathematical agent traces"
+  default_prompt: "Use $learn-from-math-agent-trajectories to review this mathematical agent trajectory and extract evidence-backed Jacobian improvements."

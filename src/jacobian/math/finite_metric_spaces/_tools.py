@@ -73,6 +73,7 @@ FINITE_METRIC_SPACE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 _METRIC_SPACE,
             ),
         ),
+        version="2",
     ),
     fms_operation(
         "metric_space.ball.compute",

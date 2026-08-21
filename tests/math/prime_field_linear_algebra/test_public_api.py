@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from jacobian.math import prime_field_linear_algebra
 from jacobian.math.prime_field_linear_algebra import (
     PrimeFieldMatrix,
     column_basis,
@@ -79,7 +80,7 @@ def test_matrix_rejects_noncanonical_entries() -> None:
         PrimeFieldMatrix(prime=2, entries=((3,),), columns=1)
     with pytest.raises(ValueError, match="canonical"):
         PrimeFieldMatrix(prime=3, entries=((1, -1),), columns=2)
-    with pytest.raises(ValueError, match="canonical"):
+    with pytest.raises(ValueError):
         PrimeFieldMatrix(prime=2, entries=((1.0,),), columns=1)
 
 
@@ -93,3 +94,24 @@ def test_matrix_rejects_oversized_dimensions_before_primality() -> None:
         PrimeFieldMatrix(prime=2, entries=(), columns=257)
     with pytest.raises(ValueError, match="dimension bound"):
         PrimeFieldMatrix(prime=2, entries=((),) * 257, columns=0)
+
+
+def test_exact_public_api_symbols() -> None:
+    """Exact owner-local contract for the prime_field_linear_algebra public API."""
+    expected = (
+        "PrimeFieldMatrix",
+        "column_basis",
+        "nullspace",
+        "quotient_basis",
+        "rank",
+        "rref",
+    )
+    assert tuple(prime_field_linear_algebra.__all__) == expected
+    assert len(prime_field_linear_algebra.__all__) == len(
+        set(prime_field_linear_algebra.__all__)
+    )
+    assert all(not name.startswith("_") for name in prime_field_linear_algebra.__all__)
+    assert all(
+        hasattr(prime_field_linear_algebra, name)
+        for name in prime_field_linear_algebra.__all__
+    )

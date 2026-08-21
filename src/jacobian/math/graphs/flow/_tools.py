@@ -11,12 +11,15 @@ from jacobian.math.graphs.flow._models import (
     EdgeDisjointPathsResult,
     MaxFlowRequest,
     MaxFlowResult,
+    MinCostFlowRequest,
+    MinCostFlowResult,
     MinCutRequest,
     MinCutResult,
 )
 from jacobian.math.graphs.flow._operations import (
     compute_edge_disjoint_paths,
     compute_max_flow,
+    compute_min_cost_flow,
     compute_min_cut,
 )
 
@@ -206,6 +209,51 @@ GRAPH_FLOW_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     },
                     "source": 0,
                     "sink": 3,
+                },
+            ),
+        ),
+    ),
+    graph_flow_operation(
+        "network.min_cost_flow.compute",
+        "Compute minimum-cost flow with demands",
+        "Compute the minimum-cost flow satisfying vertex demands in a "
+        "directed graph with capacities and per-unit costs, using "
+        "NetworkX's network simplex algorithm.",
+        MinCostFlowRequest,
+        MinCostFlowResult,
+        compute_min_cost_flow,
+        "network",
+        "min-cost-flow",
+        "exact",
+        examples=(
+            example(
+                "simple_min_cost_flow",
+                "Send 2 units from node 0 to node 2 via node 1.",
+                {
+                    "graph": {
+                        "vertex_count": 3,
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "capacity": {"num": "5", "den": "1"},
+                                "cost": {"num": "1", "den": "1"},
+                            },
+                            {
+                                "source": 1,
+                                "target": 2,
+                                "capacity": {"num": "5", "den": "1"},
+                                "cost": {"num": "2", "den": "1"},
+                            },
+                            {
+                                "source": 0,
+                                "target": 2,
+                                "capacity": {"num": "5", "den": "1"},
+                                "cost": {"num": "4", "den": "1"},
+                            },
+                        ],
+                    },
+                    "demands": [-2, 0, 2],
                 },
             ),
         ),

@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 from benchmarks.tooling import heldout_integrity
-from benchmarks.tooling.command_runner import operator_environment
 from benchmarks.tooling.heldout_integrity import _AWS_ENVIRONMENT_VARS
 from benchmarks.validation.heldout_fixtures import _manifest
+from tools.command_runner import operator_environment
 
 
 def test_aws_environment_vars_include_only_credentials_and_region(

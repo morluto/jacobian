@@ -14,10 +14,13 @@ from jacobian.math.number_theory._factorization_kernels import (
     enumerate_divisors,
     enumerate_proper_divisors,
     factorize_primes,
+    factorize_with_budget,
 )
 from jacobian.math.number_theory._models import (
     ArithmeticFunctionRequest,
     BooleanResult,
+    BudgetedFactorizationRequest,
+    BudgetedFactorizationResult,
     DivisorListResult,
     IntegerValueResult,
     NonzeroFactorizationRequest,
@@ -25,6 +28,12 @@ from jacobian.math.number_theory._models import (
     PowerfulNumberResult,
     PrimeFactorizationResult,
 )
+
+
+def _compute_budgeted_factorization(
+    request: BudgetedFactorizationRequest,
+) -> BudgetedFactorizationResult:
+    return factorize_with_budget(request)
 
 
 def _compute_divisors(
@@ -73,10 +82,11 @@ def _operation[RequestT: StrictModel, ResultT: StrictModel](
     implementation: Callable[[RequestT], ResultT],
     tags: tuple[str, ...],
     examples: tuple[OperationExample, ...] = (),
+    version: str = "2",
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
         operation_id=operation_id,
-        version="2",
+        version=version,
         title=title,
         description=description,
         request_type=request_model,
@@ -88,6 +98,23 @@ def _operation[RequestT: StrictModel, ResultT: StrictModel](
 
 
 FACTORIZATION_OPERATIONS = (
+    _operation(
+        operation_id="integer.factor.certified_compute",
+        title="Compute a budgeted integer factorization",
+        description="Factor one bounded 15-digit integer with an explicit search limit, returning certified prime factors and any explicitly unfactored composite cofactor.",
+        request_model=BudgetedFactorizationRequest,
+        result_model=BudgetedFactorizationResult,
+        implementation=_compute_budgeted_factorization,
+        tags=("number-theory", "factorization", "bounded", "partial", "prime"),
+        examples=(
+            example(
+                "semiprime_10403",
+                "Factor 10403 within a declared search limit; unfactored composite cofactors remain explicit.",
+                {"value": "10403", "factor_limit": 1000},
+            ),
+        ),
+        version="3",
+    ),
     _operation(
         operation_id="integer.compute.divisors",
         title="Enumerate positive divisors",
@@ -121,7 +148,10 @@ FACTORIZATION_OPERATIONS = (
     _operation(
         operation_id="integer.compute.prime_factorization",
         title="Factor an integer",
-        description="Compute a complete prime-power factorization.",
+        description=(
+            "Factor an integer into prime powers and return the complete "
+            "prime-power factorization."
+        ),
         request_model=NonzeroFactorizationRequest,
         result_model=PrimeFactorizationResult,
         implementation=_compute_prime_factorization,

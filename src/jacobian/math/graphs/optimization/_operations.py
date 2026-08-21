@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from jacobian.math.graphs.optimization._budget import remaining_ms as _remaining_ms
@@ -83,6 +82,7 @@ def solve_chromatic_number(
     graph: ChromaticGraph,
     vertices: tuple[str, ...],
     wall_seconds: int,
+    started: float,
 ) -> GraphChromaticNumberOutput:
     """Bounded Z3 k-colorability search returning EXACT or UNKNOWN.
 
@@ -92,7 +92,6 @@ def solve_chromatic_number(
     tested k-colorability trace; it is never a negative conclusion.
     """
 
-    import networkx as nx
     import z3  # type: ignore[import-untyped]
 
     n = len(vertices)
@@ -110,12 +109,18 @@ def solve_chromatic_number(
             detail="the empty graph requires zero colors",
         )
 
-    greedy = nx.coloring.greedy_color(
-        networkx_graph,
-        strategy="saturation_largest_first",
-    )
-    upper_bound = max(greedy.values(), default=-1) + 1
+    greedy = {vertex: color for color, vertex in enumerate(vertices)}
+    upper_bound = n
     lower_bound = 2 if networkx_graph.number_of_edges() else 1
+    if _remaining_ms(started, wall_seconds) <= 0:
+        return _unknown_chromatic_result(
+            vertices=vertices,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            coloring=greedy,
+            tested=[],
+            detail="the chromatic-number wall-clock budget expired",
+        )
     if upper_bound == lower_bound:
         return GraphChromaticNumberOutput(
             status="EXACT",
@@ -130,7 +135,6 @@ def solve_chromatic_number(
             detail="a maintained greedy coloring and graph edge bound coincide",
         )
 
-    started = time.monotonic()
     tested: list[ChromaticSearchStep] = []
     encoded_graph = canonical_graph(graph)
     for colors in range(lower_bound, upper_bound + 1):

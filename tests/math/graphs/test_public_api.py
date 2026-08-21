@@ -37,3 +37,31 @@ def test_graph_construction_functions_use_immutable_graph_values() -> None:
     assert complement.vertices == ("v0", "v1", "v2")
     assert complement.edges == (("v0", "v2"),)
     assert type(explicit) is SimpleUndirectedGraph
+
+
+def test_exact_public_api_symbols() -> None:
+    """Exact owner-local contract for the graphs public API."""
+    expected = (
+        "GraphCompositionInput",
+        "IndependenceNumberBudget",
+        "IndependenceNumberRequest",
+        "IndependenceNumberResult",
+        "SimpleUndirectedGraph",
+        "biconnected_components",
+        "complement",
+        "compose_graphs",
+        "diameter",
+        "explicit_graph",
+        "graph_power",
+        "independence_number",
+        "induced_subgraph",
+        "is_eulerian",
+        "line_graph",
+        "radius",
+        "strongly_connected_components",
+        "triangle_count",
+    )
+    assert tuple(graphs.__all__) == expected
+    assert len(graphs.__all__) == len(set(graphs.__all__))
+    assert all(not name.startswith("_") for name in graphs.__all__)
+    assert all(hasattr(graphs, name) for name in graphs.__all__)

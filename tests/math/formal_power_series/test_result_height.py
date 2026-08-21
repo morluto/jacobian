@@ -1,0 +1,175 @@
+import pytest
+from pydantic import ValidationError
+
+from jacobian.canonical import encode_strict_json
+from jacobian.math.formal_power_series._models import (
+    MAX_RATIONAL_DIGITS,
+    MAX_TRUNCATION_ORDER,
+    InputTruncatedSeries,
+    SeriesComposeRequest,
+    SeriesDivideRequest,
+    SeriesDivideResult,
+    SeriesInverseResult,
+    SeriesMultiplyResult,
+    SeriesPowerRequest,
+    SeriesReversionRequest,
+    SeriesReversionResult,
+    _SeriesAddSubtractRequest,
+    _SeriesMultiplyRequest,
+)
+from jacobian.math.formal_power_series._operations import (
+    compute_divide,
+    compute_inverse,
+    compute_multiply,
+)
+
+
+def _coefficient(num: str = "1", den: str = "1") -> dict[str, str]:
+    return {"num": num, "den": den}
+
+
+def _series(order: int, coefficients: list[dict[str, str]]) -> dict[str, object]:
+    return {"variable": "x", "truncation_order": order, "coefficients": coefficients}
+
+
+def test_multiplication_bound_does_not_reject_coefficientwise_addition() -> None:
+    order = 20
+    coefficients = [_coefficient(den=str(2**800)) for _ in range(order)]
+    payload = {
+        "left": _series(order, coefficients),
+        "right": _series(order, coefficients),
+    }
+
+    assert _SeriesAddSubtractRequest.model_validate(payload)
+    with pytest.raises(ValidationError, match="multiplication coefficient growth"):
+        _SeriesMultiplyRequest.model_validate(payload)
+
+
+def test_power_propagates_binary_convolution_growth() -> None:
+    order = 8
+    coefficients = [_coefficient(den=str(3**500)) for _ in range(order)]
+    with pytest.raises(ValidationError, match="power coefficient growth"):
+        SeriesPowerRequest.model_validate(
+            {"series": _series(order, coefficients), "exponent": 16}
+        )
+
+
+def test_division_propagates_inverse_and_residual_growth() -> None:
+    order = 8
+    numerator = [_coefficient() for _ in range(order)]
+    denominator = [_coefficient(den=str(2**700)), *[_coefficient()] * (order - 1)]
+    with pytest.raises(ValidationError, match="inverse coefficient growth"):
+        SeriesDivideRequest.model_validate(
+            {"left": _series(order, numerator), "right": _series(order, denominator)}
+        )
+
+
+def test_composition_propagates_inner_power_growth() -> None:
+    order = 8
+    outer = [_coefficient() for _ in range(order)]
+    inner = [_coefficient("0"), *[_coefficient(den=str(5**300))] * (order - 1)]
+    with pytest.raises(ValidationError, match="composition coefficient growth"):
+        SeriesComposeRequest.model_validate(
+            {"outer": _series(order, outer), "inner": _series(order, inner)}
+        )
+
+
+def test_reversion_propagates_linear_coefficient_division() -> None:
+    order = 8
+    coefficients = [
+        _coefficient("0"),
+        _coefficient(den=str(7**250)),
+        *[_coefficient()] * (order - 2),
+    ]
+    with pytest.raises(ValidationError, match="reversion coefficient growth"):
+        SeriesReversionRequest.model_validate(_series(order, coefficients))
+
+
+def test_sparse_linear_reversion_remains_admitted() -> None:
+    request = SeriesReversionRequest.model_validate(
+        _series(
+            4,
+            [
+                _coefficient("0"),
+                _coefficient("2"),
+                _coefficient("0"),
+                _coefficient("0"),
+            ],
+        )
+    )
+
+    assert request.coefficients[1].num == "2"
+
+
+def test_small_requests_remain_admitted() -> None:
+    series = InputTruncatedSeries.model_validate(
+        _series(2, [_coefficient("1"), _coefficient("1")])
+    )
+    assert SeriesPowerRequest(series=series, exponent=3)
+
+
+def test_largest_multiplication_result_fits_shared_output_envelope() -> None:
+    numerator = "9" * MAX_RATIONAL_DIGITS
+    denominator = "1" + "0" * (MAX_RATIONAL_DIGITS - 1)
+    coefficient = _coefficient(numerator, denominator)
+    series = InputTruncatedSeries.model_validate(
+        _series(MAX_TRUNCATION_ORDER, [coefficient] * MAX_TRUNCATION_ORDER)
+    )
+    result = compute_multiply(series, series)
+
+    assert encode_strict_json(result.model_dump(mode="json"))
+
+
+def test_reversion_result_rejects_fabricated_conclusion_with_zero_residuals() -> None:
+    zero = _coefficient("0")
+    one = _coefficient("1")
+    source = _series(2, [zero, one])
+    fabricated = _series(2, [zero, zero])
+
+    with pytest.raises(ValidationError, match="source composed with result"):
+        SeriesReversionResult.model_validate(
+            {
+                "source": source,
+                "result": fabricated,
+                "left_residual": [zero, zero],
+                "right_residual": [zero, zero],
+            }
+        )
+
+
+def test_multiplication_result_rejects_fabricated_conclusion_and_ledger() -> None:
+    series = InputTruncatedSeries.model_validate(
+        _series(2, [_coefficient("1"), _coefficient("1")])
+    )
+    payload = compute_multiply(series, series).model_dump(mode="json")
+    fabricated = [_coefficient("0"), _coefficient("0")]
+    payload["result"]["coefficients"] = fabricated
+    payload["convolution_ledger"] = fabricated
+
+    with pytest.raises(ValidationError, match="source convolution"):
+        SeriesMultiplyResult.model_validate(payload)
+
+
+def test_inverse_result_rejects_fabricated_conclusion_with_zero_residual() -> None:
+    series = InputTruncatedSeries.model_validate(
+        _series(2, [_coefficient("1"), _coefficient("1")])
+    )
+    payload = compute_inverse(series).model_dump(mode="json")
+    payload["result"]["coefficients"] = [_coefficient("1"), _coefficient("0")]
+
+    with pytest.raises(ValidationError, match="source times result"):
+        SeriesInverseResult.model_validate(payload)
+
+
+def test_division_result_rejects_fabricated_conclusion_with_zero_residual() -> None:
+    numerator = InputTruncatedSeries.model_validate(
+        _series(2, [_coefficient("1"), _coefficient("0")])
+    )
+    denominator = InputTruncatedSeries.model_validate(
+        _series(2, [_coefficient("1"), _coefficient("1")])
+    )
+    payload = compute_divide(numerator, denominator).model_dump(mode="json")
+    payload["quotient"]["coefficients"] = [_coefficient("1"), _coefficient("0")]
+
+    with pytest.raises(ValidationError, match="denominator times quotient"):
+        SeriesDivideResult.model_validate(payload)

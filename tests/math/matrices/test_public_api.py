@@ -117,3 +117,27 @@ def test_rref_pivots_are_strictly_increasing(matrix_data: list[list[int]]) -> No
     _, pivots = matrices.rref(sympy.Matrix(matrix_data))
     assert pivots == tuple(sorted(pivots))
     assert len(pivots) == len(set(pivots))
+
+
+def test_exact_public_api_symbols() -> None:
+    """Exact owner-local contract for the matrices public API."""
+    expected = (
+        "SmithNormalForm",
+        "adjugate",
+        "characteristic_polynomial",
+        "determinant",
+        "inverse",
+        "kronecker_product",
+        "multiply",
+        "partial_trace",
+        "permanent",
+        "rank",
+        "rref",
+        "smith_normal_form",
+        "solve_linear_system",
+        "trace",
+    )
+    assert tuple(matrices.__all__) == expected
+    assert len(matrices.__all__) == len(set(matrices.__all__))
+    assert all(not name.startswith("_") for name in matrices.__all__)
+    assert all(hasattr(matrices, name) for name in matrices.__all__)

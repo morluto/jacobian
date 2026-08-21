@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -11,6 +11,26 @@ const require = createRequire(import.meta.url);
 const npmRoot = dirname(fileURLToPath(import.meta.url));
 const packageMetadata = require("./package.json");
 const { pythonVersionFromNpmVersion, packageSpec } = require("./bin/jacobian.cjs");
+
+async function setupEnvironment(base) {
+  const bin = join(base, "bin");
+  const home = join(base, "home");
+  await mkdir(bin, { recursive: true });
+  await writeFile(join(bin, "uvx"), "#!/bin/sh\nexit 0\n", "utf8");
+  await chmod(join(bin, "uvx"), 0o755);
+  return {
+    ...process.env,
+    HOME: home,
+    PATH: `${bin}:${process.env.PATH}`,
+  };
+}
+
+function runCarrier(args, env) {
+  return spawnSync(process.execPath, [join(npmRoot, "bin", "jacobian.cjs"), ...args], {
+    encoding: "utf8",
+    env,
+  });
+}
 
 const pythonPrereleaseNames = {
   a: "alpha",
@@ -97,6 +117,7 @@ require("node:fs").writeFileSync(
         [
           join(npmRoot, "bin", "jacobian.cjs"),
           "mcp",
+          "--managed-by-setup",
           "--state-dir",
           join(base, "state"),
         ],
@@ -175,6 +196,131 @@ require("node:fs").writeFileSync(${JSON.stringify(marker)}, "forwarded");
   }
 });
 
+test("setup dry-run emits a pinned, non-mutating Codex plan", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-plan-"));
+  try {
+    const env = await setupEnvironment(base);
+    const result = runCarrier(["setup", "--codex", "--dry-run", "--json"], env);
+
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.status, "planned");
+    assert.equal(report.dry_run, true);
+    assert.deepEqual(report.clients.map((client) => client.client), ["codex"]);
+    assert.deepEqual(report.launcher, {
+      command: "npx",
+      args: ["--yes", `jacobian@${packageMetadata.version}`, "mcp", "--managed-by-setup"],
+    });
+    await assert.rejects(readFile(join(env.HOME, ".codex", "config.toml")), {
+      code: "ENOENT",
+    });
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup configures every supported client and preserves unrelated configuration", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-apply-"));
+  try {
+    const env = await setupEnvironment(base);
+    const claudePath = join(env.HOME, ".claude.json");
+    await mkdir(dirname(claudePath), { recursive: true });
+    await writeFile(
+      claudePath,
+      JSON.stringify({ mcpServers: { other: { command: "other" } }, theme: "dark" }),
+      "utf8",
+    );
+    const result = runCarrier(["setup", "--all", "--yes", "--json"], env);
+
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.status, "configured");
+    assert.deepEqual(report.clients.map((client) => client.client), [
+      "claude",
+      "opencode",
+      "codex",
+      "cursor",
+      "gemini",
+      "antigravity",
+    ]);
+
+    const claude = JSON.parse(await readFile(claudePath, "utf8"));
+    assert.equal(claude.theme, "dark");
+    assert.deepEqual(claude.mcpServers.other, { command: "other" });
+    assert.deepEqual(claude.mcpServers.jacobian, {
+      command: "npx",
+      args: ["--yes", `jacobian@${packageMetadata.version}`, "mcp", "--managed-by-setup"],
+    });
+
+    const codex = await readFile(join(env.HOME, ".codex", "config.toml"), "utf8");
+    assert.match(codex, /# Managed by Jacobian setup\./);
+    assert.match(codex, /\[mcp_servers\.jacobian\]/);
+    assert.match(codex, /startup_timeout_sec = 30/);
+    const opencode = JSON.parse(
+      await readFile(join(env.HOME, ".config", "opencode", "opencode.json"), "utf8"),
+    );
+    assert.deepEqual(opencode.mcp.jacobian, {
+      type: "local",
+      command: ["npx", "--yes", `jacobian@${packageMetadata.version}`, "mcp", "--managed-by-setup"],
+      cwd: ".",
+      enabled: true,
+    });
+
+    const repeat = runCarrier(["setup", "--codex", "--dry-run", "--json"], env);
+    assert.equal(repeat.status, 0, repeat.stderr);
+    assert.equal(JSON.parse(repeat.stdout).clients[0].action, "already current");
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup protects an unmanaged Jacobian registration", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-conflict-"));
+  try {
+    const env = await setupEnvironment(base);
+    const configPath = join(env.HOME, ".claude.json");
+    const original = JSON.stringify({
+      mcpServers: { jacobian: { command: "python", args: ["-m", "jacobian.mcp"] } },
+    });
+    await mkdir(dirname(configPath), { recursive: true });
+    await writeFile(configPath, original, "utf8");
+
+    const result = runCarrier(["setup", "--claude", "--dry-run", "--json"], env);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /refusing to replace an unmanaged Jacobian entry/);
+    assert.equal(await readFile(configPath, "utf8"), original);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup requires explicit clients when non-interactive", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-nontty-"));
+  try {
+    const env = await setupEnvironment(base);
+    const result = runCarrier(["setup", "--dry-run"], env);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /requires one or more client flags or --all/);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("setup blocks before any write when uvx is unavailable", async () => {
+  const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-setup-prerequisite-"));
+  try {
+    const env = { ...process.env, HOME: join(base, "home"), PATH: "" };
+    const result = runCarrier(["setup", "--codex", "--dry-run", "--json"], env);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /requires uvx on PATH/);
+    await assert.rejects(readFile(join(env.HOME, ".codex", "config.toml")), {
+      code: "ENOENT",
+    });
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
 test("npm and Python packages publish the same release version", async () => {
   const pyproject = await readFile(join(npmRoot, "..", "pyproject.toml"), "utf8");
   const match = pyproject.match(/^version = "([^"]+)"$/m);
@@ -182,10 +328,14 @@ test("npm and Python packages publish the same release version", async () => {
   assert.equal(packageMetadata.version, npmVersionFromPythonVersion(match[1]));
 });
 
-test("package metadata carries no dependencies and packs only the carrier", async () => {
-  assert.equal(packageMetadata.dependencies, undefined);
+test("package metadata carries setup dependencies and packs the setup adapter", async () => {
+  assert.deepEqual(packageMetadata.dependencies, {
+    "@iarna/toml": "^2.2.5",
+    "@inquirer/prompts": "^7.2.1",
+    "jsonc-parser": "^3.3.1",
+  });
   assert.equal(packageMetadata.bundleDependencies, undefined);
-  assert.deepEqual(packageMetadata.files, ["bin", "README.md"]);
+  assert.deepEqual(packageMetadata.files, ["bin", "lib", "README.md"]);
   assert.deepEqual(Object.keys(packageMetadata.bin), ["jacobian"]);
 
   const base = await mkdtemp(join(tmpdir(), "jacobian-carrier-pack-"));
@@ -207,25 +357,19 @@ test("package metadata carries no dependencies and packs only the carrier", asyn
     assert.equal(list.status, 0, list.stderr);
     const entries = JSON.parse(list.stdout)[0].files.map((file) => file.path);
     assert.ok(entries.includes("bin/jacobian.cjs"));
+    assert.ok(entries.includes("lib/setup.cjs"));
     assert.ok(entries.includes("README.md"));
     assert.ok(!entries.some((path) => path.startsWith("install.sh")));
-    assert.ok(
-      !entries.some((path) =>
-        ["setup.cjs", "doctor.cjs", "launcher.cjs", "toml-config.mjs"].some(
-          (removed) => path === `bin/${removed}`,
-        ),
-      ),
-    );
     assert.ok(tarball.length > 0);
   } finally {
     await rm(base, { recursive: true, force: true });
   }
 });
 
-test("package-lock.json agrees with package.json and declares no dependencies", async () => {
+test("package-lock.json agrees with package.json dependencies", async () => {
   const lock = JSON.parse(await readFile(join(npmRoot, "package-lock.json"), "utf8"));
   assert.equal(lock.version, packageMetadata.version);
   assert.equal(lock.packages[""].version, packageMetadata.version);
-  assert.equal(lock.packages[""].dependencies, undefined);
+  assert.deepEqual(lock.packages[""].dependencies, packageMetadata.dependencies);
   assert.equal(lock.packages[""].bundleDependencies, undefined);
 });

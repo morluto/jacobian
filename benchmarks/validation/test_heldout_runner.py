@@ -10,6 +10,7 @@ from benchmarks.tooling.errors import HarborSuiteError
 from benchmarks.tooling.heldout_runner import (
     _default_command,
     _json_digest,
+    _usage,
     execute_plan,
 )
 
@@ -536,3 +537,16 @@ def test_runner_rejects_plan_with_wrong_condition(tmp_path: Path) -> None:
             probe_url="http://127.0.0.1:8000/mcp",
             probe_fn=_ready_probe,
         )
+
+
+# ---------------------------------------------------------------------------
+# Regression: non-object usage stats must fail closed
+# ---------------------------------------------------------------------------
+
+
+def test_usage_rejects_non_dict_stats(tmp_path: Path) -> None:
+    path = tmp_path / "result.json"
+    path.write_text(json.dumps({"stats": None}), encoding="utf-8")
+
+    with pytest.raises(HarborSuiteError, match="stats must be an object"):
+        _usage(path)

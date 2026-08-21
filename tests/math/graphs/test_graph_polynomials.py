@@ -33,14 +33,9 @@ class TestTuttePolynomial:
         req = GraphPolynomialRequest(graph=_cycle_graph(4))
         result = compute_tutte_polynomial(req)
         # T(C4, x, y) = x^3 + x^2 + x + y
-        # Encoded as degree = x_deg * 100 + y_deg
-        d = _terms_to_dict(result)
-        # x^3: degree=300, coeff=1; x^2: degree=200, coeff=1
-        # x: degree=100, coeff=1; y: degree=1, coeff=1
-        assert d.get(300) == 1  # x^3
-        assert d.get(200) == 1  # x^2
-        assert d.get(100) == 1  # x
-        assert d.get(1) == 1  # y
+        d = {term.exponents: term.coefficient for term in result.terms}
+        assert result.variables == ("x", "y")
+        assert d == {(0, 1): 1, (1, 0): 1, (2, 0): 1, (3, 0): 1}
 
     def test_single_edge(self):
         req = GraphPolynomialRequest(
@@ -48,8 +43,8 @@ class TestTuttePolynomial:
         )
         result = compute_tutte_polynomial(req)
         # T(K2) = x
-        d = _terms_to_dict(result)
-        assert d.get(100) == 1  # x
+        d = {term.exponents: term.coefficient for term in result.terms}
+        assert d == {(1, 0): 1}
 
 
 class TestChromaticPolynomial:

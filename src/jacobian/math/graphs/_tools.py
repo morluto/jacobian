@@ -2,16 +2,32 @@
 
 from __future__ import annotations
 
-from pydantic import Field, StrictStr
+from typing import Self
+
+from pydantic import Field, StrictStr, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
-from jacobian.math.graphs.graph6 import Graph6DecodeValue, decode_graph6
+from jacobian.math.graphs.graph6 import (
+    Graph6DecodeValue,
+    decode_graph6,
+)
 
 
 class Graph6DecodeRequest(StrictModel):
     graph6: StrictStr = Field(min_length=1, max_length=352)
+
+    @model_validator(mode="after")
+    def require_valid_graph6(self) -> Self:
+        """Validate the graph6 payload at the request boundary.
+
+        This ensures that every accepted request returns a Graph6DecodeValue
+        without a parser exception.  The full parsing and canonicalization is
+        delegated to the maintained decode_graph6 path.
+        """
+        decode_graph6(self.graph6)
+        return self
 
 
 def _decode(request: Graph6DecodeRequest) -> Graph6DecodeValue:

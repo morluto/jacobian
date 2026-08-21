@@ -10,6 +10,13 @@ LABEL io.jacobian.source-dirty=$JACOBIAN_SOURCE_DIRTY
 
 WORKDIR /app
 
+ARG SINGULAR_DEBIAN_VERSION=1:4.4.1+ds-2
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      "singular=${SINGULAR_DEBIAN_VERSION}" \
+    && rm -rf /var/lib/apt/lists/* \
+    && test "$(Singular -q --execute 'system("version");quit;' | tr -d '[:space:]')" = "44100"
+
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 COPY lean ./lean

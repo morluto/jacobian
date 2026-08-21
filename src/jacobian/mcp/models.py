@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import ConfigDict, Field, RootModel, StrictInt
 
@@ -100,6 +100,33 @@ class OperationInspectionResult(StrictModel):
     operation: OperationDescriptor
 
 
+class OperationValidationIssue(StrictModel):
+    """One field-level recovery item for a selected operation payload."""
+
+    location: tuple[Annotated[str, Field(max_length=128)] | StrictInt, ...] = Field(
+        max_length=32
+    )
+    code: str = Field(min_length=1, max_length=128)
+    message: str = Field(min_length=1, max_length=1_024)
+    input: Any | None = None
+
+
+class OperationInvalidRequestData(StrictModel):
+    """Structured MCP error data for operation-owned request validation."""
+
+    code: Literal["INVALID_REQUEST"] = "INVALID_REQUEST"
+    stage: Literal["operation_validation"] = "operation_validation"
+    operation_id: OperationId
+    errors: tuple[OperationValidationIssue, ...] = Field(
+        min_length=1,
+        max_length=64,
+    )
+    hint: str = (
+        "Inspect the operation with math.find and correct the fields at the "
+        "reported locations before retrying."
+    )
+
+
 class OperationDiscoveryError(StrictModel):
     kind: Literal["error"]
     error: OperationDiscoveryErrorDetail
@@ -130,6 +157,8 @@ __all__ = [
     "OperationFindResponse",
     "OperationInspectRequest",
     "OperationInspectionResult",
+    "OperationInvalidRequestData",
     "OperationSearchRequest",
     "OperationSearchResult",
+    "OperationValidationIssue",
 ]

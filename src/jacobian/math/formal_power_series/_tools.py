@@ -29,7 +29,9 @@ from jacobian.math.formal_power_series._models import (
     SeriesToPolynomialResult,
     SeriesTruncateRequest,
     SeriesTruncateResult,
-    _SeriesPairRequest,
+    _SeriesAddSubtractRequest,
+    _SeriesIdentityCheckRequest,
+    _SeriesMultiplyRequest,
 )
 from jacobian.math.formal_power_series._operations import (
     compute_add,
@@ -49,15 +51,6 @@ from jacobian.math.formal_power_series._operations import (
     compute_truncate,
 )
 
-
-class _SeriesArithmeticRequest(_SeriesPairRequest):
-    """Request for add/subtract/multiply/divide operations."""
-
-
-class _SeriesIdentityCheckRequest(_SeriesPairRequest):
-    """Request for identity check operation."""
-
-
 FORMAL_POWER_SERIES_OPERATIONS = (
     MathTool(
         operation_id="formal_series.rational.add.compute",
@@ -68,7 +61,7 @@ FORMAL_POWER_SERIES_OPERATIONS = (
             "coefficient-wise.  Both operands must share the same variable and "
             "truncation order."
         ),
-        request_type=_SeriesArithmeticRequest,
+        request_type=_SeriesAddSubtractRequest,
         result_type=SeriesArithmeticResult,
         run=lambda request: compute_add(request.left, request.right),
         tags=(
@@ -114,7 +107,7 @@ FORMAL_POWER_SERIES_OPERATIONS = (
             "QQ[[x]]/(x^N) coefficient-wise.  Both operands must share the same "
             "variable and truncation order."
         ),
-        request_type=_SeriesArithmeticRequest,
+        request_type=_SeriesAddSubtractRequest,
         result_type=SeriesArithmeticResult,
         run=lambda request: compute_subtract(request.left, request.right),
         tags=(
@@ -160,7 +153,7 @@ FORMAL_POWER_SERIES_OPERATIONS = (
             "QQ[[x]]/(x^N).  Both operands must share the same variable and "
             "truncation order."
         ),
-        request_type=_SeriesArithmeticRequest,
+        request_type=_SeriesMultiplyRequest,
         result_type=SeriesMultiplyResult,
         run=lambda request: compute_multiply(request.left, request.right),
         tags=(

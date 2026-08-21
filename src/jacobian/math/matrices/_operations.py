@@ -153,11 +153,15 @@ def compute_rational_linear_solve(
 
     source = conversions.rational_matrix_to_sympy(request.matrix)
     rhs = sympy.Matrix([sympy.Rational(value.as_fraction()) for value in request.rhs])
-    solution, parameters = matrices.solve_linear_system(source, rhs)
+    try:
+        solution, parameters = matrices.solve_linear_system(source, rhs)
+    except ValueError:
+        return RationalLinearSolveResult(outcome="INCONSISTENT")
     if parameters.rows:
-        raise ValueError("linear system does not have a unique solution")
+        return RationalLinearSolveResult(outcome="NON_UNIQUE")
     return RationalLinearSolveResult(
-        solution=tuple(conversions.rational_from_sympy(value) for value in solution)
+        outcome="UNIQUE",
+        solution=tuple(conversions.rational_from_sympy(value) for value in solution),
     )
 
 

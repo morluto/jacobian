@@ -58,7 +58,9 @@ def test_cli_catalog_inspect_and_run_are_inline(
 def test_cli_run_requires_exactly_one_payload_source(
     arguments: tuple[str, ...],
 ) -> None:
-    result = CliRunner().invoke(app, ["run", "integer.compute.gcd", *arguments])
+    result = CliRunner().invoke(
+        app, ["run", "integer.compute.extended_gcd", *arguments]
+    )
 
     assert result.exit_code == 1
     error = json.loads(result.stderr)["error"]

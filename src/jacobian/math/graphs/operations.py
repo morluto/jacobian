@@ -10,12 +10,33 @@ if TYPE_CHECKING:
     import networkx as nx
 
 __all__ = [
+    "biconnected_components",
     "compose_graphs",
     "diameter",
     "explicit_graph",
     "is_eulerian",
+    "radius",
+    "strongly_connected_components",
     "triangle_count",
 ]
+
+
+def biconnected_components(graph: nx.Graph[Any]) -> tuple[frozenset[Any], ...]:
+    """Return the biconnected vertex components of a simple graph."""
+
+    from jacobian.math.graphs import _networkx
+
+    return _networkx.biconnected_components(graph)
+
+
+def strongly_connected_components(
+    graph: nx.DiGraph[Any],
+) -> tuple[frozenset[Any], ...]:
+    """Return the strongly connected components of a simple digraph."""
+
+    from jacobian.math.graphs import _networkx
+
+    return _networkx.strongly_connected_components(graph)
 
 
 def triangle_count(graph: nx.Graph[Any]) -> int:
@@ -32,6 +53,14 @@ def diameter(graph: nx.Graph[Any]) -> int:
     from jacobian.math.graphs import _networkx
 
     return _networkx.diameter(graph)
+
+
+def radius(graph: nx.Graph[Any]) -> int:
+    """Return graph radius, requiring a nonempty connected graph."""
+
+    from jacobian.math.graphs import _networkx
+
+    return _networkx.radius(graph)
 
 
 def is_eulerian(graph: nx.Graph[Any]) -> bool:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -53,6 +52,7 @@ def _search_thresholds[WitnessT: (VertexWitness, EdgeWitness)](
     incumbent: WitnessT,
     budget: GraphOptimizationBudget,
     solve: Callable[[int, int], tuple[object, WitnessT]],
+    started: float,
 ) -> _SearchResult[WitnessT]:
     import z3  # type: ignore[import-untyped]
 
@@ -64,8 +64,16 @@ def _search_thresholds[WitnessT: (VertexWitness, EdgeWitness)](
         else range(upper_bound, incumbent_value, -1)
     )
     tested: list[OptimizationSearchStep] = []
-    started = time.monotonic()
-
+    if _remaining_ms(started, budget.wall_seconds) <= 0:
+        return _SearchResult(
+            False,
+            incumbent,
+            incumbent_value,
+            lower_bound,
+            upper_bound,
+            (),
+            "WALL_TIME",
+        )
     for bound in thresholds:
         if len(tested) >= budget.max_solver_calls:
             return _SearchResult(
@@ -169,9 +177,8 @@ def solve_domination(
     graph: Any,
     source: ChromaticGraph,
     budget: GraphOptimizationBudget,
+    started: float,
 ) -> GraphDominationMinimumOutput:
-    import networkx as nx
-
     vertices = tuple(source.vertices)
     if not vertices:
         return GraphDominationMinimumOutput(
@@ -186,7 +193,7 @@ def solve_domination(
             termination_reason="SPECIAL_CASE",
             detail="the empty graph is dominated by the empty set",
         )
-    incumbent = tuple(sorted(nx.dominating_set(graph)))
+    incumbent = tuple(sorted(vertices))
 
     def solve(bound: int, timeout_ms: int) -> tuple[object, VertexWitness]:
         import z3
@@ -216,6 +223,7 @@ def solve_domination(
         incumbent=incumbent,
         budget=budget,
         solve=solve,
+        started=started,
     )
     return GraphDominationMinimumOutput(
         status="EXACT" if result.exact else "UNKNOWN",
@@ -235,14 +243,10 @@ def solve_minimum_maximal_matching(
     graph: Any,
     source: ChromaticGraph,
     budget: GraphOptimizationBudget,
+    started: float,
 ) -> GraphMinimumMaximalMatchingOutput:
-    import networkx as nx
-
     vertices = tuple(source.vertices)
     edges = _canonical_edges(graph)
-    incumbent = tuple(
-        sorted(tuple(sorted(edge)) for edge in nx.maximal_matching(graph))
-    )
     if not edges:
         return GraphMinimumMaximalMatchingOutput(
             status="EXACT",
@@ -256,6 +260,13 @@ def solve_minimum_maximal_matching(
             termination_reason="SPECIAL_CASE",
             detail="an edgeless graph has the empty maximal matching",
         )
+    used: set[str] = set()
+    greedy_edges: list[tuple[str, str]] = []
+    for edge in edges:
+        if edge[0] not in used and edge[1] not in used:
+            greedy_edges.append(edge)
+            used.update(edge)
+    incumbent = tuple(greedy_edges)
 
     def solve(bound: int, timeout_ms: int) -> tuple[object, EdgeWitness]:
         import z3
@@ -296,6 +307,7 @@ def solve_minimum_maximal_matching(
         incumbent=incumbent,
         budget=budget,
         solve=solve,
+        started=started,
     )
     return GraphMinimumMaximalMatchingOutput(
         status="EXACT" if result.exact else "UNKNOWN",
@@ -317,12 +329,24 @@ def _maximum_vertex_search(
     source: ChromaticGraph,
     budget: GraphOptimizationBudget,
     kind: Literal["FOREST", "TREE", "BIPARTITE"],
+    started: float,
 ) -> _SearchResult[VertexWitness]:
     import networkx as nx
 
     vertices = tuple(source.vertices)
     if not vertices:
         return _SearchResult(True, (), 0, 0, 0, (), "SPECIAL_CASE")
+    incumbent: VertexWitness = (min(vertices),)
+    if _remaining_ms(started, budget.wall_seconds) <= 0:
+        return _SearchResult(
+            False,
+            incumbent,
+            1,
+            1,
+            len(vertices),
+            (),
+            "WALL_TIME",
+        )
     whole_valid = (
         nx.is_forest(graph)
         if kind == "FOREST"
@@ -341,7 +365,6 @@ def _maximum_vertex_search(
             (),
             "SPECIAL_CASE",
         )
-    incumbent: VertexWitness = (min(vertices),)
     edges = _canonical_edges(graph)
 
     def solve(bound: int, timeout_ms: int) -> tuple[object, VertexWitness]:
@@ -406,6 +429,7 @@ def _maximum_vertex_search(
         incumbent=incumbent,
         budget=budget,
         solve=solve,
+        started=started,
     )
 
 
@@ -413,9 +437,10 @@ def solve_induced_forest(
     graph: Any,
     source: ChromaticGraph,
     budget: GraphOptimizationBudget,
+    started: float,
 ) -> GraphInducedForestMaximumOutput:
     result = _maximum_vertex_search(
-        graph=graph, source=source, budget=budget, kind="FOREST"
+        graph=graph, source=source, budget=budget, kind="FOREST", started=started
     )
     return GraphInducedForestMaximumOutput(
         status="EXACT" if result.exact else "UNKNOWN",
@@ -435,9 +460,10 @@ def solve_induced_tree(
     graph: Any,
     source: ChromaticGraph,
     budget: GraphOptimizationBudget,
+    started: float,
 ) -> GraphInducedTreeMaximumOutput:
     result = _maximum_vertex_search(
-        graph=graph, source=source, budget=budget, kind="TREE"
+        graph=graph, source=source, budget=budget, kind="TREE", started=started
     )
     return GraphInducedTreeMaximumOutput(
         status="EXACT" if result.exact else "UNKNOWN",
@@ -457,9 +483,14 @@ def solve_induced_bipartite(
     graph: Any,
     source: ChromaticGraph,
     budget: GraphOptimizationBudget,
+    started: float,
 ) -> GraphInducedBipartiteMaximumOutput:
     result = _maximum_vertex_search(
-        graph=graph, source=source, budget=budget, kind="BIPARTITE"
+        graph=graph,
+        source=source,
+        budget=budget,
+        kind="BIPARTITE",
+        started=started,
     )
     return GraphInducedBipartiteMaximumOutput(
         status="EXACT" if result.exact else "UNKNOWN",

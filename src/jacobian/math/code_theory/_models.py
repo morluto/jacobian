@@ -122,3 +122,87 @@ class CoveringRadiusRequest(StrictModel):
 class CoveringRadiusResult(StrictModel):
     covering_radius: int = Field(ge=0, le=256)
     method: Literal["SYNDROME_BFS"] = "SYNDROME_BFS"
+
+
+# ---------------------------------------------------------------------------
+# Dual code operations
+# ---------------------------------------------------------------------------
+
+
+class DualCodeRequest(StrictModel):
+    """Compute the dual code (parity check matrix) from a generator matrix."""
+
+    field_order: int = Field(ge=2, le=251)
+    generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=16)
+
+    @model_validator(mode="after")
+    def require_valid_prime_field(self) -> Self:
+        from sympy import isprime
+
+        if not isprime(self.field_order):
+            raise ValueError("field_order must be prime")
+        width = len(self.generator_matrix[0])
+        if width == 0 or width > 32:
+            raise ValueError("generator rows must have between 1 and 32 entries")
+        if any(len(row) != width for row in self.generator_matrix):
+            raise ValueError("generator rows must have equal length")
+        if any(
+            not 0 <= entry < self.field_order
+            for row in self.generator_matrix
+            for entry in row
+        ):
+            raise ValueError("entries must be canonical field residues")
+        return self
+
+
+class DualCodeResult(StrictModel):
+    """The dual code: parity check matrix (rows span the null space)."""
+
+    field_order: int
+    parity_check_matrix: tuple[tuple[int, ...], ...]
+    code_dimension: int
+    code_length: int
+    dual_dimension: int
+
+
+class SyndromeRequest(StrictModel):
+    """Compute the syndrome of a received word under a parity check matrix."""
+
+    field_order: int = Field(ge=2, le=251)
+    parity_check_matrix: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=16
+    )
+    received_word: tuple[int, ...] = Field(min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def require_valid_request(self) -> Self:
+        from sympy import isprime
+
+        if not isprime(self.field_order):
+            raise ValueError("field_order must be prime")
+        cols = len(self.parity_check_matrix[0])
+        if cols == 0 or cols > 32:
+            raise ValueError("parity check rows must have between 1 and 32 entries")
+        if any(len(row) != cols for row in self.parity_check_matrix):
+            raise ValueError("parity check rows must have equal length")
+        if any(
+            not 0 <= entry < self.field_order
+            for row in self.parity_check_matrix
+            for entry in row
+        ):
+            raise ValueError("parity check entries must be canonical field residues")
+        if len(self.received_word) != cols:
+            raise ValueError("received word length must match parity check columns")
+        for entry in self.received_word:
+            if not 0 <= entry < self.field_order:
+                raise ValueError(
+                    "received word entries must be canonical field residues"
+                )
+        return self
+
+
+class SyndromeResult(StrictModel):
+    """The syndrome vector H * r^T mod p."""
+
+    field_order: int
+    syndrome: tuple[int, ...]

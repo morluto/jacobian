@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 import tomli_w
-from benchmarks.tooling.command_runner import ToolCommandStatus, run_operator_command
 from benchmarks.tooling.harbor_suite import (
     TASK_SCHEMA_VERSION,
     EnvironmentProfile,
@@ -15,19 +14,15 @@ from benchmarks.tooling.harbor_suite import (
     load_registry,
     verifier_bundle_checksum_bytes,
 )
+from tools.command_runner import ToolCommandStatus, run_operator_command
 
 
-def patch_harbor_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    """Redirect harbor_suite.ROOT to tmp_path so _resolve accepts test paths."""
-
+def _apply_synthetic_profiles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> EnvironmentProfile:
+    """Replace ``load_environment_profiles`` with a deterministic test profile."""
     import benchmarks.tooling.harbor_suite as hs
 
-    monkeypatch.setattr(hs, "ROOT", tmp_path)
-    # Worktree-local pytest basetemps remain inside the outer repository and
-    # inherit its ignore rules unless the synthetic Harbor root owns a Git
-    # boundary. Keep cache-policy tests independent of their temp location.
-    git = run_operator_command("git", ("init", "--quiet"), cwd=tmp_path)
-    assert git.status is ToolCommandStatus.EXITED and git.exit_code == 0
     profile = EnvironmentProfile(
         name="test-profile",
         agent_image="python:3.12-slim",
@@ -37,6 +32,34 @@ def patch_harbor_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     monkeypatch.setattr(
         hs, "load_environment_profiles", lambda: {profile.name: profile}
     )
+    return profile
+
+
+def patch_harbor_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Redirect harbor_suite.ROOT to tmp_path and supply a synthetic profile.
+
+    This fixture does NOT create a Git repository. Tests that exercise real
+    ``git check-ignore`` behavior should use ``patch_harbor_root_with_git``.
+    """
+
+    import benchmarks.tooling.harbor_suite as hs
+
+    monkeypatch.setattr(hs, "ROOT", tmp_path)
+    _apply_synthetic_profiles(monkeypatch)
+    return tmp_path
+
+
+def patch_harbor_root_with_git(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Like ``patch_harbor_root`` but also initializes a real Git repository.
+
+    Only tests that exercise ``git check-ignore`` semantics should use this
+    fixture. Ordinary registry, topology, and strict-boundary tests do not
+    need a Git repository.
+    """
+
+    patch_harbor_root(monkeypatch, tmp_path)
+    git = run_operator_command("git", ("init", "--quiet"), cwd=tmp_path)
+    assert git.status is ToolCommandStatus.EXITED and git.exit_code == 0
     return tmp_path
 
 

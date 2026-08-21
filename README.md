@@ -7,7 +7,7 @@
 <h1 align="center">Jacobian</h1>
 
 <p align="center">
-  <strong>Atomic mathematics for agents: discover one typed operation, run it, and compose its bounded result.</strong>
+  <strong>An executable mathematical vocabulary for agents: discover one typed operation, run it, and compose its result.</strong>
 </p>
 
 <p align="center">
@@ -18,15 +18,42 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/morluto/jacobian" alt="MIT license"></a>
 </p>
 
-Jacobian is an MCP server that gives AI agents atomic, composable tools for
-higher mathematics. It exposes two tools: `math.find` searches an immutable
-library of typed mathematical operations, and `math.run` executes exactly one
-of them and returns its concrete typed result. Each operation is one bounded,
-exact computation: a typed request in, a typed mathematical value out, with
-no workflow, state, or intermediate runtime between them. The same
-mathematical library is also available through a CLI and native Python API.
+Jacobian is an MCP server that gives AI agents a searchable vocabulary of typed
+mathematical operations. `math.find` discovers an operation, and `math.run`
+executes exactly one bounded mathematical contract and returns its typed
+result. The same mathematical library is also available through a CLI and
+native Python API.
+
+Each operation establishes one stable, reusable mathematical postcondition
+rather than prescribing a workflow or proof strategy. Results are exact where
+claimed and make approximation, incompleteness, or uncertainty explicit.
+
+**Jacobian's hypothesis is that mathematical reasoning benefits from an
+executable vocabulary of semantically scoped, bounded operations.** Rather than
+exposing large domain solvers or precomposed workflows, Jacobian exposes
+mathematical primitives that agents can search for and compose into solutions
+beyond what any individual operation was designed to solve. The library
+supplies trustworthy mathematical moves; the reasoning model decides which
+moves to make, how to combine their results, and when to stop. Keeping the
+operations semantically narrow and domain-owned preserves that search space
+instead of baking one proof strategy or workflow into the tools themselves.
+
+See [Executable mathematical vocabulary](docs/explanation/executable-mathematical-vocabulary.md)
+for what semantic atomicity means and how the operation vocabulary grows.
 
 ## Quickstart
+
+Set up Jacobian for your agents with a single command. The setup command
+requires Node.js 18 or newer and `uvx` on your `PATH`.
+
+```sh
+npx jacobian@latest setup
+```
+
+Choose detected agents and review the changes before they are written. Setup
+does not install Node.js, Python, `uv`, or an agent. For automation, preview
+an explicit plan with `npx jacobian@latest setup --codex --dry-run`; use
+`--yes` only with explicit agent flags or `--all`.
 
 Run the canonical Python MCP command without installing Jacobian globally:
 
@@ -58,15 +85,15 @@ of the tested release contract yet. In particular, Alpine/musl cannot install
 the complete mandatory stack from PyPI.
 
 The Python distribution contains the mathematical kernel, CLI, and MCP server.
-The npm package contains no lifecycle manager or JavaScript API; it only maps
-its exact package version to the corresponding `uvx` invocation.
+The npm package deterministically maps its exact package version to the
+corresponding `uvx` invocation.
 
 ## Compute one bounded result
 
 An ordinary operation returns mathematics first. For example,
 `matrix.determinant.compute` accepts one exact rational matrix and returns its
 determinant directly. Callers compose results by passing their typed values to a
-subsequent operation; Jacobian retains no project state or artifact store.
+subsequent operation.
 
 ## Available mathematics
 
@@ -81,10 +108,9 @@ The built-in portfolio covers work in:
 
 SAT and SMT operations use the maintained Z3 Python binding directly. The
 optional `lean.check` operation runs one bounded source snippet in the fixed
-Lean service environment. It creates only a request-scoped temporary directory
-and returns typed diagnostics; it does not expose a proof-state session or
-retain source. Use `math.find` to search for an operation, browse an unfamiliar
-domain, and inspect one operation before calling `math.run` once.
+Lean service environment, using a request-scoped temporary directory and
+returning typed diagnostics. Use `math.find` to search for an operation, browse
+an unfamiliar domain, and inspect one operation before calling `math.run` once.
 
 See the [domain operation library](docs/reference/domain-operation-library.md)
 for the maintained operation portfolio and
@@ -92,7 +118,7 @@ for the maintained operation portfolio and
 
 ## Status
 
-Jacobian 0.12.0 is pre-stable. Its published package and operation contracts
+Jacobian 0.13.0 <!-- x-release-please-version --> is pre-stable. Its published package and operation contracts
 describe the supported surface; experimental operation contracts may change
 between releases.
 

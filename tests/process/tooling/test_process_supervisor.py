@@ -44,18 +44,33 @@ def test_timeout_kills_a_descendant_that_ignores_sigterm(tmp_path: Path) -> None
 
     assert result.timed_out is True
     assert result.exit_code == 1
-    deadline = time.monotonic() + 2
+
+    # Wait for the descendant PID marker until the deadline.
+    deadline = time.monotonic() + 5
     child_pid: int | None = None
     while time.monotonic() < deadline:
-        if marker.exists() and marker.read_text(encoding="utf-8").strip():
-            child_pid = int(marker.read_text(encoding="utf-8"))
-            break
+        if marker.exists():
+            text = marker.read_text(encoding="utf-8").strip()
+            if text:
+                child_pid = int(text)
+                break
         time.sleep(0.05)
-        if child_pid is None:
-            raise AssertionError("descendant did not record its pid before timeout")
+
+    if child_pid is None:
+        raise AssertionError("descendant did not record its pid before timeout")
+
+    # Verify the SIGTERM-ignoring descendant was actually killed.
+    # Poll for termination: the supervisor sends SIGTERM then SIGKILL.
+    kill_deadline = time.monotonic() + 10
+    still_alive = True
+    while time.monotonic() < kill_deadline:
         try:
             os.kill(child_pid, 0)
-            still_alive = True
         except OSError:
             still_alive = False
-        assert still_alive is False
+            break
+        time.sleep(0.05)
+
+    assert still_alive is False, (
+        f"descendant (pid={child_pid}) survived timeout — SIGKILL not sent?"
+    )

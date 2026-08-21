@@ -8,6 +8,7 @@ from jacobian.math.number_theory._models import (
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,
     PreviousPrimeRequest,
+    PrimorialResult,
 )
 from jacobian.math.number_theory._prime_operations import (
     compute_euler_totient,
@@ -90,7 +91,7 @@ PRIME_OPERATIONS = (
         "Compute primorial",
         "Compute the product of the first n primes.",
         PositiveIntegerRequest,
-        IntegerValueResult,
+        PrimorialResult,
         compute_primorial,
         "number-theory",
         "prime",
@@ -99,6 +100,7 @@ PRIME_OPERATIONS = (
                 "primorial_5", "Compute the product of the first five primes.", {"n": 5}
             ),
         ),
+        version="3",
     ),
     number_theory_operation(
         "integer.compute.euler_totient",

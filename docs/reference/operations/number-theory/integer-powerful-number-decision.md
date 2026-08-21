@@ -2,9 +2,10 @@
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
-`integer.decide.powerful` decides whether every prime exponent of one bounded
-positive integer is at least two. Its result carries the complete factor witness
-and the primes whose exponents violate the predicate, when any do.
+Use `integer.compute.prime_factorization` to obtain the complete factor witness,
+then test whether every exponent is at least two in caller-owned Python. The
+powerful-number predicate is a cheap deterministic projection of that retained
+public result and therefore has no separate discovery entry.
 
 The integer is the complete request value and the decision is the complete
 response value. The operation runs as a direct bounded computation; it has no

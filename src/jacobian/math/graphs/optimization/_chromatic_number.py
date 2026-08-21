@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
 from jacobian.math.graphs.optimization._coloring_models import (
@@ -19,12 +21,14 @@ def _search_chromatic_number(
 ) -> GraphChromaticNumberOutput:
     """Run bounded k-colorability decisions until exactness or timeout."""
 
+    started = time.monotonic()
     networkx_graph = build_simple_graph(request.graph)
     output = solve_chromatic_number(
         networkx_graph,
         graph=request.graph,
         vertices=request.graph.vertices,
         wall_seconds=request.resource_budget.wall_seconds,
+        started=started,
     )
 
     return output

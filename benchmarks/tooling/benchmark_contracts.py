@@ -14,19 +14,18 @@ from typing import Any
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError, ValidationError
 
+from benchmarks.tooling.benchmark_job_models import HarborJobSelection
 from benchmarks.tooling.benchmark_snapshots import validate_lock
 from benchmarks.tooling.harbor_suite import (
     BENCHMARKS,
     ROOT,
     HarborSuiteError,
     Suite,
+    get_suite,
     load_registry,
 )
 from benchmarks.tooling.public_contract import check as check_public_contract_drift
-from benchmarks.tooling.strict_boundaries import (
-    HarborJobSelection,
-    strict_model_failures,
-)
+from benchmarks.tooling.strict_boundaries import strict_model_failures
 from benchmarks.tooling.verifier_audits import (
     canonical_string_rational_schema_failures,
     formula_string_schema_failures,
@@ -467,14 +466,16 @@ def validate_all() -> list[str]:
     )
     suites = load_registry()
     failures.extend(_suite_contract_failures(suites))
+    math_suite = get_suite("jacobian/mathematical-benchmarks-v1")
     failures.extend(
         _validate_job(
-            BENCHMARKS / "config" / "mathematical-benchmarks-v1-control.json", suites[0]
+            BENCHMARKS / "config" / "mathematical-benchmarks-v1-control.json",
+            math_suite,
         )
     )
     failures.extend(
         collect_contract_failures(
-            partial(_validate_job, path, suites[0]) for path in inventory.proxy_jobs
+            partial(_validate_job, path, math_suite) for path in inventory.proxy_jobs
         )
     )
     failures.extend(_observation_pair_failures())

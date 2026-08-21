@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -104,12 +105,13 @@ def _valid_witness(graph: Any, result: StrictModel) -> bool:
 def _execute[ResultT: StrictModel](
     request: GraphOptimizationRequest,
     solve: Callable[
-        [Any, ChromaticGraph, GraphOptimizationBudget],
+        [Any, ChromaticGraph, GraphOptimizationBudget, float],
         ResultT,
     ],
 ) -> ResultT:
+    started = time.monotonic()
     graph = cast(Any, build_simple_graph(request.graph))
-    result = solve(graph, request.graph, request.resource_budget)
+    result = solve(graph, request.graph, request.resource_budget, started)
     if not _valid_witness(graph, result):
         raise RuntimeError("graph optimization backend returned an invalid witness")
     return result
@@ -120,7 +122,7 @@ def _operation[ResultT: StrictModel](
     title: str,
     description: str,
     result_type: type[ResultT],
-    solve: Callable[[Any, ChromaticGraph, GraphOptimizationBudget], ResultT],
+    solve: Callable[[Any, ChromaticGraph, GraphOptimizationBudget, float], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
 ) -> MathTool[GraphOptimizationRequest, ResultT]:
@@ -142,7 +144,9 @@ DOMINATION_MINIMUM_OPERATION = _operation(
     "Minimum dominating set",
     "Compute the domination number and an attaining set within explicit budgets.",
     GraphDominationMinimumOutput,
-    lambda graph, contract, budget: solve_domination(graph, contract, budget),
+    lambda graph, contract, budget, started: solve_domination(
+        graph, contract, budget, started
+    ),
     "domination",
     "minimum",
     examples=(
@@ -165,8 +169,8 @@ MINIMUM_MAXIMAL_MATCHING_OPERATION = _operation(
     "Minimum maximal matching",
     "Compute the saturation number and an attaining maximal matching within explicit budgets.",
     GraphMinimumMaximalMatchingOutput,
-    lambda graph, contract, budget: solve_minimum_maximal_matching(
-        graph, contract, budget
+    lambda graph, contract, budget, started: solve_minimum_maximal_matching(
+        graph, contract, budget, started
     ),
     "matching",
     "saturation_number",
@@ -191,7 +195,9 @@ INDUCED_FOREST_MAXIMUM_OPERATION = _operation(
     "Maximum induced forest",
     "Compute a maximum-order induced forest and vertex witness within explicit budgets.",
     GraphInducedForestMaximumOutput,
-    lambda graph, contract, budget: solve_induced_forest(graph, contract, budget),
+    lambda graph, contract, budget, started: solve_induced_forest(
+        graph, contract, budget, started
+    ),
     "induced_forest",
     "maximum",
     examples=(
@@ -214,7 +220,9 @@ INDUCED_TREE_MAXIMUM_OPERATION = _operation(
     "Maximum induced tree",
     "Compute a maximum-order induced tree and vertex witness within explicit budgets.",
     GraphInducedTreeMaximumOutput,
-    lambda graph, contract, budget: solve_induced_tree(graph, contract, budget),
+    lambda graph, contract, budget, started: solve_induced_tree(
+        graph, contract, budget, started
+    ),
     "induced_tree",
     "maximum",
     examples=(
@@ -237,7 +245,9 @@ INDUCED_BIPARTITE_MAXIMUM_OPERATION = _operation(
     "Maximum induced bipartite subgraph",
     "Compute a maximum-order induced bipartite subgraph within explicit budgets.",
     GraphInducedBipartiteMaximumOutput,
-    lambda graph, contract, budget: solve_induced_bipartite(graph, contract, budget),
+    lambda graph, contract, budget, started: solve_induced_bipartite(
+        graph, contract, budget, started
+    ),
     "induced_bipartite",
     "maximum",
     examples=(

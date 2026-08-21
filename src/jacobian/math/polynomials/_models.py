@@ -64,6 +64,15 @@ class PolynomialGcdRequest(PolynomialPairRequest):
             )
         return self
 
+    @model_validator(mode="after")
+    def require_not_both_zero(self) -> Self:
+        """Reject gcd(0, 0): zero has no monic normalization."""
+        left_zero = len(self.left.polynomial.terms) == 0
+        right_zero = len(self.right.polynomial.terms) == 0
+        if left_zero and right_zero:
+            raise ValueError("gcd(0, 0) is undefined: zero has no monic normalization")
+        return self
+
 
 class PolynomialBezoutIdentity(StrictModel):
     left_multiplier: RationalPolynomial

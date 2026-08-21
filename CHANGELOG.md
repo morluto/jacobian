@@ -1,5 +1,163 @@
 # Changelog
 
+## [0.13.0](https://github.com/morluto/jacobian/compare/jacobian-v0.12.0...jacobian-v0.13.0) (2026-08-20)
+
+
+### ⚠ Breaking Changes
+
+* **runtime:** remove stateful commands and APIs, including `jacobian init`,
+  `jacobian update`, `--state-dir`, workspaces, artifacts, value references,
+  and checker/runtime interfaces. The stateless kernel now accepts one complete
+  request per `math.run` call; callers own composition and durable state
+  ([0ff90ee](https://github.com/morluto/jacobian/commit/0ff90ee22d2edd1b78a38041c5a92a0baf13dade),
+  [62ce9d3](https://github.com/morluto/jacobian/commit/62ce9d371fc5501c0eb7a0843c4d757048a8e974)).
+* **catalog:** curate the public operation basis and remove legacy operation
+  IDs. Compatibility aliases are not provided; use `math.find` to locate a
+  retained operation before replacing an old `math.run` call
+  ([dd341af](https://github.com/morluto/jacobian/commit/dd341afbdba42186a4b511b830335ac62f21d05d)).
+
+
+### Features
+
+* **math:** add permanent, Kronecker product, partial trace, Walsh transform,
+  and symbolic matrix operations ([#1651](https://github.com/morluto/jacobian/issues/1651))
+  ([1ca7143](https://github.com/morluto/jacobian/commit/1ca7143be800e3973507b472e3dab0b15eeff44c)).
+* **math:** add exact bounded operations across code theory, graph coloring,
+  flows and spectra, groups, Markov chains, number fields, recurrence solving,
+  and root isolation ([#1683](https://github.com/morluto/jacobian/issues/1683))
+  ([a6adff8](https://github.com/morluto/jacobian/commit/a6adff87a2be8711fe0062b143bdc7af9add2af8)).
+* **math:** add bounded composable operations across arithmetic, combinatorics,
+  geometry, graphs, matrices, polynomials, and finite structures
+  ([#1817](https://github.com/morluto/jacobian/issues/1817))
+  ([68df662](https://github.com/morluto/jacobian/commit/68df66239fcce898a0087d72bae795904b126b00)).
+* **graph:** add an exact maximal independent-set decision
+  ([#1774](https://github.com/morluto/jacobian/issues/1774))
+  ([7c84d1e](https://github.com/morluto/jacobian/commit/7c84d1e501e91e9438a418a96be47b52a6b3ee37)).
+* **code-theory:** add a bounded exact code-covering radius operation
+  ([#1721](https://github.com/morluto/jacobian/issues/1721))
+  ([5d73f35](https://github.com/morluto/jacobian/commit/5d73f35c049d99fc2f58d19a65d488717b060c79)).
+* **analysis:** add bounded Arb expression enclosures ([#2098](https://github.com/morluto/jacobian/issues/2098)) ([8a0c635](https://github.com/morluto/jacobian/commit/8a0c635b39af653f643ada288e20b860027d5037))
+* **markov-chain:** add exact bounded mixing time ([#2100](https://github.com/morluto/jacobian/issues/2100)) ([f2fcd06](https://github.com/morluto/jacobian/commit/f2fcd0693c4c3ec61b31d9d66cd4d25cced83895))
+* **math:** add algebraic topology operations ([#1878](https://github.com/morluto/jacobian/issues/1878)) ([#2061](https://github.com/morluto/jacobian/issues/2061)) ([213c37a](https://github.com/morluto/jacobian/commit/213c37a368e581379447202fd148681bf7ba75dc))
+* **math:** add chip-firing domain with Laplacian and vertex firing ([#1741](https://github.com/morluto/jacobian/issues/1741)) ([#2017](https://github.com/morluto/jacobian/issues/2017)) ([52d9f33](https://github.com/morluto/jacobian/commit/52d9f33b8afa8f425a11bd1aa41097857b98ccc0))
+* **math:** add combinatorial maps domain with faces and dual operations ([#1728](https://github.com/morluto/jacobian/issues/1728)) ([1232975](https://github.com/morluto/jacobian/commit/123297549123f91b16fd503b4a55f30a05578d12))
+* **math:** add combinatorial matrices domain with Hadamard profiles, normalization, determinant, and Sylvester construction ([#1784](https://github.com/morluto/jacobian/issues/1784)) ([#2033](https://github.com/morluto/jacobian/issues/2033)) ([684b0ef](https://github.com/morluto/jacobian/commit/684b0eff475c11e7e0c4c969a98d5cb50c2aa24e))
+* **math:** add commutative algebra operations ([#1869](https://github.com/morluto/jacobian/issues/1869)) ([#2055](https://github.com/morluto/jacobian/issues/2055)) ([6421fd8](https://github.com/morluto/jacobian/commit/6421fd84b9fc8ccbb98475401e73aa143cd08129))
+* **math:** add context-free language operations ([#1894](https://github.com/morluto/jacobian/issues/1894)) ([#2051](https://github.com/morluto/jacobian/issues/2051)) ([55daad2](https://github.com/morluto/jacobian/commit/55daad2690a7eec4a85cdb593a5f60b944086bdb))
+* **math:** add cubical complexes domain with f-vector and face closure ([#1888](https://github.com/morluto/jacobian/issues/1888)) ([#2020](https://github.com/morluto/jacobian/issues/2020)) ([772e960](https://github.com/morluto/jacobian/commit/772e960236db48c7babb4d2cba4349b71d51b961))
+* **math:** add dual code and syndrome operations using SymPy ([#1851](https://github.com/morluto/jacobian/issues/1851)) ([#2026](https://github.com/morluto/jacobian/issues/2026)) ([e4b39e8](https://github.com/morluto/jacobian/commit/e4b39e88537eaf93dcfe0f53563dd5ea512db407))
+* **math:** add finite categories domain with profile and opposite ([#1733](https://github.com/morluto/jacobian/issues/1733)) ([#2023](https://github.com/morluto/jacobian/issues/2023)) ([95b6eee](https://github.com/morluto/jacobian/commit/95b6eee85e345cf3458d35092b1e7812905a2784))
+* **math:** add finite geometry operations ([#1853](https://github.com/morluto/jacobian/issues/1853)) ([#2041](https://github.com/morluto/jacobian/issues/2041)) ([7388708](https://github.com/morluto/jacobian/commit/7388708d154a4200229e40da24287c8156b34099))
+* **math:** add finite semigroup domain with power profiles and generated subsemigroups ([#1858](https://github.com/morluto/jacobian/issues/1858)) ([#2011](https://github.com/morluto/jacobian/issues/2011)) ([da7b42f](https://github.com/morluto/jacobian/commit/da7b42f759667630d6a9221f0b20a5b881bc2cc5))
+* **math:** add finite stochastic processes domain with sigma algebras, conditional expectation, filtrations, and Doob martingales ([#1806](https://github.com/morluto/jacobian/issues/1806)) ([#2036](https://github.com/morluto/jacobian/issues/2036)) ([739ff6a](https://github.com/morluto/jacobian/commit/739ff6a2dc694027bb3afae6d0a50883002b11f2))
+* **math:** add finite topological spaces domain with interior, closure, boundary, Kolmogorov quotient, and continuity check ([#1920](https://github.com/morluto/jacobian/issues/1920)) ([#2037](https://github.com/morluto/jacobian/issues/2037)) ([1e74773](https://github.com/morluto/jacobian/commit/1e74773c5375e61bcbef9263a6b738ce9acea66f))
+* **math:** add finite-dimensional algebra operations ([#1875](https://github.com/morluto/jacobian/issues/1875)) ([#2056](https://github.com/morluto/jacobian/issues/2056)) ([c51dcdf](https://github.com/morluto/jacobian/commit/c51dcdfe1c638dd116c2612a3de91b1e72dbd20c))
+* **math:** add finitely generated abelian group operations ([#1857](https://github.com/morluto/jacobian/issues/1857)) ([#2044](https://github.com/morluto/jacobian/issues/2044)) ([6e67391](https://github.com/morluto/jacobian/commit/6e67391dfd69ba1d837f0ab6a9d50833803e626e))
+* **math:** add formal concept analysis domain with derivation, closure, concepts, and lattice ([#1896](https://github.com/morluto/jacobian/issues/1896)) ([#2035](https://github.com/morluto/jacobian/issues/2035)) ([280df56](https://github.com/morluto/jacobian/commit/280df56cf5a407783165010d08d6512c8bd5b44f))
+* **math:** add Galois theory operations ([#1862](https://github.com/morluto/jacobian/issues/1862)) ([#2047](https://github.com/morluto/jacobian/issues/2047)) ([dcd7286](https://github.com/morluto/jacobian/commit/dcd728625f27b784c8163e01eea9a5d78134a08e))
+* **math:** add graph morphism operations ([#1856](https://github.com/morluto/jacobian/issues/1856)) ([#2043](https://github.com/morluto/jacobian/issues/2043)) ([3892666](https://github.com/morluto/jacobian/commit/38926667a7cf5499b0294737b346476a140d662f))
+* **math:** add greedoids domain with recognize, rank, bases, basic words, convex geometry ([#1915](https://github.com/morluto/jacobian/issues/1915)) ([#2031](https://github.com/morluto/jacobian/issues/2031)) ([33650ef](https://github.com/morluto/jacobian/commit/33650ef0588c076f13608e6cdda4c4ad2682333e))
+* **math:** add hyperplane arrangement operations ([#1885](https://github.com/morluto/jacobian/issues/1885)) ([#2052](https://github.com/morluto/jacobian/issues/2052)) ([0e6cb64](https://github.com/morluto/jacobian/commit/0e6cb64a0ce6e7e29a29629cc3697c0fd6bfbd27))
+* **math:** add incidence structure domain with matrix and degree profiles ([#1732](https://github.com/morluto/jacobian/issues/1732)) ([#2018](https://github.com/morluto/jacobian/issues/2018)) ([947704d](https://github.com/morluto/jacobian/commit/947704d6edb725b283b6d119e02419799547ed56))
+* **math:** add integer multiplicative normal-form operations ([#1893](https://github.com/morluto/jacobian/issues/1893)) ([#2009](https://github.com/morluto/jacobian/issues/2009)) ([1605b75](https://github.com/morluto/jacobian/commit/1605b751e16d43797dc210da311c154df97ae52d))
+* **math:** add integer multiplicative normal-form operations ([#2038](https://github.com/morluto/jacobian/issues/2038)) ([5184b64](https://github.com/morluto/jacobian/commit/5184b645fec978e13a3f7f096dce0a3836c68144))
+* **math:** add inverse multiplicative function operations ([#1867](https://github.com/morluto/jacobian/issues/1867)) ([#2058](https://github.com/morluto/jacobian/issues/2058)) ([a30efd7](https://github.com/morluto/jacobian/commit/a30efd7c7be072c1e8db11e7666325191309fd43))
+* **math:** add Latin squares domain with check and transversal search ([#1887](https://github.com/morluto/jacobian/issues/1887)) ([#2021](https://github.com/morluto/jacobian/issues/2021)) ([ff00216](https://github.com/morluto/jacobian/commit/ff00216ef0ed95f4fa5308a0db16d5fc02e23004))
+* **math:** add linear code structural operations ([#1851](https://github.com/morluto/jacobian/issues/1851)) ([#2040](https://github.com/morluto/jacobian/issues/2040)) ([d5b1eaa](https://github.com/morluto/jacobian/commit/d5b1eaaae96b6452306e9f1e755522a3529d2592))
+* **math:** add network optimization operations ([#1852](https://github.com/morluto/jacobian/issues/1852)) ([#2042](https://github.com/morluto/jacobian/issues/2042)) ([0aedebc](https://github.com/morluto/jacobian/commit/0aedebc8a230822f18c3f31025c751f4b9b7999b))
+* **math:** add nim sum and outcome profile operations ([#2010](https://github.com/morluto/jacobian/issues/2010)) ([4690ec7](https://github.com/morluto/jacobian/commit/4690ec71844e87fdfdd4ba594e88ce1f921df2df))
+* **math:** add plane algebraic curve operations ([#1877](https://github.com/morluto/jacobian/issues/1877)) ([#2060](https://github.com/morluto/jacobian/issues/2060)) ([384b491](https://github.com/morluto/jacobian/commit/384b491cb733b25803f1fc6bd1486c0a7c2d1abd))
+* **math:** add polynomial interpolation operations ([#1883](https://github.com/morluto/jacobian/issues/1883)) ([#2050](https://github.com/morluto/jacobian/issues/2050)) ([e0b54ba](https://github.com/morluto/jacobian/commit/e0b54ba8ac8d8e61f81286bce20fb621181c4350))
+* **math:** add polynomial vector calculus operations ([#1865](https://github.com/morluto/jacobian/issues/1865)) ([#2045](https://github.com/morluto/jacobian/issues/2045)) ([fc79fd9](https://github.com/morluto/jacobian/commit/fc79fd9f734b1ded8663502fbcfeda95af63e5ac))
+* **math:** add poset closure, dual, and induced subposet operations ([#2039](https://github.com/morluto/jacobian/issues/2039)) ([55e033d](https://github.com/morluto/jacobian/commit/55e033dcb329108b7ed792f9cde99590ed3e8bf2))
+* **math:** add projective coordinate operations ([#1892](https://github.com/morluto/jacobian/issues/1892)) ([#2013](https://github.com/morluto/jacobian/issues/2013)) ([43d7133](https://github.com/morluto/jacobian/commit/43d7133da2fe90b3b1eee994acdc30c6fc1b689c))
+* **math:** add quadratic forms domain with evaluate, discriminant, signature ([#1841](https://github.com/morluto/jacobian/issues/1841)) ([#2027](https://github.com/morluto/jacobian/issues/2027)) ([607fe27](https://github.com/morluto/jacobian/commit/607fe27923645b71398de73a9104338511a93eb8))
+* **math:** add quiver and path algebra operations ([#1863](https://github.com/morluto/jacobian/issues/1863)) ([#2048](https://github.com/morluto/jacobian/issues/2048)) ([d1645f4](https://github.com/morluto/jacobian/commit/d1645f493efafe9c81226aa462ee2fd59e6216d8))
+* **math:** add root system domain with Cartan matrix root computation ([#1810](https://github.com/morluto/jacobian/issues/1810)) ([#2015](https://github.com/morluto/jacobian/issues/2015)) ([3e08ee8](https://github.com/morluto/jacobian/commit/3e08ee8ca6d72e9c38917a735f240c05233789da))
+* **math:** add RSK permutation correspondence operation ([#2014](https://github.com/morluto/jacobian/issues/2014)) ([c97dd35](https://github.com/morluto/jacobian/commit/c97dd351b632ecd6f524abfcd4c82d580814150f))
+* **math:** add semigroup power, idempotents, and principal ideal operations ([#2081](https://github.com/morluto/jacobian/issues/2081)) ([5a62529](https://github.com/morluto/jacobian/commit/5a62529e2e3258784c75bbd36272dd7c85e69f7a))
+* **math:** add simplicial complex f-vector operation ([#1798](https://github.com/morluto/jacobian/issues/1798)) ([#2022](https://github.com/morluto/jacobian/issues/2022)) ([be4fb5c](https://github.com/morluto/jacobian/commit/be4fb5c236540a9cc7ebefd0e709314f7c3e16a3))
+* **math:** add simplicial complex link and f-vector operations ([#1850](https://github.com/morluto/jacobian/issues/1850)) ([#2025](https://github.com/morluto/jacobian/issues/2025)) ([3608695](https://github.com/morluto/jacobian/commit/3608695b9574558def8ce607d78152ca9d989e8e))
+* **math:** add tree decompositions domain with width, occurrences, adhesions, reroot, restrict, bag intersection ([#1731](https://github.com/morluto/jacobian/issues/1731)) ([#2032](https://github.com/morluto/jacobian/issues/2032)) ([af37526](https://github.com/morluto/jacobian/commit/af3752692cfcd51afa1ed441a173fdf4a4478b1c))
+* **math:** add universal algebra domain with term evaluation, equation profiles, subalgebras, congruences, and quotients ([#1912](https://github.com/morluto/jacobian/issues/1912)) ([#2034](https://github.com/morluto/jacobian/issues/2034)) ([c9872f0](https://github.com/morluto/jacobian/commit/c9872f0ab4775cb22d1a33d764dfdb9210b5cdc9))
+* **math:** extract 8 closed math PRs with review-thread root-cause fixes ([#1959](https://github.com/morluto/jacobian/issues/1959)) ([7bbb302](https://github.com/morluto/jacobian/commit/7bbb3027d5783dc213fe8f32e6457a7a73435b47))
+* **mcp:** add paginated operation browse ([0bb7bfc](https://github.com/morluto/jacobian/commit/0bb7bfc96a8d4fccb1e70701e1981d0b646943eb))
+* **mcp:** expose canonical polynomial input guidance ([#1662](https://github.com/morluto/jacobian/issues/1662)) ([95b283c](https://github.com/morluto/jacobian/commit/95b283c54b7ec503e75bc339a241adb45f4329a2))
+* **mcp:** publish valid examples for every operation ([#1690](https://github.com/morluto/jacobian/issues/1690)) ([ae9f4e1](https://github.com/morluto/jacobian/commit/ae9f4e15937a9015d688e20c739f3e2a019654e7))
+* **npm:** add agent setup wizard ([850ca04](https://github.com/morluto/jacobian/commit/850ca040c1fc7550e546f36de0a84fdda378b402))
+* **number-theory:** add budgeted certified factorization ([#2099](https://github.com/morluto/jacobian/issues/2099)) ([498c5b2](https://github.com/morluto/jacobian/commit/498c5b2bbae6de60f50f6933c45d6f423cbc97a6))
+
+
+### Bug Fixes
+
+* **math:** fix sequence signs, polygon areas, finite-game Nash supports, SMT
+  behavior, discrete logarithms, and request-boundary validation
+  ([#1948](https://github.com/morluto/jacobian/issues/1948))
+  ([c02e53e](https://github.com/morluto/jacobian/commit/c02e53ebca172146a70f7d1a7d01f2f2772eb7e5)).
+* **math:** accept canonical integers beyond Python's string-conversion limit
+  and fix valuation primality and discrete-logarithm edge cases
+  ([#1949](https://github.com/morluto/jacobian/issues/1949))
+  ([89c0a1f](https://github.com/morluto/jacobian/commit/89c0a1fb4a993f6d0730fa703d7195848303a47b)).
+* **math:** reject oversized algebraic comparisons and return typed outcomes for
+  singular and non-unique linear solves
+  ([#2097](https://github.com/morluto/jacobian/issues/2097))
+  ([cf5d325](https://github.com/morluto/jacobian/commit/cf5d3258b8a9f31cd6499539d7eff08766f50f4b)).
+* **boolean:** compute Walsh spectrum from the Boolean sign function ([#2083](https://github.com/morluto/jacobian/issues/2083)) ([2056dd0](https://github.com/morluto/jacobian/commit/2056dd045eee9a9534239b9b357e3891acfcabef))
+* **ci:** route Harbor job tests through bounded runner ([9f2a0c0](https://github.com/morluto/jacobian/commit/9f2a0c0bc55d5c1092bda635ab3b47b2404dec25))
+* **graph6:** validate graph6 format at the request boundary ([#2087](https://github.com/morluto/jacobian/issues/2087)) ([c0e2ef1](https://github.com/morluto/jacobian/commit/c0e2ef126554cd0920d84d1be826519d8a2d1d22))
+* **math:** bind distance-matrix rows to labelled vertices ([#930](https://github.com/morluto/jacobian/issues/930)) ([#2008](https://github.com/morluto/jacobian/issues/2008)) ([c254f00](https://github.com/morluto/jacobian/commit/c254f00af0a093f212a6036ac5217a15bafa36fe))
+* **math:** validate exact rational growth before execution ([#2101](https://github.com/morluto/jacobian/issues/2101)) ([11b556a](https://github.com/morluto/jacobian/commit/11b556aba454846fe178a03fc47f78da18e45332))
+* **matrices:** reject rectangular matrices in square-only symbolic operations ([#2085](https://github.com/morluto/jacobian/issues/2085)) ([2eb7570](https://github.com/morluto/jacobian/commit/2eb757009042e37ffd113d9389713d5c1d04cb7b))
+* **matrices:** return typed outcomes for singular/inconsistent/non-unique linear systems ([#2090](https://github.com/morluto/jacobian/issues/2090)) ([6ea7d6e](https://github.com/morluto/jacobian/commit/6ea7d6e2982706bdd8a97044ad1ffef62c3d5264))
+* **mcp:** advertise math.run as read-only ([225ae41](https://github.com/morluto/jacobian/commit/225ae41062e1f0dcfabce2dcadf5ee413ae57f43))
+* **polynomials:** reject gcd(0,0) and handle zero operands symmetrically ([#2084](https://github.com/morluto/jacobian/issues/2084)) ([b7ce9e8](https://github.com/morluto/jacobian/commit/b7ce9e86551125d5bbd4908aa06ec0efd9155a04))
+* **primorial:** use primorial-specific result type to cover full n&lt;=1000 domain ([#2086](https://github.com/morluto/jacobian/issues/2086)) ([3ba9147](https://github.com/morluto/jacobian/commit/3ba914718f03a4f557f8c32b7673e04f8cd0d2cd))
+* **probability:** bound graph reliability state mass ([#1508](https://github.com/morluto/jacobian/issues/1508)) ([f22a4f9](https://github.com/morluto/jacobian/commit/f22a4f927ac275cbcc66588965b7cc1c77122839))
+* rank integer factorization for prime-power queries ([#2028](https://github.com/morluto/jacobian/issues/2028)) ([b8ba303](https://github.com/morluto/jacobian/commit/b8ba30393f5410e0eced679b5e73b0c542093ce2))
+* **smt:** preserve fail-closed guards under optimization ([#1506](https://github.com/morluto/jacobian/issues/1506)) ([35a42ef](https://github.com/morluto/jacobian/commit/35a42ef11ea3de952fcaecd41226ea3af80423ab))
+* **symbolic:** return exact polynomial branch for unrepresentable eigenvalues ([#2091](https://github.com/morluto/jacobian/issues/2091)) ([b58126f](https://github.com/morluto/jacobian/commit/b58126faaa8ed2041d722d468fef82e24af49a2f))
+
+
+### Performance Improvements
+
+* accelerate development validation ([#1509](https://github.com/morluto/jacobian/issues/1509)) ([af10bf5](https://github.com/morluto/jacobian/commit/af10bf596976b52472103aa41899f10afbc8b7d2))
+
+
+### Dependencies
+
+* **deps-dev:** bump hypothesis from 6.165.2 to 6.165.7 ([#1945](https://github.com/morluto/jacobian/issues/1945)) ([adfbb2c](https://github.com/morluto/jacobian/commit/adfbb2c003e2f18e85ca722eae160c570deca1a0))
+* **deps-dev:** bump pre-commit from 4.6.1 to 4.6.2 ([#1943](https://github.com/morluto/jacobian/issues/1943)) ([7a7068d](https://github.com/morluto/jacobian/commit/7a7068de58c3c5bbfb3a57b9d340cdf293e3f528))
+* **deps-dev:** bump ruff from 0.16.1 to 0.16.3 ([#1946](https://github.com/morluto/jacobian/issues/1946)) ([27fccd5](https://github.com/morluto/jacobian/commit/27fccd56f1ac15947fa60cb6ffd368003b5e84a6))
+* **deps:** bump aws-actions/configure-aws-credentials ([#1944](https://github.com/morluto/jacobian/issues/1944)) ([7d38fc6](https://github.com/morluto/jacobian/commit/7d38fc676d7b8bba252e0614ca428f164c6f503e))
+* **deps:** bump https://github.com/astral-sh/ruff-pre-commit ([#1942](https://github.com/morluto/jacobian/issues/1942)) ([775a038](https://github.com/morluto/jacobian/commit/775a0387178b1d441e6f2e6921f1a8b8eda1b72a))
+
+
+### Documentation
+
+* add public operation preflight ([#1694](https://github.com/morluto/jacobian/issues/1694)) ([e96fbf8](https://github.com/morluto/jacobian/commit/e96fbf808c14fad282f3ff36c47b2145d5429af3))
+* align state migration references ([a06671f](https://github.com/morluto/jacobian/commit/a06671f3c703588f4246367352abec4ce179fe31))
+* clarify executable vocabulary and admission ([#2072](https://github.com/morluto/jacobian/issues/2072)) ([e3ca01d](https://github.com/morluto/jacobian/commit/e3ca01d52937b0d4a0e347866e156575203babfd))
+* clarify public operation adapter semantics ([2645e7e](https://github.com/morluto/jacobian/commit/2645e7eb7d55e44bb52e118299da7324fc4fbb5c))
+* define the durable operation criterion ([1c9095a](https://github.com/morluto/jacobian/commit/1c9095a3a860812d9ddcb4d02ee89191ca9c28a8))
+* describe current architecture instead of deleted systems ([#2016](https://github.com/morluto/jacobian/issues/2016)) ([140c607](https://github.com/morluto/jacobian/commit/140c607ffb0f0c91f2a3b858b44d0ae9e3a2488c))
+* describe the stateless mathematical kernel ([#1511](https://github.com/morluto/jacobian/issues/1511)) ([ca9e499](https://github.com/morluto/jacobian/commit/ca9e499991d18fc99968c12626c90220fd5f129b))
+* distinguish operations from backend routines ([#1702](https://github.com/morluto/jacobian/issues/1702)) ([f50dbf6](https://github.com/morluto/jacobian/commit/f50dbf6277341f8837ce006d8b10eda8edb6a4b6))
+* document MCP argument validation boundary ([1a912de](https://github.com/morluto/jacobian/commit/1a912de28b252343ee7173047f1fc97e0898000c))
+* document operation admission ledger ([7513f68](https://github.com/morluto/jacobian/commit/7513f689c47e4456ae3c8382025a73e004cb841e))
+* explain Jacobian's executable math vocabulary hypothesis ([#2012](https://github.com/morluto/jacobian/issues/2012)) ([efce533](https://github.com/morluto/jacobian/commit/efce533714a7745c195e655fbb815359f9720304))
+* explain semantic atomicity and vocabulary growth ([#2074](https://github.com/morluto/jacobian/issues/2074)) ([14f884d](https://github.com/morluto/jacobian/commit/14f884dca74fce927a01c6a71f6b059ae55c4b6f))
+* **math:** require adapter boundary regressions ([f083434](https://github.com/morluto/jacobian/commit/f083434723358357319603158550cbd3becb24a7))
+* **mcp:** clarify proactive math tool guidance ([71f17e6](https://github.com/morluto/jacobian/commit/71f17e63f84637ee9574d16dc99b45c1d78e9586))
+* **mcp:** recommend local math operations ([6b6b234](https://github.com/morluto/jacobian/commit/6b6b234c02172dfbce9358d54e7a0d6bce1e1502))
+* **readme:** add Chinese README ([0ed7a8c](https://github.com/morluto/jacobian/commit/0ed7a8c99bc299d7f05313a42d6f8854dcf41fa4))
+* **readme:** add Chinese translation link ([80d1031](https://github.com/morluto/jacobian/commit/80d1031a75d78a4e56bfde7e3823a5d71c495eeb))
+* **readme:** refresh product description and version ([3a5acc7](https://github.com/morluto/jacobian/commit/3a5acc75a62cc20209ed1bae667f852fab62ad19))
+* require closure matrix when closing a broad operation parent ([9bda56a](https://github.com/morluto/jacobian/commit/9bda56a4e1ab6aa315c87a673dfa315d7c5e951e))
+* separate benchmark material from product docs ([#2019](https://github.com/morluto/jacobian/issues/2019)) ([7ab1d47](https://github.com/morluto/jacobian/commit/7ab1d4746a94e233c97b1fcc175564c871dcc850))
+* **skills:** add Jacobian math workflow ([134d98b](https://github.com/morluto/jacobian/commit/134d98b4fe5ac4cba5994816232f4713d2eac607))
+* **skills:** clarify operation discovery modes ([cffda53](https://github.com/morluto/jacobian/commit/cffda53b6dfe03365451c055c56797859a468bab))
+* split issue forms into gap diagnosis and admitted operation ([bd50e85](https://github.com/morluto/jacobian/commit/bd50e858319c9cc035719bc8f028e4bb818699d9))
+
 ## [0.12.0](https://github.com/morluto/jacobian/compare/jacobian-v0.11.0...jacobian-v0.12.0) (2026-08-13)
 
 

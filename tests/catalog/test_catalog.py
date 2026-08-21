@@ -122,6 +122,32 @@ def test_search_and_browse_do_not_materialize_descriptors(
     assert browse.operations
 
 
+def test_natural_prime_power_query_ranks_factorization_before_prime_navigation() -> (
+    None
+):
+    catalog = Catalog.open()
+
+    result = catalog.search(
+        OperationDiscoveryRequest(
+            query="factor an integer into prime powers",
+            limit=5,
+        )
+    )
+    positions = {
+        match.operation_id: index for index, match in enumerate(result.matches)
+    }
+
+    assert all(
+        positions["integer.compute.prime_factorization"]
+        < positions[prime_navigation_id]
+        for prime_navigation_id in (
+            "integer.compute.next_prime",
+            "integer.compute.nth_prime",
+            "integer.compute.previous_prime",
+        )
+    )
+
+
 def test_search_finds_lattice_hnf_in_matrix_domain() -> None:
     catalog = Catalog.open()
 

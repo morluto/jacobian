@@ -43,20 +43,43 @@ class ComplementRequest(StrictModel):
     dfa: DFA
 
 
-class RunResult(StrictModel):
+class RunResult(RunRequest):
     """Whether a word was accepted and the final state reached."""
 
     accepted: bool
     final_state: int = Field(ge=0, le=MAX_DFA_STATES - 1)
+    state_trace: tuple[int, ...]
     method: Literal["DFA_SIMULATION"] = "DFA_SIMULATION"
 
+    @model_validator(mode="after")
+    def bind_run(self) -> Self:
+        transitions = {
+            (item.source, item.symbol): item.target for item in self.dfa.transitions
+        }
+        trace = [self.dfa.initial_state]
+        for symbol in self.word:
+            trace.append(transitions[(trace[-1], symbol)])
+        if self.state_trace != tuple(trace) or self.final_state != trace[-1]:
+            raise ValueError("DFA run trace is not bound to its source")
+        if self.accepted != (self.final_state in self.dfa.accepting_states):
+            raise ValueError("DFA acceptance must agree with the final state")
+        return self
 
-class CountResult(StrictModel):
+
+class CountResult(CountRequest):
     """Exact count of accepted words of a given length."""
 
     count: CanonicalInteger
     word_length: int = Field(ge=0, le=MAX_COUNT_WORD_LENGTH)
     method: Literal["MATRIX_POWERING"] = "MATRIX_POWERING"
+
+    @model_validator(mode="after")
+    def bind_count(self) -> Self:
+        from jacobian.math.regular_languages.operations import count_accepted_words
+
+        if int(self.count) != count_accepted_words(self.dfa, self.word_length):
+            raise ValueError("word count is not bound to its DFA")
+        return self
 
 
 class ComplementResult(StrictModel):

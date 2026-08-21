@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jacobian"
-version = "0.12.0"
+version = "0.13.0"
 description = "Atomic mathematical tools for agents over MCP and Python"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
@@ -84,7 +84,7 @@ testpaths = [
 # deadline would interrupt native solvers that process/Lean isolate instead.
 timeout_method = "thread"
 markers = [
-    "requires_provider(name): test requires a production provider readiness probe",
+    "requires_backend(name): test requires a maintained mathematical backend",
     "requires_lean: test requires the fixed external Lean toolchain",
     "property: property-based invariant tests",
     "exhaustive: broad finite reference sweeps run by scheduled validation",
@@ -126,9 +126,56 @@ packages = ["jacobian"]
 module = ["sympy", "sympy.*"]
 ignore_missing_imports = true
 
+# Benchmark tooling: structural mypy boundary (see tools/check_benchmark_static.py).
+# The following overrides address known third-party stub gaps and platform-
+# specific attributes that surface when checking the complete benchmarks.tooling
+# package without --follow-imports=skip.  Each is narrow and should be removed
+# when the underlying issue is resolved.
 [[tool.mypy.overrides]]
-module = ["jacobian.math.graphs.decomposition._operations"]
-disable_error_code = ["type-arg", "arg-type", "misc", "comparison-overlap", "unused-ignore", "var-annotated"]
+module = ["yaml", "yaml.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["harbor.models.task.task", "harbor.publisher.packager"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["benchmarks.tooling.command_runner", "tools.process_supervisor"]
+# Windows-only attribute not in subprocess type stubs.
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = ["benchmarks.tooling.harbor_digest"]
+disable_error_code = ["assignment", "no-any-return"]
+
+[[tool.mypy.overrides]]
+module = ["benchmarks.tooling.host_validation"]
+disable_error_code = ["redundant-cast"]
+
+[[tool.mypy.overrides]]
+module = ["benchmarks.tooling.verifier_audits"]
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = ["benchmarks.tooling.benchmark_snapshots"]
+disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+module = ["benchmarks.tooling.heldout_routing"]
+disable_error_code = ["var-annotated"]
+
+[[tool.mypy.overrides]]
+module = ["benchmarks.tooling.benchmark_contracts"]
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = ["benchmarks.tooling.heldout_smoke"]
+disable_error_code = ["str-bytes-safe"]
+
+[[tool.mypy.overrides]]
+module = ["tools.benchmark_plan.compiler"]
+disable_error_code = ["arg-type"]
+
 
 [tool.deptry]
 extend_exclude = ["benchmarks"]
@@ -147,49 +194,24 @@ root_package = "jacobian"
 [[tool.importlinter.contracts]]
 name = "The public math library does not depend on product layers"
 type = "forbidden"
-source_modules = [
-    "jacobian.math.algebraic_combinatorics.operations",
-    "jacobian.math.arithmetic.operations",
-    "jacobian.math.boolean.operations",
-    "jacobian.math.matrices.canonical_forms.operations",
-    "jacobian.math.matrices.certified_snf.operations",
-    "jacobian.math.matrices.certified_snf.values",
-    "jacobian.math.code_theory.operations",
-    "jacobian.math.combinatorics.recurrence_tables",
-    "jacobian.math.finite_abelian_groups",
-    "jacobian.math.finite_fields.operations",
-    "jacobian.math.finite_fields.values",
-    "jacobian.math.graphs.spectral.operations",
-    "jacobian.math.graphs.graph6",
-    "jacobian.math.graphs.independence",
-    "jacobian.math.graphs.operations",
-    "jacobian.math.graphs.values",
-    "jacobian.math.group.operations",
-    "jacobian.math.lattices.operations",
-    "jacobian.math.markov_chain.operations",
-    "jacobian.math.matrices.operations",
-    "jacobian.math.matrices.values",
-    "jacobian.math.modular_polynomials",
-    "jacobian.math.number_field.operations",
-    "jacobian.math.polynomials.operations",
-    "jacobian.math.polynomials.values",
-    "jacobian.math.prime_field_linear_algebra",
-    "jacobian.math.probability.mutual_information",
-    "jacobian.math.probability.values",
-    "jacobian.math.geometry.projective.values",
-    "jacobian.math.real_quadratic",
-    "jacobian.math.recurrence_solving.operations",
-    "jacobian.math.regular_languages.operations",
-    "jacobian.math.regular_languages.values",
-    "jacobian.math.root_isolation.operations",
-    "jacobian.math.matrices.symbolic.operations",
-]
+source_modules = ["jacobian.math.**"]
 forbidden_modules = [
     "jacobian.catalog",
     "jacobian.cli",
     "jacobian.dispatch",
     "jacobian.mcp",
     "jacobian.process",
+]
+ignore_imports = [
+    # Private publication/admission modules and internal tool-declaration
+    # helpers may import catalog declaration types to publish built-ins.
+    "jacobian.math.** -> jacobian.catalog.models",
+    "jacobian.math.** -> jacobian.catalog._examples",
+    "jacobian.math.** -> jacobian.catalog.admission",
+    # The logic domain launches bounded external solvers via jacobian.process.
+    "jacobian.math.logic._operations -> jacobian.process",
+    # General ideal radical/quotient run in a bounded one-shot Singular process.
+    "jacobian.math.commutative_algebra_ops._singular -> jacobian.process",
 ]
 
 [[tool.importlinter.contracts]]
@@ -205,13 +227,10 @@ source_modules = ["jacobian.dispatch"]
 forbidden_modules = ["jacobian.cli", "jacobian.mcp"]
 
 [[tool.importlinter.contracts]]
-name = "Finite-field values do not import private backends"
+name = "Finite-field values do not import the optional FLINT backend"
 type = "forbidden"
 source_modules = ["jacobian.math.finite_fields.values"]
-forbidden_modules = [
-    "jacobian.math.finite_fields._flint",
-    "jacobian.math.finite_fields._sympy",
-]
+forbidden_modules = ["jacobian.math.finite_fields._flint"]
 
 [tool.coverage.run]
 branch = true

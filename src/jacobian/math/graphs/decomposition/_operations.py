@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import networkx as nx
 
 from jacobian.math.graphs.decomposition._models import (
@@ -17,14 +19,14 @@ from jacobian.math.graphs.decomposition._models import (
 )
 
 
-def _build_graph(graph: UndirectedGraph) -> nx.Graph:
+def _build_graph(graph: UndirectedGraph) -> nx.Graph[int]:
     """Build a NetworkX undirected graph from the contract model.
 
     All declared vertices are added as nodes, even isolated ones, so that
     decomposition routines that rely on graph membership observe every
     vertex in the input.
     """
-    g = nx.Graph()
+    g: nx.Graph[int] = nx.Graph()
     g.add_nodes_from(range(graph.vertex_count))
     for source, target in graph.edges:
         g.add_edge(source, target)
@@ -40,7 +42,10 @@ def compute_block_cut_tree(request: BlockCutTreeRequest) -> BlockCutTreeResult:
     each articulation point it contains.
     """
     g = _build_graph(request.graph)
-    blocks = [frozenset(component) for component in nx.biconnected_components(g)]
+    blocks = [
+        frozenset(cast(set[int], component))
+        for component in nx.biconnected_components(g)
+    ]
     articulation_points = sorted(nx.articulation_points(g))
 
     tree_edges: list[tuple[int, int]] = []
@@ -64,10 +69,10 @@ def compute_bridge_block_tree(request: BridgeBlockRequest) -> BridgeBlockResult:
     connects two components whenever a bridge joins them.
     """
     g = _build_graph(request.graph)
-    bridges = list(nx.bridges(g))
+    bridges = list(cast(list[tuple[int, int]], nx.bridges(g)))
 
     # Contract each non-bridge edge to form the 2-edge-connected components.
-    contracted: nx.Graph = nx.Graph()
+    contracted: nx.Graph[int] = nx.Graph()
     contracted.add_nodes_from(g.nodes())
     bridge_set = {(min(u, v), max(u, v)) for u, v in bridges}
     for source, target in g.edges():
@@ -245,7 +250,7 @@ def compute_biconnected_components(
     Uses ``nx.biconnected_components`` directly.
     """
     g = _build_graph(request.graph)
-    components = list(nx.biconnected_components(g))
+    components = [cast(set[int], c) for c in nx.biconnected_components(g)]
     return BiconnectedComponentsResult(
         components=tuple(tuple(sorted(component)) for component in components),
     )

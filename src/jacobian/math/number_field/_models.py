@@ -8,13 +8,14 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
+from jacobian.math.polynomials.values import PolynomialVariable
 
 
 class NumberFieldRequest(StrictModel):
     """A number field Q(alpha) defined by a minimal polynomial."""
 
     coefficients_descending: tuple[str, ...] = Field(min_length=2, max_length=32)
-    variable: str = Field(min_length=1, max_length=10)
+    variable: PolynomialVariable
 
     @model_validator(mode="after")
     def require_monic_irreducible_integer_polynomial(self) -> Self:

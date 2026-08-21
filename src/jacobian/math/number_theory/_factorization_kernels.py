@@ -7,6 +7,9 @@ import math
 from jacobian.math.number_theory._models import (
     ArithmeticFunctionRequest,
     BooleanResult,
+    BudgetedFactorizationRequest,
+    BudgetedFactorizationResult,
+    CertifiedFactorComponent,
     DivisorListResult,
     FactorizationRequest,
     IntegerValueResult,
@@ -15,6 +18,39 @@ from jacobian.math.number_theory._models import (
     PrimeFactorizationResult,
     PrimePower,
 )
+
+
+def factorize_with_budget(
+    request: BudgetedFactorizationRequest,
+) -> BudgetedFactorizationResult:
+    """Factor a small integer and classify each bounded component exactly."""
+    from flint import fmpz
+    from sympy import factorint
+
+    from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+
+    value = parse_canonical_integer(request.value)
+    decomposition = sorted(factorint(value, limit=request.factor_limit).items())
+    factors = tuple(
+        CertifiedFactorComponent(
+            value=format_canonical_integer(int(factor)),
+            exponent=int(exponent),
+            status=(
+                "CERTIFIED_PRIME"
+                if fmpz(int(factor)).is_prime()
+                else "UNFACTORED_COMPOSITE"
+            ),
+        )
+        for factor, exponent in decomposition
+    )
+    return BudgetedFactorizationResult(
+        status="COMPLETE"
+        if all(item.status == "CERTIFIED_PRIME" for item in factors)
+        else "INCOMPLETE",
+        value=request.value,
+        factor_limit=request.factor_limit,
+        factors=factors,
+    )
 
 
 def enumerate_divisors(request: FactorizationRequest) -> DivisorListResult:

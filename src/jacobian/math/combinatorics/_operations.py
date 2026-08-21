@@ -7,6 +7,7 @@ from operator import mul
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.math.combinatorics import operations as native
 from jacobian.math.combinatorics._models import (
     BinomialRequest,
     FibonacciPairRequest,
@@ -33,17 +34,11 @@ def factorial(request: NonnegativeIntegerRequest) -> IntegerResult:
 
 
 def double_factorial(request: NonnegativeIntegerRequest) -> IntegerResult:
-    import sympy
-
-    n = request.n
-    return _integer_result(sympy.factorial2(n))
+    return _integer_result(native.double_factorial(request.n))
 
 
 def derangements(request: NonnegativeIntegerRequest) -> IntegerResult:
-    import sympy
-
-    n = request.n
-    return _integer_result(sympy.subfactorial(n))
+    return _integer_result(native.derangement_number(request.n))
 
 
 def binomial(request: BinomialRequest) -> IntegerResult:
@@ -74,105 +69,67 @@ def permutations(request: NonnegativePairRequest) -> IntegerResult:
 
 
 def stirling_first(request: NonnegativePairRequest) -> IntegerResult:
-    from sympy.functions.combinatorial.numbers import stirling
-
     pair = request
-    return _integer_result(stirling(pair.n, pair.k, kind=1))
+    return _integer_result(native.stirling_first(pair.n, pair.k))
 
 
 def stirling_second(request: NonnegativePairRequest) -> IntegerResult:
-    from sympy.functions.combinatorial.numbers import stirling
-
     pair = request
-    return _integer_result(stirling(pair.n, pair.k, kind=2))
+    return _integer_result(native.stirling_second(pair.n, pair.k))
 
 
 def bell(request: NonnegativeIntegerRequest) -> IntegerResult:
-    import sympy
-
-    n = request.n
-    return _integer_result(sympy.bell(n))
+    return _integer_result(native.bell_number(request.n))
 
 
 def catalan(request: NonnegativeIntegerRequest) -> IntegerResult:
-    import sympy
-
-    n = request.n
-    return _integer_result(sympy.catalan(n))
+    return _integer_result(native.catalan_number(request.n))
 
 
 def partition_number(request: NonnegativeIntegerRequest) -> IntegerResult:
-    import sympy
-
-    n = request.n
-    return _integer_result(sympy.partition(n))
+    return _integer_result(native.partition_number(request.n))
 
 
 def enumerate_integer_partitions(
     request: IntegerPartitionEnumerationRequest,
 ) -> IntegerPartitionEnumerationResult:
     """Enumerate all bounded partitions using ``sympy.utilities.partitions``."""
-    from sympy.utilities.iterables import partitions
-
     value = request
-    expanded_partitions: list[tuple[int, ...]] = []
-    for multiplicities in partitions(value.n, m=value.max_parts):
-        expanded_partitions.append(
-            tuple(
-                part
-                for part in sorted(multiplicities, reverse=True)
-                for _ in range(int(multiplicities[part]))
-            )
-        )
     return IntegerPartitionEnumerationResult(
         n=value.n,
         max_parts=value.max_parts,
-        partitions=tuple(expanded_partitions),
+        partitions=native.integer_partitions(value.n, max_parts=value.max_parts),
     )
 
 
 def fibonacci(request: NonnegativeIntegerRequest) -> IntegerResult:
-    import sympy
-
-    n = request.n
-    return _integer_result(sympy.fibonacci(n))
+    return _integer_result(native.fibonacci_number(request.n))
 
 
 def fibonacci_pair(request: FibonacciPairRequest) -> FibonacciPairResult:
     """Compute two consecutive Fibonacci values."""
-    import sympy
-
     n = request.n
     return FibonacciPairResult(
         n=n,
-        f_n=str(sympy.fibonacci(n)),
-        f_n_plus_one=str(sympy.fibonacci(n + 1)),
+        f_n=str(native.fibonacci_number(n)),
+        f_n_plus_one=str(native.fibonacci_number(n + 1)),
     )
 
 
 def lucas(request: NonnegativeIntegerRequest) -> IntegerResult:
-    import sympy
-
-    n = request.n
-    return _integer_result(sympy.lucas(n))
+    return _integer_result(native.lucas_number(request.n))
 
 
 def motzkin(request: NonnegativeIntegerRequest) -> IntegerResult:
-    import sympy
-
-    n = request.n
-    return _integer_result(sympy.motzkin(n))
+    return _integer_result(native.motzkin_number(request.n))
 
 
 def bernoulli(request: NonnegativeIntegerRequest) -> RationalResult:
-    import sympy
-
-    n = request.n
-    value = sympy.bernoulli(n)
+    value = native.bernoulli_number(request.n)
     return RationalResult(
         value=CanonicalRational(
-            num=format_canonical_integer(int(value.p)),
-            den=format_canonical_integer(int(value.q)),
+            num=format_canonical_integer(value.numerator),
+            den=format_canonical_integer(value.denominator),
         ),
     )
 

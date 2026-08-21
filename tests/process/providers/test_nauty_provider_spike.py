@@ -3,34 +3,30 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import runpy
 import tarfile
-from collections.abc import Callable, Sequence
 from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pytest
-from benchmarks.tooling.command_runner import ToolCommandResult
-from tests.process.providers._spike_support import _result, _runner
+from benchmarks.tooling.providers.nauty import run_spike
+from tests.process.providers._spike_support import (
+    _ExpectedRunner,
+    _request,
+    _result,
+    _run_expected,
+    _runner,
+)
+from tools.command_runner import ToolCommandRequest, ToolCommandResult
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-SPIKE = runpy.run_path(
-    str(PROJECT_ROOT / "tests" / "fixtures" / "providers" / "nauty" / "spike.py")
-)
-PIN = json.loads(
-    (
-        PROJECT_ROOT
-        / "tests"
-        / "fixtures"
-        / "providers"
-        / "nauty"
-        / "nauty_provider_pin.json"
-    ).read_text(encoding="utf-8")
-)
-RunSpike = Callable[..., dict[str, Any]]
-RUN_SPIKE = cast(RunSpike, SPIKE["run_spike"])
+
+
+def _base_pin() -> dict[str, Any]:
+    path = PROJECT_ROOT / "tests/fixtures/providers/nauty/nauty_provider_pin.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
 
 GENG_HELP = (
     b"Usage: geng \n"
@@ -42,13 +38,74 @@ LABELG_HELP = (
     b"Canonically label a file of graphs or digraphs.\n"
     b"-q  suppress auxiliary information\n"
 )
-GENG_OUTPUT = ("\n".join(PIN["reproduction"]["expected_graph6"]) + "\n").encode()
-LABELG_OUTPUT = (
-    "\n".join(PIN["canonicalization"]["expected_output_graph6"]) + "\n"
-).encode()
 
 
-def _source_archive(tmp_path: Path, *, pin_digest: bool = True) -> Path:
+def _geng_output() -> bytes:
+    return ("\n".join(_base_pin()["reproduction"]["expected_graph6"]) + "\n").encode()
+
+
+def _labelg_output() -> bytes:
+    return (
+        "\n".join(_base_pin()["canonicalization"]["expected_output_graph6"]) + "\n"
+    ).encode()
+
+
+def RUN_SPIKE(**kwargs: Any) -> dict[str, Any]:  # noqa: N802
+    runner = kwargs.get("runner")
+    if not isinstance(runner, _ExpectedRunner):
+        return run_spike(cwd=PROJECT_ROOT, **kwargs)
+    pin = json.loads(Path(kwargs["pin_path"]).read_text(encoding="utf-8"))
+    geng = Path(kwargs["geng"])
+    labelg = Path(kwargs["labelg"])
+    timeout = float(kwargs.get("timeout_seconds", 5))
+    canonical_input = (
+        "\n".join(pin["canonicalization"]["input_graph6"]) + "\n"
+    ).encode("ascii")
+    requests = (
+        _request(
+            geng,
+            ("-help",),
+            environment={"LANG": "C", "LC_ALL": "C", "TZ": "UTC"},
+            cwd=PROJECT_ROOT,
+            timeout_seconds=timeout,
+            stdout_limit_bytes=16_384,
+            stderr_limit_bytes=16_384,
+        ),
+        _request(
+            labelg,
+            ("-help",),
+            environment={"LANG": "C", "LC_ALL": "C", "TZ": "UTC"},
+            cwd=PROJECT_ROOT,
+            timeout_seconds=timeout,
+            stdout_limit_bytes=16_384,
+            stderr_limit_bytes=16_384,
+        ),
+        _request(
+            geng,
+            tuple(pin["reproduction"]["command"][1:]),
+            environment={"LANG": "C", "LC_ALL": "C", "TZ": "UTC"},
+            cwd=PROJECT_ROOT,
+            timeout_seconds=timeout,
+            stdout_limit_bytes=4096,
+            stderr_limit_bytes=16_384,
+        ),
+        _request(
+            labelg,
+            tuple(pin["canonicalization"]["command"][1:]),
+            environment={"LANG": "C", "LC_ALL": "C", "TZ": "UTC"},
+            cwd=PROJECT_ROOT,
+            timeout_seconds=timeout,
+            stdin_bytes=canonical_input,
+            stdout_limit_bytes=4096,
+            stderr_limit_bytes=16_384,
+        ),
+    )
+    return _run_expected(
+        lambda: run_spike(cwd=PROJECT_ROOT, **kwargs), runner, requests
+    )
+
+
+def _source_archive(tmp_path: Path) -> Path:
     archive_path = tmp_path / "nauty2_9_3.tar.gz"
     copyright_notice = b"Licensed under the Apache License, Version 2.0 (the License)\n"
     version_header = b"/* nauty version 2.9.3 */\n"
@@ -61,9 +118,6 @@ def _source_archive(tmp_path: Path, *, pin_digest: bool = True) -> Path:
             info.size = len(payload)
             info.mtime = 0
             archive.addfile(info, BytesIO(payload))
-    if pin_digest:
-        digest = "sha256:" + hashlib.sha256(archive_path.read_bytes()).hexdigest()
-        PIN["archive_sha256"] = digest
     return archive_path
 
 
@@ -77,7 +131,13 @@ def _files(tmp_path: Path) -> tuple[Path, Path]:
 
 def _pin_file(tmp_path: Path, pin: dict[str, Any] | None = None) -> Path:
     path = tmp_path / "pin.json"
-    path.write_text(json.dumps(PIN if pin is None else pin), encoding="utf-8")
+    payload = _base_pin() if pin is None else pin
+    archive = tmp_path / "nauty2_9_3.tar.gz"
+    if pin is None and archive.exists():
+        payload["archive_sha256"] = (
+            "sha256:" + hashlib.sha256(archive.read_bytes()).hexdigest()
+        )
+    path.write_text(json.dumps(payload), encoding="utf-8")
     return path
 
 
@@ -85,8 +145,8 @@ def _successful_outcomes() -> list[ToolCommandResult]:
     return [
         _result(stdout=GENG_HELP),
         _result(stdout=LABELG_HELP),
-        _result(stdout=GENG_OUTPUT),
-        _result(stdout=LABELG_OUTPUT),
+        _result(stdout=_geng_output()),
+        _result(stdout=_labelg_output()),
     ]
 
 
@@ -146,7 +206,7 @@ def test_absent_explicit_executable_is_an_isolated_non_conclusion(
 def test_source_version_mismatch_fails_closed_before_execution(
     tmp_path: Path,
 ) -> None:
-    archive = _source_archive(tmp_path, pin_digest=False)
+    archive = _source_archive(tmp_path)
     geng, labelg = _files(tmp_path)
 
     report = RUN_SPIKE(
@@ -191,7 +251,7 @@ def test_nonfinite_timeout_fails_before_provider_inspection(
 
 
 def test_malformed_nested_pin_fails_as_json_safe_non_conclusion(tmp_path: Path) -> None:
-    pin = deepcopy(PIN)
+    pin = deepcopy(_base_pin())
     pin["reproduction"] = {"command": ["geng", "-q", "4"]}
 
     report = RUN_SPIKE(
@@ -209,14 +269,10 @@ def test_malformed_nested_pin_fails_as_json_safe_non_conclusion(tmp_path: Path) 
 def test_spike_executes_the_command_profile_recorded_by_the_pin(tmp_path: Path) -> None:
     archive = _source_archive(tmp_path)
     geng, labelg = _files(tmp_path)
-    pin = deepcopy(PIN)
+    pin = deepcopy(_base_pin())
+    pin["archive_sha256"] = "sha256:" + hashlib.sha256(archive.read_bytes()).hexdigest()
     pin["reproduction"]["command"] = ["geng", "--frozen-profile", "4"]
-    commands: list[list[str]] = []
-    outcomes = iter(_successful_outcomes())
-
-    def runner(command: Sequence[str], **_kwargs: object) -> ToolCommandResult:
-        commands.append(list(command))
-        return next(outcomes)
+    runner = _runner(_successful_outcomes())
 
     report = RUN_SPIKE(
         geng=geng,
@@ -227,22 +283,23 @@ def test_spike_executes_the_command_profile_recorded_by_the_pin(tmp_path: Path) 
     )
 
     assert report["status"] == "COMPLETED"
-    assert commands[2] == [str(geng.resolve()), "--frozen-profile", "4"]
+    assert [runner.requests[2].executable, *runner.requests[2].arguments] == [
+        str(geng.resolve()),
+        "--frozen-profile",
+        "4",
+    ]
 
 
 def test_changed_executable_digest_rejects_the_success_report(tmp_path: Path) -> None:
     archive = _source_archive(tmp_path)
     geng, labelg = _files(tmp_path)
-    outcomes = iter(_successful_outcomes())
-    call_count = 0
+    runner = _runner(_successful_outcomes())
 
-    def runner(_command: Sequence[str], **_kwargs: object) -> ToolCommandResult:
-        nonlocal call_count
-        result = next(outcomes)
-        call_count += 1
+    def mutate_after_last_call(call_count: int, _request: ToolCommandRequest) -> None:
         if call_count == 4:
             labelg.write_bytes(b"replaced after execution")
-        return result
+
+    runner.on_call = mutate_after_last_call
 
     report = RUN_SPIKE(
         geng=geng,

@@ -10,6 +10,7 @@ from jacobian.math.graphs.polynomials._models import (
     GraphPolynomialRequest,
     GraphPolynomialResult,
     MatchingPolynomialRequest,
+    SparseMultivariatePolynomial,
 )
 from jacobian.math.graphs.polynomials._operations import (
     compute_chromatic_polynomial,
@@ -74,10 +75,10 @@ GRAPH_POLYNOMIAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "graph.polynomial.tutte.compute",
         "Compute the Tutte polynomial",
         "Compute the exact Tutte polynomial T_G(x, y) of a finite simple "
-        "graph using NetworkX. Terms are encoded as (coefficient, degree) "
-        "where degree = x_degree * 100 + y_degree.",
+        "graph using NetworkX, with structural exponent pairs on the ordered "
+        "variable axis (x, y).",
         GraphPolynomialRequest,
-        GraphPolynomialResult,
+        SparseMultivariatePolynomial,
         compute_tutte_polynomial,
         "graph",
         "polynomial",

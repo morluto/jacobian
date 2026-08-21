@@ -6,11 +6,11 @@ import dataclasses
 from pathlib import Path
 
 import pytest
-from benchmarks.tooling.command_runner import ToolCommandResult, ToolCommandStatus
 from benchmarks.tooling.harbor_suite import (
     validate_task_topology,
     validate_task_visibility,
 )
+from tools.command_runner import ToolCommandResult, ToolCommandStatus
 
 from tests.tooling.harbor_suite_support import (
     _make_suite_with_task,
@@ -18,14 +18,14 @@ from tests.tooling.harbor_suite_support import (
 
 
 def test_validate_task_topology_passes_for_minimal_task(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     suite, task = _make_suite_with_task(tmp_path)
     assert validate_task_topology(suite, task) == []
 
 
 def test_validate_task_topology_binds_verifier_support(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     suite, task = _make_suite_with_task(tmp_path)
     support = task / "tests" / "verifier_support.py"
@@ -37,7 +37,7 @@ def test_validate_task_topology_binds_verifier_support(
 
 
 def test_validate_task_topology_reports_missing_readme(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     suite, task = _make_suite_with_task(tmp_path)
     (task / "README.md").unlink()
@@ -46,7 +46,7 @@ def test_validate_task_topology_reports_missing_readme(
 
 
 def test_validate_task_topology_reports_missing_metadata_field(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     suite, task = _make_suite_with_task(tmp_path)
     task_toml = (task / "task.toml").read_text()
@@ -57,7 +57,7 @@ def test_validate_task_topology_reports_missing_metadata_field(
 
 
 def test_validate_task_topology_reports_unknown_environment_profile(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     suite, task = _make_suite_with_task(tmp_path)
     unknown = dataclasses.replace(suite.tasks[0], environment_profile="not-a-profile")
@@ -69,7 +69,7 @@ def test_validate_task_topology_reports_unknown_environment_profile(
 
 
 def test_validate_task_topology_reports_workflow_fixture_digest_drift(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     suite, task = _make_suite_with_task(tmp_path)
     task_toml = (
@@ -86,7 +86,7 @@ def test_validate_task_topology_reports_workflow_fixture_digest_drift(
 
 
 def test_validate_task_topology_reports_env_dockerfile_copies_solution(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     suite, task = _make_suite_with_task(tmp_path)
     (task / "environment" / "Dockerfile").write_text(
@@ -97,7 +97,7 @@ def test_validate_task_topology_reports_env_dockerfile_copies_solution(
 
 
 def test_validate_task_topology_forbids_root_input_json(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     suite, task = _make_suite_with_task(tmp_path)
     (task / "input.json").write_text("{}")
@@ -106,7 +106,7 @@ def test_validate_task_topology_forbids_root_input_json(
 
 
 def test_validate_task_topology_forbids_raw_interpreter_caches(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     suite, task = _make_suite_with_task(tmp_path)
     cache = task / "tests" / "__pycache__"
@@ -117,7 +117,7 @@ def test_validate_task_topology_forbids_raw_interpreter_caches(
 
 
 def test_validate_task_topology_ignores_gitignored_interpreter_caches(
-    tmp_path: Path, patched_root: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, synthetic_harbor_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import benchmarks.tooling.harbor_suite as harbor_suite
 
@@ -140,7 +140,7 @@ def test_validate_task_topology_ignores_gitignored_interpreter_caches(
 
 
 def test_validate_task_topology_rejects_tracked_interpreter_caches(
-    tmp_path: Path, patched_root: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, synthetic_harbor_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import benchmarks.tooling.harbor_suite as harbor_suite
 
@@ -174,7 +174,7 @@ def test_validate_task_topology_rejects_tracked_interpreter_caches(
 
 
 def test_validate_task_visibility_detects_host_path(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     _suite, task = _make_suite_with_task(tmp_path)
     (task / "instruction.md").write_text("Read /home/user/secret.txt for the answer.")
@@ -183,7 +183,7 @@ def test_validate_task_visibility_detects_host_path(
 
 
 def test_validate_task_visibility_detects_secret(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     _suite, task = _make_suite_with_task(tmp_path)
     (task / "instruction.md").write_text('api_key = "supersecretkey12345"')
@@ -192,7 +192,7 @@ def test_validate_task_visibility_detects_secret(
 
 
 def test_validate_task_visibility_rejects_oracle_named_files(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     _suite, task = _make_suite_with_task(tmp_path)
     (task / "environment" / "expected.json").write_text("{}")
@@ -201,7 +201,7 @@ def test_validate_task_visibility_rejects_oracle_named_files(
 
 
 def test_validate_task_visibility_clean_for_normal_task(
-    tmp_path: Path, patched_root: Path
+    tmp_path: Path, synthetic_harbor_root: Path
 ) -> None:
     _suite, task = _make_suite_with_task(tmp_path)
     assert validate_task_visibility(task) == []

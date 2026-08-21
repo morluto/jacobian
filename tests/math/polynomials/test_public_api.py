@@ -75,3 +75,24 @@ def test_native_discriminant_preserves_the_polynomial_domain() -> None:
     polynomial = Poly(x**2 + x + 1, x, modulus=2)
 
     assert polynomials.discriminant(polynomial, x) == 1
+
+
+def test_exact_public_api_symbols() -> None:
+    """Exact owner-local contract for the polynomials public API."""
+    expected = (
+        "derivative",
+        "discriminant",
+        "divide",
+        "evaluate",
+        "factorization",
+        "gcdex",
+        "groebner_basis",
+        "integral",
+        "partial_fractions",
+        "resultant",
+        "square_free_decomposition",
+    )
+    assert tuple(polynomials.__all__) == expected
+    assert len(polynomials.__all__) == len(set(polynomials.__all__))
+    assert all(not name.startswith("_") for name in polynomials.__all__)
+    assert all(hasattr(polynomials, name) for name in polynomials.__all__)

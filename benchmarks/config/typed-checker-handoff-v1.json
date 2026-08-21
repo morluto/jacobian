@@ -3,12 +3,12 @@
   "suite_id": "typed-checker-handoff-v1",
   "cases": [
     {
-      "case_id": "scalar-gcd",
+      "case_id": "extended-gcd-certificate",
       "cue_level": "EXPLICIT",
-      "prompt": "Use the Jacobian MCP server. Discover or inspect the exact operation contract, then compute gcd(3918848, 1653264). Report the exact integer result. Do not use shell, Python, or mental arithmetic when Jacobian offers the operation.",
+      "prompt": "Use the Jacobian MCP server. Discover or inspect the exact operation contract, then compute gcd(3918848, 1653264) together with exact Bezout coefficients. Report the certificate. Do not use shell, Python, or mental arithmetic when Jacobian offers the operation.",
       "expectation": "USE",
       "expected_operation_ids": [
-        "integer.compute.gcd"
+        "integer.compute.extended_gcd"
       ]
     },
     {
@@ -21,15 +21,14 @@
       ]
     },
     {
-      "case_id": "smith-producer-checker",
+      "case_id": "canonical-cnf-assignment-check",
       "cue_level": "EXPLICIT",
-      "prompt": "Use the Jacobian MCP server to compute the Smith normal form of the integer matrix [[2,4],[6,8]], then independently verify that produced result with the exact replay verifier. Inspect exact contracts as needed. Use a declared runtime-local typed value reference to carry the producer result into the checker when that port exists; otherwise use the checker's inline candidate contract. Report the invariant factors and whether a verification record was produced. Do not use shell or Python.",
+      "prompt": "Use the Jacobian MCP server to canonicalize the CNF with variable names [b,a] and clauses [[1,-2],[2]], then pass the returned canonical CNF inline to the assignment checker for assignment [true,true]. Inspect exact contracts as needed and report the canonical CNF and whether the assignment satisfies it. Do not use shell or Python.",
       "expectation": "USE",
       "expected_operation_ids": [
-        "matrix.normal_form.smith.compute",
-        "matrix.normal_form.smith.verify"
-      ],
-      "require_verified": true
+        "sat.cnf.canonicalize",
+        "sat.assignment.check"
+      ]
     },
     {
       "case_id": "negative-no-surface",

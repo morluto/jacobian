@@ -3,9 +3,14 @@
 
 The benchmark tree contains verifier and validation Python alongside ordinary
 benchmark tooling.  Ruff scans the complete tree, including those boundary
-directories.  Mypy checks the benchmark control scripts with the repository's
-strict configuration while skipping imported implementation bodies; importing
-or executing a task, verifier, Oracle, or model is not part of this gate.
+directories.  Mypy checks the benchmark control-plane package
+``benchmarks.tooling`` and selected ``tools/`` entrypoints with the
+repository's strict configuration.  New benchmark tooling modules are
+covered automatically without editing a per-file allowlist.
+
+Task-local verifier, Oracle, solution, and environment worker scripts are
+intentionally excluded — they execute in separate task/verifier environments
+and are not part of the importable control-plane package.
 """
 
 from __future__ import annotations
@@ -17,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from benchmarks.tooling.command_runner import (  # noqa: E402
+from tools.command_runner import (  # noqa: E402
     ToolCommandRequest,
     ToolCommandStatus,
     operator_environment,
@@ -31,11 +36,12 @@ RUFF_TARGETS = (
     "tools/harbor_task_workflow.py",
     "tools/pytest_lifecycle.py",
 )
+
+# mypy targets: the complete benchmarks.tooling package plus selected
+# repository tooling entrypoints.  New modules under benchmarks/tooling/
+# are automatically covered without editing this list.
 MYPY_TARGETS = (
-    "benchmarks/tooling/benchmark_timings.py",
-    "benchmarks/tooling/benchmark_validation.py",
-    "benchmarks/tooling/host_validation.py",
-    "benchmarks/tooling/validation_plan.py",
+    "benchmarks/tooling",
     "tools/benchmark_pr_status.py",
     "tools/check_benchmark_adapters.py",
     "tools/check_benchmark_contracts.py",
@@ -60,7 +66,6 @@ def _commands() -> tuple[tuple[str, tuple[str, ...]], ...]:
             (
                 "-m",
                 "mypy",
-                "--follow-imports=skip",
                 *MYPY_TARGETS,
             ),
         ),

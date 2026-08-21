@@ -3,6 +3,11 @@
   "max_complexity": 10,
   "violations": [
     {
+      "path": "src/jacobian/math/finite_semigroups/_operations.py",
+      "symbol": "_join_partition",
+      "complexity": 12
+    },
+    {
       "path": "src/jacobian/math/graphs/decomposition/_operations.py",
       "symbol": "_find_next_ear",
       "complexity": 12
@@ -11,6 +16,16 @@
       "path": "src/jacobian/math/graphs/tree_decompositions/operations.py",
       "symbol": "restrict",
       "complexity": 13
+    },
+    {
+      "path": "src/jacobian/math/majorization/_operations.py",
+      "symbol": "compute_birkhoff_decomposition",
+      "complexity": 11
+    },
+    {
+      "path": "src/jacobian/math/majorization/_operations.py",
+      "symbol": "compute_t_transform_sequence",
+      "complexity": 23
     },
     {
       "path": "tests/math/graphs/test_graph_isomorphism.py",

@@ -1,7 +1,5 @@
 """Tests for nonlinear binary code operations."""
 
-import pytest
-
 from jacobian.math.code_nonlinear._models import (
     ConstantWeightProfileRequest,
     ConstantWeightRequest,
@@ -21,7 +19,9 @@ from jacobian.math.code_nonlinear._operations import (
 
 class TestWordDistance:
     def test_identical_words(self) -> None:
-        result = compute_word_distance(WordDistanceRequest(word1=(1, 0, 1), word2=(1, 0, 1)))
+        result = compute_word_distance(
+            WordDistanceRequest(word1=(1, 0, 1), word2=(1, 0, 1))
+        )
         assert result.distance == 0
         assert result.differing_coordinates == ()
         assert result.weight1 == 2
@@ -29,13 +29,17 @@ class TestWordDistance:
         assert result.support_intersection == 2
 
     def test_complementary_words(self) -> None:
-        result = compute_word_distance(WordDistanceRequest(word1=(1, 0, 1, 0), word2=(0, 1, 0, 1)))
+        result = compute_word_distance(
+            WordDistanceRequest(word1=(1, 0, 1, 0), word2=(0, 1, 0, 1))
+        )
         assert result.distance == 4
         assert result.differing_coordinates == (0, 1, 2, 3)
         assert result.support_intersection == 0
 
     def test_partial_overlap(self) -> None:
-        result = compute_word_distance(WordDistanceRequest(word1=(1, 1, 0, 0), word2=(1, 0, 1, 0)))
+        result = compute_word_distance(
+            WordDistanceRequest(word1=(1, 1, 0, 0), word2=(1, 0, 1, 0))
+        )
         assert result.distance == 2
         assert result.support_intersection == 1
 
@@ -51,11 +55,12 @@ class TestExplicitProfile:
         assert result.maximum_distance == 2
 
     def test_single_codeword(self) -> None:
-        result = compute_explicit_profile(
+        # Singleton codes have no pairwise distances and are now rejected.
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
             ExplicitProfileRequest(codewords=((1, 0, 1),))
-        )
-        assert result.minimum_distance == 2
-        assert result.maximum_distance == 2
 
     def test_distance_histogram(self) -> None:
         result = compute_explicit_profile(

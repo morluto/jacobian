@@ -101,17 +101,31 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "distance",
         "exact",
+        examples=(
+            example(
+                "word_distance_01",
+                "Hamming distance between [1,0,1] and [1,1,0] with differing coordinates and support intersection.",
+                {"word1": [1, 0, 1], "word2": [1, 1, 0]},
+            ),
+        ),
     ),
     _op(
         "code.binary.explicit.profile.compute",
         "Compute the complete profile of an explicit binary code",
-        "Compute length, cardinality, weight distribution, minimum/maximum pairwise Hamming distance, distance histogram, and extremal pairs for a nonlinear binary code.",
+        "Compute length, cardinality, weight distribution, minimum/maximum pairwise Hamming distance, distance histogram, and extremal pairs for a nonlinear binary code with at least two codewords.",
         ExplicitProfileRequest,
         ExplicitProfileResult,
         compute_explicit_profile,
         "code",
         "distance",
         "exact",
+        examples=(
+            example(
+                "explicit_profile_three",
+                "Complete distance profile of three-word code [[0,0,0],[1,1,0],[0,1,1]] with pairwise distances.",
+                {"codewords": [[0, 0, 0], [1, 1, 0], [0, 1, 1]]},
+            ),
+        ),
     ),
     _op(
         "code.binary.constant_weight.profile.compute",
@@ -123,6 +137,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "constant-weight",
         "exact",
+        examples=(
+            example(
+                "const_weight_profile",
+                "Profile of constant-weight code [[1,1,0,0],[1,0,1,0]] with distance via support intersection.",
+                {"codewords": [[1, 1, 0, 0], [1, 0, 1, 0]]},
+            ),
+        ),
     ),
     _op(
         "code.binary.explicit.to_set_system.compute",
@@ -134,6 +155,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "code",
         "set-system",
         "exact",
+        examples=(
+            example(
+                "to_set_system_two",
+                "Support subsets for two codewords [[1,0,1,0],[0,1,0,1]] on four coordinates.",
+                {"codewords": [[1, 0, 1, 0], [0, 1, 0, 1]]},
+            ),
+        ),
     ),
 )
 

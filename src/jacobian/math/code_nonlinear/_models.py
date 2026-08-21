@@ -63,8 +63,8 @@ class ConstantWeightResult(StrictModel):
 class WordDistanceRequest(StrictModel):
     """Compute Hamming distance between two equal-length binary words."""
 
-    word1: tuple[int, ...] = Field(min_length=1)
-    word2: tuple[int, ...] = Field(min_length=1)
+    word1: tuple[int, ...] = Field(min_length=1, max_length=MAX_LENGTH)
+    word2: tuple[int, ...] = Field(min_length=1, max_length=MAX_LENGTH)
 
     @model_validator(mode="after")
     def require_valid_words(self) -> Self:
@@ -108,7 +108,7 @@ class ExplicitProfileRequest(StrictModel):
     """Compute the complete profile of an explicit binary code."""
 
     codewords: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=MAX_CODEWORDS
+        min_length=2, max_length=MAX_CODEWORDS
     )
 
     @model_validator(mode="after")

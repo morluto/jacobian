@@ -67,7 +67,7 @@ def _word_distance(
 def _explicit_profile(codewords):
     """Compute the complete profile of an explicit binary code."""
     n = len(codewords[0])
-    M = len(codewords)
+    m_count = len(codewords)
 
     weight_distribution = [0] * (n + 1)
     for w in codewords:
@@ -79,8 +79,8 @@ def _explicit_profile(codewords):
     min_pair = None
     max_pair = None
 
-    for i in range(M):
-        for j in range(i + 1, M):
+    for i in range(m_count):
+        for j in range(i + 1, m_count):
             dist = sum(a != b for a, b in zip(codewords[i], codewords[j], strict=True))
             distance_histogram[dist] += 1
             if dist < min_dist:
@@ -89,12 +89,6 @@ def _explicit_profile(codewords):
             if dist > max_dist:
                 max_dist = dist
                 max_pair = (i, j)
-
-    if M == 1:
-        min_dist = sum(codewords[0])
-        max_dist = min_dist
-        min_pair = None
-        max_pair = None
 
     return {
         "weight_distribution": tuple(weight_distribution),
@@ -108,24 +102,25 @@ def _explicit_profile(codewords):
 
 def _constant_weight_profile(codewords):
     """Profile of a constant-weight code using support-intersection distances."""
-    n = len(codewords[0])
     w = sum(codewords[0])
-    M = len(codewords)
+    m_count = len(codewords)
 
     distance_histogram = [0] * (2 * w + 1)
     min_dist = 2 * w + 1
 
-    for i in range(M):
-        for j in range(i + 1, M):
+    for i in range(m_count):
+        for j in range(i + 1, m_count):
             inter = sum(
-                1 for a, b in zip(codewords[i], codewords[j], strict=True) if a == 1 and b == 1
+                1
+                for a, b in zip(codewords[i], codewords[j], strict=True)
+                if a == 1 and b == 1
             )
             dist = 2 * (w - inter)
             distance_histogram[dist] += 1
             if dist < min_dist:
                 min_dist = dist
 
-    if M == 1:
+    if m_count == 1:
         min_dist = 0
 
     return {

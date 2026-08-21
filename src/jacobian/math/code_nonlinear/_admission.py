@@ -37,8 +37,9 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     ),
     OperationAdmission(
         "code.binary.explicit.to_set_system.compute",
-        AdmissionDecision.KEEP,
-        "map codewords to support subsets on coordinate labels",
+        AdmissionDecision.NATIVE_ONLY,
+        "trivial projection enumerating support indices already supplied by caller",
+        native_symbol="jacobian.math.code_nonlinear.to_set_system",
     ),
 )
 

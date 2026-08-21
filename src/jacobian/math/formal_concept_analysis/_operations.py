@@ -5,14 +5,14 @@ from __future__ import annotations
 from typing import Any, cast
 
 from jacobian.math.formal_concept_analysis._models import (
+    AttributeSubsetRequest,
     ClosureResult,
     ConceptLatticeResult,
-    ConceptRequest,
     ConceptResult,
-    DerivationRequest,
     DerivationResult,
     EnumerateConceptsRequest,
     EnumerateConceptsResult,
+    ObjectSubsetRequest,
 )
 from jacobian.math.formal_concept_analysis.operations import (
     attribute_derivation,
@@ -34,17 +34,17 @@ __all__ = [
 ]
 
 
-def compute_object_derivation(request: DerivationRequest) -> DerivationResult:
+def compute_object_derivation(request: ObjectSubsetRequest) -> DerivationResult:
     result = object_derivation(request.context, frozenset(request.subset))
     return DerivationResult(derived=tuple(sorted(result)))
 
 
-def compute_attribute_derivation(request: DerivationRequest) -> DerivationResult:
+def compute_attribute_derivation(request: AttributeSubsetRequest) -> DerivationResult:
     result = attribute_derivation(request.context, frozenset(request.subset))
     return DerivationResult(derived=tuple(sorted(result)))
 
 
-def compute_object_closure(request: DerivationRequest) -> ClosureResult:
+def compute_object_closure(request: ObjectSubsetRequest) -> ClosureResult:
     fs = frozenset(request.subset)
     derived = object_derivation(request.context, fs)
     closure = attribute_derivation(request.context, derived)
@@ -57,7 +57,7 @@ def compute_object_closure(request: DerivationRequest) -> ClosureResult:
     )
 
 
-def compute_attribute_closure(request: DerivationRequest) -> ClosureResult:
+def compute_attribute_closure(request: AttributeSubsetRequest) -> ClosureResult:
     fs = frozenset(request.subset)
     derived = attribute_derivation(request.context, fs)
     closure = object_derivation(request.context, derived)
@@ -70,7 +70,7 @@ def compute_attribute_closure(request: DerivationRequest) -> ClosureResult:
     )
 
 
-def compute_concept_from_objects(request: ConceptRequest) -> ConceptResult:
+def compute_concept_from_objects(request: ObjectSubsetRequest) -> ConceptResult:
     result = concept_from_objects(request.context, frozenset(request.subset))
     return ConceptResult(
         extent=tuple(sorted(result["extent"])),
@@ -78,7 +78,7 @@ def compute_concept_from_objects(request: ConceptRequest) -> ConceptResult:
     )
 
 
-def compute_concept_from_attributes(request: ConceptRequest) -> ConceptResult:
+def compute_concept_from_attributes(request: AttributeSubsetRequest) -> ConceptResult:
     result = concept_from_attributes(request.context, frozenset(request.subset))
     return ConceptResult(
         extent=tuple(sorted(result["extent"])),

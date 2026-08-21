@@ -8,10 +8,11 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math._labels import MAX_OPAQUE_LABEL_LENGTH, OpaqueLabel
 
 MAX_POSITIONS = 500
 MAX_MOVES = 2_000
-MAX_LABEL_LENGTH = 64
+MAX_LABEL_LENGTH = MAX_OPAQUE_LABEL_LENGTH
 MAX_HEAPS = 50
 MAX_HEAP_SIZE = 10_000
 MAX_NIM_OPTIONS = 5_000
@@ -21,14 +22,14 @@ MAX_SUBTRACTION_WORK = 250_000
 
 
 class GameMove(StrictModel):
-    source: str = Field(min_length=1, max_length=MAX_LABEL_LENGTH)
-    target: str = Field(min_length=1, max_length=MAX_LABEL_LENGTH)
+    source: OpaqueLabel
+    target: OpaqueLabel
 
 
 class ImpartialGame(StrictModel):
     """A complete finite normal-play impartial game DAG."""
 
-    positions: tuple[str, ...] = Field(min_length=1, max_length=MAX_POSITIONS)
+    positions: tuple[OpaqueLabel, ...] = Field(min_length=1, max_length=MAX_POSITIONS)
     moves: tuple[GameMove, ...] = Field(max_length=MAX_MOVES)
 
     @model_validator(mode="after")

@@ -127,6 +127,19 @@ class TestKolmogorovQuotient:
         )
         assert len(result.quotient_points) == 2
 
+    def test_equivalence_classes_retain_long_source_labels(self) -> None:
+        left = "a" * 64
+        right = "b" * 64
+        space = FiniteTopologicalSpace(
+            points=(left, right),
+            preorder=((0, 1), (0, 1)),
+        )
+
+        result = compute_kolmogorov_quotient(KolmogorovQuotientRequest(space=space))
+
+        assert result.quotient_points == ((left, right),)
+        assert result.quotient_preorder == ((0,),)
+
 
 # ---------------------------------------------------------------------------
 # Continuity check
@@ -153,6 +166,13 @@ class TestContinuityCheck:
 
 
 class TestValidation:
+    def test_duplicate_point_labels_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="point labels must be distinct"):
+            FiniteTopologicalSpace(
+                points=("a", "a"),
+                preorder=((0,), (1,)),
+            )
+
     def test_non_reflexive_preorder_rejected(self) -> None:
         with pytest.raises(ValidationError, match="reflexive"):
             FiniteTopologicalSpace(

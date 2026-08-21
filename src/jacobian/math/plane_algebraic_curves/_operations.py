@@ -5,25 +5,28 @@ from __future__ import annotations
 import sympy
 
 from jacobian.math.plane_algebraic_curves._models import (
+    HOMOGENIZING_COORDINATE,
     AffineChartRequest,
     AffineChartResult,
     AffineCurveRequest,
     AffineCurveResult,
     ProjectiveClosureRequest,
     ProjectiveClosureResult,
-    _parse_polynomial,
 )
-
-HOMOGENIZING_COORDINATE = "z"
+from jacobian.math.polynomials._conversions import (
+    rational_polynomial_from_sympy,
+    rational_polynomial_to_sympy,
+    symbols_for_variables,
+)
 
 
 def compute_affine_curve_check(request: AffineCurveRequest) -> AffineCurveResult:
-    """Check that a polynomial defines a valid affine plane curve."""
-    poly = _parse_polynomial(request.polynomial, request.variables)
-    degree = int(sympy.total_degree(poly))
-    is_valid = poly != 0 and degree >= 1
+    """Check whether a nonconstant polynomial defines an affine plane curve."""
+
+    polynomial = rational_polynomial_to_sympy(request.polynomial)
+    degree = 0 if polynomial.is_zero else int(polynomial.total_degree())
     return AffineCurveResult(
-        is_valid=is_valid,
+        is_valid=not polynomial.is_zero and degree >= 1,
         degree=degree,
     )
 
@@ -31,38 +34,71 @@ def compute_affine_curve_check(request: AffineCurveRequest) -> AffineCurveResult
 def compute_projective_closure(
     request: ProjectiveClosureRequest,
 ) -> ProjectiveClosureResult:
-    """Compute the projective closure by homogenizing with a new variable."""
-    var_symbols = list(sympy.symbols(request.variables))
-    poly = _parse_polynomial(request.polynomial, request.variables)
-    z = sympy.Symbol(HOMOGENIZING_COORDINATE)
-    terms = sympy.Poly(poly, *var_symbols)
-    degree = terms.total_degree()
-    new_terms = []
-    for monom, coeff in terms.as_dict().items():
-        total_deg = sum(monom)
-        factor = z ** (degree - total_deg)
-        term = coeff
-        for i, exp in enumerate(monom):
-            term *= var_symbols[i] ** exp
-        new_terms.append(term * factor)
-    homogenized = sympy.expand(sum(new_terms))
+    """Homogenize an affine plane curve with the reserved coordinate ``z``."""
+
+    source = rational_polynomial_to_sympy(request.polynomial)
+    source_variables = symbols_for_variables(request.polynomial.variables)
+    homogenizing = sympy.Symbol(HOMOGENIZING_COORDINATE)
+    variables = (*request.polynomial.variables, HOMOGENIZING_COORDINATE)
+    degree = 0 if source.is_zero else int(source.total_degree())
+    expression = sum(
+        coefficient
+        * sympy.prod(
+            variable**exponent
+            for variable, exponent in zip(
+                source_variables,
+                monomial,
+                strict=True,
+            )
+        )
+        * homogenizing ** (degree - sum(monomial))
+        for monomial, coefficient in source.terms()
+    )
+    closure = sympy.Poly(
+        sympy.expand(expression),
+        *source_variables,
+        homogenizing,
+        domain=sympy.QQ,
+    )
     return ProjectiveClosureResult(
-        polynomial=str(homogenized),
-        variables=(*request.variables, HOMOGENIZING_COORDINATE),
+        polynomial=rational_polynomial_from_sympy(
+            closure,
+            variables,
+            maximum_terms=256,
+        )
     )
 
 
 def compute_affine_chart(request: AffineChartRequest) -> AffineChartResult:
-    """Extract an affine chart by dehomogenizing at the chart variable."""
-    chart_var = sympy.Symbol(request.chart_variable)
-    poly = _parse_polynomial(request.polynomial, request.variables)
-    idx = request.variables.index(request.chart_variable)
-    other_vars = [v for i, v in enumerate(request.variables) if i != idx]
+    """Dehomogenize a projective plane curve at one chart coordinate."""
 
-    dehomogenized = poly.subs(chart_var, 1)
-    dehomogenized = sympy.expand(dehomogenized)
-
-    return AffineChartResult(
-        polynomial=str(dehomogenized),
-        variables=tuple(other_vars),
+    source = rational_polynomial_to_sympy(request.polynomial)
+    chart_index = request.polynomial.variables.index(request.chart_variable)
+    symbols = symbols_for_variables(request.polynomial.variables)
+    remaining_variables = tuple(
+        variable
+        for index, variable in enumerate(request.polynomial.variables)
+        if index != chart_index
     )
+    remaining_symbols = tuple(
+        symbol for index, symbol in enumerate(symbols) if index != chart_index
+    )
+    chart = sympy.Poly(
+        sympy.expand(source.as_expr().subs(symbols[chart_index], 1)),
+        *remaining_symbols,
+        domain=sympy.QQ,
+    )
+    return AffineChartResult(
+        polynomial=rational_polynomial_from_sympy(
+            chart,
+            remaining_variables,
+            maximum_terms=256,
+        )
+    )
+
+
+__all__ = [
+    "compute_affine_chart",
+    "compute_affine_curve_check",
+    "compute_projective_closure",
+]

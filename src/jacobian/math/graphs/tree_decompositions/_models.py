@@ -87,6 +87,13 @@ class RestrictRequest(StrictModel):
     decomposition: TreeDecomposition
     subset: tuple[str, ...] = Field(min_length=1)
 
+    @model_validator(mode="after")
+    def require_source_vertices(self) -> Self:
+        source_vertices = set(self.decomposition.graph.vertices)
+        if not set(self.subset).issubset(source_vertices):
+            raise ValueError("subset must contain only declared source vertices")
+        return self
+
 
 class RestrictResult(StrictModel):
     """The restricted decomposition bound to the induced source graph."""

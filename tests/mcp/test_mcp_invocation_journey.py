@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 import pytest
+from mcp.shared.exceptions import MCPError
 
 from jacobian.mcp.server import create_server
 
@@ -90,22 +91,111 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                 "first_unsatisfied_clause": None,
             }
 
-            invalid = await client.call_tool(
-                "math.run",
-                {
-                    "operation_id": "integer.compute.extended_gcd",
-                    "payload": {
-                        "left": "84",
-                        "right": "30",
-                        "private": "reject-this-private-value",
+            with pytest.raises(MCPError) as invalid_error:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": "integer.compute.extended_gcd",
+                        "payload": {
+                            "left": "84",
+                            "right": "30",
+                            "private": "reject-this-private-value",
+                        },
                     },
-                },
+                )
+            assert invalid_error.value.code == -32602
+            assert invalid_error.value.message == "operation payload failed validation"
+            assert invalid_error.value.data == {
+                "code": "INVALID_REQUEST",
+                "stage": "operation_validation",
+                "operation_id": "integer.compute.extended_gcd",
+                "errors": [
+                    {
+                        "location": ["private"],
+                        "code": "extra_forbidden",
+                        "message": "Extra inputs are not permitted",
+                        "input": "reject-this-private-value",
+                    }
+                ],
+                "hint": (
+                    "Inspect the operation with math.find and correct the fields at "
+                    "the reported locations before retrying."
+                ),
+            }
+            assert "reject-this-private-value" not in invalid_error.value.message
+
+            with pytest.raises(MCPError) as noncanonical_error:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": "integer.compute.extended_gcd",
+                        "payload": {"left": 1.5, "right": "30"},
+                    },
+                )
+            assert noncanonical_error.value.code == -32602
+            assert noncanonical_error.value.data["errors"] == [
+                {
+                    "location": [],
+                    "code": "canonicalization_error",
+                    "message": "JSON floating-point numbers are not allowed",
+                    "input": None,
+                }
+            ]
+
+            with pytest.raises(MCPError) as oversized_error:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": "universal_algebra.term.evaluate.compute",
+                        "payload": {
+                            "term": {
+                                "nodes": [{"kind": "x" * 4_096}],
+                                "root": 0,
+                            }
+                        },
+                    },
+                )
+            assert oversized_error.value.code == -32602
+            assert all(
+                len(issue["message"]) <= 1_024
+                for issue in oversized_error.value.data["errors"]
             )
-            assert invalid.is_error is True
-            assert invalid.structured_content is None
-            assert "operation payload failed validation" in invalid.content[0].text
-            assert "reject-this-private-value" not in invalid.content[0].text
-            assert len(invalid.content[0].text.encode("utf-8")) < 2_048
+
+            oversized_fields = {
+                f"{'x' * 4_096}{index}": "y" * 2_000 for index in range(64)
+            }
+            with pytest.raises(MCPError) as bounded_locations_error:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": "integer.compute.extended_gcd",
+                        "payload": {
+                            "left": "84",
+                            "right": "30",
+                            **oversized_fields,
+                        },
+                    },
+                )
+            bounded_data = bounded_locations_error.value.data
+            assert all(
+                len(component) <= 128
+                for issue in bounded_data["errors"]
+                for component in issue["location"]
+                if isinstance(component, str)
+            )
+            assert len(json.dumps(bounded_data).encode("utf-8")) <= 64 * 1_024
+
+            with pytest.raises(MCPError) as multiple_errors:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": "integer.compute.extended_gcd",
+                        "payload": {"left": "01", "right": "not-an-integer"},
+                    },
+                )
+            assert [
+                error["location"] for error in multiple_errors.value.data["errors"]
+            ] == [["left"], ["right"]]
 
             matching_description = await client.call_tool(
                 "math.find",

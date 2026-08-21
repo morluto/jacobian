@@ -12,7 +12,9 @@ from jacobian.math.graphs.polynomials._models import (
     GraphPolynomialRequest,
     GraphPolynomialResult,
     MatchingPolynomialRequest,
+    MultivariatePolynomialTerm,
     PolynomialTerm,
+    SparseMultivariatePolynomial,
 )
 
 
@@ -37,24 +39,27 @@ def _poly_to_terms(poly_expr: object, var: sympy.Symbol) -> tuple[PolynomialTerm
     return tuple(sorted(terms, key=lambda term: term.degree))
 
 
-def compute_tutte_polynomial(request: GraphPolynomialRequest) -> GraphPolynomialResult:
+def compute_tutte_polynomial(
+    request: GraphPolynomialRequest,
+) -> SparseMultivariatePolynomial:
     """Compute the exact Tutte polynomial T_G(x, y).
 
-    Terms are encoded as (coefficient, degree) where degree = x_deg * 100 + y_deg
-    to fit the single-int constraint of PolynomialTerm.
+    Monomials retain their bivariate exponent tuples.
     """
     x, y = sympy.symbols("x y")
     g = _build_graph(request)
     result = nx.tutte_polynomial(g)
     poly = Poly(result, x, y)
-    terms: list[PolynomialTerm] = []
+    terms: list[MultivariatePolynomialTerm] = []
     for monom, coeff in poly.terms():
         if coeff == 0:
             continue
-        x_deg, y_deg = monom
-        terms.append(PolynomialTerm(coefficient=int(coeff), degree=x_deg * 100 + y_deg))
-    return GraphPolynomialResult(
-        terms=tuple(sorted(terms, key=lambda term: term.degree))
+        terms.append(
+            MultivariatePolynomialTerm(coefficient=int(coeff), exponents=tuple(monom))
+        )
+    return SparseMultivariatePolynomial(
+        variables=("x", "y"),
+        terms=tuple(sorted(terms, key=lambda term: term.exponents)),
     )
 
 

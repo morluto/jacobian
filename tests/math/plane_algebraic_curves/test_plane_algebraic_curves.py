@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.plane_algebraic_curves._models import (
     AffineChartRequest,
     AffineCurveRequest,
@@ -14,6 +15,29 @@ from jacobian.math.plane_algebraic_curves._operations import (
     compute_projective_closure,
 )
 from jacobian.math.plane_algebraic_curves._tools import TOOLS
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
+
+
+def _polynomial(
+    variables: tuple[str, ...],
+    *terms: tuple[int, tuple[int, ...]],
+) -> RationalPolynomial:
+    return RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_integer_ratio(coefficient, 1),
+                    exponents=exponents,
+                )
+                for coefficient, exponents in terms
+            )
+        ),
+    )
 
 
 def test_catalog_contains_only_audited_operations() -> None:
@@ -25,108 +49,112 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_affine_curve_check_circle() -> None:
-    request = AffineCurveRequest(variables=("x", "y"), polynomial="x**2 + y**2 - 1")
+    request = AffineCurveRequest(
+        polynomial=_polynomial(("x", "y"), (1, (2, 0)), (1, (0, 2)), (-1, (0, 0)))
+    )
     result = compute_affine_curve_check(request)
     assert result.is_valid is True
     assert result.degree == 2
 
 
-def test_projective_closure_circle() -> None:
-    request = ProjectiveClosureRequest(
-        variables=("x", "y"), polynomial="x**2 + y**2 - 1"
+def test_projective_closure_circle_is_canonical_polynomial() -> None:
+    source = _polynomial(("x", "y"), (1, (2, 0)), (1, (0, 2)), (-1, (0, 0)))
+    result = compute_projective_closure(ProjectiveClosureRequest(polynomial=source))
+    assert result.polynomial == _polynomial(
+        ("x", "y", "z"),
+        (1, (2, 0, 0)),
+        (1, (0, 2, 0)),
+        (-1, (0, 0, 2)),
     )
-    result = compute_projective_closure(request)
-    assert "z" in result.polynomial
 
 
-def test_affine_chart_circle() -> None:
-    request = AffineChartRequest(
-        variables=("x", "y", "z"),
-        polynomial="x**2 + y**2 - z**2",
-        chart_variable="z",
+def test_affine_chart_circle_is_directly_composable() -> None:
+    projective = _polynomial(
+        ("x", "y", "z"),
+        (1, (2, 0, 0)),
+        (1, (0, 2, 0)),
+        (-1, (0, 0, 2)),
     )
-    result = compute_affine_chart(request)
-    assert result.polynomial == "x**2 + y**2 - 1"
-    assert result.variables == ("x", "y")
-
-
-# --- Issue 6: round-trip, non-polynomial rejection, variable named "z",
-#     constant polynomial -----------------------------------------------
+    result = compute_affine_chart(
+        AffineChartRequest(polynomial=projective, chart_variable="z")
+    )
+    assert result.polynomial == _polynomial(
+        ("x", "y"), (1, (2, 0)), (1, (0, 2)), (-1, (0, 0))
+    )
+    AffineCurveRequest(polynomial=result.polynomial)
 
 
 def test_homogenize_dehomogenize_round_trip() -> None:
-    """Homogenizing an affine curve then taking the z=1 chart recovers it."""
-    affine = "x**3 - 2*x*y + y - 7"
-    request = ProjectiveClosureRequest(variables=("x", "y"), polynomial=affine)
-    closure = compute_projective_closure(request)
-    assert closure.variables == ("x", "y", "z")
-    chart = compute_affine_chart(
-        AffineChartRequest(
-            variables=closure.variables,
-            polynomial=closure.polynomial,
-            chart_variable="z",
-        )
+    affine = _polynomial(
+        ("x", "y"),
+        (1, (3, 0)),
+        (-2, (1, 1)),
+        (1, (0, 1)),
+        (-7, (0, 0)),
     )
-    recovered = chart.polynomial.replace(" ", "")
-    original = affine.replace(" ", "")
-    assert recovered == original
-    assert chart.variables == ("x", "y")
+    closure = compute_projective_closure(ProjectiveClosureRequest(polynomial=affine))
+    chart = compute_affine_chart(
+        AffineChartRequest(polynomial=closure.polynomial, chart_variable="z")
+    )
+    assert chart.polynomial == affine
 
 
-def test_non_polynomial_expression_is_rejected() -> None:
-    """A non-polynomial expression must be rejected at parse time."""
-    for model in (AffineCurveRequest, ProjectiveClosureRequest, AffineChartRequest):
-        if model is AffineChartRequest:
-            kwargs = {
-                "variables": ("x", "y", "z"),
-                "polynomial": "sin(x) + y",
-                "chart_variable": "z",
-            }
-        else:
-            kwargs = {"variables": ("x", "y"), "polynomial": "sin(x) + y"}
+def test_expression_strings_are_not_a_public_polynomial_contract() -> None:
+    for payload in (
+        "sin(x) + y",
+        "x +* y",
+        "x + t",
+        "__import__('os').getcwd()",
+    ):
         with pytest.raises(ValidationError, match="polynomial"):
-            model(**kwargs)
+            AffineCurveRequest.model_validate({"polynomial": payload})
 
 
-def test_unparseable_expression_is_rejected() -> None:
-    with pytest.raises(ValidationError, match="polynomial"):
-        AffineCurveRequest(variables=("x", "y"), polynomial="x +* y")
-
-
-def test_undeclared_variable_is_rejected() -> None:
-    with pytest.raises(ValidationError, match="undeclared"):
-        AffineCurveRequest(variables=("x", "y"), polynomial="x + t")
-
-
-def test_duplicate_variable_names_are_rejected() -> None:
+def test_duplicate_and_invalid_variable_names_are_rejected() -> None:
     with pytest.raises(ValidationError, match="unique"):
-        AffineCurveRequest(variables=("x", "x"), polynomial="x + 1")
+        _polynomial(("x", "x"), (1, (1, 0)))
+    with pytest.raises(ValidationError, match="string_pattern_mismatch"):
+        _polynomial(("", "y"), (1, (1, 0)))
 
 
 def test_variable_named_z_rejected_in_projective_closure() -> None:
-    """The homogenizing coordinate 'z' must not collide with a user variable."""
     with pytest.raises(ValidationError, match="homogenizing"):
-        ProjectiveClosureRequest(variables=("x", "z"), polynomial="x**2 - z")
+        ProjectiveClosureRequest(
+            polynomial=_polynomial(("x", "z"), (1, (2, 0)), (-1, (0, 1)))
+        )
 
 
-def test_constant_polynomial_is_not_a_valid_curve() -> None:
-    request = AffineCurveRequest(variables=("x", "y"), polynomial="5")
-    result = compute_affine_curve_check(request)
+@pytest.mark.parametrize("constant", [0, 5])
+def test_constant_polynomial_is_not_a_valid_curve(constant: int) -> None:
+    terms = () if constant == 0 else ((constant, (0, 0)),)
+    result = compute_affine_curve_check(
+        AffineCurveRequest(polynomial=_polynomial(("x", "y"), *terms))
+    )
     assert result.is_valid is False
     assert result.degree == 0
 
 
-def test_zero_polynomial_is_not_a_valid_curve() -> None:
-    request = AffineCurveRequest(variables=("x", "y"), polynomial="0")
-    result = compute_affine_curve_check(request)
-    assert result.is_valid is False
-    assert result.degree == 0
-
-
-def test_chart_variable_must_be_a_projective_variable() -> None:
-    with pytest.raises(ValidationError, match="chart_variable must be"):
+def test_chart_requires_three_variables_and_a_homogeneous_polynomial() -> None:
+    with pytest.raises(ValidationError, match="exactly three"):
         AffineChartRequest(
-            variables=("x", "y", "z"),
-            polynomial="x**2 + y**2 - z**2",
+            polynomial=_polynomial(("x", "y"), (1, (2, 0))),
+            chart_variable="x",
+        )
+    with pytest.raises(ValidationError, match="homogeneous"):
+        AffineChartRequest(
+            polynomial=_polynomial(("x", "y", "z"), (1, (2, 0, 0)), (1, (0, 1, 0))),
+            chart_variable="z",
+        )
+
+
+def test_chart_variable_must_be_on_the_projective_axis() -> None:
+    with pytest.raises(ValidationError, match="must belong"):
+        AffineChartRequest(
+            polynomial=_polynomial(
+                ("x", "y", "z"),
+                (1, (2, 0, 0)),
+                (1, (0, 2, 0)),
+                (-1, (0, 0, 2)),
+            ),
             chart_variable="w",
         )

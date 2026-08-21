@@ -86,6 +86,12 @@ class TestGramProfile:
         assert result.is_hadamard is False
         assert result.gram == ((2, 2), (2, 2))
 
+    def test_tall_matrix_retains_every_diagonal_residual(self) -> None:
+        result = compute_gram_profile(
+            GramProfileRequest(matrix={"rows": [[1], [1], [-1]]})
+        )
+        assert result.diagonal_residuals == (0, 0, 0)
+
 
 # ---------------------------------------------------------------------------
 # Normalize
@@ -96,14 +102,14 @@ class TestNormalize:
     def test_h2_normalize_idempotent(self) -> None:
         result = compute_normalize(NormalizeRequest(matrix=_h2()))
         # H2 already has first row/column all +1.
-        assert result.normalized == ((1, 1), (1, -1))
+        assert result.normalized.rows == ((1, 1), (1, -1))
         assert result.row_switches == (0, 0)
         assert result.column_switches == (0, 0)
 
     def test_normalize_flips(self) -> None:
         matrix = SignMatrix(rows=((-1, -1), (-1, 1)))
         result = compute_normalize(NormalizeRequest(matrix=matrix))
-        assert result.normalized == ((1, 1), (1, -1))
+        assert result.normalized.rows == ((1, 1), (1, -1))
         assert result.column_switches == (1, 1)
         assert result.row_switches == (0, 0)
 
@@ -131,17 +137,17 @@ class TestSylvester:
     def test_sylvester_k0(self) -> None:
         result = compute_sylvester(SylvesterRequest(k=0))
         assert result.order == 1
-        assert result.matrix == ((1,),)
+        assert result.matrix.rows == ((1,),)
 
     def test_sylvester_k1(self) -> None:
         result = compute_sylvester(SylvesterRequest(k=1))
         assert result.order == 2
-        assert result.matrix == ((1, 1), (1, -1))
+        assert result.matrix.rows == ((1, 1), (1, -1))
 
     def test_sylvester_k2_is_hadamard(self) -> None:
         result = compute_sylvester(SylvesterRequest(k=2))
         assert result.order == 4
-        h = HadamardMatrix(rows=result.matrix)
+        h = result.matrix
         assert len(h.rows) == 4
 
 

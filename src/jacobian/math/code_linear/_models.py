@@ -75,14 +75,12 @@ class CodewordCheckRequest(StrictModel):
         return self
 
 
-class SyndromeRequest(StrictModel):
-    """Compute the syndrome of a word under a parity-check matrix."""
+class ParityCheckMatrix(StrictModel):
+    """A prime-field matrix retaining its column count when it has no rows."""
 
     field_order: int = Field(ge=2, le=251)
-    parity_check_matrix: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=16
-    )
-    word: tuple[int, ...] = Field(min_length=1, max_length=MAX_LENGTH)
+    column_count: int = Field(ge=1, le=MAX_LENGTH)
+    rows: tuple[tuple[int, ...], ...] = Field(max_length=MAX_LENGTH)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -90,20 +88,24 @@ class SyndromeRequest(StrictModel):
 
         if not isprime(self.field_order):
             raise ValueError("field_order must be prime")
-        width = len(self.parity_check_matrix[0])
-        if width == 0 or width > MAX_LENGTH:
-            raise ValueError("parity-check rows must have between 1 and 32 entries")
-        if any(len(row) != width for row in self.parity_check_matrix):
-            raise ValueError("parity-check matrix rows must have equal length")
-        if any(
-            not 0 <= entry < self.field_order
-            for row in self.parity_check_matrix
-            for entry in row
-        ):
+        if any(len(row) != self.column_count for row in self.rows):
+            raise ValueError("parity-check rows must match the declared column count")
+        if any(not 0 <= value < self.field_order for row in self.rows for value in row):
             raise ValueError("parity-check entries must be canonical field residues")
-        if len(self.word) != width:
+        return self
+
+
+class SyndromeRequest(StrictModel):
+    """Compute the syndrome of a word under a parity-check matrix."""
+
+    parity_check: ParityCheckMatrix
+    word: tuple[int, ...] = Field(min_length=1, max_length=MAX_LENGTH)
+
+    @model_validator(mode="after")
+    def require_valid(self) -> Self:
+        if len(self.word) != self.parity_check.column_count:
             raise ValueError("word length must match code length")
-        if any(not 0 <= v < self.field_order for v in self.word):
+        if any(not 0 <= v < self.parity_check.field_order for v in self.word):
             raise ValueError("word entries must be canonical field residues")
         return self
 
@@ -196,6 +198,7 @@ class FromGeneratorResult(StrictModel):
 
 class DualCodeResult(StrictModel):
     dual_generator: tuple[tuple[int, ...], ...]
+    parity_check: ParityCheckMatrix
     dimension: int = Field(ge=0)
     dual_dimension: int = Field(ge=0)
     length: int = Field(ge=0)
@@ -203,7 +206,7 @@ class DualCodeResult(StrictModel):
 
 
 class ParityCheckResult(StrictModel):
-    parity_check: tuple[tuple[int, ...], ...]
+    parity_check: ParityCheckMatrix
     dimension: int = Field(ge=0)
     rank_h: int = Field(ge=0)
     length: int = Field(ge=0)

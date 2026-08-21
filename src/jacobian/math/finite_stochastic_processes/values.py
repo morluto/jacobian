@@ -6,6 +6,7 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 
 MAX_SAMPLES = 64
@@ -14,12 +15,15 @@ MAX_SAMPLES = 64
 class FiniteProbabilitySpace(StrictModel):
     """An immutable finite probability space with positive-mass atoms.
 
-    ``samples`` are unique labels. ``masses`` are positive rational strings
-    that sum to exactly 1 (represented as strings for exactness).
+    ``samples`` are unique labels. ``masses`` are positive canonical rationals
+    that sum to exactly one.
     """
 
     samples: tuple[str, ...] = Field(min_length=1, max_length=MAX_SAMPLES)
-    masses: tuple[str, ...] = Field(min_length=1, max_length=MAX_SAMPLES)
+    masses: tuple[CanonicalRational, ...] = Field(
+        min_length=1,
+        max_length=MAX_SAMPLES,
+    )
 
     @model_validator(mode="after")
     def require_well_formed(self) -> Self:
@@ -27,14 +31,15 @@ class FiniteProbabilitySpace(StrictModel):
             raise ValueError("samples and masses must have equal length")
         if len(set(self.samples)) != len(self.samples):
             raise ValueError("sample labels must be unique")
-        from fractions import Fraction
-
-        total = Fraction(0)
-        for m in self.masses:
-            f = Fraction(m)
-            if f <= 0:
+        total = sum((mass.as_fraction() for mass in self.masses), start=0)
+        for mass in self.masses:
+            require_bounded_rational(
+                mass,
+                max_digits=256,
+                label="probability mass",
+            )
+            if mass.as_fraction() <= 0:
                 raise ValueError("masses must be positive")
-            total += f
         if total != 1:
             raise ValueError("masses must sum to exactly 1")
         return self
@@ -43,21 +48,20 @@ class FiniteProbabilitySpace(StrictModel):
 class FiniteRandomVariable(StrictModel):
     """An immutable finite random variable on a probability space.
 
-    ``values`` is a tuple of rational strings, one per sample, in the same
+    ``values`` is a tuple of canonical rationals, one per sample, in the same
     order as the probability space's samples.
     """
 
     space: FiniteProbabilitySpace
-    values: tuple[str, ...] = Field(min_length=1)
+    values: tuple[CanonicalRational, ...] = Field(
+        min_length=1,
+        max_length=MAX_SAMPLES,
+    )
 
     @model_validator(mode="after")
     def require_valid_rv(self) -> Self:
         if len(self.values) != len(self.space.samples):
             raise ValueError("values must have one entry per sample")
-        from fractions import Fraction
-
-        for v in self.values:
-            Fraction(v)
         return self
 
 

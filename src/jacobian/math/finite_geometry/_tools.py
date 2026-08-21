@@ -77,7 +77,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "fp2_point",
                 "Canonicalize [2,3] in F_5^2.",
-                {"field_order": 5, "vector": [2, 3]},
+                {"space": {"field_order": 5, "axis": ["x", "y"]}, "vector": [2, 3]},
             ),
         ),
     ),
@@ -97,9 +97,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "equal_points",
                 "Check [2,3] and [4,1] in F_5^2 are the same projective point.",
                 {
-                    "field_order": 5,
-                    "vector_a": [2, 3],
-                    "vector_b": [4, 1],
+                    "point_a": {
+                        "space": {"field_order": 5, "axis": ["x", "y"]},
+                        "coordinates": [1, 4],
+                    },
+                    "point_b": {
+                        "space": {"field_order": 5, "axis": ["x", "y"]},
+                        "coordinates": [1, 4],
+                    },
                 },
             ),
         ),
@@ -120,7 +125,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "plane_in_f3",
                 "Compute the span of [1,0,0] and [0,1,0] in F_3^3.",
                 {
-                    "field_order": 3,
+                    "space": {"field_order": 3, "axis": ["x", "y", "z"]},
                     "vectors": [[1, 0, 0], [0, 1, 0]],
                 },
             ),
@@ -142,9 +147,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "member_word",
                 "Check [1,1,0] is in span{[1,0,0],[0,1,0]} in F_3.",
                 {
-                    "field_order": 3,
-                    "generators": [[1, 0, 0], [0, 1, 0]],
-                    "word": [1, 1, 0],
+                    "subspace": {
+                        "space": {"field_order": 3, "axis": ["x", "y", "z"]},
+                        "basis": [[1, 0, 0], [0, 1, 0]],
+                    },
+                    "vector": [1, 1, 0],
                 },
             ),
         ),
@@ -164,7 +171,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "span_two_vectors",
                 "Span of [1,0] and [0,1] in F_2.",
-                {"field_order": 2, "vectors": [[1, 0], [0, 1]]},
+                {
+                    "space": {"field_order": 2, "axis": ["x", "y"]},
+                    "vectors": [[1, 0], [0, 1]],
+                    "subspaces": [],
+                },
             ),
         ),
     ),
@@ -185,9 +196,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "intersection_of_planes",
                 "Intersection of two lines in F_2^2.",
                 {
-                    "field_order": 2,
-                    "generators_a": [[1, 0]],
-                    "generators_b": [[0, 1]],
+                    "subspace_a": {
+                        "space": {"field_order": 2, "axis": ["x", "y"]},
+                        "basis": [[1, 0]],
+                    },
+                    "subspace_b": {
+                        "space": {"field_order": 2, "axis": ["x", "y"]},
+                        "basis": [[0, 1]],
+                    },
                 },
             ),
         ),
@@ -226,7 +242,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "pg_2_3",
                 "Enumerate all points of PG(1, F_2).",
-                {"field_order": 2, "projective_dimension": 1},
+                {"space": {"field_order": 2, "axis": ["x", "y"]}},
             ),
         ),
     ),

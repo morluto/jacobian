@@ -107,7 +107,7 @@ class TestFiniteSemigroup:
             )
 
     def test_overlong_label_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="length budget"):
+        with pytest.raises(ValidationError, match="at most 64 characters"):
             FiniteSemigroup(
                 elements=["a", "x" * 65],
                 multiplication=[

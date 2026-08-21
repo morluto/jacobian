@@ -70,11 +70,10 @@ _ALGEBRA = {
 # Flat term: node 0 = variable 0, node 1 = variable 1, node 2 = application of op 0 with children (0, 1).
 _TERM = {
     "nodes": [
-        {"kind": "variable", "variable_id": 0, "operation": None, "children": []},
-        {"kind": "variable", "variable_id": 1, "operation": None, "children": []},
+        {"kind": "variable", "variable_id": 0},
+        {"kind": "variable", "variable_id": 1},
         {
             "kind": "application",
-            "variable_id": None,
             "operation": 0,
             "children": [0, 1],
         },
@@ -103,6 +102,7 @@ UNIVERSAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"algebra": _ALGEBRA, "term": _TERM, "assignment": [0, 1]},
             ),
         ),
+        version="2",
     ),
     _op(
         "universal_algebra.equation.profile.compute",
@@ -123,22 +123,26 @@ UNIVERSAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "Check AND(x,x) = x in the 2-element Boolean algebra.",
                 {
                     "algebra": _ALGEBRA,
-                    "left": _TERM,
-                    "right": {
+                    "left": {
                         "nodes": [
+                            {"kind": "variable", "variable_id": 0},
                             {
-                                "kind": "variable",
-                                "variable_id": 0,
-                                "operation": None,
-                                "children": [],
+                                "kind": "application",
+                                "operation": 0,
+                                "children": [0, 0],
                             },
                         ],
+                        "root": 1,
+                    },
+                    "right": {
+                        "nodes": [{"kind": "variable", "variable_id": 0}],
                         "root": 0,
                     },
-                    "variable_count": 2,
+                    "variable_count": 1,
                 },
             ),
         ),
+        version="2",
     ),
     _op(
         "universal_algebra.subalgebra.generated.compute",
@@ -159,6 +163,7 @@ UNIVERSAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"algebra": _ALGEBRA, "generators": [0]},
             ),
         ),
+        version="2",
     ),
     _op(
         "universal_algebra.congruence.check.compute",
@@ -180,12 +185,14 @@ UNIVERSAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"algebra": _ALGEBRA, "partition": [[0, 1]]},
             ),
         ),
+        version="2",
     ),
     _op(
         "universal_algebra.quotient.compute",
         "Compute the quotient algebra A/theta",
         "Return the quotient algebra induced by a congruence. The quotient "
-        "carrier is the set of blocks, and operations are applied block-wise.",
+        "carrier is the set of blocks; return a directly composable "
+        "FiniteAlgebra together with the quotient map.",
         QuotientRequest,
         QuotientResult,
         compute_quotient,
@@ -199,6 +206,7 @@ UNIVERSAL_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 {"algebra": _ALGEBRA, "partition": [[0, 1]]},
             ),
         ),
+        version="2",
     ),
 )
 

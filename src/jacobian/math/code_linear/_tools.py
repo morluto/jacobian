@@ -159,8 +159,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "binary_repetition_syndrome",
                 "Syndrome of [1,0] under parity-check [1,1] over F_2.",
                 {
-                    "field_order": 2,
-                    "parity_check_matrix": [[1, 1]],
+                    "parity_check": {
+                        "field_order": 2,
+                        "column_count": 2,
+                        "rows": [[1, 1]],
+                    },
                     "word": [1, 0],
                 },
             ),

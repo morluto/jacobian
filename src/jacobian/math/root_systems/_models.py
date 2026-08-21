@@ -7,6 +7,7 @@ from typing import Self
 from pydantic import model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.root_systems._cartan import require_finite_type
 
 MAX_RANK = 8
 
@@ -28,7 +29,7 @@ class CartanMatrixRequest(StrictModel):
             if self.matrix[i][i] != 2:
                 raise ValueError("diagonal entries must be 2")
         self._check_off_diagonal(n)
-        self._check_finite_type(n)
+        require_finite_type(self.matrix)
         return self
 
     def _check_off_diagonal(self, n: int) -> None:
@@ -47,42 +48,22 @@ class CartanMatrixRequest(StrictModel):
                         "generalized Cartan matrix requires a_ij == 0 iff a_ji == 0"
                     )
 
-    def _check_finite_type(self, n: int) -> None:
-        """Check that the Cartan matrix is of finite type.
 
-        For a generalized Cartan matrix of finite type, the positive roots
-        are finite.  We enumerate them by applying simple reflections to
-        already-discovered positive roots, keeping only positive results,
-        with a generous bound on the root count.
-        """
-        matrix = self.matrix
-        # Simple roots
-        positive_roots: set[tuple[int, ...]] = set()
-        for i in range(n):
-            root = tuple(1 if j == i else 0 for j in range(n))
-            positive_roots.add(root)
-
-        max_roots = n * n * 6  # generous bound for finite type (n<=8)
-        changed = True
-        while changed:
-            changed = False
-            for root in list(positive_roots):
-                for i in range(n):
-                    inner = sum(root[j] * matrix[i][j] for j in range(n))
-                    new_root = tuple(root[j] - inner * matrix[i][j] for j in range(n))
-                    if new_root not in positive_roots and all(v > 0 for v in new_root):
-                        positive_roots.add(new_root)
-                        changed = True
-                        if len(positive_roots) > max_roots:
-                            raise ValueError("Cartan matrix is not of finite type")
-
-
-class PositiveRootsResult(StrictModel):
+class PositiveRootsResult(CartanMatrixRequest):
     """The positive roots of a root system."""
 
     rank: int
     positive_roots: tuple[tuple[int, ...], ...]
     num_positive_roots: int
+
+    @model_validator(mode="after")
+    def bind_roots(self) -> Self:
+        from jacobian.math.root_systems._cartan import positive_roots
+
+        expected = positive_roots(self.matrix)
+        if self.positive_roots != expected or self.num_positive_roots != len(expected):
+            raise ValueError("positive roots are not bound to the Cartan matrix")
+        return self
 
 
 class SimpleReflectionResult(StrictModel):
@@ -93,6 +74,14 @@ class SimpleReflectionResult(StrictModel):
     reflected_vector: tuple[int, ...]
 
 
+class RootComponentData(StrictModel):
+    simple_root_indices: tuple[int, ...]
+    positive_roots: tuple[tuple[int, ...], ...]
+    highest_root: tuple[int, ...]
+    marks: tuple[int, ...]
+    coxeter_number: int
+
+
 class RootSystemDataResult(StrictModel):
     """Complete root system data from a Cartan matrix."""
 
@@ -101,6 +90,52 @@ class RootSystemDataResult(StrictModel):
     positive_roots: tuple[tuple[int, ...], ...]
     negative_roots: tuple[tuple[int, ...], ...]
     simple_roots: tuple[tuple[int, ...], ...]
-    highest_root: tuple[int, ...] | None
     num_positive_roots: int
-    coxeter_number: int
+    components: tuple[RootComponentData, ...]
+
+    @model_validator(mode="after")
+    def bind_root_data(self) -> Self:
+        from jacobian.math.root_systems._cartan import (
+            connected_components,
+            positive_roots,
+        )
+
+        CartanMatrixRequest(matrix=self.cartan_matrix)
+        expected = positive_roots(self.cartan_matrix)
+        rank = len(self.cartan_matrix)
+        simple = tuple(tuple(int(i == j) for j in range(rank)) for i in range(rank))
+        if (
+            self.rank != rank
+            or self.simple_roots != simple
+            or self.positive_roots != expected
+            or self.num_positive_roots != len(expected)
+        ):
+            raise ValueError("root-system data is not bound to its Cartan matrix")
+        if self.negative_roots != tuple(
+            tuple(-value for value in root) for root in expected
+        ):
+            raise ValueError("negative roots must be the negatives of positive roots")
+        expected_components = []
+        for indices in connected_components(self.cartan_matrix):
+            roots = tuple(
+                root
+                for root in expected
+                if any(root[index] for index in indices)
+                and all(
+                    root[index] == 0 for index in range(rank) if index not in indices
+                )
+            )
+            highest = max(roots, key=lambda root: sum(root))
+            marks = tuple(highest[index] for index in indices)
+            expected_components.append(
+                RootComponentData(
+                    simple_root_indices=indices,
+                    positive_roots=roots,
+                    highest_root=highest,
+                    marks=marks,
+                    coxeter_number=sum(marks) + 1,
+                )
+            )
+        if self.components != tuple(expected_components):
+            raise ValueError("component data is not bound to the Cartan matrix")
+        return self

@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from math import lcm
 
-from jacobian.canonical import format_canonical_integer
+from jacobian._exact import CanonicalRational
 from jacobian.math.finite_game_theory._models import (
     BestResponseResult,
     NashEquilibriumResult,
@@ -13,13 +13,8 @@ from jacobian.math.finite_game_theory._models import (
 )
 
 
-def _format_rational(value: Fraction) -> str:
-    if value.denominator == 1:
-        return format_canonical_integer(value.numerator)
-    return (
-        f"{format_canonical_integer(value.numerator)}/"
-        f"{format_canonical_integer(value.denominator)}"
-    )
+def _wire_rational(value: Fraction) -> CanonicalRational:
+    return CanonicalRational.from_fraction(value)
 
 
 def _payoff_matrix(request: ZeroSumGameRequest) -> list[list[Fraction]]:
@@ -41,7 +36,7 @@ def compute_best_response(request: ZeroSumGameRequest) -> BestResponseResult:
         if row_min > best_value:
             best_value = row_min
             best_row = row_index
-    return BestResponseResult(value=_format_rational(best_value), best_row=best_row)
+    return BestResponseResult(value=_wire_rational(best_value), best_row=best_row)
 
 
 def compute_nash_equilibrium(request: ZeroSumGameRequest) -> NashEquilibriumResult:
@@ -113,9 +108,9 @@ def compute_nash_equilibrium(request: ZeroSumGameRequest) -> NashEquilibriumResu
     ):
         raise RuntimeError("column strategy does not attain the reported game value")
     return NashEquilibriumResult(
-        row_strategy=tuple(_format_rational(weight) for weight in row_strategy),
-        col_strategy=tuple(_format_rational(weight) for weight in column_strategy),
-        value=_format_rational(value),
+        row_strategy=tuple(_wire_rational(weight) for weight in row_strategy),
+        col_strategy=tuple(_wire_rational(weight) for weight in column_strategy),
+        value=_wire_rational(value),
     )
 
 

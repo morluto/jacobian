@@ -1,10 +1,17 @@
-"""Tests for polynomial map operations."""
+"""Tests for canonical polynomial map operations."""
 
+from __future__ import annotations
+
+from fractions import Fraction
+
+import pytest
+from pydantic import ValidationError
+
+from jacobian._exact import CanonicalRational
 from jacobian.math.polynomials.maps._models import (
     CompositionRequest,
     EvalRequest,
     JacobianRequest,
-    RationalPolynomialExpr,
     VariablePoint,
 )
 from jacobian.math.polynomials.maps._operations import (
@@ -12,95 +19,115 @@ from jacobian.math.polynomials.maps._operations import (
     compute_jacobian,
     evaluate_polynomial,
 )
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
 
-class TestEvaluate:
-    def test_simple(self):
-        req = EvalRequest(
-            polynomial=RationalPolynomialExpr(expression="x**2 + 2*y"),
-            point=VariablePoint(
-                variables=("x", "y"),
-                values=(
-                    {"num": "3", "den": "1"},
-                    {"num": "1", "den": "1"},
-                ),
+def _polynomial(
+    variables: tuple[str, ...],
+    terms: dict[tuple[int, ...], int | Fraction],
+) -> RationalPolynomial:
+    return RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_fraction(Fraction(coefficient)),
+                    exponents=exponents,
+                )
+                for exponents, coefficient in sorted(terms.items(), reverse=True)
+                if coefficient
+            )
+        ),
+    )
+
+
+def test_evaluation_returns_a_canonical_rational() -> None:
+    request = EvalRequest(
+        polynomial=_polynomial(("x", "y"), {(2, 0): 1, (0, 1): 2}),
+        point=VariablePoint(
+            variables=("x", "y"),
+            values=(
+                CanonicalRational(num="3", den="1"),
+                CanonicalRational(num="1", den="1"),
             ),
-        )
-        result = evaluate_polynomial(req)
-        assert result.value == "11"  # 9 + 2 = 11
+        ),
+    )
+    assert evaluate_polynomial(request).value == CanonicalRational(num="11", den="1")
 
-    def test_zero(self):
-        req = EvalRequest(
-            polynomial=RationalPolynomialExpr(expression="x**2"),
+
+def test_evaluation_requires_the_complete_ordered_axis() -> None:
+    with pytest.raises(ValidationError, match="complete ordered axis"):
+        EvalRequest(
+            polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
             point=VariablePoint(
                 variables=("x",),
-                values=({"num": "0", "den": "1"},),
+                values=(CanonicalRational(num="1", den="1"),),
             ),
         )
-        result = evaluate_polynomial(req)
-        assert result.value == "0"
-
-    def test_rejects_rational_function(self):
-        import pytest
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="polynomial"):
-            EvalRequest(
-                polynomial=RationalPolynomialExpr(expression="1/x"),
-                point=VariablePoint(
-                    variables=("x",),
-                    values=({"num": "1", "den": "1"},),
-                ),
-            )
-
-    def test_rejects_irrational_coefficient(self):
-        import pytest
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="rational coefficients"):
-            RationalPolynomialExpr(expression="pi*x")
-
-    def test_rejects_incomplete_substitution(self):
-        import pytest
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="every free variable"):
-            EvalRequest(
-                polynomial=RationalPolynomialExpr(expression="x + y"),
-                point=VariablePoint(
-                    variables=("x",),
-                    values=({"num": "1", "den": "1"},),
-                ),
-            )
 
 
-class TestJacobian:
-    def test_simple(self):
-        req = JacobianRequest(
+def test_evaluation_rejects_a_point_whose_exact_value_exceeds_result_bound() -> None:
+    with pytest.raises(ValidationError, match="32,768-digit"):
+        EvalRequest(
+            polynomial=_polynomial(("x",), {(64,): 1}),
+            point=VariablePoint(
+                variables=("x",),
+                values=(CanonicalRational(num="1" + "0" * 600, den="1"),),
+            ),
+        )
+
+
+def test_jacobian_entries_are_directly_composable_polynomials() -> None:
+    request = JacobianRequest(
+        input_variables=("x", "y"),
+        output_polynomials=(
+            _polynomial(("x", "y"), {(2, 0): 1}),
+            _polynomial(("x", "y"), {(0, 2): 1}),
+        ),
+    )
+    result = compute_jacobian(request)
+    assert result.n_inputs == 2
+    assert result.n_outputs == 2
+    assert result.entries == (
+        _polynomial(("x", "y"), {(1, 0): 2}),
+        _polynomial(("x", "y"), {}),
+        _polynomial(("x", "y"), {}),
+        _polynomial(("x", "y"), {(0, 1): 2}),
+    )
+
+
+def test_jacobian_rejects_a_mismatched_output_ring() -> None:
+    with pytest.raises(ValidationError, match="complete ordered input axis"):
+        JacobianRequest(
             input_variables=("x", "y"),
-            output_polynomials=(
-                RationalPolynomialExpr(expression="x**2"),
-                RationalPolynomialExpr(expression="y**2"),
-            ),
+            output_polynomials=(_polynomial(("x",), {(2,): 1}),),
         )
-        result = compute_jacobian(req)
-        assert result.n_inputs == 2
-        assert result.n_outputs == 2
-        assert result.entries[0] == "2*x"  # d(x^2)/dx
-        assert result.entries[3] == "2*y"  # d(y^2)/dy
 
 
-class TestComposition:
-    def test_simple(self):
-        req = CompositionRequest(
-            outer=RationalPolynomialExpr(expression="x**2"),
-            inner=RationalPolynomialExpr(expression="x + 1"),
+def test_univariate_composition_returns_a_canonical_polynomial() -> None:
+    result = compose_polynomials(
+        CompositionRequest(
+            outer=_polynomial(("u",), {(2,): 1}),
+            inner=_polynomial(("x",), {(1,): 1, (0,): 1}),
             inner_variable="x",
-            outer_variable="x",
+            outer_variable="u",
         )
-        result = compose_polynomials(req)
-        # (x+1)^2 = x^2 + 2*x + 1
-        from sympy import expand, sympify
+    )
+    assert result.polynomial == _polynomial(
+        ("x",),
+        {(2,): 1, (1,): 2, (0,): 1},
+    )
 
-        result_expr = expand(sympify(result.expression))
-        assert result_expr == expand(sympify("(x + 1)**2"))
+
+def test_composition_rejects_multivariate_operands() -> None:
+    with pytest.raises(ValidationError, match="exactly outer_variable"):
+        CompositionRequest(
+            outer=_polynomial(("u", "v"), {(1, 0): 1}),
+            inner=_polynomial(("x",), {(1,): 1}),
+            inner_variable="x",
+            outer_variable="u",
+        )

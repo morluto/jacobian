@@ -210,6 +210,8 @@ ignore_imports = [
     "jacobian.math.** -> jacobian.catalog.admission",
     # The logic domain launches bounded external solvers via jacobian.process.
     "jacobian.math.logic._operations -> jacobian.process",
+    # General ideal radical/quotient run in a bounded one-shot Singular process.
+    "jacobian.math.commutative_algebra_ops._singular -> jacobian.process",
 ]
 
 [[tool.importlinter.contracts]]
@@ -225,13 +227,10 @@ source_modules = ["jacobian.dispatch"]
 forbidden_modules = ["jacobian.cli", "jacobian.mcp"]
 
 [[tool.importlinter.contracts]]
-name = "Finite-field values do not import private backends"
+name = "Finite-field values do not import the optional FLINT backend"
 type = "forbidden"
 source_modules = ["jacobian.math.finite_fields.values"]
-forbidden_modules = [
-    "jacobian.math.finite_fields._flint",
-    "jacobian.math.finite_fields._sympy",
-]
+forbidden_modules = ["jacobian.math.finite_fields._flint"]
 
 [tool.coverage.run]
 branch = true

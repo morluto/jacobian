@@ -5,9 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from sympy.combinatorics.permutations import PermutationGroup
+    from sympy.combinatorics.perm_groups import PermutationGroup
 
 from jacobian.math.galois_theory._models import (
+    FiniteFieldFactor,
+    FinitePermutationGroup,
     FrobeniusCycleRequest,
     FrobeniusCycleResult,
     GaloisFactorRequest,
@@ -28,16 +30,29 @@ def compute_galois_factor(request: GaloisFactorRequest) -> GaloisFactorResult:
     coeffs = list(request.coefficients)
     terms = sum(c * x**i for i, c in enumerate(coeffs))
     poly = Poly(terms, domain=field)
-    _coeff, factor_polys = poly.factor_list()
-    result_factors = []
-    for factor_poly, _mult in factor_polys:
-        coeff_list = [int(c) for c in factor_poly.all_coeffs()]
-        result_factors.append(tuple(reversed(coeff_list)))
-
-    factor_count = len(result_factors)
-    is_irred = factor_count == 1
+    unit, factor_polys = poly.factor_list()
+    result_factors = tuple(
+        FiniteFieldFactor(
+            coefficients=tuple(
+                int(coefficient) % request.field_order
+                for coefficient in reversed(factor_poly.all_coeffs())
+            ),
+            multiplicity=int(multiplicity),
+        )
+        for factor_poly, multiplicity in factor_polys
+    )
+    factor_count = sum(factor.multiplicity for factor in result_factors)
+    is_irred = (
+        len(result_factors) == 1
+        and result_factors[0].multiplicity == 1
+        and len(result_factors[0].coefficients) == len(request.coefficients)
+    )
     return GaloisFactorResult(
-        factors=tuple(result_factors),
+        field_order=request.field_order,
+        source_coefficients=request.coefficients,
+        unit=int(unit) % request.field_order,
+        factors=result_factors,
+        distinct_factor_count=len(result_factors),
         factor_count=factor_count,
         is_irreducible=is_irred,
     )
@@ -45,7 +60,7 @@ def compute_galois_factor(request: GaloisFactorRequest) -> GaloisFactorResult:
 
 def compute_frobenius_cycle(request: FrobeniusCycleRequest) -> FrobeniusCycleResult:
     cycle_type = tuple(sorted(request.factorization_degrees, reverse=True))
-    is_irred = len(cycle_type) == 1
+    is_irred = cycle_type == (request.polynomial_degree,)
     return FrobeniusCycleResult(
         cycle_type=cycle_type,
         degree=request.polynomial_degree,
@@ -71,6 +86,18 @@ def _galois_group_from_coeffs(coeffs: tuple[int, ...]) -> PermutationGroup:
     return perm_group
 
 
+def _wire_group(perm_group: PermutationGroup, degree: int) -> FinitePermutationGroup:
+    """Project a SymPy group onto a complete explicit root axis."""
+
+    return FinitePermutationGroup(
+        root_axis=tuple(f"root_{index}" for index in range(degree)),
+        generators=tuple(
+            tuple(int(generator(index)) for index in range(degree))
+            for generator in perm_group.generators
+        ),
+    )
+
+
 def compute_galois_group(request: GaloisGroupRequest) -> GaloisGroupResult:
     """Compute the Galois group of a polynomial over Q."""
     perm_group = _galois_group_from_coeffs(request.coefficients)
@@ -79,6 +106,7 @@ def compute_galois_group(request: GaloisGroupRequest) -> GaloisGroupResult:
     is_solvable = bool(perm_group.is_solvable)
 
     return GaloisGroupResult(
+        group=_wire_group(perm_group, len(request.coefficients) - 1),
         group_name=group_name,
         order=order,
         degree=len(request.coefficients) - 1,
@@ -94,4 +122,7 @@ def compute_solvable(request: SolvableRequest) -> SolvableResult:
     """
     perm_group = _galois_group_from_coeffs(request.coefficients)
     is_solvable = bool(perm_group.is_solvable)
-    return SolvableResult(solvable_by_radicals=is_solvable)
+    return SolvableResult(
+        solvable_by_radicals=is_solvable,
+        group=_wire_group(perm_group, len(request.coefficients) - 1),
+    )

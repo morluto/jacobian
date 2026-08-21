@@ -2,159 +2,162 @@
 
 from __future__ import annotations
 
-from typing import Any, Self
+from fractions import Fraction
+from typing import Self
 
-import sympy
 from pydantic import Field, model_validator
-from sympy.polys.polyerrors import CoercionFailed
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.polynomials.values import (
+    PolynomialVariable,
+    RationalPolynomial,
+    require_polynomial_budget,
+)
+
+_MAX_VARIABLES = 8
+_MAX_MAP_OUTPUTS = 20
+_MAX_TERMS = 256
+_MAX_EXPONENT = 64
+_MAX_COEFFICIENT_DIGITS = 128
+_MAX_COMPOSITION_DEGREE = 128
 
 
-class RationalPolynomialExpr(StrictModel):
-    """A rational polynomial as a SymPy-compatible string expression.
-
-    The polynomial is given as a string like "x**2 + 2*y" that sympy can parse.
-    Variables are named in the expression string itself.
-    """
-
-    expression: str = Field(
-        min_length=1,
-        max_length=2000,
-        description="Polynomial expression with rational coefficients.",
+def _require_map_polynomial(polynomial: RationalPolynomial, *, label: str) -> None:
+    if len(polynomial.variables) > _MAX_VARIABLES:
+        raise ValueError(f"{label} exceeds the {_MAX_VARIABLES}-variable budget")
+    require_polynomial_budget(
+        polynomial,
+        maximum_terms=_MAX_TERMS,
+        maximum_exponent=_MAX_EXPONENT,
+        maximum_coefficient_digits=_MAX_COEFFICIENT_DIGITS,
+        label=label,
     )
-
-    @model_validator(mode="after")
-    def require_polynomial(self) -> Self:
-        _require_polynomial_expression(self.expression)
-        return self
-
-
-def _require_polynomial_expression(raw: str) -> Any:
-    try:
-        expression = sympy.sympify(raw)
-    except (sympy.SympifyError, TypeError, SyntaxError) as exc:
-        raise ValueError("polynomial expression must be a polynomial") from exc
-    symbols = tuple(expression.free_symbols)
-    if symbols:
-        if not expression.is_polynomial(*symbols):
-            raise ValueError("polynomial expression must be a polynomial")
-        try:
-            sympy.Poly(expression, *symbols, domain=sympy.QQ)
-        except (CoercionFailed, sympy.PolynomialError, TypeError, ValueError) as exc:
-            raise ValueError(
-                "polynomial expression must have rational coefficients"
-            ) from exc
-    elif not expression.is_rational:
-        raise ValueError("polynomial expression must be a polynomial")
-    return expression
+    if any(sum(term.exponents) > _MAX_EXPONENT for term in polynomial.polynomial.terms):
+        raise ValueError(f"{label} exceeds total degree {_MAX_EXPONENT}")
 
 
 class VariablePoint(StrictModel):
-    """A rational point: ordered variable names and their rational values."""
+    """One rational point on an explicitly ordered polynomial axis."""
 
-    variables: tuple[str, ...] = Field(min_length=1, max_length=20)
-    values: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=20)
+    variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=1, max_length=_MAX_VARIABLES
+    )
+    values: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=_MAX_VARIABLES
+    )
 
     @model_validator(mode="after")
-    def require_matching_lengths(self) -> Self:
+    def require_matching_axis(self) -> Self:
         if len(self.variables) != len(self.values):
-            raise ValueError("variables and values must have the same length")
+            raise ValueError("point variables and values must have the same length")
         if len(set(self.variables)) != len(self.variables):
-            raise ValueError("variable names must be unique")
+            raise ValueError("point variables must be unique")
         return self
 
 
 class EvalRequest(StrictModel):
-    """Evaluate a polynomial at a rational point."""
+    """Evaluate one canonical rational polynomial at a complete rational point."""
 
-    polynomial: RationalPolynomialExpr
+    polynomial: RationalPolynomial
     point: VariablePoint
 
     @model_validator(mode="after")
-    def require_complete_rational_evaluation(self) -> Self:
-        expression = _require_polynomial_expression(self.polynomial.expression)
-        free = {str(symbol) for symbol in expression.free_symbols}
-        given = set(self.point.variables)
-        if not free <= given:
-            raise ValueError("evaluation point must cover every free variable")
+    def require_complete_ordered_point(self) -> Self:
+        _require_map_polynomial(self.polynomial, label="evaluation polynomial")
+        if self.point.variables != self.polynomial.variables:
+            raise ValueError(
+                "evaluation point must use the polynomial's complete ordered axis"
+            )
+        value = Fraction(0)
+        coordinates = tuple(item.as_fraction() for item in self.point.values)
+        for term in self.polynomial.polynomial.terms:
+            monomial = term.coefficient.as_fraction()
+            for coordinate, exponent in zip(coordinates, term.exponents, strict=True):
+                monomial *= coordinate**exponent
+            value += monomial
+        CanonicalRational.from_fraction(value)
         return self
 
 
 class EvalResult(StrictModel):
-    """The rational value of the polynomial at the point."""
+    """The exact rational value at the requested point."""
 
-    value: str
+    value: CanonicalRational
 
 
 class JacobianRequest(StrictModel):
-    """Compute the Jacobian matrix of a polynomial map."""
+    """Compute the Jacobian of a canonical polynomial map."""
 
-    input_variables: tuple[str, ...] = Field(min_length=1, max_length=20)
-    output_polynomials: tuple[RationalPolynomialExpr, ...] = Field(
-        min_length=1, max_length=20
+    input_variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=1, max_length=_MAX_VARIABLES
+    )
+    output_polynomials: tuple[RationalPolynomial, ...] = Field(
+        min_length=1, max_length=_MAX_MAP_OUTPUTS
     )
 
     @model_validator(mode="after")
-    def require_unique_and_complete_variables(self) -> Self:
+    def require_one_map_ring(self) -> Self:
         if len(set(self.input_variables)) != len(self.input_variables):
             raise ValueError("input variables must be unique")
-        declared = set(self.input_variables)
-        import sympy
-
-        for poly in self.output_polynomials:
-            expression = sympy.sympify(poly.expression)
-            free = {str(s) for s in expression.free_symbols}
-            undeclared = free - declared
-            if undeclared:
+        for polynomial in self.output_polynomials:
+            _require_map_polynomial(polynomial, label="map output polynomial")
+            if polynomial.variables != self.input_variables:
                 raise ValueError(
-                    f"output polynomial references undeclared variables: {undeclared}"
+                    "every map output must use the complete ordered input axis"
                 )
         return self
 
 
 class JacobianResult(StrictModel):
-    """The Jacobian matrix as a flat list of entries (row-major order)."""
+    """The row-major Jacobian matrix over the source polynomial ring."""
 
-    n_inputs: int = Field(ge=1)
-    n_outputs: int = Field(ge=1)
-    entries: tuple[str, ...]
+    n_inputs: int = Field(ge=1, le=_MAX_VARIABLES)
+    n_outputs: int = Field(ge=1, le=_MAX_MAP_OUTPUTS)
+    entries: tuple[RationalPolynomial, ...] = Field(max_length=160)
+
+    @model_validator(mode="after")
+    def require_matrix_shape(self) -> Self:
+        if len(self.entries) != self.n_inputs * self.n_outputs:
+            raise ValueError("Jacobian entry count must match its matrix dimensions")
+        if self.entries:
+            variables = self.entries[0].variables
+            if any(entry.variables != variables for entry in self.entries):
+                raise ValueError("Jacobian entries must use one ordered ring")
+        return self
 
 
 class CompositionRequest(StrictModel):
-    """Compose outer(f(g(x)))."""
+    """Compose two bounded univariate rational polynomials."""
 
-    outer: RationalPolynomialExpr
-    inner: RationalPolynomialExpr
-    inner_variable: str
-    outer_variable: str
+    outer: RationalPolynomial
+    inner: RationalPolynomial
+    inner_variable: PolynomialVariable
+    outer_variable: PolynomialVariable
 
     @model_validator(mode="after")
-    def require_valid_composition(self) -> Self:
-        import sympy
-
-        outer_expr = sympy.sympify(self.outer.expression)
-        outer_free = {str(s) for s in outer_expr.free_symbols}
-        if self.outer_variable not in outer_free:
-            raise ValueError(
-                f"outer variable '{self.outer_variable}' must appear in the outer polynomial"
-            )
-
-        inner_expr = sympy.sympify(self.inner.expression)
-        inner_free = {str(s) for s in inner_expr.free_symbols}
-        if self.inner_variable not in inner_free:
-            raise ValueError(
-                f"inner variable '{self.inner_variable}' must appear in the inner polynomial"
-            )
-
+    def require_univariate_bounded_composition(self) -> Self:
+        _require_map_polynomial(self.outer, label="outer polynomial")
+        _require_map_polynomial(self.inner, label="inner polynomial")
+        if self.outer.variables != (self.outer_variable,):
+            raise ValueError("outer polynomial must use exactly outer_variable")
+        if self.inner.variables != (self.inner_variable,):
+            raise ValueError("inner polynomial must use exactly inner_variable")
+        outer_degree = max(
+            (term.exponents[0] for term in self.outer.polynomial.terms), default=0
+        )
+        inner_degree = max(
+            (term.exponents[0] for term in self.inner.polynomial.terms), default=0
+        )
+        if outer_degree * inner_degree > _MAX_COMPOSITION_DEGREE:
+            raise ValueError(f"composition exceeds degree {_MAX_COMPOSITION_DEGREE}")
         return self
 
 
 class CompositionResult(StrictModel):
-    """The composed polynomial expression."""
+    """The canonical polynomial obtained by substitution."""
 
-    expression: str
+    polynomial: RationalPolynomial
 
 
 __all__ = [
@@ -164,6 +167,5 @@ __all__ = [
     "EvalResult",
     "JacobianRequest",
     "JacobianResult",
-    "RationalPolynomialExpr",
     "VariablePoint",
 ]

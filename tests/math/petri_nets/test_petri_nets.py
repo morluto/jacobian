@@ -18,7 +18,15 @@ from jacobian.math.petri_nets._operations import (
     compute_reachability,
 )
 from jacobian.math.petri_nets._tools import TOOLS
-from jacobian.math.petri_nets.values import Marking, PetriNet
+from jacobian.math.petri_nets.values import (
+    MAX_PETRI_ARC_WEIGHT,
+    MAX_PETRI_MARKING,
+    MAX_REACHABILITY_EXPLORATION_WORK,
+    MAX_REACHABILITY_FIRING_RECORDS,
+    MAX_REACHABILITY_STATE_TOKEN_CELLS,
+    Marking,
+    PetriNet,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -113,8 +121,9 @@ class TestFireTransition:
         result = compute_fire_transition(
             FireTransitionRequest(net=net, marking=marking, transition=0)
         )
-        assert result.fired is True
-        assert result.new_marking == (1, 0)
+        assert result.status == "FIRED"
+        assert result.new_marking == Marking(tokens=(1, 0))
+        assert result.envelope_escape is None
 
     def test_fire_disabled(self):
         net = _simple_net()
@@ -122,8 +131,9 @@ class TestFireTransition:
         result = compute_fire_transition(
             FireTransitionRequest(net=net, marking=marking, transition=0)
         )
-        assert result.fired is False
-        assert result.new_marking == (0, 0)
+        assert result.status == "NOT_ENABLED"
+        assert result.new_marking == Marking(tokens=(0, 0))
+        assert result.envelope_escape is None
 
     def test_fire_cyclic(self):
         net = _token_passing_net()
@@ -131,8 +141,28 @@ class TestFireTransition:
         result = compute_fire_transition(
             FireTransitionRequest(net=net, marking=marking, transition=0)
         )
-        assert result.fired is True
-        assert result.new_marking == (0, 1)
+        assert result.status == "FIRED"
+        assert result.new_marking == Marking(tokens=(0, 1))
+        assert result.envelope_escape is None
+
+    def test_fire_reports_successor_outside_marking_envelope(self):
+        net = PetriNet(
+            place_count=1,
+            transition_count=1,
+            pre=((0,),),
+            post=((MAX_PETRI_ARC_WEIGHT,),),
+        )
+        result = compute_fire_transition(
+            FireTransitionRequest(
+                net=net,
+                marking=Marking(tokens=(MAX_PETRI_MARKING,)),
+                transition=0,
+            )
+        )
+
+        assert result.status == "ESCAPES_DECLARED_ENVELOPE"
+        assert result.new_marking is None
+        assert result.envelope_escape == (2 * MAX_PETRI_MARKING,)
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +275,28 @@ class TestReachability:
         assert len(result.frontier) == 1
         assert result.frontier[0].target_marking == (3,)
 
+    def test_marking_growth_returns_replayable_envelope_escape(self):
+        net = PetriNet(
+            place_count=1,
+            transition_count=1,
+            pre=((0,),),
+            post=((1,),),
+        )
+        result = compute_reachability(
+            ReachabilityRequest(
+                net=net,
+                initial_marking=Marking(tokens=(MAX_PETRI_MARKING,)),
+                max_states=10,
+            )
+        )
+        assert result.status == "ESCAPES_DECLARED_ENVELOPE"
+        assert result.states == ((MAX_PETRI_MARKING,),)
+        assert result.frontier == ()
+        assert result.envelope_escape is not None
+        assert result.envelope_escape.source_state == 0
+        assert result.envelope_escape.transition == 0
+        assert result.envelope_escape.target_marking == (MAX_PETRI_MARKING + 1,)
+
     def test_result_rejects_false_complete_status(self):
         result = compute_reachability(
             ReachabilityRequest(
@@ -255,7 +307,7 @@ class TestReachability:
         )
         payload = result.model_dump(mode="json")
         payload["status"] = "COMPLETE"
-        with pytest.raises(ValidationError, match="open frontier"):
+        with pytest.raises(ValidationError, match="deterministic BFS outcome"):
             ReachabilityResult.model_validate(payload)
 
 
@@ -285,6 +337,121 @@ class TestValidation:
                 transition_count=1,
                 pre=((-1, 0), (0, 0)),
                 post=((0, 0), (0, 0)),
+            )
+
+    @pytest.mark.parametrize("value", [MAX_PETRI_ARC_WEIGHT, MAX_PETRI_MARKING])
+    def test_scalar_bounds_accept_boundary(self, value: int):
+        PetriNet(
+            place_count=1,
+            transition_count=1,
+            pre=((value,),),
+            post=((value,),),
+        )
+        Marking(tokens=(value,))
+
+    def test_scalar_bounds_reject_above_boundary(self):
+        with pytest.raises(ValidationError, match="pre weights"):
+            PetriNet(
+                place_count=1,
+                transition_count=1,
+                pre=((MAX_PETRI_ARC_WEIGHT + 1,),),
+                post=((0,),),
+            )
+        with pytest.raises(ValidationError, match="marking tokens"):
+            Marking(tokens=(MAX_PETRI_MARKING + 1,))
+
+    def test_reachability_bounds_state_cells(self):
+        place_count = 64
+        net = PetriNet(
+            place_count=place_count,
+            transition_count=1,
+            pre=tuple((0,) for _ in range(place_count)),
+            post=tuple((0,) for _ in range(place_count)),
+        )
+        accepted_states = MAX_REACHABILITY_STATE_TOKEN_CELLS // place_count
+        ReachabilityRequest(
+            net=net,
+            initial_marking=Marking(tokens=(0,) * place_count),
+            max_states=accepted_states,
+        )
+        with pytest.raises(ValidationError, match="state-token cells"):
+            ReachabilityRequest(
+                net=net,
+                initial_marking=Marking(tokens=(0,) * place_count),
+                max_states=accepted_states + 1,
+            )
+
+    def test_reachability_bounds_firing_records(self):
+        transition_count = 64
+        net = PetriNet(
+            place_count=1,
+            transition_count=transition_count,
+            pre=((0,) * transition_count,),
+            post=((0,) * transition_count,),
+        )
+        accepted_states = MAX_REACHABILITY_FIRING_RECORDS // transition_count
+        ReachabilityRequest(
+            net=net,
+            initial_marking=Marking(tokens=(0,)),
+            max_states=accepted_states,
+        )
+        with pytest.raises(ValidationError, match="firing records"):
+            ReachabilityRequest(
+                net=net,
+                initial_marking=Marking(tokens=(0,)),
+                max_states=accepted_states + 1,
+            )
+
+    def test_reachability_bounds_exploration_work(self):
+        dimension = 64
+        net = PetriNet(
+            place_count=dimension,
+            transition_count=dimension,
+            pre=tuple((0,) * dimension for _ in range(dimension)),
+            post=tuple((0,) * dimension for _ in range(dimension)),
+        )
+        accepted_states = MAX_REACHABILITY_EXPLORATION_WORK // (2 * dimension**2)
+        ReachabilityRequest(
+            net=net,
+            initial_marking=Marking(tokens=(0,) * dimension),
+            max_states=accepted_states,
+        )
+        with pytest.raises(ValidationError, match="exploration"):
+            ReachabilityRequest(
+                net=net,
+                initial_marking=Marking(tokens=(0,) * dimension),
+                max_states=accepted_states + 1,
+            )
+
+    def test_reachability_bounds_estimated_result_bytes(self):
+        net = PetriNet(
+            place_count=2,
+            transition_count=2,
+            pre=((0, 0), (0, 0)),
+            post=((0, 0), (0, 0)),
+        )
+        marking = Marking(tokens=(0, 0))
+        ReachabilityRequest(net=net, initial_marking=marking, max_states=48_390)
+        with pytest.raises(ValidationError, match="byte bound"):
+            ReachabilityRequest(
+                net=net,
+                initial_marking=marking,
+                max_states=48_391,
+            )
+
+    def test_native_reachability_uses_the_same_aggregate_admission(self):
+        dimension = 64
+        net = PetriNet(
+            place_count=dimension,
+            transition_count=dimension,
+            pre=tuple((0,) * dimension for _ in range(dimension)),
+            post=tuple((0,) * dimension for _ in range(dimension)),
+        )
+        with pytest.raises(ValueError, match="reachability"):
+            petri_nets.reachability_graph(
+                net,
+                Marking(tokens=(0,) * dimension),
+                max_states=100_000,
             )
 
     def test_transition_out_of_range_rejected(self):

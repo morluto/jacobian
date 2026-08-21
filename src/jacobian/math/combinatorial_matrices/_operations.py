@@ -21,6 +21,7 @@ from jacobian.math.combinatorial_matrices.operations import (
     sign_profile,
     sylvester,
 )
+from jacobian.math.combinatorial_matrices.values import HadamardMatrix, SignMatrix
 
 __all__ = [
     "compute_determinant_profile",
@@ -57,8 +58,13 @@ def compute_gram_profile(request: GramProfileRequest) -> GramProfileResult:
 
 def compute_normalize(request: NormalizeRequest) -> NormalizeResult:
     result = normalize(request.matrix)
+    rows = result["normalized"]
+    value_type = (
+        HadamardMatrix if isinstance(request.matrix, HadamardMatrix) else SignMatrix
+    )
+    normalized = value_type(rows=rows)  # type: ignore[arg-type]
     return NormalizeResult(
-        normalized=result["normalized"],  # type: ignore[arg-type]
+        normalized=normalized,
         row_switches=result["row_switches"],  # type: ignore[arg-type]
         column_switches=result["column_switches"],  # type: ignore[arg-type]
     )
@@ -79,7 +85,7 @@ def compute_determinant_profile(
 def compute_sylvester(request: SylvesterRequest) -> SylvesterResult:
     result = sylvester(request.k)
     return SylvesterResult(
-        matrix=result["matrix"],  # type: ignore[arg-type]
+        matrix=HadamardMatrix(rows=result["matrix"]),  # type: ignore[arg-type]
         construction=result["construction"],  # type: ignore[arg-type]
         order=result["order"],  # type: ignore[arg-type]
     )

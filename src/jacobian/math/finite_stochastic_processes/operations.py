@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from jacobian._exact import CanonicalRational
+
 from .values import FiniteProbabilitySpace, FiniteRandomVariable, FiniteSigmaAlgebra
 
 __all__ = [
@@ -20,7 +22,7 @@ def _index_of(space: FiniteProbabilitySpace) -> dict[str, int]:
 
 
 def _mass(space: FiniteProbabilitySpace) -> list[Fraction]:
-    return [Fraction(m) for m in space.masses]
+    return [mass.as_fraction() for mass in space.masses]
 
 
 def sigma_algebra_from_observation(
@@ -72,8 +74,8 @@ def conditional_expectation(
         raise ValueError("random variable and sigma algebra must share the same space")
     idx = _index_of(rv.space)
     masses = _mass(rv.space)
-    values = [Fraction(v) for v in rv.values]
-    ce_values: list[str] = []
+    values = [value.as_fraction() for value in rv.values]
+    ce_values: list[CanonicalRational] = []
     for sample in rv.space.samples:
         block = None
         for b in sigma.blocks:
@@ -88,7 +90,7 @@ def conditional_expectation(
             si = idx[s]
             total_mass += masses[si]
             weighted_sum += masses[si] * values[si]
-        ce_values.append(str(weighted_sum / total_mass))
+        ce_values.append(CanonicalRational.from_fraction(weighted_sum / total_mass))
     return FiniteRandomVariable(space=rv.space, values=tuple(ce_values))
 
 
@@ -114,18 +116,18 @@ def filtration_natural(
 def doob_martingale(
     space: FiniteProbabilitySpace,
     observations: tuple[tuple[str, ...], ...],
-    payoff: tuple[str, ...],
-) -> tuple[tuple[str, ...], ...]:
+    payoff: tuple[CanonicalRational, ...],
+) -> tuple[tuple[CanonicalRational, ...], ...]:
     """Return the Doob martingale M_t = E[payoff | F_t] for each time t.
 
     The payoff is a rational-valued random variable. The result is one
-    tuple of rational strings per time step.
+    tuple of canonical rational values per time step.
     """
     if len(payoff) != len(space.samples):
         raise ValueError("payoff must have one entry per sample")
     sigmas = filtration_natural(space, observations)
     rv = FiniteRandomVariable(space=space, values=payoff)
-    result: list[tuple[str, ...]] = []
+    result: list[tuple[CanonicalRational, ...]] = []
     for sigma in sigmas:
         ce = conditional_expectation(rv, sigma)
         result.append(ce.values)

@@ -1,71 +1,63 @@
-"""Domain functions for polynomial interpolation operations."""
+"""Exact Newton interpolation kernels over canonical rationals."""
 
 from __future__ import annotations
 
-import sympy
+from fractions import Fraction
 
+from jacobian._exact import CanonicalRational
+from jacobian.math.polynomial_interpolation_ops._kernel import (
+    divided_difference_coefficients,
+    evaluate_newton_form,
+)
 from jacobian.math.polynomial_interpolation_ops._models import (
     DividedDifferencesRequest,
     DividedDifferencesResult,
     NewtonEvaluateRequest,
     NewtonEvaluateResult,
+    NewtonForm,
     NewtonFormRequest,
-    NewtonFormResult,
 )
 
 
-def _parse_rational(s: str) -> sympy.Rational:
-    """Parse a canonical rational string into an exact sympy.Rational."""
-    return sympy.Rational(s)
-
-
-def _divided_differences(
-    nodes: list[sympy.Rational], values: list[sympy.Rational]
-) -> list[list[sympy.Rational]]:
-    """Compute the full divided-difference table."""
-    n = len(nodes)
-    table = [list(values)]
-    for j in range(1, n):
-        row = []
-        for i in range(n - j):
-            numerator = table[j - 1][i + 1] - table[j - 1][i]
-            denominator = nodes[i + j] - nodes[i]
-            row.append(numerator / denominator)
-        table.append(row)
-    return table
+def _canonical(values: tuple[Fraction, ...]) -> tuple[CanonicalRational, ...]:
+    return tuple(CanonicalRational.from_fraction(value) for value in values)
 
 
 def compute_divided_differences(
     request: DividedDifferencesRequest,
 ) -> DividedDifferencesResult:
-    """Compute Newton divided differences from sample points."""
-    nodes = [_parse_rational(x) for x in request.nodes]
-    values = [_parse_rational(v) for v in request.values]
-    table = _divided_differences(nodes, values)
-    n = len(nodes)
-    coeffs = tuple(str(sympy.simplify(table[j][0])) for j in range(n))
-    return DividedDifferencesResult(coefficients=coeffs)
+    coefficients = divided_difference_coefficients(
+        request.samples.nodes,
+        request.samples.values,
+    )
+    return DividedDifferencesResult(coefficients=_canonical(coefficients))
 
 
-def compute_newton_form(request: NewtonFormRequest) -> NewtonFormResult:
-    """Compute Newton form coefficients (same as divided differences)."""
-    nodes = [_parse_rational(x) for x in request.nodes]
-    values = [_parse_rational(v) for v in request.values]
-    table = _divided_differences(nodes, values)
-    n = len(nodes)
-    coeffs = tuple(str(sympy.simplify(table[j][0])) for j in range(n))
-    return NewtonFormResult(coefficients=coeffs, nodes=request.nodes)
+def compute_newton_form(request: NewtonFormRequest) -> NewtonForm:
+    coefficients = divided_difference_coefficients(
+        request.samples.nodes,
+        request.samples.values,
+    )
+    return NewtonForm(
+        coefficients=_canonical(coefficients),
+        nodes=request.samples.nodes,
+    )
 
 
 def compute_newton_evaluate(request: NewtonEvaluateRequest) -> NewtonEvaluateResult:
-    """Evaluate a polynomial in Newton form using Horner-like nesting."""
-    nodes = [_parse_rational(x) for x in request.nodes]
-    values = [_parse_rational(v) for v in request.values]
-    table = _divided_differences(nodes, values)
-    n = len(nodes)
-    coeffs = [table[j][0] for j in range(n)]
-    x = _parse_rational(request.evaluation_point)
-    result = coeffs[n - 1]
-    for j in range(n - 2, -1, -1):
-        result = coeffs[j] + (x - nodes[j]) * result
-    return NewtonEvaluateResult(result=str(sympy.simplify(result)))
+    return NewtonEvaluateResult(
+        result=CanonicalRational.from_fraction(
+            evaluate_newton_form(
+                request.newton_form.nodes,
+                request.newton_form.coefficients,
+                request.evaluation_point,
+            )
+        )
+    )
+
+
+__all__ = [
+    "compute_divided_differences",
+    "compute_newton_evaluate",
+    "compute_newton_form",
+]

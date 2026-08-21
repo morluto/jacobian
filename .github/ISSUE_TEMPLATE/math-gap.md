@@ -15,7 +15,7 @@ assignees: []
 <!-- What custom code, external library call, solver encoding, or manual work was needed? -->
 
 ## Gap classification
-<!-- Check one. Only a genuine operation gap normally proceeds to admission. -->
+<!-- Check one. An operation gap records a missing postcondition; it does not pre-admit a public operation. -->
 - [ ] representation
 - [ ] interoperability
 - [ ] discovery
@@ -23,6 +23,9 @@ assignees: []
 - [ ] scale/backend
 - [ ] operation
 - [ ] reasoning
+
+## Admission posture (operation gaps only)
+<!-- State whether the evidence supports public-catalog consideration, suggests native-only support, or leaves disposition unresolved. Public admission is a later decision. -->
 
 ## Existing math.find queries
 <!-- Queries already tried and what they returned. -->

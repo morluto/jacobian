@@ -51,13 +51,18 @@ def _op[
 _FACTOR1 = {
     "variables": [0, 1],
     "domain_sizes": [2, 2, 2],
-    "table": ["1/2", "1/2", "1/3", "2/3"],
+    "table": [
+        {"num": "1", "den": "2"},
+        {"num": "1", "den": "2"},
+        {"num": "1", "den": "3"},
+        {"num": "2", "den": "3"},
+    ],
 }
 
 _FACTOR_SINGLE = {
     "variables": [0],
     "domain_sizes": [2],
-    "table": ["1/3", "2/3"],
+    "table": [{"num": "1", "den": "3"}, {"num": "2", "den": "3"}],
 }
 
 GRAPHICAL_MODEL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
@@ -81,11 +86,15 @@ GRAPHICAL_MODEL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     "right": {
                         "variables": [1],
                         "domain_sizes": [2, 2, 2],
-                        "table": ["1/2", "1/2"],
+                        "table": [
+                            {"num": "1", "den": "2"},
+                            {"num": "1", "den": "2"},
+                        ],
                     },
                 },
             ),
         ),
+        version="2",
     ),
     _op(
         "graphical_model.factor.marginalize",
@@ -109,6 +118,7 @@ GRAPHICAL_MODEL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
+        version="2",
     ),
     _op(
         "graphical_model.d_separation.compute",
@@ -135,6 +145,7 @@ GRAPHICAL_MODEL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
+        version="2",
     ),
 )
 

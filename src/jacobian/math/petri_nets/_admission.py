@@ -18,7 +18,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "petri_net.reachability_graph.compute",
         AdmissionDecision.KEEP,
-        "bounded reachability construction with an explicit typed completeness frontier after the #1978 contract repair",
+        "aggregate-bounded reachability with exact frontier and marking-envelope escape witnesses",
     ),
 )
 

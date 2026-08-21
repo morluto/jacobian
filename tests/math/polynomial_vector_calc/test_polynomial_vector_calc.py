@@ -1,6 +1,15 @@
-"""Tests for polynomial vector calculus operations."""
+"""Tests for canonical polynomial vector-calculus operations."""
 
+from __future__ import annotations
+
+from fractions import Fraction
+
+import pytest
+from pydantic import ValidationError
+
+from jacobian._exact import CanonicalRational
 from jacobian.math.polynomial_vector_calc._models import (
+    CurlRequest,
     DirectionalDerivativeRequest,
     ScalarFieldRequest,
     VectorFieldRequest,
@@ -13,6 +22,30 @@ from jacobian.math.polynomial_vector_calc._operations import (
     compute_laplacian,
 )
 from jacobian.math.polynomial_vector_calc._tools import TOOLS
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
+
+
+def _polynomial(
+    variables: tuple[str, ...],
+    terms: dict[tuple[int, ...], int | Fraction],
+) -> RationalPolynomial:
+    return RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_fraction(Fraction(coefficient)),
+                    exponents=exponents,
+                )
+                for exponents, coefficient in sorted(terms.items(), reverse=True)
+                if coefficient
+            )
+        ),
+    )
 
 
 def test_catalog_contains_only_audited_operations() -> None:
@@ -25,116 +58,128 @@ def test_catalog_contains_only_audited_operations() -> None:
     }
 
 
-def test_gradient_of_x2_y2() -> None:
-    request = ScalarFieldRequest(variables=("x", "y"), polynomial="x**2 + y**2")
-    result = compute_gradient(request)
-    assert result.components == ("2*x", "2*y")
-
-
-def test_laplacian_of_x3_y3() -> None:
-    request = ScalarFieldRequest(variables=("x", "y"), polynomial="x**3 + y**3")
-    result = compute_laplacian(request)
-    assert result.result == "6*x + 6*y"
-
-
-def test_directional_derivative() -> None:
-    request = DirectionalDerivativeRequest(
-        variables=("x", "y"),
-        polynomial="x**2 + y**2",
-        direction=("1", "1"),
+def test_gradient_returns_composable_polynomials() -> None:
+    source = _polynomial(("x", "y"), {(2, 0): 1, (0, 2): 1})
+    result = compute_gradient(ScalarFieldRequest(polynomial=source))
+    assert result.components == (
+        _polynomial(("x", "y"), {(1, 0): 2}),
+        _polynomial(("x", "y"), {(0, 1): 2}),
     )
-    result = compute_directional_derivative(request)
-    assert "2*x" in result.result and "2*y" in result.result
 
 
-def test_divergence() -> None:
-    request = VectorFieldRequest(variables=("x", "y"), components=("x**2", "y**2"))
-    result = compute_divergence(request)
-    assert result.result == "2*x + 2*y"
-
-
-def test_curl_3d() -> None:
-    request = VectorFieldRequest(variables=("x", "y", "z"), components=("y", "0", "0"))
-    result = compute_curl(request)
-    assert result.components == ("0", "0", "-1")
-
-
-def test_curl_requires_3d() -> None:
-    import pytest
-
-    request = VectorFieldRequest(variables=("x", "y"), components=("x", "y"))
-    with pytest.raises(ValueError, match="3D"):
-        compute_curl(request)
-
-
-class TestVectorFieldValidation:
-    """Tests for the strengthened VectorFieldRequest contract."""
-
-    def test_component_count_mismatch_rejected(self) -> None:
-        import pytest
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="one component per variable"):
-            VectorFieldRequest(variables=("x", "y"), components=("x**2",))
-
-    def test_too_many_components_rejected(self) -> None:
-        import pytest
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="one component per variable"):
-            VectorFieldRequest(variables=("x", "y"), components=("x", "y", "x*y"))
-
-    def test_correct_component_count_accepted(self) -> None:
-        vf = VectorFieldRequest(variables=("x", "y", "z"), components=("x", "y", "z"))
-        assert len(vf.components) == 3
-
-    def test_non_polynomial_rejected(self) -> None:
-        """The parser should reject non-polynomial expressions like 1/x."""
-        import pytest
-
-        with pytest.raises((ValueError, TypeError)):
-            compute_gradient(ScalarFieldRequest(variables=("x",), polynomial="1/x"))
-
-    def test_foreign_symbol_rejected(self) -> None:
-        """The parser should reject symbols not in the declared variables."""
-        import pytest
-
-        with pytest.raises(ValueError, match="undeclared symbols"):
-            compute_gradient(ScalarFieldRequest(variables=("x",), polynomial="y + x"))
-
-    def test_distinct_variables_required(self) -> None:
-        import pytest
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="distinct"):
-            ScalarFieldRequest(variables=("x", "x"), polynomial="x")
-
-
-def test_gradient_single_variable() -> None:
-    """Gradient of x**2 in one variable should give (2*x,)."""
-    request = ScalarFieldRequest(variables=("x",), polynomial="x**2")
-    result = compute_gradient(request)
-    assert result.components == ("2*x",)
-
-
-def test_divergence_single_variable() -> None:
-    """Divergence of a 1D vector field (x**2) should give 2*x."""
-    request = VectorFieldRequest(variables=("x",), components=("x**2",))
-    result = compute_divergence(request)
-    assert result.result == "2*x"
-
-
-def test_laplacian_single_variable() -> None:
-    """Laplacian of x**3 in one variable should give 6*x."""
-    request = ScalarFieldRequest(variables=("x",), polynomial="x**3")
-    result = compute_laplacian(request)
-    assert result.result == "6*x"
-
-
-def test_directional_derivative_single_variable() -> None:
-    """Directional derivative of x**2 along (2,) should give 4*x."""
-    request = DirectionalDerivativeRequest(
-        variables=("x",), polynomial="x**2", direction=("2",)
+def test_renaming_the_declared_axis_transports_the_gradient() -> None:
+    original = compute_gradient(
+        ScalarFieldRequest(polynomial=_polynomial(("x", "y"), {(2, 0): 1, (0, 1): 3}))
     )
-    result = compute_directional_derivative(request)
-    assert result.result == "4*x"
+    renamed = compute_gradient(
+        ScalarFieldRequest(polynomial=_polynomial(("u", "v"), {(2, 0): 1, (0, 1): 3}))
+    )
+
+    assert tuple(component.polynomial for component in original.components) == tuple(
+        component.polynomial for component in renamed.components
+    )
+    assert all(component.variables == ("x", "y") for component in original.components)
+    assert all(component.variables == ("u", "v") for component in renamed.components)
+
+
+def test_laplacian_returns_a_composable_polynomial() -> None:
+    source = _polynomial(("x", "y"), {(3, 0): 1, (0, 3): 1})
+    result = compute_laplacian(ScalarFieldRequest(polynomial=source))
+    assert result.result == _polynomial(
+        ("x", "y"),
+        {(1, 0): 6, (0, 1): 6},
+    )
+
+
+def test_directional_derivative_uses_exact_rational_coordinates() -> None:
+    source = _polynomial(("x", "y"), {(2, 0): 1, (0, 2): 1})
+    result = compute_directional_derivative(
+        DirectionalDerivativeRequest(
+            polynomial=source,
+            direction=(
+                CanonicalRational(num="1", den="2"),
+                CanonicalRational(num="1", den="1"),
+            ),
+        )
+    )
+    assert result.result == _polynomial(
+        ("x", "y"),
+        {(1, 0): 1, (0, 1): 2},
+    )
+
+
+def test_divergence_uses_one_authoritative_axis() -> None:
+    result = compute_divergence(
+        VectorFieldRequest(
+            components=(
+                _polynomial(("x", "y"), {(2, 0): 1}),
+                _polynomial(("x", "y"), {(0, 2): 1}),
+            )
+        )
+    )
+    assert result.result == _polynomial(
+        ("x", "y"),
+        {(1, 0): 2, (0, 1): 2},
+    )
+
+
+def test_curl_is_rejected_at_the_request_boundary_outside_three_dimensions() -> None:
+    with pytest.raises(ValidationError, match="exactly three"):
+        CurlRequest(
+            components=(
+                _polynomial(("x", "y"), {(1, 0): 1}),
+                _polynomial(("x", "y"), {(0, 1): 1}),
+            )
+        )
+
+
+def test_curl_three_dimensional_orientation() -> None:
+    variables = ("x", "y", "z")
+    result = compute_curl(
+        CurlRequest(
+            components=(
+                _polynomial(variables, {(0, 1, 0): 1}),
+                _polynomial(variables, {}),
+                _polynomial(variables, {}),
+            )
+        )
+    )
+    assert result.components == (
+        _polynomial(variables, {}),
+        _polynomial(variables, {}),
+        _polynomial(variables, {(0, 0, 0): -1}),
+    )
+
+
+def test_vector_components_must_share_the_same_ring() -> None:
+    with pytest.raises(ValidationError, match="one ordered ring"):
+        VectorFieldRequest(
+            components=(
+                _polynomial(("x", "y"), {(1, 0): 1}),
+                _polynomial(("y", "x"), {(1, 0): 1}),
+            )
+        )
+
+
+def test_vector_field_rejects_aggregate_result_term_growth() -> None:
+    variables = ("x", "y")
+    monomials = [
+        (left, right) for left in range(1, 64) for right in range(1, 64 - left)
+    ]
+    first = dict.fromkeys(monomials[:128], 1)
+    second = dict.fromkeys(monomials[128:257], 1)
+    with pytest.raises(ValidationError, match="result-term budget"):
+        VectorFieldRequest(
+            components=(
+                _polynomial(variables, first),
+                _polynomial(variables, second),
+            )
+        )
+
+
+def test_direction_length_must_match_polynomial_axis() -> None:
+    with pytest.raises(ValidationError, match="length must match"):
+        DirectionalDerivativeRequest(
+            polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
+            direction=(CanonicalRational(num="1", den="1"),),
+        )

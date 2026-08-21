@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
-
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.finite_stochastic_processes import (
     FiniteProbabilitySpace,
     FiniteRandomVariable,
@@ -32,7 +31,14 @@ from jacobian.math.finite_stochastic_processes._tools import TOOLS
 
 
 def _coin_space() -> FiniteProbabilitySpace:
-    return FiniteProbabilitySpace(samples=("H", "T"), masses=("1/2", "1/2"))
+    return FiniteProbabilitySpace(
+        samples=("H", "T"),
+        masses=(_q(1, 2), _q(1, 2)),
+    )
+
+
+def _q(numerator: int, denominator: int = 1) -> CanonicalRational:
+    return CanonicalRational.from_integer_ratio(numerator, denominator)
 
 
 # ---------------------------------------------------------------------------
@@ -100,24 +106,36 @@ class TestJoin:
 
 class TestConditionalExpectation:
     def test_trivial_sigma(self) -> None:
-        rv = FiniteRandomVariable(space=_coin_space(), values=("1", "0"))
+        rv = FiniteRandomVariable(space=_coin_space(), values=(_q(1), _q(0)))
         sigma = FiniteSigmaAlgebra(space=_coin_space(), blocks=(("H", "T"),))
         result = compute_conditional_expectation(
             ConditionalExpectationRequest(rv=rv, sigma=sigma)
         )
         # E[X | trivial sigma] = E[X] = 1/2
-        assert Fraction(result.values[0]) == Fraction(1, 2)
-        assert Fraction(result.values[1]) == Fraction(1, 2)
+        assert result.values == (_q(1, 2), _q(1, 2))
 
     def test_discrete_sigma(self) -> None:
-        rv = FiniteRandomVariable(space=_coin_space(), values=("1", "0"))
+        rv = FiniteRandomVariable(space=_coin_space(), values=(_q(1), _q(0)))
         sigma = FiniteSigmaAlgebra(space=_coin_space(), blocks=(("H",), ("T",)))
         result = compute_conditional_expectation(
             ConditionalExpectationRequest(rv=rv, sigma=sigma)
         )
         # E[X | {H}] = 1, E[X | {T}] = 0
-        assert Fraction(result.values[0]) == 1
-        assert Fraction(result.values[1]) == 0
+        assert result.values == (_q(1), _q(0))
+
+    def test_exact_result_may_grow_beyond_input_digit_bound(self) -> None:
+        left = 10**255 + 19
+        right = 10**255 + 21
+        rv = FiniteRandomVariable(
+            space=_coin_space(), values=(_q(1, left), _q(1, right))
+        )
+        sigma = FiniteSigmaAlgebra(space=_coin_space(), blocks=(("H", "T"),))
+
+        result = compute_conditional_expectation(
+            ConditionalExpectationRequest(rv=rv, sigma=sigma)
+        )
+
+        assert len(result.values[0].den) > 256
 
 
 # ---------------------------------------------------------------------------
@@ -147,12 +165,11 @@ class TestDoobMartingale:
             DoobMartingaleRequest(
                 space=_coin_space(),
                 observations=(("heads", "tails"),),
-                payoff=("1", "0"),
+                payoff=(_q(1), _q(0)),
             )
         )
         assert len(result.martingale) == 1
-        assert Fraction(result.martingale[0][0]) == 1
-        assert Fraction(result.martingale[0][1]) == 0
+        assert result.martingale[0] == (_q(1), _q(0))
 
 
 # ---------------------------------------------------------------------------
@@ -163,12 +180,26 @@ class TestDoobMartingale:
 class TestValidation:
     def test_nonpositive_mass_rejected(self) -> None:
         with pytest.raises(ValidationError, match="positive"):
-            FiniteProbabilitySpace(samples=("a",), masses=("0",))
+            FiniteProbabilitySpace(samples=("a",), masses=(_q(0),))
 
     def test_masses_not_summing_to_one_rejected(self) -> None:
         with pytest.raises(ValidationError, match="sum to exactly 1"):
-            FiniteProbabilitySpace(samples=("a", "b"), masses=("1/3", "1/3"))
+            FiniteProbabilitySpace(samples=("a", "b"), masses=(_q(1, 3), _q(1, 3)))
 
     def test_duplicate_samples_rejected(self) -> None:
         with pytest.raises(ValidationError, match="unique"):
-            FiniteProbabilitySpace(samples=("a", "a"), masses=("1/2", "1/2"))
+            FiniteProbabilitySpace(samples=("a", "a"), masses=(_q(1, 2), _q(1, 2)))
+
+    @pytest.mark.parametrize(
+        "payoff",
+        ["0/0", "1/0", {"num": "0", "den": "0"}, {"num": "1", "den": "0"}],
+    )
+    def test_doob_rejects_invalid_payoff_rationals(self, payoff: object) -> None:
+        with pytest.raises(ValidationError):
+            DoobMartingaleRequest.model_validate(
+                {
+                    "space": _coin_space().model_dump(mode="json"),
+                    "observations": [["heads", "tails"]],
+                    "payoff": [payoff, {"num": "0", "den": "1"}],
+                }
+            )

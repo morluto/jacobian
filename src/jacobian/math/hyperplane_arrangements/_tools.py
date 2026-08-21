@@ -63,12 +63,25 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "ambient_dimension": 2,
                     "hyperplanes": [
-                        {"coefficients": ["1", "0"], "constant": "0"},
-                        {"coefficients": ["0", "1"], "constant": "0"},
+                        {
+                            "coefficients": [
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            "constant": {"num": "0", "den": "1"},
+                        },
+                        {
+                            "coefficients": [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                            "constant": {"num": "0", "den": "1"},
+                        },
                     ],
                 },
             ),
         ),
+        version="2",
     ),
     _op(
         "arrangement.characteristic_polynomial.compute",

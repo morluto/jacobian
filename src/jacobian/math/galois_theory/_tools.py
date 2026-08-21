@@ -53,7 +53,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "polynomial.galois.factor_mod_p.compute",
         "Factor a polynomial over GF(p)",
         "Factor a polynomial over a prime finite field GF(p) using SymPy, "
-        "returning the factorization and irreducibility.",
+        "retaining the unit, monic factors, positive multiplicities, and a "
+        "reconstruction-checked irreducibility result.",
         GaloisFactorRequest,
         GaloisFactorResult,
         compute_galois_factor,
@@ -67,6 +68,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {"field_order": 5, "coefficients": [1, 0, 1]},
             ),
         ),
+        version="2",
     ),
     _op(
         "polynomial.galois.frobenius_cycle.compute",
@@ -90,12 +92,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 },
             ),
         ),
+        version="2",
     ),
     _op(
         "polynomial.galois_group.compute",
         "Compute the Galois group of a polynomial over Q",
         "Compute the Galois group of a polynomial with rational coefficients "
-        "using SymPy's galois_group function.",
+        "using SymPy's galois_group function. The request must be irreducible "
+        "and degree at most six; the result includes explicit generators.",
         GaloisGroupRequest,
         GaloisGroupResult,
         compute_galois_group,
@@ -109,12 +113,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {"coefficients": [-2, 0, 1]},
             ),
         ),
+        version="2",
     ),
     _op(
         "polynomial.solvable_by_radicals.decide",
         "Decide if a polynomial is solvable by radicals",
         "Check whether a polynomial is solvable by radicals based on its "
-        "degree and Galois group solvability.",
+        "Galois group, within SymPy's irreducible degree-at-most-six domain.",
         SolvableRequest,
         SolvableResult,
         compute_solvable,
@@ -128,6 +133,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {"coefficients": [-2, 0, 0, 1]},
             ),
         ),
+        version="2",
     ),
 )
 

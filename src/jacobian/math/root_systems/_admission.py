@@ -11,7 +11,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "root_system.positive_roots.compute",
         AdmissionDecision.KEEP,
-        "complete positive roots, highest root, and Coxeter number from a Cartan matrix",
+        "complete positive roots and componentwise finite-root invariants",
     ),
 )
 

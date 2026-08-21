@@ -14,6 +14,27 @@ MAX_ARITY = 16
 MAX_RULES = 64
 
 
+class RankedSignature(StrictModel):
+    """A finite ordered family of function-symbol arities."""
+
+    arities: tuple[int, ...] = Field(min_length=1, max_length=MAX_SYMBOLS)
+
+    @model_validator(mode="after")
+    def require_bounded_arities(self) -> Self:
+        if any(not 0 <= arity <= MAX_ARITY for arity in self.arities):
+            raise ValueError("signature arities must be within the supported bound")
+        return self
+
+    def validate_term(self, term: Term) -> None:
+        if not term.is_variable:
+            if term.symbol >= len(self.arities):
+                raise ValueError("term uses an undeclared function symbol")
+            if len(term.children) != self.arities[term.symbol]:
+                raise ValueError("term child count must match the ranked signature")
+        for child in term.children:
+            self.validate_term(child)
+
+
 def _variable_symbols(term: Term) -> set[int]:
     if term.is_variable:
         return {term.symbol}
@@ -82,6 +103,7 @@ __all__ = [
     "MAX_RULES",
     "MAX_SYMBOLS",
     "MAX_TERMS",
+    "RankedSignature",
     "RewriteApplication",
     "RewriteRule",
     "Substitution",

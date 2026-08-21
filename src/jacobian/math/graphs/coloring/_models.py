@@ -95,3 +95,68 @@ class MaximalIndependentSetResult(StrictModel):
         if self.addable_vertex < 0:
             raise ValueError("addable_vertex must be nonnegative")
         return self
+
+
+# ---------------------------------------------------------------------------
+# Edge coloring
+# ---------------------------------------------------------------------------
+
+
+class EdgeKColorabilityRequest(StrictModel):
+    """Decide whether a simple graph admits a proper ``k``-edge-coloring."""
+
+    graph: GraphEdgeList
+    colors: int = Field(ge=1, le=20)
+
+
+class EdgeKColorabilityResult(StrictModel):
+    """Whether a proper ``k``-edge-coloring exists, with one coloring witness."""
+
+    colorable: bool
+    coloring: tuple[int, ...] | None = None
+    edge_count: int = Field(ge=0)
+    colors: int = Field(ge=1, le=20)
+
+    @model_validator(mode="after")
+    def require_witness_consistency(self) -> Self:
+        if self.colorable:
+            if self.coloring is None:
+                raise ValueError("a colorable result must carry a coloring witness")
+            if len(self.coloring) != self.edge_count:
+                raise ValueError("a coloring must assign one color per edge")
+        else:
+            if self.coloring is not None:
+                raise ValueError("a non-colorable result must not carry a coloring")
+        return self
+
+
+class EdgeColoringCheckRequest(StrictModel):
+    """Validate a submitted edge-to-color assignment as a proper edge coloring."""
+
+    graph: GraphEdgeList
+    colors: int = Field(ge=1, le=20)
+    coloring: tuple[int, ...] = Field(min_length=0)
+
+    @model_validator(mode="after")
+    def require_assignment_length(self) -> Self:
+        if len(self.coloring) != len(self.graph.edges):
+            raise ValueError("coloring must assign one color per edge")
+        for value in self.coloring:
+            if type(value) is not int or not 0 <= value < self.colors:
+                raise ValueError("coloring values must be in 0..colors-1")
+        return self
+
+
+class EdgeColoringCheckResult(StrictModel):
+    """Whether a submitted edge coloring is proper, with a blocking edge."""
+
+    proper: bool
+    blocking_edge: tuple[int, int] | None = None
+
+    @model_validator(mode="after")
+    def require_blocking_edge_consistency(self) -> Self:
+        if self.proper and self.blocking_edge is not None:
+            raise ValueError("a proper coloring must not carry a blocking edge")
+        if not self.proper and self.blocking_edge is None:
+            raise ValueError("an improper coloring must carry a blocking edge")
+        return self

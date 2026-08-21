@@ -28,6 +28,11 @@
       "complexity": 23
     },
     {
+      "path": "src/jacobian/math/root_systems/_operations.py",
+      "symbol": "_weyl_group_data",
+      "complexity": 12
+    },
+    {
       "path": "tests/math/graphs/test_graph_isomorphism.py",
       "symbol": "_is_mapping_valid_isomorphism",
       "complexity": 13

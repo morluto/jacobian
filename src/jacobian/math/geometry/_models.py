@@ -138,6 +138,27 @@ class PointLineRequest(StrictModel):
     line: LineRequest
 
 
+class CircleInversionRequest(StrictModel):
+    """Invert one rational planar point in a circle of squared radius ``s``."""
+
+    center: RationalPoint2D
+    power: CanonicalRational = Field(
+        description=(
+            "Positive rational inversion power, interpreted as the squared "
+            "inversion radius. Must be strictly positive."
+        ),
+    )
+    point: RationalPoint2D
+
+    @model_validator(mode="after")
+    def require_positive_power_and_distinct_point(self) -> Self:
+        if self.power.as_fraction() <= 0:
+            raise ValueError("inversion power must be a positive rational")
+        if self.point == self.center:
+            raise ValueError("the point to invert must differ from the center")
+        return self
+
+
 class PointTripleRequest(StrictModel):
     first: RationalPoint2D
     second: RationalPoint2D

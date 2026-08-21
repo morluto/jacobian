@@ -260,11 +260,20 @@ def compute_reduced_classes(
 ) -> ReducedClassesResult:
     """Enumerate all reduced primitive positive-definite classes of a discriminant."""
 
-    D = request.discriminant  # noqa: N806
-    if D >= -2:
-        return ReducedClassesResult(discriminant=D, classes=(), class_number=0)
-    if D % 4 not in (0, 1):
-        return ReducedClassesResult(discriminant=D, classes=(), class_number=0)
+    classes = _enumerate_reduced_classes(request.discriminant)
+    return ReducedClassesResult(
+        discriminant=request.discriminant,
+        classes=classes,
+        class_number=len(classes),
+    )
+
+
+def _enumerate_reduced_classes(discriminant: int) -> tuple[tuple[int, int, int], ...]:
+    """Enumerate every reduced primitive class without constructing a result."""
+    if discriminant >= -2:
+        return ()
+    if discriminant % 4 not in (0, 1):
+        return ()
 
     classes: list[tuple[int, int, int]] = []
     # For reduced forms: |b| <= a <= c, b^2 - 4ac = D
@@ -276,11 +285,11 @@ def compute_reduced_classes(
     # So a <= sqrt(|D|/3) (standard bound)
     import math
 
-    a_bound = math.isqrt(abs(D) // 3) + 1
+    a_bound = math.isqrt(abs(discriminant) // 3) + 1
     for a in range(1, a_bound + 1):
         # b ranges from -a to a
         for b in range(-a, a + 1):
-            num = b * b - D  # = 4ac
+            num = b * b - discriminant  # = 4ac
             if num % (4 * a) != 0:
                 continue
             c_val = num // (4 * a)
@@ -295,8 +304,4 @@ def compute_reduced_classes(
                 classes.append((a, b, c_val))
 
     classes.sort()
-    return ReducedClassesResult(
-        discriminant=D,
-        classes=tuple(classes),
-        class_number=len(classes),
-    )
+    return tuple(classes)

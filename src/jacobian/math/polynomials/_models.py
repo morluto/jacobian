@@ -360,9 +360,7 @@ class IdealMembershipRequest(StrictModel):
         # cap the input at the 1,024-term result boundary so an accepted
         # request can never leak a result-budget host exception.
         if len(self.polynomial.polynomial.terms) > _MAX_RESULT_POLYNOMIAL_TERMS:
-            raise ValueError(
-                "polynomial exceeds the 1,024-term exact-result limit"
-            )
+            raise ValueError("polynomial exceeds the 1,024-term exact-result limit")
         require_polynomial_budget(
             self.polynomial,
             maximum_terms=MAX_POLYNOMIAL_TERMS,
@@ -395,9 +393,7 @@ class IdealMembershipResult(StrictModel):
     def bind_membership_to_normal_form(self) -> Self:
         remainder_is_zero = not self.normal_form.polynomial.terms
         if self.in_ideal is not remainder_is_zero:
-            raise ValueError(
-                "in_ideal must equal (normal_form == 0)"
-            )
+            raise ValueError("in_ideal must equal (normal_form == 0)")
         return self
 
 

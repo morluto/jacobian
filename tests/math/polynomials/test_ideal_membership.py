@@ -53,9 +53,7 @@ def _ideal1() -> RationalPolynomialIdeal:
 def _ideal_xy() -> RationalPolynomialIdeal:
     return RationalPolynomialIdeal(
         variables=_XY_VARS,
-        generators=(
-            _poly(_XY_VARS, {(1, 0): 1, (0, 1): 1}),
-        ),
+        generators=(_poly(_XY_VARS, {(1, 0): 1, (0, 1): 1}),),
     )
 
 

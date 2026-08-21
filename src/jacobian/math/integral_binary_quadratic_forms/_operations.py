@@ -51,7 +51,7 @@ def _check_reduced(a: int, b: int, c: int) -> bool:
 
 def _reduce_step(
     a: int, b: int, c: int
-) -> tuple[int, int, int, int, int, int, int, int, int]:
+) -> tuple[int, int, int, int, int, int, int, int, int, int]:
     """One reduction step.
 
     Returns (a, b, c, p, q, r, s, new_a, new_b, new_c).
@@ -91,14 +91,28 @@ def _reduce_step(
     return a, b, c, 1, 0, 0, 1, a, b, c
 
 
-def _reduce(a: int, b: int, c: int) -> tuple[int, int, int, int, int, int, int, list]:
+def _reduce(
+    a: int, b: int, c: int
+) -> tuple[
+    int,
+    int,
+    int,
+    int,
+    int,
+    int,
+    int,
+    list[tuple[int, int, int, int, int, int, int, int, int, int]],
+]:
     """Full Gauss reduction.
 
     Returns (ra, rb, rc, p, q, r, s, steps).
     """
 
     # Compose two SL_2(Z) matrices
-    def compose(m1, m2):
+    def compose(
+        m1: tuple[tuple[int, int], tuple[int, int]],
+        m2: tuple[tuple[int, int], tuple[int, int]],
+    ) -> tuple[tuple[int, int], tuple[int, int]]:
         p1, q1 = m1[0]
         r1, s1 = m1[1]
         p2, q2 = m2[0]
@@ -110,7 +124,7 @@ def _reduce(a: int, b: int, c: int) -> tuple[int, int, int, int, int, int, int, 
 
     cur_a, cur_b, cur_c = a, b, c
     matrix = ((1, 0), (0, 1))
-    steps = []
+    steps: list[tuple[int, int, int, int, int, int, int, int, int, int]] = []
     max_iter = 100
     for _ in range(max_iter):
         if _check_reduced(cur_a, cur_b, cur_c):

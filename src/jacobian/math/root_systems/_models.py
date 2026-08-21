@@ -66,14 +66,6 @@ class PositiveRootsResult(CartanMatrixRequest):
         return self
 
 
-class SimpleReflectionResult(StrictModel):
-    """Result of applying a simple reflection to a vector."""
-
-    vector: tuple[int, ...]
-    simple_index: int
-    reflected_vector: tuple[int, ...]
-
-
 class RootComponentData(StrictModel):
     simple_root_indices: tuple[int, ...]
     positive_roots: tuple[tuple[int, ...], ...]
@@ -161,7 +153,7 @@ class SimpleReflectionRequest(StrictModel):
         return self
 
 
-class SimpleReflectionResult(StrictModel):  # noqa: F811
+class SimpleReflectionResult(StrictModel):
     """Result of applying a simple reflection to a vector."""
 
     matrix: tuple[tuple[int, ...], ...]

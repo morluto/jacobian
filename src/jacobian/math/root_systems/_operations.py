@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from jacobian.math.root_systems._cartan import (
     connected_components,
-    simple_reflection,
 )
 from jacobian.math.root_systems._cartan import (
     positive_roots as enumerate_positive_roots,
@@ -14,6 +13,10 @@ from jacobian.math.root_systems._models import (
     PositiveRootsResult,
     RootComponentData,
     RootSystemDataResult,
+    SimpleReflectionRequest,
+    SimpleReflectionResult,
+    WeylGroupDataRequest,
+    WeylGroupDataResult,
 )
 
 
@@ -27,17 +30,6 @@ def compute_positive_roots(request: CartanMatrixRequest) -> PositiveRootsResult:
         rank=n,
         positive_roots=all_positive,
         num_positive_roots=len(all_positive),
-    )
-
-
-def compute_simple_reflection(
-    vector: list[int],
-    simple_index: int,
-    cartan: list[list[int]],
-) -> list[int]:
-    """Apply a simple reflection s_i to a root lattice vector."""
-    return list(
-        simple_reflection(tuple(vector), simple_index, tuple(map(tuple, cartan)))
     )
 
 
@@ -108,24 +100,14 @@ def _weyl_group_data(cartan: list[list[int]]) -> tuple[int, tuple[int, ...], int
 
     # For small rank, enumerate Weyl group elements by BFS on simple reflections
 
-    def apply_simple_reflection_to_perm(perm, i, cartan):
-        """Apply s_i on the right of a Weyl group element (as a permutation of roots)."""
-        # The Weyl group acts on roots, but we track elements as reduced words
-        # For order computation, we can use the formula:
-        # |W| = n! * product of (e_i + 1) / ...
-        # Actually, let's just count elements by BFS on simple reflections
-        # Each element is identified by its action on simple roots
-        result = list(perm)
-        # Apply s_i: s_i sends alpha_i to -alpha_i, and alpha_j to alpha_j - A[i][j]*alpha_i
-        # We track the image of each simple root as a vector
-        return tuple(result)
-
     # Enumerate Weyl group elements by BFS
     # Each element is represented as a tuple of its action on each simple root
     # The action on simple root alpha_j is a vector in Z^n
     identity_vecs = tuple(tuple(1 if j == i else 0 for j in range(n)) for i in range(n))
 
-    def apply_s_i(root_images, i):
+    def apply_s_i(
+        root_images: tuple[tuple[int, ...], ...], i: int
+    ) -> tuple[tuple[int, ...], ...]:
         """Apply simple reflection s_i to a Weyl group element.
 
         root_images is a tuple of n vectors, where root_images[j] is
@@ -188,7 +170,9 @@ def _weyl_group_data(cartan: list[list[int]]) -> tuple[int, tuple[int, ...], int
     return order, longest_perm, coxeter_number
 
 
-def compute_simple_reflection(request):  # noqa: F811
+def compute_simple_reflection(
+    request: SimpleReflectionRequest,
+) -> SimpleReflectionResult:
     """Apply a simple reflection to a root lattice vector."""
     from jacobian.math.root_systems._models import SimpleReflectionResult
 
@@ -205,7 +189,7 @@ def compute_simple_reflection(request):  # noqa: F811
     )
 
 
-def compute_weyl_group_data(request):
+def compute_weyl_group_data(request: WeylGroupDataRequest) -> WeylGroupDataResult:
     """Compute Weyl group data from a Cartan matrix."""
     from jacobian.math.root_systems._models import WeylGroupDataResult
 

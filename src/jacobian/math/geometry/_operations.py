@@ -9,11 +9,15 @@ from typing import Any, cast
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry._models import (
+    CircumcircleRequest,
     CircumradiusProfileRequest,
     CircumradiusProfileResult,
     CircumradiusTripleEntry,
-    CircumcircleRequest,
     ClosedSegment2D,
+    CollinearTripleWitness,
+    ConcyclicQuadrupleWitness,
+    GeneralPositionRequest,
+    GeneralPositionResult,
     GeometryBooleanResult,
     GeometryCircleResult,
     GeometryConvexHullResult,
@@ -27,10 +31,6 @@ from jacobian.math.geometry._models import (
     PointPairRequest,
     PointQuadrupleRequest,
     PointSetRequest,
-    GeneralPositionRequest,
-    GeneralPositionResult,
-    CollinearTripleWitness,
-    ConcyclicQuadrupleWitness,
     PointTripleRequest,
     PolygonIntersectionWitness,
     PolygonPointClassificationResult,
@@ -456,9 +456,10 @@ def general_position_search(request: GeneralPositionRequest) -> GeneralPositionR
             collinear_triples.append(CollinearTripleWitness(indices=(i, j, k)))
 
     concyclic_quadruples: list[ConcyclicQuadrupleWitness] = []
-    for i, j, k, l in combinations(range(n), 4):
+    for i, j, k, m in combinations(range(n), 4):
         a, b = pts[i], pts[j]
-        c, d = pts[k], pts[l]
+        c, d = pts[k], pts[m]
+
         # Check concyclicity via determinant
         # A 4x4 determinant: |x^2+y^2, x, y, 1| for each point
         def det4(m: tuple[tuple[Fraction, ...], ...]) -> Fraction:
@@ -485,7 +486,7 @@ def general_position_search(request: GeneralPositionRequest) -> GeneralPositionR
             rows.append((px * px + py * py, px, py, Fraction(1)))
         determinant = det4(tuple(rows))
         if determinant == 0:
-            concyclic_quadruples.append(ConcyclicQuadrupleWitness(indices=(i, j, k, l)))
+            concyclic_quadruples.append(ConcyclicQuadrupleWitness(indices=(i, j, k, m)))
 
     return GeneralPositionResult(
         num_points=n,
@@ -496,10 +497,12 @@ def general_position_search(request: GeneralPositionRequest) -> GeneralPositionR
     )
 
 
-def circumradius_profile(request: CircumradiusProfileRequest) -> CircumradiusProfileResult:
+def circumradius_profile(
+    request: CircumradiusProfileRequest,
+) -> CircumradiusProfileResult:
     """Compute circumradius squared for every unordered triple in a configuration."""
-    from itertools import combinations
     from fractions import Fraction
+    from itertools import combinations
 
     pts = _points_to_fractions(request.points)
     n = len(pts)
@@ -520,10 +523,12 @@ def circumradius_profile(request: CircumradiusProfileRequest) -> CircumradiusPro
         cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
 
         if cross == 0:
-            entries.append(CircumradiusTripleEntry(
-                indices=(i, j, k),
-                is_degenerate=True,
-            ))
+            entries.append(
+                CircumradiusTripleEntry(
+                    indices=(i, j, k),
+                    is_degenerate=True,
+                )
+            )
         else:
             # Squared side lengths
             ab_sq = (bx - ax) ** 2 + (by - ay) ** 2
@@ -534,11 +539,13 @@ def circumradius_profile(request: CircumradiusProfileRequest) -> CircumradiusPro
             # R = abc/(4*Area), R^2 = a^2*b^2*c^2 / (16 * Area^2)
             # = a^2*b^2*c^2 / (16 * cross^2/4) = a^2*b^2*c^2 / (4*cross^2)
             r_sq = Fraction(ab_sq * bc_sq * ca_sq) / Fraction(4 * cross * cross)
-            entries.append(CircumradiusTripleEntry(
-                indices=(i, j, k),
-                is_degenerate=False,
-                radius_squared=_wire_rational(r_sq),
-            ))
+            entries.append(
+                CircumradiusTripleEntry(
+                    indices=(i, j, k),
+                    is_degenerate=False,
+                    radius_squared=_wire_rational(r_sq),
+                )
+            )
 
     return CircumradiusProfileResult(
         num_points=n,

@@ -27,8 +27,10 @@ class TestGeneralPosition:
     def test_square_concyclic(self):
         """Four vertices of a square are concyclic."""
         points = [
-            _point("0", "0"), _point("1", "0"),
-            _point("1", "1"), _point("0", "1"),
+            _point("0", "0"),
+            _point("1", "0"),
+            _point("1", "1"),
+            _point("0", "1"),
         ]
         result = general_position_search(GeneralPositionRequest(points=tuple(points)))
         assert result.num_points == 4
@@ -40,8 +42,10 @@ class TestGeneralPosition:
     def test_collinear_triple(self):
         """Three points on the x-axis are collinear."""
         points = [
-            _point("0", "0"), _point("1", "0"),
-            _point("2", "0"), _point("0", "1"),
+            _point("0", "0"),
+            _point("1", "0"),
+            _point("2", "0"),
+            _point("0", "1"),
         ]
         result = general_position_search(GeneralPositionRequest(points=tuple(points)))
         assert result.has_collinear_triple
@@ -52,8 +56,10 @@ class TestGeneralPosition:
     def test_general_position(self):
         """Four points in general position."""
         points = [
-            _point("-1", "0"), _point("1", "0"),
-            _point("0", "2"), _point("0", "-2"),
+            _point("-1", "0"),
+            _point("1", "0"),
+            _point("0", "2"),
+            _point("0", "-2"),
         ]
         result = general_position_search(GeneralPositionRequest(points=tuple(points)))
         assert not result.has_collinear_triple
@@ -68,7 +74,7 @@ class TestGeneralPosition:
 
     def test_duplicate_points_rejected(self):
         """Duplicate points should be rejected."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             GeneralPositionRequest(
                 points=(_point("0", "0"), _point("0", "0"), _point("1", "0"))
             )
@@ -88,7 +94,9 @@ class TestCircumradiusProfile:
     def test_collinear_triple_degenerate(self):
         """Collinear triple is marked as degenerate."""
         points = [
-            _point("0", "0"), _point("1", "0"), _point("2", "0"),
+            _point("0", "0"),
+            _point("1", "0"),
+            _point("2", "0"),
         ]
         result = circumradius_profile(CircumradiusProfileRequest(points=tuple(points)))
         assert len(result.entries) == 1
@@ -98,8 +106,10 @@ class TestCircumradiusProfile:
     def test_four_points(self):
         """Four points have C(4,3) = 4 triples."""
         points = [
-            _point("0", "0"), _point("1", "0"),
-            _point("0", "1"), _point("1", "1"),
+            _point("0", "0"),
+            _point("1", "0"),
+            _point("0", "1"),
+            _point("1", "1"),
         ]
         result = circumradius_profile(CircumradiusProfileRequest(points=tuple(points)))
         assert result.num_points == 4
@@ -110,8 +120,10 @@ class TestCircumradiusProfile:
     def test_equal_circumradius(self):
         """All four triangles of a unit square have equal circumradius."""
         points = [
-            _point("0", "0"), _point("1", "0"),
-            _point("1", "1"), _point("0", "1"),
+            _point("0", "0"),
+            _point("1", "0"),
+            _point("1", "1"),
+            _point("0", "1"),
         ]
         result = circumradius_profile(CircumradiusProfileRequest(points=tuple(points)))
         radii = set()

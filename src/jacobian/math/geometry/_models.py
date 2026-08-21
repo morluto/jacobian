@@ -443,6 +443,7 @@ class ConvexPolygonTriangulationResult(StrictModel):
 # Configuration-level operations (issues #2107, #2106)
 # ---------------------------------------------------------------------------
 
+
 class GeneralPositionRequest(StrictModel):
     """Search a bounded point configuration for collinear triples and concyclic quadruples."""
 
@@ -450,9 +451,7 @@ class GeneralPositionRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_unique(self) -> Self:
-        keys = tuple(
-            (p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points
-        )
+        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
         return self
@@ -477,22 +476,22 @@ class GeneralPositionResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
-        for witness in self.collinear_triples:
-            idx = witness.indices
-            if len(idx) != 3 or len(set(idx)) != 3:
-                raise ValueError("collinear triple indices must be 3 distinct values")
+        def _check_sorted_distinct(
+            idx: tuple[int, ...], *, expected: int, label: str
+        ) -> None:
+            if len(idx) != expected or len(set(idx)) != expected:
+                raise ValueError(f"{label} indices must be {expected} distinct values")
             if idx != tuple(sorted(idx)):
-                raise ValueError("collinear triple indices must be sorted")
+                raise ValueError(f"{label} indices must be sorted")
             if any(i >= self.num_points for i in idx):
                 raise ValueError("index out of range")
-        for witness in self.concyclic_quadruples:
-            idx = witness.indices
-            if len(idx) != 4 or len(set(idx)) != 4:
-                raise ValueError("concyclic quadruple indices must be 4 distinct values")
-            if idx != tuple(sorted(idx)):
-                raise ValueError("concyclic quadruple indices must be sorted")
-            if any(i >= self.num_points for i in idx):
-                raise ValueError("index out of range")
+
+        for triple in self.collinear_triples:
+            _check_sorted_distinct(triple.indices, expected=3, label="collinear triple")
+        for quadruple in self.concyclic_quadruples:
+            _check_sorted_distinct(
+                quadruple.indices, expected=4, label="concyclic quadruple"
+            )
         if self.has_collinear_triple != bool(self.collinear_triples):
             raise ValueError("has_collinear_triple must match collinear_triples")
         if self.has_concyclic_quadruple != bool(self.concyclic_quadruples):
@@ -507,9 +506,7 @@ class CircumradiusProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_unique(self) -> Self:
-        keys = tuple(
-            (p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points
-        )
+        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
         return self
@@ -544,7 +541,10 @@ class CircumradiusProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
-        if len(self.entries) != self.num_points * (self.num_points - 1) * (self.num_points - 2) // 6:
+        if (
+            len(self.entries)
+            != self.num_points * (self.num_points - 1) * (self.num_points - 2) // 6
+        ):
             raise ValueError("entries must cover exactly C(n,3) triples")
         seen: set[tuple[int, int, int]] = set()
         for entry in self.entries:

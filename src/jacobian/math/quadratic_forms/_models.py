@@ -6,16 +6,25 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 
 MAX_DIM = 10
 MAX_ENTRY_DIGITS = 100  # limit entry magnitude to ~10^100 for bounded eigenvalue work
+MAX_VECTOR_DIGITS = 100
+MAX_EVALUATION_DIGITS = MAX_ENTRY_DIGITS + 2 * MAX_VECTOR_DIGITS + 3
+MAX_DISCRIMINANT_DIGITS = MAX_DIM * (MAX_ENTRY_DIGITS + 1)
+
+
+def _require_integer_digits(value: CanonicalInteger, maximum: int, label: str) -> None:
+    if len(value.lstrip("-")) > maximum:
+        raise ValueError(f"{label} must not exceed {maximum} digits")
 
 
 class SymmetricMatrix(StrictModel):
     """A symmetric integer matrix representing a quadratic form."""
 
-    matrix: tuple[tuple[int, ...], ...] = Field(min_length=1)
+    matrix: tuple[tuple[CanonicalInteger, ...], ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def require_symmetric_square(self) -> Self:
@@ -26,10 +35,7 @@ class SymmetricMatrix(StrictModel):
             if len(row) != n:
                 raise ValueError("matrix must be square")
             for entry in row:
-                if abs(entry) >= 10**MAX_ENTRY_DIGITS:
-                    raise ValueError(
-                        f"matrix entries must not exceed {MAX_ENTRY_DIGITS} digits"
-                    )
+                _require_integer_digits(entry, MAX_ENTRY_DIGITS, "matrix entries")
         for i in range(n):
             for j in range(n):
                 if self.matrix[i][j] != self.matrix[j][i]:
@@ -41,12 +47,14 @@ class EvaluationRequest(StrictModel):
     """Evaluate q(x) = x^T A x for an integer vector x."""
 
     form: SymmetricMatrix
-    vector: tuple[int, ...] = Field(min_length=1)
+    vector: tuple[CanonicalInteger, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def require_matching_dimension(self) -> Self:
         if len(self.vector) != len(self.form.matrix):
             raise ValueError("vector dimension must match form dimension")
+        for entry in self.vector:
+            _require_integer_digits(entry, MAX_VECTOR_DIGITS, "vector entries")
         return self
 
 
@@ -65,15 +73,29 @@ class SignatureRequest(StrictModel):
 class EvaluationResult(StrictModel):
     """The value q(x) = x^T A x."""
 
-    value: int
+    value: CanonicalInteger
     dimension: int
+
+    @model_validator(mode="after")
+    def require_bounded_value(self) -> Self:
+        _require_integer_digits(self.value, MAX_EVALUATION_DIGITS, "evaluation value")
+        return self
 
 
 class DiscriminantResult(StrictModel):
     """The discriminant det(A) of a quadratic form."""
 
-    discriminant: int
+    discriminant: CanonicalInteger
     dimension: int
+
+    @model_validator(mode="after")
+    def require_bounded_discriminant(self) -> Self:
+        _require_integer_digits(
+            self.discriminant,
+            MAX_DISCRIMINANT_DIGITS,
+            "discriminant",
+        )
+        return self
 
 
 class SignatureResult(StrictModel):

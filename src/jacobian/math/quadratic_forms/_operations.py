@@ -1,5 +1,6 @@
 """Exact quadratic form operations using SymPy for linear algebra."""
 
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math._exact_linear_algebra import symmetric_inertia
 from jacobian.math.quadratic_forms._models import (
     DiscriminantRequest,
@@ -13,30 +14,39 @@ from jacobian.math.quadratic_forms._models import (
 
 def evaluate_form(request: EvaluationRequest) -> EvaluationResult:
     """Evaluate q(x) = x^T A x for an integer vector x."""
-    a = request.form.matrix
-    x = request.vector
+    a = tuple(
+        tuple(parse_canonical_integer(entry) for entry in row)
+        for row in request.form.matrix
+    )
+    x = tuple(parse_canonical_integer(entry) for entry in request.vector)
     n = len(a)
     value = 0
     for i in range(n):
         for j in range(n):
             value += a[i][j] * x[i] * x[j]
-    return EvaluationResult(value=value, dimension=n)
+    return EvaluationResult(value=format_canonical_integer(value), dimension=n)
 
 
 def compute_discriminant(request: DiscriminantRequest) -> DiscriminantResult:
     """Compute det(A) for the symmetric matrix A."""
     from sympy import Matrix
 
-    a = request.form.matrix
+    a = tuple(
+        tuple(parse_canonical_integer(entry) for entry in row)
+        for row in request.form.matrix
+    )
     n = len(a)
     m = Matrix(a)
     det = int(m.det())
-    return DiscriminantResult(discriminant=det, dimension=n)
+    return DiscriminantResult(discriminant=format_canonical_integer(det), dimension=n)
 
 
 def compute_signature(request: SignatureRequest) -> SignatureResult:
     """Compute inertia by exact characteristic-polynomial root counting."""
-    a = request.form.matrix
+    a = tuple(
+        tuple(parse_canonical_integer(entry) for entry in row)
+        for row in request.form.matrix
+    )
     n = len(a)
     n_positive, n_negative, n_zero = symmetric_inertia(a)
 

@@ -97,7 +97,15 @@ def _bound_raw_probability_matrix(value: Any) -> Any:
         cell_count += _bound_raw_probability_row(row)
         if cell_count > MAX_FINITE_JOINT_TABLE_CELLS:
             raise ValueError("joint table exceeds the bounded cell count")
-    return value
+    prepared = dict(value)
+    for field_name in ("row_labels", "column_labels"):
+        raw_labels = prepared.get(field_name)
+        if isinstance(raw_labels, list):
+            prepared[field_name] = tuple(raw_labels)
+    prepared["probabilities"] = tuple(
+        tuple(row) if isinstance(row, list) else row for row in raw_table
+    )
+    return prepared
 
 
 def _bound_raw_rational(

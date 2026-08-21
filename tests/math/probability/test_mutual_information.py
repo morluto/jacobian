@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -13,6 +15,23 @@ from jacobian.math.probability.mutual_information import (
 )
 
 _Q1 = {"num": "1", "den": "1"}
+
+
+def test_request_accepts_json_array_wire_shapes_with_raw_bound_validator() -> None:
+    payload = {
+        "row_labels": ["row"],
+        "column_labels": ["column"],
+        "probabilities": [[_Q1]],
+        "log_base": 2,
+    }
+
+    from_python = FiniteJointTableMutualInformationRequest.model_validate(payload)
+    from_json = FiniteJointTableMutualInformationRequest.model_validate_json(
+        json.dumps(payload),
+        strict=True,
+    )
+
+    assert from_python == from_json
 
 
 def test_request_rejects_oversized_outer_table_before_cell_parsing() -> None:

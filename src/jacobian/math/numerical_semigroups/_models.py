@@ -483,9 +483,16 @@ class ElementElasticityRequest(StrictModel):
     """Elasticity of one element in a numerical semigroup."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            f"Distinct, strictly increasing minimal generators, each at most "
+            f"{MAX_GENERATOR}."
+        ),
     )
-    value: CanonicalInteger
+    value: CanonicalInteger = Field(
+        description=f"Positive semigroup element at most {MAX_ELEMENT}."
+    )
 
     @model_validator(mode="after")
     def require_nonzero_semigroup_element(self) -> Self:
@@ -774,7 +781,12 @@ class ElasticityRequest(StrictModel):
     """Global elasticity of a numerical semigroup."""
 
     generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
+        min_length=1,
+        max_length=MAX_GENERATORS,
+        description=(
+            f"Distinct, strictly increasing minimal generators, each at most "
+            f"{MAX_GENERATOR}."
+        ),
     )
 
     @model_validator(mode="after")

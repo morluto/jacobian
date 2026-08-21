@@ -38,6 +38,16 @@
       "complexity": 12
     },
     {
+      "path": "src/jacobian/math/prime_field_matrix/_models.py",
+      "symbol": "require_nullspace_canonical",
+      "complexity": 15
+    },
+    {
+      "path": "src/jacobian/math/prime_field_matrix/_models.py",
+      "symbol": "require_rref_canonical",
+      "complexity": 16
+    },
+    {
       "path": "src/jacobian/math/root_systems/_operations.py",
       "symbol": "_weyl_group_data",
       "complexity": 11

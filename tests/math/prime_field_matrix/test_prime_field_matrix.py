@@ -22,8 +22,8 @@ class TestRank:
         result = compute_rank(req)
         assert result.rank == 3
         assert result.prime == 2
-        assert result.rows == 3
-        assert result.columns == 3
+        assert len(result.source.entries) == 3
+        assert len(result.source.entries[0]) == 3
 
     def test_zero_matrix_gf2(self):
         """Zero matrix over GF(2) has rank 0."""

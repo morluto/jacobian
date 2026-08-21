@@ -34,9 +34,8 @@ def compute_rank(request: PrimeFieldMatrixRequest) -> PrimeFieldMatrixRankResult
     """Compute the rank of a matrix over GF(p)."""
     matrix = _to_kernel(request)
     return PrimeFieldMatrixRankResult(
+        source=request,
         prime=request.prime,
-        rows=len(request.entries),
-        columns=len(request.entries[0]),
         rank=_rank(matrix),
     )
 
@@ -46,9 +45,8 @@ def compute_rref(request: PrimeFieldMatrixRequest) -> PrimeFieldRrefResult:
     matrix = _to_kernel(request)
     rref_rows, pivot_columns = _rref(matrix)
     return PrimeFieldRrefResult(
+        source=request,
         prime=request.prime,
-        rows=len(request.entries),
-        columns=len(request.entries[0]),
         rref=rref_rows,
         pivot_columns=pivot_columns,
         rank=len(pivot_columns),
@@ -60,8 +58,8 @@ def compute_nullspace(request: PrimeFieldMatrixRequest) -> PrimeFieldNullspaceRe
     matrix = _to_kernel(request)
     basis = _nullspace(matrix)
     return PrimeFieldNullspaceResult(
+        source=request,
         prime=request.prime,
-        columns=len(request.entries[0]),
         nullspace=basis,
         nullity=len(basis),
     )

@@ -67,9 +67,7 @@ def _representation_numbers(
 
     Brute-force enumeration over a bounded integer box.
     """
-    form = tuple(
-        tuple(parse_canonical_integer(entry) for entry in row) for row in form
-    )
+    form = tuple(tuple(parse_canonical_integer(entry) for entry in row) for row in form)
     n = len(form)
     counts = [0] * (bound + 1)
 
@@ -119,7 +117,10 @@ def _scale_form(
     """Scale a form by an integer factor."""
     n = len(form)
     return tuple(
-        tuple(format_canonical_integer(factor * parse_canonical_integer(form[i][j])) for j in range(n))
+        tuple(
+            format_canonical_integer(factor * parse_canonical_integer(form[i][j]))
+            for j in range(n)
+        )
         for i in range(n)
     )
 

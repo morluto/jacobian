@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from jacobian._models import StrictModel
 
@@ -122,9 +122,33 @@ class RetractionCheckResult(StrictModel):
 # Fixed-length cycle decision
 # ---------------------------------------------------------------------------
 
+# Worst-case DFS work for a k-cycle is bounded by the number of simple
+# directed paths of length k-1, at most n*(d_max)^(k-1) where d_max is the
+# maximum degree.  This product budget couples graph size with the requested
+# length so every accepted request terminates inside a tested bound.
+MAX_CYCLE_SEARCH_PATHS = 10_000_000
+
+
+def _max_degree(graph: SimpleGraph) -> int:
+    degree = [0] * graph.vertex_count
+    for u, v in graph.edges:
+        degree[u] += 1
+        degree[v] += 1
+    return max(degree, default=0)
+
 
 class FixedLengthCycleRequest(StrictModel):
     """Decide whether a simple graph contains a simple cycle of length ``k``."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Decide whether the simple graph contains a simple cycle of "
+                "length `length` (3..20). The request is rejected when the "
+                "worst-case exhaustive search would exceed the work budget."
+            )
+        },
+    )
 
     graph: SimpleGraph
     length: int = Field(ge=3, le=MORPHISM_MAX_VERTICES)
@@ -133,23 +157,56 @@ class FixedLengthCycleRequest(StrictModel):
     def require_length_within_graph(self) -> Self:
         if self.length > self.graph.vertex_count:
             raise ValueError("cycle length must not exceed the vertex count")
+        # Conservative worst-case path-count bound: n * d^(length-1).
+        d_max = _max_degree(self.graph)
+        work = self.graph.vertex_count * (d_max ** (self.length - 1))
+        if work > MAX_CYCLE_SEARCH_PATHS:
+            raise ValueError(
+                "fixed-length cycle search exceeds the "
+                f"{MAX_CYCLE_SEARCH_PATHS}-path worst-case budget"
+            )
         return self
 
 
 class FixedLengthCycleResult(StrictModel):
-    """Whether a simple ``k``-cycle exists, with one ordered witness."""
+    """Whether a simple ``k``-cycle exists, with one ordered witness.
 
+    The result retains its source graph so validation can replay the witness
+    vertices and closing edges against it.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Cycle-existence decision bound to the source graph; an EXISTS "
+                "witness lists `length` distinct graph vertices whose "
+                "consecutive pairs (and the closing pair) are graph edges."
+            )
+        },
+    )
+
+    graph: SimpleGraph
     decision: Literal["EXISTS", "DOES_NOT_EXIST"]
     length: int = Field(ge=3)
     cycle: tuple[int, ...] = Field(default=())
 
     @model_validator(mode="after")
     def require_consistent_witness(self) -> Self:
+        if len(self.graph.edges) > MAX_EDGES or self.graph.vertex_count > MAX_VERTICES:
+            raise ValueError("source graph exceeds the morphism bounds")
         if self.decision == "EXISTS":
             if len(self.cycle) != self.length:
                 raise ValueError("an EXISTS witness must list exactly length vertices")
             if len(set(self.cycle)) != self.length:
                 raise ValueError("a simple cycle witness must have distinct vertices")
+            edge_set = {(min(u, v), max(u, v)) for u, v in self.graph.edges}
+            for index in range(self.length):
+                u = self.cycle[index]
+                v = self.cycle[(index + 1) % self.length]
+                if not (0 <= u < self.graph.vertex_count):
+                    raise ValueError("cycle vertex out of range")
+                if (min(u, v), max(u, v)) not in edge_set:
+                    raise ValueError("a cycle witness must follow graph edges")
         else:
             if self.cycle:
                 raise ValueError("a DOES_NOT_EXIST result must not carry a witness")
@@ -162,7 +219,24 @@ class FixedLengthCycleResult(StrictModel):
 
 
 class SubgraphPatternFindRequest(StrictModel):
-    """Find an injective edge-preserving embedding of ``pattern`` in ``host``."""
+    """Find an injective edge-preserving embedding of ``pattern`` in ``host``.
+
+    The pattern is capped at 20 vertices (``MORPHISM_MAX_VERTICES``), and the
+    request is rejected when the worst-case backtracking work - bounded by the
+    falling factorial of host vertices taken pattern-at-a-time times the
+    edge-choice branching - would exceed the search budget.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Find an injective edge-preserving embedding of `pattern` in "
+                "`host`. `pattern` must have at most 20 vertices; requests "
+                "whose worst-case exhaustive search exceeds the work budget "
+                "are rejected at validation."
+            )
+        },
+    )
 
     pattern: SimpleGraph
     host: SimpleGraph
@@ -175,22 +249,59 @@ class SubgraphPatternFindRequest(StrictModel):
             )
         if self.pattern.vertex_count > self.host.vertex_count:
             raise ValueError("pattern must not have more vertices than the host")
+        # Conservative worst-case assignment count: P(n, k) injective maps.
+        n = self.host.vertex_count
+        k = self.pattern.vertex_count
+        assignments = 1
+        for step in range(k):
+            assignments *= n - step
+            if assignments > MAX_CYCLE_SEARCH_PATHS:
+                raise ValueError(
+                    "subgraph-pattern search exceeds the "
+                    f"{MAX_CYCLE_SEARCH_PATHS}-assignment worst-case budget"
+                )
         return self
 
 
 class SubgraphPatternFindResult(StrictModel):
-    """Whether a non-induced subgraph embedding exists, with one witness map."""
+    """Whether a non-induced subgraph embedding exists, with one witness map.
 
+    The result retains both source graphs so validation can replay map
+    length, host bounds, injectivity, and exact edge preservation.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Embedding decision bound to its pattern and host graphs; an "
+                "EXISTS vertex_map is an injective, edge-preserving map from "
+                "pattern vertices into host vertices."
+            )
+        },
+    )
+
+    pattern: SimpleGraph
+    host: SimpleGraph
     decision: Literal["EXISTS", "DOES_NOT_EXIST"]
     vertex_map: tuple[int, ...] = Field(default=())
 
     @model_validator(mode="after")
     def require_consistent_witness(self) -> Self:
         if self.decision == "EXISTS":
-            if not self.vertex_map:
-                raise ValueError("an EXISTS result must carry a vertex map")
+            if len(self.vertex_map) != self.pattern.vertex_count:
+                raise ValueError(
+                    "an EXISTS result must map every pattern vertex exactly once"
+                )
             if len(set(self.vertex_map)) != len(self.vertex_map):
                 raise ValueError("a subgraph embedding must be injective")
+            if any(not 0 <= v < self.host.vertex_count for v in self.vertex_map):
+                raise ValueError("vertex_map entries must be valid host vertices")
+            host_edges = {(min(u, v), max(u, v)) for u, v in self.host.edges}
+            for u, v in self.pattern.edges:
+                mapped_u = self.vertex_map[u]
+                mapped_v = self.vertex_map[v]
+                if (min(mapped_u, mapped_v), max(mapped_u, mapped_v)) not in host_edges:
+                    raise ValueError("an embedding must preserve every pattern edge")
         else:
             if self.vertex_map:
                 raise ValueError("a DOES_NOT_EXIST result must not carry a vertex map")

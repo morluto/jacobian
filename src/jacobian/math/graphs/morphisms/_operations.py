@@ -218,11 +218,17 @@ def compute_fixed_length_cycle(
         path = [start]
         if dfs(start, start):
             return FixedLengthCycleResult(
+                graph=graph,
                 decision="EXISTS",
                 length=k,
                 cycle=tuple(path),
             )
-    return FixedLengthCycleResult(decision="DOES_NOT_EXIST", length=k, cycle=())
+    return FixedLengthCycleResult(
+        graph=graph,
+        decision="DOES_NOT_EXIST",
+        length=k,
+        cycle=(),
+    )
 
 
 def compute_subgraph_pattern_find(
@@ -277,6 +283,8 @@ def compute_subgraph_pattern_find(
 
     found = backtrack(0)
     return SubgraphPatternFindResult(
+        pattern=pattern,
+        host=host,
         decision="EXISTS" if found else "DOES_NOT_EXIST",
         vertex_map=tuple(vertex_map) if found else (),
     )

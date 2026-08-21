@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.majorization._models import (
     BirkhoffDecompositionRequest,
     BirkhoffDecompositionResult,
@@ -30,8 +31,8 @@ def _to_cr(value: Fraction) -> CanonicalRational:
 
 def _format_rational(value: Fraction) -> str:
     if value.denominator == 1:
-        return str(value.numerator)
-    return f"{value.numerator}/{value.denominator}"
+        return format_canonical_integer(value.numerator)
+    return f"{format_canonical_integer(value.numerator)}/{format_canonical_integer(value.denominator)}"
 
 
 def _sorted_desc(values: Sequence[Fraction]) -> list[Fraction]:

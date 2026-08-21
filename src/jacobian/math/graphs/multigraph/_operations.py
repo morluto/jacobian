@@ -8,7 +8,7 @@ used only as a private traversal backend for the Eulerian decomposition.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 import networkx as nx
 
@@ -170,13 +170,18 @@ def _check_flow_conservation(
 def _build_edge_choices(
     group: FiniteAbelianGroup,
     require_nz: bool,
-) -> list[tuple[str, tuple[int, ...]]]:
+) -> list[tuple[Literal["left_to_right", "right_to_left"], tuple[int, ...]]]:
     """Build the per-edge (orientation, value) choice list."""
     candidate_values = _enumerate_group_elements(group)
     if require_nz:
         candidate_values = [v for v in candidate_values if not group.is_zero(v)]
-    orientations = ("left_to_right", "right_to_left")
-    choices: list[tuple[str, tuple[int, ...]]] = []
+    orientations: tuple[Literal["left_to_right", "right_to_left"], ...] = (
+        "left_to_right",
+        "right_to_left",
+    )
+    choices: list[
+        tuple[Literal["left_to_right", "right_to_left"], tuple[int, ...]]
+    ] = []
     for orientation in orientations:
         for value in candidate_values:
             choices.append((orientation, value))
@@ -186,7 +191,9 @@ def _build_edge_choices(
 def _search_dfs(
     graph: LooplessMultigraph,
     group: FiniteAbelianGroup,
-    choices_per_edge: list[list[tuple[str, tuple[int, ...]]]],
+    choices_per_edge: list[
+        list[tuple[Literal["left_to_right", "right_to_left"], tuple[int, ...]]]
+    ],
     max_states: int,
 ) -> MultigraphFlowFindResult:
     """Run the bounded DFS search and return the result."""

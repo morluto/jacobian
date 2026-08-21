@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.elliptic_curves._models import (
     CurvePointRequest,
@@ -127,3 +128,44 @@ class TestScalarMultiplication:
         assert result.point is not None
         assert result.point.x.as_fraction() == 338
         assert result.point.y.as_fraction() == 6214
+
+
+class TestGroupLawAdmission:
+    """The chord-and-tangent domain is enforced at the typed boundary."""
+
+    def test_order_two_point_odd_multiple(self):
+        """P=(0,0) on y^2=x^3+x has 2P=O, so 3P=P (not infinity)."""
+        curve = ShortWeierstrassCurve(coefficient_a=_pt("1"), coefficient_b=_pt("0"))
+        p = RationalAffinePoint(x=_pt("0"), y=_pt("0"))
+        result = scalar_multiply(
+            ScalarMultiplicationRequest(curve=curve, point=p, scalar=3)
+        )
+        assert result.point is not None
+        assert result.point.x.as_fraction() == 0
+        assert result.point.y.as_fraction() == 0
+
+    def test_point_off_curve_rejected(self):
+        """(1,1) does not lie on y^2=x^3+x; the old code returned a fake sum."""
+        curve = ShortWeierstrassCurve(coefficient_a=_pt("1"), coefficient_b=_pt("0"))
+        p = RationalAffinePoint(x=_pt("1"), y=_pt("1"))
+        with pytest.raises(ValidationError, match="lie on the curve"):
+            add_points(
+                EllipticCurvePointAdditionRequest(
+                    curve=curve, first=p, second=p
+                )
+            )
+
+    def test_singular_curve_rejected(self):
+        """y^2=x^3 has a cusp at the origin: discriminant zero."""
+        curve = ShortWeierstrassCurve(coefficient_a=_pt("0"), coefficient_b=_pt("0"))
+        p = RationalAffinePoint(x=_pt("1"), y=_pt("1"))
+        with pytest.raises(ValidationError, match="nonsingular"):
+            ScalarMultiplicationRequest(curve=curve, point=p, scalar=2)
+
+
+class TestPrimeFieldModulusBound:
+    def test_huge_modulus_rejected(self):
+        from jacobian.math.prime_field_matrix_ops._models import RankRequest
+
+        with pytest.raises(ValidationError):
+            RankRequest(prime=2**200, entries=((1,),), columns=1)

@@ -15,7 +15,6 @@ from jacobian.math.elliptic_curves._models import (
     PointOnCurveResult,
     ScalarMultiplicationRequest,
     ScalarMultiplicationResult,
-    ShortWeierstrassCurve,
 )
 from jacobian.math.elliptic_curves._operations import (
     add_points,

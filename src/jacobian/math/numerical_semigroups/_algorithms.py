@@ -121,19 +121,24 @@ def factorization_length_extrema(
     maximum: list[int | None] = [None] * (target + 1)
     minimum[0] = maximum[0] = 0
     for value in range(1, target + 1):
-        candidates = [
-            (minimum[value - generator], maximum[value - generator])
-            for generator in generators
-            if value >= generator
-            and minimum[value - generator] is not None
-            and maximum[value - generator] is not None
-        ]
-        if candidates:
-            minimum[value] = min(candidate[0] for candidate in candidates) + 1
-            maximum[value] = max(candidate[1] for candidate in candidates) + 1
-    if minimum[target] is None or maximum[target] is None:
+        min_candidates: list[int] = []
+        max_candidates: list[int] = []
+        for generator in generators:
+            predecessor = value - generator
+            if predecessor >= 0:
+                min_length = minimum[predecessor]
+                max_length = maximum[predecessor]
+                if min_length is not None and max_length is not None:
+                    min_candidates.append(min_length)
+                    max_candidates.append(max_length)
+        if min_candidates:
+            minimum[value] = min(min_candidates) + 1
+            maximum[value] = max(max_candidates) + 1
+    min_result = minimum[target]
+    max_result = maximum[target]
+    if min_result is None or max_result is None:
         raise ValueError("target is not in the numerical semigroup")
-    return minimum[target], maximum[target]
+    return min_result, max_result
 
 
 def catenary_degree_from_factorizations(

@@ -175,314 +175,95 @@ class DirectSumPredicateResult(StrictModel):
         return self
 
 
+
 # ---------------------------------------------------------------------------
-# Ordered-difference profile for integer-vector sets
+# Ordered-difference profile for finite integer-vector sets
 # ---------------------------------------------------------------------------
 
-_MAX_VECTOR_DIMENSION = 8
-_MAX_VECTOR_SET_SIZE = 64
-_MAX_VECTOR_COORDINATE_DIGITS = 64
-# A difference coordinate can grow by one digit (sum of two bounded integers).
-_MAX_VECTOR_DIFFERENCE_DIGITS = _MAX_VECTOR_COORDINATE_DIGITS + 1
-_MAX_ORDERED_PAIRS = _MAX_VECTOR_SET_SIZE * (_MAX_VECTOR_SET_SIZE - 1)
-_VECTOR_COORDINATE_PATTERN = (
-    rf"^(?:0|-?[1-9][0-9]{{0,{_MAX_VECTOR_COORDINATE_DIGITS - 1}}})$"
-)
-
-VectorCoordinate = Annotated[
-    str,
-    StringConstraints(
-        pattern=_VECTOR_COORDINATE_PATTERN,
-        max_length=_MAX_VECTOR_COORDINATE_DIGITS + 1,
-        strict=True,
-    ),
-]
+MAX_VECTOR_SET_SIZE = 128
+MAX_VECTOR_DIMENSION = 8
 
 
-class IntegerVector(StrictModel):
-    """One integer vector in a bounded common dimension.
+class FiniteIntegerVectorSet(StrictModel):
+    """One finite set of distinct integer vectors in Z^d."""
 
-    Each coordinate is a canonical integer with at most 64 decimal digits.
-    """
-
-    coordinates: tuple[VectorCoordinate, ...] = Field(
-        min_length=1,
-        max_length=_MAX_VECTOR_DIMENSION,
-        description=(
-            "Canonical integer coordinates sharing one dimension in "
-            f"[1, {_MAX_VECTOR_DIMENSION}]; each coordinate has at most "
-            f"{_MAX_VECTOR_COORDINATE_DIGITS} decimal digits."
-        ),
-        examples=[("0", "1")],
-    )
+    vectors: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=MAX_VECTOR_SET_SIZE)
 
     @model_validator(mode="after")
-    def require_bounded_coordinates(self) -> Self:
-        for value in self.coordinates:
-            if len(value.lstrip("-")) > _MAX_VECTOR_COORDINATE_DIGITS:
-                raise ValueError(
-                    "vector coordinate exceeds the "
-                    f"{_MAX_VECTOR_COORDINATE_DIGITS}-digit bound"
-                )
-        return self
-
-
-class IntegerVectorSet(StrictModel):
-    """A finite set of distinct integer vectors in a fixed dimension.
-
-    Coordinates remain canonical integers with at most 64 decimal digits; the
-    listed order is the index order used by ordered-difference pairs.
-    """
-
-    vectors: tuple[IntegerVector, ...] = Field(
-        min_length=1,
-        max_length=_MAX_VECTOR_SET_SIZE,
-        description=(
-            "Distinct source vectors in one shared dimension; each coordinate "
-            f"has at most {_MAX_VECTOR_COORDINATE_DIGITS} decimal digits."
-        ),
-    )
-
-    @model_validator(mode="after")
-    def require_uniform_and_distinct(self) -> Self:
+    def require_valid_vectors(self) -> Self:
         if not self.vectors:
-            return self
-        dim = len(self.vectors[0].coordinates)
-        for vec in self.vectors[1:]:
-            if len(vec.coordinates) != dim:
-                raise ValueError("all vectors must share the same dimension")
-        seen: set[tuple[int, ...]] = set()
-        for vec in self.vectors:
-            key = tuple(parse_canonical_integer(c) for c in vec.coordinates)
-            if key in seen:
-                raise ValueError("vector set elements must be distinct")
-            seen.add(key)
+            raise ValueError("vector set must be nonempty")
+        dim = len(self.vectors[0])
+        if dim < 1:
+            raise ValueError("vectors must have at least one coordinate")
+        if dim > MAX_VECTOR_DIMENSION:
+            raise ValueError(f"vector dimension exceeds the {MAX_VECTOR_DIMENSION}-coordinate bound")
+        if any(len(v) != dim for v in self.vectors):
+            raise ValueError("all vectors must have the same dimension")
+        if any(any(type(c) is not int for c in v) for v in self.vectors):
+            raise ValueError("vector coordinates must be integers")
+        if len(set(self.vectors)) != len(self.vectors):
+            raise ValueError("vectors must be distinct")
         return self
 
 
 class OrderedDifferenceProfileRequest(StrictModel):
-    """Compute the complete ordered-difference profile ``r_{A-A}`` of one set.
+    """Compute the complete ordered-difference profile r_{A-A}(v)."""
 
-    Source vectors share one dimension in ``[1, 8]``, the set has at most 64
-    distinct vectors, and each coordinate has at most 64 decimal digits.
-    """
-
-    vectors: IntegerVectorSet = Field(
-        description=(
-            "Distinct integer vectors in one shared dimension; each coordinate "
-            f"has at most {_MAX_VECTOR_COORDINATE_DIGITS} decimal digits."
-        ),
-    )
+    vectors: FiniteIntegerVectorSet
 
 
-class OrderedDifferencePair(StrictModel):
-    """One ordered source pair realizing a difference vector."""
+class DifferenceClassEntry(StrictModel):
+    """One nonzero difference vector and its ordered source pairs."""
 
-    minuend_index: int = Field(ge=0, le=_MAX_VECTOR_SET_SIZE - 1)
-    subtrahend_index: int = Field(ge=0, le=_MAX_VECTOR_SET_SIZE - 1)
-
-
-class OrderedDifferenceClass(StrictModel):
-    """One nonzero difference vector and every ordered pair realizing it.
-
-    ``difference`` is the domain's canonical ``IntegerVector`` value so exact
-    differences compose downstream without reconstruction.  Difference
-    coordinates may carry one more digit than request coordinates (a
-    difference of two bounded integers), so this canonical use admits the
-    documented 65-digit boundary rather than the 64-digit request bound.
-    """
-
-    difference: IntegerVector = Field(
-        description=(
-            "The nonzero difference vector as the canonical IntegerVector "
-            "value; coordinates may carry one more digit than request "
-            "coordinates because a difference of two bounded integers can "
-            "grow by one digit."
-        ),
-    )
-    pairs: tuple[OrderedDifferencePair, ...] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def require_nonzero_difference(self) -> Self:
-        if all(parse_canonical_integer(c) == 0 for c in self.difference.coordinates):
-            raise ValueError("the zero difference class is not reported")
-        if any(
-            len(c.lstrip("-")) > _MAX_VECTOR_DIFFERENCE_DIGITS
-            for c in self.difference.coordinates
-        ):
-            raise ValueError("difference coordinate exceeds the digit bound")
-        for pair in self.pairs:
-            if pair.minuend_index == pair.subtrahend_index:
-                raise ValueError("an ordered difference pair must be distinct")
-        return self
-
-
-def _source_points(
-    vectors: tuple[IntegerVector, ...],
-) -> tuple[tuple[int, ...], ...]:
-    return tuple(
-        tuple(parse_canonical_integer(c) for c in vec.coordinates) for vec in vectors
-    )
-
-
-def _require_source_shape(
-    source: tuple[IntegerVector, ...],
-    *,
-    dimension: int,
-    set_size: int,
-) -> tuple[tuple[int, ...], ...]:
-    n = len(source)
-    dim = len(source[0].coordinates)
-    if set_size != n:
-        raise ValueError("set_size must equal the source vector count")
-    if dimension != dim:
-        raise ValueError("dimension must equal the source vector dimension")
-    return _source_points(source)
-
-
-def _replay_pair(
-    pair: OrderedDifferencePair,
-    *,
-    points: tuple[tuple[int, ...], ...],
-    dimension: int,
-    seen_pairs: set[tuple[int, int]],
-) -> tuple[int, ...]:
-    n = len(points)
-    if not (0 <= pair.minuend_index < n and 0 <= pair.subtrahend_index < n):
-        raise ValueError("pair indexes must lie in the source set")
-    key = (pair.minuend_index, pair.subtrahend_index)
-    if key in seen_pairs:
-        raise ValueError("ordered pairs must be unique")
-    seen_pairs.add(key)
-    return tuple(
-        points[pair.minuend_index][k] - points[pair.subtrahend_index][k]
-        for k in range(dimension)
-    )
-
-
-def _require_replayed_classes(
-    classes: tuple[OrderedDifferenceClass, ...],
-    *,
-    points: tuple[tuple[int, ...], ...],
-    dimension: int,
-) -> None:
-    n = len(points)
-    expected_pairs = {(i, j) for i in range(n) for j in range(n) if i != j}
-    seen_pairs: set[tuple[int, int]] = set()
-    numeric_diffs: list[tuple[int, ...]] = []
-    for cls in classes:
-        if len(cls.difference.coordinates) != dimension:
-            raise ValueError("difference dimension must match the source")
-        diff = tuple(parse_canonical_integer(c) for c in cls.difference.coordinates)
-        numeric_diffs.append(diff)
-        for pair in cls.pairs:
-            if (
-                _replay_pair(
-                    pair,
-                    points=points,
-                    dimension=dimension,
-                    seen_pairs=seen_pairs,
-                )
-                != diff
-            ):
-                raise ValueError(
-                    "difference must equal source[minuend] - source[subtrahend]",
-                )
-    if seen_pairs != expected_pairs:
-        raise ValueError(
-            "classes must cover every ordered pair of distinct source vectors",
-        )
-    if len(numeric_diffs) != len(set(numeric_diffs)):
-        raise ValueError("difference classes must be unique")
-    if numeric_diffs != sorted(numeric_diffs):
-        raise ValueError("difference classes must be sorted")
-
-
-def _require_repeated_decision(
-    classes: tuple[OrderedDifferenceClass, ...],
-    *,
-    ordered_pair_count: int,
-    support_size: int,
-    set_size: int,
-    max_multiplicity: int,
-    has_repeated_difference: bool,
-    first_repeated_difference: tuple[str, ...] | None,
-) -> None:
-    if ordered_pair_count != set_size * (set_size - 1):
-        raise ValueError("ordered_pair_count must equal set_size * (set_size - 1)")
-    if support_size != len(classes):
-        raise ValueError("support_size must equal the number of difference classes")
-    max_mult = max((len(cls.pairs) for cls in classes), default=0)
-    if max_multiplicity != max_mult:
-        raise ValueError("max_multiplicity must equal the largest class size")
-    first_repeated = next(
-        (cls.difference.coordinates for cls in classes if len(cls.pairs) > 1),
-        None,
-    )
-    if has_repeated_difference != (max_mult > 1):
-        raise ValueError("has_repeated_difference must equal max_multiplicity > 1")
-    if first_repeated_difference != first_repeated:
-        raise ValueError(
-            "first_repeated_difference must be the first class of multiplicity 2+",
-        )
+    difference: tuple[int, ...]
+    multiplicity: int = Field(gt=0)
+    source_pairs: tuple[tuple[int, int], ...]
 
 
 class OrderedDifferenceProfileResult(StrictModel):
-    """Complete ordered-difference profile of a bounded integer-vector set.
+    """The complete exact ordered-difference profile of a finite integer-vector set."""
 
-    The result retains the source ``IntegerVectorSet`` so every class can be
-    replayed as ``vectors[minuend] - vectors[subtrahend]`` without the request.
-    """
-
-    vectors: IntegerVectorSet
-    dimension: int = Field(ge=1, le=_MAX_VECTOR_DIMENSION)
-    set_size: int = Field(ge=1, le=_MAX_VECTOR_SET_SIZE)
-    classes: tuple[OrderedDifferenceClass, ...] = Field(
-        max_length=_MAX_ORDERED_PAIRS,
-    )
-    ordered_pair_count: int = Field(ge=0)
+    dimension: int = Field(ge=1)
+    set_size: int = Field(ge=1)
+    total_ordered_pairs: int = Field(ge=0)
     support_size: int = Field(ge=0)
     max_multiplicity: int = Field(ge=0)
     has_repeated_difference: bool
-    first_repeated_difference: tuple[CanonicalInteger, ...] | None = Field(
-        default=None,
-    )
+    first_repeated_difference: tuple[int, ...] | None = None
+    classes: tuple[DifferenceClassEntry, ...]
 
     @model_validator(mode="after")
-    def require_consistent_profile(self) -> Self:
-        points = _require_source_shape(
-            self.vectors.vectors,
-            dimension=self.dimension,
-            set_size=self.set_size,
-        )
-        _require_replayed_classes(
-            self.classes,
-            points=points,
-            dimension=self.dimension,
-        )
-        _require_repeated_decision(
-            self.classes,
-            ordered_pair_count=self.ordered_pair_count,
-            support_size=self.support_size,
-            set_size=self.set_size,
-            max_multiplicity=self.max_multiplicity,
-            has_repeated_difference=self.has_repeated_difference,
-            first_repeated_difference=self.first_repeated_difference,
-        )
+    def require_profile_invariants(self) -> Self:
+        expected_total = self.set_size * (self.set_size - 1)
+        if self.total_ordered_pairs != expected_total:
+            raise ValueError("total_ordered_pairs must equal set_size * (set_size - 1)")
+        if self.support_size != len(self.classes):
+            raise ValueError("support_size must match the class count")
+        class_total = sum(c.multiplicity for c in self.classes)
+        if class_total != expected_total:
+            raise ValueError("class multiplicities must sum to total_ordered_pairs")
+        if self.classes:
+            computed_max = max(c.multiplicity for c in self.classes)
+            if self.max_multiplicity != computed_max:
+                raise ValueError("max_multiplicity must be the maximum class multiplicity")
+        if self.has_repeated_difference != (self.max_multiplicity > 1):
+            raise ValueError("has_repeated_difference must agree with max_multiplicity > 1")
+        for cls in self.classes:
+            if cls.multiplicity != len(cls.source_pairs):
+                raise ValueError("multiplicity must match the source pair count")
         return self
 
 
 __all__ = [
     "AdditiveEnergyRequest",
     "AdditiveEnergyResult",
+    "DifferenceClassEntry",
     "DirectSumPredicateRequest",
     "DirectSumPredicateResult",
     "FiniteCyclicGroup",
     "FiniteIntegerSet",
-    "IntegerVector",
-    "IntegerVectorSet",
-    "OrderedDifferenceClass",
-    "OrderedDifferencePair",
+    "FiniteIntegerVectorSet",
     "OrderedDifferenceProfileRequest",
     "OrderedDifferenceProfileResult",
     "RepresentationProfileEntry",

@@ -11,11 +11,6 @@ from jacobian.math.symmetric_functions._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
-        "symmetric_function.partition.conjugate.compute",
-        AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
-    ),
-    OperationAdmission(
         "symmetric_function.schur.evaluate.compute",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",

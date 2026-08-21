@@ -18,36 +18,37 @@ from jacobian.math.symmetric_functions._tools import TOOLS
 
 def test_operations_in_catalog() -> None:
     ids = {tool.operation_id for tool in TOOLS}
-    assert "symmetric_function.partition.conjugate.compute" in ids
     assert "symmetric_function.schur.evaluate.compute" in ids
+    # conjugate is NATIVE_ONLY via algebraic_combinatorics; not a distinct public operation
+    assert "symmetric_function.partition.conjugate.compute" not in ids
 
 
 def test_conjugate_self_conjugate_partition() -> None:
     result = compute_partition_conjugate(
         PartitionRequest(partition=IntegerPartition(parts=(3, 2, 1)))
     )
-    assert result.conjugate == (3, 2, 1)
+    assert result.conjugate.parts == (3, 2, 1)
 
 
 def test_conjugate_non_self_conjugate() -> None:
     result = compute_partition_conjugate(
         PartitionRequest(partition=IntegerPartition(parts=(4, 2)))
     )
-    assert result.conjugate == (2, 2, 1, 1)
+    assert result.conjugate.parts == (2, 2, 1, 1)
 
 
 def test_conjugate_single_row() -> None:
     result = compute_partition_conjugate(
         PartitionRequest(partition=IntegerPartition(parts=(5,)))
     )
-    assert result.conjugate == (1, 1, 1, 1, 1)
+    assert result.conjugate.parts == (1, 1, 1, 1, 1)
 
 
 def test_conjugate_empty() -> None:
     result = compute_partition_conjugate(
         PartitionRequest(partition=IntegerPartition(parts=()))
     )
-    assert result.conjugate == ()
+    assert result.conjugate.parts == ()
 
 
 def test_schur_single_variable_one() -> None:
@@ -58,7 +59,7 @@ def test_schur_single_variable_one() -> None:
             point=(1,),
         )
     )
-    assert result.value == 1
+    assert result.value == "1"
 
 
 def test_schur_complete_homogeneous_at_ones() -> None:
@@ -70,7 +71,7 @@ def test_schur_complete_homogeneous_at_ones() -> None:
             point=(1, 1),
         )
     )
-    assert result.value == 3
+    assert result.value == "3"
 
 
 def test_schur_elementary_at_ones() -> None:
@@ -82,7 +83,7 @@ def test_schur_elementary_at_ones() -> None:
             point=(1, 1),
         )
     )
-    assert result.value == 1
+    assert result.value == "1"
 
 
 def test_schur_at_origin() -> None:
@@ -93,7 +94,7 @@ def test_schur_at_origin() -> None:
             point=(0, 0, 0),
         )
     )
-    assert result.value == 0
+    assert result.value == "0"
 
 
 def test_partition_rejects_non_decreasing() -> None:

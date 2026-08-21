@@ -6,10 +6,13 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 
 _MAX_PARTITION_SIZE = 100
 _MAX_PARTITION_PARTS = 50
+_MAX_POINT_COORDINATE_DIGITS = 6
+_MAX_SCHUR_RESULT_DIGITS = 4000
 
 
 class IntegerPartition(StrictModel):
@@ -35,7 +38,7 @@ class PartitionRequest(StrictModel):
 
 
 class PartitionConjugateResult(StrictModel):
-    conjugate: tuple[int, ...]
+    conjugate: IntegerPartition
 
 
 class SchurExpansionRequest(StrictModel):
@@ -47,11 +50,22 @@ class SchurExpansionRequest(StrictModel):
     def require_matching_dimensions(self) -> Self:
         if len(self.variables) != len(self.point):
             raise ValueError("variables and point must have the same length")
+        for coord in self.point:
+            if len(str(abs(coord))) > _MAX_POINT_COORDINATE_DIGITS:
+                raise ValueError(
+                    f"point coordinate exceeds the {_MAX_POINT_COORDINATE_DIGITS}-digit bound"
+                )
         return self
 
 
 class SchurExpansionResult(StrictModel):
-    value: int
+    value: CanonicalInteger
+
+    @model_validator(mode="after")
+    def require_bounded_value(self) -> Self:
+        if len(self.value.lstrip("-")) > _MAX_SCHUR_RESULT_DIGITS:
+            raise ValueError("Schur value exceeds the output digit bound")
+        return self
 
 
 __all__ = [

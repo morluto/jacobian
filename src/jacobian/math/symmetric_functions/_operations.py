@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.symmetric_functions._models import (
+    IntegerPartition,
     PartitionConjugateResult,
     PartitionRequest,
     SchurExpansionRequest,
@@ -15,10 +17,10 @@ def compute_partition_conjugate(request: PartitionRequest) -> PartitionConjugate
 
     parts = request.partition.parts
     if not parts:
-        return PartitionConjugateResult(conjugate=())
+        return PartitionConjugateResult(conjugate=IntegerPartition(parts=()))
     max_part = parts[0]
     conjugate = tuple(sum(1 for p in parts if p >= i) for i in range(1, max_part + 1))
-    return PartitionConjugateResult(conjugate=conjugate)
+    return PartitionConjugateResult(conjugate=IntegerPartition(parts=conjugate))
 
 
 def _complete_homogeneous(variables: list[int], k: int) -> int:
@@ -50,7 +52,7 @@ def compute_schur_evaluation(request: SchurExpansionRequest) -> SchurExpansionRe
     partition = list(request.partition.parts)
     n = len(partition)
     if not partition:
-        return SchurExpansionResult(value=1)
+        return SchurExpansionResult(value=format_canonical_integer(1))
 
     point = list(request.point)
 
@@ -66,28 +68,22 @@ def compute_schur_evaluation(request: SchurExpansionRequest) -> SchurExpansionRe
             matrix[i][j] = h(partition[i] - (i + 1) + (j + 1))
 
     result = _determinant(matrix)
-    return SchurExpansionResult(value=result)
+    return SchurExpansionResult(value=format_canonical_integer(result))
 
 
 def _determinant(matrix: list[list[int]]) -> int:
-    """Compute the determinant of a square integer matrix."""
+    """Compute the determinant of a square integer matrix via SymPy."""
 
     n = len(matrix)
+    if n == 0:
+        return 1
     if n == 1:
         return matrix[0][0]
     if n == 2:
         return matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0]
+    from sympy import Matrix
 
-    result = 0
-    sign = 1
-    for j in range(n):
-        if matrix[0][j] == 0:
-            sign = -sign
-            continue
-        sub = [[matrix[i][k] for k in range(n) if k != j] for i in range(1, n)]
-        result += sign * matrix[0][j] * _determinant(sub)
-        sign = -sign
-    return result
+    return int(Matrix(matrix).det())
 
 
 __all__ = [

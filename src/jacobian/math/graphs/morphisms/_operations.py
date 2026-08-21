@@ -5,12 +5,16 @@ from __future__ import annotations
 from jacobian.math.graphs.morphisms._models import (
     CoreCheckRequest,
     CoreCheckResult,
+    FixedLengthCycleRequest,
+    FixedLengthCycleResult,
     HomomorphismCheckRequest,
     HomomorphismCheckResult,
     HomomorphismFindRequest,
     HomomorphismFindResult,
     RetractionCheckRequest,
     RetractionCheckResult,
+    SubgraphPatternFindRequest,
+    SubgraphPatternFindResult,
 )
 
 
@@ -172,3 +176,97 @@ def compute_retraction_check(
 
     found = backtrack(0)
     return RetractionCheckResult(is_retraction=found)
+
+
+def compute_fixed_length_cycle(request: FixedLengthCycleRequest) -> FixedLengthCycleResult:
+    """Decide whether ``graph`` contains a simple cycle of length ``length``.
+
+    Returns ``EXISTS`` with one ordered cycle witness (a sequence of vertex
+    indices whose consecutive vertices and the last-to-first vertex are edges)
+    or ``DOES_NOT_EXIST`` after exhaustive bounded search.  The witness cycle is
+    a subgraph and may have chords; this is distinct from girth (shortest
+    cycle) and from Hamiltonicity (spanning).
+    """
+    graph = request.graph
+    k = request.length
+    adj: list[set[int]] = [set() for _ in range(graph.vertex_count)]
+    for u, v in graph.edges:
+        adj[u].add(v)
+        adj[v].add(u)
+
+    # To avoid reporting rotations, fix the smallest vertex of the cycle as the
+    # start and restrict every other vertex to be strictly larger than the
+    # start; within that, the path may visit any eligible larger neighbor.  The
+    # closing edge from the last vertex back to the start completes the cycle.
+    path: list[int] = []
+
+    def dfs(start: int, last: int) -> bool:
+        if len(path) == k:
+            return start in adj[last]
+        for nxt in range(start + 1, graph.vertex_count):
+            if nxt not in adj[last] or nxt in path:
+                continue
+            path.append(nxt)
+            if dfs(start, nxt):
+                return True
+            path.pop()
+        return False
+
+    for start in range(graph.vertex_count):
+        path = [start]
+        if dfs(start, start):
+            return FixedLengthCycleResult(
+                decision="EXISTS",
+                length=k,
+                cycle=tuple(path),
+            )
+    return FixedLengthCycleResult(decision="DOES_NOT_EXIST", length=k, cycle=())
+
+
+def compute_subgraph_pattern_find(request: SubgraphPatternFindRequest) -> SubgraphPatternFindResult:
+    """Find an injective edge-preserving embedding of ``pattern`` in ``host``.
+
+    Ordinary (non-induced) subgraph containment: an injective map from pattern
+    vertices to host vertices such that every pattern edge maps to a host edge.
+    Returns ``EXISTS`` with one witness vertex map or ``DOES_NOT_EXIST`` after
+    exhaustive bounded search.
+    """
+    pattern = request.pattern
+    host = request.host
+    host_adj = _adjacency(host.edges)
+    vertex_map: list[int] = [-1] * pattern.vertex_count
+    used: set[int] = set()
+    pattern_order = sorted(range(pattern.vertex_count), key=lambda i: -len([
+        (u, v) for u, v in pattern.edges if u == i or v == i
+    ]))
+
+    def backtrack(pos: int) -> bool:
+        if pos == pattern.vertex_count:
+            return True
+        vertex = pattern_order[pos]
+        for candidate in range(host.vertex_count):
+            if candidate in used:
+                continue
+            ok = True
+            for u, v in pattern.edges:
+                other = v if u == vertex else (u if v == vertex else None)
+                if other is not None and vertex_map[other] != -1 and (
+                    candidate,
+                    vertex_map[other],
+                ) not in host_adj:
+                    ok = False
+                    break
+            if ok:
+                vertex_map[vertex] = candidate
+                used.add(candidate)
+                if backtrack(pos + 1):
+                    return True
+                used.discard(candidate)
+                vertex_map[vertex] = -1
+        return False
+
+    found = backtrack(0)
+    return SubgraphPatternFindResult(
+        decision="EXISTS" if found else "DOES_NOT_EXIST",
+        vertex_map=tuple(vertex_map) if found else (),
+    )

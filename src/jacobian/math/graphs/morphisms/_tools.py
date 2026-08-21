@@ -9,18 +9,24 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.morphisms._models import (
     CoreCheckRequest,
     CoreCheckResult,
+    FixedLengthCycleRequest,
+    FixedLengthCycleResult,
     HomomorphismCheckRequest,
     HomomorphismCheckResult,
     HomomorphismFindRequest,
     HomomorphismFindResult,
     RetractionCheckRequest,
     RetractionCheckResult,
+    SubgraphPatternFindRequest,
+    SubgraphPatternFindResult,
 )
 from jacobian.math.graphs.morphisms._operations import (
     compute_core_check,
+    compute_fixed_length_cycle,
     compute_homomorphism_check,
     compute_homomorphism_find,
     compute_retraction_check,
+    compute_subgraph_pattern_find,
 )
 
 
@@ -47,6 +53,12 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
         examples=examples,
     )
 
+
+
+CYCLE_C4_WITH_CHORD = {'graph': {'vertex_count': 4, 'edges': [[0, 1], [1, 2], [2, 3], [3, 0], [0, 2]]}, 'length': 3}
+CYCLE_C4_PLAIN = {'graph': {'vertex_count': 4, 'edges': [[0, 1], [1, 2], [2, 3], [3, 0]]}, 'length': 3}
+SUBGRAPH_TRIANGLE_IN_C4_CHORD = {'pattern': {'vertex_count': 3, 'edges': [[0, 1], [1, 2], [0, 2]]}, 'host': {'vertex_count': 4, 'edges': [[0, 1], [1, 2], [2, 3], [3, 0], [0, 2]]}}
+SUBGRAPH_P3_NOT_IN_MATCHING = {'pattern': {'vertex_count': 3, 'edges': [[0, 1], [1, 2]]}, 'host': {'vertex_count': 4, 'edges': [[0, 1], [2, 3]]}}
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
@@ -154,6 +166,65 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     },
                     "subgraph_vertices": [0, 1],
                 },
+            ),
+        ),
+    ),
+    _op(
+        "graph.cycle.fixed_length.decide",
+        "Decide a fixed-length simple cycle",
+        "Given a bounded simple graph and an integer k >= 3, decide whether "
+        "the graph contains a simple cycle of exactly length k, returning an "
+        "ordered cycle witness when one exists. The cycle is a subgraph and "
+        "may have chords; this is distinct from girth (shortest cycle) and "
+        "from Hamiltonicity (spanning).",
+        FixedLengthCycleRequest,
+        FixedLengthCycleResult,
+        compute_fixed_length_cycle,
+        "graph",
+        "cycle",
+        "subgraph",
+        examples=(
+            example(
+                "c4_with_chord_has_triangle",
+                (
+                    "A 4-cycle with a chord contains a 3-cycle (triangle); the "
+                    "cycle length k must be at least 3 and at most the vertex count."
+                ),
+                CYCLE_C4_WITH_CHORD,
+            ),
+            example(
+                "c4_plain_no_triangle",
+                "A plain 4-cycle has no 3-cycle.",
+                CYCLE_C4_PLAIN,
+            ),
+        ),
+    ),
+    _op(
+        "graph.subgraph_pattern.find",
+        "Find a subgraph-pattern embedding",
+        "Given bounded simple graphs pattern H and host G, find an injective "
+        "embedding of H into G such that every edge of H maps to an edge of G "
+        "(ordinary, non-induced subgraph containment). Returns one witness "
+        "vertex map when one exists.",
+        SubgraphPatternFindRequest,
+        SubgraphPatternFindResult,
+        compute_subgraph_pattern_find,
+        "graph",
+        "subgraph",
+        "monomorphism",
+        examples=(
+            example(
+                "triangle_in_c4_with_chord",
+                (
+                    "A triangle pattern embeds in a 4-cycle-with-chord host. "
+                    "The pattern must have no more vertices than the host."
+                ),
+                SUBGRAPH_TRIANGLE_IN_C4_CHORD,
+            ),
+            example(
+                "p3_not_in_matching",
+                "A path P3 pattern does not embed in a host of two disjoint edges.",
+                SUBGRAPH_P3_NOT_IN_MATCHING,
             ),
         ),
     ),

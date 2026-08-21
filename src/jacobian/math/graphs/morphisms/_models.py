@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -116,3 +116,82 @@ class CoreCheckResult(StrictModel):
 class RetractionCheckResult(StrictModel):
     is_retraction: bool
     method: str = "HOMOMORPHISM_CHECK"
+
+
+# ---------------------------------------------------------------------------
+# Fixed-length cycle decision
+# ---------------------------------------------------------------------------
+
+
+class FixedLengthCycleRequest(StrictModel):
+    """Decide whether a simple graph contains a simple cycle of length ``k``."""
+
+    graph: SimpleGraph
+    length: int = Field(ge=3, le=MORPHISM_MAX_VERTICES)
+
+    @model_validator(mode="after")
+    def require_length_within_graph(self) -> Self:
+        if self.length > self.graph.vertex_count:
+            raise ValueError("cycle length must not exceed the vertex count")
+        return self
+
+
+class FixedLengthCycleResult(StrictModel):
+    """Whether a simple ``k``-cycle exists, with one ordered witness."""
+
+    decision: Literal["EXISTS", "DOES_NOT_EXIST"]
+    length: int = Field(ge=3)
+    cycle: tuple[int, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_consistent_witness(self) -> Self:
+        if self.decision == "EXISTS":
+            if len(self.cycle) != self.length:
+                raise ValueError("an EXISTS witness must list exactly length vertices")
+            if len(set(self.cycle)) != self.length:
+                raise ValueError("a simple cycle witness must have distinct vertices")
+        else:
+            if self.cycle:
+                raise ValueError("a DOES_NOT_EXIST result must not carry a witness")
+        return self
+
+
+# ---------------------------------------------------------------------------
+# Subgraph-pattern containment (non-induced subgraph monomorphism)
+# ---------------------------------------------------------------------------
+
+
+class SubgraphPatternFindRequest(StrictModel):
+    """Find an injective edge-preserving embedding of ``pattern`` in ``host``."""
+
+    pattern: SimpleGraph
+    host: SimpleGraph
+
+    @model_validator(mode="after")
+    def require_search_bounded(self) -> Self:
+        if self.pattern.vertex_count > MORPHISM_MAX_VERTICES:
+            raise ValueError(
+                f"pattern must have at most {MORPHISM_MAX_VERTICES} vertices"
+            )
+        if self.pattern.vertex_count > self.host.vertex_count:
+            raise ValueError("pattern must not have more vertices than the host")
+        return self
+
+
+class SubgraphPatternFindResult(StrictModel):
+    """Whether a non-induced subgraph embedding exists, with one witness map."""
+
+    decision: Literal["EXISTS", "DOES_NOT_EXIST"]
+    vertex_map: tuple[int, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_consistent_witness(self) -> Self:
+        if self.decision == "EXISTS":
+            if not self.vertex_map:
+                raise ValueError("an EXISTS result must carry a vertex map")
+            if len(set(self.vertex_map)) != len(self.vertex_map):
+                raise ValueError("a subgraph embedding must be injective")
+        else:
+            if self.vertex_map:
+                raise ValueError("a DOES_NOT_EXIST result must not carry a vertex map")
+        return self

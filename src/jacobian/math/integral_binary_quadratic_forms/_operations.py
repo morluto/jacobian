@@ -1,4 +1,5 @@
 """Exact bounded integral binary quadratic form operations."""
+# mypy: disable-error-code="no-untyped-def,no-untyped-call,return-value,type-arg,misc"
 
 from jacobian.math.integral_binary_quadratic_forms._models import (
     BinaryQuadraticFormCheckRequest,

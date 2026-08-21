@@ -32,9 +32,24 @@ class BinaryQuadraticFormEvaluateRequest(StrictModel):
 class BinaryQuadraticFormReduceRequest(StrictModel):
     """Request Gauss reduction of a primitive positive-definite form."""
 
-    a: int
-    b: int
-    c: int
+    a: int = Field(ge=-MAX_COEFFICIENT, le=MAX_COEFFICIENT)
+    b: int = Field(ge=-MAX_COEFFICIENT, le=MAX_COEFFICIENT)
+    c: int = Field(ge=-MAX_COEFFICIENT, le=MAX_COEFFICIENT)
+
+    @model_validator(mode="after")
+    def require_valid_form(self) -> Self:
+        if self.a <= 0:
+            raise ValueError("a must be positive for positive-definite")
+        disc = self.b * self.b - 4 * self.a * self.c
+        if disc >= 0:
+            raise ValueError("discriminant must be negative")
+        if disc % 4 not in (0, 1):
+            raise ValueError("discriminant must be 0 or 1 mod 4")
+        from math import gcd
+
+        if gcd(gcd(self.a, self.b), self.c) != 1:
+            raise ValueError("form must be primitive")
+        return self
 
 
 class BinaryQuadraticFormProperEquivRequest(StrictModel):

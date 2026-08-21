@@ -490,4 +490,77 @@ __all__ = [
     "RepresentationProfileResult",
     "SumsetCardinalityRequest",
     "SumsetCardinalityResult",
+    "OrderedDifferenceProfileRequest",
+    "OrderedDifferenceProfileResult",
+    "OrderedDifferenceEntry",
+    "OrderedDifferencePair",
 ]
+
+
+class OrderedDifferenceProfileRequest(StrictModel):
+    """Compute the ordered-difference profile r_{A-A}(v) for a finite set in Z^d."""
+
+    vectors: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=_MAX_SET_SIZE)
+
+    @model_validator(mode="after")
+    def require_valid(self) -> Self:
+        if not self.vectors:
+            raise ValueError("vectors must be non-empty")
+        dimension = len(self.vectors[0])
+        if dimension == 0:
+            raise ValueError("vectors must be non-empty")
+        for vec in self.vectors:
+            if len(vec) != dimension:
+                raise ValueError("all vectors must have the same dimension")
+        return self
+
+
+class OrderedDifferencePair(StrictModel):
+    """One ordered source pair (i, j) with i != j."""
+
+    left_index: int = Field(ge=0)
+    right_index: int = Field(ge=0)
+
+
+class OrderedDifferenceEntry(StrictModel):
+    """One nonzero difference vector and its ordered source pairs."""
+
+    difference: tuple[int, ...]
+    multiplicity: int = Field(gt=0)
+    pairs: tuple[OrderedDifferencePair, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_canonical(self) -> Self:
+        if self.multiplicity != len(self.pairs):
+            raise ValueError("multiplicity must equal the number of pairs")
+        for pair in self.pairs:
+            if pair.left_index == pair.right_index:
+                raise ValueError("pair indices must be distinct")
+        return self
+
+
+class OrderedDifferenceProfileResult(StrictModel):
+    """Complete ordered-difference profile for a finite set in Z^d."""
+
+    dimension: int = Field(ge=1)
+    set_size: int = Field(ge=0)
+    total_ordered_pairs: int = Field(ge=0)
+    support_size: int = Field(ge=0)
+    max_multiplicity: int = Field(ge=0)
+    entries: tuple[OrderedDifferenceEntry, ...] = Field(default=())
+    has_repeated_difference: bool = False
+    first_collision: OrderedDifferencePair | None = None
+
+    @model_validator(mode="after")
+    def require_canonical(self) -> Self:
+        total = sum(entry.multiplicity for entry in self.entries)
+        if total != self.total_ordered_pairs:
+            raise ValueError("total ordered pairs must match sum of multiplicities")
+        if self.entries:
+            if self.max_multiplicity != max(e.multiplicity for e in self.entries):
+                raise ValueError("max_multiplicity must be the maximum entry multiplicity")
+        if self.has_repeated_difference != (self.max_multiplicity > 1 if self.entries else False):
+            raise ValueError("has_repeated_difference must match max_multiplicity > 1")
+        if self.has_repeated_difference and self.first_collision is None:
+            raise ValueError("first_collision must be present when has_repeated_difference")
+        return self

@@ -77,25 +77,6 @@ _DIRECT_SUM_EXAMPLE: dict[str, Any] = {
     "right": {"elements": ["0", "2"]},
 }
 
-_ORDERED_DIFFERENCE_RECT_EXAMPLE: dict[str, Any] = {
-    "vectors": {
-        "vectors": [
-            {"coordinates": ["0", "0"]},
-            {"coordinates": ["1", "0"]},
-            {"coordinates": ["1", "1"]},
-            {"coordinates": ["0", "1"]},
-        ]
-    }
-}
-_ORDERED_DIFFERENCE_SIDON_EXAMPLE: dict[str, Any] = {
-    "vectors": {
-        "vectors": [
-            {"coordinates": ["0", "0"]},
-            {"coordinates": ["1", "0"]},
-            {"coordinates": ["0", "1"]},
-        ]
-    }
-}
 _DIRECT_SUM_NON_TILING_EXAMPLE: dict[str, Any] = {
     "modulus": 4,
     "left": {"elements": ["0", "1"]},
@@ -206,44 +187,27 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     ),
     additive_combinatorics_operation(
         "additive.ordered_difference_profile.compute",
-        "Compute the ordered-difference profile of an integer-vector set",
-        "Given one bounded finite set A of distinct integer vectors in Z^d, "
-        "return the complete exact profile r_{A-A}(v) = |{(x,y) in A^2 : "
-        "x != y, x - y = v}| for every nonzero difference vector v, "
-        "retaining every ordered source pair in each class. Reports the total "
-        "ordered-pair count |A|(|A|-1), support size, maximum multiplicity, and "
-        "a first repeated-difference witness when one exists. A Sidon decision, "
-        "additive energy, or collision count is a cheap projection of this "
-        "complete profile.",
+        "Compute the ordered-difference profile of a set in Z^d",
+        "Given a finite set A in Z^d, return r_{A-A}(v) = |{(x,y) in A^2 : "
+        "x != y, x - y = v}| for every nonzero difference v, preserving every "
+        "ordered source pair. A Sidon decision, additive energy, or collision "
+        "count is a cheap projection of this complete profile.",
         OrderedDifferenceProfileRequest,
         OrderedDifferenceProfileResult,
         compute_ordered_difference_profile,
         "additive-combinatorics",
-        "ordered-differences",
-        "integer-vectors",
+        "difference-profile",
         "exact",
         examples=(
             example(
-                "rectangle_repeated_difference",
-                (
-                    "Rectangle {(0,0),(1,0),(1,1),(0,1)}: the difference (1,0) "
-                    "is realized by two ordered pairs, so a repeated difference "
-                    "exists. Vectors must be distinct and share one dimension."
-                ),
-                _ORDERED_DIFFERENCE_RECT_EXAMPLE,
-            ),
-            example(
-                "triangle_sidon",
-                (
-                    "Three non-collinear lattice points with every nonzero "
-                    "ordered difference distinct: no repeated difference exists."
-                ),
-                _ORDERED_DIFFERENCE_SIDON_EXAMPLE,
+                "three_vectors",
+                "Compute the ordered-difference profile for {(0,0), (1,0), (0,1)}; "
+                "the vectors must be non-empty and share the same dimension.",
+                {"vectors": [[0, 0], [1, 0], [0, 1]]},
             ),
         ),
     ),
 )
-
 
 TOOLS = ADDITIVE_COMBINATORICS_OPERATIONS
 

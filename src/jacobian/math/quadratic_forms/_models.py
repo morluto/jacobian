@@ -141,7 +141,7 @@ class RepresentationNumbersResult(StrictModel):
     """The representation numbers r(0), r(1), ..., r(bound)."""
 
     form: SymmetricMatrix
-    bound: int
+    bound: int = Field(ge=0, le=1000)
     counts: tuple[int, ...]
 
     @model_validator(mode="after")
@@ -165,7 +165,7 @@ class ThetaSeriesPrefixResult(StrictModel):
     """The theta series prefix coefficients r(0), ..., r(bound)."""
 
     form: SymmetricMatrix
-    bound: int
+    bound: int = Field(ge=0, le=1000)
     coefficients: tuple[int, ...]
 
     @model_validator(mode="after")

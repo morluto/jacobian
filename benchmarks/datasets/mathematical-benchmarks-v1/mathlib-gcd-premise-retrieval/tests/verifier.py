@@ -37,6 +37,37 @@ def _load_frozen_input() -> dict[str, object]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _lean_candidates() -> list[str]:
+    candidates: list[str] = list(_LEAN_CANDIDATES)
+    for elan_candidate in (
+        str(Path.home() / ".elan" / "bin" / "lean"),
+        "/home/runner/.elan/bin/lean",
+        "/root/.elan/bin/lean",
+        str(Path("~/.elan/bin/lean").expanduser()),
+    ):
+        if elan_candidate not in candidates:
+            candidates.append(elan_candidate)
+    which_lean = shutil.which("lean")
+    if which_lean:
+        candidates.append(which_lean)
+    for elan_bin in ("/home/runner/.elan/bin/elan", "/root/.elan/bin/elan"):
+        if Path(elan_bin).is_file() and os.access(elan_bin, os.X_OK):
+            try:
+                resolved = subprocess.run(
+                    [elan_bin, "which", "lean"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if resolved.returncode == 0:
+                    lean_path = resolved.stdout.strip().splitlines()[0].strip()
+                    if lean_path and lean_path not in candidates:
+                        candidates.append(lean_path)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+    return candidates
+
+
 def _elaborates(result: object, frozen: dict[str, object]) -> bool:
     if not isinstance(result, dict) or set(result) != {"theorem", "arguments"}:
         return False
@@ -67,13 +98,7 @@ def _elaborates(result: object, frozen: dict[str, object]) -> bool:
     application = " ".join((theorem, *arguments))
     source = f"{source_prefix}\n  exact {application}\n"
     source_path = Path("/logs/verifier/Submission.lean")
-    candidates: list[str] = list(_LEAN_CANDIDATES)
-    # ``setup-lean`` installs Lean via ``elan`` into ``$HOME/.elan/bin``,
-    # which is on ``PATH`` in CI host-validation but not in the fixed list
-    # above.  ``shutil.which`` resolves the active toolchain's shim.
-    which_lean = shutil.which("lean")
-    if which_lean:
-        candidates.append(which_lean)
+    candidates = _lean_candidates()
     lean = next(
         (
             candidate

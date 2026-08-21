@@ -67,6 +67,9 @@ def _representation_numbers(
 
     Brute-force enumeration over a bounded integer box.
     """
+    form = tuple(
+        tuple(parse_canonical_integer(entry) for entry in row) for row in form
+    )
     n = len(form)
     counts = [0] * (bound + 1)
 
@@ -115,13 +118,18 @@ def _scale_form(
 ) -> tuple[tuple[int, ...], ...]:
     """Scale a form by an integer factor."""
     n = len(form)
-    return tuple(tuple(factor * form[i][j] for j in range(n)) for i in range(n))
+    return tuple(
+        tuple(format_canonical_integer(factor * parse_canonical_integer(form[i][j])) for j in range(n))
+        for i in range(n)
+    )
 
 
 def _direct_sum(
     form1: tuple[tuple[int, ...], ...], form2: tuple[tuple[int, ...], ...]
 ) -> tuple[tuple[int, ...], ...]:
     """Block diagonal direct sum A ⊕ B."""
+    form1 = tuple(tuple(parse_canonical_integer(x) for x in row) for row in form1)
+    form2 = tuple(tuple(parse_canonical_integer(x) for x in row) for row in form2)
     n1 = len(form1)
     n2 = len(form2)
     result = []
@@ -134,7 +142,7 @@ def _direct_sum(
             for j in range(n2):
                 row[n1 + j] = form2[i - n1][j]
         result.append(tuple(row))
-    return tuple(result)
+    return tuple(tuple(format_canonical_integer(x) for x in row) for row in result)
 
 
 def compute_representation_numbers(request):

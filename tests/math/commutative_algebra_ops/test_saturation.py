@@ -94,12 +94,14 @@ class TestIdealSaturation:
         with pytest.raises(ValidationError):
             IdealSaturationRequest(ideal=ideal, denominator=denominator)
 
+    @requires_singular
+    @pytest.mark.requires_backend("singular")
     def test_saturation_result_has_backend_version(self):
         """Computed saturation should include a backend version."""
         ideal = _ideal(("x", "y"), {(1, 1): 1})
         denominator = _ideal(("x", "y"), {(1, 0): 1})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
         result = compute_ideal_saturation(request)
-        if result.outcome == "COMPUTED":
-            assert result.backend_version is not None
-            assert result.backend_version != ""
+        assert result.outcome == "COMPUTED"
+        assert result.backend_version is not None
+        assert result.backend_version != ""

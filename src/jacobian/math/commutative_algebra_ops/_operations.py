@@ -100,4 +100,5 @@ __all__ = [
     "compute_ideal_quotient",
     "compute_ideal_radical",
     "compute_ideal_radical_membership",
+    "compute_ideal_saturation",
 ]

@@ -83,3 +83,53 @@ class ClosedFormResult(StrictModel):
 
     expression: str
     method: Literal["SYMPY_RSOLVE"] = "SYMPY_RSOLVE"
+
+
+# ---------------------------------------------------------------------------
+# Berlekamp-Massey over an explicit prime field
+# ---------------------------------------------------------------------------
+
+_MAX_FIELD_SEQUENCE_LENGTH = 256
+
+
+class PrimeFieldRecurrenceFindRequest(StrictModel):
+    """Find the minimal linear recurrence of a sequence over ``GF(p)``."""
+
+    prime: int = Field(gt=1)
+    sequence: tuple[int, ...] = Field(
+        min_length=2,
+        max_length=_MAX_FIELD_SEQUENCE_LENGTH,
+    )
+
+    @model_validator(mode="after")
+    def require_valid_field_sequence(self) -> Self:
+        from sympy import isprime
+
+        if not isprime(self.prime):
+            raise ValueError("prime must be a prime integer")
+        for value in self.sequence:
+            if type(value) is not int or not 0 <= value < self.prime:
+                raise ValueError("sequence values must be canonical residues modulo the prime")
+        return self
+
+
+class PrimeFieldRecurrenceFindResult(StrictModel):
+    """The minimal LFSR over ``GF(p)`` found by Berlekamp-Massey."""
+
+    prime: int = Field(gt=1)
+    coefficients: tuple[int, ...] = Field(max_length=255)
+    order: int = Field(ge=0, le=255)
+    status: Literal["FOUND", "NO_FITTING_RECURRENCE"]
+    method: Literal["BERLEKAMP_MASSEY"] = "BERLEKAMP_MASSEY"
+
+    @model_validator(mode="after")
+    def require_status_consistent_coefficients(self) -> Self:
+        if self.status == "FOUND":
+            if self.order == 0 or len(self.coefficients) != self.order:
+                raise ValueError("a found recurrence must have one coefficient per order")
+            for value in self.coefficients:
+                if type(value) is not int or not 0 <= value < self.prime:
+                    raise ValueError("coefficients must be canonical residues modulo the prime")
+        elif self.order != 0 or self.coefficients:
+            raise ValueError("a missing recurrence must have zero order and no coefficients")
+        return self

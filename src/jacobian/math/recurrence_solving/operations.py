@@ -7,7 +7,7 @@ from typing import Literal
 
 from jacobian._exact import CanonicalRational
 
-__all__ = ["ClosedForm", "Recurrence", "closed_form", "find_recurrence"]
+__all__ = ["ClosedForm", "Recurrence", "berlekamp_massey", "closed_form", "find_recurrence"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,3 +94,58 @@ def closed_form(
     consts = a.solve(b)
     expr = sum(c * term for c, term in zip(consts, basis, strict=True))
     return ClosedForm(expression=str(sympy.simplify(expr)))
+
+
+def berlekamp_massey(sequence: list[int], prime: int) -> list[int]:
+    """Return the minimal LFSR connection polynomial coefficients over ``GF(p)``.
+
+    Implements the classical Berlekamp-Massey algorithm.  Returns the list
+    ``[c_1, ..., c_L]`` such that for every ``n >= L``,
+    ``s_n = c_1 s_{n-1} + ... + c_L s_{n-L}`` (mod p), with ``L`` minimal.  An
+    empty list means no nontrivial recurrence of positive order was found.
+    """
+    s = [int(x) % prime for x in sequence]
+    n = len(s)
+    coeffs = [1]          # C(x) = 1
+    b = [1]               # B(x) = 1
+    length = 0
+    m = 1
+    last_discrepancy = 1
+
+    for i in range(n):
+        # compute discrepancy: s_i + sum_j C_j s_{i-j}
+        discrepancy = s[i] % prime
+        for j in range(1, len(coeffs)):
+            discrepancy = (discrepancy + coeffs[j] * s[i - j]) % prime
+        if discrepancy == 0:
+            m += 1
+        elif 2 * length <= i:
+            temp = list(coeffs)
+            factor = (discrepancy * pow(last_discrepancy, prime - 2, prime)) % prime
+            shifted = [0] * m + [(-factor * x) % prime for x in b]
+            if len(shifted) > len(coeffs):
+                coeffs.extend([0] * (len(shifted) - len(coeffs)))
+            elif len(shifted) < len(coeffs):
+                shifted.extend([0] * (len(coeffs) - len(shifted)))
+            coeffs = [(c + s_coeff) % prime for c, s_coeff in zip(coeffs, shifted, strict=True)]
+            length = i + 1 - length
+            b = temp
+            last_discrepancy = discrepancy
+            m = 1
+        else:
+            factor = (discrepancy * pow(last_discrepancy, prime - 2, prime)) % prime
+            shifted = [0] * m + [(-factor * x) % prime for x in b]
+            if len(shifted) > len(coeffs):
+                coeffs.extend([0] * (len(shifted) - len(coeffs)))
+            elif len(shifted) < len(coeffs):
+                shifted.extend([0] * (len(coeffs) - len(shifted)))
+            coeffs = [(c + s_coeff) % prime for c, s_coeff in zip(coeffs, shifted, strict=True)]
+            m += 1
+
+    # The connection polynomial is C(x) = 1 + c_1 x + ... + c_L x^L.
+    # The recurrence is s_n = -c_1 s_{n-1} - ... - c_L s_{n-L}, so the
+    # recurrence coefficients are [-c_1, ..., -c_L].
+    if length == 0:
+        return []
+    recurrence = [(-coeffs[j]) % prime for j in range(1, length + 1)]
+    return recurrence

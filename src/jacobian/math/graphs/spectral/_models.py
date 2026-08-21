@@ -8,6 +8,14 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
+
+_VARIABLE = "x"
+_MAX_CHARPOLY_TERMS = 64
 
 
 class GraphEdgeList(StrictModel):
@@ -43,18 +51,67 @@ class GraphSpectrumResult(StrictModel):
     convention: Literal["SYMPY_EIGENVALS"] = "SYMPY_EIGENVALS"
 
 
-class GraphCharacteristicPolynomialResult(StrictModel):
-    """The exact monic characteristic polynomial of a graph matrix over QQ."""
-
-    coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1,
-        description=("Monic polynomial coefficients in increasing degree over QQ."),
+def _dense_to_canonical_polynomial(
+    coefficients: tuple[CanonicalRational, ...],
+) -> RationalPolynomial:
+    """Convert increasing-degree dense coefficients to the canonical value."""
+    terms = tuple(
+        RationalPolynomialTerm(coefficient=coefficient, exponents=(degree,))
+        for degree, coefficient in reversed(list(enumerate(coefficients)))
+        if coefficient.as_fraction() != 0
+    )
+    return RationalPolynomial(
+        variables=(_VARIABLE,),
+        polynomial=SparseRationalPolynomial(terms=terms),
     )
 
+
+class GraphCharacteristicPolynomialResult(StrictModel):
+    """The exact monic characteristic polynomial of a graph matrix over QQ.
+
+    ``polynomial`` is the domain-owned canonical sparse value so downstream
+    polynomial operations compose without translation.  The result retains
+    its source graph and convention so validation can replay the defining
+    determinant relation.
+    """
+
+    graph: GraphEdgeList
+    convention: Literal["ADJACENCY", "LAPLACIAN"]
+    polynomial: RationalPolynomial
+
     @model_validator(mode="after")
-    def require_monic(self) -> Self:
-        if not self.coefficients:
-            raise ValueError("characteristic polynomial must have coefficients")
-        if self.coefficients[-1].as_fraction() != 1:
-            raise ValueError("characteristic polynomial must be monic")
+    def require_bound_to_source(self) -> Self:
+        from jacobian.math.graphs.spectral.operations import (
+            _adjacency_matrix,
+            _laplacian_matrix,
+        )
+        from jacobian.math.polynomials._conversions import (
+            rational_polynomial_to_sympy,
+        )
+
+        matrix = (
+            _adjacency_matrix(self.graph)
+            if self.convention == "ADJACENCY"
+            else _laplacian_matrix(self.graph)
+        )
+        expected = (
+            matrix.charpoly()
+            .as_expr()
+            .subs(
+                matrix.charpoly().gen, rational_polynomial_to_sympy(self.polynomial).gen
+            )
+        )
+        actual = rational_polynomial_to_sympy(self.polynomial).as_expr()
+        if expected != actual:
+            raise ValueError(
+                "characteristic polynomial does not match the source graph"
+            )
         return self
+
+
+__all__ = [
+    "GraphCharacteristicPolynomialResult",
+    "GraphEdgeList",
+    "GraphSpectrumRequest",
+    "GraphSpectrumResult",
+]

@@ -11,7 +11,33 @@ __all__ = [
     "laplacian_spectrum",
 ]
 
-from jacobian.math.graphs.spectral._models import GraphEdgeList
+from jacobian._exact import CanonicalRational
+from jacobian.math.graphs.spectral._models import (
+    GraphCharacteristicPolynomialResult,
+    GraphEdgeList,
+)
+
+
+def _characteristic_polynomial_coeffs(
+    matrix: Any,
+) -> tuple[CanonicalRational, ...]:
+    """Return monic charpoly coefficients (increasing degree) as canonical values."""
+    from fractions import Fraction
+
+    coeffs = matrix.charpoly().all_coeffs()
+    increasing = list(reversed(coeffs))
+    return tuple(
+        CanonicalRational.from_fraction(Fraction(int(c.p), int(c.q)))
+        for c in increasing
+    )
+
+
+def _dense_to_canonical_polynomial(
+    coefficients: tuple[CanonicalRational, ...],
+) -> Any:
+    from jacobian.math.graphs.spectral._models import _dense_to_canonical_polynomial
+
+    return _dense_to_canonical_polynomial(coefficients)
 
 
 def _adjacency_matrix(graph: GraphEdgeList) -> Any:
@@ -24,6 +50,14 @@ def _adjacency_matrix(graph: GraphEdgeList) -> Any:
     return mat
 
 
+def _laplacian_matrix(graph: GraphEdgeList) -> Any:
+    import sympy
+
+    adj = _adjacency_matrix(graph)
+    degree = sympy.diag(*(sum(adj[vertex, :]) for vertex in range(graph.vertex_count)))
+    return degree - adj
+
+
 def adjacency_spectrum(graph: GraphEdgeList) -> list[tuple[str, int]]:
     mat = _adjacency_matrix(graph)
     eigenvals = mat.eigenvals()
@@ -31,40 +65,31 @@ def adjacency_spectrum(graph: GraphEdgeList) -> list[tuple[str, int]]:
 
 
 def laplacian_spectrum(graph: GraphEdgeList) -> list[tuple[str, int]]:
-    import sympy
-
-    adj = _adjacency_matrix(graph)
-    degree = sympy.diag(*(sum(adj[vertex, :]) for vertex in range(graph.vertex_count)))
-    lap = degree - adj
-    eigenvals = lap.eigenvals()
+    eigenvals = _laplacian_matrix(graph).eigenvals()
     return [(str(val), int(mult)) for val, mult in eigenvals.items()]
 
 
-def _characteristic_polynomial_coeffs(matrix: Any) -> list[tuple[int, int]]:
-    """Return monic charpoly coefficients (increasing degree) as (num, den)."""
-    from fractions import Fraction
+def adjacency_characteristic_polynomial(
+    graph: GraphEdgeList,
+) -> GraphCharacteristicPolynomialResult:
+    """Monic characteristic polynomial of the adjacency matrix (canonical value)."""
 
-    poly = matrix.charpoly()
-    # sympy Poly.all_coeffs() is decreasing degree; reverse for increasing.
-    coeffs = poly.all_coeffs()
-    increasing = list(reversed(coeffs))
-    result: list[tuple[int, int]] = []
-    for c in increasing:
-        r = Fraction(int(c.p), int(c.q))
-        result.append((r.numerator, r.denominator))
-    return result
+    coeffs = _characteristic_polynomial_coeffs(_adjacency_matrix(graph))
+    return GraphCharacteristicPolynomialResult(
+        graph=graph,
+        convention="ADJACENCY",
+        polynomial=_dense_to_canonical_polynomial(coeffs),
+    )
 
 
-def adjacency_characteristic_polynomial(graph: GraphEdgeList) -> list[tuple[int, int]]:
-    """Monic characteristic polynomial of the adjacency matrix (increasing degree)."""
-    return _characteristic_polynomial_coeffs(_adjacency_matrix(graph))
+def laplacian_characteristic_polynomial(
+    graph: GraphEdgeList,
+) -> GraphCharacteristicPolynomialResult:
+    """Monic characteristic polynomial of the Laplacian matrix (canonical value)."""
 
-
-def laplacian_characteristic_polynomial(graph: GraphEdgeList) -> list[tuple[int, int]]:
-    """Monic characteristic polynomial of the Laplacian matrix (increasing degree)."""
-    import sympy
-
-    adj = _adjacency_matrix(graph)
-    degree = sympy.diag(*(sum(adj[vertex, :]) for vertex in range(graph.vertex_count)))
-    lap = degree - adj
-    return _characteristic_polynomial_coeffs(lap)
+    coeffs = _characteristic_polynomial_coeffs(_laplacian_matrix(graph))
+    return GraphCharacteristicPolynomialResult(
+        graph=graph,
+        convention="LAPLACIAN",
+        polynomial=_dense_to_canonical_polynomial(coeffs),
+    )

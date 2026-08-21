@@ -34,28 +34,10 @@ def compute_laplacian_spectrum(request: GraphSpectrumRequest) -> GraphSpectrumRe
 def compute_adjacency_characteristic_polynomial(
     request: GraphSpectrumRequest,
 ) -> GraphCharacteristicPolynomialResult:
-    from fractions import Fraction
-
-    from jacobian._exact import CanonicalRational
-
-    coeffs = adjacency_characteristic_polynomial(request.graph)
-    return GraphCharacteristicPolynomialResult(
-        coefficients=tuple(
-            CanonicalRational.from_fraction(Fraction(n, d)) for n, d in coeffs
-        ),
-    )
+    return adjacency_characteristic_polynomial(request.graph)
 
 
 def compute_laplacian_characteristic_polynomial(
     request: GraphSpectrumRequest,
 ) -> GraphCharacteristicPolynomialResult:
-    from fractions import Fraction
-
-    from jacobian._exact import CanonicalRational
-
-    coeffs = laplacian_characteristic_polynomial(request.graph)
-    return GraphCharacteristicPolynomialResult(
-        coefficients=tuple(
-            CanonicalRational.from_fraction(Fraction(n, d)) for n, d in coeffs
-        ),
-    )
+    return laplacian_characteristic_polynomial(request.graph)

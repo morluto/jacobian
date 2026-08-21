@@ -15,7 +15,7 @@ from jacobian.math.polynomials._conversions import (
 )
 from jacobian.math.polynomials.values import RationalFunction
 
-__all__ = ["symbolic_determinant", "symbolic_rank"]
+__all__ = ["symbolic_determinant", "symbolic_linear_system_solve", "symbolic_rank"]
 
 
 def _matrix_from_values(
@@ -90,3 +90,85 @@ def symbolic_eigenvalues(
         raise ValueError("eigenvalues require a square matrix")
     eigenvalues = matrix.eigenvals()
     return [(sstr(value), int(mult)) for value, mult in eigenvalues.items()]
+
+
+def symbolic_linear_system_solve(
+    entries: tuple[tuple[RationalFunction, ...], ...],
+    rhs: tuple[RationalFunction, ...],
+    variables: tuple[str, ...],
+) -> tuple[
+    str,
+    tuple[RationalFunction, ...] | None,
+    tuple[RationalFunction, ...] | None,
+    tuple[tuple[RationalFunction, ...], ...] | None,
+]:
+    """Solve ``A x = b`` over ``QQ(t_1, ..., t_n)``.
+
+    Returns ``(classification, solution, particular_solution, nullspace_basis)``.
+    """
+    import sympy
+
+    matrix = _matrix_from_values(entries)
+    rhs_vec = sympy.Matrix(
+        [[rational_function_to_sympy(v) for v in rhs]]
+    ).T
+
+    rank_coeff = matrix.rank()
+    aug = matrix.row_join(rhs_vec)
+    rank_aug = aug.rank()
+    n_cols = matrix.cols
+
+    if rank_aug > rank_coeff:
+        return "INCONSISTENT", None, None, None
+
+    if rank_coeff == n_cols:
+        # Unique solution
+        try:
+            sol = matrix.LUsolve(rhs_vec)
+            solution = tuple(
+                rational_function_from_sympy(sol[i], variables)
+                for i in range(n_cols)
+            )
+            return "UNIQUE", solution, None, None
+        except Exception:
+            pass
+
+    # Non-unique consistent system
+    try:
+        null = matrix.nullspace()
+        nullspace_basis: tuple[tuple[RationalFunction, ...], ...] = tuple(
+            tuple(
+                rational_function_from_sympy(vec[i], variables)
+                for i in range(n_cols)
+            )
+            for vec in null
+        )
+
+        # Find a particular solution using the pseudo-inverse approach
+        # or least squares.  For now, use sympy's linear solve.
+        # Use the augmented matrix rref to find a particular solution
+        rref_mat, pivots = aug.rref()
+        # The particular solution: set free variables to 0
+        # Extract from the RREF of the augmented matrix
+        particular = []
+        for j in range(n_cols):
+            particular.append(
+                rational_function_from_sympy(sympy.Integer(0), variables)
+            )
+
+        for i, pivot_col in enumerate(pivots):
+            if pivot_col < n_cols:
+                particular[pivot_col] = rational_function_from_sympy(
+                    rref_mat[i, n_cols], variables
+                )
+
+        return (
+            "NON_UNIQUE",
+            None,
+            tuple(particular),
+            nullspace_basis if nullspace_basis else None,
+        )
+    except Exception:
+        pass
+
+    return "INCONSISTENT", None, None, None

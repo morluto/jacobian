@@ -342,8 +342,8 @@ def compute_doubly_stochastic_check(
         if first_neg is not None:
             break
 
-    row_sums = [sum(mat[i]) for i in range(n)]
-    col_sums = [sum(mat[i][j] for i in range(n)) for j in range(n)]
+    row_sums = [sum(mat[i], Fraction(0)) for i in range(n)]
+    col_sums = [sum((mat[i][j] for i in range(n)), Fraction(0)) for j in range(n)]
 
     first_bad_row = next((i for i in range(n) if row_sums[i] != 1), None)
     first_bad_col = next((j for j in range(n) if col_sums[j] != 1), None)
@@ -416,7 +416,7 @@ def compute_birkhoff_decomposition(  # noqa: C901
             )
         )
 
-    weights_sum = sum(t.weight.as_fraction() for t in terms)
+    weights_sum = sum((t.weight.as_fraction() for t in terms), Fraction(0))
 
     return BirkhoffDecompositionResult(
         terms=tuple(terms),

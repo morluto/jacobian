@@ -439,3 +439,13 @@ def test_request_schema_publishes_polynomial_admission_limits() -> None:
     assert "degree at most 12" in description
     assert "128" in description
     assert "1,024" in description
+
+
+def test_queried_polynomial_total_degree_budget_enforced() -> None:
+    # x^12*y^12 keeps every exponent at 12 while its total degree is 24;
+    # the advertised work domain bounds total degree, so it is rejected.
+    with pytest.raises(ValidationError, match="total-degree"):
+        IdealMembershipRequest(
+            ideal=_ideal_xy(),
+            polynomial=_poly(("x", "y"), {(12, 12): 1}),
+        )

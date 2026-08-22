@@ -376,6 +376,14 @@ def _validate_membership_source(
         maximum_coefficient_digits=128,
         label="polynomial",
     )
+    # The advertised work domain bounds per-term total degree, not just
+    # each individual exponent.
+    for term in polynomial.polynomial.terms:
+        if sum(term.exponents) > _IDEAL_GENERATOR_TOTAL_DEGREE:
+            raise ValueError(
+                "polynomial degree exceeds the "
+                f"{_IDEAL_GENERATOR_TOTAL_DEGREE}-total-degree operation budget"
+            )
 
 
 def _validate_retained_basis(

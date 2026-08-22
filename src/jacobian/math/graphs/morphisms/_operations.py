@@ -5,12 +5,16 @@ from __future__ import annotations
 from jacobian.math.graphs.morphisms._models import (
     CoreCheckRequest,
     CoreCheckResult,
+    FixedLengthCycleRequest,
+    FixedLengthCycleResult,
     HomomorphismCheckRequest,
     HomomorphismCheckResult,
     HomomorphismFindRequest,
     HomomorphismFindResult,
     RetractionCheckRequest,
     RetractionCheckResult,
+    SubgraphPatternFindRequest,
+    SubgraphPatternFindResult,
 )
 
 
@@ -172,3 +176,162 @@ def compute_retraction_check(
 
     found = backtrack(0)
     return RetractionCheckResult(is_retraction=found)
+
+
+def _canonical_label_adjacency(
+    vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
+) -> tuple[dict[str, int], list[set[int]]]:
+    """Map labels to indices and build integer adjacency for search."""
+    index = {label: i for i, label in enumerate(vertices)}
+    n = len(vertices)
+    adj: list[set[int]] = [set() for _ in range(n)]
+    for u_label, v_label in edges:
+        u = index[u_label]
+        v = index[v_label]
+        adj[u].add(v)
+        adj[v].add(u)
+    return index, adj
+
+
+def compute_fixed_length_cycle(
+    request: FixedLengthCycleRequest,
+) -> FixedLengthCycleResult:
+    """Decide whether ``graph`` contains a simple cycle of length ``length``.
+
+    Returns ``EXISTS`` with one ordered cycle witness (a sequence of vertex
+    labels whose consecutive vertices and the last-to-first vertex are edges)
+    or ``DOES_NOT_EXIST`` after exhaustive bounded search.  The witness cycle is
+    a subgraph and may have chords; this is distinct from girth (shortest
+    cycle) and from Hamiltonicity (spanning).
+    """
+    graph = request.graph
+    k = request.length
+    vertices = graph.vertices
+    n = len(vertices)
+    _, adj = _canonical_label_adjacency(vertices, graph.edges)
+
+    # To avoid reporting rotations, fix the smallest vertex of the cycle as the
+    # start and restrict every other vertex to be strictly larger than the
+    # start; within that, the path may visit any eligible larger neighbor.  The
+    # closing edge from the last vertex back to the start completes the cycle.
+    path: list[int] = []
+
+    def dfs(start: int, last: int) -> bool:
+        if len(path) == k:
+            return start in adj[last]
+        for nxt in range(start + 1, n):
+            if nxt not in adj[last] or nxt in path:
+                continue
+            path.append(nxt)
+            if dfs(start, nxt):
+                return True
+            path.pop()
+        return False
+
+    for start in range(n):
+        path = [start]
+        if dfs(start, start):
+            cycle_labels = tuple(vertices[i] for i in path)
+            return FixedLengthCycleResult(
+                graph=graph,
+                decision="EXISTS",
+                length=k,
+                cycle=cycle_labels,
+            )
+    return FixedLengthCycleResult(
+        graph=graph,
+        decision="DOES_NOT_EXIST",
+        length=k,
+        cycle=(),
+    )
+
+
+def compute_subgraph_pattern_find(  # noqa: C901
+    request: SubgraphPatternFindRequest,
+) -> SubgraphPatternFindResult:
+    """Find an injective edge-preserving embedding of ``pattern`` in ``host``.
+
+    Ordinary (non-induced) subgraph containment: an injective map from pattern
+    vertices to host vertices such that every pattern edge maps to a host edge.
+    Returns ``EXISTS`` with one witness vertex map (ordered by pattern vertex
+    order) or ``DOES_NOT_EXIST`` after exhaustive bounded search.
+    """
+    pattern = request.pattern
+    host = request.host
+    # Build host adjacency as set of unordered label pairs for fast check.
+    host_edge_set: set[tuple[str, str]] = set()
+    for u, v in host.edges:
+        host_edge_set.add((u, v) if u < v else (v, u))
+    host_vertices = host.vertices
+    pattern_vertices = pattern.vertices
+    p_n = len(pattern_vertices)
+    h_n = len(host_vertices)
+    # Map pattern vertex label -> degree for ordering.
+    pattern_degree: dict[str, int] = dict.fromkeys(pattern_vertices, 0)
+    for u, v in pattern.edges:
+        pattern_degree[u] += 1
+        pattern_degree[v] += 1
+    pattern_order = sorted(
+        range(p_n), key=lambda i: -pattern_degree[pattern_vertices[i]]
+    )
+    # Pattern edges as pairs of indices in pattern vertex order.
+    pattern_edge_idx = tuple(
+        (pattern_vertices.index(u), pattern_vertices.index(v)) for u, v in pattern.edges
+    )
+    vertex_map_idx: list[int] = [-1] * p_n  # pattern idx -> host idx
+    used_host_idx: set[int] = set()
+    # Pattern adjacency for quick neighbor checks.
+    pattern_adj: list[list[int]] = [[] for _ in range(p_n)]
+    for u_idx, v_idx in pattern_edge_idx:
+        pattern_adj[u_idx].append(v_idx)
+        pattern_adj[v_idx].append(u_idx)
+
+    def _edge_ok(candidate_label: str, p_idx: int) -> bool:
+        for nbr in pattern_adj[p_idx]:
+            mapped = vertex_map_idx[nbr]
+            if mapped == -1:
+                continue
+            other_label = host_vertices[mapped]
+            key = (
+                (candidate_label, other_label)
+                if candidate_label < other_label
+                else (other_label, candidate_label)
+            )
+            if key not in host_edge_set:
+                return False
+        return True
+
+    def backtrack(pos: int) -> bool:
+        if pos == p_n:
+            return True
+        p_idx = pattern_order[pos]
+        for h_idx in range(h_n):
+            if h_idx in used_host_idx:
+                continue
+            candidate_label = host_vertices[h_idx]
+            if not _edge_ok(candidate_label, p_idx):
+                continue
+            vertex_map_idx[p_idx] = h_idx
+            used_host_idx.add(h_idx)
+            if backtrack(pos + 1):
+                return True
+            used_host_idx.discard(h_idx)
+            vertex_map_idx[p_idx] = -1
+        return False
+
+    found = backtrack(0)
+    if found:
+        # Convert index map to host labels ordered by pattern vertex order.
+        vertex_map_labels = tuple(host_vertices[vertex_map_idx[i]] for i in range(p_n))
+        return SubgraphPatternFindResult(
+            pattern=pattern,
+            host=host,
+            decision="EXISTS",
+            vertex_map=vertex_map_labels,
+        )
+    return SubgraphPatternFindResult(
+        pattern=pattern,
+        host=host,
+        decision="DOES_NOT_EXIST",
+        vertex_map=(),
+    )

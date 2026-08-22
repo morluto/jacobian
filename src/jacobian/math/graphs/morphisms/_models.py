@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_VERTICES = 64
 MAX_EDGES = 512
@@ -116,3 +117,242 @@ class CoreCheckResult(StrictModel):
 class RetractionCheckResult(StrictModel):
     is_retraction: bool
     method: str = "HOMOMORPHISM_CHECK"
+
+
+# ---------------------------------------------------------------------------
+# Fixed-length cycle decision
+# ---------------------------------------------------------------------------
+
+# Worst-case DFS work for a k-cycle is bounded by the number of simple
+# directed paths of length k-1, at most n*(d_max)^(k-1) where d_max is the
+# maximum degree.  This product budget couples graph size with the requested
+# length so every accepted request terminates inside a tested bound.
+MAX_CYCLE_SEARCH_PATHS = 10_000_000
+
+
+def _canonical_max_degree(graph: SimpleUndirectedGraph) -> int:
+    degree: dict[str, int] = dict.fromkeys(graph.vertices, 0)
+    for u, v in graph.edges:
+        degree[u] += 1
+        degree[v] += 1
+    return max(degree.values(), default=0)
+
+
+class FixedLengthCycleRequest(StrictModel):
+    """Decide whether a simple graph contains a simple cycle of length ``k``."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Decide whether the canonical simple graph contains a simple "
+                "cycle of length `length` (3..20). The request is rejected when "
+                "the worst-case exhaustive search would exceed the work budget. "
+                "Accepts the domain-owned `SimpleUndirectedGraph` so callers can "
+                "compose the output of `explicit_graph` or `compose_graphs` "
+                "directly."
+            )
+        },
+    )
+
+    graph: SimpleUndirectedGraph = Field(
+        description=(
+            "Canonical simple undirected graph. The operation is bounded to "
+            "at most 20 vertices; larger graphs are rejected."
+        )
+    )
+    length: int = Field(ge=3, le=MORPHISM_MAX_VERTICES)
+
+    @model_validator(mode="after")
+    def require_length_within_graph(self) -> Self:
+        n = len(self.graph.vertices)
+        if n > MORPHISM_MAX_VERTICES:
+            raise ValueError(
+                f"graph must have at most {MORPHISM_MAX_VERTICES} vertices"
+            )
+        if self.length > n:
+            raise ValueError("cycle length must not exceed the vertex count")
+        # Conservative worst-case path-count bound: n * d^(length-1).
+        d_max = _canonical_max_degree(self.graph)
+        work = n * (d_max ** (self.length - 1))
+        if work > MAX_CYCLE_SEARCH_PATHS:
+            raise ValueError(
+                "fixed-length cycle search exceeds the "
+                f"{MAX_CYCLE_SEARCH_PATHS}-path worst-case budget"
+            )
+        return self
+
+
+class FixedLengthCycleResult(StrictModel):
+    """Whether a simple ``k``-cycle exists, with one ordered witness.
+
+    The result retains its source graph so validation can replay the witness
+    vertices and closing edges against it. The witness vertices are canonical
+    string labels from the source graph.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Cycle-existence decision bound to the source canonical graph; "
+                "an EXISTS witness lists `length` distinct graph vertices "
+                "(string labels) whose consecutive pairs (and the closing pair) "
+                "are graph edges."
+            )
+        },
+    )
+
+    graph: SimpleUndirectedGraph
+    decision: Literal["EXISTS", "DOES_NOT_EXIST"]
+    length: int = Field(ge=3)
+    cycle: tuple[str, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_consistent_witness(self) -> Self:  # noqa: C901
+        n = len(self.graph.vertices)
+        if n > 256 or len(self.graph.edges) > 32640:
+            raise ValueError("source graph exceeds the canonical bounds")
+        vertex_set = set(self.graph.vertices)
+        # Normalise edges to unordered canonical pairs of labels.
+        edge_set = set()
+        for u, v in self.graph.edges:
+            # SimpleUndirectedGraph already guarantees u < v and membership,
+            # but re-validate for forged results.
+            if u not in vertex_set or v not in vertex_set:
+                raise ValueError("edge vertices must be declared")
+            edge_set.add((u, v) if u < v else (v, u))
+        if self.decision == "EXISTS":
+            if len(self.cycle) != self.length:
+                raise ValueError("an EXISTS witness must list exactly length vertices")
+            if len(set(self.cycle)) != self.length:
+                raise ValueError("a simple cycle witness must have distinct vertices")
+            for label in self.cycle:
+                if label not in vertex_set:
+                    raise ValueError("cycle vertex not in source graph")
+            for index in range(self.length):
+                u = self.cycle[index]
+                v = self.cycle[(index + 1) % self.length]
+                key = (u, v) if u < v else (v, u)
+                if key not in edge_set:
+                    raise ValueError("a cycle witness must follow graph edges")
+        else:
+            if self.cycle:
+                raise ValueError("a DOES_NOT_EXIST result must not carry a witness")
+        return self
+
+
+# ---------------------------------------------------------------------------
+# Subgraph-pattern containment (non-induced subgraph monomorphism)
+# ---------------------------------------------------------------------------
+
+
+class SubgraphPatternFindRequest(StrictModel):
+    """Find an injective edge-preserving embedding of ``pattern`` in ``host``.
+
+    The pattern is capped at 20 vertices (``MORPHISM_MAX_VERTICES``), and the
+    request is rejected when the worst-case backtracking work - bounded by the
+    falling factorial of host vertices taken pattern-at-a-time times the
+    edge-choice branching - would exceed the search budget. Both graphs are
+    canonical ``SimpleUndirectedGraph`` values for direct composition.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Find an injective edge-preserving embedding of `pattern` in "
+                "`host`. Both are canonical `SimpleUndirectedGraph` values so "
+                "callers can pass `explicit_graph` output directly. `pattern` "
+                "must have at most 20 vertices; requests whose worst-case "
+                "exhaustive search exceeds the work budget are rejected."
+            )
+        },
+    )
+
+    pattern: SimpleUndirectedGraph = Field(
+        description="Canonical pattern graph with at most 20 vertices."
+    )
+    host: SimpleUndirectedGraph = Field(description="Canonical host graph.")
+
+    @model_validator(mode="after")
+    def require_search_bounded(self) -> Self:
+        if len(self.pattern.vertices) > MORPHISM_MAX_VERTICES:
+            raise ValueError(
+                f"pattern must have at most {MORPHISM_MAX_VERTICES} vertices"
+            )
+        if len(self.pattern.vertices) > len(self.host.vertices):
+            raise ValueError("pattern must not have more vertices than the host")
+        # Conservative worst-case assignment count: P(n, k) injective maps.
+        n = len(self.host.vertices)
+        k = len(self.pattern.vertices)
+        assignments = 1
+        for step in range(k):
+            assignments *= n - step
+            if assignments > MAX_CYCLE_SEARCH_PATHS:
+                raise ValueError(
+                    "subgraph-pattern search exceeds the "
+                    f"{MAX_CYCLE_SEARCH_PATHS}-assignment worst-case budget"
+                )
+        return self
+
+
+class SubgraphPatternFindResult(StrictModel):
+    """Whether a non-induced subgraph embedding exists, with one witness map.
+
+    The result retains both source graphs so validation can replay map
+    length, host bounds, injectivity, and exact edge preservation. The
+    witness is ordered by the pattern's vertex order and contains host
+    vertex labels.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Embedding decision bound to its pattern and host canonical "
+                "graphs; an EXISTS vertex_map is an injective, edge-preserving "
+                "map from pattern vertices (in pattern vertex order) into host "
+                "vertex labels."
+            )
+        },
+    )
+
+    pattern: SimpleUndirectedGraph
+    host: SimpleUndirectedGraph
+    decision: Literal["EXISTS", "DOES_NOT_EXIST"]
+    vertex_map: tuple[str, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_consistent_witness(self) -> Self:
+        if self.decision == "EXISTS":
+            if len(self.vertex_map) != len(self.pattern.vertices):
+                raise ValueError(
+                    "an EXISTS result must map every pattern vertex exactly once"
+                )
+            if len(set(self.vertex_map)) != len(self.vertex_map):
+                raise ValueError("a subgraph embedding must be injective")
+            host_set = set(self.host.vertices)
+            if any(v not in host_set for v in self.vertex_map):
+                raise ValueError("vertex_map entries must be valid host vertices")
+            # Host edges as unordered label pairs.
+            host_edges = set()
+            for u, v in self.host.edges:
+                host_edges.add((u, v) if u < v else (v, u))
+            # Pattern edges need mapping: pattern vertex order -> host label.
+            # Build index map from pattern label -> position, then vertex_map gives host label per position.
+            for u_label, v_label in self.pattern.edges:
+                try:
+                    u_idx = self.pattern.vertices.index(u_label)
+                    v_idx = self.pattern.vertices.index(v_label)
+                except ValueError:
+                    raise ValueError("pattern edge vertices must be declared") from None
+                mapped_u = self.vertex_map[u_idx]
+                mapped_v = self.vertex_map[v_idx]
+                key = (
+                    (mapped_u, mapped_v)
+                    if mapped_u < mapped_v
+                    else (mapped_v, mapped_u)
+                )
+                if key not in host_edges:
+                    raise ValueError("an embedding must preserve every pattern edge")
+        else:
+            if self.vertex_map:
+                raise ValueError("a DOES_NOT_EXIST result must not carry a vertex map")
+        return self

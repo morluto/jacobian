@@ -205,7 +205,6 @@ class ChristoffelDarbouxRequest(StrictModel):
         _validate_alpha_beta(self.alpha, self.beta)
         require_bounded_rational(self.x, max_digits=MAX_RATIONAL_DIGITS, label="x")
         require_bounded_rational(self.y, max_digits=MAX_RATIONAL_DIGITS, label="y")
-        return self
 
         # Christoffel-Darboux output growth: each monic recurrence step
         # p_{k+1}(t) = (t - alpha_k) p_k(t) - beta_k p_{k-1}(t) raises the
@@ -230,6 +229,7 @@ class ChristoffelDarbouxRequest(StrictModel):
                 "Christoffel-Darboux coefficients exceed the conservative "
                 "combined order-and-height bound for an exact kernel"
             )
+        return self
 
 
 class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):

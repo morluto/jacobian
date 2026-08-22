@@ -418,7 +418,9 @@ def _solution_component_growth_bound(
     return terms_bound, exponent_bound, digits_bound
 
 
-def _require_linear_system_solution_budget(request) -> None:
+def _require_linear_system_solution_budget(
+    request: SymbolicLinearSystemRequest,
+) -> None:
     """Admit only systems whose derived solutions fit the result type.
 
     Runs at request admission so no accepted request can fail inside the

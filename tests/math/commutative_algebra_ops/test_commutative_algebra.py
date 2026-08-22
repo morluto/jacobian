@@ -495,7 +495,25 @@ class TestSaturationRequestGrammar:
 
 
 class TestSaturationContainment:
-    def test_computed_claim_must_contain_source_ideal(self, monkeypatch) -> None:
+    @staticmethod
+    def _computed_backend(monkeypatch, claimed_ideal) -> None:
+        """Stub the bounded Singular flow so the operation contract is
+        tested hermetically, independent of a local Singular install."""
+        from jacobian.math.commutative_algebra_ops import _operations as ops
+
+        class _FakeBackend:
+            outcome = "COMPUTED"
+            ideal = claimed_ideal
+            backend_version = "4.4"
+            detail = None
+
+        monkeypatch.setattr(
+            ops,
+            "run_singular_ideal_operation",
+            lambda *args, **kwargs: _FakeBackend(),
+        )
+
+    def test_refuted_claim_is_never_reported(self, monkeypatch) -> None:
         """A COMPUTED backend claim violating the defining equality fails
         verification inside the operation's bounded Singular flow."""
         from jacobian.math.commutative_algebra_ops import _operations as ops
@@ -508,20 +526,101 @@ class TestSaturationContainment:
             variables=("x", "y"),
             generators=(_polynomial(("x", "y"), {(0, 2): 1}),),  # (y^2)
         )
-
-        class _FakeBackend:
-            outcome = "COMPUTED"
-            ideal = bogus
-            backend_version = "4.4"
-            detail = None
-
+        self._computed_backend(monkeypatch, bogus)
         monkeypatch.setattr(
             ops,
-            "run_singular_ideal_operation",
-            lambda *args, **kwargs: _FakeBackend(),
+            "run_singular_saturation_verification",
+            lambda *args, **kwargs: "REFUTED",
         )
         request = IdealSaturationRequest(
             ideal=_ideal(("x", "y"), {(1, 0): 1}),  # (x)
+            saturation_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
+        )
+        with pytest.raises(ValueError, match="differs"):
+            ops.compute_ideal_saturation(request)
+
+    def test_verified_claim_is_reported(self, monkeypatch) -> None:
+        """A verified COMPUTED claim is reported with its backend version."""
+        from jacobian.math.commutative_algebra_ops import _operations as ops
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationRequest,
+        )
+
+        source = _ideal(("x", "y"), {(1, 0): 1})  # (x)
+        self._computed_backend(monkeypatch, source)
+        monkeypatch.setattr(
+            ops,
+            "run_singular_saturation_verification",
+            lambda *args, **kwargs: "VERIFIED",
+        )
+        request = IdealSaturationRequest(
+            ideal=source,
+            saturation_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
+        )
+        result = ops.compute_ideal_saturation(request)
+        assert result.outcome == "COMPUTED"
+        assert result.saturation == source
+        assert result.backend_version == "4.4"
+
+    def test_unverifiable_computation_is_fail_closed(self, monkeypatch) -> None:
+        """When the bounded backend cannot decide the defining equality
+        (e.g. no Singular install), the operation must not report COMPUTED."""
+        from jacobian.math.commutative_algebra_ops import _operations as ops
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationRequest,
+        )
+
+        self._computed_backend(monkeypatch, _ideal(("x", "y"), {(1, 0): 1}))
+        monkeypatch.setattr(
+            ops,
+            "run_singular_saturation_verification",
+            lambda *args, **kwargs: "UNAVAILABLE",
+        )
+        request = IdealSaturationRequest(
+            ideal=_ideal(("x", "y"), {(1, 0): 1}),  # (x)
+            saturation_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
+        )
+        result = ops.compute_ideal_saturation(request)
+        assert result.outcome == "UNAVAILABLE"
+        assert result.saturation is None
+
+    @requires_singular
+    @pytest.mark.requires_backend("singular")
+    def test_bounded_verification_accepts_the_true_saturation(self) -> None:
+        """The real bounded verification accepts the backend's exact
+        saturation of (x, y^2) by x, which equals (x, y^2) : x^inf = (y^2)."""
+        from jacobian.math.commutative_algebra_ops._operations import (
+            compute_ideal_saturation,
+        )
+
+        source = _ideal(("x", "y"), {(1, 1): 1}, {(0, 2): 1})  # (xy, y^2)
+        request = IdealSaturationRequest(
+            ideal=source,
+            saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),  # x
+        )
+        result = compute_ideal_saturation(request)
+        assert result.outcome == "COMPUTED"
+        assert result.saturation is not None
+        assert _equal(result.saturation, _ideal(("x", "y"), {(0, 1): 1}))  # (y)
+
+    def test_refuted_claim_is_decided_by_the_real_backend(self, monkeypatch) -> None:
+        """With the real bounded verification in place, a corrupted COMPUTED
+        claim is refused; skipped only where Singular is unavailable."""
+        if shutil.which("Singular") is None:
+            pytest.skip("Singular 4.4 backend is not installed")
+        from jacobian.math.commutative_algebra_ops import _operations as ops
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationRequest,
+        )
+        from jacobian.math.polynomials.values import RationalPolynomialIdeal
+
+        bogus = RationalPolynomialIdeal(
+            variables=("x", "y"),
+            generators=(_polynomial(("x", "y"), {(0, 2): 1}),),  # (y^2)
+        )
+        self._computed_backend(monkeypatch, bogus)
+        request = IdealSaturationRequest(
+            ideal=_ideal(("x", "y"), {(1, 0): 1}),  # (x), true saturation (x)
             saturation_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
         )
         with pytest.raises(ValueError, match="differs"):

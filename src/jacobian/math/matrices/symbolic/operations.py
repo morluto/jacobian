@@ -7,7 +7,7 @@ terms; this module never parses caller text.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
@@ -15,7 +15,14 @@ from jacobian.math.polynomials._conversions import (
 )
 from jacobian.math.polynomials.values import RationalFunction
 
-__all__ = ["symbolic_determinant", "symbolic_linear_system_solve", "symbolic_rank"]
+SystemClassification = Literal["UNIQUE", "NON_UNIQUE", "INCONSISTENT"]
+
+__all__ = [
+    "SystemClassification",
+    "symbolic_determinant",
+    "symbolic_linear_system_solve",
+    "symbolic_rank",
+]
 
 
 def _matrix_from_values(
@@ -97,7 +104,7 @@ def symbolic_linear_system_solve(
     rhs: tuple[RationalFunction, ...],
     variables: tuple[str, ...],
 ) -> tuple[
-    str,
+    SystemClassification,
     tuple[RationalFunction, ...] | None,
     tuple[RationalFunction, ...] | None,
     tuple[tuple[RationalFunction, ...], ...] | None,
@@ -128,47 +135,44 @@ def symbolic_linear_system_solve(
         # column rank and consistency already established, every coefficient
         # column is a pivot row and the augmented entry is the solution.
         rref_mat, pivots = aug.rref()
-        entries = [None] * n_cols
+        solution: dict[int, RationalFunction] = {}
         for i, pivot_col in enumerate(pivots):
             if pivot_col < n_cols:
-                entries[pivot_col] = rational_function_from_sympy(
+                solution[pivot_col] = rational_function_from_sympy(
                     rref_mat[i, n_cols], variables
                 )
-        if any(entry is None for entry in entries):
+        if len(solution) != n_cols:
             raise ValueError(
                 "exact row reduction did not determine the unique solution"
             )
-        return "UNIQUE", tuple(entries), None, None
+        return "UNIQUE", tuple(solution[j] for j in range(n_cols)), None, None
 
     # Non-unique consistent system
-    if True:
-        null = matrix.nullspace()
-        nullspace_basis: tuple[tuple[RationalFunction, ...], ...] = tuple(
-            tuple(
-                rational_function_from_sympy(vec[i], variables) for i in range(n_cols)
+    null = matrix.nullspace()
+    nullspace_basis: tuple[tuple[RationalFunction, ...], ...] = tuple(
+        tuple(rational_function_from_sympy(vec[i], variables) for i in range(n_cols))
+        for vec in null
+    )
+
+    # Find a particular solution using the pseudo-inverse approach
+    # or least squares.  For now, use sympy's linear solve.
+    # Use the augmented matrix rref to find a particular solution
+    rref_mat, pivots = aug.rref()
+    # The particular solution: set free variables to 0
+    # Extract from the RREF of the augmented matrix
+    particular = []
+    for _j in range(n_cols):
+        particular.append(rational_function_from_sympy(sympy.Integer(0), variables))
+
+    for i, pivot_col in enumerate(pivots):
+        if pivot_col < n_cols:
+            particular[pivot_col] = rational_function_from_sympy(
+                rref_mat[i, n_cols], variables
             )
-            for vec in null
-        )
 
-        # Find a particular solution using the pseudo-inverse approach
-        # or least squares.  For now, use sympy's linear solve.
-        # Use the augmented matrix rref to find a particular solution
-        rref_mat, pivots = aug.rref()
-        # The particular solution: set free variables to 0
-        # Extract from the RREF of the augmented matrix
-        particular = []
-        for _j in range(n_cols):
-            particular.append(rational_function_from_sympy(sympy.Integer(0), variables))
-
-        for i, pivot_col in enumerate(pivots):
-            if pivot_col < n_cols:
-                particular[pivot_col] = rational_function_from_sympy(
-                    rref_mat[i, n_cols], variables
-                )
-
-        return (
-            "NON_UNIQUE",
-            None,
-            tuple(particular),
-            nullspace_basis if nullspace_basis else None,
-        )
+    return (
+        "NON_UNIQUE",
+        None,
+        tuple(particular),
+        nullspace_basis if nullspace_basis else None,
+    )

@@ -250,6 +250,41 @@ class TestSolutionGrowthAdmission:
         with pytest.raises(ValidationError, match="coefficient"):
             SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
 
+    def test_rank_deficient_particular_solution_is_bounded_by_small_minor(self):
+        """The reviewer's rank-deficient shape with representable sizes:
+        [[1/N, 0], [0, 0]] x = [N, 0] has the exact particular solution
+        x_0 = N^2 driven by a size-1 minor while every work-size (size-2)
+        augmented minor is structurally zero; a small N is admitted and
+        solved exactly."""
+
+        def rf(num: int, den: int) -> RationalFunction:
+            terms = (
+                [{"coefficient": {"num": str(num), "den": str(den)}, "exponents": [0]}]
+                if num != 0
+                else []
+            )
+            return RationalFunction.model_validate(
+                {
+                    "variables": ["t"],
+                    "numerator": {"terms": terms},
+                    "denominator": {
+                        "terms": [
+                            {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
+                        ]
+                    },
+                }
+            )
+
+        n = 3
+        matrix = _matrix(("t",), ((rf(1, n), rf(0, 1)), (rf(0, 1), rf(0, 1))))
+        rhs = (rf(n, 1), rf(0, 1))
+        request = SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
+        result = compute_symbolic_linear_system(request)
+        assert result.classification == "NON_UNIQUE"
+        assert result.particular_solution is not None
+        assert result.particular_solution[0] == rf(n**2, 1)
+        assert result.nullspace_basis is not None
+
 
 class TestSourceBoundResult:
     """The retained result must be verifiable against its source system."""

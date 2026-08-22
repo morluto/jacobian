@@ -4,7 +4,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.prime_field_matrix._models import (
+    PrimeFieldMatrixRankResult,
     PrimeFieldMatrixRequest,
+    PrimeFieldNullspaceResult,
+    PrimeFieldRrefResult,
 )
 from jacobian.math.prime_field_matrix._operations import (
     compute_nullspace,
@@ -240,3 +243,60 @@ class TestRequestValidation:
         """Entries >= prime are not canonical."""
         with pytest.raises(ValidationError):
             PrimeFieldMatrixRequest(prime=2, entries=((2, 0), (0, 1)))
+
+
+class TestResultReplay:
+    """Serialized results must revalidate only when they match the source."""
+
+    def test_forged_rank_rejected(self):
+        request = PrimeFieldMatrixRequest(prime=2, entries=((1, 0), (0, 1)))
+        with pytest.raises(ValidationError, match="recomputation"):
+            PrimeFieldMatrixRankResult(prime=2, source=request, rank=0)
+
+    def test_forged_rref_rejected(self):
+        request = PrimeFieldMatrixRequest(prime=2, entries=((1, 0), (0, 1)))
+        with pytest.raises(ValidationError, match="recomputation"):
+            PrimeFieldRrefResult(
+                prime=2,
+                source=request,
+                rref=((0, 0), (0, 0)),
+                pivot_columns=(),
+                rank=0,
+            )
+
+    def test_forged_nullspace_rejected(self):
+        request = PrimeFieldMatrixRequest(prime=2, entries=((0, 0),))
+        with pytest.raises(ValidationError, match="recomputation"):
+            PrimeFieldNullspaceResult(prime=2, source=request, nullspace=(), nullity=0)
+
+    def test_prime_mismatch_rejected(self):
+        request = PrimeFieldMatrixRequest(prime=2, entries=((1, 0), (0, 1)))
+        result = compute_rank(request)
+        with pytest.raises(ValidationError, match="prime"):
+            PrimeFieldMatrixRankResult(prime=3, source=result.source, rank=result.rank)
+        rref_result = compute_rref(request)
+        with pytest.raises(ValidationError, match="prime"):
+            PrimeFieldRrefResult(
+                prime=3,
+                source=rref_result.source,
+                rref=rref_result.rref,
+                pivot_columns=rref_result.pivot_columns,
+                rank=rref_result.rank,
+            )
+        ns_result = compute_nullspace(request)
+        with pytest.raises(ValidationError, match="prime"):
+            PrimeFieldNullspaceResult(
+                prime=3,
+                source=ns_result.source,
+                nullspace=ns_result.nullspace,
+                nullity=ns_result.nullity,
+            )
+
+    def test_genuine_results_round_trip(self):
+        request = PrimeFieldMatrixRequest(prime=5, entries=((1, 2, 3), (2, 4, 1)))
+        rank_result = compute_rank(request)
+        assert rank_result.rank == 1
+        rref_result = compute_rref(request)
+        assert rref_result.rank == 1
+        ns_result = compute_nullspace(request)
+        assert len(ns_result.nullspace) == 2

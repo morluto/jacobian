@@ -88,6 +88,76 @@ class TestTensorProduct:
         # Tensor of two points is a point: one group of size 1
         assert result.tensor_basis_sizes == (1,)
 
+    def test_result_requires_canonical_value(self) -> None:
+        """A tensor result without its canonical value cannot validate, and
+        projections that disagree with the retained value are rejected."""
+        from pydantic import ValidationError
+
+        from jacobian.math.chain_complexes.values import TensorProductResult
+
+        with pytest.raises(ValidationError):
+            TensorProductResult(
+                tensor_basis_sizes=(1,), tensor_differential_matrices=()
+            )
+        result = compute_tensor_product(
+            TensorProductRequest(left=_point_complex(), right=_point_complex())
+        )
+        payload = result.model_dump()
+        payload["tensor_basis_sizes"] = (5,)
+        with pytest.raises(ValidationError, match="canonical"):
+            TensorProductResult.model_validate(payload)
+
+
+class TestCanonicalCoefficientSpellings:
+    def test_noncanonical_spellings_rejected(self) -> None:
+        """One rational has one spelling: no leading zeros, reduced
+        fractions, integer denominators spelled as integers."""
+        from pydantic import ValidationError
+
+        for bad in ("01", "2/4", "3/1", "-0", "0/2", "007"):
+            with pytest.raises(ValidationError):
+                ChainComplexValue(
+                    coefficient_field=CoefficientField.RATIONAL,
+                    degree_min=0,
+                    degree_max=1,
+                    basis_sizes=(1, 1),
+                    differential_matrices=(((bad,),),),
+                )
+
+    def test_prime_field_residues_bounded(self) -> None:
+        """GF_p entries are residues in [0, p), canonically spelled."""
+        from pydantic import ValidationError
+
+        for bad in ("7", "-1"):
+            with pytest.raises(ValidationError, match="residue"):
+                ChainComplexValue(
+                    coefficient_field=CoefficientField.PRIME_FIELD,
+                    prime=5,
+                    degree_min=0,
+                    degree_max=1,
+                    basis_sizes=(1, 1),
+                    differential_matrices=(((bad,),),),
+                )
+
+
+class TestAggregateEntryWorkBound:
+    def test_dense_high_height_matrix_rejected(self) -> None:
+        """A dense 32x32 matrix of 500-digit entries is sub-megabyte but
+        exceeds the aggregate digit-work budget coupled to elimination."""
+        from pydantic import ValidationError
+
+        big = tuple(
+            tuple(str(10**500 + r * 33 + c) for c in range(32)) for r in range(32)
+        )
+        with pytest.raises(ValidationError, match="MAX_MATRIX_ENTRY_CHARS"):
+            ChainComplexValue(
+                coefficient_field=CoefficientField.RATIONAL,
+                degree_min=0,
+                degree_max=1,
+                basis_sizes=(32, 32),
+                differential_matrices=(big,),
+            )
+
 
 class TestMappingCone:
     def test_mapping_cone_identity(self) -> None:

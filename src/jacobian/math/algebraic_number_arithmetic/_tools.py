@@ -7,8 +7,9 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.algebraic_number_arithmetic._models import (
-    AlgebraicArithmeticRequest,
+    AlgebraicAdditionRequest,
     AlgebraicArithmeticResult,
+    AlgebraicMultiplicationRequest,
 )
 from jacobian.math.algebraic_number_arithmetic._operations import (
     compute_algebraic_add,
@@ -54,8 +55,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Add two elements of Q(sqrt(d))",
         "Compute the exact sum of two elements in the quadratic "
         "number field Q(sqrt(d)). Each element is represented as "
-        "a + b*sqrt(d) with rational coefficients a and b.",
-        AlgebraicArithmeticRequest,
+        "a + b*sqrt(d) with rational coefficients a and b. Both "
+        "operands must use the same square-free radicand d, and the "
+        "component-wise sum must fit within the 256-digit canonical "
+        "rational bound; requests whose sum would exceed that bound "
+        "are rejected.",
+        AlgebraicAdditionRequest,
         AlgebraicArithmeticResult,
         compute_algebraic_add,
         "algebraic-number",
@@ -64,7 +69,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "add_sqrt2",
-                "Compute (1 + sqrt(2)) + (3 + 2*sqrt(2)) in Q(sqrt(2)).",
+                "Compute (1 + sqrt(2)) + (3 + 2*sqrt(2)) in Q(sqrt(2)). "
+                "Both operands must share one square-free radicand, and "
+                "the component-wise sum must stay within the 256-digit "
+                "canonical rational bound.",
                 {
                     "left": _element(1, 1, 2),
                     "right": _element(3, 2, 2),
@@ -77,8 +85,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Multiply two elements of Q(sqrt(d))",
         "Compute the exact product of two elements in the quadratic "
         "number field Q(sqrt(d)). Each element is represented as "
-        "a + b*sqrt(d) with rational coefficients a and b.",
-        AlgebraicArithmeticRequest,
+        "a + b*sqrt(d) with rational coefficients a and b. Both "
+        "operands must use the same square-free radicand d, and the "
+        "exact product components (ac + b*e*d and a*e + b*c) must fit "
+        "within the 256-digit canonical rational bound; requests whose "
+        "product would exceed that bound are rejected.",
+        AlgebraicMultiplicationRequest,
         AlgebraicArithmeticResult,
         compute_algebraic_multiply,
         "algebraic-number",
@@ -87,7 +99,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "multiply_sqrt2",
-                "Compute (1 + sqrt(2)) * (1 - sqrt(2)) = -1 in Q(sqrt(2)).",
+                "Compute (1 + sqrt(2)) * (1 - sqrt(2)) = -1 in Q(sqrt(2)). "
+                "Both operands must share one square-free radicand, and "
+                "the exact product components must stay within the "
+                "256-digit canonical rational bound.",
                 {
                     "left": _element(1, 1, 2),
                     "right": _element(1, -1, 2),

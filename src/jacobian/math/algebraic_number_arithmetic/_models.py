@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.real_quadratic import RealQuadraticValue
 
@@ -15,12 +17,45 @@ from jacobian.math.real_quadratic import RealQuadraticValue
 # backwards compatibility (P1).
 QuadraticElement = RealQuadraticValue
 
+_MAX_RESULT_DIGITS = 256
+
+
+def _fits(frac: Fraction) -> bool:
+    """Check one exact rational against the result digit bound."""
+
+    if len(str(abs(frac.numerator))) > _MAX_RESULT_DIGITS or len(
+        str(frac.denominator)
+    ) > _MAX_RESULT_DIGITS:
+        return False
+    try:
+        CanonicalRational.from_fraction(frac)
+    except ValueError:
+        return False
+    return True
+
 
 class AlgebraicArithmeticRequest(StrictModel):
-    """Two elements of Q(sqrt(d)) for an exact binary operation."""
+    """Two elements of Q(sqrt(d)) for an exact binary operation.
 
-    left: RealQuadraticValue
-    right: RealQuadraticValue
+    Both operands must belong to one shared quadratic field: their
+    radicands must be equal (and square-free, as ``RealQuadraticValue``
+    already enforces).  Each concrete operation narrows admission further
+    so that its own exact result fits the 256-digit canonical rational
+    bound.
+    """
+
+    left: RealQuadraticValue = Field(
+        description=(
+            "Operand a + b*sqrt(d).  Its radicand d must be square-free "
+            "and must match the other operand's radicand exactly."
+        ),
+    )
+    right: RealQuadraticValue = Field(
+        description=(
+            "Operand a + b*sqrt(d) in the same field as ``left``.  Its "
+            "square-free radicand must match ``left``'s radicand exactly."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_same_radicand(self) -> Self:
@@ -28,46 +63,58 @@ class AlgebraicArithmeticRequest(StrictModel):
             raise ValueError("both operands must belong to the same quadratic field")
         return self
 
+
+class AlgebraicAdditionRequest(AlgebraicArithmeticRequest):
+    """Two elements of Q(sqrt(d)) whose component-wise sum is returnable.
+
+    Admission rejects only requests whose own addition result
+    ``(a+c) + (b+e)*sqrt(d)`` would exceed the 256-digit canonical
+    rational bound; multiplication growth is irrelevant here.
+    """
+
     @model_validator(mode="after")
-    def require_result_within_operand_bound(self) -> Self:
-        """Narrow admission so every accepted request's exact result fits the 256-digit contract.
-
-        Both addition and multiplication are closed under this check: the
-        validator computes the exact ``add`` and ``multiply`` results as
-        Fractions and verifies that each rational component survives the
-        canonical 256-digit validator.  This guarantees the operation can
-        return its declared ``AlgebraicArithmeticResult`` (which reuses the
-        same 256-digit bound) without exposing a host ``ValidationError``.
-        """
-        from fractions import Fraction
-
-        from jacobian._exact import CanonicalRational
-
-        def _fits(frac: Fraction) -> bool:
-            # Check digit bound without constructing the full model twice
-            num_digits = len(str(abs(frac.numerator)))
-            den_digits = len(str(frac.denominator))
-            if num_digits > 256 or den_digits > 256:
-                return False
-            # Also ensure canonical reduction would succeed (it will if digits fit)
-            try:
-                CanonicalRational.from_fraction(frac)
-            except ValueError:
-                return False
-            return True
-
-        a, b = self.left.rational_part.as_fraction(), self.left.radical_coefficient.as_fraction()
-        c, e = self.right.rational_part.as_fraction(), self.right.radical_coefficient.as_fraction()
-        d = self.left.radicand
+    def require_addition_result_within_bound(self) -> Self:
+        a, b = (
+            self.left.rational_part.as_fraction(),
+            self.left.radical_coefficient.as_fraction(),
+        )
+        c, e = (
+            self.right.rational_part.as_fraction(),
+            self.right.radical_coefficient.as_fraction(),
+        )
         # Addition: (a+c) + (b+e)*sqrt(d)
         if not _fits(a + c) or not _fits(b + e):
             raise ValueError(
-                "operands would produce an addition result exceeding the 256-digit canonical rational bound"
+                "operands would produce an addition result exceeding the "
+                f"{_MAX_RESULT_DIGITS}-digit canonical rational bound"
             )
+        return self
+
+
+class AlgebraicMultiplicationRequest(AlgebraicArithmeticRequest):
+    """Two elements of Q(sqrt(d)) whose exact product is returnable.
+
+    Admission rejects only requests whose own product
+    ``(ac+bed) + (ae+bc)*sqrt(d)`` would exceed the 256-digit canonical
+    rational bound; addition growth is irrelevant here.
+    """
+
+    @model_validator(mode="after")
+    def require_multiplication_result_within_bound(self) -> Self:
+        a, b = (
+            self.left.rational_part.as_fraction(),
+            self.left.radical_coefficient.as_fraction(),
+        )
+        c, e = (
+            self.right.rational_part.as_fraction(),
+            self.right.radical_coefficient.as_fraction(),
+        )
+        d = self.left.radicand
         # Multiplication: (ac + bed) + (ae + bc)*sqrt(d)
         if not _fits(a * c + b * e * d) or not _fits(a * e + b * c):
             raise ValueError(
-                "operands would produce a multiplication result exceeding the 256-digit canonical rational bound"
+                "operands would produce a multiplication result exceeding the "
+                f"{_MAX_RESULT_DIGITS}-digit canonical rational bound"
             )
         return self
 
@@ -83,7 +130,9 @@ class AlgebraicArithmeticResult(RealQuadraticValue):
 
 
 __all__ = [
+    "AlgebraicAdditionRequest",
     "AlgebraicArithmeticRequest",
     "AlgebraicArithmeticResult",
+    "AlgebraicMultiplicationRequest",
     "QuadraticElement",
 ]

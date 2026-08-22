@@ -6,8 +6,9 @@ from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.algebraic_number_arithmetic._models import (
-    AlgebraicArithmeticRequest,
+    AlgebraicAdditionRequest,
     AlgebraicArithmeticResult,
+    AlgebraicMultiplicationRequest,
 )
 from jacobian.math.real_quadratic import RealQuadraticValue
 
@@ -34,7 +35,7 @@ def _to_fractions(element: RealQuadraticValue) -> tuple[Fraction, Fraction]:
 
 
 def compute_algebraic_add(
-    request: AlgebraicArithmeticRequest,
+    request: AlgebraicAdditionRequest,
 ) -> AlgebraicArithmeticResult:
     """Compute (a + b*sqrt(d)) + (c + e*sqrt(d)) = (a+c) + (b+e)*sqrt(d)."""
 
@@ -44,7 +45,7 @@ def compute_algebraic_add(
 
 
 def compute_algebraic_multiply(
-    request: AlgebraicArithmeticRequest,
+    request: AlgebraicMultiplicationRequest,
 ) -> AlgebraicArithmeticResult:
     """Compute (a + b*sqrt(d)) * (c + e*sqrt(d)) = (ac + b*e*d) + (ae + bc)*sqrt(d)."""
 

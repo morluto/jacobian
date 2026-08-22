@@ -247,7 +247,7 @@ class IdealSaturationRequest(StrictModel):
         )
         if any(
             sum(term.exponents) > MAX_INPUT_EXPONENT
-            for term in self.saturation_polynomial.terms
+            for term in self.saturation_polynomial.polynomial.terms
         ):
             raise ValueError(
                 f"saturation polynomial exceeds total degree {MAX_INPUT_EXPONENT}"

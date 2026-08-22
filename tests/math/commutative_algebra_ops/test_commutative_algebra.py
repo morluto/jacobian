@@ -16,6 +16,7 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealQuotientRequest,
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
+    IdealSaturationRequest,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
@@ -480,3 +481,14 @@ class TestSaturationSourceBinding:
                 saturation=_ideal(("x", "y"), {(1, 0): 1}),
                 backend_version="4.4",
             )
+
+
+class TestSaturationRequestGrammar:
+    def test_saturation_polynomial_terms_read_from_value(self) -> None:
+        """The total-degree check reads terms via .polynomial.terms; a valid
+        request must not crash with AttributeError during validation."""
+        request = IdealSaturationRequest(
+            ideal=_ideal(("x", "y"), {(2, 0): 1}),
+            saturation_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
+        )
+        assert request.saturation_polynomial is not None

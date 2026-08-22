@@ -46,14 +46,23 @@ class PolynomialOutputBudgetError(RuntimeError):
 
 
 def _result_polynomial(poly: object, variables: tuple[str, ...]) -> RationalPolynomial:
+    from pydantic import ValidationError
+
     try:
         return rational_polynomial_from_sympy(
             poly,
             variables,
             maximum_terms=_MAX_OUTPUT_TERMS,
         )
+    except ValidationError as exc:
+        # Exponent cap (32_768), term representation, or canonical-rational
+        # limits during result materialization are budget overflows, not host
+        # exceptions.  Map every such validation failure to the typed outcome.
+        raise PolynomialOutputBudgetError(str(exc)) from exc
     except ValueError as exc:
         if "term operation budget" in str(exc):
+            raise PolynomialOutputBudgetError(str(exc)) from exc
+        if "exponent" in str(exc).lower() or "representation limit" in str(exc).lower():
             raise PolynomialOutputBudgetError(str(exc)) from exc
         raise
 
@@ -251,8 +260,17 @@ def _compute_membership_context(
             )
             for expr in basis.exprs
         )
-    except PolynomialOutputBudgetError:
-        return None, basis
+    except (PolynomialOutputBudgetError, Exception) as exc:
+        # _result_polynomial already maps ValidationError/exponent overflows to
+        # PolynomialOutputBudgetError; any other validation failure during
+        # retained-basis materialization is also a budget overflow.
+        if isinstance(exc, PolynomialOutputBudgetError):
+            return None, basis
+        from pydantic import ValidationError
+
+        if isinstance(exc, ValidationError) or "exponent" in str(exc).lower() or "representation limit" in str(exc).lower():
+            return None, basis
+        raise
     if sum(len(element.polynomial.terms) for element in wire_basis) > 1024:
         return None, basis
     return wire_basis, basis
@@ -281,14 +299,18 @@ def polynomial_ideal_normal_form(
             sympy.Poly(basis.reduce(poly)[1], *symbols, domain=sympy.QQ),
             variables,
         )
-    except PolynomialOutputBudgetError:
-        return IdealNormalFormResult(
-            **source,
-            monomial_order=request.monomial_order,
-            status="BUDGET_EXCEEDED",
-            groebner_basis=wire_basis,
-            remainder=None,
-        )
+    except (PolynomialOutputBudgetError, Exception) as exc:
+        from pydantic import ValidationError
+
+        if isinstance(exc, PolynomialOutputBudgetError) or isinstance(exc, ValidationError) or "exponent" in str(exc).lower() or "representation limit" in str(exc).lower():
+            return IdealNormalFormResult(
+                **source,
+                monomial_order=request.monomial_order,
+                status="BUDGET_EXCEEDED",
+                groebner_basis=wire_basis,
+                remainder=None,
+            )
+        raise
     return IdealNormalFormResult(
         **source,
         monomial_order=request.monomial_order,

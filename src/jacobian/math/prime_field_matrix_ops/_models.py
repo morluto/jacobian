@@ -153,6 +153,7 @@ class RrefRequest(StrictModel):
 class RrefResult(RrefRequest):
     rref_rows: tuple[tuple[int, ...], ...]
     pivot_columns: tuple[int, ...]
+    computed_matrix: PrimeFieldMatrix | None = None
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_RREF"] = "EXACT_DOMAIN_MATRIX_RREF"
 
@@ -162,6 +163,16 @@ class RrefResult(RrefRequest):
             prime=self.prime, entries=self.entries, columns=self.columns
         )
         expected_rows, expected_pivots = rref(matrix)
+        # Canonical value: the computed matrix composes into downstream
+        # prime-field consumers unchanged.
+        if self.computed_matrix is None:
+            self.computed_matrix = PrimeFieldMatrix(
+                prime=self.prime,
+                entries=expected_rows,
+                columns=self.columns,
+            )
+        elif self.computed_matrix.entries != expected_rows:
+            raise ValueError("computed_matrix must be the exact RREF")
         if self.rref_rows != expected_rows:
             raise ValueError("rref_rows must be the exact reduced row-echelon form")
         if self.pivot_columns != expected_pivots:

@@ -6,16 +6,18 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.geometry.exact._models import (
+from jacobian.math.geometry._models import (
     CircumradiusProfileRequest,
     CircumradiusProfileResult,
+)
+from jacobian.math.geometry._operations import circumradius_profile
+from jacobian.math.geometry.exact._models import (
     DistanceGraphRequest,
     DistanceGraphResult,
     DistanceProfileRequest,
     DistanceProfileResult,
 )
 from jacobian.math.geometry.exact._operations import (
-    compute_circumradius_profile,
     compute_distance_graph,
     compute_distance_profile,
 )
@@ -73,30 +75,34 @@ UNIT_SQUARE = {
 
 
 PARABOLA_COLLISION = {
-    "configuration": {
-        "points": [
-            {
-                "label": "t1",
-                "coordinates": [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}],
+    "points": [
+        {
+            "label": "t1",
+            "point": {"x": {"num": "1", "den": "1"}, "y": {"num": "1", "den": "1"}},
+        },
+        {
+            "label": "t2",
+            "point": {"x": {"num": "2", "den": "1"}, "y": {"num": "4", "den": "1"}},
+        },
+        {
+            "label": "t4",
+            "point": {"x": {"num": "4", "den": "1"}, "y": {"num": "16", "den": "1"}},
+        },
+        {
+            "label": "t19",
+            "point": {
+                "x": {"num": "19", "den": "1"},
+                "y": {"num": "361", "den": "1"},
             },
-            {
-                "label": "t2",
-                "coordinates": [{"num": "2", "den": "1"}, {"num": "4", "den": "1"}],
+        },
+        {
+            "label": "t29",
+            "point": {
+                "x": {"num": "29", "den": "1"},
+                "y": {"num": "841", "den": "1"},
             },
-            {
-                "label": "t4",
-                "coordinates": [{"num": "4", "den": "1"}, {"num": "16", "den": "1"}],
-            },
-            {
-                "label": "t19",
-                "coordinates": [{"num": "19", "den": "1"}, {"num": "361", "den": "1"}],
-            },
-            {
-                "label": "t29",
-                "coordinates": [{"num": "29", "den": "1"}, {"num": "841", "den": "1"}],
-            },
-        ]
-    }
+        },
+    ]
 }
 
 EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
@@ -142,14 +148,14 @@ EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "geometry.points.circumradius_profile.compute",
         "Compute circumradius profile of a point configuration",
-        "Given a bounded labelled rational planar point configuration, "
+        "Given a bounded labelled rational planar point configuration with "
+        "at least three points, unique labels, and unique coordinates, "
         "compute the exact squared circumradius of every unordered triple "
-        "with an explicit nondegenerate or degenerate disposition, and group "
-        "triples sharing each radius into a sorted multiplicity profile so "
-        "circumradius collisions are directly inspectable.",
+        "with an explicit collinear or nondegenerate disposition, each "
+        "entry replayed against the retained source configuration.",
         CircumradiusProfileRequest,
         CircumradiusProfileResult,
-        compute_circumradius_profile,
+        circumradius_profile,
         "geometry",
         "circumradius",
         "exact",

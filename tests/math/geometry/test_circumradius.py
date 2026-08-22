@@ -234,3 +234,34 @@ class TestCircumradiusProfileValidation:
                 collinear=False,
                 squared_circumradius=CanonicalRational(num="0", den="1"),
             )
+
+
+class TestCatalogContractParity:
+    def test_parabola_collision(self):
+        from fractions import Fraction
+
+        pts = tuple(
+            _lp(f"t{t}", str(t), "1", str(t * t), "1") for t in (1, 2, 4, 19, 29)
+        )
+        result = circumradius_profile(_request(pts))
+        assert result.point_count == 5
+        assert result.triple_count == 10
+        collision = [
+            entry.indices
+            for entry in result.entries
+            if entry.squared_circumradius is not None
+            and entry.squared_circumradius.as_fraction() == Fraction(2166905)
+        ]
+        assert collision == [(0, 1, 4), (1, 2, 3)]
+
+    def test_collinear_triple_is_degenerate(self):
+        pts = (
+            _lp("a", "0", "1", "0", "1"),
+            _lp("b", "1", "1", "0", "1"),
+            _lp("c", "2", "1", "0", "1"),
+            _lp("d", "0", "1", "1", "1"),
+        )
+        result = circumradius_profile(_request(pts))
+        assert result.triple_count == 4
+        degenerate = [entry.indices for entry in result.entries if entry.collinear]
+        assert degenerate == [(0, 1, 2)]

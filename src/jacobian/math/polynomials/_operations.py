@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import sympy
+
 from jacobian.math import polynomials
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
@@ -12,6 +14,9 @@ from jacobian.math.polynomials._conversions import (
     symbols_for_variables,
 )
 from jacobian.math.polynomials._models import (
+    IdealMembershipRequest,
+    IdealMembershipResult,
+    IdealNormalFormResult,
     PolynomialBezoutIdentity,
     PolynomialDiscriminantRequest,
     PolynomialDiscriminantResult,
@@ -41,14 +46,23 @@ class PolynomialOutputBudgetError(RuntimeError):
 
 
 def _result_polynomial(poly: object, variables: tuple[str, ...]) -> RationalPolynomial:
+    from pydantic import ValidationError
+
     try:
         return rational_polynomial_from_sympy(
             poly,
             variables,
             maximum_terms=_MAX_OUTPUT_TERMS,
         )
+    except ValidationError as exc:
+        # Exponent cap (32_768), term representation, or canonical-rational
+        # limits during result materialization are budget overflows, not host
+        # exceptions.  Map every such validation failure to the typed outcome.
+        raise PolynomialOutputBudgetError(str(exc)) from exc
     except ValueError as exc:
         if "term operation budget" in str(exc):
+            raise PolynomialOutputBudgetError(str(exc)) from exc
+        if "exponent" in str(exc).lower() or "representation limit" in str(exc).lower():
             raise PolynomialOutputBudgetError(str(exc)) from exc
         raise
 
@@ -214,4 +228,119 @@ def polynomial_groebner_basis(
         variables=variables,
         monomial_order=request.monomial_order,
         basis=wire_basis,
+    )
+
+
+def _compute_membership_context(
+    request: IdealMembershipRequest,
+) -> tuple[tuple[RationalPolynomial, ...] | None, Any]:
+    """Compute the Gröbner basis and return its wire form with the SymPy basis.
+
+    The wire basis is ``None`` when the computed basis itself exceeds the
+    1,024-term aggregate output boundary; the caller then reports the typed
+    budget outcome instead of a partial exact artifact.
+    """
+
+    variables = request.ideal.variables
+    symbols = symbols_for_variables(variables)
+    generators = [
+        rational_polynomial_to_sympy(generator).as_expr()
+        for generator in request.ideal.generators
+    ]
+    basis = sympy.groebner(
+        generators,
+        *symbols,
+        order=request.monomial_order,
+        domain=sympy.QQ,
+    )
+    try:
+        wire_basis = tuple(
+            _result_polynomial(
+                sympy.Poly(expr.as_expr(), *symbols, domain=sympy.QQ), variables
+            )
+            for expr in basis.exprs
+        )
+    except (PolynomialOutputBudgetError, Exception) as exc:
+        # _result_polynomial already maps ValidationError/exponent overflows to
+        # PolynomialOutputBudgetError; any other validation failure during
+        # retained-basis materialization is also a budget overflow.
+        if isinstance(exc, PolynomialOutputBudgetError):
+            return None, basis
+        from pydantic import ValidationError
+
+        if isinstance(exc, ValidationError) or "exponent" in str(exc).lower() or "representation limit" in str(exc).lower():
+            return None, basis
+        raise
+    if sum(len(element.polynomial.terms) for element in wire_basis) > 1024:
+        return None, basis
+    return wire_basis, basis
+
+
+def polynomial_ideal_normal_form(
+    request: IdealMembershipRequest,
+) -> IdealNormalFormResult:
+    """Reduce a polynomial modulo an ideal using a Groebner basis."""
+
+    variables = request.ideal.variables
+    symbols = symbols_for_variables(variables)
+    wire_basis, basis = _compute_membership_context(request)
+    source = {"ideal": request.ideal, "polynomial": request.polynomial}
+    if wire_basis is None:
+        return IdealNormalFormResult(
+            **source,
+            monomial_order=request.monomial_order,
+            status="BUDGET_EXCEEDED",
+            groebner_basis=None,
+            remainder=None,
+        )
+    poly = rational_polynomial_to_sympy(request.polynomial).as_expr()
+    try:
+        remainder = _result_polynomial(
+            sympy.Poly(basis.reduce(poly)[1], *symbols, domain=sympy.QQ),
+            variables,
+        )
+    except (PolynomialOutputBudgetError, Exception) as exc:
+        from pydantic import ValidationError
+
+        if isinstance(exc, PolynomialOutputBudgetError) or isinstance(exc, ValidationError) or "exponent" in str(exc).lower() or "representation limit" in str(exc).lower():
+            return IdealNormalFormResult(
+                **source,
+                monomial_order=request.monomial_order,
+                status="BUDGET_EXCEEDED",
+                groebner_basis=wire_basis,
+                remainder=None,
+            )
+        raise
+    return IdealNormalFormResult(
+        **source,
+        monomial_order=request.monomial_order,
+        status="COMPUTED",
+        groebner_basis=wire_basis,
+        remainder=remainder,
+    )
+
+
+def polynomial_ideal_membership(
+    request: IdealMembershipRequest,
+) -> IdealMembershipResult:
+    """Decide whether a polynomial lies in an ideal."""
+
+    normal_form = polynomial_ideal_normal_form(request)
+    source = {
+        "ideal": normal_form.ideal,
+        "polynomial": normal_form.polynomial,
+        "monomial_order": normal_form.monomial_order,
+        "groebner_basis": normal_form.groebner_basis,
+    }
+    if normal_form.status == "BUDGET_EXCEEDED":
+        return IdealMembershipResult(
+            **source,
+            status="BUDGET_EXCEEDED",
+            normal_form=None,
+        )
+    is_zero = len(normal_form.remainder.polynomial.terms) == 0
+    return IdealMembershipResult(
+        **source,
+        status="IN_IDEAL" if is_zero else "NOT_IN_IDEAL",
+        normal_form=normal_form.remainder,
     )

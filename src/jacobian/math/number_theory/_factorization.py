@@ -118,7 +118,9 @@ FACTORIZATION_OPERATIONS = (
         examples=(
             example(
                 "semiprime_10403",
-                "Factor 10403 with subexponential methods and per-factor Pratt certificates.",
+                "Factor 10403 with subexponential methods and per-factor Pratt "
+                "certificates. The input must be a canonical integer of at "
+                "least 2 and at most 30 digits.",
                 {"value": "10403"},
             ),
         ),
@@ -135,7 +137,8 @@ FACTORIZATION_OPERATIONS = (
         examples=(
             example(
                 "pratt_101",
-                "Produce a Pratt certificate for the prime 101.",
+                "Produce a Pratt certificate for the prime 101. The input must "
+                "be a canonical integer of at least 2 and at most 30 digits.",
                 {"value": "101"},
             ),
         ),

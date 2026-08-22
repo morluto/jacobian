@@ -784,6 +784,11 @@ def _verify_pratt_identities(p: int, witness: int, sub_primes: tuple[int, ...]) 
     Checks ``witness^(p-1) ≡ 1 (mod p)``, ``witness^((p-1)/q) ≢ 1 (mod p)``
     for each prime factor ``q`` of ``p - 1``, and that ``sub_primes``
     exactly covers the distinct prime factors of ``p - 1``.
+
+    Completeness is verified by repeatedly dividing ``p - 1`` by the
+    recursively certified ``sub_primes`` and requiring residual ``1``,
+    without invoking a factoring backend.  This keeps validation bounded
+    and makes the Pratt certificate independently replayable.
     """
 
     if pow(witness, p - 1, p) != 1:
@@ -793,10 +798,15 @@ def _verify_pratt_identities(p: int, witness: int, sub_primes: tuple[int, ...]) 
             raise ValueError("sub-certificate prime must divide p-1")
         if pow(witness, (p - 1) // q, p) == 1:
             raise ValueError("Pratt witness fails a^((p-1)/q) ≢ 1 (mod p)")
-    from sympy import factorint
-
-    expected = set(factorint(p - 1).keys())
-    if set(sub_primes) != expected:
+    # Verify completeness without factoring: divide out each certified
+    # prime factor and require that the residual becomes 1.  Duplicate
+    # primes are already rejected by the caller, and each q is a
+    # recursively certified prime (validated before this node).
+    residual = p - 1
+    for q in sub_primes:
+        while residual % q == 0:
+            residual //= q
+    if residual != 1:
         raise ValueError(
             "sub-certificates must exactly cover the distinct prime factors of p-1"
         )

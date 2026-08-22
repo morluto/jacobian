@@ -245,6 +245,13 @@ class IdealSaturationRequest(StrictModel):
             maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
             label="saturation polynomial",
         )
+        if any(
+            sum(term.exponents) > MAX_INPUT_EXPONENT
+            for term in self.saturation_polynomial.terms
+        ):
+            raise ValueError(
+                f"saturation polynomial exceeds total degree {MAX_INPUT_EXPONENT}"
+            )
         if self.saturation_polynomial.variables != self.ideal.variables:
             raise ValueError(
                 "saturation polynomial must use the ideal's ordered ring"

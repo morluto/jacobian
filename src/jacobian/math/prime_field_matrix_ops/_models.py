@@ -14,15 +14,36 @@ from jacobian.math.prime_field_linear_algebra import (
 )
 
 MAX_DIMENSION = 256
+MAX_PRIME = 1000003  # conservative prime modulus bound
+
+def _is_prime(n: int) -> bool:
+    if n < 2:
+        return False
+    if n % 2 == 0:
+        return n == 2
+    d = 3
+    while d * d <= n:
+        if n % d == 0:
+            return False
+        d += 2
+    return True
+
+
+def _require_bounded_prime(prime: int) -> None:
+    if prime > MAX_PRIME:
+        raise ValueError(f"prime {prime} exceeds the bounded modulus {MAX_PRIME} for field arithmetic")
+    if not _is_prime(prime):
+        raise ValueError(f"prime {prime} is not prime")
 
 
 class PrimeFieldMatrixRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
+        _require_bounded_prime(self.prime)
         if len(self.entries) > MAX_DIMENSION:
             raise ValueError("matrix exceeds the supported dimension bound")
         if any(len(row) != self.columns for row in self.entries):
@@ -47,12 +68,13 @@ class _PrimeFieldMatrixValidator:
 
 
 class RankRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
+        _require_bounded_prime(self.prime)
         if len(self.entries) > MAX_DIMENSION:
             raise ValueError("matrix exceeds the supported dimension bound")
         if any(len(row) != self.columns for row in self.entries):
@@ -68,25 +90,41 @@ class RankRequest(StrictModel):
 
 
 class RankResult(StrictModel):
+    prime: int = Field(ge=2, le=MAX_PRIME)
+    entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
+    columns: int = Field(ge=0, le=MAX_DIMENSION)
     rank: int = Field(ge=0)
-    prime: int = Field(ge=2)
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_RANK"] = "EXACT_DOMAIN_MATRIX_RANK"
 
     @model_validator(mode="after")
     def bind_rank(self) -> Self:
+        _require_bounded_prime(self.prime)
         if self.rank > MAX_DIMENSION:
             raise ValueError("rank exceeds the supported dimension bound")
+        if len(self.entries) > MAX_DIMENSION:
+            raise ValueError("matrix exceeds the supported dimension bound")
+        if any(len(row) != self.columns for row in self.entries):
+            raise ValueError("every row must match the declared column count")
+        if any(type(v) is not int or not 0 <= v < self.prime for row in self.entries for v in row):
+            raise ValueError("entries must be canonical prime-field residues")
+        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix, rref
+        mat = PrimeFieldMatrix(prime=self.prime, entries=self.entries, columns=self.columns)
+        _, pivots = rref(mat)
+        expected = len(pivots)
+        if self.rank != expected:
+            raise ValueError(f"rank {self.rank} does not match recomputed rank {expected}")
         return self
 
 
 class RrefRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
+        _require_bounded_prime(self.prime)
         if len(self.entries) > MAX_DIMENSION:
             raise ValueError("matrix exceeds the supported dimension bound")
         if any(len(row) != self.columns for row in self.entries):
@@ -127,12 +165,13 @@ class RrefResult(RrefRequest):
 
 
 class NullspaceRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
+        _require_bounded_prime(self.prime)
         if len(self.entries) > MAX_DIMENSION:
             raise ValueError("matrix exceeds the supported dimension bound")
         if any(len(row) != self.columns for row in self.entries):

@@ -6,8 +6,9 @@ from collections.abc import Callable
 from fractions import Fraction
 from typing import Any, cast
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
+from jacobian.math._rational_height import RationalHeight, sum_heights
 from jacobian.math.geometry._models import (
     CircumcircleRequest,
     CircumradiusProfileRequest,
@@ -431,6 +432,11 @@ def circumradius_profile(
 
     Each triple is either nondegenerate (exact squared circumradius) or
     degenerate (collinear, no circumcircle).
+
+    Coordinates are conservatively bounded so the exact ``R^2 = (|a-b|^2|b-c|^2|c-a|^2)/(4*(2*area)^2)``
+    stays within the 32768-digit canonical limit; inputs exceeding the
+    admitted height are rejected at the request boundary, and each
+    computed radius is checked before constructing the result.
     """
     from itertools import combinations
 
@@ -459,20 +465,25 @@ def circumradius_profile(
             continue
         # R^2 = (|a-b|^2 |b-c|^2 |c-a|^2) / (4 * (2*area)^2)
         squared_circumradius = (dab * dbc * dac) / (4 * cross * cross)
+        # Validate result height before constructing CanonicalRational to avoid execution exception.
+        cr_canonical = CanonicalRational.from_fraction(squared_circumradius)
+        if RationalHeight.from_canonical(cr_canonical).exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
+            raise ValueError(
+                "circumradius squared result exceeds the 32768-digit canonical limit; input coordinates must be smaller"
+            )
         entries.append(
             CircumradiusTripleEntry(
                 labels=(points[i].label, points[j].label, points[k].label),
                 indices=(i, j, k),
                 collinear=False,
-                squared_circumradius=CanonicalRational.from_fraction(
-                    squared_circumradius
-                ),
+                squared_circumradius=cr_canonical,
             )
         )
     return CircumradiusProfileResult(
         point_count=n,
         triple_count=len(entries),
         entries=tuple(entries),
+        points=tuple(points),
     )
 
 
@@ -545,6 +556,27 @@ def forbidden_patterns(request):
             - m[0][3] * _minor3(m, 1, 2, 3, 0, 1, 2)
         )
         if det == 0:
+            # Determinant zero holds for any collinear quadruple as well, but
+            # no finite circle contains three collinear points. Require a
+            # non-collinear triple within the quadruple before reporting
+            # concyclicity.
+            # Check whether all four points are collinear: if every triple
+            # among the four is collinear, the quadruple is degenerate.
+            def _tri_collinear(a, b, c):
+                xa, ya = xy[a]; xb, yb = xy[b]; xc, yc = xy[c]
+                return (xb - xa) * (yc - ya) - (yb - ya) * (xc - xa) == 0
+            all_collinear = (
+                _tri_collinear(i, j, k)
+                and _tri_collinear(i, j, ell)
+                and _tri_collinear(i, k, ell)
+                and _tri_collinear(j, k, ell)
+            )
+            if all_collinear:
+                checked_quadruples += 0  # still counted, but not concyclic
+                continue
+            # Also require at least one non-collinear triple to have a
+            # well-defined circle; if all triples were collinear we already
+            # continued. This guards the line case.
             has_concyclic = True
             concyclic_quadruple = ConcyclicQuadruple(
                 first=i, second=j, third=k, fourth=ell

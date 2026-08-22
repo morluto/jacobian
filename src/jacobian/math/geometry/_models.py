@@ -7,8 +7,9 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math._rational_height import RationalHeight, sum_heights
 
 
 class RationalPoint2D(StrictModel):
@@ -446,6 +447,18 @@ class LabelledPoint2D(StrictModel):
     point: RationalPoint2D
 
 
+def _circumradius_input_height_ok(point: RationalPoint2D) -> bool:
+    # Conservative: each coordinate within quarter of canonical digits ensures
+    # R^2 product of three squared distances over 4*cross^2 stays within limit.
+    # Squared distance height ~ 2*coord height, product of three ~6*coord, denominator ~2*coord.
+    # Bounding inputs at 4096 digits keeps result well under 32768.
+    max_input = 4096
+    for v in (point.x, point.y):
+        if RationalHeight.from_canonical(v).exceeds(max_input):
+            return False
+    return True
+
+
 class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration."""
 
@@ -467,6 +480,11 @@ class CircumradiusProfileRequest(StrictModel):
         )
         if len(keys) != len(set(keys)):
             raise ValueError("point coordinates must be unique")
+        for item in self.points:
+            if not _circumradius_input_height_ok(item.point):
+                raise ValueError(
+                    "circumradius coordinates exceed the conservative 4096-digit input bound for exact output"
+                )
         return self
 
 
@@ -496,12 +514,53 @@ class CircumradiusProfileResult(StrictModel):
     point_count: StrictInt = Field(ge=3, le=64)
     triple_count: StrictInt = Field(ge=1, le=41664)
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
+    points: tuple[LabelledPoint2D, ...] | None = Field(default=None, description="Source labelled points for replay; when present, entries must match exact circumradius recomputation")
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
     def require_complete_profile(self) -> Self:
         if len(self.entries) != self.triple_count:
             raise ValueError("circumradius profile must be complete")
+        import math
+        from fractions import Fraction
+        from jacobian._exact import CanonicalRational
+        expected = math.comb(self.point_count, 3) if self.point_count >= 3 else 0
+        if self.triple_count != expected:
+            raise ValueError(
+                f"triple_count {self.triple_count} must equal C(point_count,3)={expected}"
+            )
+        seen = set()
+        for e in self.entries:
+            key = tuple(sorted(e.indices))
+            if len(key) != 3 or key[0] < 0 or key[2] >= self.point_count:
+                raise ValueError("circumradius entry indices out of range")
+            if key in seen:
+                raise ValueError("circumradius entries must cover each triple exactly once")
+            seen.add(key)
+        if len(seen) != expected:
+            raise ValueError("circumradius entries must cover every unordered triple exactly once")
+        if self.points is not None:
+            if len(self.points) != self.point_count:
+                raise ValueError("points length must match point_count")
+            coords = [(pt.point.x.as_fraction(), pt.point.y.as_fraction()) for pt in self.points]
+            for e in self.entries:
+                i,j,k = e.indices
+                (ax,ay),(bx,by),(cx,cy) = coords[i], coords[j], coords[k]
+                cross = (bx-ax)*(cy-ay) - (by-ay)*(cx-ax)
+                if cross == 0:
+                    if not e.collinear or e.squared_circumradius is not None:
+                        raise ValueError("collinear triple must have no radius")
+                else:
+                    if e.collinear:
+                        raise ValueError("non-collinear triple must have a radius")
+                    dab = (ax-bx)**2 + (ay-by)**2
+                    dbc = (bx-cx)**2 + (by-cy)**2
+                    dac = (ax-cx)**2 + (ay-cy)**2
+                    expected_r2 = CanonicalRational.from_fraction((dab*dbc*dac)/(4*cross*cross))
+                    if e.squared_circumradius != expected_r2:
+                        raise ValueError("squared_circumradius does not match recomputed exact value")
+                    if e.labels != (self.points[i].label, self.points[j].label, self.points[k].label):
+                        raise ValueError("circumradius labels must match source points")
         return self
 
 

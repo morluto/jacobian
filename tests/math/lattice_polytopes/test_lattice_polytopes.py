@@ -9,6 +9,7 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.math.lattice_polytopes._models import (
     MAX_BOUND_SPAN,
     MAX_DIMENSION,
+    EnumerateLatticePointsRequest,
     Halfspace,
     LatticePolytopeRequest,
     Vertex,
@@ -362,3 +363,58 @@ class TestLargeCoordinateBounds:
         )
         assert result.point_count == 1
         assert result.points[0].coordinates == (huge,)
+
+
+class TestEnumerateRequestBoundary:
+    def test_oversize_artifact_rejected_at_request_validation(self) -> None:
+        # [0,599]^2 holds 360k lattice points; the serialized artifact
+        # exceeds the 10 MiB output limit, which the dispatch layer only
+        # translates for request parsing, so admission rejects it at
+        # request construction instead of failing inside operation.run.
+        far = "599"
+        with pytest.raises(ValidationError, match="output limit"):
+            EnumerateLatticePointsRequest(
+                vertices=(
+                    _v(("0", "1"), ("0", "1")),
+                    _v((far, "1"), ("0", "1")),
+                    _v((far, "1"), (far, "1")),
+                    _v(("0", "1"), (far, "1")),
+                )
+            )
+
+    def test_oversize_count_rejected_at_enumerate_boundary(self) -> None:
+        # [0,1000]^2 holds more than MAX_LATTICE_POINTS points: counting
+        # succeeds but enumeration must be refused before execution.
+        far = "1000"
+        with pytest.raises(ValidationError, match="budget bound"):
+            EnumerateLatticePointsRequest(
+                vertices=(
+                    _v(("0", "1"), ("0", "1")),
+                    _v((far, "1"), ("0", "1")),
+                    _v((far, "1"), (far, "1")),
+                    _v(("0", "1"), (far, "1")),
+                )
+            )
+
+    def test_result_count_must_match_points(self) -> None:
+        from jacobian.math.lattice_polytopes._models import (
+            EnumerateLatticePointsResult,
+            LatticePoint,
+        )
+
+        with pytest.raises(ValidationError, match="point_count"):
+            EnumerateLatticePointsResult(
+                dimension=1,
+                point_count=0,
+                points=(LatticePoint(coordinates=("1",)),),
+                representation="vertices",
+            )
+
+    def test_coordinates_require_canonical_integers(self) -> None:
+        from jacobian.math.lattice_polytopes._models import LatticePoint
+
+        with pytest.raises(ValidationError):
+            LatticePoint(coordinates=("01",))
+        with pytest.raises(ValidationError):
+            LatticePoint(coordinates=("x",))
+        assert LatticePoint(coordinates=("-42",)).coordinates == ("-42",)

@@ -400,21 +400,28 @@ def _scan_box(
     return points, count
 
 
-def enumerate_lattice_points(
+_MAX_OUTPUT_BYTES = 10 * 1024 * 1024
+
+
+def enumeration_output_admission(
     request: LatticePolytopeRequest,
-) -> EnumerateLatticePointsResult:
-    """Enumerate every lattice point inside a bounded rational polytope."""
-    representation: Literal["vertices", "halfspaces"] = (
-        "vertices" if request.vertices is not None else "halfspaces"
-    )
+) -> None:
+    """Reject enumerations whose serialized artifact cannot fit the output limits.
+
+    Runs the exact count pass (bounded by the admitted scan budget) and
+    checks both the materialization cap and the conservative canonical
+    JSON size estimate.  Raises ``ValueError`` so the enumerate-specific
+    request boundary turns oversize artifacts into invalid requests
+    instead of internal operation failures.
+    """
+
     facets, lo, hi, d = _facets_and_box(request)
-    # Conservative serialized-size admission for enumerate: the result must
-    # fit within the 10 MiB canonical JSON output limit.  Estimate the
-    # worst-case size from the actual lattice-point count (first pass
-    # without materializing) and reject before expansion when it can be
-    # exceeded.  This avoids materializing a 360k-point square that would
-    # fail at OperationResult.require_canonical_output only after heavy work.
-    _, count_for_estimate = _scan_box(facets, lo, hi, d, collect=False)
+    _, count = _scan_box(facets, lo, hi, d, collect=False)
+    if count > MAX_LATTICE_POINTS:
+        raise ValueError(
+            "lattice-point enumeration exceeds the "
+            f"{MAX_LATTICE_POINTS}-point budget bound"
+        )
     # Per-point JSON is roughly {"coordinates":["x",...]} with d strings.
     # Max coordinate string length is bounded by the bounding box; the
     # canonical formatter is digit-limit-safe for 32,768-digit coordinates.
@@ -428,12 +435,22 @@ def enumerate_lattice_points(
     # Conservative: 20 bytes overhead + per-coordinate (digits+quotes+comma) + brackets
     per_point = 20 + d * (max_coord_len + 4)
     base_overhead = 80
-    estimated = base_overhead + count_for_estimate * per_point
-    if estimated > 10 * 1024 * 1024:
-        raise LatticePointBudgetError(
+    estimated = base_overhead + count * per_point
+    if estimated > _MAX_OUTPUT_BYTES:
+        raise ValueError(
             "lattice-point enumeration would exceed the 10 MiB canonical JSON output limit"
         )
-    # Second pass now that size is known to fit.
+
+
+def enumerate_lattice_points(
+    request: LatticePolytopeRequest,
+) -> EnumerateLatticePointsResult:
+    """Enumerate every lattice point inside a bounded rational polytope."""
+    representation: Literal["vertices", "halfspaces"] = (
+        "vertices" if request.vertices is not None else "halfspaces"
+    )
+    facets, lo, hi, d = _facets_and_box(request)
+    _, _count_for_estimate = _scan_box(facets, lo, hi, d, collect=False)
     points, _count = _scan_box(facets, lo, hi, d, collect=True)
     return EnumerateLatticePointsResult(
         dimension=d,

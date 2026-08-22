@@ -8,6 +8,7 @@ from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.lattice_polytopes._models import (
     CountLatticePointsResult,
+    EnumerateLatticePointsRequest,
     EnumerateLatticePointsResult,
     LatticePolytopeRequest,
 )
@@ -48,16 +49,14 @@ LATTICE_POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "polytope.lattice_points.enumerate",
         "Enumerate lattice points inside a bounded rational polytope",
-        "Given a bounded rational polytope in V-representation (vertices) "
-        "or H-representation (half-spaces) for ambient dimension d <= 4, "
-        "enumerate every lattice (integer) point inside it. The facets of "
-        "the convex hull are built with exact rational linear algebra and "
-        "every integer point in the bounding box is tested against the "
-        "exact half-space inequalities. A V-representation must be "
-        "full-dimensional: its vertices must affinely span the ambient "
-        "dimension, so lower-dimensional hulls (for example a segment in "
-        "3-D space) are rejected.",
-        LatticePolytopeRequest,
+        "Enumerate every lattice (integer) point of a bounded rational "
+        "polytope in V- or H-representation for dimension d <= 4, exactly. "
+        "Facets come from exact rational linear algebra; every integer "
+        "point in the bounding box is tested against the exact half-space "
+        "inequalities. A V-representation must be full-dimensional: its "
+        "vertices must affinely span the ambient dimension, so lower-"
+        "dimensional hulls are rejected.",
+        EnumerateLatticePointsRequest,
         EnumerateLatticePointsResult,
         enumerate_lattice_points,
         "polytope",
@@ -101,15 +100,13 @@ LATTICE_POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "polytope.lattice_points.count",
         "Count lattice points inside a bounded rational polytope",
-        "Given a bounded rational polytope in V-representation (vertices) "
-        "or H-representation (half-spaces) for ambient dimension d <= 4, "
-        "count the lattice (integer) points inside it without listing them. "
-        "The count is exact: the facet half-spaces are built with exact "
-        "rational linear algebra and every integer point in the bounding "
-        "box is tested against the exact inequalities. A V-representation "
-        "must be full-dimensional: its vertices must affinely span the "
-        "ambient dimension, so lower-dimensional hulls (for example a "
-        "segment in 3-D space) are rejected.",
+        "Count, exactly, the lattice (integer) points of a bounded "
+        "rational polytope in V- or H-representation for dimension "
+        "d <= 4 without listing them. Facets come from exact rational "
+        "linear algebra; every integer point in the bounding box is "
+        "tested against the exact inequalities. A V-representation must "
+        "be full-dimensional: its vertices must affinely span the "
+        "ambient dimension, so lower-dimensional hulls are rejected.",
         LatticePolytopeRequest,
         CountLatticePointsResult,
         count_lattice_points,

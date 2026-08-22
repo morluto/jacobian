@@ -7,7 +7,11 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    CanonicalInteger,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
 
 MAX_DIMENSION = 4
@@ -288,7 +292,19 @@ class LatticePolytopeRequest(StrictModel):
 class LatticePoint(StrictModel):
     """One lattice point, as a tuple of canonical integers."""
 
-    coordinates: tuple[str, ...] = Field(min_length=1)
+    coordinates: tuple[CanonicalInteger, ...] = Field(
+        min_length=1, max_length=MAX_DIMENSION
+    )
+
+    @model_validator(mode="after")
+    def require_coordinate_digit_bound(self) -> Self:
+        for coordinate in self.coordinates:
+            if len(coordinate.lstrip("-")) > COORDINATE_DIGITS + 1:
+                raise ValueError(
+                    "lattice-point coordinate exceeds the "
+                    f"{COORDINATE_DIGITS}-digit bound"
+                )
+        return self
 
 
 class EnumerateLatticePointsResult(StrictModel):
@@ -299,6 +315,14 @@ class EnumerateLatticePointsResult(StrictModel):
     points: tuple[LatticePoint, ...]
     representation: str
 
+    @model_validator(mode="after")
+    def require_count_matches_points(self) -> Self:
+        if self.point_count != len(self.points):
+            raise ValueError(
+                "point_count must equal the number of returned lattice points"
+            )
+        return self
+
 
 class CountLatticePointsResult(StrictModel):
     """The number of lattice points inside a bounded rational polytope."""
@@ -308,6 +332,25 @@ class CountLatticePointsResult(StrictModel):
     representation: str
 
 
+class EnumerateLatticePointsRequest(LatticePolytopeRequest):
+    """Enumeration admission: the serialized result must fit the output limits.
+
+    The exact lattice-point count is computed during request validation
+    (bounded by the admitted scan budget); an accepted enumerate request
+    therefore always materializes within the point cap and the 10 MiB
+    canonical JSON output limit instead of failing after acceptance.
+    """
+
+    @model_validator(mode="after")
+    def require_enumeration_artifact_fits(self) -> Self:
+        from jacobian.math.lattice_polytopes._operations import (
+            enumeration_output_admission,
+        )
+
+        enumeration_output_admission(self)
+        return self
+
+
 __all__ = [
     "MAX_BOUND_SPAN",
     "MAX_DIMENSION",
@@ -315,6 +358,7 @@ __all__ = [
     "MAX_LATTICE_POINTS",
     "MAX_VERTICES",
     "CountLatticePointsResult",
+    "EnumerateLatticePointsRequest",
     "EnumerateLatticePointsResult",
     "Halfspace",
     "LatticePoint",

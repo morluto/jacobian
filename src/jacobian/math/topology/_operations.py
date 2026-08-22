@@ -1117,12 +1117,12 @@ def compute_shelling_check(request: ShellingCheckRequest) -> ShellingCheckResult
                 failure_reason=f"facet {idx} has no new faces",
             )
         # Check that these faces form a nonempty interval [min, F_i)
-        # i.e., there is a unique minimal face
+        # i.e., there is a unique minimal face (no other face is a proper subset)
         face_sets = {frozenset(f) for f in faces_not_in_prev}
         min_faces = [
             frozenset(f)
             for f in faces_not_in_prev
-            if not any(f != other and frozenset(f) < other for other in face_sets)
+            if not any(other < frozenset(f) for other in face_sets if other != frozenset(f))
         ]
         if len(min_faces) != 1:
             return ShellingCheckResult(

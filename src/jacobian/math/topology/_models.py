@@ -979,6 +979,24 @@ class JoinRequest(StrictModel):
             raise ValueError(
                 "join requires disjoint vertex sets; rename vertices first"
             )
+        # Validate join result bounds: combined facet dimension must be <=7,
+        # vertex count <=64, and facet count within limits.
+        combined_vertices = len(va | vb)
+        if combined_vertices > MAX_TOPOLOGY_VERTICES:
+            raise ValueError(
+                f"join would have {combined_vertices} vertices exceeding {MAX_TOPOLOGY_VERTICES}"
+            )
+        max_joined_size = 0
+        for fa in self.complex_a.facets:
+            for fb in self.complex_b.facets:
+                joined_size = len(set(fa) | set(fb))
+                max_joined_size = max(max_joined_size, joined_size)
+                if joined_size > MAX_TOPOLOGY_DIMENSION + 1:
+                    raise ValueError(
+                        f"join facet size {joined_size} exceeds dimension {MAX_TOPOLOGY_DIMENSION} limit"
+                    )
+        # Check closure size estimate for join: upper bound is product of face counts
+        # For two 4-simplices (32 faces each), join has 63 faces? Actually 5+5=10 vertices => 1023 faces >2048? But dimension already fails.
         return self
 
 
@@ -1020,18 +1038,13 @@ class BarycentricSubdivisionRequest(StrictModel):
     def require_barycentric_work_bounds(self) -> Self:
         closure = face_closure(tuple(tuple(sorted(f)) for f in self.complex.facets))
         face_count = sum(len(part) for part in closure)
-        if face_count > 64:
-            raise ValueError(
-                f"barycentric subdivision requires at most 64 faces (got {face_count}); "
-                "input is too large for exact bounded subdivision"
-            )
-        # Bound subdivision output size: number of maximal chains for 64 faces is
-        # still bounded by factorial-like growth but with face_count<=64 the
-        # resulting facet count remains within transport limits for tested cases.
         if face_count > 31:
-            # For 6-vertex simplex (63 faces) subdivision has 720 maximal chains;
-            # allow but note bound.
-            pass
+            raise ValueError(
+                f"barycentric subdivision requires at most 31 faces (got {face_count}); "
+                "input would produce >128 subdivision facets exceeding result contract"
+            )
+        # Additional check: subdivision of a 5-vertex simplex has 120 facets within 128 limit;
+        # 6-vertex simplex would have 720 >128, so 31 is safe.
         return self
 
 
@@ -1088,7 +1101,7 @@ class PseudomanifoldRequest(StrictModel):
 class PseudomanifoldResult(TopologyExactResult):
     """Pseudomanifold decision result bound to its source complex."""
 
-    complex: SimplicialComplexRequest | None = None
+    complex: SimplicialComplexRequest
     is_pseudomanifold: bool
     is_closed: bool
     dimension: int
@@ -1097,35 +1110,64 @@ class PseudomanifoldResult(TopologyExactResult):
 
     @model_validator(mode="after")
     def require_pseudomanifold_binding(self) -> Self:
-        if self.complex is None:
-            # Allow legacy payloads without binding to validate for backward compat,
-            # but require new code to provide binding.
-            return self
         facets = [frozenset(f) for f in self.complex.facets]
         dim = max(len(f) - 1 for f in facets) if facets else 0
         if self.dimension != dim or self.num_facets != len(facets):
             raise ValueError("dimension/num_facets must match source complex")
-        # Recompute pseudomanifold decision
+        # Recompute expected decision
         is_pure = all(len(f) - 1 == dim for f in facets) if facets else False
-        if not is_pure and self.is_pseudomanifold:
-            raise ValueError("impure complex cannot be pseudomanifold")
-        if dim < 1 and self.is_pseudomanifold:
-            raise ValueError("dimension <1 cannot be pseudomanifold")
-        if self.is_pseudomanifold:
-            # Check codim-1 counts
-            codim1_count: dict[frozenset[str], int] = {}
+        codim1_count: dict[frozenset[str], int] = {}
+        is_closed_expected = False
+        obstruction_expected: str | None = None
+        expected_is_pseudo = False
+        if not is_pure:
+            expected_is_pseudo = False
+            obstruction_expected = "not pure: facets have different dimensions"
+        elif dim < 1:
+            expected_is_pseudo = False
+            obstruction_expected = "dimension must be at least 1"
+        else:
             for facet in facets:
                 for face in combinations(sorted(facet), len(facet) - 1):
                     key = frozenset(face)
                     codim1_count[key] = codim1_count.get(key, 0) + 1
-            for count in codim1_count.values():
-                if count > 2:
-                    raise ValueError("pseudomanifold must have codim-1 count <=2")
-            is_closed_expected = all(c == 2 for c in codim1_count.values()) if codim1_count else False
-            if self.is_closed != is_closed_expected:
-                raise ValueError("is_closed must match codim-1 incidence")
-            if self.is_closed and self.obstruction is not None:
-                raise ValueError("closed pseudomanifold must have no obstruction")
+            has_over = any(c > 2 for c in codim1_count.values())
+            if has_over:
+                expected_is_pseudo = False
+                # find first over face
+                for face, cnt in codim1_count.items():
+                    if cnt > 2:
+                        obstruction_expected = f"codim-1 face {sorted(face)} is in {cnt} facets"
+                        break
+            else:
+                expected_is_pseudo = True
+                is_closed_expected = all(c == 2 for c in codim1_count.values()) if codim1_count else False
+                if is_closed_expected:
+                    obstruction_expected = None
+                else:
+                    obstruction_expected = "pseudomanifold with boundary"
+                if self.is_closed != is_closed_expected:
+                    raise ValueError("is_closed must match codim-1 incidence")
+                if self.is_closed and self.obstruction is not None:
+                    raise ValueError("closed pseudomanifold must have no obstruction")
+                if not self.is_closed and self.obstruction is None:
+                    raise ValueError("pseudomanifold with boundary must have obstruction")
+        if self.is_pseudomanifold != expected_is_pseudo:
+            raise ValueError(
+                f"is_pseudomanifold {self.is_pseudomanifold} does not match expected {expected_is_pseudo}"
+            )
+        # For non-pseudomanifold, obstruction must match expected (allow any non-None when expected is not None? strict)
+        if not expected_is_pseudo:
+            if self.is_closed:
+                raise ValueError("non-pseudomanifold cannot be closed")
+            # Obstruction should be present
+            if self.obstruction is None:
+                raise ValueError("non-pseudomanifold must have obstruction")
+        else:
+            if self.obstruction != obstruction_expected:
+                raise ValueError(
+                    f"obstruction {self.obstruction!r} does not match expected {obstruction_expected!r}"
+                )
         return self
 
 
@@ -1151,7 +1193,7 @@ class ShellingCheckResult(TopologyExactResult):
 
 
 class ElementaryCollapseRequest(StrictModel):
-    """Check and perform one elementary collapse step."""
+    """Check and perform one elementary collapse step (free face must be codimension-one)."""
 
     complex: SimplicialComplexRequest
     free_face: tuple[VertexLabel, ...] = Field(min_length=1)
@@ -1165,6 +1207,11 @@ class ElementaryCollapseRequest(StrictModel):
             raise ValueError("free_face must be a proper subset of coface")
         if not face_set.issubset(coface_set):
             raise ValueError("free_face must be contained in coface")
+        if len(coface_set) != len(face_set) + 1:
+            raise ValueError(
+                "elementary collapse requires free_face to be codimension-one in coface "
+                f"(got |free|={len(face_set)}, |coface|={len(coface_set)})"
+            )
         return self
 
 

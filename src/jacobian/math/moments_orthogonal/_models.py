@@ -225,10 +225,6 @@ def _require_bounded_kernel_growth(
     bn = [_digits(v.numerator) for v in beta]
     bd = [_digits(v.denominator) for v in beta]
 
-    # u_k = x - alpha_k over a common denominator.
-    un = [max(xn + ad[k], an[k] + xd) + 1 for k in range(len(alpha))]
-    ud = [xd + ad[k] for k in range(len(alpha))]
-
     def recurrence(point_n: int, point_d: int) -> tuple[list[int], list[int]]:
         # Digit bounds (numerator, denominator) of p_k evaluated at one point;
         # no reduction credit is taken, so these are strict upper bounds.
@@ -236,10 +232,12 @@ def _require_bounded_kernel_growth(
         pd = [0]
         if not alpha:
             return pn, pd
-        first_u_num = max(point_n + ad[0], an[0] + point_d) + 1
-        first_u_den = point_d + ad[0]
-        pn.append(first_u_num)
-        pd.append(first_u_den)
+        # u_k = point - alpha_k over a common denominator; each evaluation
+        # point derives its own bounds so a large y is fully charged.
+        un = [max(point_n + ad[k], an[k] + point_d) + 1 for k in range(len(alpha))]
+        ud = [point_d + ad[k] for k in range(len(alpha))]
+        pn.append(un[0])
+        pd.append(ud[0])
         for k in range(1, len(alpha)):
             w_num, w_den = bn[k], bd[k]
             pn.append(

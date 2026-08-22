@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from fractions import Fraction
 from typing import Literal, Self
 
@@ -601,6 +602,7 @@ class ConcyclicQuadruple(StrictModel):
 class ForbiddenPatternsResult(StrictModel):
     """Result of screening a configuration for forbidden patterns."""
 
+    configuration: ForbiddenConfiguration
     point_count: StrictInt = Field(ge=1, le=128)
     has_collinear_triple: bool
     has_concyclic_quadruple: bool
@@ -615,14 +617,125 @@ class ForbiddenPatternsResult(StrictModel):
             raise ValueError("exactly a collinear triple carries one witness")
         if self.has_concyclic_quadruple is (self.concyclic_quadruple is None):
             raise ValueError("exactly a concyclic quadruple carries one witness")
+        screen = _replay_forbidden_screen(self.configuration)
+        if self.point_count != len(self.configuration.points):
+            raise ValueError("point count does not match the retained configuration")
         if (
-            self.collinear_triple is not None
-            and self.collinear_triple.third >= self.point_count
+            self.checked_triples != screen.checked_triples
+            or self.has_collinear_triple != (screen.collinear_triple is not None)
+            or self.checked_quadruples != screen.checked_quadruples
+            or self.has_concyclic_quadruple != (screen.concyclic_quadruple is not None)
         ):
-            raise ValueError("collinear triple index exceeds configuration")
-        if (
-            self.concyclic_quadruple is not None
-            and self.concyclic_quadruple.fourth >= self.point_count
+            raise ValueError(
+                "forbidden-pattern decisions do not match the retained configuration"
+            )
+        for declared, replayed in (
+            (self.collinear_triple, screen.collinear_triple),
+            (self.concyclic_quadruple, screen.concyclic_quadruple),
         ):
-            raise ValueError("concyclic quadruple index exceeds configuration")
+            if (declared is None) != (replayed is None):
+                raise ValueError(
+                    "forbidden-pattern witnesses do not match the retained "
+                    "configuration"
+                )
+            if declared is not None and declared != replayed:
+                raise ValueError(
+                    "forbidden-pattern witnesses do not match the retained "
+                    "configuration"
+                )
         return self
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _ForbiddenScreen:
+    has_collinear_triple: bool
+    collinear_triple: CollinearTriple | None
+    checked_triples: int
+    has_concyclic_quadruple: bool
+    concyclic_quadruple: ConcyclicQuadruple | None
+    checked_quadruples: int
+
+
+def _collinear_triple_det(
+    first: tuple[Fraction, Fraction],
+    second: tuple[Fraction, Fraction],
+    third: tuple[Fraction, Fraction],
+) -> Fraction:
+    return (second[0] - first[0]) * (third[1] - first[1]) - (
+        second[1] - first[1]
+    ) * (third[0] - first[0])
+
+
+def _concyclic_quadruple_det(
+    quadruple: tuple[tuple[Fraction, Fraction], ...],
+) -> Fraction:
+    rows = [
+        (x * x + y * y, x, y, Fraction(1)) for x, y in quadruple
+    ]
+
+    def minor(rows: list[tuple[Fraction, ...]], keep: tuple[int, ...]) -> Fraction:
+        (a, b, c), (d, e, f), (g, h, i) = (
+            tuple(row[index] for index in keep) for row in rows
+        )
+        return a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
+
+    return (
+        rows[0][0] * minor(rows[1:], (1, 2, 3))
+        - rows[0][1] * minor(rows[1:], (0, 2, 3))
+        + rows[0][2] * minor(rows[1:], (0, 1, 3))
+        - rows[0][3] * minor(rows[1:], (0, 1, 2))
+    )
+
+
+def _quadruple_is_collinear(
+    quadruple: tuple[tuple[Fraction, Fraction], ...],
+) -> bool:
+    first, second = quadruple[0], quadruple[1]
+    return all(_collinear_triple_det(first, second, point) == 0 for point in quadruple[2:])
+
+
+def _replay_forbidden_screen(
+    configuration: ForbiddenConfiguration,
+) -> _ForbiddenScreen:
+    """Replay the exact bounded screen from the retained configuration."""
+
+    from itertools import combinations
+
+    points = [
+        (item.point.x.as_fraction(), item.point.y.as_fraction())
+        for item in configuration.points
+    ]
+    count = len(points)
+    collinear_triple = None
+    has_collinear = False
+    checked_triples = 0
+    for i, j, k in combinations(range(count), 3):
+        checked_triples += 1
+        if _collinear_triple_det(points[i], points[j], points[k]) == 0:
+            has_collinear = True
+            collinear_triple = CollinearTriple(first=i, second=j, third=k)
+            break
+
+    concyclic_quadruple = None
+    has_concyclic = False
+    checked_quadruples = 0
+    for i, j, k, ell in combinations(range(count), 4):
+        checked_quadruples += 1
+        quadruple = (points[i], points[j], points[k], points[ell])
+        if _concyclic_quadruple_det(quadruple) == 0 and not _quadruple_is_collinear(
+            quadruple
+        ):
+            has_concyclic = True
+            concyclic_quadruple = ConcyclicQuadruple(
+                first=i, second=j, third=k, fourth=ell
+            )
+            break
+
+    return _ForbiddenScreen(
+        has_collinear_triple=has_collinear,
+        collinear_triple=collinear_triple,
+        checked_triples=checked_triples,
+        has_concyclic_quadruple=has_concyclic,
+        concyclic_quadruple=concyclic_quadruple,
+        checked_quadruples=checked_quadruples,
+    )

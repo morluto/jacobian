@@ -32,7 +32,7 @@ _COEFFICIENT = re.compile(r"^(0|-?[1-9][0-9]*)(?:/([1-9][0-9]*))?$")
 _STDOUT_LIMIT = 512 * 1024
 _STDERR_LIMIT = 64 * 1024
 
-SingularOperation = Literal["radical", "quotient"]
+SingularOperation = Literal["radical", "quotient", "saturation"]
 SingularOutcome = Literal[
     "COMPUTED", "UNAVAILABLE", "TIMEOUT", "LIMIT_EXCEEDED", "ERROR"
 ]
@@ -106,17 +106,26 @@ def _script(
         f"string(jacobian_exponents[{index + 1}])" for index in range(variable_count)
     )
     declarations = [_singular_ideal("jacobian_left", left)]
+    # Load only the library each kernel needs: loading several emits
+    # redefinition warnings on stderr, which the protocol treats as failure.
     if operation == "radical":
+        libraries = 'LIB "primdec.lib";'
         operation_line = "ideal jacobian_result=radical(jacobian_left);"
+    elif operation == "saturation":
+        if right is None:
+            raise ValueError("saturation requires a divisor ideal")
+        libraries = 'LIB "elim.lib";'
+        declarations.append(_singular_ideal("jacobian_right", right))
+        operation_line = "ideal jacobian_result=sat(jacobian_left,jacobian_right);"
     else:
         if right is None:
             raise ValueError("quotient requires a divisor ideal")
+        libraries = ""
         declarations.append(_singular_ideal("jacobian_right", right))
         operation_line = "ideal jacobian_result=quotient(jacobian_left,jacobian_right);"
     source = "\n".join(
-        [
-            'LIB "primdec.lib";',
-            "option(redSB);",
+        [line for line in (libraries, "option(redSB);") if line]
+        + [
             f"ring jacobian_ring=0,({variables}),dp;",
             *declarations,
             operation_line,

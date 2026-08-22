@@ -179,6 +179,19 @@ class TestChristoffelDarboux:
         assert result.kernel == _frac(0, 1)
         assert result.polynomials_evaluated == (_frac(1, 1),)
 
+    def test_large_y_charged_at_every_recurrence_step(self) -> None:
+        """A huge y must be charged at every step, not only the first."""
+        alpha = tuple(_frac(0, 1) for _ in range(15))
+        beta = tuple(_frac(1, 1) for _ in range(16))
+        y = Fraction(10) ** 3000
+        with pytest.raises(ValueError, match="growth exceeds the canonical"):
+            ChristoffelDarbouxRequest(
+                alpha=tuple(_cr(a.numerator, a.denominator) for a in alpha),
+                beta=tuple(_cr(b.numerator, b.denominator) for b in beta),
+                x=_cr(2, 1),
+                y=_cr(y.numerator, y.denominator),
+            )
+
 
 # ---------------------------------------------------------------------------
 # Gaussian quadrature

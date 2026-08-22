@@ -6,10 +6,14 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.math.geometry._models import (
     CircumradiusProfileRequest,
+    ForbiddenConfiguration,
+    ForbiddenLabelledPoint,
+    ForbiddenPatternsRequest,
+    ForbiddenPatternsResult,
     LabelledPoint2D,
     RationalPoint2D,
 )
-from jacobian.math.geometry._operations import circumradius_profile
+from jacobian.math.geometry._operations import circumradius_profile, forbidden_patterns
 from jacobian.math.geometry._pinned_distances import (
     LineDistanceEntry,
     PinnedDistanceRequest,
@@ -212,3 +216,94 @@ class TestPinnedDistanceReplay:
                 distinct_line_count=1,
                 min_squared_distance=forged_entry,
             )
+
+
+class TestForbiddenPatternsSourceBinding:
+    @staticmethod
+    def _point(label: str, x_num: str, y_num: str) -> ForbiddenLabelledPoint:
+        return ForbiddenLabelledPoint(
+            label=label,
+            point=RationalPoint2D(
+                x=CanonicalRational(num=x_num, den="1"),
+                y=CanonicalRational(num=y_num, den="1"),
+            ),
+        )
+
+    @classmethod
+    def _request(cls) -> ForbiddenPatternsRequest:
+        return ForbiddenPatternsRequest(
+            configuration=ForbiddenConfiguration(
+                points=(
+                    cls._point("a", "0", "0"),
+                    cls._point("b", "1", "0"),
+                    cls._point("c", "2", "0"),
+                    cls._point("d", "0", "1"),
+                )
+            )
+        )
+
+    def test_producer_retains_and_replays_source(self):
+        request = self._request()
+        result = forbidden_patterns(request)
+        assert result.configuration == request.configuration
+        assert result.has_collinear_triple
+        assert (
+            result.collinear_triple.first,
+            result.collinear_triple.second,
+            result.collinear_triple.third,
+        ) == (0, 1, 2)
+        replayed = ForbiddenPatternsResult.model_validate(result.model_dump())
+        assert replayed.checked_triples == result.checked_triples
+
+    def test_forged_negative_screen_rejected(self):
+        genuine = forbidden_patterns(self._request())
+        with pytest.raises(ValidationError):
+            ForbiddenPatternsResult(
+                configuration=genuine.configuration,
+                point_count=4,
+                has_collinear_triple=False,
+                has_concyclic_quadruple=False,
+                collinear_triple=None,
+                concyclic_quadruple=None,
+                checked_triples=0,
+                checked_quadruples=0,
+            )
+
+    def test_forged_witness_rejected(self):
+        genuine = forbidden_patterns(self._request())
+        assert genuine.collinear_triple is not None
+        with pytest.raises(ValidationError):
+            ForbiddenPatternsResult(
+                configuration=genuine.configuration,
+                point_count=4,
+                has_collinear_triple=True,
+                has_concyclic_quadruple=False,
+                collinear_triple=type(genuine.collinear_triple)(
+                    first=0, second=1, third=3
+                ),
+                concyclic_quadruple=None,
+                checked_triples=4,
+                checked_quadruples=0,
+            )
+
+    def test_concyclic_square_binds_its_quadruple(self):
+        request = ForbiddenPatternsRequest(
+            configuration=ForbiddenConfiguration(
+                points=(
+                    self._point("a", "0", "0"),
+                    self._point("b", "1", "0"),
+                    self._point("c", "1", "1"),
+                    self._point("d", "0", "1"),
+                )
+            )
+        )
+        result = forbidden_patterns(request)
+        assert result.has_concyclic_quadruple
+        assert not result.has_collinear_triple
+        assert (
+            result.concyclic_quadruple.first,
+            result.concyclic_quadruple.second,
+            result.concyclic_quadruple.third,
+            result.concyclic_quadruple.fourth,
+        ) == (0, 1, 2, 3)
+        ForbiddenPatternsResult.model_validate(result.model_dump())

@@ -165,7 +165,7 @@ class GaussianQuadratureRequest(StrictModel):
         coefficients = family.polynomials[self.order].coefficients
         x = sympy.Symbol(self.prefix.variable)
         poly = sum(
-            sympy.Rational(int(c.num), int(c.den)) * x**i
+            sympy.Rational(*c.as_integer_ratio()) * x**i
             for i, c in enumerate(coefficients)
         )
         _, factors = sympy.factor_list(poly)
@@ -189,8 +189,8 @@ class GaussianQuadratureRequest(StrictModel):
         )
 
         _nodes, weights = _construct_quadrature_rule(
-            [Fraction(int(c.num), int(c.den)) for c in coefficients],
-            [Fraction(int(v.num), int(v.den)) for v in self.prefix.moments],
+            [Fraction(*c.as_integer_ratio()) for c in coefficients],
+            [Fraction(*v.as_integer_ratio()) for v in self.prefix.moments],
             self.order,
         )
         if any(weight <= 0 for weight in weights):

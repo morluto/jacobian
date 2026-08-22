@@ -314,6 +314,20 @@ def compute_christoffel_darboux(
             for j in range(k + 1):
                 coefficients[i][j] += p_k[i] * p_k[j] / h_k
 
+    # Kernel entries can exceed the canonical range even when the family
+    # is quasi-definite; reject them before canonical conversion.
+    from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+    from jacobian.math._rational_height import RationalHeight
+
+    for row in coefficients:
+        for value in row:
+            if RationalHeight.from_canonical(
+                CanonicalRational.from_fraction(value)
+            ).exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
+                raise ValueError(
+                    "Christoffel-Darboux kernel coefficients exceed the "
+                    "canonical rational digit limit for this family"
+                )
     return ChristoffelDarbouxKernel(
         degree=m,
         coefficients=tuple(

@@ -268,3 +268,18 @@ class JacobiMatrix(StrictModel):
     betas: tuple[CanonicalRational, ...]
     matrix: tuple[tuple[CanonicalRational, ...], ...]
     variable: str = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def bind_matrix_to_coefficients(self) -> Self:
+        size = len(self.alphas)
+        if len(self.matrix) != size or any(len(row) != size for row in self.matrix):
+            raise ValueError("matrix must be a square size x size array")
+        for i in range(size):
+            if self.matrix[i][i] != self.alphas[i]:
+                raise ValueError(f"matrix diagonal must carry alpha_{i}")
+            if i + 1 < size:
+                if self.matrix[i + 1][i] != CanonicalRational.from_integer_ratio(1, 1):
+                    raise ValueError("the monic subdiagonal must be exactly 1")
+                if self.betas[i + 1] != self.matrix[i][i + 1]:
+                    raise ValueError("matrix superdiagonal must carry beta_{i+1}")
+        return self

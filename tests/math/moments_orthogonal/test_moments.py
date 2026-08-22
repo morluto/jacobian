@@ -356,3 +356,16 @@ class TestQuadratureSourceBinding:
                 exactness_degree=3,
                 prefix=self._prefix(),
             )
+
+
+class TestJacobiCrossField:
+    def test_contradictory_jacobi_rejected(self) -> None:
+        from jacobian.math.moments_orthogonal.values import JacobiMatrix as JM
+
+        with pytest.raises(ValidationError, match="diagonal must carry"):
+            JM(
+                alphas=(CanonicalRational(num="0", den="1"),),
+                betas=(CanonicalRational(num="0", den="1"),),
+                matrix=((CanonicalRational(num="1", den="1"),),),
+                variable="x",
+            )

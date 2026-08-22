@@ -317,18 +317,30 @@ class GroebnerBasisRequest(StrictModel):
         return self
 
 
-class GroebnerBasisResult(StrictModel):
-    """A reduced Gröbner basis and its exact metadata."""
+GroebnerExecutionOutcome = Literal["COMPUTED", "TIMEOUT"]
 
-    basis: RationalPolynomialIdeal
-    generator_count: StrictInt = Field(ge=1, le=MAX_OUTPUT_GENERATORS)
+
+class GroebnerBasisResult(StrictModel):
+    """A reduced Gröbner basis, or a typed timeout under the enforced budget."""
+
+    outcome: GroebnerExecutionOutcome = "COMPUTED"
+    basis: RationalPolynomialIdeal | None = None
+    generator_count: StrictInt = Field(default=0, ge=0, le=MAX_OUTPUT_GENERATORS)
     monomial_order: Literal["lex", "grlex", "grevlex"]
+    detail: str | None = None
     backend: Literal["SYMPY"] = "SYMPY"
 
     @model_validator(mode="after")
-    def require_consistent_count(self) -> Self:
-        if self.generator_count != len(self.basis.generators):
-            raise ValueError("generator_count must match the basis generator count")
+    def require_outcome_shape(self) -> Self:
+        if self.outcome == "COMPUTED":
+            if self.basis is None or self.detail is not None:
+                raise ValueError(
+                    "computed basis requires a value and no failure detail"
+                )
+            if self.generator_count != len(self.basis.generators) or self.generator_count < 1:
+                raise ValueError("generator_count must match the basis generator count")
+        elif self.basis is not None or self.detail is None:
+            raise ValueError("timed-out computation carries only a safe detail")
         return self
 
 

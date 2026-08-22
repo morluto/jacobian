@@ -47,7 +47,9 @@ def _polynomial(
                     "coefficient": {"num": str(numerator), "den": str(denominator)},
                     "exponents": list(exponents),
                 }
-                for numerator, denominator, exponents in terms
+                for numerator, denominator, exponents in sorted(
+                    terms, key=lambda term: term[2], reverse=True
+                )
             ]
         },
     }

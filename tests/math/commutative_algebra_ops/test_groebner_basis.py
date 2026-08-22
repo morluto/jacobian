@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from jacobian.math.commutative_algebra_ops._models import (
     EliminationIdealRequest,
     GroebnerBasisRequest,

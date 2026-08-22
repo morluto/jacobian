@@ -5,7 +5,12 @@ from __future__ import annotations
 import sympy
 
 from jacobian.math.commutative_algebra_ops._models import (
-    MAX_OUTPUT_TERMS,
+    EliminationIdealRequest,
+    EliminationIdealResult,
+    GroebnerBasisRequest,
+    GroebnerBasisResult,
+    IdealNormalFormRequest,
+    IdealNormalFormResult,
     IdealQuotientRequest,
     IdealQuotientResult,
     IdealRadicalMembershipRequest,
@@ -87,7 +92,6 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
 
     from jacobian.math.polynomials.values import (
         RationalPolynomialIdeal,
-        SparseRationalPolynomial,
     )
     saturation_ideal = RationalPolynomialIdeal(
         variables=request.ideal.variables,
@@ -114,14 +118,16 @@ __all__ = [
 ]
 
 
-def compute_groebner_basis(request: "GroebnerBasisRequest") -> "GroebnerBasisResult":
+def compute_groebner_basis(request: GroebnerBasisRequest) -> GroebnerBasisResult:
     """Compute a reduced Gröbner basis for a bounded ideal over QQ using SymPy."""
     from jacobian.math.commutative_algebra_ops._models import (
-    MAX_OUTPUT_TERMS,
+        MAX_OUTPUT_TERMS,
         GroebnerBasisResult,
     )
     from jacobian.math.polynomials._conversions import rational_polynomial_from_sympy
-    from jacobian.math.polynomials.values import RationalPolynomial, RationalPolynomialIdeal, SparseRationalPolynomial
+    from jacobian.math.polynomials.values import (
+        RationalPolynomialIdeal,
+    )
 
     variables = request.ideal.variables
     variable_symbols = symbols_for_variables(variables)
@@ -133,12 +139,37 @@ def compute_groebner_basis(request: "GroebnerBasisRequest") -> "GroebnerBasisRes
     order_map = {"lex": "lex", "grlex": "grlex", "grevlex": "grevlex"}
     order = order_map.get(request.monomial_order, "grevlex")
 
-    basis = sympy.groebner(
-        ideal_generators,
-        *variable_symbols,
-        order=order,
-        domain=sympy.QQ,
-    )
+    # Enforce the advertised wall-time budget around the backend call so an
+    # admitted request cannot occupy the inline execution path indefinitely.
+    import signal
+
+    class _BudgetExceededError(TimeoutError):
+        pass
+
+    def _on_budget(signum, frame):
+        raise _BudgetExceededError("groebner computation exceeded wall_seconds")
+
+    previous_handler = signal.signal(signal.SIGALRM, _on_budget)
+    signal.setitimer(signal.ITIMER_REAL, request.resource_budget.wall_seconds)
+    try:
+        basis = sympy.groebner(
+            ideal_generators,
+            *variable_symbols,
+            order=order,
+            domain=sympy.QQ,
+        )
+    except _BudgetExceededError:
+        return GroebnerBasisResult(
+            outcome="TIMEOUT",
+            monomial_order=request.monomial_order,
+            detail=(
+                "groebner computation exceeded the enforced "
+                f"{request.resource_budget.wall_seconds}s budget"
+            ),
+        )
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
 
     basis_generators = tuple(
         rational_polynomial_from_sympy(
@@ -161,11 +192,10 @@ def compute_groebner_basis(request: "GroebnerBasisRequest") -> "GroebnerBasisRes
     )
 
 
-def compute_ideal_normal_form(request: "IdealNormalFormRequest") -> "IdealNormalFormResult":
+def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFormResult:
     """Reduce one polynomial modulo an ideal using a Gröbner basis remainder."""
     from jacobian.math.commutative_algebra_ops._models import IdealNormalFormResult
     from jacobian.math.polynomials._conversions import rational_polynomial_from_sympy
-    from jacobian.math.polynomials.values import SparseRationalPolynomial
 
     variables = request.ideal.variables
     variable_symbols = symbols_for_variables(variables)
@@ -175,9 +205,17 @@ def compute_ideal_normal_form(request: "IdealNormalFormRequest") -> "IdealNormal
     ]
     poly = rational_polynomial_to_sympy(request.polynomial).as_expr()
 
+    # Membership is decided only against a Groebner basis; reducing against
+    # the raw generators computes a division remainder that proves nothing.
+    basis = sympy.groebner(
+        ideal_generators,
+        *variable_symbols,
+        order="grevlex",
+        domain=sympy.QQ,
+    )
     _, remainder = sympy.reduced(
         poly,
-        ideal_generators,
+        list(basis.exprs),
         *variable_symbols,
         order="grevlex",
         domain=sympy.QQ,
@@ -197,38 +235,46 @@ def compute_ideal_normal_form(request: "IdealNormalFormRequest") -> "IdealNormal
     )
 
 
-def compute_elimination_ideal(request: "EliminationIdealRequest") -> "EliminationIdealResult":
+def compute_elimination_ideal(request: EliminationIdealRequest) -> EliminationIdealResult:
     """Compute the elimination ideal I ∩ QQ[remaining variables] using a lex Gröbner basis."""
     from jacobian.math.commutative_algebra_ops._models import EliminationIdealResult
     from jacobian.math.polynomials._conversions import rational_polynomial_from_sympy
-    from jacobian.math.polynomials.values import RationalPolynomial, RationalPolynomialIdeal, SparseRationalPolynomial
+    from jacobian.math.polynomials.values import (
+        RationalPolynomialIdeal,
+        SparseRationalPolynomial,
+    )
 
     variables = list(request.ideal.variables)
     eliminated_set = set(request.eliminated_variables)
     remaining = [v for v in variables if v not in eliminated_set]
-    remaining_symbols = symbols_for_variables(tuple(remaining))
 
-    variable_symbols = symbols_for_variables(request.ideal.variables)
+    # The elimination theorem requires the eliminated variables to precede
+    # the retained variables in the lex monomial order.
+    ordered_variables = tuple(v for v in variables if v in eliminated_set) + tuple(remaining)
+    ordered_symbols = symbols_for_variables(ordered_variables)
     ideal_generators = [
         rational_polynomial_to_sympy(generator).as_expr()
         for generator in request.ideal.generators
     ]
 
-    # Compute a lex Gröbner basis — the elimination ideal is generated by
-    # the basis elements that only involve the remaining variables
     basis = sympy.groebner(
         ideal_generators,
-        *variable_symbols,
+        *ordered_symbols,
         order="lex",
         domain=sympy.QQ,
     )
 
+    remaining_symbols = symbols_for_variables(tuple(remaining))
     elimination_generators = []
+    unit_ideal = False
     for expr in basis:
-        poly = sympy.Poly(expr, *variable_symbols, domain=sympy.QQ)
-        # Check if this polynomial only involves the remaining variables
-        involved_vars = set(str(s) for s in poly.free_symbols)
-        if involved_vars and involved_vars.issubset(set(remaining)):
+        poly = sympy.Poly(expr, *ordered_symbols, domain=sympy.QQ)
+        involved = {str(s) for s in poly.free_symbols}
+        if not involved:
+            # A nonzero constant basis element means the whole ring.
+            unit_ideal = True
+            break
+        if involved.issubset(set(remaining)):
             elimination_generators.append(
                 rational_polynomial_from_sympy(
                     sympy.Poly(expr, *remaining_symbols, domain=sympy.QQ),
@@ -236,12 +282,13 @@ def compute_elimination_ideal(request: "EliminationIdealRequest") -> "Eliminatio
                 )
             )
 
-    if not elimination_generators:
-        # The elimination ideal is the whole ring
+    if unit_ideal:
         from jacobian._exact import CanonicalRational
-        from jacobian.math.polynomials.values import RationalPolynomialTerm
-        from jacobian.math.polynomials.values import RationalPolynomial as _RP
-        one = _RP(
+        from jacobian.math.polynomials.values import (
+            RationalPolynomial,
+            RationalPolynomialTerm,
+        )
+        one = RationalPolynomial(
             variables=tuple(remaining),
             polynomial=SparseRationalPolynomial(
                 terms=(
@@ -253,6 +300,15 @@ def compute_elimination_ideal(request: "EliminationIdealRequest") -> "Eliminatio
             ),
         )
         elimination_generators = [one]
+    elif not elimination_generators:
+        # No retained-only basis elements: the elimination ideal is the
+        # zero ideal, represented by its canonical zero generator.
+        from jacobian.math.polynomials.values import RationalPolynomial
+        zero = RationalPolynomial(
+            variables=tuple(remaining),
+            polynomial=SparseRationalPolynomial(terms=()),
+        )
+        elimination_generators = [zero]
 
     ideal = RationalPolynomialIdeal(
         variables=tuple(remaining),

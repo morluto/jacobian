@@ -259,14 +259,13 @@ class TestBudgets:
     def test_bounding_box_span_bound_enforced(self) -> None:
         # A 1D interval spanning more than MAX_BOUND_SPAN integer points.
         far = str(MAX_BOUND_SPAN + 5)
-        request = LatticePolytopeRequest(
-            vertices=(
-                _v(("0", "1")),
-                _v((far, "1")),
+        with pytest.raises(ValidationError, match="span bound"):
+            LatticePolytopeRequest(
+                vertices=(
+                    _v(("0", "1")),
+                    _v((far, "1")),
+                )
             )
-        )
-        with pytest.raises(LatticePointBudgetError, match="span bound"):
-            count_lattice_points(request)
 
     def test_lattice_point_cap_enforced(self) -> None:
         # A 2D box just within the per-axis span bound but with more than

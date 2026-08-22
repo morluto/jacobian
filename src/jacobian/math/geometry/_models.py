@@ -531,7 +531,7 @@ class CircumradiusProfileResult(StrictModel):
     configuration: CircumradiusProfileRequest
     point_count: StrictInt = Field(ge=3, le=64)
     triple_count: StrictInt = Field(ge=1, le=41664)
-    entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
+    entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1, max_length=41664)
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
@@ -572,6 +572,8 @@ class CircumradiusProfileResult(StrictModel):
                 raise ValueError(
                     "collinearity flag does not match the source configuration"
                 )
+            if entry.labels != (points[i].label, points[j].label, points[k].label):
+                raise ValueError("entry does not match its recomputed labels")
             if entry.collinear:
                 continue
             dab = (ax - bx) ** 2 + (ay - by) ** 2
@@ -579,11 +581,8 @@ class CircumradiusProfileResult(StrictModel):
             dac = (ax - cx) ** 2 + (ay - cy) ** 2
             expected_radius = (dab * dbc * dac) / (4 * cross * cross)
             assert entry.squared_circumradius is not None
-            if (
-                entry.squared_circumradius.as_fraction() != expected_radius
-                or entry.labels != (points[i].label, points[j].label, points[k].label)
-            ):
-                raise ValueError("entry does not match its recomputed radius or labels")
+            if entry.squared_circumradius.as_fraction() != expected_radius:
+                raise ValueError("entry does not match its recomputed radius")
             d = entry.squared_circumradius.as_fraction()
             histogram[d] = histogram.get(d, 0) + 1
         return self

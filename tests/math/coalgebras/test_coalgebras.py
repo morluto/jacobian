@@ -258,3 +258,24 @@ class TestSourceBoundResults:
                 element_index=result.element_index,
                 value=result.value,
             )
+
+
+class TestEnumerationBudgetBeforeReplay:
+    def test_oversized_direct_result_rejected_before_enumeration(self):
+        """A serialized result with an unbounded coalgebra fails fast."""
+        import time
+
+        big = Coalgebra(
+            prime=9973,
+            dimension=2,
+            comultiplication=(
+                ((1, 0), (0, 0)),
+                ((0, 0), (0, 1)),
+            ),
+            counit=(1, 1),
+        )
+        assert big.prime ** big.dimension > GROUP_LIKE_ENUMERATION_BUDGET
+        started = time.monotonic()
+        with pytest.raises(ValidationError, match="enumeration requires"):
+            GroupLikeElementsResult(coalgebra=big, elements=(), count=0)
+        assert time.monotonic() - started < 5

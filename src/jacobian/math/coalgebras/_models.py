@@ -220,6 +220,18 @@ class GroupLikeElementsResult(StrictModel):
 
         if self.count != len(self.elements):
             raise ValueError("count must match element count")
+        # Reapply the enumeration admission bound before replaying: when a
+        # serialized result is validated directly, its coalgebra is parsed as
+        # a Coalgebra, not as a GroupLikeElementsRequest, so the request
+        # guard alone never runs.
+        if (
+            self.coalgebra.prime ** self.coalgebra.dimension
+            > GROUP_LIKE_ENUMERATION_BUDGET
+        ):
+            raise ValueError(
+                "group-like enumeration requires prime**dimension <= "
+                f"{GROUP_LIKE_ENUMERATION_BUDGET}"
+            )
         n = self.coalgebra.dimension
         seen = set()
         for element in self.elements:

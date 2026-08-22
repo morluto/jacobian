@@ -97,3 +97,20 @@ class TestCircumradiusAdmissionAndBinding:
         }
         with pytest.raises(ValidationError, match="does not match"):
             CircumradiusProfileResult.model_validate(payload)
+
+
+class TestCollinearLabelBinding:
+    def test_forged_labels_on_collinear_entry_rejected(self) -> None:
+        request = CircumradiusProfileRequest(
+            points=(
+                _labelled("A", "0", "0"),
+                _labelled("B", "1", "0"),
+                _labelled("C", "2", "0"),
+            )
+        )
+        result = circumradius_profile(request)
+        assert result.entries[0].collinear is True
+        payload = result.model_dump()
+        payload["entries"][0]["labels"] = ["A", "B", "Z"]
+        with pytest.raises(ValidationError):
+            CircumradiusProfileResult.model_validate(payload)

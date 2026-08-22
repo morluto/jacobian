@@ -573,6 +573,10 @@ def _require_circumradius_source_replay(
     coords = [(pt.point.x.as_fraction(), pt.point.y.as_fraction()) for pt in points]
     for e in entries:
         i, j, k = e.indices
+        # Bind entry identity to the source before any early return so
+        # collinear entries cannot claim the wrong labels.
+        if e.labels != (points[i].label, points[j].label, points[k].label):
+            raise ValueError("circumradius labels must match source points")
         (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
         cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
         if cross == 0:
@@ -591,8 +595,6 @@ def _require_circumradius_source_replay(
             raise ValueError(
                 "squared_circumradius does not match recomputed exact value"
             )
-        if e.labels != (points[i].label, points[j].label, points[k].label):
-            raise ValueError("circumradius labels must match source points")
 
 
 class ForbiddenLabelledPoint(StrictModel):

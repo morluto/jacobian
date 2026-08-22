@@ -36,6 +36,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
     OperationAdmission(
+        "geometry.points.compute.pinned_distances",
+        AdmissionDecision.KEEP,
+        "complete exact pinned-distance profile with source-bound line ledger for bounded point configurations",
+    ),
+    OperationAdmission(
         "geometry.points.compute.squared_distance",
         AdmissionDecision.DROP,
         "elementary exact formula without material leverage over direct Python",

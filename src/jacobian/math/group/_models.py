@@ -89,7 +89,7 @@ class GroupOrbitResult(StrictModel):
 # The conjugacy result serializes every group element and the lattice
 # traverses the subgroup structure; both stay bounded only under an
 # explicit enumerated-order cap enforced at this typed boundary.
-MAX_GROUP_ORDER = 512
+MAX_GROUP_ORDER = 64
 
 
 def _require_bounded_group_order(

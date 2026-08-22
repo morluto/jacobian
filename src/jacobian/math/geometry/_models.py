@@ -7,8 +7,9 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math._rational_height import RationalHeight, sum_heights
 
 
 class RationalPoint2D(StrictModel):
@@ -446,6 +447,18 @@ class LabelledPoint2D(StrictModel):
     point: RationalPoint2D
 
 
+def _circumradius_input_height_ok(point: RationalPoint2D) -> bool:
+    # Conservative: each coordinate within quarter of canonical digits ensures
+    # R^2 product of three squared distances over 4*cross^2 stays within limit.
+    # Squared distance height ~ 2*coord height, product of three ~6*coord, denominator ~2*coord.
+    # Bounding inputs at 4096 digits keeps result well under 32768.
+    max_input = 4096
+    for v in (point.x, point.y):
+        if RationalHeight.from_canonical(v).exceeds(max_input):
+            return False
+    return True
+
+
 class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration."""
 
@@ -467,6 +480,11 @@ class CircumradiusProfileRequest(StrictModel):
         )
         if len(keys) != len(set(keys)):
             raise ValueError("point coordinates must be unique")
+        for item in self.points:
+            if not _circumradius_input_height_ok(item.point):
+                raise ValueError(
+                    "circumradius coordinates exceed the conservative 4096-digit input bound for exact output"
+                )
         return self
 
 

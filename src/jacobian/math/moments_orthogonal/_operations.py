@@ -100,6 +100,9 @@ def compute_gaussian_quadrature(
         beta=request.beta,
         nodes=_from_fractions(result.nodes),
         weights=_from_fractions(result.weights),
+        is_approximate=True,
+        precision="FLOAT64",
+        exactness="APPROXIMATE_DYADIC",
     )
 
 

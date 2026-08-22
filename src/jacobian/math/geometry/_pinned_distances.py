@@ -208,9 +208,9 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
         if int_a < 0 or (int_a == 0 and int_b < 0):
             int_a, int_b, int_c = -int_a, -int_b, -int_c
         return (
-            str(int_a),
-            str(int_b),
-            str(int_c),
+            format_canonical_integer(int_a),
+            format_canonical_integer(int_b),
+            format_canonical_integer(int_c),
         )
 
     line_map: dict[

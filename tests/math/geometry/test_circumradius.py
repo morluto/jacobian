@@ -16,40 +16,37 @@ from jacobian.math.geometry._models import (
     _maximum_profile_wire_bytes,
 )
 from jacobian.math.geometry._operations import circumradius_profile
+from jacobian.math.geometry.exact._models import (
+    DistanceProfileRequest,
+    PointConfiguration,
+)
+from jacobian.math.geometry.exact._operations import compute_distance_profile
 
 
 def _pt(label: str, x: tuple[str, str], y: tuple[str, str]):
     return {
         "label": label,
-        "point": {
-            "x": {"num": x[0], "den": x[1]},
-            "y": {"num": y[0], "den": y[1]},
-        },
+        "coordinates": [
+            {"num": x[0], "den": x[1]},
+            {"num": y[0], "den": y[1]},
+        ],
     }
 
 
 def _request(points):
-    return CircumradiusProfileRequest(points=tuple(points))
-
-
-class _Lp:
-    """Shorthand for a labelled point dict."""
-
-    def __init__(self, label, x, y):
-        self.label = label
-        self.x = x
-        self.y = y
+    return CircumradiusProfileRequest(configuration={"points": tuple(points)})
 
 
 def _lp(label, xn, xd, yn, yd):
-    from jacobian._exact import CanonicalRational
-    from jacobian.math.geometry._models import LabelledPoint2D, RationalPoint2D
+    from jacobian.math.geometry.exact._models import (
+        LabelledRationalPoint,
+    )
 
-    return LabelledPoint2D(
+    return LabelledRationalPoint(
         label=label,
-        point=RationalPoint2D(
-            x=CanonicalRational(num=xn, den=xd),
-            y=CanonicalRational(num=yn, den=yd),
+        coordinates=(
+            CanonicalRational(num=xn, den=xd),
+            CanonicalRational(num=yn, den=yd),
         ),
     )
 
@@ -196,7 +193,7 @@ class TestCircumradiusProfileValidation:
             _lp("c", "2", "1", "0", "1"),
         )
         with pytest.raises(ValidationError, match="unique"):
-            CircumradiusProfileRequest(points=pts)
+            CircumradiusProfileRequest(configuration={"points": tuple(pts)})
 
     def test_rejects_duplicate_coordinates(self):
         pts = (
@@ -205,7 +202,7 @@ class TestCircumradiusProfileValidation:
             _lp("c", "2", "1", "0", "1"),
         )
         with pytest.raises(ValidationError, match="unique"):
-            CircumradiusProfileRequest(points=pts)
+            CircumradiusProfileRequest(configuration={"points": tuple(pts)})
 
     def test_rejects_too_few_points(self):
         pts = (
@@ -213,7 +210,7 @@ class TestCircumradiusProfileValidation:
             _lp("b", "1", "1", "0", "1"),
         )
         with pytest.raises(ValidationError):
-            CircumradiusProfileRequest(points=pts)
+            CircumradiusProfileRequest(configuration={"points": tuple(pts)})
 
     def test_entry_rejects_collinear_with_radius(self):
         with pytest.raises(ValidationError, match="collinear"):
@@ -288,7 +285,7 @@ def _height_point(index: int) -> dict[str, object]:
     y = Fraction((index + 1) ** 2, 10**59 + 2 * index + 129)
     return {
         "label": f"p{index}",
-        "point": {"x": _fraction_wire(x), "y": _fraction_wire(y)},
+        "coordinates": [_fraction_wire(x), _fraction_wire(y)],
     }
 
 
@@ -296,11 +293,11 @@ class TestAggregateResultBudget:
     def test_reviewer_counterexample_beyond_budget_is_rejected(self):
         points = tuple(_height_point(index) for index in range(64))
         with pytest.raises(ValidationError, match="aggregate result budget"):
-            CircumradiusProfileRequest(points=points)
+            CircumradiusProfileRequest(configuration={"points": tuple(points)})
 
     def test_same_coordinate_heights_admitted_when_profile_fits_budget(self):
         points = tuple(_height_point(index) for index in range(20))
-        result = circumradius_profile(CircumradiusProfileRequest(points=points))
+        result = circumradius_profile(CircumradiusProfileRequest(configuration={"points": tuple(points)}))
         assert result.point_count == 20
         assert result.triple_count == math.comb(20, 3)
         encoded = len(encode_strict_json(result.model_dump(mode="json")))
@@ -310,20 +307,20 @@ class TestAggregateResultBudget:
         points = tuple(
             {
                 "label": f"p{index}",
-                "point": {
-                    "x": {"num": str(index), "den": "1"},
-                    "y": {"num": str(index * index % 89), "den": "1"},
-                },
+                "coordinates": [
+                    {"num": str(index), "den": "1"},
+                    {"num": str(index * index % 89), "den": "1"},
+                ],
             }
             for index in range(64)
         )
-        request = CircumradiusProfileRequest(points=points)
+        request = CircumradiusProfileRequest(configuration={"points": tuple(points)})
         result = circumradius_profile(request)
         assert result.triple_count == math.comb(64, 3)
         wire = result.model_dump(mode="json")
         actual = len(encode_strict_json(wire))
         assert actual <= MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES
-        assert actual <= _maximum_profile_wire_bytes(request)
+        assert actual <= _maximum_profile_wire_bytes(request.configuration)
 
     def test_near_degenerate_triple_stays_exact_within_bound(self):
         # Three consecutive parabola points with huge heights: the cross is
@@ -337,14 +334,11 @@ class TestAggregateResultBudget:
         points = tuple(
             {
                 "label": f"t{index}",
-                "point": {
-                    "x": _fraction_wire(t),
-                    "y": _fraction_wire(t * t),
-                },
+                "coordinates": [_fraction_wire(t), _fraction_wire(t * t)],
             }
             for index, t in enumerate(parameters)
         )
-        result = circumradius_profile(CircumradiusProfileRequest(points=points))
+        result = circumradius_profile(CircumradiusProfileRequest(configuration={"points": tuple(points)}))
         entry = result.entries[0]
         assert entry.collinear is False
         ax, ay = (Fraction(parameters[0]), parameters[0] ** 2)
@@ -371,34 +365,38 @@ class TestAggregateResultBudget:
             tuple(
                 {
                     "label": chr(ord("a") + index),
-                    "point": {
-                        "x": _fraction_wire(Fraction(index + 1, 97 * (index + 3))),
-                        "y": _fraction_wire(Fraction(index * index + 1, 89)),
-                    },
+                    "coordinates": [
+                        _fraction_wire(Fraction(index + 1, 97 * (index + 3))),
+                        _fraction_wire(Fraction(index * index + 1, 89)),
+                    ],
                 }
                 for index in range(11)
             ),
         ]
         for points in configurations:
-            request = CircumradiusProfileRequest(points=points)
+            request = CircumradiusProfileRequest(configuration={"points": tuple(points)})
             result = circumradius_profile(request)
             actual = len(encode_strict_json(result.model_dump(mode="json")))
-            assert actual <= _maximum_profile_wire_bytes(request)
+            assert actual <= _maximum_profile_wire_bytes(request.configuration)
 
 
 class TestSchemaPublishedBounds:
-    def test_points_schema_publishes_coordinate_digit_bound(self):
+    def test_configuration_schema_publishes_coordinate_digit_bound(self):
         schema = CircumradiusProfileRequest.model_json_schema()
-        points_schema = schema["properties"]["points"]
-        assert points_schema["coordinate_digit_bound"] == CIRCUMRADIUS_INPUT_HEIGHT
+        configuration_schema = schema["properties"]["configuration"]
+        assert (
+            configuration_schema["coordinate_digit_bound"]
+            == CIRCUMRADIUS_INPUT_HEIGHT
+        )
         assert CIRCUMRADIUS_INPUT_HEIGHT == 64
         assert (
-            points_schema["aggregate_result_budget_bytes"]
+            configuration_schema["aggregate_result_budget_bytes"]
             == MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES
         )
-        assert "64 canonical decimal digits" in points_schema["description"]
+        assert "64 canonical decimal digits" in configuration_schema["description"]
         assert (
-            str(MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES) in points_schema["description"]
+            str(MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES)
+            in configuration_schema["description"]
         )
 
     def test_enforced_coordinate_height_matches_published_bound(self):
@@ -412,4 +410,75 @@ class TestSchemaPublishedBounds:
             ValidationError,
             match=f"exceeds the {CIRCUMRADIUS_INPUT_HEIGHT}-digit bound",
         ):
-            CircumradiusProfileRequest(points=pts)
+            CircumradiusProfileRequest(configuration={"points": tuple(pts)})
+
+    def test_label_heavy_near_limit_configuration_is_rejected_by_budget(self):
+        # 27 points at ~63-digit coordinate heights with maximum-size
+        # four-byte UTF-8 labels: the honest wire estimate must dominate
+        # the actual encoding and reject this before any profile work.
+        height = 10**62
+
+        def wire(value: Fraction) -> dict[str, str]:
+            return {
+                "num": format_canonical_integer(value.numerator),
+                "den": format_canonical_integer(value.denominator),
+            }
+
+        base = "\U0001F600" * 62  # 62 four-byte characters
+        points = tuple(
+            {
+                "label": f"{base}{index:02d}",
+                "coordinates": [
+                    wire(Fraction(height + 2 * index + 1, height + 2 * index + 3)),
+                    wire(Fraction(height + 4 * index + 3, height + 4 * index + 5)),
+                ],
+            }
+            for index in range(27)
+        )
+        request_points = PointConfiguration(points=points)
+        assert (
+            _maximum_profile_wire_bytes(request_points)
+            > MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES
+        )
+        with pytest.raises(ValidationError, match="aggregate result"):
+            CircumradiusProfileRequest(configuration={"points": points})
+
+    def test_accepts_the_canonical_configuration_value_unchanged(self):
+        configuration = {
+            "points": [
+                {
+                    "label": "a",
+                    "coordinates": [
+                        {"num": "0", "den": "1"},
+                        {"num": "0", "den": "1"},
+                    ],
+                },
+                {
+                    "label": "b",
+                    "coordinates": [
+                        {"num": "2", "den": "1"},
+                        {"num": "0", "den": "1"},
+                    ],
+                },
+                {
+                    "label": "c",
+                    "coordinates": [
+                        {"num": "0", "den": "1"},
+                        {"num": "2", "den": "1"},
+                    ],
+                },
+            ]
+        }
+        distance_result = compute_distance_profile(
+            DistanceProfileRequest(configuration=configuration)
+        )
+        circumradius_request = CircumradiusProfileRequest(
+            configuration=configuration
+        )
+        circumradius_result = circumradius_profile(circumradius_request)
+        assert distance_result.point_count == 3
+        assert circumradius_result.point_count == 3
+        assert circumradius_result.triple_count == math.comb(3, 3)
+        entry = circumradius_result.entries[0]
+        assert entry.squared_circumradius is not None
+        assert entry.squared_circumradius.as_fraction() == Fraction(2)

@@ -77,34 +77,30 @@ UNIT_SQUARE = {
 
 
 PARABOLA_COLLISION = {
-    "points": [
-        {
-            "label": "t1",
-            "point": {"x": {"num": "1", "den": "1"}, "y": {"num": "1", "den": "1"}},
-        },
-        {
-            "label": "t2",
-            "point": {"x": {"num": "2", "den": "1"}, "y": {"num": "4", "den": "1"}},
-        },
-        {
-            "label": "t4",
-            "point": {"x": {"num": "4", "den": "1"}, "y": {"num": "16", "den": "1"}},
-        },
-        {
-            "label": "t19",
-            "point": {
-                "x": {"num": "19", "den": "1"},
-                "y": {"num": "361", "den": "1"},
+    "configuration": {
+        "points": [
+            {
+                "label": "t1",
+                "coordinates": [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}],
             },
-        },
-        {
-            "label": "t29",
-            "point": {
-                "x": {"num": "29", "den": "1"},
-                "y": {"num": "841", "den": "1"},
+            {
+                "label": "t2",
+                "coordinates": [{"num": "2", "den": "1"}, {"num": "4", "den": "1"}],
             },
-        },
-    ]
+            {
+                "label": "t4",
+                "coordinates": [{"num": "4", "den": "1"}, {"num": "16", "den": "1"}],
+            },
+            {
+                "label": "t19",
+                "coordinates": [{"num": "19", "den": "1"}, {"num": "361", "den": "1"}],
+            },
+            {
+                "label": "t29",
+                "coordinates": [{"num": "29", "den": "1"}, {"num": "841", "den": "1"}],
+            },
+        ]
+    }
 }
 
 EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (

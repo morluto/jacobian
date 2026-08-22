@@ -433,10 +433,11 @@ def circumradius_profile(
     """
     from itertools import combinations
 
-    points = request.points
+    points = request.configuration.points
     n = len(points)
     coords: list[tuple[Fraction, Fraction]] = [
-        (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in points
+        (item.coordinates[0].as_fraction(), item.coordinates[1].as_fraction())
+        for item in points
     ]
     entries: list[CircumradiusTripleEntry] = []
     for i, j, k in combinations(range(n), 3):

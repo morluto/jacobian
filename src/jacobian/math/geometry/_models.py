@@ -11,6 +11,10 @@ from pydantic import Field, StrictInt, model_validator
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import encode_strict_json, format_canonical_integer
+from jacobian.math.geometry.exact._models import (
+    LabelledRationalPoint,
+    PointConfiguration,
+)
 
 
 class RationalPoint2D(StrictModel):
@@ -441,13 +445,6 @@ class ConvexPolygonTriangulationResult(StrictModel):
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
 
-class LabelledPoint2D(StrictModel):
-    """A labelled rational point in the plane."""
-
-    label: str = Field(min_length=1, max_length=64)
-    point: RationalPoint2D
-
-
 CIRCUMRADIUS_COORDINATE_DIGITS = 256
 """Conservative per-coordinate digit bound.
 
@@ -464,6 +461,9 @@ MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES = 10 * 1024 * 1024
 
 _CIRCUMRADIUS_RESULT_BOUND_PADDING_BYTES = 1_024
 
+_CIRCUMRADIUS_ENTRY_SLACK_BYTES = 16
+"""Per-entry slack over the exact skeleton, label, index, and digit bounds."""
+
 
 def _bounded_circumradius_coordinate(value: CanonicalRational, label: str) -> None:
     from jacobian._exact import require_bounded_rational
@@ -476,18 +476,18 @@ def _bounded_circumradius_coordinate(value: CanonicalRational, label: str) -> No
 
 
 def _difference_digit_heights(
-    left: RationalPoint2D,
-    right: RationalPoint2D,
+    left: LabelledRationalPoint,
+    right: LabelledRationalPoint,
 ) -> tuple[int, int, int, int]:
     """Return reduced coordinate-difference component digit counts.
 
     The four counts are ``(digits(|dx numerator|), digits(dx denominator),
-    digits(|dy numerator|), digits(dy denominator))`` for the difference
-    ``left - right``.
+    digits(|dy numerator|), digits(dy denominator))`` for the planar
+    difference ``left - right``.
     """
 
-    delta_x = left.x.as_fraction() - right.x.as_fraction()
-    delta_y = left.y.as_fraction() - right.y.as_fraction()
+    delta_x = left.coordinates[0].as_fraction() - right.coordinates[0].as_fraction()
+    delta_y = left.coordinates[1].as_fraction() - right.coordinates[1].as_fraction()
     return (
         len(format_canonical_integer(abs(delta_x.numerator))),
         len(format_canonical_integer(delta_x.denominator)),
@@ -496,28 +496,30 @@ def _difference_digit_heights(
     )
 
 
-def _maximum_profile_wire_bytes(configuration: CircumradiusProfileRequest) -> int:
+def _maximum_profile_wire_bytes(configuration: PointConfiguration) -> int:
     """Upper-bound the canonical wire encoding of the complete profile result.
 
-    For a reduced difference with numerator digit count ``n`` and denominator
-    digit count ``d``, its square has numerator within ``2n + 2d + 1`` digits
-    and denominator within ``2d + 1``; a squared distance sums two such
-    squares so its numerator gains one more digit. A triangle cross of
-    differences is bounded by the larger cross-term plus one carry digit, and
-    ``squared_circumradius`` (the product of three squared distances over
-    ``4 * cross^2``) therefore has numerator digits at most the summed
-    squared-distance numerator bounds plus carries, and denominator digits at
-    most the summed squared-distance denominator bounds plus twice the cross
-    bound and one multiplier digit. Each entry is bounded by an encoding
-    skeleton plus those digit counts and the exact label and index encodings;
-    the configuration echo is counted exactly.
+    Every bound below is taken on unreduced forms, so canonical reduction at
+    any step can only shrink the real encoding. For a reduced coordinate
+    difference with numerator digit count ``n`` and denominator digit count
+    ``d``, its square has numerator within ``2n`` and denominator within
+    ``2d`` digits; a squared distance sums two such squares over the product
+    denominator, gaining one sum-carry digit on the numerator. The triangle's
+    squared-distance product multiplies those bounds. The cross of two edge
+    differences scales each term to the other's denominator, so its numerator
+    gains the opposite term's denominator digits plus a carry and its
+    denominator is the summed denominator digits. Dividing by ``4 * cross^2``
+    moves twice the cross bounds across the fraction with one multiplier
+    carry digit. Each entry is costed as an encoding skeleton plus both
+    radius component bounds (not their maximum), exact label and index
+    encodings, and slack; the configuration echo is counted exactly.
     """
 
     points = configuration.points
     pairs = {
         (first, second): _difference_digit_heights(
-            points[first].point,
-            points[second].point,
+            points[first],
+            points[second],
         )
         for first, second in combinations(range(len(points)), 2)
     }
@@ -528,8 +530,8 @@ def _maximum_profile_wire_bytes(configuration: CircumradiusProfileRequest) -> in
     ) -> tuple[int, int]:
         num_x, den_x, num_y, den_y = pairs[(first, second)]
         return (
-            max(2 * num_x + 2 * den_y, 2 * num_y + 2 * den_x) + 3,
-            2 * den_x + 2 * den_y + 1,
+            max(2 * num_x + 2 * den_y, 2 * num_y + 2 * den_x) + 1,
+            2 * den_x + 2 * den_y,
         )
 
     label_bytes = [len(encode_strict_json(item.label)) for item in points]
@@ -553,22 +555,35 @@ def _maximum_profile_wire_bytes(configuration: CircumradiusProfileRequest) -> in
             )
             numerator_bound += squared_numerator
             denominator_bound += squared_denominator
-        cross_digits = (
+        # Cross of the (first, second) and (first, third) differences: each
+        # term scales to the other term's denominator before subtracting.
+        nx_ab, bx_ab, ny_ab, by_ab = pairs[(first, second)]
+        nx_ac, bx_ac, ny_ac, by_ac = pairs[(first, third)]
+        first_numerator = nx_ab + ny_ac
+        first_denominator = bx_ab + by_ac
+        second_numerator = ny_ab + nx_ac
+        second_denominator = by_ab + bx_ac
+        cross_numerator_digits = (
             max(
-                pairs[(first, second)][0] + pairs[(first, third)][3],
-                pairs[(first, second)][3] + pairs[(first, third)][0],
+                first_numerator + second_denominator,
+                second_numerator + first_denominator,
             )
-            + 2
+            + 1
         )
-        radius_digits = max(
-            numerator_bound + 1,
-            denominator_bound + 2 * cross_digits + 2,
+        cross_denominator_digits = first_denominator + second_denominator
+        radius_numerator_digits = (
+            numerator_bound + 2 * cross_denominator_digits + 1
+        )
+        radius_denominator_digits = (
+            denominator_bound + 2 * cross_numerator_digits + 1
         )
         total += (
             entry_base
             + sum(label_bytes[index] - 2 for index in (first, second, third))
             + sum(index_bytes[index] - 1 for index in (first, second, third))
-            + 2 * radius_digits
+            + radius_numerator_digits
+            + radius_denominator_digits
+            + _CIRCUMRADIUS_ENTRY_SLACK_BYTES
         )
         triple_count += 1
     total += triple_count + 1 + _CIRCUMRADIUS_RESULT_BOUND_PADDING_BYTES
@@ -579,55 +594,56 @@ class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration.
 
     Requires at least three points (a circumradius profile needs triples),
-    unique labels, unique coordinates, coordinates within the published
-    ``coordinate_digit_bound`` schema metadata, and an aggregate profile that
-    fits the published aggregate result budget, so every accepted request
-    returns one typed exact result instead of an unencodable value.
+    unique labels, unique coordinates, exactly two coordinates per point,
+    coordinates within the published ``coordinate_digit_bound`` schema
+    metadata, and an aggregate profile that fits the published aggregate
+    result budget, so every accepted request returns one typed exact result
+    instead of an unencodable value.
     """
 
-    points: tuple[LabelledPoint2D, ...] = Field(
-        min_length=3,
-        max_length=64,
+    configuration: PointConfiguration = Field(
         description=(
-            "Labelled rational points. Every coordinate numerator and "
-            f"denominator carries at most {CIRCUMRADIUS_INPUT_HEIGHT} "
-            "canonical decimal digits, and configurations whose complete "
-            "profile would exceed the "
+            "Canonical labelled rational point configuration (the same "
+            "value accepted by distance_profile and distance_graph) with "
+            "at least three points and exactly two coordinates per point. "
+            "Every coordinate numerator and denominator carries at most "
+            f"{CIRCUMRADIUS_INPUT_HEIGHT} canonical decimal digits, and "
+            "configurations whose complete profile would exceed the "
             f"{MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES}-byte aggregate result "
             "budget are rejected before execution."
         ),
         json_schema_extra={
             "coordinate_digit_bound": CIRCUMRADIUS_INPUT_HEIGHT,
             "aggregate_result_budget_bytes": MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES,
+            "min_point_count": 3,
+            "dimension": 2,
         },
     )
 
     @model_validator(mode="after")
     def require_admissible_configuration(self) -> Self:
-        if len(self.points) < 3:
+        points = self.configuration.points
+        if len(points) < 3:
             raise ValueError("circumradius profile requires at least three points")
-        labels = tuple(item.label for item in self.points)
-        if len(labels) != len(set(labels)):
-            raise ValueError("point labels must be unique")
-        keys = tuple(
-            (
-                item.point.x.num,
-                item.point.x.den,
-                item.point.y.num,
-                item.point.y.den,
+        if any(len(item.coordinates) != 2 for item in points):
+            raise ValueError(
+                "circumradius profile requires a planar configuration "
+                "(exactly two coordinates per point)"
             )
-            for item in self.points
+        keys = tuple(
+            tuple(
+                (component.num, component.den) for component in item.coordinates
+            )
+            for item in points
         )
         if len(keys) != len(set(keys)):
             raise ValueError("point coordinates must be unique")
-        for index, item in enumerate(self.points):
-            _bounded_circumradius_coordinate(
-                item.point.x, f"point {index} x coordinate"
-            )
-            _bounded_circumradius_coordinate(
-                item.point.y, f"point {index} y coordinate"
-            )
-        estimated_bytes = _maximum_profile_wire_bytes(self)
+        for index, item in enumerate(points):
+            for axis, component in enumerate(item.coordinates):
+                _bounded_circumradius_coordinate(
+                    component, f"point {index} coordinate {axis}"
+                )
+        estimated_bytes = _maximum_profile_wire_bytes(self.configuration)
         if estimated_bytes > MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES:
             raise ValueError(
                 "the complete circumradius profile would exceed the "
@@ -671,7 +687,8 @@ class CircumradiusProfileResult(StrictModel):
         import math
 
         # Cap point_count before enumerating expected triples.
-        if self.point_count > 64 or len(self.configuration.points) != self.point_count:
+        points = self.configuration.configuration.points
+        if self.point_count > 64 or len(points) != self.point_count:
             raise ValueError(
                 "point_count must match the retained configuration (at most 64)"
             )
@@ -680,9 +697,9 @@ class CircumradiusProfileResult(StrictModel):
             raise ValueError("circumradius profile must be complete")
         if self.triple_count != expected_count:
             raise ValueError("triple_count must equal C(point_count, 3)")
-        points = self.configuration.points
         coords: list[tuple[Fraction, Fraction]] = [
-            (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in points
+            (item.coordinates[0].as_fraction(), item.coordinates[1].as_fraction())
+            for item in points
         ]
         seen: set[tuple[int, int, int]] = set()
         histogram: dict[Fraction, int] = {}

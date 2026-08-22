@@ -445,12 +445,16 @@ def enumeration_output_admission(
 def enumerate_lattice_points(
     request: LatticePolytopeRequest,
 ) -> EnumerateLatticePointsResult:
-    """Enumerate every lattice point inside a bounded rational polytope."""
+    """Enumerate every lattice point inside a bounded rational polytope.
+
+    The enumerate-specific request boundary has already run the exact
+    count pass for artifact admission, so execution performs only the
+    collecting scan.
+    """
     representation: Literal["vertices", "halfspaces"] = (
         "vertices" if request.vertices is not None else "halfspaces"
     )
     facets, lo, hi, d = _facets_and_box(request)
-    _, _count_for_estimate = _scan_box(facets, lo, hi, d, collect=False)
     points, _count = _scan_box(facets, lo, hi, d, collect=True)
     return EnumerateLatticePointsResult(
         dimension=d,

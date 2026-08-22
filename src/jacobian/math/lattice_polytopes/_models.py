@@ -299,7 +299,7 @@ class LatticePoint(StrictModel):
     @model_validator(mode="after")
     def require_coordinate_digit_bound(self) -> Self:
         for coordinate in self.coordinates:
-            if len(coordinate.lstrip("-")) > COORDINATE_DIGITS + 1:
+            if len(coordinate.lstrip("-")) > COORDINATE_DIGITS:
                 raise ValueError(
                     "lattice-point coordinate exceeds the "
                     f"{COORDINATE_DIGITS}-digit bound"
@@ -310,17 +310,26 @@ class LatticePoint(StrictModel):
 class EnumerateLatticePointsResult(StrictModel):
     """The complete list of lattice points inside a bounded rational polytope."""
 
-    dimension: int = Field(ge=1)
+    dimension: int = Field(ge=1, le=MAX_DIMENSION)
     point_count: int = Field(ge=0)
     points: tuple[LatticePoint, ...]
     representation: str
 
     @model_validator(mode="after")
-    def require_count_matches_points(self) -> Self:
+    def require_complete_point_set(self) -> Self:
         if self.point_count != len(self.points):
             raise ValueError(
                 "point_count must equal the number of returned lattice points"
             )
+        seen = {point.coordinates for point in self.points}
+        if len(seen) != len(self.points):
+            raise ValueError("enumeration must not repeat a lattice point")
+        for point in self.points:
+            if len(point.coordinates) != self.dimension:
+                raise ValueError(
+                    "every lattice point must carry exactly `dimension` "
+                    "coordinates"
+                )
         return self
 
 

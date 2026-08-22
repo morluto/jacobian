@@ -418,3 +418,47 @@ class TestEnumerateRequestBoundary:
         with pytest.raises(ValidationError):
             LatticePoint(coordinates=("x",))
         assert LatticePoint(coordinates=("-42",)).coordinates == ("-42",)
+
+
+class TestEnumerationResultInvariants:
+    def test_duplicate_points_rejected(self) -> None:
+        from jacobian.math.lattice_polytopes._models import (
+            EnumerateLatticePointsResult,
+            LatticePoint,
+        )
+
+        with pytest.raises(ValidationError, match="repeat"):
+            EnumerateLatticePointsResult(
+                dimension=1,
+                point_count=2,
+                points=(
+                    LatticePoint(coordinates=("0",)),
+                    LatticePoint(coordinates=("0",)),
+                ),
+                representation="vertices",
+            )
+
+    def test_dimension_must_match_point_coordinates(self) -> None:
+        from jacobian.math.lattice_polytopes._models import (
+            EnumerateLatticePointsResult,
+            LatticePoint,
+        )
+
+        with pytest.raises(ValidationError, match="dimension"):
+            EnumerateLatticePointsResult(
+                dimension=2,
+                point_count=1,
+                points=(LatticePoint(coordinates=("0",)),),
+                representation="vertices",
+            )
+
+    def test_coordinate_digit_limit_is_exact(self) -> None:
+        from jacobian.math.lattice_polytopes._models import (
+            COORDINATE_DIGITS,
+            LatticePoint,
+        )
+
+        exactly_at = "9" * COORDINATE_DIGITS
+        assert LatticePoint(coordinates=(exactly_at,)).coordinates == (exactly_at,)
+        with pytest.raises(ValidationError, match="digit bound"):
+            LatticePoint(coordinates=("9" * (COORDINATE_DIGITS + 1),))

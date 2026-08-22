@@ -345,20 +345,103 @@ __all__ = [
 
 
 class VerificationResult(StrictModel):
-    """Result of verifying a chain complex property."""
+    """Result of verifying a chain complex property, bound to its input."""
 
     is_valid: bool
     detail: str
     complex: ChainComplexValue | None = None
     source: ChainComplexValue | None = None
     target: ChainComplexValue | None = None
+    map_matrices: tuple[tuple[tuple[str, ...], ...], ...] | None = None
 
     @model_validator(mode="after")
     def bind_verification_to_source(self) -> Self:
-        # If a source complex is present, ensure the verdict is replayable
-        # by checking that the stored detail matches the expected pattern for the claimed complex.
-        # For now, require that at least one of complex/source is set when is_valid is claimed.
-        # The operation-level validators will ensure the boolean matches the actual check.
+        """Replay the checked relation against the retained inputs so a
+        detached or forged verdict cannot validate."""
+        from jacobian.math.chain_complexes.operations import (
+            _matrix_to_fractions,
+            _parsed_differentials,
+            _require_chain_map_relation,
+            _require_square_zero,
+        )
+        if self.complex is not None:
+            if self.source or self.target or self.map_matrices:
+                raise ValueError(
+                    "a differential verification result must not carry "
+                    "chain-map inputs"
+                )
+            try:
+                _require_square_zero(
+                    _parsed_differentials(self.complex),
+                    self.complex.prime,
+                    label="verified",
+                    group_columns=list(self.complex.basis_sizes),
+                    degree_min=self.complex.degree_min,
+                )
+                holds = True
+            except ValueError:
+                holds = False
+        elif (
+            self.source is not None
+            and self.target is not None
+            and self.map_matrices is not None
+        ):
+            prime = self.source.prime
+            try:
+                map_mats = [
+                    _matrix_to_fractions(
+                        m, self.target.basis_sizes[i], self.source.basis_sizes[i], prime
+                    )
+                    for i, m in enumerate(self.map_matrices)
+                ]
+                source_diffs = [
+                    _matrix_to_fractions(
+                        m,
+                        self.source.basis_sizes[i],
+                        self.source.basis_sizes[i + 1],
+                        prime,
+                    )
+                    for i, m in enumerate(self.source.differential_matrices)
+                ]
+                target_diffs = [
+                    _matrix_to_fractions(
+                        m,
+                        self.target.basis_sizes[i],
+                        self.target.basis_sizes[i + 1],
+                        prime,
+                    )
+                    for i, m in enumerate(self.target.differential_matrices)
+                ]
+                # Producer semantics: endpoints must be genuine complexes
+                # and the map must commute at every differential.
+                for endpoint in (self.source, self.target):
+                    _require_square_zero(
+                        _parsed_differentials(endpoint),
+                        endpoint.prime,
+                        label="chain-map",
+                        group_columns=list(endpoint.basis_sizes),
+                        degree_min=endpoint.degree_min,
+                    )
+                _require_chain_map_relation(
+                    source_diffs,
+                    target_diffs,
+                    map_mats,
+                    prime,
+                    source_group_columns=list(self.source.basis_sizes),
+                )
+                holds = True
+            except (ValueError, IndexError):
+                holds = False
+        else:
+            raise ValueError(
+                "a verification result must retain the complete checked "
+                "input (the complex, or both endpoints with their map)"
+            )
+        if holds != self.is_valid:
+            raise ValueError(
+                "verification verdict must be the exact replay of the "
+                "retained relation"
+            )
         return self
 
 

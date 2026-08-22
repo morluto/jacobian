@@ -267,7 +267,11 @@ def verify_differential(request: VerifyDifferentialRequest) -> VerificationResul
                 complex=request.complex,
             )
 
-    return VerificationResult(is_valid=True, detail="d^2 = 0 for all degrees")
+    return VerificationResult(
+        is_valid=True,
+        detail="d^2 = 0 for all degrees",
+        complex=request.complex,
+    )
 
 
 def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
@@ -301,6 +305,7 @@ def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
                     "endpoints exists",
                     source=source,
                     target=target,
+                    map_matrices=request.map_matrices,
                 )
 
     # Request admission guarantees one component per degree, equal shape
@@ -332,6 +337,7 @@ def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
                 detail=f"chain map does not commute at degree {source.degree_min + i}",
                 source=source,
                 target=target,
+                map_matrices=request.map_matrices,
             )
 
     return VerificationResult(
@@ -339,6 +345,7 @@ def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
         detail="chain map commutes with differentials",
         source=source,
         target=target,
+        map_matrices=request.map_matrices,
     )
 
 

@@ -1,6 +1,7 @@
 """Tests for chain complex operations (#1824)."""
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.chain_complexes._models import (
     ComputeHomologyRequest,
@@ -747,3 +748,32 @@ class TestZeroWidthGroupComposition:
         result = verify_differential(VerifyDifferentialRequest(complex=neg))
         assert not result.is_valid
         assert "-4" in result.detail
+
+
+class TestVerificationVerdictBinding:
+    def test_forged_verdict_rejected(self) -> None:
+        """A successful verdict cannot validate against a complex whose
+        d^2 is nonzero, and a detached verdict cannot validate at all."""
+        from jacobian.math.chain_complexes.values import VerificationResult
+
+        bad = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=2,
+            basis_sizes=(1, 1, 1),
+            differential_matrices=((("1",),), (("1",),)),
+        )
+        with pytest.raises(ValidationError, match="exact replay"):
+            VerificationResult(is_valid=True, detail="d^2 = 0", complex=bad)
+        with pytest.raises(ValidationError, match="retain"):
+            VerificationResult(is_valid=True, detail="d^2 = 0")
+
+    def test_true_verdict_retains_complex(self) -> None:
+        """Successful differential verification retains its input."""
+        result = verify_differential(
+            VerifyDifferentialRequest(complex=_circle_complex())
+        )
+        assert result.is_valid
+        assert result.complex is not None
+        revalidated = type(result).model_validate(result.model_dump())
+        assert revalidated.is_valid

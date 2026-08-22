@@ -148,3 +148,49 @@ class TestRankSourceBinding:
                 columns=2,
                 rank=7,
             )
+
+
+class TestComputedMatrixContext:
+    def test_computed_matrix_prime_must_match(self) -> None:
+        from jacobian.math.prime_field_matrix_ops._models import (
+            RankRequest,
+            RrefResult,
+        )
+        from jacobian.math.prime_field_matrix_ops._operations import (
+            compute_rref,
+        )
+
+        request = RankRequest(prime=2, entries=((1, 0), (1, 1)), columns=2)
+        rref_request = __import__(
+            "jacobian.math.prime_field_matrix_ops._models",
+            fromlist=["RrefRequest"],
+        ).RrefRequest(prime=2, entries=request.entries, columns=2)
+        rref_result = compute_rref(rref_request)
+        # A relayed payload pairing GF(2) rows with a GF(3) claim fails.
+        with pytest.raises(ValidationError):
+            RrefResult.model_validate(
+                {
+                    "prime": 3,
+                    "entries": rref_result.entries,
+                    "columns": 2,
+                    "rref_rows": rref_result.rref_rows,
+                    "pivot_columns": rref_result.pivot_columns,
+                    "computed_matrix": {
+                        "prime": 2,
+                        "entries": rref_result.rref_rows,
+                        "columns": 2,
+                    },
+                }
+            )
+
+
+class TestNullspaceContext:
+    def test_nullspace_basis_carries_field_context(self) -> None:
+        from jacobian.math.prime_field_matrix_ops._operations import (
+            compute_nullspace,
+        )
+
+        request = NullspaceRequest(prime=5, entries=((1, 2),), columns=2)
+        result = compute_nullspace(request)
+        assert result.basis_matrix is not None
+        assert result.basis_matrix.prime == 5

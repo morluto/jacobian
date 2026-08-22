@@ -292,8 +292,13 @@ def gaussian_quadrature(
         raise ValueError("alpha must contain between 1 and 16 entries")
     if len(beta) != n and len(beta) != n + 1:
         raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-    if beta[0] == 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    # A Gaussian rule requires a positive-definite functional: mu_0 > 0
+    # and nonnegative subdiagonal beta, otherwise the "rule" is not a
+    # measure (negative masses).
+    if beta[0] <= 0:
+        raise ValueError(
+            "beta_0 must be positive for a Gaussian quadrature rule"
+        )
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
     for k in range(n - 1):
@@ -309,12 +314,14 @@ def gaussian_quadrature(
         jacobi += np.diag(off_arr, 1) + np.diag(off_arr, -1)
     eigenvalues, eigenvectors = np.linalg.eigh(jacobi)
     mu0 = float(beta[0])
-    weights = mu0 * eigenvectors[0, :] ** 2
+    weights_np = mu0 * eigenvectors[0, :] ** 2
+    if any(w < 0 for w in weights_np):
+        raise ValueError("quadrature produced a negative weight")
     # Each double is carried as its exact dyadic rational image so the result
     # stays canonical and reconstructible without JSON floating points.
     return GaussianQuadrature(
         nodes=tuple(Fraction(float(v)) for v in eigenvalues),
-        weights=tuple(Fraction(float(w)) for w in weights),
+        weights=tuple(Fraction(float(w)) for w in weights_np),
         is_approximate=True,
         precision="FLOAT64",
     )

@@ -165,14 +165,15 @@ class RrefResult(RrefRequest):
         expected_rows, expected_pivots = rref(matrix)
         # Canonical value: the computed matrix composes into downstream
         # prime-field consumers unchanged.
-        if self.computed_matrix is None:
-            self.computed_matrix = PrimeFieldMatrix(
-                prime=self.prime,
-                entries=expected_rows,
-                columns=self.columns,
+        if (
+            self.computed_matrix is None
+            or self.computed_matrix.prime != self.prime
+            or self.computed_matrix.columns != self.columns
+            or self.computed_matrix.entries != expected_rows
+        ):
+            raise ValueError(
+                "computed_matrix must be the exact RREF over the same prime"
             )
-        elif self.computed_matrix.entries != expected_rows:
-            raise ValueError("computed_matrix must be the exact RREF")
         if self.rref_rows != expected_rows:
             raise ValueError("rref_rows must be the exact reduced row-echelon form")
         if self.pivot_columns != expected_pivots:
@@ -210,6 +211,7 @@ class NullspaceRequest(StrictModel):
 
 class NullspaceResult(NullspaceRequest):
     nullspace_rows: tuple[tuple[int, ...], ...]
+    basis_matrix: PrimeFieldMatrix | None = None
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_NULLSPACE"] = "EXACT_DOMAIN_MATRIX_NULLSPACE"
 
@@ -221,6 +223,23 @@ class NullspaceResult(NullspaceRequest):
         expected = nullspace(matrix)
         if self.nullspace_rows != expected:
             raise ValueError("nullspace_rows must be the exact nullspace basis")
+        # Canonical value: the basis composes into downstream prime-field
+        # consumers with its field context retained.
+        rows = tuple(tuple(int(v) for v in row) for row in self.nullspace_rows)
+        if not rows:
+            # Full-rank source: the basis carries a single zero row so its
+            # field context and width stay explicit.
+            rows = (tuple(0 for _ in range(self.columns)),)
+        if (
+            self.basis_matrix is None
+            or self.basis_matrix.prime != self.prime
+            or self.basis_matrix.entries != rows
+            or self.basis_matrix.columns != self.columns
+        ):
+            raise ValueError(
+                "basis_matrix must be the exact nullspace basis over the "
+                "same prime"
+            )
         if any(
             type(value) is not int or not 0 <= value < self.prime
             for row in self.nullspace_rows

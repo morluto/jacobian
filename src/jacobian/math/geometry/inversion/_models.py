@@ -41,9 +41,10 @@ def _inversion_height_bound_ok(
     scale = RationalHeight.from_canonical(power).quotient(norm2)
     hx = sum_heights((RationalHeight.from_canonical(center.x), scale.product(dx)))
     hy = sum_heights((RationalHeight.from_canonical(center.y), scale.product(dy)))
-    return not hx.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) and not hy.exceeds(
-        MAX_CANONICAL_RATIONAL_DIGITS
-    )
+    # Closure: the image must itself be an admissible input, so its
+    # height is compared against the same input cap, not the full
+    # canonical limit.
+    return not hx.exceeds(half) and not hy.exceeds(half)
 
 
 class CircleInversionRequest(StrictModel):

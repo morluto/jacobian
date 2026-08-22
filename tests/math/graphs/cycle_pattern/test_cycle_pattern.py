@@ -219,3 +219,42 @@ class TestBoundedSearchAndWitnessBinding:
         result = ops.decide_fixed_length_cycle(request)
         assert result.outcome == "SEARCH_BUDGET_EXCEEDED"
         assert result.exists is None and result.cycle is None
+
+    def test_negative_embedding_replay_stays_within_search_budget(self):
+        """An empty 64-vertex host against a 20-vertex one-edge pattern is
+        rejected by degree pruning; validating the negative result must
+        replay the same bounded search instead of enumerating P(64,20)
+        injective mappings."""
+        import time
+
+        host = UndirectedGraph.model_validate(self._graph(64, []))
+        pattern = UndirectedGraph.model_validate(self._graph(20, [(0, 1)]))
+        start = time.monotonic()
+        result = find_subgraph_pattern(SubgraphPatternRequest(host=host, pattern=pattern))
+        elapsed = time.monotonic() - start
+        assert result.exists is False
+        assert elapsed < 5.0
+
+    def test_forged_negative_embedding_is_rejected(self):
+        """A host containing the pattern cannot validate exists=False."""
+        host = UndirectedGraph.model_validate(self._graph(4, [(0, 1), (1, 2), (2, 3), (3, 0), (0, 2)]))
+        pattern = UndirectedGraph.model_validate(self._graph(3, [(0, 1), (1, 2), (2, 0)]))
+        with pytest.raises(ValidationError, match="contradicts"):
+            SubgraphPatternResult(
+                host_graph=host,
+                pattern_graph=pattern,
+                host_vertex_count=4,
+                pattern_vertex_count=3,
+                exists=False,
+            )
+
+    def test_forged_negative_cycle_is_rejected(self):
+        """A graph containing the requested cycle cannot validate exists=False."""
+        square = UndirectedGraph.model_validate(self._graph(4, [(0, 1), (1, 2), (2, 3), (3, 0)]))
+        with pytest.raises(ValidationError, match="contradicts"):
+            FixedLengthCycleResult(
+                graph=square,
+                vertex_count=4,
+                length=4,
+                exists=False,
+            )

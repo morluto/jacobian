@@ -44,7 +44,8 @@ PROFILE_OPERATIONS = (
     geometry_operation(
         "geometry.configuration.forbidden_patterns.check",
         "Find collinear triples and concyclic quadruples",
-        "Given a bounded labelled rational planar point configuration, find a "
+        "Given a labelled rational planar point configuration of at most 32 "
+        "points whose coordinates carry at most 64 digits, find a "
         "witness to either a collinear triple or a concyclic quadruple, or "
         "establish after complete bounded enumeration that neither exists.",
         ForbiddenPatternsRequest,

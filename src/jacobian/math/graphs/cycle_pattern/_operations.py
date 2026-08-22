@@ -26,6 +26,52 @@ def _build_graph(graph: UndirectedGraph) -> nx.Graph[int]:
     return g
 
 
+def _decide_cycle_bounded(graph: UndirectedGraph, length: int) -> bool:
+    """Bounded exhaustive k-cycle decision shared by execution and validation.
+
+    Raises ``_BudgetExceededError`` when the deterministic node budget is
+    exhausted without deciding.
+    """
+    g = _build_graph(graph)
+    budget = _NodeBudget()
+    for start in range(graph.vertex_count):
+        found = _search_cycle_from(g, start, length, budget)
+        if found is not None:
+            return True
+        if budget.exceeded():
+            raise _BudgetExceededError()
+    return False
+
+
+def _decide_embedding_bounded(
+    host_graph: UndirectedGraph,
+    pattern_graph: UndirectedGraph,
+) -> bool:
+    """Bounded exhaustive embedding decision shared by execution and validation.
+
+    Raises ``_BudgetExceededError`` when the deterministic node budget is
+    exhausted without deciding.
+    """
+    host_g = _build_graph(host_graph)
+    pattern_g = _build_graph(pattern_graph)
+    pattern_vertices = sorted(pattern_g.nodes())
+    pattern_adj: dict[int, set[int]] = {
+        v: set(pattern_g.neighbors(v)) for v in pattern_vertices
+    }
+    host_adj: dict[int, set[int]] = {
+        v: set(host_g.neighbors(v)) for v in host_g.nodes()
+    }
+    return _search_embedding(
+        host_g,
+        pattern_g,
+        pattern_vertices,
+        pattern_adj,
+        host_adj,
+        {},
+        _NodeBudget(),
+    )
+
+
 def decide_fixed_length_cycle(
     request: FixedLengthCycleRequest,
 ) -> FixedLengthCycleResult:

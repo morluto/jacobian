@@ -20,8 +20,7 @@ class UndirectedGraph(StrictModel):
         seen: set[tuple[int, int]] = set()
         for source, target in self.edges:
             if not (
-                0 <= source < self.vertex_count
-                and 0 <= target < self.vertex_count
+                0 <= source < self.vertex_count and 0 <= target < self.vertex_count
             ):
                 raise ValueError("edge vertices must be in 0..vertex_count-1")
             if source == target:
@@ -46,14 +45,54 @@ class FixedLengthCycleRequest(StrictModel):
         return self
 
 
-def _require_decided_witness_pair(
-    exists: bool | None, witness: object
-) -> None:
+def _require_decided_witness_pair(exists: bool | None, witness: object) -> None:
     """A decided search states a claim; exactly an affirmative one carries a witness."""
     if exists is None:
         raise ValueError("a decided search states whether the target exists")
     if exists is (witness is None):
         raise ValueError("exactly an existing witness carries one witness")
+
+
+def _require_cycle_witness_replay(
+    graph: UndirectedGraph, length: int, cycle: tuple[int, ...]
+) -> None:
+    """A positive cycle witness must replay as edges of its source graph."""
+    if len(cycle) != length:
+        raise ValueError("witness cycle length must match the declared length")
+    if len(set(cycle)) != length:
+        raise ValueError("witness cycle vertices must be distinct")
+    if any(v >= graph.vertex_count for v in cycle):
+        raise ValueError("witness cycle vertices must lie in the graph")
+    edges = {(min(a, b), max(a, b)) for a, b in graph.edges}
+    for index, u in enumerate(cycle):
+        v = cycle[(index + 1) % len(cycle)]
+        if (min(u, v), max(u, v)) not in edges:
+            raise ValueError("witness cycle must replay as edges of the source graph")
+
+
+def _require_negative_cycle_replay(graph: UndirectedGraph, length: int) -> None:
+    """Replay the same bounded exhaustive search the operation ran.
+
+    A decided negative result implies the search completed within its
+    deterministic budget, so an identical replay decides within budget as
+    well; exhaustion here means the payload cannot be re-verified.
+    """
+    from jacobian.math.graphs.cycle_pattern._operations import (
+        _BudgetExceededError,
+        _decide_cycle_bounded,
+    )
+
+    try:
+        contradicts = _decide_cycle_bounded(graph, length)
+    except _BudgetExceededError as error:
+        raise ValueError(
+            "negative cycle decision cannot be re-verified within "
+            "the cycle search budget"
+        ) from error
+    if contradicts:
+        raise ValueError(
+            "negative cycle decision contradicts exhaustive search: a k-cycle exists"
+        )
 
 
 class SearchOutcome(StrictModel):
@@ -99,62 +138,9 @@ class FixedLengthCycleResult(SearchOutcome):
             return self
         _require_decided_witness_pair(self.exists, self.cycle)
         if self.cycle is not None:
-            if len(self.cycle) != self.length:
-                raise ValueError(
-                    "witness cycle length must match the declared length"
-                )
-            if len(set(self.cycle)) != self.length:
-                raise ValueError("witness cycle vertices must be distinct")
-            if any(v >= self.graph.vertex_count for v in self.cycle):
-                raise ValueError("witness cycle vertices must lie in the graph")
-            edges = {
-                (min(a, b), max(a, b))
-                for a, b in self.graph.edges
-            }
-            for index, u in enumerate(self.cycle):
-                v = self.cycle[(index + 1) % len(self.cycle)]
-                if (min(u, v), max(u, v)) not in edges:
-                    raise ValueError(
-                        "witness cycle must replay as edges of the source graph"
-                    )
+            _require_cycle_witness_replay(self.graph, self.length, self.cycle)
         else:
-            # Negative decision: replay exhaustive bounded search to ensure no k-cycle exists.
-            # Perform a direct DFS without constructing a validated result to avoid recursion.
-            import networkx as nx
-
-            def _has_cycle_bruteforce() -> bool:
-                g = nx.Graph()
-                g.add_nodes_from(range(self.graph.vertex_count))
-                for a,b in self.graph.edges:
-                    g.add_edge(a,b)
-                k = self.length
-                n = self.graph.vertex_count
-                # Simple backtracking per start, same as operation but without budget tracking and without result validation.
-                for start in range(n):
-                    path = [start]
-                    visited = {start}
-                    stack = [(start, 1, iter(sorted(g.neighbors(start))))]  # not simple, use recursion
-
-                    # Use recursive helper
-                    def dfs(depth: int, path: list[int], visited: set[int]) -> bool:
-                        if depth == k:
-                            return start in g.neighbors(path[-1])
-                        cur = path[-1]
-                        for nb in sorted(g.neighbors(cur)):
-                            if nb in visited or nb <= start:
-                                continue
-                            visited.add(nb)
-                            path.append(nb)
-                            if dfs(depth+1, path, visited):
-                                return True
-                            path.pop()
-                            visited.remove(nb)
-                        return False
-                    if dfs(1, path, visited):
-                        return True
-                return False
-            if _has_cycle_bruteforce():
-                raise ValueError("negative cycle decision contradicts exhaustive search: a k-cycle exists")
+            _require_negative_cycle_replay(self.graph, self.length)
         return self
 
 
@@ -218,50 +204,58 @@ class SubgraphPatternResult(SearchOutcome):
             return self
         _require_decided_witness_pair(self.exists, self.embedding)
         if self.embedding is not None:
-            mapping = dict(self.embedding.mapping)
-            if set(mapping) != set(range(self.pattern_graph.vertex_count)):
-                raise ValueError("embedding must cover every pattern vertex")
-            if any(hv >= self.host_graph.vertex_count for hv in mapping.values()):
-                raise ValueError("embedding codomain must lie in the host graph")
-            host_edges = {(min(a, b), max(a, b)) for a, b in self.host_graph.edges}
-            for a, b in self.pattern_graph.edges:
-                ha, hb = mapping[a], mapping[b]
-                if (min(ha, hb), max(ha, hb)) not in host_edges:
-                    raise ValueError(
-                        "embedding must preserve every pattern edge in the host"
-                    )
+            _require_embedding_witness_replay(
+                self.host_graph, self.pattern_graph, self.embedding
+            )
         else:
-            # Negative embedding: brute-force check that no injective edge-preserving mapping exists.
-            import networkx as nx
-            host_g = nx.Graph()
-            host_g.add_nodes_from(range(self.host_graph.vertex_count))
-            for a,b in self.host_graph.edges:
-                host_g.add_edge(a,b)
-            pat_g = nx.Graph()
-            pat_g.add_nodes_from(range(self.pattern_graph.vertex_count))
-            for a,b in self.pattern_graph.edges:
-                pat_g.add_edge(a,b)
-            # Brute force: try all injective mappings (permutations) for small graphs
-            import itertools
-            host_vertices = list(range(self.host_graph.vertex_count))
-            pat_vertices = list(range(self.pattern_graph.vertex_count))
-            host_edge_set = {(min(a,b), max(a,b)) for a,b in self.host_graph.edges}
-            pat_edges = list(self.pattern_graph.edges)
-            found = False
-            for perm in itertools.permutations(host_vertices, len(pat_vertices)):
-                mapping = dict(zip(pat_vertices, perm))
-                ok = True
-                for a,b in pat_edges:
-                    ha, hb = mapping[a], mapping[b]
-                    if (min(ha,hb), max(ha,hb)) not in host_edge_set:
-                        ok = False
-                        break
-                if ok:
-                    found = True
-                    break
-            if found:
-                raise ValueError("negative subgraph decision contradicts existence of an embedding")
+            _require_negative_embedding_replay(self.host_graph, self.pattern_graph)
         return self
+
+
+def _require_embedding_witness_replay(
+    host_graph: UndirectedGraph,
+    pattern_graph: UndirectedGraph,
+    embedding: SubgraphEmbedding,
+) -> None:
+    """A positive embedding must replay injectively and preserve edges."""
+    mapping = dict(embedding.mapping)
+    if set(mapping) != set(range(pattern_graph.vertex_count)):
+        raise ValueError("embedding must cover every pattern vertex")
+    if any(hv >= host_graph.vertex_count for hv in mapping.values()):
+        raise ValueError("embedding codomain must lie in the host graph")
+    host_edges = {(min(a, b), max(a, b)) for a, b in host_graph.edges}
+    for a, b in pattern_graph.edges:
+        ha, hb = mapping[a], mapping[b]
+        if (min(ha, hb), max(ha, hb)) not in host_edges:
+            raise ValueError("embedding must preserve every pattern edge in the host")
+
+
+def _require_negative_embedding_replay(
+    host_graph: UndirectedGraph,
+    pattern_graph: UndirectedGraph,
+) -> None:
+    """Replay the same degree-pruned bounded search the operation ran.
+
+    A decided negative result implies the search completed within its
+    deterministic budget, so an identical replay must decide within budget
+    as well; exhaustion here means the payload cannot be re-verified.
+    """
+    from jacobian.math.graphs.cycle_pattern._operations import (
+        _BudgetExceededError,
+        _decide_embedding_bounded,
+    )
+
+    try:
+        contradicts = _decide_embedding_bounded(host_graph, pattern_graph)
+    except _BudgetExceededError as error:
+        raise ValueError(
+            "negative subgraph decision cannot be re-verified "
+            "within the embedding search budget"
+        ) from error
+    if contradicts:
+        raise ValueError(
+            "negative subgraph decision contradicts existence of an embedding"
+        )
 
 
 __all__ = [

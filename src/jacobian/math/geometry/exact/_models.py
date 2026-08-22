@@ -17,7 +17,8 @@ COORDINATE_DIGITS = 256
 
 
 def _require_bounded_point_configuration(
-    configuration: PointConfiguration, anchor: tuple[CanonicalRational, ...] | None = None
+    configuration: PointConfiguration,
+    anchor: tuple[CanonicalRational, ...] | None = None,
 ) -> None:
     """Enforce the 256-digit coordinate bound for pinned operations.
 
@@ -156,9 +157,10 @@ class PinnedLineDistanceRequest(StrictModel):
         )
     )
     anchor: tuple[CanonicalRational, ...] = Field(
-        min_length=1,
+        min_length=2,
+        max_length=2,
         description=(
-            "Planar rational anchor point (dimension 2); both coordinates at most "
+            "Planar rational anchor point (exactly two coordinates); both at most "
             "256 digits so derived squared distances remain representable."
         ),
     )
@@ -172,8 +174,6 @@ class PinnedLineDistanceRequest(StrictModel):
             raise ValueError(
                 "pinned line-distance profile requires a planar configuration"
             )
-        if len(self.anchor) != 2:
-            raise ValueError("the anchor must be a planar rational point")
         # A pair of coincident points does not span a line; require distinct
         # coordinates so every pair defines a geometric line.
         coords = {
@@ -222,9 +222,11 @@ class PinnedLineDistanceResult(StrictModel):
         )
     )
     anchor: tuple[CanonicalRational, ...] = Field(
-        min_length=1,
+        min_length=2,
+        max_length=2,
         description=(
-            "Retained planar anchor point; both coordinates at most 256 digits."
+            "Retained planar anchor point (exactly two coordinates); both at "
+            "most 256 digits."
         ),
     )
     dimension: int = Field(ge=2, le=2)
@@ -239,11 +241,16 @@ class PinnedLineDistanceResult(StrictModel):
 
         _require_bounded_point_configuration(self.configuration, self.anchor)
 
-        # Bind the profile to its source geometry before any pair accounting.
+        # Bind the profile to planar source geometry before any pair accounting;
+        # replay indexes only (x, y) and would otherwise raise on 1D points or
+        # silently accept 3D points whose third components it cannot see.
+        if any(len(pt.coordinates) != 2 for pt in self.configuration.points):
+            raise ValueError(
+                "retained configuration must be a planar configuration "
+                "(exactly two coordinates per point)"
+            )
         if len(self.configuration.points) != self.point_count:
             raise ValueError("point_count must match the retained configuration")
-        if len(self.anchor) != 2:
-            raise ValueError("the retained anchor must be a planar rational point")
         coords = {
             tuple(c.as_fraction() for c in pt.coordinates)
             for pt in self.configuration.points
@@ -309,7 +316,9 @@ class PinnedLineDistanceResult(StrictModel):
             norm_sq = dx * dx + dy * dy
             return (cross * cross) / norm_sq
 
-        expected_lines: dict[tuple[Fraction, Fraction, Fraction], list[tuple[int, int]]] = {}
+        expected_lines: dict[
+            tuple[Fraction, Fraction, Fraction], list[tuple[int, int]]
+        ] = {}
         expected_distances: dict[tuple[Fraction, Fraction, Fraction], Fraction] = {}
         for i, j in combinations(range(self.point_count), 2):
             coeffs = _canonical_line_coefficients(points[i], points[j])
@@ -325,18 +334,20 @@ class PinnedLineDistanceResult(StrictModel):
         mult: dict[Fraction, int] = {}
         # Map expected coeffs for quick lookup of exact distance/pairs.
         for entry in self.lines:
-            coeffs = tuple(c.as_fraction() for c in entry.line_coefficients)
-            if coeffs in seen_lines:
+            entry_coeffs = tuple(c.as_fraction() for c in entry.line_coefficients)
+            if entry_coeffs in seen_lines:
                 raise ValueError("duplicate lines must be collapsed into one entry")
-            seen_lines.add(coeffs)
+            seen_lines.add(entry_coeffs)
             # Must be a genuine pair-spanned line from the source.
-            if coeffs not in expected_lines:
+            if entry_coeffs not in expected_lines:
                 raise ValueError("line coefficients do not match any source pair line")
             # Pairs must exactly match the source pairs that generate this line.
-            if tuple(sorted(entry.pairs)) != tuple(sorted(expected_lines[coeffs])):
+            if tuple(sorted(entry.pairs)) != tuple(
+                sorted(expected_lines[entry_coeffs])
+            ):
                 raise ValueError("source pairs do not match the line's geometry")
             # Squared distance must match the exact anchor-to-line distance.
-            expected_d = expected_distances[coeffs]
+            expected_d = expected_distances[entry_coeffs]
             if entry.squared_distance.as_fraction() != expected_d:
                 raise ValueError("squared distance does not match the source geometry")
             for i, j in entry.pairs:

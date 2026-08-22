@@ -177,11 +177,10 @@ EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "inverted_orthocentric_equal_distance",
                 (
-                    "For the inverted orthocentric points B'=(1/4,0), "
-                    "C'=(1/5,2/5), H'=(4/13,6/13) with anchor (0,0), all three "
-                    "pair-spanned lines have exact squared distance 4/65. The "
-                    "configuration must be planar with distinct coordinates and "
-                    "the anchor a planar point (each coordinate at most 256 digits)."
+                    "For B'=(1/4,0), C'=(1/5,2/5), H'=(4/13,6/13) with anchor "
+                    "(0,0), all three pair-spanned lines have exact squared "
+                    "distance 4/65; the configuration must be planar with "
+                    "distinct coordinates and a planar anchor."
                 ),
                 INVERTED_ORTHOCENTRIC,
             ),

@@ -247,3 +247,119 @@ class TestPinnedLineDistance:
                 configuration=PointConfiguration(points=pts),
                 anchor=(cr(0), cr(0)),
             )
+
+    def test_result_rejects_nonplanar_retained_configuration(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            PinnedLineDistanceRequest,
+            PinnedLineDistanceResult,
+        )
+        from jacobian.math.geometry.exact._operations import (
+            compute_pinned_line_distance_profile,
+        )
+
+        cfg = self._cfg([("a", 0, 0), ("b", 1, 0), ("c", 0, 1), ("d", 1, 1)])
+        result = compute_pinned_line_distance_profile(
+            PinnedLineDistanceRequest(configuration=cfg, anchor=self._anchor(0, 0))
+        )
+        cfg3d = PointConfiguration(
+            points=tuple(
+                LabelledRationalPoint(
+                    label=p.label, coordinates=(*p.coordinates, _cr(7))
+                )
+                for p in cfg.points
+            )
+        )
+        with pytest.raises(ValidationError, match="planar"):
+            PinnedLineDistanceResult(
+                configuration=cfg3d,
+                anchor=self._anchor(0, 0),
+                dimension=2,
+                point_count=4,
+                lines=result.lines,
+                distance_multiplicities=result.distance_multiplicities,
+            )
+
+    def test_result_rejects_one_dimensional_retained_configuration(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import PinnedLineDistanceResult
+
+        cfg1d = PointConfiguration(
+            points=(
+                LabelledRationalPoint(label="a", coordinates=(_cr(0),)),
+                LabelledRationalPoint(label="b", coordinates=(_cr(1),)),
+            )
+        )
+        with pytest.raises(ValidationError, match="planar"):
+            PinnedLineDistanceResult(
+                configuration=cfg1d,
+                anchor=self._anchor(0, 0),
+                dimension=2,
+                point_count=2,
+                lines=(),
+                distance_multiplicities=(),
+            )
+
+    def test_result_rejects_3d_points_differing_only_outside_plane(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import PinnedLineDistanceResult
+
+        # Same XY location, distinct third component: the XY-only replay would
+        # divide by a zero direction norm, so planarity must be checked first.
+        cfgz = PointConfiguration(
+            points=(
+                LabelledRationalPoint(label="a", coordinates=(_cr(0), _cr(0), _cr(0))),
+                LabelledRationalPoint(label="b", coordinates=(_cr(0), _cr(0), _cr(1))),
+            )
+        )
+        with pytest.raises(ValidationError, match="planar"):
+            PinnedLineDistanceResult(
+                configuration=cfgz,
+                anchor=self._anchor(0, 1),
+                dimension=2,
+                point_count=2,
+                lines=(),
+                distance_multiplicities=(),
+            )
+
+    def test_anchor_arity_is_schema_expressed(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            PinnedLineDistanceRequest,
+            PinnedLineDistanceResult,
+        )
+
+        for model in (PinnedLineDistanceRequest, PinnedLineDistanceResult):
+            anchor_schema = model.model_json_schema()["properties"]["anchor"]
+            assert anchor_schema["minItems"] == 2
+            assert anchor_schema["maxItems"] == 2
+
+        cfg = self._cfg([("a", 0, 0), ("b", 1, 0)])
+        for bad_anchor in (self._anchor(0, 0)[:1], (*self._anchor(0, 0), _cr(1))):
+            with pytest.raises(ValidationError):
+                PinnedLineDistanceRequest(configuration=cfg, anchor=bad_anchor)
+            with pytest.raises(ValidationError):
+                PinnedLineDistanceResult(
+                    configuration=cfg,
+                    anchor=bad_anchor,
+                    dimension=2,
+                    point_count=2,
+                    lines=(),
+                    distance_multiplicities=(),
+                )
+
+
+def _cr(x):
+    from fractions import Fraction
+
+    from jacobian._exact import CanonicalRational
+
+    return CanonicalRational.from_fraction(Fraction(x))

@@ -205,6 +205,15 @@ class ChristoffelDarbouxRequest(StrictModel):
         require_bounded_rational(
             self.y, max_digits=MAX_RATIONAL_DIGITS, label="y"
         )
+        # Bound derived Christoffel-Darboux recurrence growth: the forward
+        # recurrence can produce ~n * max_digits growth; cap total to keep
+        # final kernel and polynomials within CanonicalRational.
+        def _digits(v: CanonicalRational) -> int:
+            return max(len(v.num.lstrip("-")), len(v.den))
+
+        total = sum(_digits(v) for v in (*self.alpha, *self.beta, self.x, self.y))
+        if total > 8192:
+            raise ValueError("Christoffel-Darboux inputs exceed derived growth budget")
         return self
 
 
@@ -262,6 +271,8 @@ class GaussianQuadratureRequest(StrictModel):
             raise ValueError(
                 "beta_0 (the zeroth moment of a positive functional) must be positive"
             )
+        if beta_zero < MIN_QUADRATURE_SUBDIAGONAL:
+            raise ValueError("beta_0 falls below the quadrature underflow bound")
         # Subdiagonal entries feed math.sqrt after float conversion; they must
         # be positive and safely inside the finite IEEE-double range, and the
         # diagonal and mu_0 must convert to finite doubles without overflow.
@@ -289,8 +300,9 @@ class GaussianQuadratureRequest(StrictModel):
 class GaussianQuadratureResult(GaussianQuadratureRequest):
     nodes: tuple[CanonicalRational, ...]
     weights: tuple[CanonicalRational, ...]
-    complete: Literal[True] = True
-    method: Literal["GOLUB_WELSCH"] = "GOLUB_WELSCH"
+    complete: Literal[False] = False
+    method: Literal["GOLUB_WELSCH_APPROXIMATE"] = "GOLUB_WELSCH_APPROXIMATE"
+    exactness: Literal["APPROXIMATE_DOUBLE"] = "APPROXIMATE_DOUBLE"
 
     @model_validator(mode="after")
     def bind_gaussian_quadrature(self) -> Self:

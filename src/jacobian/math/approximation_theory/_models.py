@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.math.polynomials.values import RationalPolynomial
 
 # Barycentric weights are products of node differences; their components can
 # grow to roughly the sum of per-node component digit budgets plus small
@@ -52,11 +53,29 @@ class LagrangeBasisRequest(StrictModel):
 
 
 class LagrangeBasisPolynomial(StrictModel):
-    """One Lagrange basis polynomial l_k(x) as coefficients [a_0, a_1, ...]."""
+    """One Lagrange basis polynomial l_k(x) as a canonical rational polynomial."""
 
     index: int = Field(ge=0)
-    coefficients: tuple[CanonicalRational, ...] = Field(min_length=1)
+    polynomial: RationalPolynomial
     barycentric_weight: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_polynomial_variable(self) -> Self:
+        if self.polynomial.variables != ("x",):
+            raise ValueError("Lagrange basis polynomial must use variable 'x'")
+        return self
+
+    @property
+    def coefficients(self) -> tuple[CanonicalRational, ...]:
+        from fractions import Fraction
+
+        terms = {term.exponents[0]: term.coefficient.as_fraction() for term in self.polynomial.polynomial.terms}
+        max_exp = max(terms.keys()) if terms else 0
+        coeffs = []
+        for exp in range(max_exp + 1):
+            frac = terms.get(exp, Fraction(0))
+            coeffs.append(CanonicalRational.from_fraction(frac))
+        return tuple(coeffs)
 
 
 class LagrangeBasisResult(StrictModel):
@@ -69,6 +88,9 @@ class LagrangeBasisResult(StrictModel):
     def require_consistent_count(self) -> Self:
         if self.node_count != len(self.basis):
             raise ValueError("node_count must match basis length")
+        for entry in self.basis:
+            if entry.index >= self.node_count:
+                raise ValueError("basis index exceeds node count")
         return self
 
 
@@ -92,10 +114,28 @@ class LagrangeInterpolationRequest(StrictModel):
 
 
 class LagrangeInterpolationResult(StrictModel):
-    """The interpolation polynomial as coefficients [a_0, a_1, ...]."""
+    """The interpolation polynomial as a canonical rational polynomial."""
 
-    degree: int = Field(ge=0)
-    coefficients: tuple[CanonicalRational, ...] = Field(min_length=1)
+    polynomial: RationalPolynomial
+
+    @property
+    def degree(self) -> int:
+        if not self.polynomial.polynomial.terms:
+            return 0
+        return max(term.exponents[0] for term in self.polynomial.polynomial.terms)
+
+    @property
+    def coefficients(self) -> tuple[CanonicalRational, ...]:
+        # Provide backwards-compatible dense coefficients for tests, derived from polynomial
+        from fractions import Fraction
+
+        terms = {term.exponents[0]: term.coefficient.as_fraction() for term in self.polynomial.polynomial.terms}
+        max_exp = max(terms.keys()) if terms else 0
+        coeffs = []
+        for exp in range(max_exp + 1):
+            frac = terms.get(exp, Fraction(0))
+            coeffs.append(CanonicalRational.from_fraction(frac))
+        return tuple(coeffs)
 
 
 __all__ = [

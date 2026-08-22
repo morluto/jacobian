@@ -117,9 +117,11 @@ class TestCircleInversion:
 
     def test_rejects_output_that_exceeds_canonical_digits(self):
         # center=(0,0), power=(10^20000+1)/1, point=(10^{-20000}, 0): the
-        # exact inverted coordinate (10^20000+1)*10^20000 needs 40,001 digits,
-        # so admission rejects before the unrepresentable value is built.
-        with pytest.raises(ValidationError, match="canonical limit"):
+        # exact inverted coordinate (10^20000+1)*10^20000 would need 40,001
+        # digits, but the input components themselves already exceed the
+        # 2,048-digit inversion admission bound, so the static check rejects
+        # before any large intermediate is built.
+        with pytest.raises(ValidationError, match="inversion admission bound"):
             CircleInversionRequest(
                 center=_pt(0, 0),
                 power=_cr(format_canonical_integer(10**20000 + 1), "1"),
@@ -130,33 +132,57 @@ class TestCircleInversion:
             )
 
     def test_rejects_oversized_result_off_center(self):
-        # c=(1,1), s=10^16000, p=(1+10^{-20000},1): scale*dx = 10^36000, so
-        # the exact inverted x-coordinate needs 36,001 digits.
-        with pytest.raises(ValidationError, match="canonical limit"):
+        # c=(1,1), s=10^1600, p=(1+10^{-3200},1): scale*dx = 10^4800, so the
+        # exact inverted x-coordinate needs 4,801 digits; the inputs fit the
+        # admission bound but the inverted result does not.
+        with pytest.raises(ValidationError, match="inversion admission bound"):
             CircleInversionRequest(
                 center=_pt(1, 1),
-                power=_cr(format_canonical_integer(10**16000), "1"),
+                power=_cr(format_canonical_integer(10**1600), "1"),
                 point=RationalPoint2D(
                     x=CanonicalRational.from_fraction(
-                        Fraction(1) + Fraction(1, 10**20000)
+                        Fraction(1) + Fraction(1, 10**3200)
                     ),
                     y=_cr("1", "1"),
                 ),
             )
 
+    def test_rejects_near_limit_inputs_before_expanding_the_result(self):
+        # Reviewer P1 shape: every request component fits the canonical limit
+        # (exactly 32,768 digits here), so parsing is schema-valid, but the
+        # exact inversion would form ~262,000-digit intermediates. Admission
+        # must reject on the static input bound before computing anything.
+        a = format_canonical_integer(10**32767)
+
+        def frac(n: int, d: int) -> CanonicalRational:
+            return _cr(
+                format_canonical_integer(10**32767 + n),
+                format_canonical_integer(10**32767 + d),
+            )
+
+        with pytest.raises(ValidationError, match="inversion admission bound"):
+            CircleInversionRequest(
+                center=_pt(0, 0),
+                power=_cr(a, format_canonical_integer(10**32767 + 29)),
+                point=RationalPoint2D(
+                    x=frac(1, 3),
+                    y=frac(5, 7),
+                ),
+            )
+
     def test_reviewer_counterexample_is_closed_under_reinversion(self):
-        # c=(0,0), s=1, p=(10^{-9000},1): the first request returns components
-        # with 18,001 digits, which the former half-limit input bound rejected
-        # on the second invocation. Admission must accept both rounds and the
-        # double inversion must recover p exactly.
-        tiny = CanonicalRational(num="1", den=format_canonical_integer(10**9000))
+        # c=(0,0), s=1, p=(10^{-800},1): the first request returns components
+        # within the admission bound (at most 1,601 digits), which the
+        # fed-back request accepts identically. Admission must accept both
+        # rounds and the double inversion must recover p exactly.
+        tiny = CanonicalRational(num="1", den=format_canonical_integer(10**800))
         center = _pt(0, 0)
         point = RationalPoint2D(x=tiny, y=_cr("1", "1"))
         first = CircleInversionRequest(center=center, power=_cr("1", "1"), point=point)
         result = circle_inversion(first)
-        assert len(result.point.x.num) == 9001
-        assert len(result.point.x.den) == 18001
-        assert len(result.point.y.den) == 18001
+        assert len(result.point.x.num.lstrip("-")) == 801
+        assert len(result.point.x.den) == 1601
+        assert len(result.point.y.den) == 1601
 
         second = CircleInversionRequest(
             center=center, power=_cr("1", "1"), point=result.point
@@ -164,19 +190,28 @@ class TestCircleInversion:
         recovered = circle_inversion(second)
         assert recovered.point == point
 
-    def test_admits_large_inputs_whose_exact_result_is_representable(self):
-        # p=(10^{-20000},10^{-20000}) inverts to (5*10^19999, 5*10^19999);
-        # every component fits the canonical limit even though the input
-        # height exceeds any half-limit heuristic.
-        tiny = _cr("1", format_canonical_integer(10**20000))
+    def test_admission_bound_boundary_is_exact(self):
+        # A component with exactly 2,048 digits sits at the admission bound:
+        # p=(10^2047,0) inverts to 1/10^2047 whose denominator carries
+        # exactly 2,048 digits, so both sides fit and the request is
+        # admitted. One digit more is rejected statically even though the
+        # exact inverted point would remain canonically representable.
+        edge = format_canonical_integer(10**2047)
         request = CircleInversionRequest(
             center=_pt(0, 0),
             power=_cr("1", "1"),
-            point=RationalPoint2D(x=tiny, y=tiny),
+            point=RationalPoint2D(x=_cr(edge, "1"), y=_cr("0", "1")),
         )
         result = circle_inversion(request)
-        assert result.point.x.as_fraction() == Fraction(10**20000, 2)
-        assert result.point.y.as_fraction() == Fraction(10**20000, 2)
+        assert result.point.x.as_fraction() == Fraction(1, 10**2047)
+
+        over = format_canonical_integer(10**2048)
+        with pytest.raises(ValidationError, match="inversion admission bound"):
+            CircleInversionRequest(
+                center=_pt(0, 0),
+                power=_cr("1", "1"),
+                point=RationalPoint2D(x=_cr(over, "1"), y=_cr("0", "1")),
+            )
 
     def test_admitted_domain_is_symmetric_under_involution(self):
         # Defining invariant: for every admitted (c,s,p), the fed-back request

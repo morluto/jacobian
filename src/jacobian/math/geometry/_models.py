@@ -7,7 +7,7 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 
@@ -139,12 +139,28 @@ class PointLineRequest(StrictModel):
     line: LineRequest
 
 
-def _inverted_components_within_limit(
+INVERSION_ADMISSION_DIGITS = 2048
+"""Per-component digit bound on both sides of an admitted inversion.
+
+Exact inversion ``I(p) = c + s(p - c)/||p - c||^2`` builds, from
+``D``-digit components, intermediates of at most about ``12*D + O(1)``
+digits: the coordinate differences roughly double each height, the
+squared norm doubles again, and scale, product, and sum add the power
+and center heights on top.  With ``D = 2048`` every admission
+intermediate stays far below the 32,768-digit canonical limit, so one
+validation performs bounded work.  Requiring the exact inverted point to
+satisfy the same bound keeps the accepted domain closed under the
+advertised involution: a re-fed result passes both checks identically.
+"""
+
+
+def _inverted_components_within_bound(
     center: RationalPoint2D,
     power: CanonicalRational,
     point: RationalPoint2D,
+    max_digits: int,
 ) -> bool:
-    """Whether every canonical component of ``I(p)`` fits the canonical limit.
+    """Whether every canonical component of ``I(p)`` fits ``max_digits``.
 
     ``I(p) = c + s(p - c)/||p - c||^2`` is computed exactly over the
     rationals; reduction is canonical, so these are the precise component
@@ -156,10 +172,8 @@ def _inverted_components_within_limit(
     norm_squared = dx * dx + dy * dy
     scale = power.as_fraction() / norm_squared
     return all(
-        len(format_canonical_integer(component.numerator).lstrip("-"))
-        <= MAX_CANONICAL_RATIONAL_DIGITS
-        and len(format_canonical_integer(component.denominator))
-        <= MAX_CANONICAL_RATIONAL_DIGITS
+        len(format_canonical_integer(component.numerator).lstrip("-")) <= max_digits
+        and len(format_canonical_integer(component.denominator)) <= max_digits
         for component in (
             center.x.as_fraction() + scale * dx,
             center.y.as_fraction() + scale * dy,
@@ -167,16 +181,30 @@ def _inverted_components_within_limit(
     )
 
 
+def _require_inversion_admission_bound(
+    value: CanonicalRational, label: str
+) -> None:
+    if (
+        len(value.num.lstrip("-")) > INVERSION_ADMISSION_DIGITS
+        or len(value.den.lstrip("-")) > INVERSION_ADMISSION_DIGITS
+    ):
+        raise ValueError(
+            f"{label} exceeds the {INVERSION_ADMISSION_DIGITS}-digit "
+            "circle-inversion admission bound"
+        )
+
+
 class CircleInversionRequest(StrictModel):
     """Invert a rational planar point ``p`` in a circle.
 
     The circle has center ``c`` and positive squared radius ``s``. Requires
-    ``p != c``. Admission computes the exact inverted point and requires each
-    of its canonical components to stay within the 32,768-digit limit.
-    Because inversion is an involution and admission constrains only the
-    canonical heights of ``p`` and ``I(p)``, an accepted request's result is
-    itself an admissible point: the admitted domain is closed under the
-    advertised involution.
+    ``p != c``. Admission requires every canonical component of ``c``, ``s``,
+    and ``p`` — and of the exact inverted point ``I(p)`` — to stay within
+    ``INVERSION_ADMISSION_DIGITS``. Because inversion is an involution and
+    both sides carry the same bound, an accepted request's result is itself
+    an admissible point: the admitted domain is closed under the advertised
+    involution, and the input-side bound keeps every admission check inside
+    bounded intermediate work.
     """
 
     center: RationalPoint2D = Field(
@@ -205,15 +233,28 @@ class CircleInversionRequest(StrictModel):
         if self.point == self.center:
             raise ValueError("the point to invert must differ from the center")
 
+        # Input-side static bound first: with every admitted component at
+        # most INVERSION_ADMISSION_DIGITS digits, the exact inversion below
+        # forms only bounded intermediates (~12x the input height, far
+        # inside the canonical limit), so validation work is bounded.
+        _require_inversion_admission_bound(self.center.x, "inversion center x")
+        _require_inversion_admission_bound(self.center.y, "inversion center y")
+        _require_inversion_admission_bound(self.power, "inversion power")
+        _require_inversion_admission_bound(self.point.x, "point x")
+        _require_inversion_admission_bound(self.point.y, "point y")
+
         # Inversion-stable admission: accept exactly when the exact inverted
-        # point is representable.  Inputs already carry the same canonical
-        # bound, so re-feeding an accepted result I(p) re-derives the original
+        # point satisfies the same bound.  Inputs already carry that bound,
+        # so re-feeding an accepted result I(p) re-derives the original
         # admitted p and passes identically: the domain is symmetric under
         # the advertised involution and every accepted result can be fed back.
-        if not _inverted_components_within_limit(self.center, self.power, self.point):
+        if not _inverted_components_within_bound(
+            self.center, self.power, self.point, INVERSION_ADMISSION_DIGITS
+        ):
             raise ValueError(
                 "circle inversion result exceeds the "
-                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit canonical limit"
+                f"{INVERSION_ADMISSION_DIGITS}-digit circle-inversion "
+                "admission bound"
             )
         return self
 

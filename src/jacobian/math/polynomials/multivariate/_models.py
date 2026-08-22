@@ -262,6 +262,10 @@ class MultivariateFactorResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
+        if self.coefficient.as_fraction() == 0:
+            raise ValueError("factorization coefficient must be nonzero")
+        if not self.reconstructed.polynomial.terms:
+            raise ValueError("reconstructed polynomial must be nonzero")
         if any(
             factor.factor.variables != self.reconstructed.variables
             for factor in self.factors

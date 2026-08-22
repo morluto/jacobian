@@ -129,6 +129,13 @@ class RetractionCheckResult(StrictModel):
 # length so every accepted request terminates inside a tested bound.
 MAX_CYCLE_SEARCH_PATHS = 10_000_000
 
+# A negative decision costs two exhaustive passes: the operation's own search
+# plus the result validator's bounded replay of that decision against the
+# retained sources.  Admission charges each pass at most half the total so a
+# complete negative operation stays inside the advertised budget.
+SEARCH_PASSES_PER_NEGATIVE_DECISION = 2
+_MAX_SEARCH_PATHS_PER_PASS = MAX_CYCLE_SEARCH_PATHS // SEARCH_PASSES_PER_NEGATIVE_DECISION
+
 
 def _canonical_max_degree(graph: SimpleUndirectedGraph) -> int:
     degree: dict[str, int] = dict.fromkeys(graph.vertices, 0)
@@ -174,10 +181,11 @@ class FixedLengthCycleRequest(StrictModel):
         # Conservative worst-case path-count bound: n * d^(length-1).
         d_max = _canonical_max_degree(self.graph)
         work = n * (d_max ** (self.length - 1))
-        if work > MAX_CYCLE_SEARCH_PATHS:
+        if work > _MAX_SEARCH_PATHS_PER_PASS:
             raise ValueError(
                 "fixed-length cycle search exceeds the "
-                f"{MAX_CYCLE_SEARCH_PATHS}-path worst-case budget"
+                f"{_MAX_SEARCH_PATHS_PER_PASS}-path per-pass budget "
+                f"({MAX_CYCLE_SEARCH_PATHS} including validation replay)"
             )
         return self
 
@@ -254,11 +262,11 @@ class FixedLengthCycleResult(StrictModel):
                 )
             d_max = _canonical_max_degree(self.graph)
             work = n * (d_max ** (self.length - 1))
-            if work > MAX_CYCLE_SEARCH_PATHS:
+            if work > _MAX_SEARCH_PATHS_PER_PASS:
                 raise ValueError(
                     "a DOES_NOT_EXIST decision requires the retained source "
                     f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
-                    f"{MAX_CYCLE_SEARCH_PATHS}-path request budget"
+                    f"{_MAX_SEARCH_PATHS_PER_PASS}-path request budget"
                 )
             from jacobian.math.graphs.morphisms._operations import find_cycle_of_length
 
@@ -321,10 +329,11 @@ class SubgraphPatternFindRequest(StrictModel):
         assignments = 1
         for step in range(k):
             assignments *= n - step
-            if assignments > MAX_CYCLE_SEARCH_PATHS:
+            if assignments > _MAX_SEARCH_PATHS_PER_PASS:
                 raise ValueError(
                     "subgraph-pattern search exceeds the "
-                    f"{MAX_CYCLE_SEARCH_PATHS}-assignment worst-case budget"
+                    f"{_MAX_SEARCH_PATHS_PER_PASS}-assignment per-pass budget "
+                    f"({MAX_CYCLE_SEARCH_PATHS} including validation replay)"
                 )
         return self
 
@@ -400,17 +409,17 @@ class SubgraphPatternFindResult(StrictModel):
             assignments = 1
             for step in range(p_n):
                 assignments *= h_n - step
-                if assignments > MAX_CYCLE_SEARCH_PATHS:
+                if assignments > _MAX_SEARCH_PATHS_PER_PASS:
                     break
             if (
                 p_n > MORPHISM_MAX_VERTICES
                 or p_n > h_n
-                or assignments > MAX_CYCLE_SEARCH_PATHS
+                or assignments > _MAX_SEARCH_PATHS_PER_PASS
             ):
                 raise ValueError(
                     "a DOES_NOT_EXIST decision requires the retained sources "
                     f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
-                    f"{MAX_CYCLE_SEARCH_PATHS}-assignment request budget"
+                    f"{_MAX_SEARCH_PATHS_PER_PASS}-assignment request budget"
                 )
             from jacobian.math.graphs.morphisms._operations import (
                 find_subgraph_embedding,

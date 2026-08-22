@@ -430,6 +430,24 @@ class TestSubgraphPatternFind:
         result = compute_subgraph_pattern_find(SubgraphPatternFindRequest(pattern=pat, host=host))
         assert result.decision == "EXISTS"
 
+    def test_request_admission_accounts_for_operation_and_replay_passes(self):
+        import pytest
+
+        from jacobian.math.graphs.morphisms._models import (
+            MAX_CYCLE_SEARCH_PATHS,
+            SubgraphPatternFindRequest,
+        )
+
+        # P(11, 8) = 6,652,800 assignments fits inside the advertised total
+        # budget but not inside the per-pass share that also covers the
+        # validator's replay of a negative decision, so it must be rejected.
+        pat = self._g([f"x{i}" for i in range(8)], [[f"x{i}", f"x{i+1}"] for i in range(7)])
+        host_labels = [f"h{i:02d}" for i in range(11)]
+        host = self._g(host_labels, [[f"h{i:02d}", f"h{i+1:02d}"] for i in range(10)])
+        assert MAX_CYCLE_SEARCH_PATHS // 2 < 11 * 10 * 9 * 8 * 7 * 6 * 5 * 4
+        with pytest.raises(ValueError, match="per-pass budget"):
+            SubgraphPatternFindRequest(pattern=pat, host=host)
+
     def test_forged_negative_decision_is_rejected_by_replay(self):
         import pytest
 

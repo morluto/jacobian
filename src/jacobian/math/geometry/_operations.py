@@ -525,6 +525,15 @@ def forbidden_patterns(request):
         xj, yj = xy[j]
         xk, yk = xy[k]
         xl, yl = xy[ell]
+        # Exclude collinear quadruples: no finite circle contains 4 distinct
+        # collinear points, yet the 4x4 determinant also vanishes in that
+        # degenerate case. Require a noncollinear triple within the quadruple.
+        cross_ijk = (xj - xi) * (yk - yi) - (yj - yi) * (xk - xi)
+        cross_ijl = (xj - xi) * (yl - yi) - (yj - yi) * (xl - xi)
+        cross_ikl = (xk - xi) * (yl - yi) - (yk - yi) * (xl - xi)
+        cross_jkl = (xk - xj) * (yl - yj) - (yk - yj) * (xl - xj)
+        if cross_ijk == 0 and cross_ijl == 0 and cross_ikl == 0 and cross_jkl == 0:
+            continue
         si = xi * xi + yi * yi
         sj = xj * xj + yj * yj
         sk = xk * xk + yk * yk

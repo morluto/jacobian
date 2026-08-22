@@ -6,8 +6,13 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+
+MAX_INVERSION_COMPONENT_DIGITS = 4_096
+
+def _component_digits(value: CanonicalRational) -> int:
+    return max(len(value.num.lstrip("-")), len(value.den))
 
 
 class RationalPoint2D(StrictModel):
@@ -41,6 +46,36 @@ class CircleInversionRequest(StrictModel):
             and self.point_y.as_fraction() == self.center_y.as_fraction()
         ):
             raise ValueError("the inversion center cannot be inverted")
+        for value, label in (
+            (self.center_x, "center_x"),
+            (self.center_y, "center_y"),
+            (self.power, "power"),
+            (self.point_x, "point_x"),
+            (self.point_y, "point_y"),
+        ):
+            require_bounded_rational(
+                value, max_digits=MAX_INVERSION_COMPONENT_DIGITS, label=label
+            )
+        # Conservative derived-output bound: the exact inversion result must
+        # fit in CanonicalRational (<=32768 digits). The computation q = c + s*(p-c)/|p-c|^2
+        # can at most quadruple digit size; with each input capped at 4096 the
+        # result stays well below the limit, and we also verify explicitly.
+        from fractions import Fraction
+
+        cx, cy = self.center_x.as_fraction(), self.center_y.as_fraction()
+        s = self.power.as_fraction()
+        px, py = self.point_x.as_fraction(), self.point_y.as_fraction()
+        dx = px - cx
+        dy = py - cy
+        norm_sq = dx * dx + dy * dy
+        # norm_sq >0 already (p != c)
+        qx = cx + s * dx / norm_sq
+        qy = cy + s * dy / norm_sq
+        for frac, name in ((qx, "inverted_x"), (qy, "inverted_y")):
+            num_digits = len(str(abs(frac.numerator)))
+            den_digits = len(str(abs(frac.denominator)))
+            if max(num_digits, den_digits) > 32_768:
+                raise ValueError(f"derived {name} exceeds the canonical digit limit")
         return self
 
 

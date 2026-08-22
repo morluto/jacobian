@@ -307,6 +307,33 @@ class OrderedDifferenceProfileResult(StrictModel):
         for cls in self.classes:
             if cls.multiplicity != len(cls.source_pairs):
                 raise ValueError("multiplicity must match the source pair count")
+        # Verify every ordered source pair is present exactly once and produces
+        # its claimed difference via the retained source vectors.
+        seen: set[tuple[int, int]] = set()
+        for cls in self.classes:
+            if len(cls.difference) != self.dimension:
+                raise ValueError("difference dimension must match the source set")
+            for a, b in cls.source_pairs:
+                if not (0 <= a < self.set_size and 0 <= b < self.set_size):
+                    raise ValueError("source pair index out of range")
+                if a == b:
+                    raise ValueError("source pair must be ordered distinct indices")
+                if (a, b) in seen:
+                    raise ValueError("source pairs must be unique across classes")
+                seen.add((a, b))
+                actual = tuple(
+                    self.source_set.vectors[a][d] - self.source_set.vectors[b][d]
+                    for d in range(self.dimension)
+                )
+                if actual != cls.difference:
+                    raise ValueError("source pair does not produce the claimed difference")
+        if len(seen) != self.total_ordered_pairs:
+            raise ValueError("source pair coverage must equal total_ordered_pairs")
+        expected_pairs = {
+            (i, j) for i in range(self.set_size) for j in range(self.set_size) if i != j
+        }
+        if seen != expected_pairs:
+            raise ValueError("source pair set must be the complete ordered pair set")
         return self
 
 

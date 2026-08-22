@@ -68,9 +68,11 @@ CLUSTER_ALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "cluster_algebra.seed.mutate.compute",
         "Mutate a cluster seed at a specified index",
         "Apply the Fomin-Zelevinsky mutation mu_k to a skew-symmetrizable "
-        "exchange matrix B. The mutation transforms B in place: it negates "
-        "row k and column k, and adds the rank-1 update "
-        "b_{ik} * b_{kj} to b_{ij} for entries where both have the same sign.",
+        "exchange matrix B. The mutation negates row k and column k, and for "
+        "i,j != k updates b_{ij} to b_{ij} + max(0,b_{ik})*max(0,b_{kj}) "
+        "- max(0,-b_{ik})*max(0,-b_{kj}); equivalently, add b_{ik}*b_{kj} when "
+        "both are positive and subtract |b_{ik}*b_{kj}| when both are negative "
+        "(no change when signs differ).",
         SeedMutationRequest,
         SeedMutationResult,
         mutate_seed,

@@ -610,6 +610,13 @@ class ForbiddenPatternsResult(StrictModel):
         )
         recomputed_concyclic = False
         for i, j, k, ell in combinations(range(len(xy)), 4):
+            # Exclude collinear quadruples: see _operations.forbidden_patterns
+            cross_ijk = (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
+            cross_ijl = (xy[j][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
+            cross_ikl = (xy[k][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[k][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
+            cross_jkl = (xy[k][0] - xy[j][0]) * (xy[ell][1] - xy[j][1]) - (xy[k][1] - xy[j][1]) * (xy[ell][0] - xy[j][0])
+            if cross_ijk == 0 and cross_ijl == 0 and cross_ikl == 0 and cross_jkl == 0:
+                continue
             m = [
                 [x * x + y * y, x, y, 1]
                 for x, y in (xy[i], xy[j], xy[k], xy[ell])

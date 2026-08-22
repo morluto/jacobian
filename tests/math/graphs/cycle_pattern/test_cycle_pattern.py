@@ -102,7 +102,9 @@ class TestSubgraphPattern:
             edges=((0, 1), (1, 2), (2, 3), (3, 4), (4, 0), (0, 2)),
         )
         pattern = UndirectedGraph(vertex_count=3, edges=((0, 1), (1, 2)))
-        result = find_subgraph_pattern(SubgraphPatternRequest(host=host, pattern=pattern))
+        result = find_subgraph_pattern(
+            SubgraphPatternRequest(host=host, pattern=pattern)
+        )
         assert result.exists
         mapping = dict(result.embedding.mapping)
         assert mapping[0] != mapping[1]
@@ -115,7 +117,9 @@ class TestSubgraphPattern:
             vertex_count=3,
             edges=((0, 1), (1, 2), (0, 2)),
         )
-        result = find_subgraph_pattern(SubgraphPatternRequest(host=host, pattern=pattern))
+        result = find_subgraph_pattern(
+            SubgraphPatternRequest(host=host, pattern=pattern)
+        )
         assert not result.exists
 
     def test_exact_match(self):
@@ -127,14 +131,18 @@ class TestSubgraphPattern:
             vertex_count=3,
             edges=((0, 1), (1, 2), (0, 2)),
         )
-        result = find_subgraph_pattern(SubgraphPatternRequest(host=host, pattern=pattern))
+        result = find_subgraph_pattern(
+            SubgraphPatternRequest(host=host, pattern=pattern)
+        )
         assert result.exists
         assert result.embedding.mapping == ((0, 0), (1, 1), (2, 2))
 
     def test_single_vertex_pattern(self):
         host = UndirectedGraph(vertex_count=3, edges=((0, 1),))
         pattern = UndirectedGraph(vertex_count=1, edges=())
-        result = find_subgraph_pattern(SubgraphPatternRequest(host=host, pattern=pattern))
+        result = find_subgraph_pattern(
+            SubgraphPatternRequest(host=host, pattern=pattern)
+        )
         assert result.exists
         assert result.embedding.mapping == ((0, 0),)
 
@@ -153,7 +161,9 @@ class TestSubgraphPattern:
             vertex_count=3,
             edges=((0, 1), (1, 2), (0, 2)),
         )
-        result = find_subgraph_pattern(SubgraphPatternRequest(host=host, pattern=pattern))
+        result = find_subgraph_pattern(
+            SubgraphPatternRequest(host=host, pattern=pattern)
+        )
         assert result.exists
 
     def test_triangle_not_in_cycle_six(self):
@@ -165,7 +175,9 @@ class TestSubgraphPattern:
             vertex_count=3,
             edges=((0, 1), (1, 2), (0, 2)),
         )
-        result = find_subgraph_pattern(SubgraphPatternRequest(host=host, pattern=pattern))
+        result = find_subgraph_pattern(
+            SubgraphPatternRequest(host=host, pattern=pattern)
+        )
         assert not result.exists
 
 
@@ -177,7 +189,9 @@ class TestBoundedSearchAndWitnessBinding:
 
     def test_cycle_witness_replays_against_source_edges(self):
         request = FixedLengthCycleRequest(
-            graph=UndirectedGraph.model_validate(self._graph(4, [(0, 1), (1, 2), (2, 3), (3, 0)])),
+            graph=UndirectedGraph.model_validate(
+                self._graph(4, [(0, 1), (1, 2), (2, 3), (3, 0)])
+            ),
             length=4,
         )
         result = decide_fixed_length_cycle(request)
@@ -193,9 +207,15 @@ class TestBoundedSearchAndWitnessBinding:
             )
 
     def test_embedding_preserves_pattern_edges_or_rejected(self):
-        host = UndirectedGraph.model_validate(self._graph(4, [(0, 1), (1, 2), (2, 3), (3, 0), (0, 2)]))
-        pattern = UndirectedGraph.model_validate(self._graph(3, [(0, 1), (1, 2), (2, 0)]))
-        result = find_subgraph_pattern(SubgraphPatternRequest(host=host, pattern=pattern))
+        host = UndirectedGraph.model_validate(
+            self._graph(4, [(0, 1), (1, 2), (2, 3), (3, 0), (0, 2)])
+        )
+        pattern = UndirectedGraph.model_validate(
+            self._graph(3, [(0, 1), (1, 2), (2, 0)])
+        )
+        result = find_subgraph_pattern(
+            SubgraphPatternRequest(host=host, pattern=pattern)
+        )
         assert result.exists
         with pytest.raises(ValidationError):
             SubgraphPatternResult(
@@ -230,15 +250,21 @@ class TestBoundedSearchAndWitnessBinding:
         host = UndirectedGraph.model_validate(self._graph(64, []))
         pattern = UndirectedGraph.model_validate(self._graph(20, [(0, 1)]))
         start = time.monotonic()
-        result = find_subgraph_pattern(SubgraphPatternRequest(host=host, pattern=pattern))
+        result = find_subgraph_pattern(
+            SubgraphPatternRequest(host=host, pattern=pattern)
+        )
         elapsed = time.monotonic() - start
         assert result.exists is False
         assert elapsed < 5.0
 
     def test_forged_negative_embedding_is_rejected(self):
         """A host containing the pattern cannot validate exists=False."""
-        host = UndirectedGraph.model_validate(self._graph(4, [(0, 1), (1, 2), (2, 3), (3, 0), (0, 2)]))
-        pattern = UndirectedGraph.model_validate(self._graph(3, [(0, 1), (1, 2), (2, 0)]))
+        host = UndirectedGraph.model_validate(
+            self._graph(4, [(0, 1), (1, 2), (2, 3), (3, 0), (0, 2)])
+        )
+        pattern = UndirectedGraph.model_validate(
+            self._graph(3, [(0, 1), (1, 2), (2, 0)])
+        )
         with pytest.raises(ValidationError, match="contradicts"):
             SubgraphPatternResult(
                 host_graph=host,
@@ -250,7 +276,9 @@ class TestBoundedSearchAndWitnessBinding:
 
     def test_forged_negative_cycle_is_rejected(self):
         """A graph containing the requested cycle cannot validate exists=False."""
-        square = UndirectedGraph.model_validate(self._graph(4, [(0, 1), (1, 2), (2, 3), (3, 0)]))
+        square = UndirectedGraph.model_validate(
+            self._graph(4, [(0, 1), (1, 2), (2, 3), (3, 0)])
+        )
         with pytest.raises(ValidationError, match="contradicts"):
             FixedLengthCycleResult(
                 graph=square,

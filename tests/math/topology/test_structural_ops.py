@@ -9,6 +9,7 @@ from jacobian.math.topology._models import (
     JoinRequest,
     PseudomanifoldRequest,
     ShellingCheckRequest,
+    ShellingCheckResult,
     SkeletonRequest,
     StarRequest,
     VertexDeletionRequest,
@@ -135,9 +136,7 @@ class TestBarycentricSubdivision:
 
 class TestPseudomanifold:
     def test_circle_is_closed_pseudomanifold(self) -> None:
-        result = compute_pseudomanifold_decision(
-            PseudomanifoldRequest(complex=CIRCLE)
-        )
+        result = compute_pseudomanifold_decision(PseudomanifoldRequest(complex=CIRCLE))
         assert result.is_pseudomanifold
         assert result.is_closed
         assert result.dimension == 1
@@ -186,9 +185,7 @@ class TestShellingCheck:
 class TestElementaryCollapse:
     def test_collapse_free_vertex_from_edge(self) -> None:
         result = compute_elementary_collapse(
-            ElementaryCollapseRequest(
-                complex=EDGE, free_face=["a"], coface=["a", "b"]
-            )
+            ElementaryCollapseRequest(complex=EDGE, free_face=["a"], coface=["a", "b"])
         )
         assert result.is_free_face
         assert result.remaining_facets == (("b",),)
@@ -206,9 +203,131 @@ class TestElementaryCollapse:
         assert not result.is_free_face
 
     def test_coface_not_a_facet(self) -> None:
+        # ['a', 'c'] is codimension-one in shape but not a facet of EDGE
         result = compute_elementary_collapse(
-            ElementaryCollapseRequest(
-                complex=EDGE, free_face=["a"], coface=["a", "b", "c"]
-            )
+            ElementaryCollapseRequest(complex=EDGE, free_face=["a"], coface=["a", "c"])
         )
         assert not result.is_free_face
+
+    def test_repeated_vertices_in_collapse_faces_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="free_face vertices must be unique"):
+            ElementaryCollapseRequest(
+                complex=EDGE, free_face=["a", "a"], coface=["a", "a", "b"]
+            )
+        with pytest.raises(ValidationError, match="coface vertices must be unique"):
+            ElementaryCollapseRequest(
+                complex=EDGE, free_face=["a"], coface=["a", "b", "b"]
+            )
+
+
+class TestJoinBounds:
+    def test_join_of_two_4_simplices_rejected(self) -> None:
+        """Disjoint 4-simplices join to a 9-simplex (10-vertex facet)."""
+        complex_a = {
+            "vertices": ["a0", "a1", "a2", "a3", "a4"],
+            "facets": [["a0", "a1", "a2", "a3", "a4"]],
+        }
+        complex_b = {
+            "vertices": ["b0", "b1", "b2", "b3", "b4"],
+            "facets": [["b0", "b1", "b2", "b3", "b4"]],
+        }
+        with pytest.raises(ValidationError, match="between 1 and 8"):
+            JoinRequest(complex_a=complex_a, complex_b=complex_b)
+
+    def test_join_exceeding_face_closure_rejected(self) -> None:
+        """Two complexes whose join closure would exceed 2048 faces."""
+        # A 7-simplex has 255 faces; its join with another 7-simplex has
+        # 256*256-1 = 65535 faces, far beyond the closure bound.
+        simplex = ["v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7"]
+        complex_a = {"vertices": simplex, "facets": [simplex]}
+        complex_b = {
+            "vertices": ["w0", "w1", "w2", "w3", "w4", "w5", "w6", "w7"],
+            "facets": [["w0", "w1", "w2", "w3", "w4", "w5", "w6", "w7"]],
+        }
+        with pytest.raises(ValidationError):
+            JoinRequest(complex_a=complex_a, complex_b=complex_b)
+
+
+class TestSkeletonBounds:
+    def test_skeleton_facet_explosion_rejected(self) -> None:
+        """k=3 on eight disjoint 7-simplices yields 560 tetrahedra > 128."""
+        vertices = []
+        facets = []
+        for i in range(8):
+            base = [f"v{i}_{j}" for j in range(8)]
+            vertices.extend(base)
+            facets.append(base)
+        complex_data = {"vertices": vertices, "facets": facets}
+        with pytest.raises(ValidationError, match="at most 128"):
+            SkeletonRequest(complex=complex_data, k=3)
+
+    def test_admissible_skeleton_still_works(self) -> None:
+        """A single 7-simplex has C(8,4) = 70 tetrahedra in its 3-skeleton."""
+        simplex = ["v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7"]
+        result = compute_skeleton(
+            SkeletonRequest(complex={"vertices": simplex, "facets": [simplex]}, k=3)
+        )
+        assert len(result.skeleton_facets) == 70
+
+
+class TestCollapseResidualBounds:
+    def test_residual_facets_exceeding_limit_rejected(self) -> None:
+        """Collapsing a codim-one face of a 7-simplex beside 122 edges
+        leaves 129 maximal facets and must be rejected before execution."""
+        simplex = ["s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7"]
+        edges = [[f"g{i // 8}", f"h{i % 8}"] for i in range(122)]
+        vertices = sorted(
+            simplex + [f"g{i}" for i in range(16)] + [f"h{i}" for i in range(8)]
+        )
+        complex_data = {"vertices": vertices, "facets": [simplex, *edges]}
+        with pytest.raises(ValidationError):
+            ElementaryCollapseRequest(
+                complex=complex_data,
+                free_face=["s1", "s2", "s3", "s4", "s5", "s6", "s7"],
+                coface=simplex,
+            )
+
+    def test_residual_within_bounds_admitted(self) -> None:
+        triangle_plus_edge = {
+            "vertices": ["t0", "t1", "t2", "u0", "u1"],
+            "facets": [["t0", "t1", "t2"], ["u0", "u1"]],
+        }
+        result = compute_elementary_collapse(
+            ElementaryCollapseRequest(
+                complex=triangle_plus_edge,
+                free_face=["t0", "t1"],
+                coface=["t0", "t1", "t2"],
+            )
+        )
+        assert result.is_free_face
+        assert set(result.remaining_facets) == {
+            ("t0", "t2"),
+            ("t1", "t2"),
+            ("u0", "u1"),
+        }
+
+
+class TestShellingSourceBinding:
+    def test_result_binds_to_complex_and_order(self) -> None:
+        request = ShellingCheckRequest(complex=CIRCLE, facet_order=[0, 1, 2])
+        result = compute_shelling_check(request)
+        assert result.complex == request.complex
+        assert result.facet_order == (0, 1, 2)
+        payload = result.model_dump()
+        assert ShellingCheckResult.model_validate(payload) == result
+
+    def test_forged_shelling_decision_rejected(self) -> None:
+        """Two disjoint edges in order [0, 1] is not a shelling order; a
+        forged is_shelling=True cannot validate against the retained source."""
+        two_edges = {
+            "vertices": ["a", "b", "c", "d"],
+            "facets": [["a", "b"], ["c", "d"]],
+        }
+        with pytest.raises(ValidationError, match="is_shelling"):
+            ShellingCheckResult(
+                complex=two_edges,
+                facet_order=[0, 1],
+                is_shelling=True,
+                failed_at=None,
+                failure_reason=None,
+            )

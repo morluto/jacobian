@@ -22,22 +22,10 @@ from jacobian.math.topology._models import (
     BarycentricSubdivisionResult,
     BoundarySquareLedgerEntry,
     ChainCoefficientRing,
-    ElementaryCollapseRequest,
-    ElementaryCollapseResult,
-    JoinRequest,
-    JoinResult,
-    PseudomanifoldRequest,
-    PseudomanifoldResult,
-    ShellingCheckRequest,
-    ShellingCheckResult,
-    SkeletonRequest,
-    SkeletonResult,
-    StarRequest,
-    StarResult,
-    VertexDeletionRequest,
-    VertexDeletionResult,
     ChainComplexRequest,
     ChainComplexResult,
+    ElementaryCollapseRequest,
+    ElementaryCollapseResult,
     FacesInDimension,
     FiniteSimplicialComplex,
     FVectorRequest,
@@ -50,16 +38,29 @@ from jacobian.math.topology._models import (
     IntegralSimplicialHomologyResult,
     IntegralTorsionGenerator,
     IntegralVector,
+    JoinRequest,
+    JoinResult,
     LinkRequest,
     LinkResult,
     ModularVector,
+    PseudomanifoldRequest,
+    PseudomanifoldResult,
+    ShellingCheckRequest,
+    ShellingCheckResult,
     SimplexBasis,
     SimplicialComplexCanonicalizationResult,
     SimplicialComplexRequest,
     SimplicialHomologyRequest,
     SimplicialHomologyResult,
+    SkeletonRequest,
+    SkeletonResult,
     SparseBoundaryMatrix,
     SparseMatrixEntry,
+    StarRequest,
+    StarResult,
+    VertexDeletionRequest,
+    VertexDeletionResult,
+    _evaluate_shelling,
     face_closure,
     simplicial_complex_digest,
 )
@@ -797,9 +798,7 @@ def compute_star(request: StarRequest) -> StarResult:
     """Compute the closed star of a simplex."""
     target = frozenset(request.simplex)
     star_facets = {
-        frozenset(facet)
-        for facet in request.complex.facets
-        if target.issubset(facet)
+        frozenset(facet) for facet in request.complex.facets if target.issubset(facet)
     }
     ordered_facets = tuple(
         tuple(sorted(simplex))
@@ -824,10 +823,7 @@ def compute_vertex_deletion(request: VertexDeletionRequest) -> VertexDeletionRes
     """Compute the induced subcomplex after deleting a vertex subset."""
     to_delete = set(request.vertices_to_delete)
     all_faces_set = _all_faces(request.complex.facets)
-    remaining_faces = {
-        face for face in all_faces_set
-        if not (set(face) & to_delete)
-    }
+    remaining_faces = {face for face in all_faces_set if not (set(face) & to_delete)}
     sorted_remaining = sorted(remaining_faces, key=lambda f: (-len(f), f))
     maximal_list: list[tuple[str, ...]] = []
     seen: set[frozenset[str]] = set()
@@ -838,7 +834,9 @@ def compute_vertex_deletion(request: VertexDeletionRequest) -> VertexDeletionRes
             seen.add(face_set)
     remaining_facets = tuple(maximal_list)
     if remaining_facets:
-        remaining_vertices = tuple(sorted({v for facet in remaining_facets for v in facet}))
+        remaining_vertices = tuple(
+            sorted({v for facet in remaining_facets for v in facet})
+        )
         remaining_complex = _canonical_complex(remaining_vertices, remaining_facets)
     else:
         remaining_vertices = ()
@@ -855,9 +853,7 @@ def compute_skeleton(request: SkeletonRequest) -> SkeletonResult:
     """Compute the k-skeleton of a simplicial complex."""
     k = request.k
     all_faces_set = _all_faces(request.complex.facets)
-    skeleton_faces = {
-        face for face in all_faces_set if len(face) <= k + 1
-    }
+    skeleton_faces = {face for face in all_faces_set if len(face) <= k + 1}
     skeleton_list = sorted(skeleton_faces, key=lambda f: (-len(f), f))
     maximal: list[tuple[str, ...]] = []
     seen: set[frozenset[str]] = set()
@@ -911,20 +907,11 @@ def compute_join(request: JoinRequest) -> JoinResult:
     )
 
 
-def compute_barycentric_subdivision(
-    request: BarycentricSubdivisionRequest,
-) -> BarycentricSubdivisionResult:
-    """Compute the barycentric subdivision of a simplicial complex."""
-    all_faces_set = _all_faces(request.complex.facets)
-    sorted_faces = sorted(all_faces_set, key=lambda f: (len(f), f))
-    # Bounded injective encoding: use short valid labels "bv{i}" instead of
-    # comma-joined face content which violates VertexLabel.
-    new_vertices = [f"bv{i}" for i in range(len(sorted_faces))]
-    vertex_map = {face: new_vertices[idx] for idx, face in enumerate(sorted_faces)}
-    # Enumerate maximal chains via cover relation (efficient, not power set).
-    face_frozens = [frozenset(f) for f in sorted_faces]
-    n = len(sorted_faces)
-    # Compute cover relation: f covers g if f<g and no h with f<h<g
+def _cover_relations(face_frozens: list[frozenset[str]]) -> list[list[int]]:
+    """Compute the cover relation of the face lattice: i covers j when
+    ``face_frozens[i] < face_frozens[j]`` with no strict intermediate."""
+
+    n = len(face_frozens)
     covers: list[list[int]] = [[] for _ in range(n)]
     for i in range(n):
         for j in range(n):
@@ -935,14 +922,26 @@ def compute_barycentric_subdivision(
                 )
                 if not has_intermediate:
                     covers[i].append(j)
-    # Minimal faces have no proper subset
-    is_minimal = [True] * n
-    for i in range(n):
-        for j in range(n):
+    return covers
+
+
+def _minimal_face_indices(face_frozens: list[frozenset[str]]) -> list[int]:
+    is_minimal = [True] * len(face_frozens)
+    for i in range(len(face_frozens)):
+        for j in range(len(face_frozens)):
             if face_frozens[j] < face_frozens[i]:
                 is_minimal[i] = False
                 break
-    minimal_indices = [i for i, v in enumerate(is_minimal) if v]
+    return [i for i, minimal in enumerate(is_minimal) if minimal]
+
+
+def _maximal_chains_from_covers(
+    covers: list[list[int]],
+    minimal_indices: list[int],
+    n: int,
+    sorted_faces: list[tuple[str, ...]],
+    face_frozens: list[frozenset[str]],
+) -> list[list[int]]:
     maximal_chains: list[list[int]] = []
 
     def dfs(chain: list[int]) -> None:
@@ -964,7 +963,27 @@ def compute_barycentric_subdivision(
             if not any(face_frozens[i] < face_frozens[j] for j in range(n)):
                 # maximal element
                 maximal_chains.append([i])
+    return maximal_chains
 
+
+def compute_barycentric_subdivision(
+    request: BarycentricSubdivisionRequest,
+) -> BarycentricSubdivisionResult:
+    """Compute the barycentric subdivision of a simplicial complex."""
+    all_faces_set = _all_faces(request.complex.facets)
+    sorted_faces = sorted(all_faces_set, key=lambda f: (len(f), f))
+    # Bounded injective encoding: use short valid labels "bv{i}" instead of
+    # comma-joined face content which violates VertexLabel.
+    new_vertices = [f"bv{i}" for i in range(len(sorted_faces))]
+    vertex_map = {face: new_vertices[idx] for idx, face in enumerate(sorted_faces)}
+    # Enumerate maximal chains via cover relation (efficient, not power set).
+    face_frozens = [frozenset(f) for f in sorted_faces]
+    n = len(sorted_faces)
+    covers = _cover_relations(face_frozens)
+    minimal_indices = _minimal_face_indices(face_frozens)
+    maximal_chains = _maximal_chains_from_covers(
+        covers, minimal_indices, n, sorted_faces, face_frozens
+    )
     subdivision_facets = [
         tuple(sorted(vertex_map[sorted_faces[idx]] for idx in chain))
         for chain in maximal_chains
@@ -1052,86 +1071,17 @@ def compute_pseudomanifold_decision(
 
 def compute_shelling_check(request: ShellingCheckRequest) -> ShellingCheckResult:
     """Check whether a submitted facet order is a valid shelling order."""
-    facets = request.complex.facets
-    order = request.facet_order
 
-    # Check purity (all facets same dimension)
-    dim = len(facets[0])
-    if not all(len(f) == dim for f in facets):
-        return ShellingCheckResult(
-            is_shelling=False,
-            failed_at=0,
-            failure_reason="complex is not pure",
-        )
-
-    for i, idx in enumerate(order):
-        facet_i = set(facets[idx])
-        if i == 0:
-            continue
-        # The intersection of F_i with the previously added facets
-        # must be a pure (dim-2)-dimensional subcomplex of the boundary of F_i
-        # i.e., every nonempty face of F_i ∩ (previous facets) that is not
-        # the whole F_i must be contained in some previous facet
-        # Standard shelling condition: for each j < i, the intersection
-        # of F_i with the union of previous facets is a nonempty union of
-        # proper faces of F_i
-        prev_facets = [set(facets[order[j]]) for j in range(i)]
-        intersection_i = facet_i.copy()
-        for pf in prev_facets:
-            intersection_i &= pf
-        # The intersection of F_i with all previous facets must be
-        # a union of proper faces (not the entire facet)
-        # Check: for every j < i, F_i ∩ F_j is a proper face of F_i
-        for j in range(i):
-            facet_j = set(facets[order[j]])
-            intersection = facet_i & facet_j
-            if intersection == facet_i:
-                # F_i is contained in F_j -- means duplicate
-                return ShellingCheckResult(
-                    is_shelling=False,
-                    failed_at=i,
-                    failure_reason=f"facet {idx} is contained in earlier facet",
-                )
-        # The intersection must be a pure subcomplex of the boundary of F_i
-        # For simplicity, check the standard condition: the restriction R(F)
-        # is nonempty for each new facet
-        # R(F_i) = {faces of F_i not in any previous facet}
-        # These must form a nonempty interval in the face lattice of F_i
-        faces_not_in_prev: set[tuple[str, ...]] = set()
-        all_faces_i = set()
-        n = len(facet_i)
-        for r in range(1, n + 1):
-            for subset in combinations(sorted(facet_i), r):
-                all_faces_i.add(tuple(sorted(subset)))
-        for face in all_faces_i:
-            face_set = set(face)
-            in_prev = any(
-                face_set.issubset(pf) for pf in prev_facets
-            )
-            if not in_prev:
-                faces_not_in_prev.add(face)
-        if not faces_not_in_prev:
-            return ShellingCheckResult(
-                is_shelling=False,
-                failed_at=i,
-                failure_reason=f"facet {idx} has no new faces",
-            )
-        # Check that these faces form a nonempty interval [min, F_i)
-        # i.e., there is a unique minimal face (no other face is a proper subset)
-        face_sets = {frozenset(f) for f in faces_not_in_prev}
-        min_faces = [
-            frozenset(f)
-            for f in faces_not_in_prev
-            if not any(other < frozenset(f) for other in face_sets if other != frozenset(f))
-        ]
-        if len(min_faces) != 1:
-            return ShellingCheckResult(
-                is_shelling=False,
-                failed_at=i,
-                failure_reason=f"facet {idx} restriction is not an interval",
-            )
-
-    return ShellingCheckResult(is_shelling=True)
+    is_shelling, failed_at, failure_reason = _evaluate_shelling(
+        request.complex.facets, request.facet_order
+    )
+    return ShellingCheckResult(
+        complex=request.complex,
+        facet_order=request.facet_order,
+        is_shelling=is_shelling,
+        failed_at=failed_at,
+        failure_reason=failure_reason,
+    )
 
 
 def compute_elementary_collapse(
@@ -1146,29 +1096,15 @@ def compute_elementary_collapse(
     free_tuple = tuple(sorted(request.free_face))
 
     def _collapse_result(is_free: bool, facets, vertices) -> ElementaryCollapseResult:
-        # Helper to build result with canonical complex
         if facets:
             verts = tuple(sorted({v for f in facets for v in f}))
-            # vertices may include isolated? Use facets-derived vertices
-            remaining_complex = _canonical_complex(verts, facets)
+            rem_facets = tuple(tuple(sorted(f)) for f in facets)
+            remaining_complex = _canonical_complex(verts, rem_facets)
             rem_vertices = verts
-            rem_facets = facets
         else:
             remaining_complex = None
             rem_vertices = ()
             rem_facets = ()
-        # For is_free=False, the remaining should be original complex canonicalized
-        if not is_free:
-            # Ensure remaining facets/vertices are original (passed in)
-            # facets and vertices are already original
-            if facets:
-                remaining_complex = _canonical_complex(vertices, facets)
-                rem_vertices = vertices
-                rem_facets = facets
-            else:
-                remaining_complex = None
-                rem_vertices = ()
-                rem_facets = ()
         return ElementaryCollapseResult(
             is_free_face=is_free,
             free_face=free_tuple,
@@ -1180,31 +1116,24 @@ def compute_elementary_collapse(
 
     # Check that free_face is a face of the complex
     if free_tuple not in all_faces_set:
-        return _collapse_result(
-            False, request.complex.facets, request.complex.vertices
-        )
+        return _collapse_result(False, request.complex.facets, request.complex.vertices)
 
     # Check that coface is a facet of the complex
     if coface_tuple not in request.complex.facets:
-        return _collapse_result(
-            False, request.complex.facets, request.complex.vertices
-        )
+        return _collapse_result(False, request.complex.facets, request.complex.vertices)
 
     # Check that free_face is a free face: it is contained in exactly one facet
     containing_facets = [
-        frozenset(f) for f in request.complex.facets
+        frozenset(f)
+        for f in request.complex.facets
         if free_face_set.issubset(frozenset(f))
     ]
 
     if len(containing_facets) != 1:
-        return _collapse_result(
-            False, request.complex.facets, request.complex.vertices
-        )
+        return _collapse_result(False, request.complex.facets, request.complex.vertices)
 
     if containing_facets[0] != coface_set:
-        return _collapse_result(
-            False, request.complex.facets, request.complex.vertices
-        )
+        return _collapse_result(False, request.complex.facets, request.complex.vertices)
 
     # Perform the collapse: remove all faces sigma with free_face <= sigma <= coface
     # Remaining faces are those not in the interval [free_face, coface]

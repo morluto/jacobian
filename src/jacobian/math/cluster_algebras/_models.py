@@ -8,12 +8,27 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 
-
 MAX_EXCHANGE_SIZE = 16
 
 
+def _require_shape(matrix: ExchangeMatrix) -> None:
+    if len(matrix.entries) != matrix.n:
+        raise ValueError("entries must be an n x n matrix")
+    for row in matrix.entries:
+        if len(row) != matrix.n:
+            raise ValueError("entries must be a square matrix")
+    if len(matrix.symmetrizer) != matrix.n:
+        raise ValueError("symmetrizer must have n entries")
+
+
 class ExchangeMatrix(StrictModel):
-    """A skew-symmetrizable integer exchange matrix B."""
+    """A skew-symmetrizable integer exchange matrix B.
+
+    The symmetrizer D must have strictly positive diagonal entries: a
+    diagonal matrix with positive diagonal satisfying DB = -B^T is exactly
+    what makes B an exchange matrix, and a zero or negative entry would
+    accept matrices that are not skew-symmetrizable.
+    """
 
     n: int = Field(ge=1, le=MAX_EXCHANGE_SIZE)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=MAX_EXCHANGE_SIZE)
@@ -21,13 +36,12 @@ class ExchangeMatrix(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
-        if len(self.entries) != self.n:
-            raise ValueError("entries must be an n x n matrix")
-        for row in self.entries:
-            if len(row) != self.n:
-                raise ValueError("entries must be a square matrix")
-        if len(self.symmetrizer) != self.n:
-            raise ValueError("symmetrizer must have n entries")
+        _require_shape(self)
+        for i in range(self.n):
+            if self.symmetrizer[i] <= 0:
+                raise ValueError(
+                    "symmetrizer entries must be strictly positive integers"
+                )
         for i in range(self.n):
             if self.entries[i][i] != 0:
                 raise ValueError("diagonal entries must be zero")

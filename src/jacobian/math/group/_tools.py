@@ -127,7 +127,10 @@ GROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Given a permutation group by generators, return its conjugacy classes "
         "(the partition of the group into conjugacy classes) as permutation "
         "array forms, using SymPy. Each class lists the elements conjugate to "
-        "a representative; class sizes are the orbit sizes under conjugation.",
+        "a representative; class sizes are the orbit sizes under conjugation. "
+        "The generated group must have order at most 5000 (degree up to 64 "
+        "alone does not bound enumeration; e.g., S8 has order 40320); larger "
+        "groups are rejected.",
         GroupConjugacyClassesRequest,
         GroupConjugacyClassesResult,
         compute_group_conjugacy_classes,

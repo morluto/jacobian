@@ -59,7 +59,9 @@ def group_conjugacy_classes(
 
     Two elements are conjugate iff they lie in the same class.  The returned
     classes partition the group; each class is a list of permutations (as
-    array forms over ``0..n-1``).
+    array forms over ``0..n-1``). The generated group must have order at
+    most 5000 (degree up to 64 alone does not bound enumeration; e.g.,
+    S8 has order 40320); larger groups are rejected before enumeration.
     """
     from sympy.combinatorics import Permutation, PermutationGroup
 

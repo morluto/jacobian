@@ -94,11 +94,30 @@ class GroupOrbitResult(StrictModel):
 
 
 class GroupConjugacyClassesRequest(StrictModel):
-    """Request the conjugacy classes of a permutation group."""
+    """Request the conjugacy classes of a permutation group.
 
-    degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
+    The generated group must have order at most 5000 (degree up to 64
+    alone does not bound enumeration; e.g., S8 has order 40320 and S12
+    has order 479M). Validators compute ``|G|`` via Schreier-Sims and
+    reject groups exceeding the 5000-element bound before enumeration.
+    """
+
+    degree: int = Field(
+        ge=1,
+        le=MAX_GROUP_DEGREE,
+        description=(
+            "Degree n of the permutation group acting on {0,...,n-1}; "
+            "the generated group must have order at most 5000 (degree 64 alone "
+            "does not bound enumeration)."
+        ),
+    )
     generators: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=MAX_GROUP_DEGREE
+        min_length=1,
+        max_length=MAX_GROUP_DEGREE,
+        description=(
+            "Generator permutations as array forms of length degree; "
+            "the generated group must have order at most 5000."
+        ),
     )
 
     @model_validator(mode="after")

@@ -543,5 +543,5 @@ class TestSaturationRelationVerification:
             ideal=_ideal(("x", "y"), {(1, 0): 1}),  # (x)
             saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),  # x
         )
-        with pytest.raises(ValueError, match="does not contain"):
+        with pytest.raises(ValueError, match="differs"):
             ops.compute_ideal_saturation(request)

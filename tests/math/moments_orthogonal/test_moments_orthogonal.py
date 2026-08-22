@@ -101,7 +101,7 @@ class TestRecurrenceCoefficients:
         assert all(a == _frac(1, 2) for a in result.alpha)
 
     def test_beta_zero_is_mu0(self) -> None:
-        moments = (_frac(2, 1), _frac(1, 1), _frac(2, 3), _frac(1, 2))
+        moments = (_frac(2, 1), _frac(1, 1), _frac(2, 3))
         result = recurrence_coefficients(moments)
         assert result.beta[0] == _frac(2, 1)
 
@@ -120,11 +120,14 @@ class TestRecurrenceCoefficients:
             recurrence_coefficients((_frac(-1, 1),))
 
     def test_insufficient_moments_for_recurrence(self) -> None:
-        """With only 2 moments we can't produce any recurrence coefficient."""
-        moments = (_frac(1, 1), _frac(1, 2))
-        result = recurrence_coefficients(moments)
+        """A single moment admits no recurrence coefficient; an even prefix
+        is rejected because its final moment would determine alpha while
+        the matching norm ratio stays undetermined."""
+        result = recurrence_coefficients((_frac(1, 1),))
         assert result.alpha == ()
         assert result.beta == (_frac(1, 1),)
+        with pytest.raises(ValueError, match="odd length"):
+            recurrence_coefficients((_frac(1, 1), _frac(1, 2)))
 
 
 # ---------------------------------------------------------------------------

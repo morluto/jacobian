@@ -16,6 +16,7 @@ from jacobian.math.commutative_algebra_ops._models import (
 )
 from jacobian.math.commutative_algebra_ops._singular import (
     run_singular_ideal_operation,
+    run_singular_saturation_verification,
 )
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
@@ -97,13 +98,35 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
         request.resource_budget,
     )
     if backend.outcome == "COMPUTED" and backend.ideal is not None:
-        # Defining-relation verification runs here, inside the operation's
-        # bounded flow, rather than in the wire validator: the containment
-        # and d-saturation checks use exact Groebner reduction bounded by
-        # the same input budgets (<=6 variables, <=12 degree, <=256 terms).
-        _verify_saturation_relation(
-            request.ideal, request.saturation_polynomial, backend.ideal
+        # Defining-equality verification (I : d^inf == J) runs inside the
+        # same bounded, supervised Singular subprocess flow, never as an
+        # unbounded host-process Groebner computation.
+        verdict = run_singular_saturation_verification(
+            request.ideal,
+            saturation_ideal,
+            backend.ideal,
+            request.resource_budget,
         )
+        if verdict == "REFUTED":
+            raise ValueError(
+                "Singular returned an ideal that differs from the exact "
+                "saturation I : d^infinity; refusing to report it"
+            )
+        if verdict != "VERIFIED":
+            detail = {
+                "UNAVAILABLE": "The supported Singular 4.4 backend is not "
+                "installed for saturation verification.",
+                "TIMEOUT": "Saturation verification exceeded the declared "
+                "wall-time limit.",
+                "ERROR": "Singular could not decide the saturation's "
+                "defining relation.",
+            }.get(verdict, "Saturation verification failed.")
+            return IdealSaturationResult(
+                outcome=verdict,
+                source_ideal=request.ideal,
+                source_polynomial=request.saturation_polynomial,
+                detail=detail,
+            )
     return IdealSaturationResult(
         outcome=backend.outcome,
         source_ideal=request.ideal,
@@ -112,60 +135,6 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
         backend_version=backend.backend_version,
         detail=backend.detail,
     )
-
-
-def _verify_saturation_relation(source_ideal, d_poly, saturation) -> None:
-    """Verify the defining equality ``I : d^infinity = J`` exactly (bounded inputs).
-
-    Containment alone proves nothing: ``d*J subseteq J`` holds for every
-    ideal by closure under multiplication. The checked defining relation is
-    the equality of ``J`` with the exact saturation computed independently
-    via the Rabinowitsch trick.
-    """
-    import sympy
-
-    from jacobian.math.polynomials._conversions import (
-        rational_polynomial_to_sympy,
-    )
-
-    symbols = sympy.symbols(source_ideal.variables)
-    saturation_basis = sympy.groebner(
-        [rational_polynomial_to_sympy(gen).as_expr() for gen in saturation.generators],
-        *symbols,
-        domain=sympy.QQ,
-    )
-    for gen in source_ideal.generators:
-        if saturation_basis.reduce(rational_polynomial_to_sympy(gen).as_expr())[1] != 0:
-            raise ValueError(
-                "Singular returned an ideal that does not contain the "
-                "source ideal; refusing to report it as the saturation"
-            )
-
-    # Rabinowitsch: I : d^inf = (I + <t*d - 1>) intersected with R. A lex
-    # Groebner basis eliminating t first keeps generators of that
-    # intersection exactly when they are free of t.
-    d_expr = rational_polynomial_to_sympy(d_poly).as_expr()
-    eliminator = sympy.Dummy("t")
-    colon_basis = sympy.groebner(
-        [rational_polynomial_to_sympy(gen).as_expr() for gen in source_ideal.generators]
-        + [eliminator * d_expr - 1],
-        eliminator,
-        *symbols,
-        order="lex",
-        domain=sympy.QQ,
-    )
-    saturated_generators = [
-        poly.as_expr()
-        for poly in colon_basis.polys
-        if not poly.as_expr().has(eliminator)
-    ]
-    saturated_basis = sympy.groebner(saturated_generators, *symbols, domain=sympy.QQ)
-    for gen in saturation.generators:
-        if saturated_basis.reduce(rational_polynomial_to_sympy(gen).as_expr())[1] != 0:
-            raise ValueError(
-                "Singular returned an ideal that differs from the exact "
-                "saturation I : d^infinity; refusing to report it"
-            )
 
 
 __all__ = [

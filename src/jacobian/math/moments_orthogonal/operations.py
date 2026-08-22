@@ -155,6 +155,15 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
             f"{2 * MAX_RECURRENCE_ORDER + 1} entries for a complete "
             f"recurrence computation (got {m})"
         )
+    if m % 2 == 0:
+        # An even prefix's final moment mu_{m-1} determines one more shift
+        # coefficient alpha via <x p_r, p_r>, while the matching norm ratio
+        # beta needs mu_{m}; returning complete=True with that moment
+        # ignored is not a faithful computation, so reject even prefixes.
+        raise ValueError(
+            "moment sequence must have odd length so every admitted "
+            f"moment participates in the recurrence (got even length {m})"
+        )
     max_order = (m - 1) // 2
     if max_order < 1:
         return RecurrenceCoefficients(alpha=(), beta=(moments[0],))

@@ -190,7 +190,9 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Compute the ordered-difference profile of a set in Z^d",
         "Given a finite set A in Z^d, return r_{A-A}(v) = |{(x,y) in A^2 : "
         "x != y, x - y = v}| for every nonzero difference v, preserving every "
-        "ordered source pair. A Sidon decision, additive energy, or collision "
+        "ordered source pair.  Inputs are bounded: 1<=d<=8, each coordinate "
+        "at most 6 digits in magnitude, vectors distinct and equal-length, set "
+        "size at most 256.  A Sidon decision, additive energy, or collision "
         "count is a cheap projection of this complete profile.",
         OrderedDifferenceProfileRequest,
         OrderedDifferenceProfileResult,
@@ -202,7 +204,8 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "three_vectors",
                 "Compute the ordered-difference profile for {(0,0), (1,0), (0,1)}; "
-                "the vectors must be non-empty and share the same dimension.",
+                "vectors must be non-empty, distinct, share the same dimension "
+                "1..8, and each coordinate is at most 6 digits in magnitude.",
                 {"vectors": [[0, 0], [1, 0], [0, 1]]},
             ),
         ),

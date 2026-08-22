@@ -116,6 +116,29 @@ def _check_entry_pairs(
                     raise ValueError("pair difference must match vectors")
 
 
+def _check_all_pairs_exactly_once(
+    entries: tuple[OrderedDifferenceEntry, ...],
+    set_size: int,
+) -> None:
+    seen: set[tuple[int, int]] = set()
+    for entry in entries:
+        for pair in entry.pairs:
+            key = (pair.left_index, pair.right_index)
+            if key in seen:
+                raise ValueError(f"ordered pair {key} appears more than once")
+            seen.add(key)
+    expected: set[tuple[int, int]] = {
+        (i, j) for i in range(set_size) for j in range(set_size) if i != j
+    }
+    if seen != expected:
+        missing = expected - seen
+        extra = seen - expected
+        raise ValueError(
+            f"entries must contain every ordered pair exactly once; "
+            f"missing {sorted(missing)[:5]}, extra {sorted(extra)[:5]}"
+        )
+
+
 def _check_first_collision(
     entries: tuple[OrderedDifferenceEntry, ...],
     has_repeated_difference: bool,
@@ -306,9 +329,22 @@ __all__ = [
 
 
 class OrderedDifferenceProfileRequest(StrictModel):
-    """Compute the ordered-difference profile r_{A-A}(v) for a finite set in Z^d."""
+    """Compute the ordered-difference profile r_{A-A}(v) for a finite set in Z^d.
 
-    vectors: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=_MAX_SET_SIZE)
+    Vectors must be distinct, share a common dimension 1..8, and each coordinate
+    is bounded to 6 digits in magnitude. The set size is bounded to 256.
+    """
+
+    vectors: tuple[tuple[int, ...], ...] = Field(
+        min_length=1,
+        max_length=_MAX_SET_SIZE,
+        description=(
+            "Finite set of distinct integer vectors in Z^d with 1<=d<=8, each "
+            "coordinate bounded to at most 6 digits in magnitude (abs value "
+            f"<10^{_MAX_COORDINATE_DIGITS}), all vectors share the same dimension, "
+            "and vector entries are unique; set size at most 256."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -400,6 +436,7 @@ class OrderedDifferenceProfileResult(StrictModel):
             _check_entry_pairs(
                 self.entries, self.dimension, self.vectors, self.set_size
             )
+            _check_all_pairs_exactly_once(self.entries, self.set_size)
             _check_first_collision(
                 self.entries, self.has_repeated_difference, self.first_collision
             )

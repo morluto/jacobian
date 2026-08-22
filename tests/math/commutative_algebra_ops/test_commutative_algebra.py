@@ -497,16 +497,15 @@ class TestSaturationRequestGrammar:
 class TestSaturationContainment:
     def test_computed_claim_must_contain_source_ideal(self) -> None:
         """A COMPUTED payload whose saturation does not contain the source
-        ideal violates the defining relation and fails validation."""
-        from jacobian.math.commutative_algebra_ops._models import (
-            IdealSaturationResult,
+        ideal violates the defining relation and fails verification inside
+        the operation's bounded flow."""
+        from jacobian.math.commutative_algebra_ops._operations import (
+            _verify_saturation_containment,
         )
 
         with pytest.raises(ValueError, match="does not contain"):
-            IdealSaturationResult(
-                outcome="COMPUTED",
-                source_ideal=_ideal(("x", "y"), {(1, 0): 1}),  # (x)
-                source_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
-                saturation=_ideal(("x", "y"), {(0, 2): 1}),  # (y^2): x not in it
-                backend_version="4.4",
+            _verify_saturation_containment(
+                _ideal(("x", "y"), {(1, 0): 1}),  # (x)
+                _polynomial(("x", "y"), {(3, 4): 1}),
+                _ideal(("x", "y"), {(0, 2): 1}),  # (y^2)
             )

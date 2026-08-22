@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -266,6 +266,7 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
 
 class GaussianQuadratureRequest(StrictModel):
     alpha: tuple[CanonicalRational, ...] = Field(min_length=1)
+    model_config = ConfigDict(extra="allow")
     beta: tuple[CanonicalRational, ...] = Field(min_length=1)
 
     @model_validator(mode="after")

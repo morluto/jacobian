@@ -55,15 +55,14 @@ PROFILE_OPERATIONS = (
         examples=(
             example(
                 "no_forbidden_patterns",
-                "A unit square has no collinear triples or concyclic quadruples "
-                "when checked as four points.",
+                "Four points in general position with no collinear triples or concyclic quadruples.",
                 {
                     "configuration": {
                         "points": [
                             {"label": "A", "point": {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}}},
                             {"label": "B", "point": {"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}}},
-                            {"label": "C", "point": {"x": {"num": "2", "den": "1"}, "y": {"num": "0", "den": "1"}}},
-                            {"label": "D", "point": {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}}},
+                            {"label": "C", "point": {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}}},
+                            {"label": "D", "point": {"x": {"num": "2", "den": "1"}, "y": {"num": "3", "den": "1"}}},
                         ],
                     },
                 },

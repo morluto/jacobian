@@ -132,8 +132,11 @@ def scalar_multiply(
             else:
                 added = _point_add(a, b, result, addend)
                 if added is None:
-                    return ScalarMultiplicationResult(at_infinity=True)
-                result = added
+                    # The accumulated sum cancelled to infinity, but higher bits
+                    # remain; continue scanning rather than discarding them.
+                    result = None
+                else:
+                    result = added
         if addend is not None:
             addend = _point_add(a, b, addend, addend)
         n >>= 1

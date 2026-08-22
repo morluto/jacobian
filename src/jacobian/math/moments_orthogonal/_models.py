@@ -118,6 +118,12 @@ class RecurrenceCoefficientsRequest(StrictModel):
     def require_valid_moments(self) -> Self:
         _validate_moments(self.moments)
         # The Gram-Schmidt kernel requires a positive-definite moment
+        # functional; the zeroth moment is the squared norm of the constant
+        # polynomial and must be positive even when the sequence is too short
+        # to run the full recurrence.
+        if self.moments[0].as_fraction() <= 0:
+            raise ValueError("the zeroth moment must be positive")
+        # The Gram-Schmidt kernel requires a positive-definite moment
         # functional; admit exactly the sequences it accepts so an accepted
         # request cannot fail inside execution.
         from jacobian.math.moments_orthogonal.operations import (
@@ -199,12 +205,31 @@ class ChristoffelDarbouxRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
         _validate_alpha_beta(self.alpha, self.beta)
+        # Bound x,y more tightly than the generic 4096: the recurrence
+        # evaluates polynomials of degree up to len(alpha) and the kernel sums
+        # n terms, so digit growth is roughly n * digit(x).  For n=16, even
+        # 4095-digit x gives 122k-digit denominators.  Cap at 1024 to keep
+        # worst-case outputs within the 32768-digit canonical limit.
+        max_cd_digits = 1024
         require_bounded_rational(
-            self.x, max_digits=MAX_RATIONAL_DIGITS, label="x"
+            self.x, max_digits=max_cd_digits, label="x"
         )
         require_bounded_rational(
-            self.y, max_digits=MAX_RATIONAL_DIGITS, label="y"
+            self.y, max_digits=max_cd_digits, label="y"
         )
+        # Also check conservative output height estimate
+        # Rough estimate: output digits ~ n * max_input_digits
+        n = max(len(self.alpha), len(self.beta))
+        max_input = max(
+            max((len(v.num.lstrip("-")) for v in self.alpha), default=0),
+            max((len(v.num.lstrip("-")) for v in self.beta), default=0),
+            len(self.x.num.lstrip("-")),
+            len(self.x.den.lstrip("-")),
+            len(self.y.num.lstrip("-")),
+            len(self.y.den.lstrip("-")),
+        )
+        if n * max_input > 30000:
+            raise ValueError("Christoffel-Darboux inputs would exceed the result digit bound")
         return self
 
 
@@ -289,8 +314,10 @@ class GaussianQuadratureRequest(StrictModel):
 class GaussianQuadratureResult(GaussianQuadratureRequest):
     nodes: tuple[CanonicalRational, ...]
     weights: tuple[CanonicalRational, ...]
-    complete: Literal[True] = True
-    method: Literal["GOLUB_WELSCH"] = "GOLUB_WELSCH"
+    complete: Literal[False] = False
+    method: Literal["GOLUB_WELSCH_NUMERICAL"] = "GOLUB_WELSCH_NUMERICAL"
+    approximation: Literal["IEEE_754_DOUBLE_DYADIC"] = "IEEE_754_DOUBLE_DYADIC"
+    is_numerical_approximation: Literal[True] = True
 
     @model_validator(mode="after")
     def bind_gaussian_quadrature(self) -> Self:

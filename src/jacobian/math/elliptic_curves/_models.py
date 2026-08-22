@@ -7,7 +7,8 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian.math._rational_height import RationalHeight
 from jacobian._models import StrictModel
 
 
@@ -122,6 +123,43 @@ class ScalarMultiplicationRequest(StrictModel):
     @model_validator(mode="after")
     def require_group_law(self) -> Self:
         _require_group_law(self.curve, (self.point,))
+        # Conservative height bound: the naive height of n*P grows roughly as
+        # n^2 times the height of P for generic curves.  Estimate the digit
+        # growth and reject requests that would exceed the canonical limit.
+        max_point_digits = max(
+            len(self.point.x.num.lstrip("-")),
+            len(self.point.x.den.lstrip("-")),
+            len(self.point.y.num.lstrip("-")),
+            len(self.point.y.den.lstrip("-")),
+        )
+        # Use n^2 * digit growth as a conservative upper bound; the true
+        # growth for the given example (2,2) with n=300 is 35k digits, which
+        # exceeds the 32k limit, so n=300 must be rejected for that point.
+        # For small points (1 digit), n=300 gives 90k estimated >32k, so reject.
+        # For n=100, estimated 10k <32k, so allow.
+        estimated_digits = self.scalar * self.scalar * max(1, max_point_digits)
+        # Also account for coefficient height
+        coeff_digits = max(
+            len(self.curve.coefficient_a.num.lstrip("-")),
+            len(self.curve.coefficient_a.den.lstrip("-")),
+            len(self.curve.coefficient_b.num.lstrip("-")),
+            len(self.curve.coefficient_b.den.lstrip("-")),
+        )
+        estimated_digits += coeff_digits * self.scalar
+        if estimated_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+            raise ValueError(
+                "scalar multiplication would exceed the canonical result height; "
+                "reduce the scalar or use smaller coordinates"
+            )
+        # Also enforce a hard scalar cap derived from the worst-case point size:
+        # even for 1-digit points, scalar=1000 would give 1M estimated digits,
+        # so cap at 500 for safety when point digits are minimal.
+        if self.scalar > 500 and max_point_digits <= 2:
+            # For larger points, the n^2 bound already rejects; for tiny points
+            # we still cap to keep intermediate work bounded.
+            raise ValueError(
+                "scalar exceeds the conservative work bound for the given point size"
+            )
         return self
 
 

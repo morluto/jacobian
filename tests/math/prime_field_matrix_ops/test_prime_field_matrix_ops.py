@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from jacobian.math.prime_field_matrix_ops._models import (
     NullspaceRequest,
     RankRequest,
+    RankResult,
     RrefRequest,
 )
 from jacobian.math.prime_field_matrix_ops._operations import (
@@ -59,6 +60,24 @@ class TestRank:
         with pytest.raises(ValidationError):
             RankRequest(prime=2, entries=[[3]], columns=1)
 
+    def test_result_binds_source_matrix(self) -> None:
+        """The result retains the source matrix and replays the rank."""
+        entries = [[1, 1, 0], [0, 1, 1]]
+        result = compute_rank(RankRequest(prime=2, entries=entries, columns=3))
+        assert result.entries == ((1, 1, 0), (0, 1, 1))
+        assert result.columns == 3
+        # The bound rank is re-derived from the retained source.
+        RankResult(
+            prime=2, entries=entries, columns=3, rank=result.rank
+        )
+
+    def test_forged_rank_rejected(self) -> None:
+        """A rank claim inconsistent with its source matrix is rejected."""
+        with pytest.raises(ValidationError, match="exact rank"):
+            RankResult(prime=2, entries=[[1, 0], [0, 1]], columns=2, rank=256)
+        with pytest.raises(ValidationError, match="exact rank"):
+            RankResult(prime=2, entries=[[0, 0]], columns=2, rank=1)
+
     def test_ragged_rows_rejected(self) -> None:
         with pytest.raises(ValidationError):
             RankRequest(prime=2, entries=[[1, 0], [0]], columns=2)
@@ -106,7 +125,7 @@ class TestNullspace:
         # Verify A*v = 0 mod p
         ns = result.nullspace_rows[0]
         for row in req.entries:
-            dot = sum(a * b for a, b in zip(row, ns)) % req.prime
+            dot = sum(a * b for a, b in zip(row, ns, strict=True)) % req.prime
             assert dot == 0
 
     def test_full_rank_no_nullspace(self) -> None:

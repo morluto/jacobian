@@ -24,10 +24,10 @@ def mutate_seed(request: SeedMutationRequest) -> SeedMutationResult:
     b'_{ij} = -sgn(i-k) * sgn(j-k) * b_{ij}  if i=k or j=k
     b'_{ij} = b_{ij} + max(0, b_{ik}) * max(0, b_{kj}) + min(0, b_{ik}) * min(0, b_{kj})  otherwise
     """
-    B = request.exchange_matrix
+    matrix = request.exchange_matrix
     k = request.mutation_index
-    n = B.n
-    old = [list(row) for row in B.entries]
+    n = matrix.n
+    old = [list(row) for row in matrix.entries]
 
     new = [[0] * n for _ in range(n)]
     for i in range(n):
@@ -49,7 +49,7 @@ def mutate_seed(request: SeedMutationRequest) -> SeedMutationResult:
     mutated = ExchangeMatrix(
         n=n,
         entries=tuple(tuple(row) for row in new),
-        symmetrizer=B.symmetrizer,
+        symmetrizer=matrix.symmetrizer,
     )
     return SeedMutationResult(
         exchange_matrix=mutated,

@@ -68,9 +68,16 @@ class RankRequest(StrictModel):
         return self
 
 
-class RankResult(StrictModel):
+class RankResult(RankRequest):
+    """The exact rank bound to its source matrix.
+
+    The canonical source matrix is retained and the rank is replayed
+    against it during result validation, mirroring the RREF and nullspace
+    results, so an authored rank cannot validate independently of the
+    matrix it claims to describe.
+    """
+
     rank: int = Field(ge=0)
-    prime: int = Field(ge=2)
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_RANK"] = "EXACT_DOMAIN_MATRIX_RANK"
 
@@ -78,6 +85,12 @@ class RankResult(StrictModel):
     def bind_rank(self) -> Self:
         if self.rank > MAX_DIMENSION:
             raise ValueError("rank exceeds the supported dimension bound")
+        matrix = PrimeFieldMatrix(
+            prime=self.prime, entries=self.entries, columns=self.columns
+        )
+        expected = rank(matrix)
+        if self.rank != expected:
+            raise ValueError("rank must be the exact rank of the source matrix")
         return self
 
 

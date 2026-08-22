@@ -322,3 +322,12 @@ class TestRecurrenceTruncation:
         moments = tuple(Fraction(1, k + 1) for k in range(35))
         with pytest.raises(ValueError, match="at most 33"):
             recurrence_coefficients(moments)
+
+
+class TestRecurrenceTruncationBoundary:
+    def test_34th_moment_rejected(self) -> None:
+        """(34-1)//2 == 16 still fits the cap, but the 34th moment would be
+        silently ignored; it must be rejected like any overlong prefix."""
+        moments = tuple(Fraction(1, k + 1) for k in range(34))
+        with pytest.raises(ValueError, match="at most 33"):
+            recurrence_coefficients(moments)

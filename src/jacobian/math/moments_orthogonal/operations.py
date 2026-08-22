@@ -146,9 +146,10 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
             "the zeroth moment must be positive: a positive-definite "
             "moment functional requires mu_0 > 0"
         )
-    if (m - 1) // 2 > MAX_RECURRENCE_ORDER:
+    if m > 2 * MAX_RECURRENCE_ORDER + 1:
         # Silently truncating would report complete=True while ignoring
-        # usable moments; admit only fully computable sequences.
+        # usable moments; admit only fully computable sequences. A 34th
+        # moment would be accepted by the floor division yet never used.
         raise ValueError(
             "moment sequence supports at most "
             f"{2 * MAX_RECURRENCE_ORDER + 1} entries for a complete "

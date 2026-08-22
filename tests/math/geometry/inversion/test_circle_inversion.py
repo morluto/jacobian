@@ -85,36 +85,30 @@ class TestRejection:
     def test_zero_power_rejected(self) -> None:
         with pytest.raises(ValidationError):
             CircleInversionRequest(
-                center_x={"num": "0", "den": "1"},
-                center_y={"num": "0", "den": "1"},
+                center={"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
                 power={"num": "0", "den": "1"},
-                point_x={"num": "1", "den": "1"},
-                point_y={"num": "0", "den": "1"},
+                point={"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}},
             )
 
 
 class TestWireAdapter:
     def test_compute_circle_inversion(self) -> None:
         request = CircleInversionRequest(
-            center_x={"num": "0", "den": "1"},
-            center_y={"num": "0", "den": "1"},
+            center={"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
             power={"num": "1", "den": "1"},
-            point_x={"num": "4", "den": "1"},
-            point_y={"num": "0", "den": "1"},
+            point={"x": {"num": "4", "den": "1"}, "y": {"num": "0", "den": "1"}},
         )
         result = compute_circle_inversion(request)
-        assert result.inverted_x.num == "1"
-        assert result.inverted_x.den == "4"
-        assert result.inverted_y.num == "0"
-        assert result.inverted_y.den == "1"
+        assert result.inverted.x.num == "1"
+        assert result.inverted.x.den == "4"
+        assert result.inverted.y.num == "0"
+        assert result.inverted.y.den == "1"
 
     def test_non_origin_center(self) -> None:
         request = CircleInversionRequest(
-            center_x={"num": "3", "den": "1"},
-            center_y={"num": "2", "den": "1"},
+            center={"x": {"num": "3", "den": "1"}, "y": {"num": "2", "den": "1"}},
             power={"num": "5", "den": "1"},
-            point_x={"num": "1", "den": "1"},
-            point_y={"num": "7", "den": "1"},
+            point={"x": {"num": "1", "den": "1"}, "y": {"num": "7", "den": "1"}},
         )
         result = compute_circle_inversion(request)
         assert isinstance(result, CircleInversionResult)

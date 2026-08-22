@@ -46,6 +46,16 @@ class FixedLengthCycleRequest(StrictModel):
         return self
 
 
+def _require_decided_witness_pair(
+    exists: bool | None, witness: object
+) -> None:
+    """A decided search states a claim; exactly an affirmative one carries a witness."""
+    if exists is None:
+        raise ValueError("a decided search states whether the target exists")
+    if exists is (witness is None):
+        raise ValueError("exactly an existing witness carries one witness")
+
+
 class SearchOutcome(StrictModel):
     """Shared outcome discriminator for bounded exhaustive searches."""
 
@@ -83,10 +93,7 @@ class FixedLengthCycleResult(SearchOutcome):
                     "a budget-exceeded search returns neither claim nor witness"
                 )
             return self
-        if self.exists is None:
-            raise ValueError("a decided search states whether the cycle exists")
-        if self.exists is (self.cycle is None):
-            raise ValueError("exactly an existing cycle carries one witness")
+        _require_decided_witness_pair(self.exists, self.cycle)
         if self.cycle is not None:
             if len(self.cycle) != self.length:
                 raise ValueError(
@@ -167,10 +174,7 @@ class SubgraphPatternResult(SearchOutcome):
                     "a budget-exceeded search returns neither claim nor witness"
                 )
             return self
-        if self.exists is None:
-            raise ValueError("a decided search states whether an embedding exists")
-        if self.exists is (self.embedding is None):
-            raise ValueError("exactly an existing embedding carries one witness")
+        _require_decided_witness_pair(self.exists, self.embedding)
         if self.embedding is not None:
             mapping = dict(self.embedding.mapping)
             if set(mapping) != set(range(self.pattern_graph.vertex_count)):

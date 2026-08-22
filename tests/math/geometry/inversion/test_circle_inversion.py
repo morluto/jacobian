@@ -90,6 +90,41 @@ class TestRejection:
                 point={"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}},
             )
 
+    def test_admission_closed_under_returned_point(self) -> None:
+        """A near-unit point whose image would fail re-admission is rejected.
+
+        For p = (1/a, 1/b) the first estimator pass accepts, but feeding the
+        exact image back through the same predicate must also succeed since
+        inversion is an involution; admission requires both directions.
+        """
+        a = 10**2000
+        with pytest.raises(ValidationError, match="height bound"):
+            CircleInversionRequest(
+                center={"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
+                power={"num": "1", "den": "1"},
+                point={"x": {"num": "1", "den": str(a)}, "y": {"num": "1", "den": str(a + 1)}},
+            )
+
+    def test_image_of_admitted_point_is_admitted(self) -> None:
+        """Every accepted request's exact image satisfies the same request."""
+        request = CircleInversionRequest(
+            center={"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
+            power={"num": "1", "den": "1"},
+            point={"x": {"num": "3", "den": "5"}, "y": {"num": "-1", "den": "2"}},
+        )
+        image = compute_circle_inversion(request).inverted
+        refed = CircleInversionRequest(
+            center=request.center,
+            power=request.power,
+            point={"x": {"num": image.x.num, "den": image.x.den},
+                   "y": {"num": image.y.num, "den": image.y.den}},
+        )
+        # Admission accepts the exact image, and inverting it returns the
+        # original point (involution).
+        round_trip = compute_circle_inversion(refed).inverted
+        assert round_trip.x.as_fraction() == request.point.x.as_fraction()
+        assert round_trip.y.as_fraction() == request.point.y.as_fraction()
+
 
 class TestWireAdapter:
     def test_compute_circle_inversion(self) -> None:

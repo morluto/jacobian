@@ -97,6 +97,11 @@ class TestNullspace:
         req = NullspaceRequest(prime=5, entries=[[1, 0], [0, 1]], columns=2)
         result = compute_nullspace(req)
         assert result.nullspace_rows == ()
+        # The genuinely empty basis is preserved so basis rows agree with
+        # nullspace_rows=() instead of counting a spurious zero row.
+        assert result.basis_matrix.entries == ()
+        assert result.basis_matrix.columns == 2
+        assert result.basis_matrix.prime == 5
 
     def test_nullity(self) -> None:
         """Nullity = columns - rank."""

@@ -185,6 +185,23 @@ class TestChristoffelDarboux:
         assert result.kernel == _frac(0, 1)
         assert result.polynomials_evaluated == (_frac(1, 1),)
 
+    def test_negative_beta_rejected(self) -> None:
+        """Native API matches the wire contract: norm ratios must be positive."""
+        with pytest.raises(ValueError, match="beta_0"):
+            christoffel_darboux(
+                (_frac(0, 1), _frac(0, 1)),
+                (_frac(-1, 1), _frac(1, 2)),
+                _frac(1, 1),
+                _frac(1, 1),
+            )
+        with pytest.raises(ValueError, match="kernel"):
+            christoffel_darboux(
+                (_frac(0, 1), _frac(0, 1)),
+                (_frac(1, 1), _frac(-1, 2)),
+                _frac(1, 1),
+                _frac(1, 1),
+            )
+
 
 # ---------------------------------------------------------------------------
 # Gaussian quadrature
@@ -218,6 +235,11 @@ class TestGaussianQuadrature:
     def test_alpha_empty_rejected(self) -> None:
         with pytest.raises(ValueError, match="between 1 and 16"):
             gaussian_quadrature((), (_frac(1, 1),))
+
+    def test_zero_subdiagonal_rejected(self) -> None:
+        """Native API rejects zero subdiagonals like GaussianQuadratureRequest."""
+        with pytest.raises(ValueError, match="positive"):
+            gaussian_quadrature((_frac(0, 1), _frac(1, 1)), (_frac(1, 1), _frac(0, 1)))
 
 
 # ---------------------------------------------------------------------------

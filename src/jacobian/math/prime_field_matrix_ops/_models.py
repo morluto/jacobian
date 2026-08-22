@@ -224,12 +224,9 @@ class NullspaceResult(NullspaceRequest):
         if self.nullspace_rows != expected:
             raise ValueError("nullspace_rows must be the exact nullspace basis")
         # Canonical value: the basis composes into downstream prime-field
-        # consumers with its field context retained.
+        # consumers with its field context retained. A full-rank source
+        # keeps the genuinely empty basis, matching nullspace_rows=().
         rows = tuple(tuple(int(v) for v in row) for row in self.nullspace_rows)
-        if not rows:
-            # Full-rank source: the basis carries a single zero row so its
-            # field context and width stay explicit.
-            rows = (tuple(0 for _ in range(self.columns)),)
         if (
             self.basis_matrix is None
             or self.basis_matrix.prime != self.prime

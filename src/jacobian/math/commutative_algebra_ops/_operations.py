@@ -115,7 +115,13 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
 
 
 def _verify_saturation_relation(source_ideal, d_poly, saturation) -> None:
-    """Verify I subseteq J and d*J subseteq J exactly (bounded inputs)."""
+    """Verify the defining equality ``I : d^infinity = J`` exactly (bounded inputs).
+
+    Containment alone proves nothing: ``d*J subseteq J`` holds for every
+    ideal by closure under multiplication. The checked defining relation is
+    the equality of ``J`` with the exact saturation computed independently
+    via the Rabinowitsch trick.
+    """
     import sympy
 
     from jacobian.math.polynomials._conversions import (
@@ -123,24 +129,42 @@ def _verify_saturation_relation(source_ideal, d_poly, saturation) -> None:
     )
 
     symbols = sympy.symbols(source_ideal.variables)
-    basis = sympy.groebner(
+    saturation_basis = sympy.groebner(
         [rational_polynomial_to_sympy(gen).as_expr() for gen in saturation.generators],
         *symbols,
         domain=sympy.QQ,
     )
     for gen in source_ideal.generators:
-        if basis.reduce(rational_polynomial_to_sympy(gen).as_expr())[1] != 0:
+        if saturation_basis.reduce(rational_polynomial_to_sympy(gen).as_expr())[1] != 0:
             raise ValueError(
                 "Singular returned an ideal that does not contain the "
                 "source ideal; refusing to report it as the saturation"
             )
+
+    # Rabinowitsch: I : d^inf = (I + <t*d - 1>) intersected with R. A lex
+    # Groebner basis eliminating t first keeps generators of that
+    # intersection exactly when they are free of t.
     d_expr = rational_polynomial_to_sympy(d_poly).as_expr()
+    eliminator = sympy.Dummy("t")
+    colon_basis = sympy.groebner(
+        [rational_polynomial_to_sympy(gen).as_expr() for gen in source_ideal.generators]
+        + [eliminator * d_expr - 1],
+        eliminator,
+        *symbols,
+        order="lex",
+        domain=sympy.QQ,
+    )
+    saturated_generators = [
+        poly.as_expr()
+        for poly in colon_basis.polys
+        if not poly.as_expr().has(eliminator)
+    ]
+    saturated_basis = sympy.groebner(saturated_generators, *symbols, domain=sympy.QQ)
     for gen in saturation.generators:
-        multiple = d_expr * rational_polynomial_to_sympy(gen).as_expr()
-        if basis.reduce(multiple)[1] != 0:
+        if saturated_basis.reduce(rational_polynomial_to_sympy(gen).as_expr())[1] != 0:
             raise ValueError(
-                "Singular returned an ideal that is not saturated by the "
-                "source polynomial; refusing to report it"
+                "Singular returned an ideal that differs from the exact "
+                "saturation I : d^infinity; refusing to report it"
             )
 
 

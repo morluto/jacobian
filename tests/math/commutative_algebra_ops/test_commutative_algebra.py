@@ -482,6 +482,38 @@ def test_ideal_quotient_by_product_equals_iterated_quotient() -> None:
 
 
 class TestSaturationRelationVerification:
+    def test_closure_only_forge_rejected_by_relation_check(self, monkeypatch) -> None:
+        """J = <1> contains I and satisfies d*J subseteq J by closure, but is
+        not the saturation; the defining-equality check rejects it."""
+        from jacobian.math.commutative_algebra_ops import _operations as ops
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationRequest,
+        )
+        from jacobian.math.polynomials.values import RationalPolynomialIdeal
+
+        forged = RationalPolynomialIdeal(
+            variables=("x", "y"),
+            generators=(_polynomial(("x", "y"), {(0, 0): 1}),),  # (1)
+        )
+
+        class _FakeBackend:
+            outcome = "COMPUTED"
+            ideal = forged
+            backend_version = "4.4"
+            detail = None
+
+        monkeypatch.setattr(
+            ops,
+            "run_singular_ideal_operation",
+            lambda *args, **kwargs: _FakeBackend(),
+        )
+        request = IdealSaturationRequest(
+            ideal=_ideal(("x", "y"), {(1, 0): 1}),  # (x)
+            saturation_polynomial=_polynomial(("x", "y"), {(0, 1): 1}),  # y
+        )
+        with pytest.raises(ValueError, match="differs"):
+            ops.compute_ideal_saturation(request)
+
     def test_bogus_backend_result_rejected_by_relation_check(self, monkeypatch) -> None:
         """A COMPUTED backend result violating the defining relation is
         rejected inside the operation's bounded flow."""

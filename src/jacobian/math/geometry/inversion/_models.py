@@ -17,34 +17,55 @@ def _inversion_height_bound_ok(
     power: CanonicalRational,
     point: RationalPoint2D,
 ) -> bool:
-    """Conservative admission for inversion growth.
+    """Conservative admission for inversion growth, closed under involution.
 
     Uses RationalHeight to estimate result digits of
     q = c + (s/||p-c||^2)*(p-c).  Requires that both inverted coordinates
-    stay within MAX_CANONICAL_RATIONAL_DIGITS. Also enforces half-digit
-    input bound so domain is symmetric under involution.
+    stay within MAX_CANONICAL_RATIONAL_DIGITS and that every input stays
+    within half of that limit. Because inverting an accepted input must
+    yield a point the same predicate admits, the exact image is checked
+    through the identical estimator; inversion is an involution, so this
+    single closure step makes the admitted domain closed under its
+    returned points.
     """
+    from jacobian.math.geometry.inversion._operations import invert_point
+
     half = MAX_CANONICAL_RATIONAL_DIGITS // 2
-    for value in (center.x, center.y, point.x, point.y, power):
-        if RationalHeight.from_canonical(value).exceeds(half):
-            return False
 
-    # Estimate heights
-    def _disp(a: CanonicalRational, b: CanonicalRational) -> RationalHeight:
-        return sum_heights(
-            (RationalHeight.from_canonical(a), RationalHeight.from_canonical(b))
-        )
+    def _admits(x: CanonicalRational, y: CanonicalRational) -> bool:
+        for value in (x, y, power):
+            if RationalHeight.from_canonical(value).exceeds(half):
+                return False
 
-    dx = _disp(point.x, center.x)
-    dy = _disp(point.y, center.y)
-    norm2 = sum_heights((dx.product(dx), dy.product(dy)))
-    scale = RationalHeight.from_canonical(power).quotient(norm2)
-    hx = sum_heights((RationalHeight.from_canonical(center.x), scale.product(dx)))
-    hy = sum_heights((RationalHeight.from_canonical(center.y), scale.product(dy)))
-    # Closure: the image must itself be an admissible input, so its
-    # height is compared against the same input cap, not the full
-    # canonical limit.
-    return not hx.exceeds(half) and not hy.exceeds(half)
+        # Estimate heights
+        def _disp(a: CanonicalRational, b: CanonicalRational) -> RationalHeight:
+            return sum_heights(
+                (RationalHeight.from_canonical(a), RationalHeight.from_canonical(b))
+            )
+
+        dx = _disp(x, center.x)
+        dy = _disp(y, center.y)
+        norm2 = sum_heights((dx.product(dx), dy.product(dy)))
+        scale = RationalHeight.from_canonical(power).quotient(norm2)
+        hx = sum_heights((RationalHeight.from_canonical(center.x), scale.product(dx)))
+        hy = sum_heights((RationalHeight.from_canonical(center.y), scale.product(dy)))
+        # Closure: the image must itself be an admissible input, so its
+        # height is compared against the same input cap, not the full
+        # canonical limit.
+        return not hx.exceeds(half) and not hy.exceeds(half)
+
+    if not _admits(point.x, point.y):
+        return False
+    inverted = invert_point(
+        center.x.as_fraction(),
+        center.y.as_fraction(),
+        power.as_fraction(),
+        point.x.as_fraction(),
+        point.y.as_fraction(),
+    )
+    image_x = CanonicalRational.from_fraction(inverted[0])
+    image_y = CanonicalRational.from_fraction(inverted[1])
+    return _admits(image_x, image_y)
 
 
 class CircleInversionRequest(StrictModel):

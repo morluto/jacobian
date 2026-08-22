@@ -240,8 +240,8 @@ def christoffel_darboux(
         raise ValueError("alpha must have length len(beta)-1 or len(beta)")
     if type(x) is not Fraction or type(y) is not Fraction:
         raise TypeError("x and y must use exact Fractions")
-    if beta[0] == 0:
-        raise ValueError("beta_0 must be nonzero")
+    if beta[0] <= 0:
+        raise ValueError("beta_0 must be positive")
     n = len(alpha)
     if n == 0:
         return ChristoffelDarbouxKernel(
@@ -264,7 +264,8 @@ def christoffel_darboux(
         px_prev, px_curr = px_curr, px_next
         py_prev, py_curr = py_curr, py_next
         # Advancing the squared norm to h_{k+1} uses beta_{k+1} = beta[k + 1].
-        if k + 1 >= len(beta) or beta[k + 1] == 0:
+        # Each used entry is a squared-norm ratio, so it must be positive.
+        if k + 1 >= len(beta) or beta[k + 1] <= 0:
             raise ValueError(
                 "recurrence coefficients do not define the requested kernel"
             )
@@ -312,8 +313,8 @@ def gaussian_quadrature(
         if k + 1 >= len(beta):
             break
         sub = beta[k + 1]
-        if sub < 0:
-            raise ValueError("subdiagonal beta entries must be nonnegative")
+        if sub <= 0:
+            raise ValueError("subdiagonal beta entries must be positive")
         off.append(math.sqrt(float(sub)))
     jacobi = np.diag(diagonal)
     if off:

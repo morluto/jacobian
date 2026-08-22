@@ -60,17 +60,16 @@ def compute_nullspace(request: NullspaceRequest) -> NullspaceResult:
         columns=request.columns,
     )
     ns = nullspace(matrix)
-    # Full-rank source: a single zero row keeps field context and width
-    # explicit for downstream consumers.
-    basis_rows = tuple(ns) if ns else (tuple(0 for _ in range(request.columns)),)
     return NullspaceResult(
         prime=request.prime,
         entries=request.entries,
         columns=request.columns,
         nullspace_rows=ns,
+        # A full-rank source keeps the genuinely empty basis so serialized
+        # basis rows agree with nullspace_rows=().
         basis_matrix=PrimeFieldMatrix(
             prime=request.prime,
-            entries=basis_rows,
+            entries=tuple(ns),
             columns=request.columns,
         ),
     )

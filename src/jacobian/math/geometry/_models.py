@@ -709,4 +709,40 @@ class ForbiddenPatternsResult(StrictModel):
             and self.concyclic_quadruple.fourth >= self.point_count
         ):
             raise ValueError("concyclic quadruple index exceeds configuration")
+        # Validate that the supplied witnesses actually satisfy the predicates
+        if self.collinear_triple is not None:
+            i, j, k = self.collinear_triple.first, self.collinear_triple.second, self.collinear_triple.third
+            if (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0]) != 0:
+                raise ValueError("collinear_triple witness is not collinear")
+        if self.concyclic_quadruple is not None:
+            i, j, k, ell = (
+                self.concyclic_quadruple.first,
+                self.concyclic_quadruple.second,
+                self.concyclic_quadruple.third,
+                self.concyclic_quadruple.fourth,
+            )
+            cross_ijk = (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
+            cross_ijl = (xy[j][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
+            cross_ikl = (xy[k][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[k][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
+            cross_jkl = (xy[k][0] - xy[j][0]) * (xy[ell][1] - xy[j][1]) - (xy[k][1] - xy[j][1]) * (xy[ell][0] - xy[j][0])
+            if cross_ijk == 0 and cross_ijl == 0 and cross_ikl == 0 and cross_jkl == 0:
+                raise ValueError("concyclic witness is collinear")
+            si = xy[i][0] * xy[i][0] + xy[i][1] * xy[i][1]
+            sj = xy[j][0] * xy[j][0] + xy[j][1] * xy[j][1]
+            sk = xy[k][0] * xy[k][0] + xy[k][1] * xy[k][1]
+            sl = xy[ell][0] * xy[ell][0] + xy[ell][1] * xy[ell][1]
+            m = [
+                [si, xy[i][0], xy[i][1], 1],
+                [sj, xy[j][0], xy[j][1], 1],
+                [sk, xy[k][0], xy[k][1], 1],
+                [sl, xy[ell][0], xy[ell][1], 1],
+            ]
+            det = (
+                m[0][0] * (m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2]) - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1]) + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1]))
+                - m[0][1] * (m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2]) - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0]) + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0]))
+                + m[0][2] * (m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1]) - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0]) + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]))
+                - m[0][3] * (m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1]) - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0]) + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]))
+            )
+            if det != 0:
+                raise ValueError("concyclic witness is not concyclic")
         return self

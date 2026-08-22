@@ -1,12 +1,19 @@
 """Tests for the geometry.circumradius.profile.compute operation."""
 
+import math
+from fractions import Fraction
+
 import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import encode_strict_json, format_canonical_integer
 from jacobian.math.geometry._models import (
+    CIRCUMRADIUS_INPUT_HEIGHT,
+    MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES,
     CircumradiusProfileRequest,
     CircumradiusTripleEntry,
+    _maximum_profile_wire_bytes,
 )
 from jacobian.math.geometry._operations import circumradius_profile
 
@@ -265,3 +272,144 @@ class TestCatalogContractParity:
         assert result.triple_count == 4
         degenerate = [entry.indices for entry in result.entries if entry.collinear]
         assert degenerate == [(0, 1, 2)]
+
+
+def _fraction_wire(value: Fraction) -> dict[str, str]:
+    return {
+        "num": format_canonical_integer(value.numerator),
+        "den": format_canonical_integer(value.denominator),
+    }
+
+
+def _height_point(index: int) -> dict[str, object]:
+    """Point with ~60-digit reduced coordinate components (reviewer heights)."""
+
+    x = Fraction(index + 1, 10**59 + 2 * index + 1)
+    y = Fraction((index + 1) ** 2, 10**59 + 2 * index + 129)
+    return {
+        "label": f"p{index}",
+        "point": {"x": _fraction_wire(x), "y": _fraction_wire(y)},
+    }
+
+
+class TestAggregateResultBudget:
+    def test_reviewer_counterexample_beyond_budget_is_rejected(self):
+        points = tuple(_height_point(index) for index in range(64))
+        with pytest.raises(ValidationError, match="aggregate result budget"):
+            CircumradiusProfileRequest(points=points)
+
+    def test_same_coordinate_heights_admitted_when_profile_fits_budget(self):
+        points = tuple(_height_point(index) for index in range(20))
+        result = circumradius_profile(CircumradiusProfileRequest(points=points))
+        assert result.point_count == 20
+        assert result.triple_count == math.comb(20, 3)
+        encoded = len(encode_strict_json(result.model_dump(mode="json")))
+        assert encoded <= MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES
+
+    def test_maximum_point_count_with_small_coordinates_stays_within_budget(self):
+        points = tuple(
+            {
+                "label": f"p{index}",
+                "point": {
+                    "x": {"num": str(index), "den": "1"},
+                    "y": {"num": str(index * index % 89), "den": "1"},
+                },
+            }
+            for index in range(64)
+        )
+        request = CircumradiusProfileRequest(points=points)
+        result = circumradius_profile(request)
+        assert result.triple_count == math.comb(64, 3)
+        wire = result.model_dump(mode="json")
+        actual = len(encode_strict_json(wire))
+        assert actual <= MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES
+        assert actual <= _maximum_profile_wire_bytes(request)
+
+    def test_near_degenerate_triple_stays_exact_within_bound(self):
+        # Three consecutive parabola points with huge heights: the cross is
+        # tiny, so the squared circumradius is enormous but still bounded.
+        big = 10**31 + 9
+        parameters = (
+            Fraction(1),
+            Fraction(big, big + 1),
+            Fraction(big + 2, big + 3),
+        )
+        points = tuple(
+            {
+                "label": f"t{index}",
+                "point": {
+                    "x": _fraction_wire(t),
+                    "y": _fraction_wire(t * t),
+                },
+            }
+            for index, t in enumerate(parameters)
+        )
+        result = circumradius_profile(CircumradiusProfileRequest(points=points))
+        entry = result.entries[0]
+        assert entry.collinear is False
+        ax, ay = (Fraction(parameters[0]), parameters[0] ** 2)
+        bx, by = (Fraction(parameters[1]), parameters[1] ** 2)
+        cx, cy = (Fraction(parameters[2]), parameters[2] ** 2)
+        cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+        expected = (
+            ((ax - bx) ** 2 + (ay - by) ** 2)
+            * ((bx - cx) ** 2 + (by - cy) ** 2)
+            * ((ax - cx) ** 2 + (ay - cy) ** 2)
+            / (4 * cross * cross)
+        )
+        assert entry.squared_circumradius is not None
+        assert entry.squared_circumradius.as_fraction() == expected
+        radius_digits = max(
+            len(entry.squared_circumradius.num),
+            len(entry.squared_circumradius.den),
+        )
+        assert radius_digits > 100
+
+    def test_estimate_bounds_actual_encoding_across_mixed_configurations(self):
+        configurations = [
+            tuple(_height_point(index) for index in range(12)),
+            tuple(
+                {
+                    "label": chr(ord("a") + index),
+                    "point": {
+                        "x": _fraction_wire(Fraction(index + 1, 97 * (index + 3))),
+                        "y": _fraction_wire(Fraction(index * index + 1, 89)),
+                    },
+                }
+                for index in range(11)
+            ),
+        ]
+        for points in configurations:
+            request = CircumradiusProfileRequest(points=points)
+            result = circumradius_profile(request)
+            actual = len(encode_strict_json(result.model_dump(mode="json")))
+            assert actual <= _maximum_profile_wire_bytes(request)
+
+
+class TestSchemaPublishedBounds:
+    def test_points_schema_publishes_coordinate_digit_bound(self):
+        schema = CircumradiusProfileRequest.model_json_schema()
+        points_schema = schema["properties"]["points"]
+        assert points_schema["coordinate_digit_bound"] == CIRCUMRADIUS_INPUT_HEIGHT
+        assert CIRCUMRADIUS_INPUT_HEIGHT == 64
+        assert (
+            points_schema["aggregate_result_budget_bytes"]
+            == MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES
+        )
+        assert "64 canonical decimal digits" in points_schema["description"]
+        assert (
+            str(MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES) in points_schema["description"]
+        )
+
+    def test_enforced_coordinate_height_matches_published_bound(self):
+        oversized = "1" + "0" * CIRCUMRADIUS_INPUT_HEIGHT
+        pts = (
+            _lp("a", "0", "1", "0", "1"),
+            _lp("b", "1", "1", "0", "1"),
+            _lp("c", "0", "1", oversized, "1"),
+        )
+        with pytest.raises(
+            ValidationError,
+            match=f"exceeds the {CIRCUMRADIUS_INPUT_HEIGHT}-digit bound",
+        ):
+            CircumradiusProfileRequest(points=pts)

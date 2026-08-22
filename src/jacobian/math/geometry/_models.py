@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import combinations
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.canonical import encode_strict_json, format_canonical_integer
 
 
 class RationalPoint2D(StrictModel):
@@ -454,7 +456,13 @@ input height, so bounding inputs at a fraction of the 32,768-digit canonical
 limit keeps every intermediate and output representable.
 """
 
-_CIRCUMRADIUS_INPUT_HEIGHT = CIRCUMRADIUS_COORDINATE_DIGITS // 4
+CIRCUMRADIUS_INPUT_HEIGHT = CIRCUMRADIUS_COORDINATE_DIGITS // 4
+"""Schema-published per-coordinate component digit bound (numerator and denominator)."""
+
+MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES = 10 * 1024 * 1024
+"""Aggregate canonical-output budget for one complete circumradius profile."""
+
+_CIRCUMRADIUS_RESULT_BOUND_PADDING_BYTES = 1_024
 
 
 def _bounded_circumradius_coordinate(value: CanonicalRational, label: str) -> None:
@@ -462,20 +470,137 @@ def _bounded_circumradius_coordinate(value: CanonicalRational, label: str) -> No
 
     require_bounded_rational(
         value,
-        max_digits=_CIRCUMRADIUS_INPUT_HEIGHT,
+        max_digits=CIRCUMRADIUS_INPUT_HEIGHT,
         label=label,
     )
+
+
+def _difference_digit_heights(
+    left: RationalPoint2D,
+    right: RationalPoint2D,
+) -> tuple[int, int, int, int]:
+    """Return reduced coordinate-difference component digit counts.
+
+    The four counts are ``(digits(|dx numerator|), digits(dx denominator),
+    digits(|dy numerator|), digits(dy denominator))`` for the difference
+    ``left - right``.
+    """
+
+    delta_x = left.x.as_fraction() - right.x.as_fraction()
+    delta_y = left.y.as_fraction() - right.y.as_fraction()
+    return (
+        len(format_canonical_integer(abs(delta_x.numerator))),
+        len(format_canonical_integer(delta_x.denominator)),
+        len(format_canonical_integer(abs(delta_y.numerator))),
+        len(format_canonical_integer(delta_y.denominator)),
+    )
+
+
+def _maximum_profile_wire_bytes(configuration: CircumradiusProfileRequest) -> int:
+    """Upper-bound the canonical wire encoding of the complete profile result.
+
+    For a reduced difference with numerator digit count ``n`` and denominator
+    digit count ``d``, its square has numerator within ``2n + 2d + 1`` digits
+    and denominator within ``2d + 1``; a squared distance sums two such
+    squares so its numerator gains one more digit. A triangle cross of
+    differences is bounded by the larger cross-term plus one carry digit, and
+    ``squared_circumradius`` (the product of three squared distances over
+    ``4 * cross^2``) therefore has numerator digits at most the summed
+    squared-distance numerator bounds plus carries, and denominator digits at
+    most the summed squared-distance denominator bounds plus twice the cross
+    bound and one multiplier digit. Each entry is bounded by an encoding
+    skeleton plus those digit counts and the exact label and index encodings;
+    the configuration echo is counted exactly.
+    """
+
+    points = configuration.points
+    pairs = {
+        (first, second): _difference_digit_heights(
+            points[first].point,
+            points[second].point,
+        )
+        for first, second in combinations(range(len(points)), 2)
+    }
+
+    def squared_distance_digit_bounds(
+        first: int,
+        second: int,
+    ) -> tuple[int, int]:
+        num_x, den_x, num_y, den_y = pairs[(first, second)]
+        return (
+            max(2 * num_x + 2 * den_y, 2 * num_y + 2 * den_x) + 3,
+            2 * den_x + 2 * den_y + 1,
+        )
+
+    label_bytes = [len(encode_strict_json(item.label)) for item in points]
+    index_bytes = [len(str(index)) for index in range(len(points))]
+    skeleton = {
+        "collinear": False,
+        "indices": [0, 0, 0],
+        "labels": ["", "", ""],
+        "squared_circumradius": {"num": "", "den": ""},
+    }
+    entry_base = len(encode_strict_json(skeleton))
+    total = len(encode_strict_json(configuration.model_dump(mode="json")))
+    triple_count = 0
+    for first, second, third in combinations(range(len(points)), 3):
+        numerator_bound = 0
+        denominator_bound = 0
+        for left, right in ((first, second), (second, third), (first, third)):
+            squared_numerator, squared_denominator = squared_distance_digit_bounds(
+                left,
+                right,
+            )
+            numerator_bound += squared_numerator
+            denominator_bound += squared_denominator
+        cross_digits = (
+            max(
+                pairs[(first, second)][0] + pairs[(first, third)][3],
+                pairs[(first, second)][3] + pairs[(first, third)][0],
+            )
+            + 2
+        )
+        radius_digits = max(
+            numerator_bound + 1,
+            denominator_bound + 2 * cross_digits + 2,
+        )
+        total += (
+            entry_base
+            + sum(label_bytes[index] - 2 for index in (first, second, third))
+            + sum(index_bytes[index] - 1 for index in (first, second, third))
+            + 2 * radius_digits
+        )
+        triple_count += 1
+    total += triple_count + 1 + _CIRCUMRADIUS_RESULT_BOUND_PADDING_BYTES
+    return total
 
 
 class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration.
 
     Requires at least three points (a circumradius profile needs triples),
-    unique labels, unique coordinates, and coordinates within the
-    operation-specific digit bound so exact radii stay representable.
+    unique labels, unique coordinates, coordinates within the published
+    ``coordinate_digit_bound`` schema metadata, and an aggregate profile that
+    fits the published aggregate result budget, so every accepted request
+    returns one typed exact result instead of an unencodable value.
     """
 
-    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
+    points: tuple[LabelledPoint2D, ...] = Field(
+        min_length=3,
+        max_length=64,
+        description=(
+            "Labelled rational points. Every coordinate numerator and "
+            f"denominator carries at most {CIRCUMRADIUS_INPUT_HEIGHT} "
+            "canonical decimal digits, and configurations whose complete "
+            "profile would exceed the "
+            f"{MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES}-byte aggregate result "
+            "budget are rejected before execution."
+        ),
+        json_schema_extra={
+            "coordinate_digit_bound": CIRCUMRADIUS_INPUT_HEIGHT,
+            "aggregate_result_budget_bytes": MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES,
+        },
+    )
 
     @model_validator(mode="after")
     def require_admissible_configuration(self) -> Self:
@@ -501,6 +626,13 @@ class CircumradiusProfileRequest(StrictModel):
             )
             _bounded_circumradius_coordinate(
                 item.point.y, f"point {index} y coordinate"
+            )
+        estimated_bytes = _maximum_profile_wire_bytes(self)
+        if estimated_bytes > MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES:
+            raise ValueError(
+                "the complete circumradius profile would exceed the "
+                f"{MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES}-byte aggregate "
+                "result budget; reduce the point count or coordinate heights"
             )
         return self
 

@@ -7,6 +7,8 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry._models import (
+    CIRCUMRADIUS_INPUT_HEIGHT,
+    MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES,
     CircumradiusProfileRequest,
     CircumradiusProfileResult,
 )
@@ -149,7 +151,10 @@ EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "geometry.points.circumradius_profile.compute",
         "Compute circumradius profile of a point configuration",
         "Given a bounded labelled rational planar point configuration with "
-        "at least three points, unique labels, and unique coordinates, "
+        "at least three points, unique labels, unique coordinates with at "
+        f"most {CIRCUMRADIUS_INPUT_HEIGHT} canonical decimal digits per "
+        "coordinate component, and an aggregate profile within the "
+        f"{MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES}-byte result budget, "
         "compute the exact squared circumradius of every unordered triple "
         "with an explicit collinear or nondegenerate disposition, each "
         "entry replayed against the retained source configuration.",

@@ -16,6 +16,7 @@ from jacobian.math.prime_field_linear_algebra import (
 MAX_DIMENSION = 256
 MAX_PRIME = 1000003  # conservative prime modulus bound
 
+
 def _is_prime(n: int) -> bool:
     if n < 2:
         return False
@@ -31,7 +32,9 @@ def _is_prime(n: int) -> bool:
 
 def _require_bounded_prime(prime: int) -> None:
     if prime > MAX_PRIME:
-        raise ValueError(f"prime {prime} exceeds the bounded modulus {MAX_PRIME} for field arithmetic")
+        raise ValueError(
+            f"prime {prime} exceeds the bounded modulus {MAX_PRIME} for field arithmetic"
+        )
     if not _is_prime(prime):
         raise ValueError(f"prime {prime} is not prime")
 
@@ -56,7 +59,9 @@ class PrimeFieldMatrixRequest(StrictModel):
             raise ValueError("entries must be canonical prime-field residues")
         if not self.entries and self.columns == 0:
             return self
-        _PrimeFieldMatrixValidator(prime=self.prime, entries=self.entries, columns=self.columns)
+        _PrimeFieldMatrixValidator(
+            prime=self.prime, entries=self.entries, columns=self.columns
+        )
         return self
 
 
@@ -90,15 +95,36 @@ class RankRequest(StrictModel):
 
 
 class RankResult(StrictModel):
-    rank: int = Field(ge=0)
+    """The exact rank of the retained prime-field matrix."""
+
     prime: int = Field(ge=2, le=MAX_PRIME)
+    entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
+    columns: int = Field(ge=0, le=MAX_DIMENSION)
+    rank: int = Field(ge=0)
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_RANK"] = "EXACT_DOMAIN_MATRIX_RANK"
 
     @model_validator(mode="after")
-    def bind_rank(self) -> Self:
+    def bind_rank_to_source(self) -> Self:
         if self.rank > MAX_DIMENSION:
             raise ValueError("rank exceeds the supported dimension bound")
+        # Source-bound replay: the retained matrix must be a canonical
+        # prime-field matrix whose exact rank equals the claimed value.
+        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix, rank
+
+        if len(self.entries) > MAX_DIMENSION or any(
+            len(row) != self.columns for row in self.entries
+        ):
+            raise ValueError("retained matrix does not match its declared shape")
+        matrix = PrimeFieldMatrix(
+            prime=self.prime, entries=self.entries, columns=self.columns
+        )
+        expected = rank(matrix)
+        if self.rank != expected:
+            raise ValueError(
+                f"rank {self.rank} must be the exact rank {expected} of the "
+                "retained matrix"
+            )
         return self
 
 

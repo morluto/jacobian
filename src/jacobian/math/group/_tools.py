@@ -151,7 +151,7 @@ GROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Enumerate all subgroups of a bounded permutation group",
         "Enumerate all subgroups of a bounded permutation group via SymPy. "
         "Each subgroup is returned with its generators and order. Bounded "
-        "to groups of order at most 512.",
+        "to groups of order at most 64.",
         GroupSubgroupLatticeRequest,
         GroupSubgroupLatticeResult,
         compute_subgroup_lattice,

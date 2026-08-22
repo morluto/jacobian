@@ -24,6 +24,7 @@ polygon fan). This is exact and bounded for the small dimensions
 from __future__ import annotations
 
 import math
+from fractions import Fraction
 from itertools import combinations
 from typing import Literal
 
@@ -577,59 +578,69 @@ def compute_polytope_volume(
     representation: Literal["vertices", "halfspaces"]
     if request.vertices is not None:
         representation = "vertices"
-        vertices, dim = _vertices_from_v_representation(request.vertices)
+        raw_vertices = tuple(
+            tuple(c.as_fraction() for c in vertex.coordinates)
+            for vertex in request.vertices
+        )
     else:
         assert request.halfspaces is not None
         representation = "halfspaces"
-        vertices_list, dim = _vertices_from_h_representation(request.halfspaces)
-        vertices = tuple(vertices_list)
-
-    if dim == 0:
-        return PolytopeVolumeResult(
-            volume=CanonicalRational.from_integer_ratio(1, 1),
-            dimension=0,
-            representation=representation,
+        derived, _dim = _vertices_from_h_representation(request.halfspaces)
+        raw_vertices = tuple(
+            tuple(Fraction(int(c.p), int(c.q)) for c in point) for point in derived
         )
-
-    n = len(vertices)
-    if n < dim + 1:
-        return PolytopeVolumeResult(
-            volume=CanonicalRational.from_integer_ratio(0, 1),
-            dimension=dim,
-            representation=representation,
-        )
-
-    # Deduplicate coincident vertices.
-    seen: set[tuple[Rational, ...]] = set()
-    unique_vertices: list[tuple[Rational, ...]] = []
-    for vertex in vertices:
-        if vertex not in seen:
-            seen.add(vertex)
-            unique_vertices.append(vertex)
-
-    if len(unique_vertices) < dim + 1:
-        return PolytopeVolumeResult(
-            volume=CanonicalRational.from_integer_ratio(0, 1),
-            dimension=dim,
-            representation=representation,
-        )
-
-    # Delegate redundant-vertex filtering to ``_polytope_volume``; the outer
-    # call was previously duplicated and is removed to avoid double exact
-    # work near the ``MAX_HULL_SUBFACETS`` ceiling.
-    points: list[list[Rational]] = [list(v) for v in unique_vertices]
-    volume = _polytope_volume(points, dim)
-    if volume == 0:
-        return PolytopeVolumeResult(
-            volume=CanonicalRational.from_integer_ratio(0, 1),
-            dimension=dim,
-            representation=representation,
-        )
+    value, dim = convex_hull_volume(raw_vertices)
     return PolytopeVolumeResult(
-        volume=_canonical_rational(volume),
+        volume=value,
         dimension=dim,
         representation=representation,
     )
 
 
-__all__ = ["compute_polytope_volume"]
+def convex_hull_volume(
+    vertices: tuple[tuple[Fraction, ...], ...],
+) -> tuple[CanonicalRational, int]:
+    """Return the exact rational volume of the convex hull of rational points.
+
+    This is the native domain kernel: it accepts mathematical values — a
+    tuple of rational coordinate tuples in a consistent ambient dimension
+    (at least one point) — and returns the canonical exact volume together
+    with the ambient dimension.  Degenerate inputs of fewer than ``dim + 1``
+    distinct affinely independent points have exact volume zero.  Raises
+    ``ValueError`` when the hull enumeration exceeds the combinatorial work
+    bound or the input does not describe one consistent dimension.
+    """
+
+    if not vertices:
+        raise ValueError("`vertices` must be non-empty")
+    dim = len(vertices[0])
+    if any(len(vertex) != dim for vertex in vertices):
+        raise ValueError("all vertices must share one dimension")
+    points: list[list[Rational]] = [
+        [Rational(fraction.numerator, fraction.denominator) for fraction in vertex]
+        for vertex in vertices
+    ]
+    n = len(points)
+    if n < dim + 1:
+        return CanonicalRational.from_integer_ratio(0, 1), dim
+
+    # Deduplicate coincident vertices.
+    seen: set[tuple[Rational, ...]] = set()
+    unique_vertices: list[list[Rational]] = []
+    for vertex in points:
+        key = tuple(vertex)
+        if key not in seen:
+            seen.add(key)
+            unique_vertices.append(vertex)
+
+    if len(unique_vertices) < dim + 1:
+        return CanonicalRational.from_integer_ratio(0, 1), dim
+
+    # Delegate redundant-vertex filtering to ``_polytope_volume``; the outer
+    # call was previously duplicated and is removed to avoid double exact
+    # work near the ``MAX_HULL_SUBFACETS`` ceiling.
+    volume = _polytope_volume(unique_vertices, dim)
+    return _canonical_rational(volume), dim
+
+
+__all__ = ["compute_polytope_volume", "convex_hull_volume"]

@@ -389,3 +389,32 @@ class TestDenominatorGrowth:
                     small_fraction(big + 3),
                 )
             )
+
+
+class TestNativeApi:
+    def test_domain_exports_the_volume_kernel(self) -> None:
+        from jacobian.math import polytope as polytope_module
+
+        assert "convex_hull_volume" in polytope_module.__all__
+        assert callable(polytope_module.convex_hull_volume)
+
+    def test_kernel_accepts_mathematical_values(self) -> None:
+        from fractions import Fraction
+
+        from jacobian.math.polytope import convex_hull_volume
+
+        area = convex_hull_volume(
+            (
+                (Fraction(0), Fraction(0)),
+                (Fraction(1), Fraction(0)),
+                (Fraction(0), Fraction(1)),
+            )
+        )
+        assert area == CanonicalRational(num="1", den="2")
+        degenerate = convex_hull_volume(
+            (
+                (Fraction(0),),
+                (Fraction(2),),
+            )
+        )
+        assert degenerate == CanonicalRational(num="2", den="1")

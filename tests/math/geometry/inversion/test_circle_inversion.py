@@ -5,6 +5,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.math.geometry.inversion._models import (
     CircleInversionRequest,
     CircleInversionResult,
@@ -110,6 +111,63 @@ class TestWireAdapter:
         )
         result = compute_circle_inversion(request)
         assert isinstance(result, CircleInversionResult)
+
+
+class TestDigitBounds:
+    """The admitted domain must guarantee exact results within canonical limits."""
+
+    @staticmethod
+    def _reciprocal(d: int) -> CanonicalRational:
+        return CanonicalRational.from_integer_ratio(1, d)
+
+    def test_result_overflow_inputs_rejected_at_admission(self) -> None:
+        big_den = 10**7999
+        with pytest.raises(ValidationError, match="2730-digit bound"):
+            CircleInversionRequest(
+                center_x=self._reciprocal(big_den + 3),
+                center_y=self._reciprocal(big_den + 7),
+                power=self._reciprocal(big_den + 11),
+                point_x=self._reciprocal(big_den + 13),
+                point_y=self._reciprocal(big_den + 17),
+            )
+
+    def test_boundary_inputs_return_exact_result(self) -> None:
+        big_den = 10**2729
+        request = CircleInversionRequest(
+            center_x=CanonicalRational.from_integer_ratio(
+                10**2728 + 11, big_den
+            ),
+            center_y=CanonicalRational.from_integer_ratio(
+                10**2728 + 17, big_den - 5
+            ),
+            power=CanonicalRational.from_integer_ratio(
+                big_den - 7, 10**2728 + 23
+            ),
+            point_x=CanonicalRational.from_integer_ratio(
+                10**2728 + 29, big_den - 11
+            ),
+            point_y=CanonicalRational.from_integer_ratio(
+                big_den - 13, 10**2728 + 31
+            ),
+        )
+        result = compute_circle_inversion(request)
+        qx, qy = result.inverted_point.x, result.inverted_point.y
+        assert len(qx.num) <= MAX_CANONICAL_RATIONAL_DIGITS
+        assert len(qx.den) <= MAX_CANONICAL_RATIONAL_DIGITS
+        assert len(qy.num) <= MAX_CANONICAL_RATIONAL_DIGITS
+        assert len(qy.den) <= MAX_CANONICAL_RATIONAL_DIGITS
+        cx = request.center_x.as_fraction()
+        cy = request.center_y.as_fraction()
+        s = request.power.as_fraction()
+        px = request.point_x.as_fraction()
+        py = request.point_y.as_fraction()
+        norm_p = (px - cx) ** 2 + (py - cy) ** 2
+        norm_q = (
+            qx.as_fraction() - cx
+        ) ** 2 + (
+            qy.as_fraction() - cy
+        ) ** 2
+        assert norm_p * norm_q == s * s
 
 
 class TestToolsAndExamples:

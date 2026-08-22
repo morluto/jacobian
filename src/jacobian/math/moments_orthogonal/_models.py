@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from fractions import Fraction
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
     MAX_QUADRATURE_POINTS,
@@ -30,7 +36,9 @@ def _to_fractions(
     return tuple(v.as_fraction() for v in values)
 
 
-def _from_fractions(values) -> tuple[CanonicalRational, ...]:
+def _from_fractions(
+    values: Iterable[Fraction],
+) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
 
 
@@ -207,23 +215,32 @@ class ChristoffelDarbouxRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
         _validate_alpha_beta(self.alpha, self.beta)
-        # Bound x,y so exact polynomial values stay within CanonicalRational limits.
-        # For order n, p_n(x) ~ x^n, so n * digits(x) must stay < 32,768.
-        max_output_digits = 32768
-        order = len(self.alpha)
-        # Conservative per-input digit bound: leave headroom for coefficient growth.
-        max_input_digits = max_output_digits // max(1, order) if order else MAX_RATIONAL_DIGITS
-        # Cap at 2048 to be safe even for order 16 (16*2048=32768).
-        max_input_digits = min(max_input_digits, 2048)
-        require_bounded_rational(
-            self.x, max_digits=max_input_digits, label="x"
+        # Coefficient magnitude grows with recurrence order (p_{k+1}(z) =
+        # (z - alpha_k) p_k(z) - beta_k p_{k-1}(z)), so bounding x and y alone
+        # cannot bound polynomials_evaluated or the kernel. Run the exact
+        # bounded recurrence here and admit exactly the requests whose every
+        # returned component fits the canonical rational limit, mirroring the
+        # admit-what-the-kernel-accepts contract of the moment-sequence
+        # requests in this module.
+        from jacobian.math.moments_orthogonal.operations import (
+            christoffel_darboux,
         )
-        require_bounded_rational(
-            self.y, max_digits=max_input_digits, label="y"
+
+        result = christoffel_darboux(
+            _to_fractions(self.alpha),
+            _to_fractions(self.beta),
+            self.x.as_fraction(),
+            self.y.as_fraction(),
         )
-        # Also ensure the computed kernel would not overflow before execution
-        # by a conservative estimate: kernel terms can be as large as x^order.
-        # If order*digits would exceed limit, reject early.
+        for value in (result.kernel, *result.polynomials_evaluated):
+            if (
+                len(format_canonical_integer(value.numerator)) > MAX_CANONICAL_RATIONAL_DIGITS
+                or len(format_canonical_integer(value.denominator)) > MAX_CANONICAL_RATIONAL_DIGITS
+            ):
+                raise ValueError(
+                    "requested kernel order exceeds the canonical "
+                    f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit component limit"
+                )
         return self
 
 

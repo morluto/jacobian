@@ -180,6 +180,59 @@ class TestChristoffelDarboux:
         assert result.polynomials_evaluated == (_frac(1, 1),)
 
 
+class TestChristoffelDarbouxBoundedness:
+    """Admission must bound coefficient growth as a function of order."""
+
+    def test_large_alpha_coefficient_growth_rejected(self) -> None:
+        coefficient = _cr(10**4090 + 123, 10**4088 + 7)
+        unit = _cr(1, 1)
+        zero = _cr(0, 1)
+        with pytest.raises(ValidationError, match="canonical"):
+            ChristoffelDarbouxRequest(
+                alpha=tuple(coefficient for _ in range(16)),
+                beta=tuple(unit for _ in range(16)),
+                x=zero,
+                y=zero,
+            )
+
+    def test_large_x_growth_rejected(self) -> None:
+        big_x = _cr(10**2001 + 5, 10**2000 + 3)
+        small_alpha = tuple(_cr(1, k + 2) for k in range(16))
+        unit = _cr(1, 1)
+        with pytest.raises(ValidationError, match="canonical"):
+            ChristoffelDarbouxRequest(
+                alpha=small_alpha,
+                beta=tuple(unit for _ in range(16)),
+                x=big_x,
+                y=big_x,
+            )
+
+    def test_fitting_coefficients_at_order_succeed(self) -> None:
+        alpha = tuple(_cr(10**399 + k, 10**400 + k) for k in range(16))
+        beta = tuple(_cr(10**400 - k, 10**399 + k) for k in range(16))
+        result = compute_christoffel_darboux(
+            ChristoffelDarbouxRequest(
+                alpha=alpha,
+                beta=beta,
+                x=_cr(0, 1),
+                y=_cr(0, 1),
+            )
+        )
+        assert len(result.polynomials_evaluated) == 16
+
+    def test_low_order_large_coefficients_succeed(self) -> None:
+        big = _cr(10**4090 + 123, 10**4088 + 7)
+        result = compute_christoffel_darboux(
+            ChristoffelDarbouxRequest(
+                alpha=(big, big),
+                beta=(_cr(1, 1), big),
+                x=big,
+                y=big,
+            )
+        )
+        assert isinstance(result, ChristoffelDarbouxResult)
+
+
 # ---------------------------------------------------------------------------
 # Gaussian quadrature
 # ---------------------------------------------------------------------------

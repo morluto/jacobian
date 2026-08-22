@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from itertools import product as iproduct
 
+from jacobian.math.hochschild_complexes._bar import (
+    StructureConstants,
+    bar_differential_entries,
+)
 from jacobian.math.hochschild_complexes._models import (
+    MAX_HOCHSCHILD_TENSOR_ELEMENTS,
     HochschildChainComplexRequest,
     HochschildChainComplexResult,
     HochschildDifferential,
@@ -58,11 +63,12 @@ def _gaussian_rank(matrix: list[list[int]], prime: int) -> int:
     return rank
 
 
-MAX_HOCHSCHILD_TENSOR_ELEMENTS = 20_000
-
-
 def _adjacent_boundary_rank(
-    c, n: int, p: int, degree: int, element_budget: int = MAX_HOCHSCHILD_TENSOR_ELEMENTS
+    c: StructureConstants,
+    n: int,
+    p: int,
+    degree: int,
+    element_budget: int = MAX_HOCHSCHILD_TENSOR_ELEMENTS,
 ) -> int:
     """GF(p)-rank of the adjacent-multiplication boundary C_degree -> C_{degree-1}."""
     source_dim = n ** degree
@@ -117,44 +123,15 @@ def compute_hochschild_chain_complex(
     differentials = []
 
     for degree in range(1, max_deg + 1):
-        source_dim = group_dims[degree]
-        target_dim = group_dims[degree - 1]
-
-        if source_dim == 0 or target_dim == 0:
-            continue
-
-        diff_matrix = [[0] * source_dim for _ in range(target_dim)]
-
-        source_basis = list(iproduct(range(n), repeat=degree))
-        target_basis = list(iproduct(range(n), repeat=degree - 1))
-
-        for j, wedge in enumerate(source_basis):
-            for k_pos in range(degree - 1):
-                a = wedge[k_pos]
-                b = wedge[k_pos + 1]
-                product = c[a][b]
-
-                remaining = wedge[:k_pos] + wedge[k_pos + 2:]
-                sign = (-1) ** k_pos
-
-                for coeff_idx, coeff in enumerate(product):
-                    if coeff == 0:
-                        continue
-                    new_wedge = (*remaining[:k_pos], coeff_idx, *remaining[k_pos:])
-                    if tuple(new_wedge) not in target_basis:
-                        continue
-                    target_idx = target_basis.index(tuple(new_wedge))
-                    entry = (sign * int(coeff)) % p
-                    diff_matrix[target_idx][j] = (diff_matrix[target_idx][j] + entry) % p
-
         differentials.append(HochschildDifferential(
             degree=degree,
-            source_dim=source_dim,
-            target_dim=target_dim,
-            entries=tuple(tuple(row) for row in diff_matrix),
+            source_dim=n ** degree,
+            target_dim=n ** (degree - 1),
+            entries=bar_differential_entries(c, p, degree),
         ))
 
     return HochschildChainComplexResult(
+        algebra=alg,
         algebra_dimension=n,
         group_dimensions=tuple(group_dims),
         differentials=tuple(differentials),

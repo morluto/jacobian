@@ -10,7 +10,11 @@ from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math.geometry._models import RationalPoint2D as GeometryPoint
 
-_MAX_INVERSION_DIGITS = 8000
+# Worst-case inverted-coordinate component size for inputs with b-digit
+# components: q = c + (s / ||p-c||^2) * (p - c) has numerator < 10^(12b+4) and
+# denominator <= 10^(12b+3) before cancellation; both must fit the canonical
+# 32,768-digit limit, which admits b <= 2730.
+_MAX_INVERSION_DIGITS = 2730
 
 
 class CircleInversionRequest(StrictModel):

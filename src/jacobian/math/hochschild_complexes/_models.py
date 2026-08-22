@@ -7,11 +7,16 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.hochschild_complexes._bar import bar_differential_entries
 
 MAX_ALGEBRA_DIM = 8
 MAX_MODULE_DIM = 8
 MAX_HOCHSCHILD_DEGREE = 4
 MAX_HOCHSCHILD_TENSOR_ELEMENTS = 20_000
+# A dense boundary matrix d_k holds n^(k-1) * n^k entries; Gaussian elimination
+# copies it and performs O(pivots * entries) field work. The entry budget keeps
+# both the matrix and its elimination copy small alongside the tensor budget.
+MAX_HOCHSCHILD_MATRIX_ENTRIES = 131_072
 
 
 class AlgebraStructure(StrictModel):
@@ -27,6 +32,18 @@ class AlgebraStructure(StrictModel):
         min_length=1, max_length=MAX_ALGEBRA_DIM
     )
 
+    def _require_canonical_residues(self) -> None:
+        """Reject noncanonical constants: each must already lie in 0..p-1 to
+        avoid implicit field coercion and unbounded input size."""
+        prime = self.prime
+        dimension = self.dimension
+        for i in range(dimension):
+            for j in range(dimension):
+                if any(not 0 <= c < prime for c in self.structure_constants[i][j]):
+                    raise ValueError(
+                        "structure constants must be canonical residues in 0..p-1"
+                    )
+
     @model_validator(mode="after")
     def require_valid(self) -> Self:
         if len(self.structure_constants) != self.dimension:
@@ -41,16 +58,7 @@ class AlgebraStructure(StrictModel):
 
         if not isprime(self.prime):
             raise ValueError("prime must be a prime integer")
-        # Reject noncanonical residues: each constant must already be in 0..p-1
-        # to avoid implicit field coercion and unbounded input size.
-        for i in range(self.dimension):
-            for j in range(self.dimension):
-                for k in range(self.dimension):
-                    c = self.structure_constants[i][j][k]
-                    if not 0 <= c < self.prime:
-                        raise ValueError(
-                            "structure constants must be canonical residues in 0..p-1"
-                        )
+        self._require_canonical_residues()
         self._require_associative()
         return self
 
@@ -91,11 +99,18 @@ class HochschildChainComplexRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_within_budget(self) -> Self:
-        # The homology computation needs d_{max_degree+1}, so check that degree.
-        if self.algebra.dimension ** (self.max_degree + 1) > MAX_HOCHSCHILD_TENSOR_ELEMENTS:
+        dimension = self.algebra.dimension
+        if dimension ** (self.max_degree + 1) > MAX_HOCHSCHILD_TENSOR_ELEMENTS:
             raise ValueError(
                 "requested max_degree exceeds the supported tensor-element budget "
                 f"(dimension^{self.max_degree+1} > {MAX_HOCHSCHILD_TENSOR_ELEMENTS})"
+            )
+        densest_entries = dimension ** (2 * self.max_degree - 1)
+        if densest_entries > MAX_HOCHSCHILD_MATRIX_ENTRIES:
+            raise ValueError(
+                "requested max_degree exceeds the supported boundary-matrix "
+                f"entry budget (dimension^(2*max_degree-1) = {densest_entries} "
+                f"> {MAX_HOCHSCHILD_MATRIX_ENTRIES})"
             )
         return self
 
@@ -110,16 +125,60 @@ class HochschildDifferential(StrictModel):
 
 
 class HochschildChainComplexResult(StrictModel):
-    """The Hochschild chain complex prefix."""
+    """The Hochschild chain complex prefix, bound to its source algebra."""
 
+    algebra: AlgebraStructure
     algebra_dimension: int = Field(ge=1)
-    group_dimensions: tuple[int, ...] = Field(min_length=1)
-    differentials: tuple[HochschildDifferential, ...] = Field(min_length=0)
+    group_dimensions: tuple[int, ...] = Field(
+        min_length=1, max_length=MAX_HOCHSCHILD_DEGREE + 1
+    )
+    differentials: tuple[HochschildDifferential, ...] = Field(
+        min_length=0, max_length=MAX_HOCHSCHILD_DEGREE
+    )
     prime: int = Field(ge=2, le=10_000)
 
     @model_validator(mode="after")
-    def require_consistent(self) -> Self:
-        # group_dimensions length is max_degree + 1, not algebra_dimension + 1
+    def require_bound_to_algebra(self) -> Self:
+        # Replay the exact derived value from the retained source so an authored
+        # payload is never trusted on its shape alone.
+        algebra = self.algebra
+        if self.algebra_dimension != algebra.dimension or self.prime != algebra.prime:
+            raise ValueError(
+                "algebra_dimension and prime must match the retained algebra"
+            )
+        dimension = algebra.dimension
+        expected_groups = tuple(
+            [1] + [dimension**k for k in range(1, len(self.group_dimensions))]
+        )
+        if self.group_dimensions != expected_groups:
+            raise ValueError(
+                "group_dimensions must be the bar complex dimensions "
+                "C_k = A^tensor-k of the retained algebra"
+            )
+        if len(self.differentials) != len(self.group_dimensions) - 1:
+            raise ValueError("one differential per positive degree is required")
+        for degree, differential in enumerate(self.differentials, start=1):
+            if differential.degree != degree:
+                raise ValueError("differential degrees must be consecutive from 1")
+            if (
+                differential.source_dim != dimension**degree
+                or differential.target_dim != dimension ** (degree - 1)
+            ):
+                raise ValueError(
+                    "differential dimensions must match the retained algebra"
+                )
+            if dimension ** (2 * degree - 1) > MAX_HOCHSCHILD_MATRIX_ENTRIES:
+                raise ValueError(
+                    "differential exceeds the supported boundary-matrix entry budget"
+                )
+            expected_entries = bar_differential_entries(
+                algebra.structure_constants, algebra.prime, degree
+            )
+            if differential.entries != expected_entries:
+                raise ValueError(
+                    "differential entries must be the exact bar differential "
+                    "of the retained algebra"
+                )
         return self
 
 
@@ -131,10 +190,19 @@ class HochschildHomologyRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_within_budget(self) -> Self:
-        if self.algebra.dimension ** (self.max_degree + 1) > MAX_HOCHSCHILD_TENSOR_ELEMENTS:
+        # Elimination runs on d_(max_degree+1), so bound that densest matrix.
+        dimension = self.algebra.dimension
+        if dimension ** (self.max_degree + 1) > MAX_HOCHSCHILD_TENSOR_ELEMENTS:
             raise ValueError(
                 "requested max_degree exceeds the supported tensor-element budget "
                 f"(dimension^{self.max_degree+1} > {MAX_HOCHSCHILD_TENSOR_ELEMENTS})"
+            )
+        densest_entries = dimension ** (2 * self.max_degree + 1)
+        if densest_entries > MAX_HOCHSCHILD_MATRIX_ENTRIES:
+            raise ValueError(
+                "requested max_degree exceeds the supported boundary-matrix "
+                f"entry budget (dimension^(2*max_degree+1) = {densest_entries} "
+                f"> {MAX_HOCHSCHILD_MATRIX_ENTRIES})"
             )
         return self
 

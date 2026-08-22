@@ -10,11 +10,13 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
 
+# With per-component digit bound b, the squared-distance fraction stays under
+# the canonical 32,768-digit limit (numerator growth <= 8b + 6 digits).
 _MAX_PINNED_COORDINATE_DIGITS = 2048
 
 
@@ -25,7 +27,7 @@ class PinnedDistanceRequest(StrictModel):
     points: tuple[RationalPoint2D, ...] = Field(min_length=2, max_length=128)
 
     @model_validator(mode="after")
-    def require_unique_points(self):
+    def require_unique_points(self) -> PinnedDistanceRequest:
         keys = tuple(
             (p.x.num, p.x.den, p.y.num, p.y.den)
             for p in self.points
@@ -58,13 +60,13 @@ class PinnedDistanceResult(StrictModel):
     method: Literal["EXACT_PINNED_DISTANCES"] = "EXACT_PINNED_DISTANCES"
 
     @model_validator(mode="after")
-    def require_invariants(self):
+    def require_invariants(self) -> PinnedDistanceResult:
         if self.distinct_line_count != len(self.lines):
             raise ValueError("distinct_line_count must match the line count")
         if self.lines:
             min_entry = min(self.lines, key=lambda e: Fraction(
-                int(e.squared_distance_numerator),
-                int(e.squared_distance_denominator),
+                parse_canonical_integer(e.squared_distance_numerator),
+                parse_canonical_integer(e.squared_distance_denominator),
             ))
             if self.min_squared_distance is None:
                 raise ValueError("min_squared_distance is required when lines exist")
@@ -153,8 +155,8 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
         entries.append(entry)
 
     min_entry = min(entries, key=lambda e: Fraction(
-        int(e.squared_distance_numerator),
-        int(e.squared_distance_denominator),
+        parse_canonical_integer(e.squared_distance_numerator),
+        parse_canonical_integer(e.squared_distance_denominator),
     )) if entries else None
 
     return PinnedDistanceResult(

@@ -2,9 +2,13 @@
 
 from fractions import Fraction
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
 from jacobian.math.polynomials.multivariate._models import (
     MultivariateFactorRequest,
+    MultivariateFactorResult,
 )
 from jacobian.math.polynomials.multivariate._operations import multivariate_factor
 from jacobian.math.polynomials.values import (
@@ -63,3 +67,50 @@ class TestMultivariateFactor:
         poly = _poly(("x", "y"), ((5, 1, (0, 0)),))
         result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
         assert len(result.factors) == 0
+
+
+class TestMultivariateFactorResultInvariants:
+    def test_roundtrip_result_validates(self):
+        poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
+        result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
+        assert MultivariateFactorResult.model_validate(result.model_dump()) == result
+
+    def test_rejects_zero_coefficient_with_zero_reconstruction(self):
+        """Zero coefficient plus zero reconstruction must not validate."""
+        zero = _poly(("x", "y"), ())
+        with pytest.raises(ValidationError, match="coefficient must be nonzero"):
+            MultivariateFactorResult(
+                coefficient=CanonicalRational.from_fraction(Fraction(0)),
+                factors=(),
+                reconstructed=zero,
+            )
+        with pytest.raises(ValidationError, match="coefficient must be nonzero"):
+            MultivariateFactorResult(
+                coefficient=CanonicalRational.from_fraction(Fraction(0)),
+                factors=(),
+                reconstructed=_poly(("x", "y"), ((3, 2, (1, 1)),)),
+            )
+
+    def test_rejects_zero_reconstructed_polynomial(self):
+        zero = _poly(("x", "y"), ())
+        with pytest.raises(ValidationError, match="must be nonzero"):
+            MultivariateFactorResult(
+                coefficient=CanonicalRational.from_fraction(Fraction(1)),
+                factors=(),
+                reconstructed=zero,
+            )
+
+    def test_rejects_product_mismatch(self):
+        reconstructed = _poly(("x", "y"), ((1, 1, (2, 0)),))
+        with pytest.raises(ValidationError, match="does not equal reconstructed"):
+            MultivariateFactorResult(
+                coefficient=CanonicalRational.from_fraction(Fraction(2)),
+                factors=(),
+                reconstructed=reconstructed,
+            )
+        with pytest.raises(ValidationError, match="does not equal reconstructed"):
+            MultivariateFactorResult(
+                coefficient=CanonicalRational.from_fraction(Fraction(1)),
+                factors=(),
+                reconstructed=reconstructed,
+            )

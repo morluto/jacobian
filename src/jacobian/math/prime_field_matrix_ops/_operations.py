@@ -47,6 +47,9 @@ def compute_rref(request: RrefRequest) -> RrefResult:
         columns=request.columns,
         rref_rows=rref_rows,
         pivot_columns=pivot_columns,
+        computed_matrix=PrimeFieldMatrix(
+            prime=request.prime, entries=rref_rows, columns=request.columns
+        ),
     )
 
 

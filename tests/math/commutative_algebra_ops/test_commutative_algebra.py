@@ -479,3 +479,37 @@ def test_ideal_quotient_by_product_equals_iterated_quotient() -> None:
     assert iterated.quotient is not None
     assert _equal(by_product.quotient, iterated.quotient)
     assert _equal(by_product.quotient, _ideal(variables, {(2, 1): 1}))
+
+
+class TestSaturationRelationVerification:
+    def test_bogus_backend_result_rejected_by_relation_check(self, monkeypatch) -> None:
+        """A COMPUTED backend result violating the defining relation is
+        rejected inside the operation's bounded flow."""
+        from jacobian.math.commutative_algebra_ops import _operations as ops
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationRequest,
+        )
+        from jacobian.math.polynomials.values import RationalPolynomialIdeal
+
+        bogus = RationalPolynomialIdeal(
+            variables=("x", "y"),
+            generators=(_polynomial(("x", "y"), {(0, 2): 1}),),  # (y^2)
+        )
+
+        class _FakeBackend:
+            outcome = "COMPUTED"
+            ideal = bogus
+            backend_version = "4.4"
+            detail = None
+
+        monkeypatch.setattr(
+            ops,
+            "run_singular_ideal_operation",
+            lambda *args, **kwargs: _FakeBackend(),
+        )
+        request = IdealSaturationRequest(
+            ideal=_ideal(("x", "y"), {(1, 0): 1}),  # (x)
+            saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),  # x
+        )
+        with pytest.raises(ValueError, match="does not contain"):
+            ops.compute_ideal_saturation(request)

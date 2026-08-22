@@ -6,7 +6,16 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
+
+_VARIABLE = "x"
+_MAX_CHARPOLY_TERMS = 64
 
 
 class GraphEdgeList(StrictModel):
@@ -40,3 +49,67 @@ class GraphSpectrumResult(StrictModel):
     eigenvalues: tuple[str, ...]
     multiplicities: tuple[int, ...]
     convention: Literal["SYMPY_EIGENVALS"] = "SYMPY_EIGENVALS"
+
+
+def _dense_to_canonical_polynomial(
+    coefficients: tuple[CanonicalRational, ...],
+) -> RationalPolynomial:
+    """Convert increasing-degree dense coefficients to the canonical value."""
+    terms = tuple(
+        RationalPolynomialTerm(coefficient=coefficient, exponents=(degree,))
+        for degree, coefficient in reversed(list(enumerate(coefficients)))
+        if coefficient.as_fraction() != 0
+    )
+    return RationalPolynomial(
+        variables=(_VARIABLE,),
+        polynomial=SparseRationalPolynomial(terms=terms),
+    )
+
+
+class GraphCharacteristicPolynomialResult(StrictModel):
+    """The exact monic characteristic polynomial of a graph matrix over QQ.
+
+    ``polynomial`` is the domain-owned canonical sparse value so downstream
+    polynomial operations compose without translation.  The result retains
+    its source graph and convention so validation can replay the defining
+    determinant relation.
+    """
+
+    graph: GraphEdgeList
+    convention: Literal["ADJACENCY", "LAPLACIAN"]
+    polynomial: RationalPolynomial
+
+    @model_validator(mode="after")
+    def require_bound_to_source(self) -> Self:
+        from jacobian.math.graphs.spectral.operations import (
+            _adjacency_matrix,
+            _laplacian_matrix,
+        )
+        from jacobian.math.polynomials._conversions import (
+            rational_polynomial_to_sympy,
+        )
+
+        if self.polynomial.variables != (_VARIABLE,):
+            raise ValueError("characteristic polynomial must be univariate in x")
+        matrix = (
+            _adjacency_matrix(self.graph)
+            if self.convention == "ADJACENCY"
+            else _laplacian_matrix(self.graph)
+        )
+        poly_sym = rational_polynomial_to_sympy(self.polynomial)
+        actual = poly_sym.as_expr()
+        charpoly = matrix.charpoly()
+        expected = charpoly.as_expr().subs(charpoly.gen, poly_sym.gen)
+        if expected != actual:
+            raise ValueError(
+                "characteristic polynomial does not match the source graph"
+            )
+        return self
+
+
+__all__ = [
+    "GraphCharacteristicPolynomialResult",
+    "GraphEdgeList",
+    "GraphSpectrumRequest",
+    "GraphSpectrumResult",
+]

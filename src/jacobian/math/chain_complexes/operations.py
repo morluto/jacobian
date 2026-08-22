@@ -399,6 +399,17 @@ def compute_homology(request: ComputeHomologyRequest) -> HomologyResult:
     )
 
 
+def _serialize_entry(value: Fraction, prime: int | None) -> str:
+    """One canonical matrix-entry spelling; GF(p) entries are residues."""
+    if prime is not None:
+        # Canonical GF(p) residues in [0, p): signed contributions must not
+        # serialize as negative integers.
+        return str(int(value) % prime)
+    if value.denominator == 1:
+        return str(int(value))
+    return f"{value.numerator}/{value.denominator}"
+
+
 def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
     """Compute the mapping cone of a chain map f: C -> D.
 
@@ -476,11 +487,7 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
 
     def _to_str_matrix(mat: list[list[Fraction]]) -> tuple[tuple[str, ...], ...]:
         return tuple(
-            tuple(
-                str(int(v)) if v.denominator == 1 else f"{v.numerator}/{v.denominator}"
-                for v in row
-            )
-            for row in mat
+            tuple(_serialize_entry(v, prime) for v in row) for row in mat
         )
 
     cone_diffs: list[tuple[tuple[str, ...], ...]] = []
@@ -605,11 +612,7 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
 
     def _to_str_matrix(mat: list[list[Fraction]]) -> tuple[tuple[str, ...], ...]:
         return tuple(
-            tuple(
-                str(int(v)) if v.denominator == 1 else f"{v.numerator}/{v.denominator}"
-                for v in row
-            )
-            for row in mat
+            tuple(_serialize_entry(v, prime) for v in row) for row in mat
         )
 
     tensor_diffs: list[tuple[tuple[str, ...], ...]] = []

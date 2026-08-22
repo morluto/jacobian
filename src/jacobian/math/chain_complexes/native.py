@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from jacobian.math.chain_complexes._models import (
+    ComputeHomologyRequest,
     MappingConeRequest,
     TensorProductRequest,
     VerifyChainMapRequest,
@@ -10,7 +11,7 @@ from jacobian.math.chain_complexes._models import (
 )
 from jacobian.math.chain_complexes.values import (
     ChainComplexValue,
-    HomologyGroupValue,
+    HomologyResult,
     MappingConeResult,
     TensorProductResult,
     VerificationResult,
@@ -27,13 +28,18 @@ __all__ = [
 
 def homology_groups(
     complex_value: ChainComplexValue,
-) -> tuple[HomologyGroupValue, ...]:
-    """Exact homology groups of one finite based chain complex."""
+) -> HomologyResult:
+    """Exact homology groups bound to their source complex and field.
+
+    The full ``HomologyResult`` carries the coefficient field, prime, and
+    degree interval so homology over different fields stays
+    distinguishable as a serialized value.
+    """
     from jacobian.math.chain_complexes.operations import (
-        _compute_homology_groups,
+        compute_homology,
     )
 
-    return _compute_homology_groups(complex_value)
+    return compute_homology(ComputeHomologyRequest(complex=complex_value))
 
 
 def differential_squares_to_zero(

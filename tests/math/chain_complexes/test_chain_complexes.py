@@ -496,8 +496,13 @@ class TestNativeSurface:
         )
 
         circle = _circle_complex()
-        groups = homology_groups(circle)
-        assert groups[0].betti_number == 1 and groups[1].betti_number == 1
+        result = homology_groups(circle)
+        assert result.homology_groups[0].betti_number == 1
+        assert result.homology_groups[1].betti_number == 1
+        # The native value carries the source's field context so GF(p) and
+        # QQ homology stay distinguishable.
+        assert result.coefficient_field == circle.coefficient_field
+        assert result.prime == circle.prime
 
         identity = (("1", "0", "0"), ("0", "1", "0"), ("0", "0", "1"))
         verdict = chain_map_commutes(circle, circle, (identity, identity))
@@ -650,3 +655,52 @@ class TestChainDegreeDiagnostics:
         )
         with pytest.raises(ValueError, match="chain degree -2"):
             compute_homology(ComputeHomologyRequest(complex=bad))
+
+
+class TestTensorPrimeFieldResidues:
+    def test_signed_tensor_coefficients_reduced_modulo_p(self) -> None:
+        """A GF(3) tensor with a sign negation serializes the canonical
+        residue 2, not -1, so the derived value validates."""
+        left = ChainComplexValue(
+            coefficient_field=CoefficientField.PRIME_FIELD,
+            prime=3,
+            degree_min=1,
+            degree_max=1,
+            basis_sizes=(1,),
+            differential_matrices=(),
+        )
+        right = ChainComplexValue(
+            coefficient_field=CoefficientField.PRIME_FIELD,
+            prime=3,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(1, 1),
+            differential_matrices=((("1",),),),
+        )
+        result = compute_tensor_product(TensorProductRequest(left=left, right=right))
+        entries = [
+            entry
+            for matrix in result.tensor_differential_matrices
+            for row in matrix
+            for entry in row
+        ]
+        assert entries
+        assert all(not entry.startswith("-") for entry in entries)
+        assert all(entry in {"0", "1", "2"} for entry in entries)
+
+    def test_out_of_range_chain_map_entry_rejected(self) -> None:
+        """GF(p) chain maps enforce canonical residues like complexes do."""
+        source = ChainComplexValue(
+            coefficient_field=CoefficientField.PRIME_FIELD,
+            prime=3,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(1, 1),
+            differential_matrices=((("2",),),),
+        )
+        with pytest.raises(ValueError, match="residue"):
+            VerifyChainMapRequest(
+                source=source,
+                target=source,
+                map_matrices=((("4",),), (("4",),)),
+            )

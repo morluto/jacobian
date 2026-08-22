@@ -54,16 +54,15 @@ PROFILE_OPERATIONS = (
         "incidence",
         examples=(
             example(
-                "collinear_witness_found",
-                "Three collinear points among four yield a forbidden-pattern "
-                "witness: A, B, and C lie on one line.",
+                "no_forbidden_patterns",
+                "Four points in general position with no collinear triple and no concyclic quadruple.",
                 {
                     "configuration": {
                         "points": [
                             {"label": "A", "point": {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}}},
                             {"label": "B", "point": {"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}}},
-                            {"label": "C", "point": {"x": {"num": "2", "den": "1"}, "y": {"num": "0", "den": "1"}}},
-                            {"label": "D", "point": {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}}},
+                            {"label": "C", "point": {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}}},
+                            {"label": "D", "point": {"x": {"num": "2", "den": "1"}, "y": {"num": "3", "den": "1"}}},
                         ],
                     },
                 },

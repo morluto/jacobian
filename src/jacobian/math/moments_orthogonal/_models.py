@@ -138,7 +138,11 @@ class JacobiMatrixRequest(StrictModel):
         # A canonical rational carries at most MAX_CANONICAL_RATIONAL_DIGITS
         # digits, i.e. its absolute value stays below 10**that limit.
         digit_limit = 10**MAX_CANONICAL_RATIONAL_DIGITS
-        for k in range(1, len(polys)):
+        # The operation derives norm ratios h_k/h_{k-1} only for the
+        # interior steps that actually appear in the (n-1)-dimensional
+        # matrix; terminal ratios are never emitted and must not gate
+        # admission.
+        for k in range(1, len(polys) - 1):
             h_k = polys[k].squared_norm.as_fraction()
             h_prev = polys[k - 1].squared_norm.as_fraction()
             ratio = h_k / h_prev

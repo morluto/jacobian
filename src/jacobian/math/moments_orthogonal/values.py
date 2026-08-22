@@ -132,10 +132,13 @@ def _require_three_term_consistency(family) -> None:
                 "below p_{k-1}"
             )
         if k >= 1:
-            norm_ratio = polynomials[k].squared_norm.as_fraction() / (
-                polynomials[k - 1].squared_norm.as_fraction()
-            )
-            if components[k - 1] != norm_ratio:
+            h_k = polynomials[k].squared_norm.as_fraction()
+            h_prev = polynomials[k - 1].squared_norm.as_fraction()
+            if h_prev == 0 or h_k == 0:
+                # The norm ratio is undefined for degenerate norms; the
+                # definiteness flags carry that classification instead.
+                continue
+            if components[k - 1] != h_k / h_prev:
                 raise ValueError(
                     "squared norms disagree with the three-term recurrence: "
                     f"beta_{k} must equal h_{k}/h_{{k-1}}"
@@ -164,11 +167,6 @@ class OrthogonalPolynomialFamily(StrictModel):
                 )
             if term.coefficients[-1].as_fraction() != 1:
                 raise ValueError(f"p_{term.degree} must be monic")
-            if term.squared_norm.as_fraction() == 0:
-                raise ValueError(
-                    f"p_{index} has zero squared norm; a quasi-definite "
-                    "family requires nonzero norms"
-                )
         # Three-term consistency: R_k = x*p_k - p_{k+1} must lie in the
         # span of {p_{k-1}, p_k}. Because every p_j is monic, R_k is exactly
         # decomposable in the p_0,...,p_k basis by greedy division; nonzero
@@ -176,6 +174,18 @@ class OrthogonalPolynomialFamily(StrictModel):
         # p_{k-1} IS beta_k, so it must also equal the norm ratio
         # h_k / h_{k-1}.
         _require_three_term_consistency(self)
+        # Definiteness classifications are derived from the retained norms,
+        # never free labels: quasi-definite means every norm nonzero, and
+        # positive-definite means every norm positive.
+        norms = [term.squared_norm.as_fraction() for term in self.polynomials]
+        if self.is_quasi_definite != all(norm != 0 for norm in norms):
+            raise ValueError(
+                "is_quasi_definite must equal every squared norm being nonzero"
+            )
+        if self.is_positive_definite != all(norm > 0 for norm in norms):
+            raise ValueError(
+                "is_positive_definite must equal every squared norm being positive"
+            )
         return self
 
 
@@ -204,15 +214,21 @@ class ChristoffelDarbouxKernel(StrictModel):
     """Christoffel-Darboux kernel K_m(x,y) = sum_{k=0}^m p_k(x) p_k(y) / h_k.
 
     The kernel is carried as the full bivariate coefficient matrix:
-    ``coefficients[i][j]`` is the exact coefficient of ``x^i y^j``.
+    ``coefficients[i][j]`` is the exact coefficient of ``x^i y^j``, bound
+    to the family whose polynomials define the sum.
     """
 
     degree: int = Field(ge=0)
     coefficients: tuple[tuple[CanonicalRational, ...], ...]
     variable: str = Field(min_length=1, max_length=64)
+    family: OrthogonalPolynomialFamily
 
     @model_validator(mode="after")
-    def require_square_bivariate_matrix(self) -> Self:
+    def bind_kernel_to_family(self) -> Self:
+        from jacobian.math.moments_orthogonal.operations import (
+            _kernel_coefficient_matrix,
+        )
+
         side = self.degree + 1
         if len(self.coefficients) != side or any(
             len(row) != side for row in self.coefficients
@@ -220,6 +236,21 @@ class ChristoffelDarbouxKernel(StrictModel):
             raise ValueError(
                 f"kernel coefficients must form a {side}x{side} matrix for "
                 f"degree {self.degree}"
+            )
+        if self.variable != self.family.variable:
+            raise ValueError("kernel variable must match the defining family")
+        if self.degree >= len(self.family.polynomials):
+            raise ValueError("kernel degree exceeds the retained family")
+        # Exact replay of the defining sum against the retained family;
+        # every kernel is symmetric by construction.
+        expected = _kernel_coefficient_matrix(self.family.polynomials, self.degree)
+        actual = tuple(
+            tuple(value.as_fraction() for value in row) for row in self.coefficients
+        )
+        if actual != tuple(tuple(row) for row in expected):
+            raise ValueError(
+                "kernel coefficients must be the exact Christoffel-Darboux "
+                "sum of the retained family"
             )
         return self
 
@@ -250,6 +281,10 @@ class GaussianQuadratureRule(StrictModel):
         if self.exactness_degree != expected_degree:
             raise ValueError(
                 f"exactness degree must be {expected_degree} for order {self.order}"
+            )
+        if self.variable != self.prefix.variable:
+            raise ValueError(
+                "quadrature variable must match the retained moment prefix"
             )
         # Pure-kernel replay: rebuild nodes and weights from the retained
         # prefix without constructing another result model.

@@ -37,6 +37,19 @@ def _from_fraction(f: Fraction) -> CanonicalRational:
     return CanonicalRational.from_fraction(f)
 
 
+_CANONICAL_DIGIT_LIMIT = 10**32_768
+
+
+def _fraction_exceeds_canonical_limit(value: Fraction) -> bool:
+    """Decimal-height test on the exact Fraction, performed BEFORE any
+    canonical conversion so an over-tall value is rejected with a typed
+    error instead of failing inside ``CanonicalRational`` construction."""
+    return (
+        abs(value.numerator) >= _CANONICAL_DIGIT_LIMIT
+        or value.denominator >= _CANONICAL_DIGIT_LIMIT
+    )
+
+
 def _rational_det(matrix: list[list[Fraction]]) -> Fraction:
     """Compute the determinant of a rational matrix via Gaussian elimination."""
     n = len(matrix)
@@ -263,14 +276,9 @@ def compute_recurrence(request: RecurrenceRequest) -> ThreeTermRecurrence:
         alphas.append(residual[k])
 
     # Norm ratios can be mathematically valid yet exceed the canonical
-    # result range; reject them before constructing wire values.
-    from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-    from jacobian.math._rational_height import RationalHeight
-
+    # result range; measure the exact Fraction height before conversion.
     for value in (*alphas, *betas):
-        if RationalHeight.from_canonical(
-            CanonicalRational.from_fraction(value)
-        ).exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
+        if _fraction_exceeds_canonical_limit(value):
             raise ValueError(
                 "recurrence coefficients exceed the canonical rational "
                 "digit limit for this family"
@@ -280,6 +288,29 @@ def compute_recurrence(request: RecurrenceRequest) -> ThreeTermRecurrence:
         beta=tuple(_from_fraction(b) for b in betas),
         variable=request.family.variable,
     )
+
+
+def _kernel_coefficient_matrix(
+    polynomials: tuple[OrthogonalPolynomialTerm, ...], m: int
+) -> list[list[Fraction]]:
+    """Exact bivariate coefficient matrix of K_m from p_0..p_m.
+
+    Shared by execution and the kernel value's defining-sum replay.
+    """
+    size = m + 1
+    coefficients = [[Fraction(0)] * size for _ in range(size)]
+    for k in range(m + 1):
+        p_k = [_to_fraction(c) for c in polynomials[k].coefficients]
+        h_k = _to_fraction(polynomials[k].squared_norm)
+        if h_k == 0:
+            raise ValueError(
+                f"family polynomial p_{k} has zero squared norm; the "
+                "Christoffel-Darboux kernel is undefined"
+            )
+        for i in range(k + 1):
+            for j in range(k + 1):
+                coefficients[i][j] += p_k[i] * p_k[j] / h_k
+    return coefficients
 
 
 def compute_christoffel_darboux(
@@ -299,31 +330,15 @@ def compute_christoffel_darboux(
     if m >= len(polys):
         raise ValueError(f"degree {m} exceeds family size {len(polys)}")
 
+    coefficients = _kernel_coefficient_matrix(polys, m)
     size = m + 1
-    coefficients = [[Fraction(0)] * size for _ in range(size)]
-
-    for k in range(m + 1):
-        p_k = [_to_fraction(c) for c in polys[k].coefficients]
-        h_k = _to_fraction(polys[k].squared_norm)
-        if h_k == 0:
-            raise ValueError(
-                f"family polynomial p_{k} has zero squared norm; the "
-                "Christoffel-Darboux kernel is undefined"
-            )
-        for i in range(k + 1):
-            for j in range(k + 1):
-                coefficients[i][j] += p_k[i] * p_k[j] / h_k
 
     # Kernel entries can exceed the canonical range even when the family
-    # is quasi-definite; reject them before canonical conversion.
-    from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
-    from jacobian.math._rational_height import RationalHeight
-
+    # is quasi-definite; measure the exact Fraction height before
+    # canonical conversion.
     for row in coefficients:
         for value in row:
-            if RationalHeight.from_canonical(
-                CanonicalRational.from_fraction(value)
-            ).exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
+            if _fraction_exceeds_canonical_limit(value):
                 raise ValueError(
                     "Christoffel-Darboux kernel coefficients exceed the "
                     "canonical rational digit limit for this family"
@@ -335,6 +350,7 @@ def compute_christoffel_darboux(
             for i in range(size)
         ),
         variable=request.family.variable,
+        family=request.family,
     )
 
 

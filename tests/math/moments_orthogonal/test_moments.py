@@ -447,10 +447,10 @@ class TestRecurrenceTupleDimensions:
 
 
 class TestJacobiNormRatioAdmission:
-    def test_unrepresentable_norm_ratio_rejected_at_request(self) -> None:
-        """h_0 = 10^-20000 and h_1 = 10^20000 derive beta_1 = 10^40000,
-        outside the canonical result type; admission rejects it before
-        execution instead of failing inside result conversion."""
+    def test_unused_terminal_ratio_does_not_gate_admission(self) -> None:
+        """For a two-polynomial family the operation returns [[alpha_0]] and
+        never emits h_1/h_0, so an extreme terminal norm ratio must not
+        reject an otherwise fully representable result."""
 
         def term(deg, coeffs, norm):
             from jacobian.math.moments_orthogonal.values import (
@@ -478,5 +478,80 @@ class TestJacobiNormRatioAdmission:
             is_quasi_definite=True,
             is_positive_definite=True,
         )
-        with pytest.raises(ValidationError, match="canonical"):
-            JacobiMatrixRequest(family=family)
+        request = JacobiMatrixRequest(family=family)
+        result = compute_jacobi_matrix(request)
+        assert [a.as_fraction() for a in result.alphas] == [Fraction(0)]
+
+
+class TestFamilyDefinitenessFlags:
+    def test_flags_derived_from_norms(self) -> None:
+        """A negative squared norm cannot carry positive-definite=true."""
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+            OrthogonalPolynomialTerm,
+        )
+
+        term = OrthogonalPolynomialTerm(
+            degree=0,
+            coefficients=(CanonicalRational(num="1", den="1"),),
+            squared_norm=CanonicalRational(num="-1", den="1"),
+        )
+        with pytest.raises(ValidationError, match="positive"):
+            OrthogonalPolynomialFamily(
+                polynomials=(term,),
+                variable="x",
+                is_quasi_definite=True,
+                is_positive_definite=True,
+            )
+
+
+class TestQuadratureVariableBinding:
+    def test_variable_must_match_prefix(self) -> None:
+        from jacobian.math.moments_orthogonal.values import GaussianQuadratureRule
+
+        prefix = _prefix(_moments_uniform(3))
+        rule_payload = None
+        try:
+            GaussianQuadratureRule(
+                order=1,
+                nodes=(
+                    QuadratureNode(
+                        node=CanonicalRational(num="0", den="1"),
+                        weight=CanonicalRational(num="2", den="1"),
+                    ),
+                ),
+                variable="y",
+                exactness_degree=1,
+                prefix=prefix,
+            )
+            raise AssertionError("mismatched variable accepted")
+        except ValidationError as error:
+            rule_payload = str(error)
+        assert "prefix" in rule_payload
+
+
+class TestKernelFamilyBinding:
+    def test_forged_kernel_rejected_against_family(self) -> None:
+        """An asymmetric bivariate payload cannot revalidate as the
+        kernel of a retained family."""
+        from jacobian.math.moments_orthogonal._models import (
+            OrthogonalPolynomialRequest,
+        )
+        from jacobian.math.moments_orthogonal.values import ChristoffelDarbouxKernel
+
+        family = compute_orthogonal_polynomials(
+            OrthogonalPolynomialRequest(prefix=_prefix(_moments_uniform(3)), max_degree=1)
+        )
+        payload = {
+            "degree": 1,
+            "coefficients": (({"num": "1", "den": "2"}, {"num": "7", "den": "5"}),),
+            "variable": "x",
+            "family": family.model_dump(),
+        }
+        # Pad to a square matrix so shape passes and the sum replay fails.
+        payload["coefficients"] = (
+            ({"num": "1", "den": "2"}, {"num": "7", "den": "5"}),
+            ({"num": "0", "den": "1"}, {"num": "3", "den": "2"}),
+        )
+        with pytest.raises(ValidationError, match="exact Christoffel-Darboux"):
+            ChristoffelDarbouxKernel.model_validate(payload)

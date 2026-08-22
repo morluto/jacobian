@@ -307,24 +307,20 @@ def _facets_and_box(  # noqa: C901
                 )
             # Lower-dimensional hulls: if vertices do not span full dimension,
             # the facet enumeration would be empty and the scan would be wrong.
-            # Detect affine rank and handle via convex-hull membership.
-            if len(verts) >= d:
-                diffs = Matrix(
-                    [
-                        [verts[i][k] - verts[0][k] for k in range(d)]
-                        for i in range(1, len(verts))
-                    ]
+            # Detect affine rank regardless of vertex count and reject; this
+            # is exact: a lower-dimensional polytope's lattice points are
+            # still well-defined, but our facet method assumes full
+            # dimension. Rejecting is fail-closed.
+            diffs = Matrix(
+                [
+                    [verts[i][k] - verts[0][k] for k in range(d)]
+                    for i in range(1, len(verts))
+                ]
+            )
+            if diffs.rank() < d:
+                raise LatticePointBudgetError(
+                    "V-representation is not full-dimensional; lower-dimensional hulls require exact handling"
                 )
-                if diffs.rank() < d:
-                    # Lower-dimensional: use direct convex-hull point-in-polytope
-                    # check via linear programming would be needed. For now,
-                    # reject as not full-dimensional to avoid incorrect counts.
-                    # This is exact: a lower-dimensional polytope's lattice
-                    # points are still well-defined, but our facet method
-                    # assumes full dimension. Rejecting is fail-closed.
-                    raise LatticePointBudgetError(
-                        "V-representation is not full-dimensional; lower-dimensional hulls require exact handling"
-                    )
         if d == 1:
             # The single facet pair is the interval endpoints.
             low = min(v[0] for v in verts)
@@ -418,8 +414,15 @@ def enumerate_lattice_points(
     # fail at OperationResult.require_canonical_output only after heavy work.
     _, count_for_estimate = _scan_box(facets, lo, hi, d, collect=False)
     # Per-point JSON is roughly {"coordinates":["x",...]} with d strings.
-    # Max coordinate string length is bounded by the bounding box.
-    max_coord_len = max(max(len(str(lo[k])), len(str(hi[k]))) for k in range(d))
+    # Max coordinate string length is bounded by the bounding box; the
+    # canonical formatter is digit-limit-safe for 32,768-digit coordinates.
+    max_coord_len = max(
+        max(
+            len(format_canonical_integer(lo[k])),
+            len(format_canonical_integer(hi[k])),
+        )
+        for k in range(d)
+    )
     # Conservative: 20 bytes overhead + per-coordinate (digits+quotes+comma) + brackets
     per_point = 20 + d * (max_coord_len + 4)
     base_overhead = 80

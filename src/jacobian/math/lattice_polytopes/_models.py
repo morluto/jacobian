@@ -148,6 +148,25 @@ class LatticePolytopeRequest(StrictModel):
         # admission filter; the operation layer keeps the same safety check
         # but the request is rejected here as ValidationError.
         verts_frac = [[c.as_fraction() for c in v.coordinates] for v in self.vertices]
+        # Full-dimensionality admission: the exact facet enumeration assumes
+        # the vertices affinely span the ambient dimension.  Reject
+        # lower-dimensional V-representations here, regardless of vertex
+        # count, so both operations fail closed as ValidationError instead of
+        # scanning an unrelated bounding box.
+        if dim > 1:
+            from sympy import Matrix
+
+            diffs = Matrix(
+                [
+                    [verts_frac[i][k] - verts_frac[0][k] for k in range(dim)]
+                    for i in range(1, len(verts_frac))
+                ]
+            )
+            if diffs.rank() < dim:
+                raise ValueError(
+                    "V-representation is not full-dimensional; "
+                    "lower-dimensional hulls require exact handling"
+                )
         # lo/hi inclusive integer bounds
         lo = [min(v[k] for v in verts_frac) for k in range(dim)]
         hi = [max(v[k] for v in verts_frac) for k in range(dim)]

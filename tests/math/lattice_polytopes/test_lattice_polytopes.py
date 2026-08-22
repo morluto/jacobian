@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.lattice_polytopes._models import (
     MAX_BOUND_SPAN,
     MAX_DIMENSION,
@@ -285,3 +286,45 @@ class TestBudgets:
         assert (side + 1) * (side + 1) > MAX_LATTICE_POINTS
         with pytest.raises(LatticePointBudgetError, match="budget"):
             count_lattice_points(request)
+
+
+class TestLowerDimensionalRejection:
+    def test_segment_in_three_d_rejected_at_validation(self) -> None:
+        # Two affinely dependent vertices in 3-D define a segment.  The old
+        # behaviour skipped the rank guard when len(vertices) < dimension and
+        # counted the whole eight-point bounding box instead of the segment.
+        with pytest.raises(ValidationError, match="full-dimensional"):
+            LatticePolytopeRequest(
+                vertices=(
+                    _v(("0", "1"), ("0", "1"), ("0", "1")),
+                    _v(("1", "1"), ("1", "1"), ("1", "1")),
+                )
+            )
+
+    def test_single_vertex_in_two_d_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="full-dimensional"):
+            LatticePolytopeRequest(vertices=(_v(("0", "1"), ("0", "1")),))
+
+    def test_collinear_triangle_rejected(self) -> None:
+        # Three collinear vertices in 2-D: affine rank 1 < 2.
+        with pytest.raises(ValidationError, match="full-dimensional"):
+            LatticePolytopeRequest(
+                vertices=(
+                    _v(("0", "1"), ("0", "1")),
+                    _v(("1", "1"), ("1", "1")),
+                    _v(("2", "1"), ("2", "1")),
+                )
+            )
+
+
+class TestLargeCoordinateBounds:
+    def test_singleton_beyond_python_digit_limit_enumerates(self) -> None:
+        # A singleton 1-D V-representation at 10**5000: the public contract
+        # admits 32,768-digit coordinates, so measuring the bounding box must
+        # not trip CPython's default 4,300-digit int-to-str limit.
+        huge = format_canonical_integer(10**5000)
+        result = enumerate_lattice_points(
+            LatticePolytopeRequest(vertices=(_v((huge, "1")),))
+        )
+        assert result.point_count == 1
+        assert result.points[0].coordinates == (huge,)

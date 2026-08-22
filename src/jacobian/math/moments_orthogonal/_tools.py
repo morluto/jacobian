@@ -25,10 +25,10 @@ from jacobian.math.moments_orthogonal.operations import (
     compute_shifted_hankel,
 )
 from jacobian.math.moments_orthogonal.values import (
-    JacobiMatrix,
     ChristoffelDarbouxKernel,
     GaussianQuadratureRule,
     HankelMomentMatrix,
+    JacobiMatrix,
     OrthogonalPolynomialFamily,
     ThreeTermRecurrence,
 )
@@ -99,7 +99,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "uniform_hankel",
                 "Hankel matrix for uniform measure mu_k = 2/(k+1).",
-                {"moments": _MOMENTS[:5], "order": 2, "variable": "x"},
+                {"prefix": {"moments": _MOMENTS[:5], "variable": "x"}, "order": 2},
             ),
         ),
     ),
@@ -117,7 +117,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "shifted_hankel_uniform",
                 "Shifted Hankel matrix for uniform measure.",
-                {"moments": _MOMENTS[:6], "order": 2, "variable": "x"},
+                {"prefix": {"moments": _MOMENTS[:6], "variable": "x"}, "order": 2},
             ),
         ),
     ),
@@ -136,7 +136,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "legendre_from_uniform",
                 "Compute monic Legendre-like polynomials from uniform moments.",
-                {"moments": _MOMENTS[:7], "max_degree": 3, "variable": "x"},
+                {"prefix": {"moments": _MOMENTS[:7], "variable": "x"}, "max_degree": 3},
             ),
         ),
     ),
@@ -264,8 +264,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "moment_functional.gaussian_quadrature.compute",
         "Compute exact Gaussian quadrature rule",
-        "Compute an exact Gaussian quadrature rule from a positive-definite "
-        "moment prefix: n distinct nodes, positive weights, exactness "
+        "Compute an exact Gaussian quadrature rule from a bounded moment "
+        "prefix whose degree-n orthogonal polynomial splits over QQ: 2n+1 "
+        "moments, n distinct rational nodes, positive weights, exactness "
         "through degree 2n-1.",
         GaussianQuadratureRequest,
         GaussianQuadratureRule,
@@ -275,9 +276,22 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "exact",
         examples=(
             example(
-                "gaussian_quadrature_uniform",
-                "Gauss-Legendre quadrature from uniform moments.",
-                {"moments": _TOY_MOMENTS[:4], "order": 2, "variable": "x"},
+                "gaussian_quadrature_rational_nodes",
+                (
+                    "Gaussian quadrature for the measure with weight 7 at "
+                    "+-1 and 5 at +-2: nodes +-3/2 with weight 12."
+                ),
+                {
+                    "moments": [
+                        {"num": "24", "den": "1"},
+                        {"num": "0", "den": "1"},
+                        {"num": "54", "den": "1"},
+                        {"num": "0", "den": "1"},
+                        {"num": "174", "den": "1"},
+                    ],
+                    "order": 2,
+                    "variable": "x",
+                },
             ),
         ),
     ),

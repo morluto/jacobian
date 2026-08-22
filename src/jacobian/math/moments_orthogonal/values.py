@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from typing import Self
+
+from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -16,7 +18,9 @@ MAX_QUADRATURE_ORDER = 16
 class MomentFunctionalPrefix(StrictModel):
     """A bounded prefix of a linear functional L(x^k) = mu_k over QQ."""
 
-    moments: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=MAX_MOMENT_DEGREE + 1)
+    moments: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_MOMENT_DEGREE + 1
+    )
     variable: str = Field(min_length=1, max_length=64)
 
     @property
@@ -32,6 +36,25 @@ class HankelMomentMatrix(StrictModel):
     determinant: CanonicalRational
     rank: int = Field(ge=0)
     variable: str = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def bind_determinant_and_rank_to_entries(self) -> Self:
+        side = self.order + 1
+        if len(self.entries) != side or any(len(row) != side for row in self.entries):
+            raise ValueError(
+                f"entries must form a {side}x{side} matrix for order {self.order}"
+            )
+        from jacobian.math.moments_orthogonal.operations import (
+            _rational_det,
+            _rational_rank,
+        )
+
+        matrix = [[value.as_fraction() for value in row] for row in self.entries]
+        if self.determinant.as_fraction() != _rational_det(matrix):
+            raise ValueError("determinant must match the retained entries")
+        if self.rank != _rational_rank(matrix):
+            raise ValueError("rank must match the retained entries")
+        return self
 
 
 class OrthogonalPolynomialTerm(StrictModel):
@@ -50,6 +73,27 @@ class OrthogonalPolynomialFamily(StrictModel):
     is_quasi_definite: bool
     is_positive_definite: bool
 
+    @model_validator(mode="after")
+    def require_canonical_family(self) -> Self:
+        for index, term in enumerate(self.polynomials):
+            if term.degree != index:
+                raise ValueError(
+                    f"polynomial at position {index} declares degree {term.degree}; "
+                    "families must be contiguous from degree 0"
+                )
+            if len(term.coefficients) != term.degree + 1:
+                raise ValueError(
+                    f"p_{term.degree} must carry exactly degree+1 coefficients"
+                )
+            if term.coefficients[-1].as_fraction() != 1:
+                raise ValueError(f"p_{term.degree} must be monic")
+            if term.squared_norm.as_fraction() == 0:
+                raise ValueError(
+                    f"p_{index} has zero squared norm; a quasi-definite "
+                    "family requires nonzero norms"
+                )
+        return self
+
 
 class ThreeTermRecurrence(StrictModel):
     """Three-term recurrence coefficients: p_{k+1} = (x - alpha_k) p_k - beta_k p_{k-1}."""
@@ -60,12 +104,27 @@ class ThreeTermRecurrence(StrictModel):
 
 
 class ChristoffelDarbouxKernel(StrictModel):
-    """Christoffel-Darboux kernel K_m(x,y) = sum_{k=0}^m p_k(x) p_k(y) / h_k."""
+    """Christoffel-Darboux kernel K_m(x,y) = sum_{k=0}^m p_k(x) p_k(y) / h_k.
+
+    The kernel is carried as the full bivariate coefficient matrix:
+    ``coefficients[i][j]`` is the exact coefficient of ``x^i y^j``.
+    """
 
     degree: int = Field(ge=0)
-    numerator_x_coefficients: tuple[CanonicalRational, ...]
-    numerator_y_coefficients: tuple[CanonicalRational, ...]
+    coefficients: tuple[tuple[CanonicalRational, ...], ...]
     variable: str = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def require_square_bivariate_matrix(self) -> Self:
+        side = self.degree + 1
+        if len(self.coefficients) != side or any(
+            len(row) != side for row in self.coefficients
+        ):
+            raise ValueError(
+                f"kernel coefficients must form a {side}x{side} matrix for "
+                f"degree {self.degree}"
+            )
+        return self
 
 
 class QuadratureNode(StrictModel):
@@ -85,14 +144,14 @@ class GaussianQuadratureRule(StrictModel):
 
 
 __all__ = [
-    "JacobiMatrix",
-    "ChristoffelDarbouxKernel",
-    "GaussianQuadratureRule",
-    "HankelMomentMatrix",
     "MAX_HANKEL_ORDER",
     "MAX_MOMENT_DEGREE",
     "MAX_POLYNOMIAL_DEGREE",
     "MAX_QUADRATURE_ORDER",
+    "ChristoffelDarbouxKernel",
+    "GaussianQuadratureRule",
+    "HankelMomentMatrix",
+    "JacobiMatrix",
     "MomentFunctionalPrefix",
     "OrthogonalPolynomialFamily",
     "OrthogonalPolynomialTerm",
@@ -102,7 +161,13 @@ __all__ = [
 
 
 class JacobiMatrix(StrictModel):
-    """Finite tridiagonal multiplication-by-x matrix in the monic basis."""
+    """Finite tridiagonal multiplication-by-x matrix in the monic basis.
+
+    With x p_k = p_{k+1} + alpha_k p_k + beta_k p_{k-1}, the subdiagonal
+    carries the monic normalization 1 and the superdiagonal carries
+    beta_{i+1}; ``betas`` keeps the recurrence convention with an unused
+    placeholder first.
+    """
 
     alphas: tuple[CanonicalRational, ...]
     betas: tuple[CanonicalRational, ...]

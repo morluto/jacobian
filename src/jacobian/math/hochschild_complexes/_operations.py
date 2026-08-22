@@ -10,6 +10,7 @@ from jacobian.math.hochschild_complexes._bar import (
 )
 from jacobian.math.hochschild_complexes._models import (
     MAX_HOCHSCHILD_TENSOR_ELEMENTS,
+    AlgebraStructure,
     HochschildChainComplexRequest,
     HochschildChainComplexResult,
     HochschildDifferential,
@@ -139,28 +140,31 @@ def compute_hochschild_chain_complex(
     )
 
 
-def compute_hochschild_homology(
-    request: HochschildHomologyRequest,
-) -> HochschildHomologyResult:
-    """Compute reduced bar (trivial-coefficient Hochschild) homology."""
-    alg = request.algebra
-    n = alg.dimension
-    p = alg.prime
-    max_deg = request.max_degree
-    c = alg.structure_constants
+def hochschild_homology_groups(
+    algebra: AlgebraStructure,
+    max_degree: int,
+) -> tuple[HochschildHomologyGroup, ...]:
+    """Pure bar-homology core returning the exact groups for one algebra.
+
+    Kept free of result-model construction so result validation can replay
+    the bounded rank computation without recursion.
+    """
+    n = algebra.dimension
+    p = algebra.prime
+    c = algebra.structure_constants
 
     group_dims = [1]
-    for k in range(1, max_deg + 1):
+    for k in range(1, max_degree + 1):
         group_dims.append(n ** k)
 
     ranks = [
         _adjacent_boundary_rank(c, n, p, degree)
-        for degree in range(1, max_deg + 1)
+        for degree in range(1, max_degree + 1)
     ]
-    ranks.append(_adjacent_boundary_rank(c, n, p, max_deg + 1))
+    ranks.append(_adjacent_boundary_rank(c, n, p, max_degree + 1))
 
     groups = []
-    for k in range(max_deg + 1):
+    for k in range(max_degree + 1):
         rank_d_out = ranks[k]
         rank_d_in = ranks[k - 1] if k > 0 else 0
         dim = group_dims[k]
@@ -173,10 +177,20 @@ def compute_hochschild_homology(
             degree=k,
             betti=betti,
         ))
+    return tuple(groups)
+
+
+def compute_hochschild_homology(
+    request: HochschildHomologyRequest,
+) -> HochschildHomologyResult:
+    """Compute reduced bar (trivial-coefficient Hochschild) homology."""
+    alg = request.algebra
 
     return HochschildHomologyResult(
-        groups=tuple(groups),
-        prime=p,
+        algebra=alg,
+        max_degree=request.max_degree,
+        groups=hochschild_homology_groups(alg, request.max_degree),
+        prime=alg.prime,
     )
 
 

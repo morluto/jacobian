@@ -12,6 +12,7 @@ from jacobian.math.hochschild_complexes._models import (
     HochschildChainComplexResult,
     HochschildDifferential,
     HochschildHomologyRequest,
+    HochschildHomologyResult,
 )
 from jacobian.math.hochschild_complexes._operations import (
     compute_hochschild_chain_complex,
@@ -240,3 +241,37 @@ class TestChainComplexSourceBinding:
         payload["prime"] = 5
         with pytest.raises(ValidationError, match="retained algebra"):
             HochschildChainComplexResult.model_validate(payload)
+
+
+class TestHomologySourceBinding:
+    def test_forged_groups_rejected(self):
+        from pydantic import ValidationError
+
+        alg = AlgebraStructure(
+            prime=5,
+            dimension=1,
+            structure_constants=(((1,),),),
+        )
+        genuine = compute_hochschild_homology(
+            HochschildHomologyRequest(algebra=alg, max_degree=2)
+        )
+        payload = genuine.model_dump()
+        payload["groups"] = [{"degree": 0, "betti": 99}]
+        with pytest.raises(ValidationError, match="replay"):
+            HochschildHomologyResult.model_validate(payload)
+
+    def test_prime_mismatch_rejected(self):
+        from pydantic import ValidationError
+
+        alg = AlgebraStructure(
+            prime=5,
+            dimension=1,
+            structure_constants=(((1,),),),
+        )
+        genuine = compute_hochschild_homology(
+            HochschildHomologyRequest(algebra=alg, max_degree=2)
+        )
+        payload = genuine.model_dump()
+        payload["prime"] = 7
+        with pytest.raises(ValidationError, match="prime"):
+            HochschildHomologyResult.model_validate(payload)

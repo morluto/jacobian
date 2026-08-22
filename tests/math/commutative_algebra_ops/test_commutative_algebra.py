@@ -16,6 +16,7 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealQuotientRequest,
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
+    IdealSaturationRequest,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
@@ -460,3 +461,26 @@ def test_ideal_quotient_by_product_equals_iterated_quotient() -> None:
     assert iterated.quotient is not None
     assert _equal(by_product.quotient, iterated.quotient)
     assert _equal(by_product.quotient, _ideal(variables, {(2, 1): 1}))
+
+
+def test_saturation_rejects_polynomials_past_total_degree() -> None:
+    # Each exponent is within the per-term limit, but the total degree 72
+    # exceeds the documented degree-12 backend domain.
+    monomial = _polynomial(
+        ("x1", "x2", "x3", "x4", "x5", "x6"),
+        {(12, 12, 12, 12, 12, 12): 1},
+    )
+    with pytest.raises(ValueError, match="total degree"):
+        IdealSaturationRequest(
+            ideal=_ideal(("x1", "x2", "x3", "x4", "x5", "x6"), {(0,) * 6: 1}),
+            saturation_polynomial=monomial,
+        )
+
+
+def test_saturation_accepts_boundary_total_degree() -> None:
+    boundary = _polynomial(("x", "y"), {(6, 6): 1})
+    request = IdealSaturationRequest(
+        ideal=_ideal(("x", "y"), {(2, 0): 1}),
+        saturation_polynomial=boundary,
+    )
+    assert request.saturation_polynomial == boundary

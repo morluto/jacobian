@@ -190,21 +190,25 @@ class HochschildHomologyRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_within_budget(self) -> Self:
-        # Elimination runs on d_(max_degree+1), so bound that densest matrix.
-        dimension = self.algebra.dimension
-        if dimension ** (self.max_degree + 1) > MAX_HOCHSCHILD_TENSOR_ELEMENTS:
-            raise ValueError(
-                "requested max_degree exceeds the supported tensor-element budget "
-                f"(dimension^{self.max_degree+1} > {MAX_HOCHSCHILD_TENSOR_ELEMENTS})"
-            )
-        densest_entries = dimension ** (2 * self.max_degree + 1)
-        if densest_entries > MAX_HOCHSCHILD_MATRIX_ENTRIES:
-            raise ValueError(
-                "requested max_degree exceeds the supported boundary-matrix "
-                f"entry budget (dimension^(2*max_degree+1) = {densest_entries} "
-                f"> {MAX_HOCHSCHILD_MATRIX_ENTRIES})"
-            )
+        require_hochschild_budget(self.algebra.dimension, self.max_degree)
         return self
+
+
+def require_hochschild_budget(dimension: int, max_degree: int) -> None:
+    """Reject degrees whose tensor or boundary-matrix budget is exceeded."""
+
+    if dimension ** (max_degree + 1) > MAX_HOCHSCHILD_TENSOR_ELEMENTS:
+        raise ValueError(
+            "requested max_degree exceeds the supported tensor-element budget "
+            f"(dimension^{max_degree + 1} > {MAX_HOCHSCHILD_TENSOR_ELEMENTS})"
+        )
+    densest_entries = dimension ** (2 * max_degree + 1)
+    if densest_entries > MAX_HOCHSCHILD_MATRIX_ENTRIES:
+        raise ValueError(
+            "requested max_degree exceeds the supported boundary-matrix "
+            f"entry budget (dimension^(2*max_degree+1) = {densest_entries} "
+            f"> {MAX_HOCHSCHILD_MATRIX_ENTRIES})"
+        )
 
 
 class HochschildHomologyGroup(StrictModel):
@@ -217,8 +221,29 @@ class HochschildHomologyGroup(StrictModel):
 class HochschildHomologyResult(StrictModel):
     """Hochschild homology groups with trivial coefficients."""
 
+    algebra: AlgebraStructure
+    max_degree: int = Field(ge=1, le=MAX_HOCHSCHILD_DEGREE)
     groups: tuple[HochschildHomologyGroup, ...] = Field(min_length=1)
     prime: int = Field(ge=2, le=10_000)
+
+    @model_validator(mode="after")
+    def bind_to_source_algebra(self) -> Self:
+        from jacobian.math.hochschild_complexes._operations import (
+            hochschild_homology_groups,
+        )
+
+        if self.prime != self.algebra.prime:
+            raise ValueError("prime must match the retained algebra")
+        # Reapply the enumeration admission bound before replaying so a
+        # directly supplied payload cannot bypass the request budget.
+        require_hochschild_budget(self.algebra.dimension, self.max_degree)
+        expected_groups = hochschild_homology_groups(self.algebra, self.max_degree)
+        if self.groups != expected_groups:
+            raise ValueError(
+                "groups must equal the exact bar-homology replay of the "
+                "retained algebra"
+            )
+        return self
 
 
 __all__ = [

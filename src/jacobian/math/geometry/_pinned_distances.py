@@ -63,27 +63,66 @@ class PinnedDistanceResult(StrictModel):
     def require_invariants(self) -> PinnedDistanceResult:
         if self.distinct_line_count != len(self.lines):
             raise ValueError("distinct_line_count must match the line count")
-        if self.lines:
-            min_entry = min(self.lines, key=lambda e: Fraction(
+        # Replay the bounded computation from the retained points so an
+        # authored profile cannot claim false distances, pairs, or counts.
+        expected = _line_entries_from_points(self.anchor, self.points)
+        if self.lines != expected:
+            raise ValueError(
+                "lines must equal the exact replay from the retained "
+                "anchor and points"
+            )
+        if self.min_squared_distance is not None:
+            if not self.lines:
+                raise ValueError("no minimum entry can exist without lines")
+            min_entry = min(expected, key=lambda e: Fraction(
                 parse_canonical_integer(e.squared_distance_numerator),
                 parse_canonical_integer(e.squared_distance_denominator),
             ))
-            if self.min_squared_distance is None:
-                raise ValueError("min_squared_distance is required when lines exist")
-            if (
-                self.min_squared_distance.squared_distance_numerator != min_entry.squared_distance_numerator
-                or self.min_squared_distance.squared_distance_denominator != min_entry.squared_distance_denominator
-            ):
+            if self.min_squared_distance != min_entry:
                 raise ValueError("min_squared_distance must be the minimum entry")
+        elif self.lines:
+            raise ValueError("min_squared_distance is required when lines exist")
         return self
 
 
-def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceResult:
-    """Compute exact squared distances from an anchor to all pair-spanned lines."""
-    ax = request.anchor.x.as_fraction()
-    ay = request.anchor.y.as_fraction()
+def _canonical_line_key(
+    xi: Fraction, yi: Fraction, xj: Fraction, yj: Fraction
+) -> tuple[str, str, str]:
+    dx = xj - xi
+    dy = yj - yi
+    # Normal form: dy*(X - xi) - dx*(Y - yi) = 0  =>  a*X + b*Y = c
+    a = dy
+    b = -dx
+    c = a * xi + b * yi
+    scale_lcm = 1
+    for component in (a.denominator, b.denominator, c.denominator):
+        scale_lcm = scale_lcm * component // gcd(scale_lcm, component)
+    int_a = int(a * scale_lcm)
+    int_b = int(b * scale_lcm)
+    int_c = int(c * scale_lcm)
+    divisor = gcd(gcd(abs(int_a), abs(int_b)), abs(int_c))
+    if divisor:
+        int_a //= divisor
+        int_b //= divisor
+        int_c //= divisor
+    if int_a < 0 or (int_a == 0 and int_b < 0):
+        int_a, int_b, int_c = -int_a, -int_b, -int_c
+    return (
+        format_canonical_integer(int_a),
+        format_canonical_integer(int_b),
+        format_canonical_integer(int_c),
+    )
 
-    pts = [(p.x.as_fraction(), p.y.as_fraction()) for p in request.points]
+
+def _line_entries_from_points(
+    anchor: RationalPoint2D,
+    points: tuple[RationalPoint2D, ...],
+) -> tuple[LineDistanceEntry, ...]:
+    """Replay the exact pair-spanned-line profile from retained geometry."""
+
+    ax = anchor.x.as_fraction()
+    ay = anchor.y.as_fraction()
+    pts = [(p.x.as_fraction(), p.y.as_fraction()) for p in points]
 
     # For each pair (i, j), compute the line and the squared distance from anchor
     # Line through points i, j: direction (dx, dy) = (p_j - p_i)
@@ -91,34 +130,6 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
     # d^2 = cross(D, P-A)^2 / |D|^2
     # Entries are keyed by the canonical integer line equation a*x + b*y = c so
     # that distinct lines are never merged; the distance is entry data.
-    def _canonical_line_key(
-        xi: Fraction, yi: Fraction, xj: Fraction, yj: Fraction
-    ) -> tuple[str, str, str]:
-        dx = xj - xi
-        dy = yj - yi
-        # Normal form: dy*(X - xi) - dx*(Y - yi) = 0  =>  a*X + b*Y = c
-        a = dy
-        b = -dx
-        c = a * xi + b * yi
-        scale_lcm = 1
-        for component in (a.denominator, b.denominator, c.denominator):
-            scale_lcm = scale_lcm * component // gcd(scale_lcm, component)
-        int_a = int(a * scale_lcm)
-        int_b = int(b * scale_lcm)
-        int_c = int(c * scale_lcm)
-        divisor = gcd(gcd(abs(int_a), abs(int_b)), abs(int_c))
-        if divisor:
-            int_a //= divisor
-            int_b //= divisor
-            int_c //= divisor
-        if int_a < 0 or (int_a == 0 and int_b < 0):
-            int_a, int_b, int_c = -int_a, -int_b, -int_c
-        return (
-            format_canonical_integer(int_a),
-            format_canonical_integer(int_b),
-            format_canonical_integer(int_c),
-        )
-
     line_map: dict[
         tuple[str, str, str], tuple[list[tuple[int, int]], str, str]
     ] = {}
@@ -147,12 +158,20 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
     entries = []
     for key in sorted(line_map.keys()):
         pairs, num, den = line_map[key]
-        entry = LineDistanceEntry(
-            squared_distance_numerator=num,
-            squared_distance_denominator=den,
-            source_pairs=tuple(pairs),
+        entries.append(
+            LineDistanceEntry(
+                squared_distance_numerator=num,
+                squared_distance_denominator=den,
+                source_pairs=tuple(pairs),
+            )
         )
-        entries.append(entry)
+    return tuple(entries)
+
+
+def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceResult:
+    """Compute exact squared distances from an anchor to all pair-spanned lines."""
+
+    entries = _line_entries_from_points(request.anchor, request.points)
 
     min_entry = min(entries, key=lambda e: Fraction(
         parse_canonical_integer(e.squared_distance_numerator),

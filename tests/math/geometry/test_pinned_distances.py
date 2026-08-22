@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._pinned_distances import (
+    LineDistanceEntry,
     PinnedDistanceRequest,
     PinnedDistanceResult,
     compute_pinned_distances,
@@ -85,3 +86,45 @@ class TestAboveConversionLimit:
         assert widest > 4300
         # Result revalidation replays the minimum through canonical parsing.
         PinnedDistanceResult.model_validate(result.model_dump())
+
+
+class TestSourceReplayBinding:
+    @staticmethod
+    def _pt(x: str, y: str) -> RationalPoint2D:
+        return RationalPoint2D(
+            x=CanonicalRational(num=x, den="1"),
+            y=CanonicalRational(num=y, den="1"),
+        )
+
+    def _request(self) -> PinnedDistanceRequest:
+        return PinnedDistanceRequest(
+            anchor=self._pt("0", "0"),
+            points=(self._pt("0", "0"), self._pt("3", "0"), self._pt("0", "4")),
+        )
+
+    def test_empty_profile_with_distinct_points_rejected(self):
+        # Two distinct points span one line: an empty profile is false.
+        with pytest.raises(ValidationError, match="replay"):
+            PinnedDistanceResult(
+                anchor=self._pt("0", "0"),
+                points=(self._pt("0", "0"), self._pt("1", "0")),
+                lines=(),
+                distinct_line_count=0,
+                min_squared_distance=None,
+            )
+
+    def test_forged_distance_and_pairs_rejected(self):
+        genuine = compute_pinned_distances(self._request())
+        forged_entry = LineDistanceEntry(
+            squared_distance_numerator="7",
+            squared_distance_denominator="1",
+            source_pairs=genuine.lines[0].source_pairs,
+        )
+        with pytest.raises(ValidationError, match="replay"):
+            PinnedDistanceResult(
+                anchor=genuine.anchor,
+                points=genuine.points,
+                lines=(forged_entry,),
+                distinct_line_count=1,
+                min_squared_distance=forged_entry,
+            )

@@ -173,8 +173,13 @@ class TestJacobiMatrix:
         assert result.off_diagonal == ()
 
     def test_zero_beta_rejected(self) -> None:
-        with pytest.raises(ValueError, match="nonzero"):
+        with pytest.raises(ValueError, match="positive"):
             jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
+
+    def test_negative_subdiagonal_beta_rejected(self) -> None:
+        """A negative squared-norm ratio cannot yield a real Jacobi matrix."""
+        with pytest.raises(ValueError, match="subdiagonal"):
+            jacobi_matrix((_frac(0, 1), _frac(0, 1)), (_frac(1, 1), -_frac(1, 1)))
 
 
 # ---------------------------------------------------------------------------

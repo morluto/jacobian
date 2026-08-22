@@ -501,7 +501,6 @@ class CircumradiusProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_profile(self) -> Self:
-        from fractions import Fraction
         from itertools import combinations
 
         if self.point_count != len(self.points):
@@ -614,7 +613,7 @@ class ConcyclicQuadruple(StrictModel):
 
 def _replay_collinear_prefix(
     xy: list[tuple[Fraction, Fraction]],
-) -> tuple[bool, int]:
+) -> tuple[bool, int, CollinearTriple | None]:
     """Replay the lexicographic collinear-triple scan and its stopping prefix."""
     from itertools import combinations
 
@@ -626,13 +625,13 @@ def _replay_collinear_prefix(
             - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
             == 0
         ):
-            return True, checked
-    return False, checked
+            return True, checked, CollinearTriple(first=i, second=j, third=k)
+    return False, checked, None
 
 
 def _replay_concyclic_prefix(
     xy: list[tuple[Fraction, Fraction]],
-) -> tuple[bool, int]:
+) -> tuple[bool, int, ConcyclicQuadruple | None]:
     """Replay the lexicographic concyclic-quadruple scan and its stopping prefix."""
     from itertools import combinations
 
@@ -677,8 +676,12 @@ def _replay_concyclic_prefix(
             )
         )
         if det == 0:
-            return True, checked
-    return False, checked
+            return (
+                True,
+                checked,
+                ConcyclicQuadruple(first=i, second=j, third=k, fourth=ell),
+            )
+    return False, checked, None
 
 
 def _require_collinear_witness(
@@ -764,8 +767,12 @@ class ForbiddenPatternsResult(StrictModel):
             for item in self.configuration.points
         ]
 
-        recomputed_collinear, checked_triples = _replay_collinear_prefix(xy)
-        recomputed_concyclic, checked_quadruples = _replay_concyclic_prefix(xy)
+        recomputed_collinear, checked_triples, first_triple = (
+            _replay_collinear_prefix(xy)
+        )
+        recomputed_concyclic, checked_quadruples, first_quadruple = (
+            _replay_concyclic_prefix(xy)
+        )
         if (
             self.has_collinear_triple != recomputed_collinear
             or self.has_concyclic_quadruple != recomputed_concyclic
@@ -788,13 +795,19 @@ class ForbiddenPatternsResult(StrictModel):
             raise ValueError("exactly a collinear triple carries one witness")
         if self.has_concyclic_quadruple is (self.concyclic_quadruple is None):
             raise ValueError("exactly a concyclic quadruple carries one witness")
-        # Validate that the supplied witnesses actually satisfy the predicates
-        if self.collinear_triple is not None:
-            _require_collinear_witness(
-                xy, self.collinear_triple, self.point_count
+        # A witness must be the exact first one produced by the stopping
+        # scan: a later predicate-satisfying tuple would contradict the
+        # reported checked counts.
+        if self.collinear_triple is not None and self.collinear_triple != first_triple:
+            raise ValueError(
+                "collinear_triple must equal the first witness of the exact "
+                "lexicographic scan over the retained configuration"
             )
-        if self.concyclic_quadruple is not None:
-            _require_concyclic_witness(
-                xy, self.concyclic_quadruple, self.point_count
+        if self.concyclic_quadruple is not None and (
+            self.concyclic_quadruple != first_quadruple
+        ):
+            raise ValueError(
+                "concyclic_quadruple must equal the first witness of the "
+                "exact lexicographic scan over the retained configuration"
             )
         return self

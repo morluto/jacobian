@@ -8,11 +8,19 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
+
+
+# With per-component digit bound d, each squared-distance fraction carries at
+# most 8d+6 numerator and denominator digits, so d = 2048 keeps every exact
+# entry inside the canonical 32,768-digit limit before execution and safely
+# below any integer-string conversion boundary in formatting.
+_MAX_PINNED_COORDINATE_DIGITS = 2048
 
 
 class PinnedDistanceRequest(StrictModel):
@@ -29,6 +37,9 @@ class PinnedDistanceRequest(StrictModel):
         )
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
+        for pt in (self.anchor, *self.points):
+            require_bounded_rational(pt.x, max_digits=_MAX_PINNED_COORDINATE_DIGITS, label="coordinate")
+            require_bounded_rational(pt.y, max_digits=_MAX_PINNED_COORDINATE_DIGITS, label="coordinate")
         return self
 
 
@@ -83,7 +94,7 @@ class PinnedDistanceResult(StrictModel):
                 int_c //= divisor
             if int_a < 0 or (int_a == 0 and int_b < 0):
                 int_a, int_b, int_c = -int_a, -int_b, -int_c
-            return (str(int_a), str(int_b), str(int_c))
+            return (format_canonical_integer(int_a), format_canonical_integer(int_b), format_canonical_integer(int_c))
 
         line_map: dict[tuple[str, str, str], tuple[list[tuple[int, int]], str, str]] = {}
         for i in range(len(pts)):
@@ -99,13 +110,19 @@ class PinnedDistanceResult(StrictModel):
                 sq_dist = Fraction(cross * cross, norm_sq)
                 key = _canonical_line_key(xi, yi, xj, yj)
                 if key not in line_map:
-                    line_map[key] = ([], str(sq_dist.numerator), str(sq_dist.denominator))
+                    line_map[key] = (
+                        [],
+                        format_canonical_integer(sq_dist.numerator),
+                        format_canonical_integer(sq_dist.denominator),
+                    )
                 line_map[key][0].append((i, j))
                 # All point pairs collapsing to the same canonical line must share
                 # the exact same squared distance.
                 if (
-                    line_map[key][1] != str(sq_dist.numerator)
-                    or line_map[key][2] != str(sq_dist.denominator)
+                    line_map[key][1]
+                    != format_canonical_integer(sq_dist.numerator)
+                    or line_map[key][2]
+                    != format_canonical_integer(sq_dist.denominator)
                 ):
                     raise ValueError("collinear point pairs must share the same squared distance")
 

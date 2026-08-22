@@ -135,6 +135,15 @@ class SeedMutationResult(StrictModel):
     exchange_matrix: ExchangeMatrix
     mutation_index: int = Field(ge=0)
 
+    @model_validator(mode="after")
+    def require_source_bound_index(self) -> Self:
+        # Revalidated results must carry the same source-bound invariant as
+        # the request: the index cannot describe a mutation of a matrix it
+        # does not range over.
+        if self.mutation_index >= self.exchange_matrix.n:
+            raise ValueError("mutation_index must be in 0..n-1")
+        return self
+
 
 class GVectorRequest(StrictModel):
     """Compute the g-vector matrix for principal coefficients.

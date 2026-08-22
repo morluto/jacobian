@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.polytope._models import (
     Halfspace,
     PolytopeVolumeRequest,
@@ -49,7 +50,7 @@ class TestUnitCube:
                 _v((0, 1), (1, 1)),
             )
         )
-        assert result.volume == "1"
+        assert result.volume == CanonicalRational(num="1", den="1")
         assert result.dimension == 2
         assert result.representation == "vertices"
         assert result.evidence == "COMPUTED"
@@ -68,7 +69,7 @@ class TestUnitCube:
                 _v((0, 1), (1, 1), (1, 1)),
             )
         )
-        assert result.volume == "1"
+        assert result.volume == CanonicalRational(num="1", den="1")
         assert result.dimension == 3
 
     def test_unit_cube_halfspaces(self):
@@ -83,7 +84,7 @@ class TestUnitCube:
                 _h((0, 1), (0, 1), (1, 1), offset=(1, 1)),
             )
         )
-        assert result.volume == "1"
+        assert result.volume == CanonicalRational(num="1", den="1")
         assert result.dimension == 3
         assert result.representation == "halfspaces"
 
@@ -99,7 +100,7 @@ class TestSimplex:
                 _v((0, 1), (0, 1), (1, 1)),
             )
         )
-        assert result.volume == "1/6"
+        assert result.volume == CanonicalRational(num="1", den="6")
 
     def test_standard_6simplex(self):
         """Standard 6-simplex has volume 1/720."""
@@ -108,7 +109,7 @@ class TestSimplex:
             _v(*((1, 1) if i == j else (0, 1) for j in range(6))) for i in range(6)
         )
         result = _volume_via_vertices((origin, *basis))
-        assert result.volume == "1/720"
+        assert result.volume == CanonicalRational(num="1", den="720")
         assert result.dimension == 6
 
     def test_simplex_scales_with_side_length(self):
@@ -129,8 +130,8 @@ class TestSimplex:
                 _v((0, 1), (0, 1), (2, 1)),
             )
         )
-        assert small.volume == "1/6"
-        assert big.volume == "4/3"
+        assert small.volume == CanonicalRational(num="1", den="6")
+        assert big.volume == CanonicalRational(num="4", den="3")
 
 
 class TestRationalVolume:
@@ -145,7 +146,7 @@ class TestRationalVolume:
                 _v((1, 1), (1, 1), (1, 1)),
             )
         )
-        assert result.volume == "4/3"
+        assert result.volume == CanonicalRational(num="4", den="3")
 
     def test_rational_triangle(self):
         """Triangle with base 2 and height 3 has area 3."""
@@ -156,7 +157,7 @@ class TestRationalVolume:
                 _v((0, 1), (3, 1)),
             )
         )
-        assert result.volume == "3"
+        assert result.volume == CanonicalRational(num="3", den="1")
 
     def test_fractional_pyramid(self):
         """Pyramid with fractional base and height has rational volume."""
@@ -169,7 +170,7 @@ class TestRationalVolume:
                 _v((1, 4), (1, 4), (1, 2)),
             )
         )
-        assert result.volume == "1/24"
+        assert result.volume == CanonicalRational(num="1", den="24")
 
 
 class TestRejection:
@@ -184,15 +185,16 @@ class TestRejection:
             )
 
     def test_collinear_vertices(self):
-        """Collinear vertices do not span the ambient dimension."""
-        with pytest.raises(ValueError):
-            _volume_via_vertices(
-                (
-                    _v((0, 1), (0, 1)),
-                    _v((1, 1), (1, 1)),
-                    _v((2, 1), (2, 1)),
-                )
+        """Collinear vertices are lower-dimensional and have volume zero."""
+        result = _volume_via_vertices(
+            (
+                _v((0, 1), (0, 1)),
+                _v((1, 1), (1, 1)),
+                _v((2, 1), (2, 1)),
             )
+        )
+        assert result.volume == CanonicalRational(num="0", den="1")
+        assert result.dimension == 2
 
     def test_dimension_exceeds_bound(self):
         """Ambient dimension 7 exceeds the d <= 6 bound."""

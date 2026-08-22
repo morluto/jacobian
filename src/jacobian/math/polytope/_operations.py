@@ -30,6 +30,7 @@ from typing import Literal
 from sympy import Matrix, Rational
 from sympy.matrices.exceptions import NonInvertibleMatrixError
 
+from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.polytope._models import (
     Halfspace,
@@ -50,6 +51,12 @@ MAX_SUBSYSTEM_SOLVES = 5_000_000
 # exact computation bounded. This admits the unit cube through d=4 and
 # the standard simplex at every supported dimension.
 MAX_HULL_SUBFACETS = 200_000
+
+# Cache for H-representation vertex enumeration to avoid doing the same
+# ``C(m, d)`` subsystem solves twice (once during request validation and
+# again during execution).  The key is a hashable projection of the
+# half-space coefficients/offsets.
+_H_VERTEX_CACHE: dict[tuple[tuple[tuple[str, str], ...], str], tuple[list[tuple[Rational, ...]], int]] = {}
 
 
 def _hyperplane_normal(points: list[list[Rational]]) -> Matrix | None:
@@ -112,23 +119,34 @@ def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
     The polytope is bounded iff its recession cone ``{y : A y <= 0}`` is
     ``{0}``, which holds iff the origin lies strictly in the interior of
     the convex hull of the rows of ``A``. That interior test is an exact
-    facet enumeration of the row normals.
+    facet enumeration of the row normals.  The rows must positively span
+    ``R^d``; equivalently their convex hull must be full-dimensional.
     """
 
     dim = len(halfspaces[0].coefficients)
     if dim == 1:
         positive = any(
-            Rational(hs.coefficients[0].num, hs.coefficients[0].den) > 0
+            Rational(*hs.coefficients[0].as_integer_ratio()) > 0
             for hs in halfspaces
         )
         negative = any(
-            Rational(hs.coefficients[0].num, hs.coefficients[0].den) < 0
+            Rational(*hs.coefficients[0].as_integer_ratio()) < 0
             for hs in halfspaces
         )
         return positive and negative
     normals: list[list[Rational]] = [
-        [Rational(c.num, c.den) for c in hs.coefficients] for hs in halfspaces
+        [Rational(*c.as_integer_ratio()) for c in hs.coefficients] for hs in halfspaces
     ]
+    # Positive spanning requires the normals' convex hull to be full-
+    # dimensional; otherwise the polyhedron is unbounded.
+    if len(normals) < dim + 1:
+        return False
+    diff_rows = [[normals[i][k] - normals[0][k] for k in range(dim)] for i in range(1, len(normals))]
+    try:
+        if Matrix(diff_rows).rank() < dim:
+            return False
+    except Exception:
+        return False
     # Guard the exact facet enumeration of the row normals.
     try:
         combo_count = math.comb(len(normals), dim)
@@ -146,12 +164,19 @@ def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
 
 def _format_rational(value: Rational) -> str:
     """Render a SymPy ``Rational`` as a canonical ``num/den`` string."""
+
     if value.denominator == 1:
         return format_canonical_integer(int(value.numerator))
     return (
         f"{format_canonical_integer(int(value.numerator))}/"
         f"{format_canonical_integer(int(value.denominator))}"
     )
+
+
+def _canonical_rational(value: Rational) -> CanonicalRational:
+    """Convert a SymPy ``Rational`` to the canonical value type."""
+
+    return CanonicalRational.from_integer_ratio(int(value.p), int(value.q))
 
 
 def _simplex_abs_det(simplex_points: list[list[Rational]]) -> Rational:
@@ -448,10 +473,15 @@ def _halfspace_rows(
     halfspaces: tuple[Halfspace, ...],
 ) -> list[tuple[list[Rational], Rational]]:
     """Convert half-spaces to a list of (coefficients, offset) rational rows."""
+
+    # Use ``as_integer_ratio`` to avoid CPython's 4_300-digit string-to-int
+    # limit for canonical rationals up to 32_768 digits (the operation's
+    # admitted domain).  Passing ints to ``Rational`` bypasses SymPy's
+    # string parsing path.
     return [
         (
-            [Rational(c.num, c.den) for c in hs.coefficients],
-            Rational(hs.offset.num, hs.offset.den),
+            [Rational(*c.as_integer_ratio()) for c in hs.coefficients],
+            Rational(*hs.offset.as_integer_ratio()),
         )
         for hs in halfspaces
     ]
@@ -503,6 +533,17 @@ def _vertices_from_h_representation(
     half-spaces is a bounded, exact vertex enumeration for the small
     dimensions this operation admits.
     """
+    # Use a cache keyed by the exact half-space data so the validation
+    # pass and the execution pass share the same enumeration.
+    cache_key = tuple(
+        (
+            tuple((c.num, c.den) for c in hs.coefficients),
+            (hs.offset.num, hs.offset.den),
+        )
+        for hs in halfspaces
+    )
+    if cache_key in _H_VERTEX_CACHE:
+        return _H_VERTEX_CACHE[cache_key]
     dim = len(halfspaces[0].coefficients)
     rows = _halfspace_rows(halfspaces)
     n = len(rows)
@@ -528,7 +569,9 @@ def _vertices_from_h_representation(
         if point not in unique_seen:
             unique_seen.add(point)
             unique.append(point)
-    return unique, dim
+    result: tuple[list[tuple[Rational, ...]], int] = (unique, dim)
+    _H_VERTEX_CACHE[cache_key] = result
+    return result
 
 
 def compute_polytope_volume(
@@ -561,16 +604,17 @@ def compute_polytope_volume(
 
     if dim == 0:
         return PolytopeVolumeResult(
-            volume="1",
+            volume=CanonicalRational.from_integer_ratio(1, 1),
             dimension=0,
             representation=representation,
         )
 
     n = len(vertices)
     if n < dim + 1:
-        raise ValueError(
-            "polytope is lower-dimensional or empty; volume is zero, "
-            "but the input vertices do not span the ambient dimension"
+        return PolytopeVolumeResult(
+            volume=CanonicalRational.from_integer_ratio(0, 1),
+            dimension=dim,
+            representation=representation,
         )
 
     # Deduplicate coincident vertices.
@@ -582,27 +626,25 @@ def compute_polytope_volume(
             unique_vertices.append(vertex)
 
     if len(unique_vertices) < dim + 1:
-        raise ValueError(
-            "polytope is lower-dimensional or empty; volume is zero, "
-            "but the input vertices do not span the ambient dimension"
+        return PolytopeVolumeResult(
+            volume=CanonicalRational.from_integer_ratio(0, 1),
+            dimension=dim,
+            representation=representation,
         )
 
-    # Remove redundant boundary points (P2) before triangulating: keep only
-    # extreme hull vertices to avoid double-counting and degenerate fans.
-    # Duplicates are already removed; this also drops collinear edge
-    # interior points that would otherwise make the 2-D adjacency graph
-    # non-simple (e.g., a 3x3 square with all 12 boundary points).
-    points_candidate: list[list[Rational]] = [list(v) for v in unique_vertices]
-    filtered_points = _filter_redundant_vertices(points_candidate, dim)
-    points = filtered_points if len(filtered_points) >= dim + 1 else points_candidate
+    # Delegate redundant-vertex filtering to ``_polytope_volume``; the outer
+    # call was previously duplicated and is removed to avoid double exact
+    # work near the ``MAX_HULL_SUBFACETS`` ceiling.
+    points: list[list[Rational]] = [list(v) for v in unique_vertices]
     volume = _polytope_volume(points, dim)
     if volume == 0:
-        raise ValueError(
-            "polytope is lower-dimensional or empty; volume is zero, "
-            "but the input vertices do not span the ambient dimension"
+        return PolytopeVolumeResult(
+            volume=CanonicalRational.from_integer_ratio(0, 1),
+            dimension=dim,
+            representation=representation,
         )
     return PolytopeVolumeResult(
-        volume=_format_rational(volume),
+        volume=_canonical_rational(volume),
         dimension=dim,
         representation=representation,
     )

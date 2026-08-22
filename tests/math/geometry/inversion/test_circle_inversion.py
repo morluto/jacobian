@@ -1,7 +1,8 @@
 """Tests for circle inversion of rational planar points."""
 
-import pytest
 from fractions import Fraction
+
+import pytest
 from pydantic import ValidationError
 
 from jacobian.math.geometry.inversion._models import (

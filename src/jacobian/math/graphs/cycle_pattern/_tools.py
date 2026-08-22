@@ -131,9 +131,12 @@ CYCLE_PATTERN_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Find a subgraph embedding of a pattern graph into a host graph",
         "Given bounded simple undirected graphs G (host) and H (pattern), "
         "find an injective embedding of H into G that preserves all edges, "
-        "or establish after complete bounded search that no such embedding "
-        "exists. Returns the mapping from pattern vertices to host vertices "
-        "as a witness.",
+        "or establish after a bounded backtracking search (degree pruning, "
+        "deterministic recursion-node budget) that no such embedding exists. "
+        "When the budget is exhausted before deciding, the result says so "
+        "instead of claiming completeness. Returns the mapping from pattern "
+        "vertices to host vertices as a witness validated against the "
+        "source graphs.",
         SubgraphPatternRequest,
         SubgraphPatternResult,
         find_subgraph_pattern,

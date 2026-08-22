@@ -164,35 +164,55 @@ def _check_orbit_stabilizer(
 
 
 class GroupStabilizerResult(StrictModel):
-    """Generators of the point stabilizer subgroup, bound to its source.
+    """Point stabilizer as a canonical permutation-group value bound to its source.
 
-    The result retains the ambient ``degree`` and the source group's
-    generators so the stabilizer is interpretable as a canonical
-    permutation-group value (``degree`` + ``generators``) without
-    reattaching external context. Validation replays the defining
-    orbit-stabilizer relation ``|G| = |orbit(point)| * |Stab(point)|``
-    and checks that every stabilizer generator fixes ``point`` and lies
-    in the source group.
+    The result retains the source group and the stabilizer subgroup as nested
+    canonical :class:`PermutationGroupRequest` values (``degree`` + ``generators``)
+    so the stabilizer can be passed unchanged to ``group.order.compute`` or any
+    other permutation-group consumer without reshaping. The trivial stabilizer
+    is represented by the identity permutation ``[0,...,degree-1]`` (the
+    consumer requires at least one generator). Validation replays the defining
+    orbit-stabilizer relation ``|G| = |orbit(point)| * |Stab(point)|`` and
+    checks that every stabilizer generator fixes ``point`` and lies in the
+    source group.
     """
 
-    degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
-    point: int = Field(ge=0, le=MAX_GROUP_DEGREE - 1)
-    generators: tuple[tuple[int, ...], ...] = Field(
-        default=(), max_length=MAX_GROUP_DEGREE
+    point: int = Field(
+        ge=0,
+        le=MAX_GROUP_DEGREE - 1,
+        description="Point whose stabilizer is computed; must satisfy 0 <= point < source.degree == stabilizer.degree.",
     )
-    source_generators: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=MAX_GROUP_DEGREE
+    source: PermutationGroupRequest = Field(
+        description="Source permutation group as the canonical value (degree + generators)."
+    )
+    stabilizer: PermutationGroupRequest = Field(
+        description=(
+            "Stabilizer subgroup as a canonical permutation-group value on the same "
+            "degree; trivial stabilizer is represented by the identity permutation "
+            "[0,...,degree-1] so the value is always consumable by group.order.compute "
+            "without reshaping or synthesizing an identity."
+        )
     )
     method: Literal["SYMPY_STABILIZER"] = "SYMPY_STABILIZER"
 
     @model_validator(mode="after")
     def require_valid_stabilizer(self) -> Self:
+        if self.source.degree != self.stabilizer.degree:
+            raise ValueError("source and stabilizer must have the same degree")
+        if not 0 <= self.point < self.source.degree:
+            raise ValueError("point must be in 0..degree-1")
         _check_stabilizer_permutations(
-            self.degree, self.point, self.generators, self.source_generators
+            self.source.degree,
+            self.point,
+            self.stabilizer.generators,
+            self.source.generators,
         )
         try:
             _check_orbit_stabilizer(
-                self.degree, self.point, self.generators, self.source_generators
+                self.source.degree,
+                self.point,
+                self.stabilizer.generators,
+                self.source.generators,
             )
         except ValueError:
             raise

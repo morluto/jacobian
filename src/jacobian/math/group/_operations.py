@@ -46,9 +46,19 @@ def compute_group_stabilizer(request: GroupStabilizerRequest) -> GroupStabilizer
         [list(g) for g in request.generators],
         request.point,
     )
-    return GroupStabilizerResult(
+    # The canonical group value requires at least one generator; represent the
+    # trivial stabilizer by the identity permutation.
+    if not stabilizer_generators:
+        stabilizer_generators = [list(range(request.degree))]
+    source = PermutationGroupRequest(
+        degree=request.degree, generators=request.generators
+    )
+    stabilizer = PermutationGroupRequest(
         degree=request.degree,
-        point=request.point,
         generators=tuple(tuple(g) for g in stabilizer_generators),
-        source_generators=request.generators,
+    )
+    return GroupStabilizerResult(
+        point=request.point,
+        source=source,
+        stabilizer=stabilizer,
     )

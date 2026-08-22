@@ -118,6 +118,20 @@ class TestRecurrenceCoefficients:
         with pytest.raises(ValueError, match="positive"):
             recurrence_coefficients((_frac(-1, 1),))
 
+    @pytest.mark.exhaustive
+    def test_result_growth_rejected_before_execution(self) -> None:
+        """Positivity alone does not admit coefficients past the limit."""
+        # mu_k = (1/(k+1) if k is even else 0) + 1/(10^70+3+2k): every input
+        # component stays small and Gram-Schmidt succeeds, but the final
+        # alpha denominator overflows the canonical limit.
+        moments = []
+        for k in range(33):
+            base = Fraction(1, k + 1) if k % 2 == 0 else Fraction(0)
+            value = base + Fraction(1, 10**70 + 3 + 2 * k)
+            moments.append(_cr(value.numerator, value.denominator))
+        with pytest.raises((ValueError, ValidationError), match="canonical"):
+            RecurrenceCoefficientsRequest(moments=tuple(moments))
+
     def test_even_length_sequence_fully_consumed(self) -> None:
         """The first four standard-normal moments determine two coefficient pairs."""
         moments = (_frac(1, 1), _frac(0, 1), _frac(1, 1), _frac(0, 1))

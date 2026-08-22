@@ -213,3 +213,28 @@ class TestBockstein:
                 simplex_values=((0, 1, 2),),
                 simplex_coefficients=(3,),
             )
+
+
+class TestCocycleAdmission:
+    def test_non_cocycle_rejected(self):
+        from pydantic import ValidationError
+
+        """A degree-1 cochain on one edge of the triangle is not a cocycle."""
+        with pytest.raises(ValidationError, match="not a cocycle"):
+            SteenrodSquareRequest(
+                cochain_degree=1,
+                simplex_values=((0, 1),),
+                simplex_coefficients=(1,),
+                square_degree=1,
+                ambient_simplices=((0, 1), (1, 2), (0, 2), (0, 1, 2)),
+            )
+
+    def test_genuine_cocycle_admitted(self):
+        result = compute_steenrod_square(SteenrodSquareRequest(
+            cochain_degree=1,
+            simplex_values=((0, 1), (0, 2)),
+            simplex_coefficients=(1, 1),
+            square_degree=1,
+            ambient_simplices=((0, 1), (1, 2), (0, 2), (0, 1, 2)),
+        ))
+        assert result.is_zero

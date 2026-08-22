@@ -22,6 +22,39 @@ def _validate_simplex_entries(
             raise ValueError(f"{label} vertices must be sorted canonical")
 
 
+def _require_cocycle(
+    cochain_degree: int,
+    simplex_values: tuple[tuple[int, ...], ...],
+    simplex_coefficients: tuple[int, ...],
+    ambient_simplices: tuple[tuple[int, ...], ...],
+) -> None:
+    """Require the GF(2) coboundary to vanish on ambient (degree+1)-simplices.
+
+    Steenrod squares are cohomology operations: the supplied cochain must be
+    a cocycle. Over GF(2) the coboundary of a degree-p cochain on a
+    (p+1)-simplex is the GF(2) sum of its values on the p+1
+    codimension-one faces.
+    """
+    values_by_face: dict[tuple[int, ...], int] = {}
+    for simplex, coefficient in zip(
+        simplex_values, simplex_coefficients, strict=True
+    ):
+        key = tuple(simplex)
+        values_by_face[key] = (values_by_face.get(key, 0) + coefficient) % 2
+    for sigma in ambient_simplices:
+        if len(sigma) != cochain_degree + 2:
+            continue
+        coboundary = 0
+        for index in range(len(sigma)):
+            face = sigma[:index] + sigma[index + 1 :]
+            coboundary = (coboundary + values_by_face.get(face, 0)) % 2
+        if coboundary:
+            raise ValueError(
+                "the supplied cochain is not a cocycle: its "
+                "coboundary does not vanish on the ambient complex"
+            )
+
+
 class SteenrodSquareRequest(StrictModel):
     """Compute Steenrod squares Sq^k(x) for a cocycle over GF(2).
 
@@ -86,6 +119,13 @@ class SteenrodSquareRequest(StrictModel):
                     raise ValueError(
                         "cochain support must lie inside the ambient complex"
                     )
+        if self.ambient_simplices:
+            _require_cocycle(
+                self.cochain_degree,
+                self.simplex_values,
+                self.simplex_coefficients,
+                self.ambient_simplices,
+            )
         return self
 
 

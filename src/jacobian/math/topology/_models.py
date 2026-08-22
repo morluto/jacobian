@@ -249,8 +249,9 @@ def _expected_pseudomanifold_decision(
         return _PseudomanifoldExpectation(
             False, False, "not pure: facets have different dimensions"
         )
-    if dim < 1:
-        return _PseudomanifoldExpectation(False, False, "dimension must be at least 1")
+    # Dimension-zero complexes participate in the same incidence definition:
+    # each vertex facet contains exactly one codimension-one face, the empty
+    # face, so one point has it once (boundary) and two points twice (closed).
     counts = _codim1_incidence(facets)
     if any(count > 2 for count in counts.values()):
         for face, count in counts.items():
@@ -1343,6 +1344,11 @@ class ShellingCheckResult(TopologyExactResult):
 
     @model_validator(mode="after")
     def require_shelling_binding(self) -> Self:
+        # Apply the request model's permutation requirement before replay: a
+        # partial or duplicated order visits only its own facets and must not
+        # authenticate a decision about facets it omits.
+        if sorted(self.facet_order) != list(range(len(self.complex.facets))):
+            raise ValueError("facet_order must be a permutation of facet indices")
         # Replay the shelling condition over the retained complex and order so
         # an authored decision cannot validate independently of its source.
         expected_is_shelling, expected_failed_at, expected_reason = _evaluate_shelling(
@@ -1418,9 +1424,33 @@ class ElementaryCollapseRequest(StrictModel):
         return self
 
 
-class ElementaryCollapseResult(TopologyExactResult):
-    """Result of checking one elementary collapse step."""
+def _require_collapse_complex(
+    remaining_facets: tuple[tuple[str, ...], ...],
+    remaining_vertices: tuple[str, ...],
+    remaining_complex: FiniteSimplicialComplex | None,
+) -> None:
+    """Require ``remaining_complex`` to restate the residual facet list."""
 
+    if not remaining_facets:
+        if remaining_complex is not None:
+            raise ValueError("empty collapsed complex must have no remaining_complex")
+        return
+    if remaining_complex is None:
+        raise ValueError("non-empty collapse requires remaining_complex")
+    if tuple(sorted(remaining_complex.maximal_simplices)) != tuple(
+        sorted(tuple(sorted(f)) for f in remaining_facets)
+    ):
+        raise ValueError(
+            "remaining_complex maximal simplices must match remaining_facets"
+        )
+    if tuple(sorted(remaining_complex.vertices)) != tuple(sorted(remaining_vertices)):
+        raise ValueError("remaining_complex vertices must match remaining_vertices")
+
+
+class ElementaryCollapseResult(TopologyExactResult):
+    """Result of checking one elementary collapse step, bound to its source."""
+
+    complex: SimplicialComplexRequest
     is_free_face: bool
     free_face: tuple[str, ...]
     coface: tuple[str, ...]
@@ -1429,39 +1459,50 @@ class ElementaryCollapseResult(TopologyExactResult):
     remaining_complex: FiniteSimplicialComplex | None = None
 
     @model_validator(mode="after")
-    def require_collapse_canonical(self) -> Self:
-        if self.is_free_face:
-            if not self.remaining_facets:
-                if self.remaining_complex is not None:
-                    raise ValueError(
-                        "empty collapsed complex must have no remaining_complex"
-                    )
-                if self.remaining_vertices:
-                    raise ValueError(
-                        "empty collapsed complex must have no remaining_vertices"
-                    )
-            else:
-                if self.remaining_complex is None:
-                    raise ValueError("non-empty collapse requires remaining_complex")
-                if tuple(sorted(self.remaining_complex.maximal_simplices)) != tuple(
-                    sorted(tuple(sorted(f)) for f in self.remaining_facets)
-                ):
-                    raise ValueError(
-                        "remaining_complex maximal simplices must match remaining_facets"
-                    )
-                if tuple(sorted(self.remaining_complex.vertices)) != tuple(
-                    sorted(self.remaining_vertices)
-                ):
-                    raise ValueError(
-                        "remaining_complex vertices must match remaining_vertices"
-                    )
+    def require_collapse_binding(self) -> Self:
+        free_face = tuple(sorted(self.free_face))
+        coface = tuple(sorted(self.coface))
+        if self.free_face != free_face or self.coface != coface:
+            raise ValueError("free_face and coface must use canonical vertex order")
+        if (
+            len(set(free_face)) != len(free_face)
+            or len(set(coface)) != len(coface)
+            or len(coface) != len(free_face) + 1
+            or not set(free_face).issubset(coface)
+        ):
+            raise ValueError("free_face must be codimension-one in coface")
+        # Replay freeness and the residual construction against the retained
+        # source complex so a serialized decision cannot validate on its own.
+        replayed_facets = _collapse_remaining_facets(
+            self.complex.facets, free_face, coface
+        )
+        if replayed_facets is None:
+            if self.is_free_face:
+                raise ValueError(
+                    "is_free_face does not match the retained source complex"
+                )
+            expected_facets = self.complex.facets
+            expected_vertices = self.complex.vertices
         else:
-            # When not a free face, remaining should be unchanged; allow both but
-            # if complex present it must match.
-            if self.remaining_complex is not None and tuple(
-                sorted(self.remaining_complex.maximal_simplices)
-            ) != tuple(sorted(tuple(sorted(f)) for f in self.remaining_facets)):
-                raise ValueError("remaining_complex must match remaining_facets")
+            if not self.is_free_face:
+                raise ValueError(
+                    "is_free_face does not match the retained source complex"
+                )
+            expected_facets = replayed_facets
+            expected_vertices = tuple(
+                sorted({vertex for facet in replayed_facets for vertex in facet})
+            )
+        if tuple(sorted(self.remaining_facets)) != tuple(sorted(expected_facets)):
+            raise ValueError("remaining_facets do not match the source-complex replay")
+        if tuple(sorted(self.remaining_vertices)) != tuple(sorted(expected_vertices)):
+            raise ValueError(
+                "remaining_vertices do not match the source-complex replay"
+            )
+        _require_collapse_complex(
+            self.remaining_facets,
+            self.remaining_vertices,
+            self.remaining_complex,
+        )
         return self
 
 

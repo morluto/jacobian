@@ -1030,24 +1030,16 @@ def compute_pseudomanifold_decision(
             obstruction="not pure: facets have different dimensions",
         )
 
-    # Each codimension-1 face must be in exactly 1 or 2 facets
-    if dim < 1:
-        return PseudomanifoldResult(
-            complex=request.complex,
-            is_pseudomanifold=False,
-            is_closed=False,
-            dimension=dim,
-            num_facets=len(facets),
-            obstruction="dimension must be at least 1",
-        )
-
+    # Each codimension-1 face must be in exactly 1 or 2 facets; for a
+    # dimension-zero complex that face is the empty face, contained once per
+    # vertex facet.
     codim1_count: dict[frozenset[str], int] = {}
     for facet in facets:
         for face in combinations(sorted(facet), len(facet) - 1):
             key = frozenset(face)
             codim1_count[key] = codim1_count.get(key, 0) + 1
 
-    for face, count in codim1_count.items():
+    for codim_face, count in codim1_count.items():
         if count > 2:
             return PseudomanifoldResult(
                 complex=request.complex,
@@ -1055,7 +1047,7 @@ def compute_pseudomanifold_decision(
                 is_closed=False,
                 dimension=dim,
                 num_facets=len(facets),
-                obstruction=f"codim-1 face {sorted(face)} is in {count} facets",
+                obstruction=f"codim-1 face {sorted(codim_face)} is in {count} facets",
             )
 
     is_closed = all(count == 2 for count in codim1_count.values())
@@ -1095,7 +1087,10 @@ def compute_elementary_collapse(
     coface_tuple = tuple(sorted(request.coface))
     free_tuple = tuple(sorted(request.free_face))
 
-    def _collapse_result(is_free: bool, facets, vertices) -> ElementaryCollapseResult:
+    def _collapse_result(
+        is_free: bool,
+        facets: tuple[tuple[str, ...], ...],
+    ) -> ElementaryCollapseResult:
         if facets:
             verts = tuple(sorted({v for f in facets for v in f}))
             rem_facets = tuple(tuple(sorted(f)) for f in facets)
@@ -1106,6 +1101,7 @@ def compute_elementary_collapse(
             rem_vertices = ()
             rem_facets = ()
         return ElementaryCollapseResult(
+            complex=request.complex,
             is_free_face=is_free,
             free_face=free_tuple,
             coface=coface_tuple,
@@ -1116,11 +1112,11 @@ def compute_elementary_collapse(
 
     # Check that free_face is a face of the complex
     if free_tuple not in all_faces_set:
-        return _collapse_result(False, request.complex.facets, request.complex.vertices)
+        return _collapse_result(False, request.complex.facets)
 
     # Check that coface is a facet of the complex
     if coface_tuple not in request.complex.facets:
-        return _collapse_result(False, request.complex.facets, request.complex.vertices)
+        return _collapse_result(False, request.complex.facets)
 
     # Check that free_face is a free face: it is contained in exactly one facet
     containing_facets = [
@@ -1130,10 +1126,10 @@ def compute_elementary_collapse(
     ]
 
     if len(containing_facets) != 1:
-        return _collapse_result(False, request.complex.facets, request.complex.vertices)
+        return _collapse_result(False, request.complex.facets)
 
     if containing_facets[0] != coface_set:
-        return _collapse_result(False, request.complex.facets, request.complex.vertices)
+        return _collapse_result(False, request.complex.facets)
 
     # Perform the collapse: remove all faces sigma with free_face <= sigma <= coface
     # Remaining faces are those not in the interval [free_face, coface]
@@ -1159,6 +1155,7 @@ def compute_elementary_collapse(
         remaining_vertices = ()
         remaining_complex = None
     return ElementaryCollapseResult(
+        complex=request.complex,
         is_free_face=True,
         free_face=free_tuple,
         coface=coface_tuple,

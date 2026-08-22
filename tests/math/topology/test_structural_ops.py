@@ -6,8 +6,10 @@ from pydantic import ValidationError
 from jacobian.math.topology._models import (
     BarycentricSubdivisionRequest,
     ElementaryCollapseRequest,
+    ElementaryCollapseResult,
     JoinRequest,
     PseudomanifoldRequest,
+    PseudomanifoldResult,
     ShellingCheckRequest,
     ShellingCheckResult,
     SkeletonRequest,
@@ -162,6 +164,48 @@ class TestPseudomanifold:
         assert not result.is_pseudomanifold
         assert "pure" in result.obstruction
 
+    def test_single_point_is_pseudomanifold_with_boundary(self) -> None:
+        """The empty codim-1 face lies in one facet: boundary case."""
+        point = {"vertices": ["a"], "facets": [["a"]]}
+        result = compute_pseudomanifold_decision(PseudomanifoldRequest(complex=point))
+        assert result.is_pseudomanifold
+        assert not result.is_closed
+        assert result.dimension == 0
+        assert result.obstruction == "pseudomanifold with boundary"
+
+    def test_two_points_are_closed_zero_dimensional_pseudomanifold(self) -> None:
+        two_points = {"vertices": ["a", "b"], "facets": [["a"], ["b"]]}
+        result = compute_pseudomanifold_decision(
+            PseudomanifoldRequest(complex=two_points)
+        )
+        assert result.is_pseudomanifold
+        assert result.is_closed
+        assert result.obstruction is None
+
+    def test_three_points_fail_incidence(self) -> None:
+        three_points = {
+            "vertices": ["a", "b", "c"],
+            "facets": [["a"], ["b"], ["c"]],
+        }
+        result = compute_pseudomanifold_decision(
+            PseudomanifoldRequest(complex=three_points)
+        )
+        assert not result.is_pseudomanifold
+        assert "3 facets" in result.obstruction
+
+    def test_forged_zero_dimensional_decision_rejected(self) -> None:
+        """A serialized negative decision for a singleton cannot validate."""
+        point = {"vertices": ["a"], "facets": [["a"]]}
+        with pytest.raises(ValidationError, match="is_pseudomanifold"):
+            PseudomanifoldResult(
+                complex=point,
+                is_pseudomanifold=False,
+                is_closed=False,
+                dimension=0,
+                num_facets=1,
+                obstruction="dimension must be at least 1",
+            )
+
 
 class TestShellingCheck:
     def test_valid_shelling_of_single_facet(self) -> None:
@@ -180,6 +224,33 @@ class TestShellingCheck:
     def test_invalid_order(self) -> None:
         with pytest.raises(ValidationError, match="permutation"):
             ShellingCheckRequest(complex=EDGE, facet_order=[1, 0])
+
+    def test_partial_order_cannot_authenticate_decision(self) -> None:
+        """A two-facet complex revalidated with facet_order=[0] must not
+        accept is_shelling=True: the omitted disjoint facet makes the full
+        order non-shelling (review counterexample)."""
+        two_facets = {
+            "vertices": ["a", "b", "c", "d"],
+            "facets": [["a", "b"], ["c", "d"]],
+        }
+        with pytest.raises(ValidationError, match="permutation"):
+            ShellingCheckResult(
+                complex=two_facets,
+                facet_order=[0],
+                is_shelling=True,
+                failed_at=None,
+                failure_reason=None,
+            )
+
+    def test_duplicate_indices_rejected_in_result(self) -> None:
+        with pytest.raises(ValidationError, match="permutation"):
+            ShellingCheckResult(
+                complex=CIRCLE,
+                facet_order=[0, 0, 1],
+                is_shelling=False,
+                failed_at=1,
+                failure_reason="facet 1 restriction is not an interval",
+            )
 
 
 class TestElementaryCollapse:
@@ -218,6 +289,53 @@ class TestElementaryCollapse:
             ElementaryCollapseRequest(
                 complex=EDGE, free_face=["a"], coface=["a", "b", "b"]
             )
+
+    def test_result_binds_to_source_complex_roundtrip(self) -> None:
+        request = ElementaryCollapseRequest(
+            complex=EDGE, free_face=["a"], coface=["a", "b"]
+        )
+        result = compute_elementary_collapse(request)
+        assert result.complex == request.complex
+        assert ElementaryCollapseResult.model_validate(result.model_dump()) == result
+
+    def test_forged_free_face_with_empty_residual_rejected(self) -> None:
+        """A serialized free-face decision with an empty residual cannot
+        validate: collapsing ('a',) from the edge {a, b} must leave {b}
+        (review counterexample)."""
+        with pytest.raises(ValidationError, match="remaining_facets"):
+            ElementaryCollapseResult(
+                complex=EDGE,
+                is_free_face=True,
+                free_face=("a",),
+                coface=("a", "b"),
+                remaining_facets=(),
+                remaining_vertices=(),
+            )
+
+    def test_forged_non_free_decision_rejected(self) -> None:
+        """A free pair replayed against its source must stay positive."""
+        with pytest.raises(ValidationError, match="is_free_face"):
+            ElementaryCollapseResult(
+                complex=EDGE,
+                is_free_face=False,
+                free_face=("a",),
+                coface=("a", "b"),
+                remaining_facets=(("a", "b"),),
+                remaining_vertices=("a", "b"),
+                remaining_complex=None,
+            )
+
+    def test_non_free_result_retains_source_facets(self) -> None:
+        request = ElementaryCollapseRequest(
+            complex=CIRCLE, free_face=["a"], coface=["a", "b"]
+        )
+        result = compute_elementary_collapse(request)
+        assert not result.is_free_face
+        assert tuple(sorted(result.remaining_facets)) == tuple(
+            sorted(tuple(sorted(f)) for f in CIRCLE["facets"])
+        )
+        assert set(result.remaining_vertices) == {"a", "b", "c"}
+        assert ElementaryCollapseResult.model_validate(result.model_dump()) == result
 
 
 class TestJoinBounds:

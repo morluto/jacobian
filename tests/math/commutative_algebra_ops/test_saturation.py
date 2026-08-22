@@ -52,6 +52,35 @@ requires_singular = pytest.mark.skipif(
 )
 
 
+def _ideals_equal(
+    left: RationalPolynomialIdeal, right: RationalPolynomialIdeal
+) -> bool:
+    """Check two ideals are equal via mutual Groebner reduction (independent oracle)."""
+
+    import sympy
+
+    from jacobian.math.polynomials._conversions import (
+        rational_polynomial_to_sympy,
+        symbols_for_variables,
+    )
+
+    assert left.variables == right.variables
+    variables = left.variables
+    symbols = symbols_for_variables(variables)
+    left_exprs = [rational_polynomial_to_sympy(g).as_expr() for g in left.generators]
+    right_exprs = [rational_polynomial_to_sympy(g).as_expr() for g in right.generators]
+    # Groebner bases with the same order give a canonical ideal membership test
+    left_gb = sympy.groebner(left_exprs, *symbols, order="grevlex", domain=sympy.QQ)
+    right_gb = sympy.groebner(right_exprs, *symbols, order="grevlex", domain=sympy.QQ)
+    for expr in left_exprs:
+        if right_gb.reduce(expr)[1] != 0:
+            return False
+    for expr in right_exprs:
+        if left_gb.reduce(expr)[1] != 0:
+            return False
+    return True
+
+
 class TestIdealSaturation:
     @requires_singular
     @pytest.mark.requires_backend("singular")
@@ -64,6 +93,8 @@ class TestIdealSaturation:
         assert result.outcome == "COMPUTED"
         assert result.saturation is not None
         assert result.backend_version is not None
+        expected = _ideal(("x", "y"), {(0, 1): 1})
+        assert _ideals_equal(result.saturation, expected), "saturation <xy>:<x>^inf should be <y>"
 
     @requires_singular
     @pytest.mark.requires_backend("singular")
@@ -75,6 +106,8 @@ class TestIdealSaturation:
         result = compute_ideal_saturation(request)
         assert result.outcome == "COMPUTED"
         assert result.saturation is not None
+        # <x> : <y>^inf = <x> (check ideal equality, not just non-null)
+        assert _ideals_equal(result.saturation, ideal)
 
     @requires_singular
     @pytest.mark.requires_backend("singular")
@@ -86,6 +119,7 @@ class TestIdealSaturation:
         result = compute_ideal_saturation(request)
         assert result.outcome == "COMPUTED"
         assert result.saturation is not None
+        assert _ideals_equal(result.saturation, ideal)
 
     def test_mismatched_rings_rejected(self):
         """Saturation operands must use the same ordered ring."""

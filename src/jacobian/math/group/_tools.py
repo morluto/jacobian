@@ -12,12 +12,15 @@ from jacobian.math.group._models import (
     GroupOrbitRequest,
     GroupOrbitResult,
     GroupOrderResult,
+    GroupStabilizerRequest,
+    GroupStabilizerResult,
     PermutationGroupRequest,
 )
 from jacobian.math.group._operations import (
     compute_element_order,
     compute_group_orbit,
     compute_group_order,
+    compute_group_stabilizer,
 )
 
 
@@ -47,6 +50,8 @@ def group_operation[
         examples=examples,
     )
 
+
+S3_STABILIZER_POINT_0 = {"degree": 3, "generators": [[1, 2, 0], [1, 0, 2]], "point": 0}
 
 GROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     group_operation(
@@ -113,6 +118,34 @@ GROUP_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     "generators": [[1, 2, 3, 0]],
                     "point": 0,
                 },
+            ),
+        ),
+    ),
+    group_operation(
+        "group.stabilizer.compute",
+        "Compute the stabilizer of a point in a permutation group",
+        "Given a permutation group by generators and a point, return generators "
+        "of the point stabilizer subgroup (elements fixing the point) using "
+        "SymPy's stabilizer computation. By the orbit-stabilizer theorem, "
+        "|G| = |orbit(point)| * |stabilizer(point)|, composable with "
+        "group.order.compute and group.orbit.compute.",
+        GroupStabilizerRequest,
+        GroupStabilizerResult,
+        compute_group_stabilizer,
+        "group",
+        "permutation",
+        "stabilizer",
+        "orbit-stabilizer",
+        "exact",
+        examples=(
+            example(
+                "s3_stabilizer_of_0",
+                (
+                    "Stabilizer of point 0 in S3 (generators (1,2,0) and "
+                    "(1,0,2)); the stabilizer has order 2 and orbit-stabilizer "
+                    "gives 6 = 3 * 2. Generators must be permutations of 0..n-1."
+                ),
+                S3_STABILIZER_POINT_0,
             ),
         ),
     ),

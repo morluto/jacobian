@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__all__ = ["element_order", "group_orbit", "group_order"]
+__all__ = ["element_order", "group_orbit", "group_order", "group_stabilizer"]
 
 
 def group_order(degree: int, generators: list[list[int]]) -> int:
@@ -45,3 +45,25 @@ def group_orbit(degree: int, generators: list[list[int]], point: int) -> list[in
     group = PermutationGroup(perms)
     orbit = group.orbit(point)
     return sorted(orbit)
+
+
+def group_stabilizer(
+    degree: int, generators: list[list[int]], point: int
+) -> list[list[int]]:
+    """Return generators of the point stabilizer subgroup.
+
+    The stabilizer of ``point`` is the subgroup of elements fixing ``point``.
+    By the orbit-stabilizer theorem, ``|G| = |orbit(point)| * |stabilizer(point)|``.
+    """
+    from sympy.combinatorics import Permutation, PermutationGroup
+
+    if not 0 <= point < degree:
+        raise ValueError("point must be in 0..n-1")
+    perms = []
+    for perm in generators:
+        if len(perm) != degree or sorted(perm) != list(range(degree)):
+            raise ValueError("each generator must be a permutation of 0..n-1")
+        perms.append(Permutation(list(perm)))
+    group = PermutationGroup(perms)
+    stab = group.stabilizer(point)
+    return [list(g.array_form) for g in stab.generators]

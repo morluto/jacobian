@@ -623,6 +623,60 @@ class ConcyclicQuadruple(StrictModel):
         return self
 
 
+def _triple_collinear(
+    xy: list[tuple[Fraction, Fraction]], i: int, j: int, k: int
+) -> bool:
+    return (
+        (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1])
+        - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
+        == 0
+    )
+
+
+def _quadruple_concyclic(
+    xy: list[tuple[Fraction, Fraction]], i: int, j: int, k: int, ell: int
+) -> bool:
+    # Exclude collinear quadruples: see _operations.forbidden_patterns
+    if (
+        _triple_collinear(xy, i, j, k)
+        and _triple_collinear(xy, i, j, ell)
+        and _triple_collinear(xy, i, k, ell)
+        and _triple_collinear(xy, j, k, ell)
+    ):
+        return False
+    m = [
+        [x * x + y * y, x, y, 1]
+        for x, y in (xy[i], xy[j], xy[k], xy[ell])
+    ]
+    det: Fraction = (
+        m[0][0]
+        * (
+            m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
+            - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
+            + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
+        )
+        - m[0][1]
+        * (
+            m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
+            - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
+            + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
+        )
+        + m[0][2]
+        * (
+            m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
+            - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
+            + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
+        )
+        - m[0][3]
+        * (
+            m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
+            - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
+            + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
+        )
+    )
+    return det == 0
+
+
 class ForbiddenPatternsResult(StrictModel):
     """Result of screening a configuration for forbidden patterns.
 
@@ -651,53 +705,13 @@ class ForbiddenPatternsResult(StrictModel):
         from itertools import combinations
 
         recomputed_collinear = any(
-            (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1])
-            - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
-            == 0
+            _triple_collinear(xy, i, j, k)
             for i, j, k in combinations(range(len(xy)), 3)
         )
-        recomputed_concyclic = False
-        for i, j, k, ell in combinations(range(len(xy)), 4):
-            # Exclude collinear quadruples: see _operations.forbidden_patterns
-            cross_ijk = (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
-            cross_ijl = (xy[j][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
-            cross_ikl = (xy[k][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[k][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
-            cross_jkl = (xy[k][0] - xy[j][0]) * (xy[ell][1] - xy[j][1]) - (xy[k][1] - xy[j][1]) * (xy[ell][0] - xy[j][0])
-            if cross_ijk == 0 and cross_ijl == 0 and cross_ikl == 0 and cross_jkl == 0:
-                continue
-            m = [
-                [x * x + y * y, x, y, 1]
-                for x, y in (xy[i], xy[j], xy[k], xy[ell])
-            ]
-            det = (
-                m[0][0]
-                * (
-                    m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
-                    - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
-                    + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
-                )
-                - m[0][1]
-                * (
-                    m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
-                    - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
-                    + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
-                )
-                + m[0][2]
-                * (
-                    m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
-                    - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
-                    + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
-                )
-                - m[0][3]
-                * (
-                    m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
-                    - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
-                    + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
-                )
-            )
-            if det == 0:
-                recomputed_concyclic = True
-                break
+        recomputed_concyclic = any(
+            _quadruple_concyclic(xy, i, j, k, ell)
+            for i, j, k, ell in combinations(range(len(xy)), 4)
+        )
         if (
             self.has_collinear_triple != recomputed_collinear
             or self.has_concyclic_quadruple != recomputed_concyclic
@@ -710,14 +724,33 @@ class ForbiddenPatternsResult(StrictModel):
             raise ValueError("exactly a collinear triple carries one witness")
         if self.has_concyclic_quadruple is (self.concyclic_quadruple is None):
             raise ValueError("exactly a concyclic quadruple carries one witness")
-        if (
-            self.collinear_triple is not None
-            and self.collinear_triple.third >= self.point_count
-        ):
-            raise ValueError("collinear triple index exceeds configuration")
-        if (
-            self.concyclic_quadruple is not None
-            and self.concyclic_quadruple.fourth >= self.point_count
-        ):
-            raise ValueError("concyclic quadruple index exceeds configuration")
+        self._require_witness_replays(xy)
         return self
+
+    def _require_witness_replays(
+        self, xy: list[tuple[Fraction, Fraction]]
+    ) -> None:
+        if self.collinear_triple is not None:
+            triple = self.collinear_triple
+            if triple.third >= self.point_count:
+                raise ValueError("collinear triple index exceeds configuration")
+            if not _triple_collinear(xy, triple.first, triple.second, triple.third):
+                raise ValueError(
+                    "collinear_triple must replay as collinear over the "
+                    "retained configuration"
+                )
+        if self.concyclic_quadruple is not None:
+            quadruple = self.concyclic_quadruple
+            if quadruple.fourth >= self.point_count:
+                raise ValueError("concyclic quadruple index exceeds configuration")
+            if not _quadruple_concyclic(
+                xy,
+                quadruple.first,
+                quadruple.second,
+                quadruple.third,
+                quadruple.fourth,
+            ):
+                raise ValueError(
+                    "concyclic_quadruple must replay as concyclic over the "
+                    "retained configuration"
+                )

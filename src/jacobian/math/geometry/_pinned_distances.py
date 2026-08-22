@@ -8,10 +8,13 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
+
+_MAX_COORDINATE_COMPONENT_DIGITS = 256
 
 
 class PinnedDistanceRequest(StrictModel):
@@ -21,7 +24,17 @@ class PinnedDistanceRequest(StrictModel):
     points: tuple[RationalPoint2D, ...] = Field(min_length=2, max_length=128)
 
     @model_validator(mode="after")
-    def require_unique_points(self):
+    def require_unique_bounded_points(self):
+        for point in (self.anchor, *self.points):
+            for coord in (point.x, point.y):
+                if (
+                    max(len(coord.num.lstrip("-")), len(coord.den))
+                    > _MAX_COORDINATE_COMPONENT_DIGITS
+                ):
+                    raise ValueError(
+                        "pinned-distance coordinate exceeds the "
+                        f"{_MAX_COORDINATE_COMPONENT_DIGITS}-digit bound"
+                    )
         keys = tuple(
             (p.x.num, p.x.den, p.y.num, p.y.den)
             for p in self.points
@@ -34,8 +47,7 @@ class PinnedDistanceRequest(StrictModel):
 class LineDistanceEntry(StrictModel):
     """One distinct line with its exact squared distance and source pairs."""
 
-    squared_distance_numerator: str
-    squared_distance_denominator: str
+    squared_distance: CanonicalRational
     source_pairs: tuple[tuple[int, int], ...]
 
 
@@ -84,7 +96,7 @@ class PinnedDistanceResult(StrictModel):
                 int_a, int_b, int_c = -int_a, -int_b, -int_c
             return (str(int_a), str(int_b), str(int_c))
 
-        line_map: dict[tuple[str, str, str], tuple[list[tuple[int, int]], str, str]] = {}
+        line_map: dict[tuple[str, str, str], tuple[list[tuple[int, int]], Fraction]] = {}
         for i in range(len(pts)):
             for j in range(i + 1, len(pts)):
                 xi, yi = pts[i]
@@ -98,23 +110,19 @@ class PinnedDistanceResult(StrictModel):
                 sq_dist = Fraction(cross * cross, norm_sq)
                 key = _canonical_line_key(xi, yi, xj, yj)
                 if key not in line_map:
-                    line_map[key] = ([], str(sq_dist.numerator), str(sq_dist.denominator))
+                    line_map[key] = ([], sq_dist)
                 line_map[key][0].append((i, j))
                 # All point pairs collapsing to the same canonical line must share
                 # the exact same squared distance.
-                if (
-                    line_map[key][1] != str(sq_dist.numerator)
-                    or line_map[key][2] != str(sq_dist.denominator)
-                ):
+                if line_map[key][1] != sq_dist:
                     raise ValueError("collinear point pairs must share the same squared distance")
 
         expected_entries: list[LineDistanceEntry] = []
         for key in sorted(line_map.keys()):
-            pairs, num, den = line_map[key]
+            pairs, sq_dist = line_map[key]
             expected_entries.append(
                 LineDistanceEntry(
-                    squared_distance_numerator=num,
-                    squared_distance_denominator=den,
+                    squared_distance=CanonicalRational.from_fraction(sq_dist),
                     source_pairs=tuple(pairs),
                 )
             )
@@ -123,26 +131,20 @@ class PinnedDistanceResult(StrictModel):
             raise ValueError("line count must match the exact pair-spanned lines")
         # Exact line entries must match in sorted-key order.
         for expected, actual in zip(expected_entries, self.lines):
-            if (
-                expected.squared_distance_numerator != actual.squared_distance_numerator
-                or expected.squared_distance_denominator != actual.squared_distance_denominator
-            ):
+            if expected.squared_distance != actual.squared_distance:
                 raise ValueError("squared distance must match the exact pinned distance")
             if set(expected.source_pairs) != set(actual.source_pairs):
                 raise ValueError("source_pairs must cover the exact line pairs")
             if tuple(sorted(actual.source_pairs)) != actual.source_pairs:
                 raise ValueError("source_pairs must be sorted")
         if self.lines:
-            min_entry = min(self.lines, key=lambda e: Fraction(
-                int(e.squared_distance_numerator),
-                int(e.squared_distance_denominator),
-            ))
+            min_entry = min(
+                self.lines,
+                key=lambda entry: entry.squared_distance.as_fraction(),
+            )
             if self.min_squared_distance is None:
                 raise ValueError("min_squared_distance is required when lines exist")
-            if (
-                self.min_squared_distance.squared_distance_numerator != min_entry.squared_distance_numerator
-                or self.min_squared_distance.squared_distance_denominator != min_entry.squared_distance_denominator
-            ):
+            if self.min_squared_distance != min_entry:
                 raise ValueError("min_squared_distance must be the minimum entry")
         else:
             if self.min_squared_distance is not None:
@@ -195,7 +197,7 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
         )
 
     line_map: dict[
-        tuple[str, str, str], tuple[list[tuple[int, int]], str, str]
+        tuple[str, str, str], tuple[list[tuple[int, int]], Fraction]
     ] = {}
 
     for i in range(len(pts)):
@@ -212,27 +214,22 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
             sq_dist = Fraction(cross * cross, norm_sq)
             key = _canonical_line_key(xi, yi, xj, yj)
             if key not in line_map:
-                line_map[key] = (
-                    [],
-                    str(sq_dist.numerator),
-                    str(sq_dist.denominator),
-                )
+                line_map[key] = ([], sq_dist)
             line_map[key][0].append((i, j))
 
     entries = []
     for key in sorted(line_map.keys()):
-        pairs, num, den = line_map[key]
+        pairs, sq_dist = line_map[key]
         entry = LineDistanceEntry(
-            squared_distance_numerator=num,
-            squared_distance_denominator=den,
+            squared_distance=CanonicalRational.from_fraction(sq_dist),
             source_pairs=tuple(pairs),
         )
         entries.append(entry)
 
-    min_entry = min(entries, key=lambda e: Fraction(
-        int(e.squared_distance_numerator),
-        int(e.squared_distance_denominator),
-    )) if entries else None
+    min_entry = min(
+        entries,
+        key=lambda entry: entry.squared_distance.as_fraction(),
+    ) if entries else None
 
     return PinnedDistanceResult(
         anchor=request.anchor,

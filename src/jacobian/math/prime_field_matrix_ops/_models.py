@@ -10,6 +10,7 @@ from jacobian._models import StrictModel
 from jacobian.math.prime_field_linear_algebra import (
     PrimeFieldMatrix,
     nullspace,
+    rank,
     rref,
 )
 
@@ -67,16 +68,18 @@ class RankRequest(StrictModel):
         return self
 
 
-class RankResult(StrictModel):
+class RankResult(RankRequest):
     rank: int = Field(ge=0)
-    prime: int = Field(ge=2)
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_RANK"] = "EXACT_DOMAIN_MATRIX_RANK"
 
     @model_validator(mode="after")
     def bind_rank(self) -> Self:
-        if self.rank > MAX_DIMENSION:
-            raise ValueError("rank exceeds the supported dimension bound")
+        matrix = PrimeFieldMatrix(
+            prime=self.prime, entries=self.entries, columns=self.columns
+        )
+        if self.rank != rank(matrix):
+            raise ValueError("rank must be the exact rank of the retained matrix")
         return self
 
 

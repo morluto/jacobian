@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, WithJsonSchema, model_validator
+from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -13,6 +14,26 @@ MAX_EDGE_COLORING_VERTICES = 20
 MAX_EDGE_COLORING_EDGES = (
     MAX_EDGE_COLORING_VERTICES * (MAX_EDGE_COLORING_VERTICES - 1) // 2
 )
+
+
+def _edge_coloring_graph_schema() -> JsonSchemaValue:
+    """Project the edge-coloring input bounds onto the shared graph schema."""
+
+    schema = SimpleUndirectedGraph.model_json_schema()
+    schema["description"] = (
+        "A simple undirected graph accepted by the edge-coloring operations: "
+        f"at most {MAX_EDGE_COLORING_VERTICES} vertices and at most "
+        f"{MAX_EDGE_COLORING_EDGES} edges."
+    )
+    schema["properties"]["vertices"].update(maxItems=MAX_EDGE_COLORING_VERTICES)
+    schema["properties"]["edges"].update(maxItems=MAX_EDGE_COLORING_EDGES)
+    return schema
+
+
+EdgeColoringGraph = Annotated[
+    SimpleUndirectedGraph,
+    WithJsonSchema(_edge_coloring_graph_schema()),
+]
 
 
 def _incident_edge_index_pairs_for_canonical_graph(
@@ -177,7 +198,7 @@ class MaximalIndependentSetResult(StrictModel):
 class EdgeKColorabilityRequest(StrictModel):
     """Decide whether a simple graph admits a proper ``k``-edge-coloring."""
 
-    graph: SimpleUndirectedGraph
+    graph: EdgeColoringGraph
     colors: StrictInt = Field(ge=1, le=20)
 
     @model_validator(mode="after")
@@ -223,7 +244,7 @@ class EdgeKColorabilityResult(StrictModel):
                 raise ValueError(
                     "empty graph is k-edge-colorable but result claims not colorable"
                 )
-            import z3
+            import z3  # type: ignore[import-untyped]
 
             solver = z3.Solver()
             edge_colors = [z3.Int(f"c_{i}") for i in range(len(self.graph.edges))]
@@ -240,7 +261,7 @@ class EdgeKColorabilityResult(StrictModel):
 class EdgeColoringCheckRequest(StrictModel):
     """Validate a submitted edge-to-color assignment as a proper edge coloring."""
 
-    graph: SimpleUndirectedGraph
+    graph: EdgeColoringGraph
     colors: StrictInt = Field(ge=1, le=20)
     coloring: tuple[StrictInt, ...] = Field(
         max_length=MAX_EDGE_COLORING_EDGES,

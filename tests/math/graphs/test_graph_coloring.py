@@ -212,6 +212,83 @@ class TestEdgeKColorability:
         )
 
 
+class TestEdgeColoringRequestSchema:
+    MAX_VERTICES = 20
+
+    def _path_graph(self, vertex_count: int):
+        from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+        labels = tuple(f"{index:02d}" for index in range(vertex_count))
+        edges = tuple((labels[i], labels[i + 1]) for i in range(vertex_count - 1))
+        return SimpleUndirectedGraph(vertices=labels, edges=edges)
+
+    def test_published_schema_advertises_operation_specific_bounds(self):
+        from jacobian.math.graphs.coloring._models import (
+            EdgeColoringCheckRequest,
+            EdgeKColorabilityRequest,
+        )
+
+        for model in (EdgeKColorabilityRequest, EdgeColoringCheckRequest):
+            graph_schema = model.model_json_schema()["properties"]["graph"]
+            assert (
+                graph_schema["properties"]["vertices"]["maxItems"] == self.MAX_VERTICES
+            )
+            assert graph_schema["properties"]["edges"]["maxItems"] == 190
+            assert "at most 20 vertices" in graph_schema["description"]
+
+    def test_both_requests_project_the_same_graph_schema(self):
+        from jacobian.math.graphs.coloring._models import (
+            EdgeColoringCheckRequest,
+            EdgeKColorabilityRequest,
+        )
+
+        decide = EdgeKColorabilityRequest.model_json_schema()
+        check = EdgeColoringCheckRequest.model_json_schema()
+        assert decide["properties"]["graph"] == check["properties"]["graph"]
+
+    def test_21_vertex_graph_is_schema_bound_and_validator_rejected(self):
+        from jacobian.math.graphs.coloring._models import (
+            EdgeColoringCheckRequest,
+            EdgeKColorabilityRequest,
+        )
+
+        g = self._path_graph(21)
+        assert len(g.vertices) == 21 < 256
+        payload = {"graph": g.model_dump(), "colors": 3}
+        with pytest.raises(ValidationError, match="at most 20 vertices"):
+            EdgeKColorabilityRequest.model_validate(payload)
+        with pytest.raises(ValidationError, match="at most 20 vertices"):
+            EdgeColoringCheckRequest.model_validate(
+                {**payload, "coloring": tuple(range(20))}
+            )
+
+    def test_direct_construction_still_enforces_vertex_bound(self):
+        from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
+
+        with pytest.raises(ValidationError, match="at most 20 vertices"):
+            EdgeKColorabilityRequest(graph=self._path_graph(21), colors=3)
+
+    def test_20_vertex_boundary_request_is_admitted(self):
+        from jacobian.math.graphs.coloring._models import (
+            EdgeColoringCheckRequest,
+            EdgeKColorabilityRequest,
+        )
+        from jacobian.math.graphs.coloring._operations import (
+            compute_edge_coloring_check,
+            compute_edge_k_colorability,
+        )
+
+        g = self._path_graph(20)
+        decided = compute_edge_k_colorability(
+            EdgeKColorabilityRequest(graph=g, colors=2)
+        )
+        assert decided.colorable is True
+        checked = compute_edge_coloring_check(
+            EdgeColoringCheckRequest(graph=g, colors=2, coloring=(0, 1) * 9 + (0,))
+        )
+        assert checked.proper is True
+
+
 class TestEdgeColoringCheck:
     def _petersen(self):
         from jacobian.math.graphs.values import SimpleUndirectedGraph

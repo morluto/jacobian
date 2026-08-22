@@ -707,6 +707,7 @@ class CircumradiusProfileResult(StrictModel):
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1, max_length=41664)
     radius_multiplicities: tuple[tuple[CanonicalRational, StrictInt], ...] = Field(
         default=(),
+        max_length=41664,
         description=(
             "Distinct positive squared circumradii of the nondegenerate "
             "triples with their multiplicities, sorted ascending by value; "

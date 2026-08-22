@@ -290,6 +290,36 @@ class TestCatalogContractParity:
                 nondegenerate_triple_count=1,
             )
 
+    def test_multiplicity_ledger_is_schema_bounded_before_validation(self):
+        from jacobian.math.geometry._models import CircumradiusProfileResult
+
+        schema = (
+            CircumradiusProfileResult.model_json_schema()["properties"][
+                "radius_multiplicities"
+            ]["maxItems"]
+        )
+        assert schema == 41664
+        forged = tuple(
+            (CanonicalRational(num=str(index), den="1"), 1)
+            for index in range(41665)
+        )
+        with pytest.raises(ValidationError, match="at most 41664 items"):
+            CircumradiusProfileResult(
+                configuration=_request(
+                    (
+                        _lp("a", "0", "1", "0", "1"),
+                        _lp("b", "2", "1", "0", "1"),
+                        _lp("c", "0", "1", "2", "1"),
+                    )
+                ),
+                point_count=3,
+                triple_count=1,
+                entries=(),
+                radius_multiplicities=forged,
+                degenerate_triple_count=0,
+                nondegenerate_triple_count=1,
+            )
+
     def test_collinear_triple_is_degenerate(self):
         pts = (
             _lp("a", "0", "1", "0", "1"),

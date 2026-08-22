@@ -240,16 +240,21 @@ class FixedLengthCycleResult(StrictModel):
             if self.cycle:
                 raise ValueError("a DOES_NOT_EXIST result must not carry a witness")
             # A negative conclusion is exact only inside the bounded request
-            # domain; mirror that admission, then replay the exhaustive
-            # decision against the retained graph before accepting it.
+            # domain; reject out-of-domain lengths BEFORE any work bound is
+            # exponentiated, then mirror the admission and replay the
+            # exhaustive decision against the retained graph.
             n = len(self.graph.vertices)
+            if self.length > n:
+                raise ValueError("cycle length must not exceed the vertex count")
+            if self.length > MORPHISM_MAX_VERTICES or n > MORPHISM_MAX_VERTICES:
+                raise ValueError(
+                    "a DOES_NOT_EXIST decision requires the retained source "
+                    f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
+                    f"{MAX_CYCLE_SEARCH_PATHS}-path request budget"
+                )
             d_max = _canonical_max_degree(self.graph)
             work = n * (d_max ** (self.length - 1))
-            if (
-                self.length > n
-                or n > MORPHISM_MAX_VERTICES
-                or work > MAX_CYCLE_SEARCH_PATHS
-            ):
+            if work > MAX_CYCLE_SEARCH_PATHS:
                 raise ValueError(
                     "a DOES_NOT_EXIST decision requires the retained source "
                     f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "

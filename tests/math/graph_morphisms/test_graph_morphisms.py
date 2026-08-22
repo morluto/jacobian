@@ -265,6 +265,27 @@ class TestFixedLengthCycle:
                 graph=triangle, decision="DOES_NOT_EXIST", length=3, cycle=()
             )
 
+    def test_oversized_length_is_rejected_before_exponentiating(self):
+        import time
+
+        import pytest
+
+        from jacobian.math.graphs.morphisms._models import FixedLengthCycleResult
+
+        # length has no schema upper bound on results, so the replay
+        # validator must reject out-of-domain lengths before raising
+        # d_max to that power.
+        triangle = self._g(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]])
+        start = time.monotonic()
+        with pytest.raises(ValueError, match="vertex count"):
+            FixedLengthCycleResult(
+                graph=triangle,
+                decision="DOES_NOT_EXIST",
+                length=10_000_000_000,
+                cycle=(),
+            )
+        assert time.monotonic() - start < 1.0
+
     def test_negative_decision_replays_inside_request_domain(self):
         from itertools import combinations
 

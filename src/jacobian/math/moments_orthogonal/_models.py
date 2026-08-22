@@ -290,7 +290,10 @@ class GaussianQuadratureResult(GaussianQuadratureRequest):
     nodes: tuple[CanonicalRational, ...]
     weights: tuple[CanonicalRational, ...]
     complete: Literal[True] = True
-    method: Literal["GOLUB_WELSCH"] = "GOLUB_WELSCH"
+    method: Literal["GOLUB_WELSCH_FLOAT64_APPROX"] = "GOLUB_WELSCH_FLOAT64_APPROX"
+    is_approximate: Literal[True] = True
+    precision: Literal["FLOAT64"] = "FLOAT64"
+    exactness: Literal["APPROXIMATE_DYADIC"] = "APPROXIMATE_DYADIC"
 
     @model_validator(mode="after")
     def bind_gaussian_quadrature(self) -> Self:

@@ -248,13 +248,15 @@ def christoffel_darboux(
 def gaussian_quadrature(
     alpha: Sequence[Fraction], beta: Sequence[Fraction]
 ) -> GaussianQuadrature:
-    """Compute Gaussian quadrature nodes and weights via the Golub-Welsch algorithm.
+    """Compute approximate Gaussian quadrature nodes and weights via the Golub-Welsch algorithm.
 
     The nodes are the eigenvalues of the symmetric tridiagonal Jacobi matrix and
     the weights are ``mu_0 * v_{0,i}^2`` where ``v_{0,i}`` is the first component of
     the normalized eigenvector for node ``i``. Because the nodes are roots of the
     orthogonal polynomial (generically irrational), the result is numerical
-    (IEEE double).
+    (IEEE double) and returned as dyadic rational approximations with an
+    explicit ``is_approximate`` / ``FLOAT64`` precision contract. Downstream
+    exact arithmetic must not treat these as canonical exact nodes.
     """
     import math
 
@@ -288,6 +290,8 @@ def gaussian_quadrature(
     return GaussianQuadrature(
         nodes=tuple(Fraction(float(v)) for v in eigenvalues),
         weights=tuple(Fraction(float(w)) for w in weights),
+        is_approximate=True,
+        precision="FLOAT64",
     )
 
 

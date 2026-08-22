@@ -41,7 +41,19 @@ def decide_fixed_length_cycle(
     budget = _NodeBudget()
 
     for start in range(n):
-        found = _search_cycle_from(g, start, k, budget)
+        try:
+            found = _search_cycle_from(g, start, k, budget)
+        except _BudgetExceededError:
+            return FixedLengthCycleResult(
+                graph=request.graph,
+                vertex_count=n,
+                length=k,
+                outcome="SEARCH_BUDGET_EXCEEDED",
+                detail=(
+                    f"cycle search exceeded {MAX_SEARCH_NODES} recursion "
+                    "nodes without deciding"
+                ),
+            )
         if found is not None:
             return FixedLengthCycleResult(
                 graph=request.graph,
@@ -103,6 +115,8 @@ def _search_cycle_from(
 
     def dfs(depth: int) -> list[int] | None:
         budget.tick()
+        if budget.exceeded():
+            raise _BudgetExceededError()
         if depth == k:
             if start in g.neighbors(path[-1]):
                 return list(path)

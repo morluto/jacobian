@@ -6,13 +6,44 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math._rational_height import RationalHeight, sum_heights
 
 
 class RationalPoint2D(StrictModel):
     x: CanonicalRational
     y: CanonicalRational
+
+
+def _inversion_height_bound_ok(
+    center_x: CanonicalRational,
+    center_y: CanonicalRational,
+    power: CanonicalRational,
+    point_x: CanonicalRational,
+    point_y: CanonicalRational,
+) -> bool:
+    """Conservative admission for inversion growth.
+
+    Uses RationalHeight to estimate result digits of
+    q = c + (s/||p-c||^2)*(p-c).  Requires that both inverted coordinates
+    stay within MAX_CANONICAL_RATIONAL_DIGITS. Also enforces half-digit
+    input bound so domain is symmetric under involution.
+    """
+    half = MAX_CANONICAL_RATIONAL_DIGITS // 2
+    for v in (center_x, center_y, point_x, point_y, power):
+        if RationalHeight.from_canonical(v).exceeds(half):
+            return False
+    # Estimate heights
+    def _disp(a: CanonicalRational, b: CanonicalRational) -> RationalHeight:
+        return sum_heights((RationalHeight.from_canonical(a), RationalHeight.from_canonical(b)))
+    dx = _disp(point_x, center_x)
+    dy = _disp(point_y, center_y)
+    norm2 = sum_heights((dx.product(dx), dy.product(dy)))
+    scale = RationalHeight.from_canonical(power).quotient(norm2)
+    hx = sum_heights((RationalHeight.from_canonical(center_x), scale.product(dx)))
+    hy = sum_heights((RationalHeight.from_canonical(center_y), scale.product(dy)))
+    return not hx.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) and not hy.exceeds(MAX_CANONICAL_RATIONAL_DIGITS)
 
 
 class CircleInversionRequest(StrictModel):
@@ -41,6 +72,13 @@ class CircleInversionRequest(StrictModel):
             and self.point_y.as_fraction() == self.center_y.as_fraction()
         ):
             raise ValueError("the inversion center cannot be inverted")
+        if not _inversion_height_bound_ok(
+            self.center_x, self.center_y, self.power, self.point_x, self.point_y
+        ):
+            raise ValueError(
+                "circle inversion inputs exceed the conservative height bound; "
+                f"each coordinate/power must be within {MAX_CANONICAL_RATIONAL_DIGITS//2} digits and result within {MAX_CANONICAL_RATIONAL_DIGITS} digits"
+            )
         return self
 
 

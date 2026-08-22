@@ -51,10 +51,18 @@ class GaussianQuadrature:
     The Golub-Welsch eigenvalue decomposition runs in IEEE doubles; each
     returned value is the exact dyadic rational image of one computed double,
     so results stay canonical and reconstructible without JSON floats.
+
+    The nodes and weights are *approximate* floating-point approximations of
+    the exact Gaussian quadrature rule: the exact nodes are algebraic numbers
+    (roots of the orthogonal polynomial) and generally irrational.  The result
+    carries an explicit approximation contract via ``is_approximate`` and
+    ``precision`` and must not be treated as exact rational nodes.
     """
 
     nodes: tuple[Fraction, ...]
     weights: tuple[Fraction, ...]
+    is_approximate: bool = True
+    precision: str = "FLOAT64"
 
 
 __all__ = [

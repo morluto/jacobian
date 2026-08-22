@@ -87,6 +87,10 @@ class FixedLengthCycleResult(SearchOutcome):
 
     @model_validator(mode="after")
     def bind_witness(self) -> Self:
+        if self.graph.vertex_count != self.vertex_count:
+            raise ValueError("vertex_count must match graph.vertex_count")
+        if self.length > self.graph.vertex_count:
+            raise ValueError("cycle length cannot exceed vertex count")
         if self.outcome != "DECIDED":
             if self.exists is not None or self.cycle is not None:
                 raise ValueError(
@@ -113,6 +117,44 @@ class FixedLengthCycleResult(SearchOutcome):
                     raise ValueError(
                         "witness cycle must replay as edges of the source graph"
                     )
+        else:
+            # Negative decision: replay exhaustive bounded search to ensure no k-cycle exists.
+            # Perform a direct DFS without constructing a validated result to avoid recursion.
+            import networkx as nx
+
+            def _has_cycle_bruteforce() -> bool:
+                g = nx.Graph()
+                g.add_nodes_from(range(self.graph.vertex_count))
+                for a,b in self.graph.edges:
+                    g.add_edge(a,b)
+                k = self.length
+                n = self.graph.vertex_count
+                # Simple backtracking per start, same as operation but without budget tracking and without result validation.
+                for start in range(n):
+                    path = [start]
+                    visited = {start}
+                    stack = [(start, 1, iter(sorted(g.neighbors(start))))]  # not simple, use recursion
+
+                    # Use recursive helper
+                    def dfs(depth: int, path: list[int], visited: set[int]) -> bool:
+                        if depth == k:
+                            return start in g.neighbors(path[-1])
+                        cur = path[-1]
+                        for nb in sorted(g.neighbors(cur)):
+                            if nb in visited or nb <= start:
+                                continue
+                            visited.add(nb)
+                            path.append(nb)
+                            if dfs(depth+1, path, visited):
+                                return True
+                            path.pop()
+                            visited.remove(nb)
+                        return False
+                    if dfs(1, path, visited):
+                        return True
+                return False
+            if _has_cycle_bruteforce():
+                raise ValueError("negative cycle decision contradicts exhaustive search: a k-cycle exists")
         return self
 
 
@@ -188,6 +230,37 @@ class SubgraphPatternResult(SearchOutcome):
                     raise ValueError(
                         "embedding must preserve every pattern edge in the host"
                     )
+        else:
+            # Negative embedding: brute-force check that no injective edge-preserving mapping exists.
+            import networkx as nx
+            host_g = nx.Graph()
+            host_g.add_nodes_from(range(self.host_graph.vertex_count))
+            for a,b in self.host_graph.edges:
+                host_g.add_edge(a,b)
+            pat_g = nx.Graph()
+            pat_g.add_nodes_from(range(self.pattern_graph.vertex_count))
+            for a,b in self.pattern_graph.edges:
+                pat_g.add_edge(a,b)
+            # Brute force: try all injective mappings (permutations) for small graphs
+            import itertools
+            host_vertices = list(range(self.host_graph.vertex_count))
+            pat_vertices = list(range(self.pattern_graph.vertex_count))
+            host_edge_set = {(min(a,b), max(a,b)) for a,b in self.host_graph.edges}
+            pat_edges = list(self.pattern_graph.edges)
+            found = False
+            for perm in itertools.permutations(host_vertices, len(pat_vertices)):
+                mapping = dict(zip(pat_vertices, perm))
+                ok = True
+                for a,b in pat_edges:
+                    ha, hb = mapping[a], mapping[b]
+                    if (min(ha,hb), max(ha,hb)) not in host_edge_set:
+                        ok = False
+                        break
+                if ok:
+                    found = True
+                    break
+            if found:
+                raise ValueError("negative subgraph decision contradicts existence of an embedding")
         return self
 
 

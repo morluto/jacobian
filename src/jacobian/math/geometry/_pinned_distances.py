@@ -15,7 +15,6 @@ from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
 
-
 # With per-component digit bound d, each squared-distance fraction carries at
 # most 8d+6 numerator and denominator digits, so d = 2048 keeps every exact
 # entry inside the canonical 32,768-digit limit before execution and safely
@@ -234,8 +233,8 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
             if key not in line_map:
                 line_map[key] = (
                     [],
-                    str(sq_dist.numerator),
-                    str(sq_dist.denominator),
+                    format_canonical_integer(sq_dist.numerator),
+                    format_canonical_integer(sq_dist.denominator),
                 )
             line_map[key][0].append((i, j))
 

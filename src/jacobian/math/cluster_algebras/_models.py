@@ -132,16 +132,27 @@ class SeedMutationRequest(StrictModel):
 class SeedMutationResult(StrictModel):
     """The mutated exchange matrix after applying the Fomin-Zelevinsky mutation."""
 
+    source_exchange_matrix: ExchangeMatrix
     exchange_matrix: ExchangeMatrix
     mutation_index: int = Field(ge=0)
 
     @model_validator(mode="after")
-    def require_source_bound_index(self) -> Self:
-        # Revalidated results must carry the same source-bound invariant as
-        # the request: the index cannot describe a mutation of a matrix it
-        # does not range over.
+    def require_source_bound_mutation(self) -> Self:
+        from jacobian.math.cluster_algebras._operations import (
+            _mutation_of,
+        )
+
         if self.mutation_index >= self.exchange_matrix.n:
             raise ValueError("mutation_index must be in 0..n-1")
+        if self.mutation_index >= self.source_exchange_matrix.n:
+            raise ValueError("mutation_index must be in 0..n-1")
+        # Replay the Fomin-Zelevinsky relation against the retained source.
+        expected = _mutation_of(self.source_exchange_matrix, self.mutation_index)
+        if self.exchange_matrix != expected:
+            raise ValueError(
+                "exchange_matrix must be the exact mutation of the retained "
+                "source matrix"
+            )
         return self
 
 

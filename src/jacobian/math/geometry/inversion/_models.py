@@ -65,7 +65,6 @@ class CircleInversionRequest(StrictModel):
         # fit in CanonicalRational (<=32768 digits). The computation q = c + s*(p-c)/|p-c|^2
         # can at most quadruple digit size; with each input capped at 4096 the
         # result stays well below the limit, and we also verify explicitly.
-        from fractions import Fraction
 
         cx, cy = self.center_x.as_fraction(), self.center_y.as_fraction()
         s = self.power.as_fraction()

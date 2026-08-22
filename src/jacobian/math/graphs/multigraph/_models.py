@@ -271,21 +271,82 @@ class MultigraphFlowCheckRequest(StrictModel):
 
 
 class MultigraphFlowCheckResult(StrictModel):
-    """Exact per-vertex conservation ledger for a submitted flow.
+    """Exact per-vertex conservation ledger for a submitted flow, bound to its source.
 
-    ``edge_flow_records`` are the canonical oriented edge-flow records.  The
-    ``divergence_ledger`` gives the per-vertex signed divergence.  ``zero_edge_ids``
-    lists edges assigned the zero group element.  ``nowhere_zero`` is true
-    when no edge is zero.  ``conservation_holds`` is true when every vertex
-    has zero divergence.
+    ``graph`` and ``group`` bind the conclusion to the checked request so the
+    ledger, zero-edge set, and booleans remain reconstructible.
     """
 
     result_schema_version: Literal["1"] = "1"
+    graph: LooplessMultigraph
+    group: FiniteAbelianGroup
     edge_flow_records: tuple[FlowEdgeAssignment, ...] = Field(max_length=MAX_EDGES)
     divergence_ledger: tuple[VertexDivergence, ...] = Field(max_length=MAX_VERTICES)
     zero_edge_ids: tuple[StrictStr, ...] = Field(max_length=MAX_EDGES)
     nowhere_zero: bool
     conservation_holds: bool
+
+    @model_validator(mode="after")
+    def require_bound_flow_check(self) -> Self:
+        # Validate that edge_flow_records cover exactly graph edges
+        graph_ids = self.graph.edge_id_set
+        record_ids = {r.edge_id for r in self.edge_flow_records}
+        if graph_ids != record_ids:
+            raise ValueError("edge_flow_records must cover exactly graph edges")
+        if len(record_ids) != len(self.edge_flow_records):
+            raise ValueError("edge_flow_records must not repeat edge IDs")
+        for rec in self.edge_flow_records:
+            if len(rec.value) != self.group.rank:
+                raise ValueError("flow value rank must match group rank")
+            if any(c >= m for c, m in zip(rec.value, self.group.moduli, strict=True)):
+                raise ValueError("flow value coordinates must be below moduli")
+            if any(c < 0 for c in rec.value):
+                raise ValueError("flow values must be non-negative")
+        # Recompute divergence ledger
+        vertex_out: dict[int, list[tuple[int, ...]]] = {
+            v: [] for v in range(self.graph.vertex_count)
+        }
+        vertex_in: dict[int, list[tuple[int, ...]]] = {
+            v: [] for v in range(self.graph.vertex_count)
+        }
+        vertex_incident: dict[int, set[str]] = {
+            v: set() for v in range(self.graph.vertex_count)
+        }
+        for rec in self.edge_flow_records:
+            edge = self.graph.edge_by_id(rec.edge_id)
+            tail, head = (edge.left, edge.right) if rec.orientation == "left_to_right" else (edge.right, edge.left)
+            val = self.group.normalize(rec.value)
+            vertex_out[tail].append(val)
+            vertex_in[head].append(val)
+            vertex_incident[tail].add(rec.edge_id)
+            vertex_incident[head].add(rec.edge_id)
+        expected_ledger: list[VertexDivergence] = []
+        expected_conservation = True
+        for v in range(self.graph.vertex_count):
+            out_sum = self.group.sum(tuple(vertex_out[v]))
+            in_sum = self.group.sum(tuple(vertex_in[v]))
+            div = self.group.add(out_sum, self.group.negate(in_sum))
+            holds = self.group.is_zero(div)
+            if not holds:
+                expected_conservation = False
+            expected_ledger.append(
+                VertexDivergence(
+                    vertex=v,
+                    coordinates=div,
+                    incident_edge_ids=tuple(sorted(vertex_incident[v])),
+                    conservation_holds=holds,
+                )
+            )
+        if tuple(expected_ledger) != self.divergence_ledger:
+            raise ValueError("divergence_ledger does not match recomputed ledger")
+        if self.conservation_holds != expected_conservation:
+            raise ValueError("conservation_holds does not match recomputed value")
+        expected_zero = tuple(sorted(rec.edge_id for rec in self.edge_flow_records if self.group.is_zero(rec.value)))
+        if self.zero_edge_ids != expected_zero:
+            raise ValueError("zero_edge_ids does not match recomputed zero set")
+        if self.nowhere_zero != (len(expected_zero) == 0):
+            raise ValueError("nowhere_zero does not match zero_edge set")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -327,15 +388,12 @@ class MultigraphFlowFindRequest(StrictModel):
 
 
 class MultigraphFlowFindResult(StrictModel):
-    """Outcome of a bounded finite-Abelian flow search.
-
-    ``status`` is one of ``FOUND``, ``EXHAUSTED``, ``UNKNOWN``.  When ``FOUND``,
-    ``flow`` is the witness (checked before return).  When ``EXHAUSTED`` the
-    complete declared finite search space was covered and no flow exists.
-    When ``UNKNOWN`` the resource limit was hit before completion.
-    """
+    """Outcome of a bounded finite-Abelian flow search, bound to its source request."""
 
     result_schema_version: Literal["1"] = "1"
+    graph: LooplessMultigraph | None = None
+    group: FiniteAbelianGroup | None = None
+    resource_budget: MultigraphFlowSearchBudget | None = None
     status: Literal["FOUND", "EXHAUSTED", "UNKNOWN"]
     flow: tuple[FlowEdgeAssignment, ...] | None = Field(
         default=None, max_length=MAX_EDGES
@@ -367,6 +425,43 @@ class MultigraphFlowFindResult(StrictModel):
                 raise ValueError("UNKNOWN status must not include a flow")
             if self.termination_reason != "STATE_BUDGET_EXCEEDED":
                 raise ValueError("UNKNOWN status requires STATE_BUDGET_EXCEEDED")
+        # If source is bound, validate budget and witness
+        if self.graph is not None and self.group is not None and self.resource_budget is not None:
+            if self.states_explored > self.resource_budget.max_states:
+                raise ValueError("states_explored exceeds resource budget")
+            if self.status == "FOUND" and self.flow is not None:
+                # Validate flow witness is a valid flow for graph/group
+                from jacobian.math.graphs.multigraph._models import MultigraphFlowCheckRequest
+
+                # Check that flow covers all edges and respects group
+                req = MultigraphFlowCheckRequest(
+                    graph=self.graph, group=self.group, edge_values=self.flow
+                )
+                # Check conservation and nowhere_zero if required
+                # Recompute via check logic without recursion
+                graph_ids = self.graph.edge_id_set
+                assigned = {a.edge_id for a in self.flow}
+                if graph_ids != assigned:
+                    raise ValueError("FOUND flow must assign every graph edge")
+                # Check budget's nowhere_zero requirement if present
+                if self.resource_budget.require_nowhere_zero:
+                    for a in self.flow:
+                        if self.group.is_zero(a.value):
+                            raise ValueError("FOUND flow violates nowhere_zero requirement")
+                # Conservation check via group
+                vertex_out: dict[int, list[tuple[int, ...]]] = {v: [] for v in range(self.graph.vertex_count)}
+                vertex_in: dict[int, list[tuple[int, ...]]] = {v: [] for v in range(self.graph.vertex_count)}
+                for a in self.flow:
+                    edge = self.graph.edge_by_id(a.edge_id)
+                    tail, head = (edge.left, edge.right) if a.orientation == "left_to_right" else (edge.right, edge.left)
+                    val = self.group.normalize(a.value)
+                    vertex_out[tail].append(val)
+                    vertex_in[head].append(val)
+                for v in range(self.graph.vertex_count):
+                    out_sum = self.group.sum(tuple(vertex_out[v]))
+                    in_sum = self.group.sum(tuple(vertex_in[v]))
+                    if not self.group.is_zero(self.group.add(out_sum, self.group.negate(in_sum))):
+                        raise ValueError("FOUND flow does not satisfy conservation")
         return self
 
 
@@ -432,18 +527,59 @@ class CycleRecord(StrictModel):
 
 
 class EulerianCyclesResult(StrictModel):
-    """Deterministic edge-disjoint cycle decomposition and edge-usage profile.
-
-    ``cycles`` are edge-disjoint and together cover every edge in the
-    requested edge subset exactly once.  ``edge_usage`` maps each covered
-    edge ID to its multiplicity (always 1 for a decomposition).  ``covers_all``
-    is true when every requested edge appears in some cycle.
-    """
+    """Deterministic edge-disjoint cycle decomposition, bound to its source edge set."""
 
     result_schema_version: Literal["1"] = "1"
+    graph: LooplessMultigraph | None = None
+    edge_subset: tuple[StrictStr, ...] | None = Field(default=None, max_length=MAX_EDGES)
     cycles: tuple[CycleRecord, ...] = Field(max_length=MAX_CYCLE_COUNT)
     edge_usage: tuple[tuple[StrictStr, StrictInt], ...] = Field(max_length=MAX_EDGES)
     covers_all: bool
+
+    @model_validator(mode="after")
+    def require_bound_eulerian(self) -> Self:
+        if self.graph is None:
+            return self
+        # Determine requested edge IDs
+        if self.edge_subset is not None:
+            requested = set(self.edge_subset)
+            if not requested.issubset(self.graph.edge_id_set):
+                raise ValueError("edge_subset contains unknown edge IDs")
+        else:
+            requested = set(self.graph.edge_id_set)
+        # Validate each cycle is valid and edge-disjoint via CycleRecord validators
+        # already ensure cycles are closed and interior vertices distinct
+        used: dict[str, int] = {eid: 0 for eid in requested}
+        seen_cycle_ids: set[str] = set()
+        for cycle in self.cycles:
+            for eid in cycle.edge_ids:
+                if eid not in requested:
+                    raise ValueError(f"cycle uses edge {eid} not in requested set")
+                if eid in seen_cycle_ids:
+                    raise ValueError(f"edge {eid} appears in multiple cycles (must be disjoint)")
+                seen_cycle_ids.add(eid)
+                # Validate incidence
+                idx = cycle.edge_ids.index(eid)  # not needed, but check per cycle
+                # Find position of eid in this cycle
+                pos = list(cycle.edge_ids).index(eid)
+                v_from = cycle.vertices[pos]
+                v_to = cycle.vertices[pos + 1]
+                edge = self.graph.edge_by_id(eid)
+                if not ((edge.left == v_from and edge.right == v_to) or (edge.right == v_from and edge.left == v_to)):
+                    raise ValueError(f"cycle edge {eid} incidence does not match graph")
+                used[eid] += 1
+        # Validate edge_usage matches
+        expected_usage = tuple(sorted((eid, used[eid]) for eid in sorted(requested)))
+        # edge_usage is expected to be sorted tuple
+        if self.edge_usage != expected_usage:
+            raise ValueError(f"edge_usage {self.edge_usage} does not match recomputed {expected_usage}")
+        expected_covers = all(used[eid] == 1 for eid in requested) and len(requested) > 0 or (len(requested) == 0 and len(self.cycles) == 0)
+        # For empty requested, covers_all should be True per operation
+        if len(requested) == 0:
+            expected_covers = True
+        if self.covers_all != expected_covers:
+            raise ValueError(f"covers_all {self.covers_all} does not match expected {expected_covers}")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -512,28 +648,32 @@ class CycleMulticoverResult(StrictModel):
         }
         recomputed_validity: list[bool] = []
         for cycle in self.cycles:
-            valid = True
+            cycle_valid = True
             for i, eid in enumerate(cycle.edge_ids):
+                edge_valid = True
                 if eid not in recomputed_multiplicity:
-                    valid = False
-                    continue
-                v_from = cycle.vertices[i]
-                v_to = cycle.vertices[i + 1]
-                if not (
-                    0 <= v_from < self.graph.vertex_count
-                    and 0 <= v_to < self.graph.vertex_count
-                ):
-                    valid = False
-                    continue
-                edge = self.graph.edge_by_id(eid)
-                if not (
-                    (edge.left == v_from and edge.right == v_to)
-                    or (edge.right == v_from and edge.left == v_to)
-                ):
-                    valid = False
-                if valid:
+                    edge_valid = False
+                    cycle_valid = False
+                else:
+                    v_from = cycle.vertices[i]
+                    v_to = cycle.vertices[i + 1]
+                    if not (
+                        0 <= v_from < self.graph.vertex_count
+                        and 0 <= v_to < self.graph.vertex_count
+                    ):
+                        edge_valid = False
+                        cycle_valid = False
+                    else:
+                        edge = self.graph.edge_by_id(eid)
+                        if not (
+                            (edge.left == v_from and edge.right == v_to)
+                            or (edge.right == v_from and edge.left == v_to)
+                        ):
+                            edge_valid = False
+                            cycle_valid = False
+                if edge_valid:
                     recomputed_multiplicity[eid] += 1
-            recomputed_validity.append(valid)
+            recomputed_validity.append(cycle_valid)
         if tuple(recomputed_validity) != self.cycle_validity:
             raise ValueError(
                 f"cycle_validity {self.cycle_validity} does not match "

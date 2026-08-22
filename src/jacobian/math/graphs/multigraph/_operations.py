@@ -107,6 +107,8 @@ def check_multigraph_flow(
     nowhere_zero = len(zero_edge_ids) == 0
 
     return MultigraphFlowCheckResult(
+        graph=graph,
+        group=group,
         edge_flow_records=request.edge_values,
         divergence_ledger=tuple(divergence_ledger),
         zero_edge_ids=tuple(zero_edge_ids),
@@ -283,29 +285,45 @@ def find_multigraph_flow(
     group = request.group
     require_nz = request.resource_budget.require_nowhere_zero
 
+    def _bind(result: MultigraphFlowFindResult) -> MultigraphFlowFindResult:
+        return MultigraphFlowFindResult(
+            graph=graph,
+            group=group,
+            resource_budget=request.resource_budget,
+            status=result.status,
+            flow=result.flow,
+            states_explored=result.states_explored,
+            termination_reason=result.termination_reason,
+        )
+
     # Special case: a graph with no edges trivially has the empty flow.
     if not graph.edges:
-        return MultigraphFlowFindResult(
-            status="FOUND",
-            flow=(),
-            states_explored=0,
-            termination_reason="SPECIAL_CASE",
+        return _bind(
+            MultigraphFlowFindResult(
+                status="FOUND",
+                flow=(),
+                states_explored=0,
+                termination_reason="SPECIAL_CASE",
+            )
         )
 
     # Per-edge candidate values: all group elements (or nonzero if required).
     choices = _build_edge_choices(group, require_nz)
     if not choices:
-        return MultigraphFlowFindResult(
-            status="EXHAUSTED",
-            flow=None,
-            states_explored=0,
-            termination_reason="SEARCH_EXHAUSTED",
+        return _bind(
+            MultigraphFlowFindResult(
+                status="EXHAUSTED",
+                flow=None,
+                states_explored=0,
+                termination_reason="SEARCH_EXHAUSTED",
+            )
         )
 
     choices_per_edge = [choices] * len(graph.edges)
-    return _search_dfs(
+    inner = _search_dfs(
         graph, group, choices_per_edge, request.resource_budget.max_states
     )
+    return _bind(inner)
 
 
 # ---------------------------------------------------------------------------
@@ -412,6 +430,8 @@ def compute_eulerian_cycles(
 
     if not edge_ids:
         return EulerianCyclesResult(
+            graph=graph,
+            edge_subset=request.edge_subset,
             cycles=(),
             edge_usage=(),
             covers_all=True,
@@ -425,6 +445,8 @@ def compute_eulerian_cycles(
         degree[edge.right] += 1
     if any(d % 2 != 0 for d in degree.values()):
         return EulerianCyclesResult(
+            graph=graph,
+            edge_subset=request.edge_subset,
             cycles=(),
             edge_usage=tuple((eid, 0) for eid in sorted(edge_ids)),
             covers_all=False,
@@ -456,6 +478,8 @@ def compute_eulerian_cycles(
     covers_all = all(edge_usage[eid] == 1 for eid in edge_ids)
 
     return EulerianCyclesResult(
+        graph=graph,
+        edge_subset=request.edge_subset,
         cycles=tuple(all_cycles),
         edge_usage=usage_tuple,
         covers_all=covers_all,
@@ -484,25 +508,25 @@ def check_cycle_multicover(
     cycle_validity: list[bool] = []
 
     for cycle in request.cycles:
-        valid = True
-        # Check that the cycle is closed (already enforced by the model)
-        # and that each edge connects consecutive vertices.
+        cycle_valid = True
         for i, eid in enumerate(cycle.edge_ids):
+            edge_valid = True
             if eid not in edge_multiplicity:
-                valid = False
-                continue
-            v_from = cycle.vertices[i]
-            v_to = cycle.vertices[i + 1]
-            edge = graph.edge_by_id(eid)
-            # The edge must connect v_from and v_to (either direction)
-            if not (
-                (edge.left == v_from and edge.right == v_to)
-                or (edge.right == v_from and edge.left == v_to)
-            ):
-                valid = False
-            if valid:
+                edge_valid = False
+                cycle_valid = False
+            else:
+                v_from = cycle.vertices[i]
+                v_to = cycle.vertices[i + 1]
+                edge = graph.edge_by_id(eid)
+                if not (
+                    (edge.left == v_from and edge.right == v_to)
+                    or (edge.right == v_from and edge.left == v_to)
+                ):
+                    edge_valid = False
+                    cycle_valid = False
+            if edge_valid:
                 edge_multiplicity[eid] += 1
-        cycle_validity.append(valid)
+        cycle_validity.append(cycle_valid)
 
     missing = sorted(eid for eid, count in edge_multiplicity.items() if count < k)
     overcovered = sorted(eid for eid, count in edge_multiplicity.items() if count > k)

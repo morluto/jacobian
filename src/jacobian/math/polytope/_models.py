@@ -37,20 +37,25 @@ provably leave that domain are rejected at admission.
 
 
 def _require_volume_within_result_bound(
-    vertex_component_digits: int, dim: int
+    component_numerator_digits: int,
+    component_denominator_digits: int,
+    dim: int,
 ) -> None:
     """Reject inputs whose exact volume cannot fit the canonical result type.
 
-    Each simplex in the triangulation uses ``dim + 1`` vertices. Scaling
-    by the common denominator and applying Hadamard's bound to the
-    resulting integer determinant bounds every volume component by
-    ``(dim + 1) * (component_digits + 1) + log10(dim!)`` digits; the sum
-    over at most ``MAX_VERTICES`` simplices adds two further digits. The
-    bound is conservative: it may reject inputs whose concrete volume
-    happens to be short, never accepts one that cannot be represented.
+    Each triangulation simplex uses ``dim + 1`` vertices. Scaling every
+    vertex by its component denominators bounds the scaled determinant
+    numerator by Hadamard at ``sum(n_i + q_i)`` digits, while the common
+    denominator product contributes ``sum(q_i) + log10(dim!)`` digits;
+    the sum over at most ``MAX_VERTICES`` simplices adds two further
+    digits. The bound is conservative: it may reject inputs whose
+    concrete volume happens to be short, never accepts one that cannot
+    be represented.
     """
 
-    bound = (dim + 1) * (vertex_component_digits + 1) + dim + 2
+    bound = (dim + 1) * (
+        component_numerator_digits + 2 * component_denominator_digits + 1
+    ) + dim + 4
     if bound > MAX_RESULT_COMPONENT_DIGITS:
         raise ValueError(
             "coordinate magnitudes can grow the exact volume beyond the "
@@ -63,7 +68,7 @@ class Vertex(StrictModel):
     """One rational vertex of a V-representation."""
 
     coordinates: tuple[CanonicalRational, ...] = Field(
-        min_length=2, max_length=MAX_DIMENSION
+        min_length=1, max_length=MAX_DIMENSION
     )
 
 
@@ -71,7 +76,7 @@ class Halfspace(StrictModel):
     """One rational half-space ``<a, x> <= b`` of an H-representation."""
 
     coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=2, max_length=MAX_DIMENSION
+        min_length=1, max_length=MAX_DIMENSION
     )
     offset: CanonicalRational
 
@@ -100,7 +105,7 @@ class PolytopeVolumeRequest(StrictModel):
     dimension_bound: int = Field(
         default=MAX_DIMENSION,
         le=MAX_DIMENSION,
-        ge=2,
+        ge=1,
         description=(
             "Upper bound on the ambient dimension; the request is rejected "
             "when the representation implies a larger dimension."
@@ -130,17 +135,15 @@ def _validate_vertices(vertices: tuple[Vertex, ...], dimension_bound: int) -> No
         raise ValueError("`vertices` must be non-empty")
     if len(vertices) > MAX_VERTICES:
         raise ValueError(f"`vertices` exceeds the {MAX_VERTICES}-vertex bound")
-    component_digits = 0
+    numerator_digits = 0
+    denominator_digits = 0
     for vertex in vertices:
         for coord in vertex.coordinates:
             require_bounded_rational(
                 coord, max_digits=COORDINATE_DIGITS, label="vertex coordinate"
             )
-            component_digits = max(
-                component_digits,
-                len(coord.num.lstrip("-")),
-                len(coord.den.lstrip("-")),
-            )
+            numerator_digits = max(numerator_digits, len(coord.num.lstrip("-")))
+            denominator_digits = max(denominator_digits, len(coord.den))
     dim = len(vertices[0].coordinates)
     if dim > dimension_bound:
         raise ValueError(
@@ -149,7 +152,9 @@ def _validate_vertices(vertices: tuple[Vertex, ...], dimension_bound: int) -> No
     for vertex in vertices:
         if len(vertex.coordinates) != dim:
             raise ValueError("all vertices must share one dimension")
-    _require_volume_within_result_bound(component_digits, dim)
+    _require_volume_within_result_bound(
+        numerator_digits, denominator_digits, dim
+    )
     # Combinatorial admission: C(n, d) d-subsets for hull enumeration.
     # The operation's brute-force hull needs to consider each d-subset;
     # reject here so the request never reaches the host exception at
@@ -237,15 +242,21 @@ def _validate_halfspaces(  # noqa: C901
     # carry more digits than the declaring half-space coefficients.
     from jacobian.canonical import format_canonical_integer
 
-    derived_digits = max(
-        max(
-            len(format_canonical_integer(abs(int(c.p)))),
-            len(format_canonical_integer(int(c.q))),
-        )
-        for point in verts
-        for c in point
+    numerator_digits = 0
+    denominator_digits = 0
+    for point in verts:
+        for c in point:
+            p = int(c.p)
+            q = int(c.q)
+            numerator_digits = max(
+                numerator_digits, len(format_canonical_integer(abs(p)))
+            )
+            denominator_digits = max(
+                denominator_digits, len(format_canonical_integer(q))
+            )
+    _require_volume_within_result_bound(
+        numerator_digits, denominator_digits, dim
     )
-    _require_volume_within_result_bound(derived_digits, dim)
 
 
 class PolytopeVolumeResult(StrictModel):

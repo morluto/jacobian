@@ -336,3 +336,56 @@ class TestRequestValidation:
             PolytopeVolumeRequest(
                 vertices=(_v((0, 1), (0, 1)), _v((1, 1), (0, 1), (0, 1))),
             )
+
+
+class TestDimensionOne:
+    def test_interval_vertices(self):
+        """The convex hull of 0 and 1 is the advertised d=1 case."""
+        result = compute_polytope_volume(
+            PolytopeVolumeRequest(
+                vertices=(
+                    Vertex(coordinates=(_cr0(),)),
+                    Vertex(coordinates=(
+                        CanonicalRational(num="1", den="1"),
+                    )),
+                )
+            )
+        )
+        assert result.volume == CanonicalRational(num="1", den="1")
+        assert result.dimension == 1
+
+    def test_interval_halfspaces(self):
+        """x <= 1 and -x <= 0 bound the unit interval."""
+        result = _volume_via_halfspaces(
+            (
+                _h((1, 1), offset=(1, 1)),
+                _h((-1, 1), offset=(0, 1)),
+            )
+        )
+        assert result.volume == CanonicalRational(num="1", den="1")
+        assert result.dimension == 1
+
+
+class TestDenominatorGrowth:
+    def test_denominator_products_beyond_the_result_bound_rejected(self):
+        """Vertices (1/p,1/q),(1/r,1/s) with ~8,500-digit denominators
+        produce a reduced area denominator near 34,000 digits; admission
+        bounds common-denominator products, not just component length."""
+
+        def small_fraction(den: int) -> Vertex:
+            return Vertex(
+                coordinates=(
+                    CanonicalRational(num="1", den=format_canonical_integer(den)),
+                    CanonicalRational(num="1", den=format_canonical_integer(den + 6)),
+                )
+            )
+
+        big = 10**8500
+        with pytest.raises(ValueError, match="result bound"):
+            PolytopeVolumeRequest(
+                vertices=(
+                    Vertex(coordinates=(_cr0(), _cr0())),
+                    small_fraction(big),
+                    small_fraction(big + 3),
+                )
+            )

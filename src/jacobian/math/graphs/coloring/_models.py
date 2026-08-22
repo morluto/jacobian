@@ -4,9 +4,81 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+MAX_EDGE_COLORING_VERTICES = 20
+MAX_EDGE_COLORING_EDGES = (
+    MAX_EDGE_COLORING_VERTICES * (MAX_EDGE_COLORING_VERTICES - 1) // 2
+)
+
+
+def _incident_edge_index_pairs_for_canonical_graph(
+    graph: SimpleUndirectedGraph,
+) -> list[tuple[int, int]]:
+    """Return pairs of edge indices that share a vertex (must differ in color)."""
+    incidence: dict[str, list[int]] = {}
+    for edge_index, (u, v) in enumerate(graph.edges):
+        incidence.setdefault(u, []).append(edge_index)
+        incidence.setdefault(v, []).append(edge_index)
+    pairs: list[tuple[int, int]] = []
+    for indices in incidence.values():
+        for a in range(len(indices)):
+            for b in range(a + 1, len(indices)):
+                pairs.append((indices[a], indices[b]))
+    return pairs
+
+
+def _is_proper_edge_coloring(
+    graph: SimpleUndirectedGraph,
+    coloring: tuple[int, ...],
+) -> bool:
+    """Check whether a coloring assigns distinct colors to incident edges."""
+    for a, b in _incident_edge_index_pairs_for_canonical_graph(graph):
+        if coloring[a] == coloring[b]:
+            return False
+    return True
+
+
+def _require_edge_coloring_graph_bound(graph: SimpleUndirectedGraph) -> None:
+    if len(graph.vertices) > MAX_EDGE_COLORING_VERTICES:
+        raise ValueError(
+            f"edge-coloring supports at most {MAX_EDGE_COLORING_VERTICES} vertices"
+        )
+
+
+def _require_coloring_sequence(
+    graph: SimpleUndirectedGraph,
+    coloring: tuple[int, ...],
+    colors: int,
+) -> None:
+    if len(coloring) != len(graph.edges):
+        raise ValueError("coloring must assign one color per edge")
+    for value in coloring:
+        if not 0 <= value < colors:
+            raise ValueError("coloring values must be in 0..colors-1")
+
+
+def _require_conflicting_pair(
+    graph: SimpleUndirectedGraph,
+    coloring: tuple[int, ...],
+    blocking_edge: tuple[str, str],
+    conflicting_edge: tuple[str, str],
+) -> None:
+    if blocking_edge == conflicting_edge:
+        raise ValueError("conflicting edge pair must be distinct")
+    edge_index = {edge: idx for idx, edge in enumerate(graph.edges)}
+    for edge in (blocking_edge, conflicting_edge):
+        if edge[0] >= edge[1]:
+            raise ValueError("blocking edges must be canonical pairs with left < right")
+        if edge not in edge_index:
+            raise ValueError("blocking edges must be edges of the graph")
+    if not set(blocking_edge) & set(conflicting_edge):
+        raise ValueError("conflicting edges must share a vertex")
+    if coloring[edge_index[blocking_edge]] != coloring[edge_index[conflicting_edge]]:
+        raise ValueError("conflicting edges must have the same color")
 
 
 class GraphEdgeList(StrictModel):
@@ -94,4 +166,127 @@ class MaximalIndependentSetResult(StrictModel):
             )
         if self.addable_vertex < 0:
             raise ValueError("addable_vertex must be nonnegative")
+        return self
+
+
+# ---------------------------------------------------------------------------
+# Edge coloring
+# ---------------------------------------------------------------------------
+
+
+class EdgeKColorabilityRequest(StrictModel):
+    """Decide whether a simple graph admits a proper ``k``-edge-coloring."""
+
+    graph: SimpleUndirectedGraph
+    colors: StrictInt = Field(ge=1, le=20)
+
+    @model_validator(mode="after")
+    def require_bounded_graph(self) -> Self:
+        _require_edge_coloring_graph_bound(self.graph)
+        return self
+
+
+class EdgeKColorabilityResult(StrictModel):
+    """Whether a proper ``k``-edge-coloring exists, with one coloring witness."""
+
+    graph: SimpleUndirectedGraph
+    colors: StrictInt = Field(ge=1, le=20)
+    colorable: bool
+    coloring: tuple[StrictInt, ...] | None = Field(
+        default=None,
+        max_length=MAX_EDGE_COLORING_EDGES,
+        description=(
+            "Edge colors aligned to graph.edges: coloring[i] is the color of "
+            "graph.edges[i] in 0..colors-1 (graph.edges order is authoritative)."
+        ),
+    )
+    edge_count: StrictInt = Field(ge=0, le=MAX_EDGE_COLORING_EDGES)
+
+    @model_validator(mode="after")
+    def require_witness_consistency(self) -> Self:
+        _require_edge_coloring_graph_bound(self.graph)
+        if self.edge_count != len(self.graph.edges):
+            raise ValueError("edge_count must equal the number of graph edges")
+        if self.colorable:
+            if self.coloring is None:
+                raise ValueError("a colorable result must carry a coloring witness")
+            _require_coloring_sequence(self.graph, self.coloring, self.colors)
+            if not _is_proper_edge_coloring(self.graph, self.coloring):
+                raise ValueError("coloring witness must be a proper edge coloring")
+        else:
+            if self.coloring is not None:
+                raise ValueError("a non-colorable result must not carry a coloring")
+            # Replay the bounded decision to prevent forged non-colorability.
+            # The graph + colors are retained, so we can re-execute the exact
+            # SAT check. Empty edge set is trivially colorable for any k>=1.
+            if not self.graph.edges:
+                raise ValueError(
+                    "empty graph is k-edge-colorable but result claims not colorable"
+                )
+            import z3
+
+            solver = z3.Solver()
+            edge_colors = [z3.Int(f"c_{i}") for i in range(len(self.graph.edges))]
+            solver.add(*(z3.And(c >= 0, c < self.colors) for c in edge_colors))
+            for a, b in _incident_edge_index_pairs_for_canonical_graph(self.graph):
+                solver.add(edge_colors[a] != edge_colors[b])
+            if solver.check() == z3.sat:
+                raise ValueError(
+                    "graph is k-edge-colorable but result claims not colorable"
+                )
+        return self
+
+
+class EdgeColoringCheckRequest(StrictModel):
+    """Validate a submitted edge-to-color assignment as a proper edge coloring."""
+
+    graph: SimpleUndirectedGraph
+    colors: StrictInt = Field(ge=1, le=20)
+    coloring: tuple[StrictInt, ...] = Field(
+        max_length=MAX_EDGE_COLORING_EDGES,
+        description=(
+            "Edge colors aligned to graph.edges: coloring[i] is the color of "
+            "graph.edges[i] in 0..colors-1 (graph.edges order is authoritative)."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_assignment_length(self) -> Self:
+        _require_edge_coloring_graph_bound(self.graph)
+        _require_coloring_sequence(self.graph, self.coloring, self.colors)
+        return self
+
+
+class EdgeColoringCheckResult(StrictModel):
+    """Whether a submitted edge coloring is proper, with a replayable conflict pair."""
+
+    graph: SimpleUndirectedGraph
+    colors: StrictInt = Field(ge=1, le=20)
+    coloring: tuple[StrictInt, ...] = Field(
+        max_length=MAX_EDGE_COLORING_EDGES,
+        description=(
+            "Edge colors aligned to graph.edges: coloring[i] is the color of "
+            "graph.edges[i] in 0..colors-1 (graph.edges order is authoritative)."
+        ),
+    )
+    proper: bool
+    blocking_edge: tuple[str, str] | None = None
+    conflicting_edge: tuple[str, str] | None = None
+
+    @model_validator(mode="after")
+    def require_blocking_edge_consistency(self) -> Self:
+        _require_edge_coloring_graph_bound(self.graph)
+        _require_coloring_sequence(self.graph, self.coloring, self.colors)
+        actual_proper = _is_proper_edge_coloring(self.graph, self.coloring)
+        if self.proper != actual_proper:
+            raise ValueError("proper flag does not match the submitted coloring")
+        if self.proper:
+            if self.blocking_edge is not None or self.conflicting_edge is not None:
+                raise ValueError("a proper coloring must not carry a blocking edge")
+            return self
+        if self.blocking_edge is None or self.conflicting_edge is None:
+            raise ValueError("an improper coloring must carry a conflicting edge pair")
+        _require_conflicting_pair(
+            self.graph, self.coloring, self.blocking_edge, self.conflicting_edge
+        )
         return self

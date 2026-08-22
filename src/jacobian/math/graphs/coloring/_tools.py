@@ -7,12 +7,18 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.coloring._models import (
+    EdgeColoringCheckRequest,
+    EdgeColoringCheckResult,
+    EdgeKColorabilityRequest,
+    EdgeKColorabilityResult,
     KColorabilityRequest,
     KColorabilityResult,
     MaximalIndependentSetRequest,
     MaximalIndependentSetResult,
 )
 from jacobian.math.graphs.coloring._operations import (
+    compute_edge_coloring_check,
+    compute_edge_k_colorability,
     compute_k_colorability,
     compute_maximal_independent_set_decision,
 )
@@ -44,6 +50,29 @@ def graph_coloring_operation[
         examples=examples,
     )
 
+
+PETERSEN_GRAPH = {
+    "graph": {
+        "vertices": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+        "edges": [
+            ["0", "1"],
+            ["1", "2"],
+            ["2", "3"],
+            ["3", "4"],
+            ["0", "4"],
+            ["5", "7"],
+            ["7", "9"],
+            ["6", "9"],
+            ["6", "8"],
+            ["5", "8"],
+            ["0", "5"],
+            ["1", "6"],
+            ["2", "7"],
+            ["3", "8"],
+            ["4", "9"],
+        ],
+    }
+}
 
 GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     graph_coloring_operation(
@@ -92,6 +121,60 @@ GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                         "edges": [[0, 1], [1, 2], [2, 3]],
                     },
                     "candidate_set": [0, 2],
+                },
+            ),
+        ),
+    ),
+    graph_coloring_operation(
+        "graph.edge_coloring.k_decide",
+        "Decide bounded k-edge-colorability",
+        "Given a bounded simple graph and an integer k, decide whether the "
+        "graph admits a proper k-edge-coloring (incident edges receive distinct "
+        "colors), returning one edge-coloring witness when one exists. "
+        "Distinct from vertex k-colorability; the chromatic index is the "
+        "smallest such k.",
+        EdgeKColorabilityRequest,
+        EdgeKColorabilityResult,
+        compute_edge_k_colorability,
+        "graph",
+        "edge-coloring",
+        "chromatic-index",
+        examples=(
+            example(
+                "petersen_not_3_edge_colorable",
+                (
+                    "The Petersen graph has maximum degree 3 and chromatic index "
+                    "4, so it is not 3-edge-colorable. The graph must be simple "
+                    "with at most 20 vertices."
+                ),
+                {**PETERSEN_GRAPH, "colors": 3},
+            ),
+        ),
+    ),
+    graph_coloring_operation(
+        "graph.edge_coloring.check",
+        "Validate a proper edge coloring",
+        "Given a bounded simple graph, a palette size, and a submitted "
+        "edge-to-color assignment, validate that it is a proper edge coloring "
+        "(no two incident edges share a color), returning a blocking edge when "
+        "it is improper.",
+        EdgeColoringCheckRequest,
+        EdgeColoringCheckResult,
+        compute_edge_coloring_check,
+        "graph",
+        "edge-coloring",
+        "validation",
+        examples=(
+            example(
+                "petersen_4_edge_colorable_check",
+                (
+                    "A 4-edge-coloring of the Petersen graph validates as proper. "
+                    "The assignment must assign one color per edge in 0..colors-1."
+                ),
+                {
+                    **PETERSEN_GRAPH,
+                    "colors": 4,
+                    "coloring": [1, 0, 1, 3, 2, 3, 0, 3, 1, 2, 0, 2, 2, 0, 1],
                 },
             ),
         ),

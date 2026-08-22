@@ -126,3 +126,157 @@ def test_result_requires_matching_rejection_witness() -> None:
         MaximalIndependentSetResult(decision="NOT_INDEPENDENT")
     with pytest.raises(ValidationError, match="addable vertex"):
         MaximalIndependentSetResult(decision="INDEPENDENT_NOT_MAXIMAL")
+
+
+class TestEdgeKColorability:
+    def _petersen(self):
+        from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+        return SimpleUndirectedGraph(
+            vertices=("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"),
+            edges=(
+                ("0", "1"),
+                ("1", "2"),
+                ("2", "3"),
+                ("3", "4"),
+                ("0", "4"),
+                ("5", "7"),
+                ("7", "9"),
+                ("6", "9"),
+                ("6", "8"),
+                ("5", "8"),
+                ("0", "5"),
+                ("1", "6"),
+                ("2", "7"),
+                ("3", "8"),
+                ("4", "9"),
+            ),
+        )
+
+    def test_petersen_not_3_edge_colorable(self):
+        from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
+        from jacobian.math.graphs.coloring._operations import (
+            compute_edge_k_colorability,
+        )
+
+        result = compute_edge_k_colorability(
+            EdgeKColorabilityRequest(graph=self._petersen(), colors=3),
+        )
+        assert result.colorable is False
+        assert result.coloring is None
+
+    def test_petersen_4_edge_colorable_and_proper(self):
+        from jacobian.math.graphs.coloring._models import (
+            EdgeColoringCheckRequest,
+            EdgeKColorabilityRequest,
+        )
+        from jacobian.math.graphs.coloring._operations import (
+            compute_edge_coloring_check,
+            compute_edge_k_colorability,
+        )
+
+        g = self._petersen()
+        result = compute_edge_k_colorability(
+            EdgeKColorabilityRequest(graph=g, colors=4)
+        )
+        assert result.colorable is True
+        assert result.coloring is not None
+        assert len(result.coloring) == 15
+        check = compute_edge_coloring_check(
+            EdgeColoringCheckRequest(graph=g, colors=4, coloring=result.coloring),
+        )
+        assert check.proper is True
+
+    def test_triangle_needs_3_edge_colors(self):
+        from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
+        from jacobian.math.graphs.coloring._operations import (
+            compute_edge_k_colorability,
+        )
+        from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+        g = SimpleUndirectedGraph(
+            vertices=("0", "1", "2"),
+            edges=(("0", "1"), ("1", "2"), ("0", "2")),
+        )
+        assert (
+            compute_edge_k_colorability(
+                EdgeKColorabilityRequest(graph=g, colors=2)
+            ).colorable
+            is False
+        )
+        assert (
+            compute_edge_k_colorability(
+                EdgeKColorabilityRequest(graph=g, colors=3)
+            ).colorable
+            is True
+        )
+
+
+class TestEdgeColoringCheck:
+    def _petersen(self):
+        from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+        return SimpleUndirectedGraph(
+            vertices=("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"),
+            edges=(
+                ("0", "1"),
+                ("1", "2"),
+                ("2", "3"),
+                ("3", "4"),
+                ("0", "4"),
+                ("5", "7"),
+                ("7", "9"),
+                ("6", "9"),
+                ("6", "8"),
+                ("5", "8"),
+                ("0", "5"),
+                ("1", "6"),
+                ("2", "7"),
+                ("3", "8"),
+                ("4", "9"),
+            ),
+        )
+
+    def test_proper_coloring_accepted(self):
+        from jacobian.math.graphs.coloring._models import EdgeColoringCheckRequest
+        from jacobian.math.graphs.coloring._operations import (
+            compute_edge_coloring_check,
+        )
+
+        g = self._petersen()
+        coloring = (1, 0, 1, 3, 2, 3, 0, 3, 1, 2, 0, 2, 2, 0, 1)
+        result = compute_edge_coloring_check(
+            EdgeColoringCheckRequest(graph=g, colors=4, coloring=coloring),
+        )
+        assert result.proper is True
+        assert result.blocking_edge is None
+
+    def test_improper_coloring_reports_blocking_edge(self):
+        from jacobian.math.graphs.coloring._models import EdgeColoringCheckRequest
+        from jacobian.math.graphs.coloring._operations import (
+            compute_edge_coloring_check,
+        )
+        from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+        g = SimpleUndirectedGraph(
+            vertices=("0", "1", "2"),
+            edges=(("0", "1"), ("1", "2")),
+        )
+        # edges (0,1) and (1,2) share vertex 1; same color is improper.
+        result = compute_edge_coloring_check(
+            EdgeColoringCheckRequest(graph=g, colors=2, coloring=(0, 0)),
+        )
+        assert result.proper is False
+        assert result.blocking_edge is not None
+        assert result.conflicting_edge is not None
+
+    def test_rejects_wrong_length_assignment(self):
+        from jacobian.math.graphs.coloring._models import EdgeColoringCheckRequest
+        from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+        g = SimpleUndirectedGraph(
+            vertices=("0", "1"),
+            edges=(("0", "1"),),
+        )
+        with pytest.raises(ValidationError, match="one color per edge"):
+            EdgeColoringCheckRequest(graph=g, colors=2, coloring=(0, 1))

@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 from jacobian.math.graphs.coloring._models import (
+    EdgeColoringCheckRequest,
+    EdgeColoringCheckResult,
+    EdgeKColorabilityRequest,
+    EdgeKColorabilityResult,
     KColorabilityRequest,
     KColorabilityResult,
     MaximalIndependentSetRequest,
     MaximalIndependentSetResult,
+    _incident_edge_index_pairs_for_canonical_graph,
 )
 
 
@@ -57,3 +62,73 @@ def compute_maximal_independent_set_decision(
                 addable_vertex=vertex,
             )
     return MaximalIndependentSetResult(decision="MAXIMAL")
+
+
+def compute_edge_k_colorability(
+    request: EdgeKColorabilityRequest,
+) -> EdgeKColorabilityResult:
+    """Decide whether a simple graph admits a proper ``k``-edge-coloring.
+
+    A proper edge coloring assigns each edge a color in ``0..k-1`` such that
+    incident edges receive distinct colors.  Uses a bounded Z3 SAT search and
+    returns one coloring witness when one exists.
+    """
+    import z3
+
+    edges = request.graph.edges
+    if not edges:
+        return EdgeKColorabilityResult(
+            graph=request.graph,
+            colors=request.colors,
+            colorable=True,
+            coloring=(),
+            edge_count=0,
+        )
+    solver = z3.Solver()
+    edge_colors = [z3.Int(f"c_{i}") for i in range(len(edges))]
+    solver.add(*(z3.And(c >= 0, c < request.colors) for c in edge_colors))
+    for a, b in _incident_edge_index_pairs_for_canonical_graph(request.graph):
+        solver.add(edge_colors[a] != edge_colors[b])
+    if solver.check() == z3.sat:
+        model = solver.model()
+        coloring = tuple(model.eval(c).as_long() for c in edge_colors)
+        return EdgeKColorabilityResult(
+            graph=request.graph,
+            colors=request.colors,
+            colorable=True,
+            coloring=coloring,
+            edge_count=len(edges),
+        )
+    return EdgeKColorabilityResult(
+        graph=request.graph,
+        colors=request.colors,
+        colorable=False,
+        coloring=None,
+        edge_count=len(edges),
+    )
+
+
+def compute_edge_coloring_check(
+    request: EdgeColoringCheckRequest,
+) -> EdgeColoringCheckResult:
+    """Validate a submitted edge-to-color assignment as a proper edge coloring."""
+    edges = request.graph.edges
+    coloring = request.coloring
+    for a, b in _incident_edge_index_pairs_for_canonical_graph(request.graph):
+        if coloring[a] == coloring[b]:
+            return EdgeColoringCheckResult(
+                graph=request.graph,
+                colors=request.colors,
+                coloring=request.coloring,
+                proper=False,
+                blocking_edge=edges[a],
+                conflicting_edge=edges[b],
+            )
+    return EdgeColoringCheckResult(
+        graph=request.graph,
+        colors=request.colors,
+        coloring=request.coloring,
+        proper=True,
+        blocking_edge=None,
+        conflicting_edge=None,
+    )

@@ -15,7 +15,10 @@ from jacobian._models import StrictModel
 from jacobian.math.polynomials._replay import (
     generators_reduce_to_zero,
     remainder_matches_claim,
+    replayed_remainder_exceeds_budget,
     replayed_remainder_term_count,
+    retained_basis_in_ideal,
+    retained_basis_is_groebner,
 )
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_TERMS,
@@ -385,7 +388,9 @@ def _validate_retained_basis(
     if groebner_basis is None:
         return
     if not groebner_basis:
-        raise ValueError("retained Gröbner basis must not be empty")
+        # Empty basis is valid only for the zero ideal; the per-result
+        # validators enforce the correct correlation via the replay checks.
+        return
     if any(element.variables != variables for element in groebner_basis):
         raise ValueError("every retained basis polynomial must use the declared ring")
     if any(not element.polynomial.terms for element in groebner_basis):
@@ -455,6 +460,14 @@ class IdealNormalFormResult(StrictModel):
                 raise ValueError(
                     "retained basis does not reduce every ideal generator to zero"
                 )
+            if not retained_basis_in_ideal(
+                self.ideal, self.groebner_basis, self.monomial_order
+            ):
+                raise ValueError("retained Gröbner basis element is not in the source ideal")
+            if not retained_basis_is_groebner(
+                self.ideal, self.groebner_basis, self.monomial_order
+            ):
+                raise ValueError("retained basis is not the Gröbner basis of the source ideal")
             if not remainder_matches_claim(
                 self.ideal,
                 self.groebner_basis,
@@ -468,15 +481,34 @@ class IdealNormalFormResult(StrictModel):
         else:
             if self.remainder is not None:
                 raise ValueError("BUDGET_EXCEEDED must not carry a remainder")
-            if self.groebner_basis is not None and replayed_remainder_term_count(
-                self.ideal,
-                self.groebner_basis,
-                self.polynomial,
-                self.monomial_order,
-            ) <= _MAX_RESULT_POLYNOMIAL_TERMS:
-                raise ValueError(
-                    "BUDGET_EXCEEDED contradicts an in-budget replayed reduction"
-                )
+            if self.groebner_basis is not None:
+                if not generators_reduce_to_zero(
+                    self.ideal, self.groebner_basis, self.monomial_order
+                ):
+                    raise ValueError(
+                        "retained basis does not reduce every ideal generator to zero"
+                    )
+                if not retained_basis_in_ideal(
+                    self.ideal, self.groebner_basis, self.monomial_order
+                ):
+                    raise ValueError(
+                        "retained Gröbner basis element is not in the source ideal"
+                    )
+                if not retained_basis_is_groebner(
+                    self.ideal, self.groebner_basis, self.monomial_order
+                ):
+                    raise ValueError(
+                        "retained basis is not the Gröbner basis of the source ideal"
+                    )
+                if not replayed_remainder_exceeds_budget(
+                    self.ideal,
+                    self.groebner_basis,
+                    self.polynomial,
+                    self.monomial_order,
+                ):
+                    raise ValueError(
+                        "BUDGET_EXCEEDED contradicts an in-budget replayed reduction"
+                    )
         return self
 
 
@@ -505,15 +537,34 @@ class IdealMembershipResult(StrictModel):
         if self.status == "BUDGET_EXCEEDED":
             if self.normal_form is not None:
                 raise ValueError("BUDGET_EXCEEDED must not carry a normal form")
-            if self.groebner_basis is not None and replayed_remainder_term_count(
-                self.ideal,
-                self.groebner_basis,
-                self.polynomial,
-                self.monomial_order,
-            ) <= _MAX_RESULT_POLYNOMIAL_TERMS:
-                raise ValueError(
-                    "BUDGET_EXCEEDED contradicts an in-budget replayed reduction"
-                )
+            if self.groebner_basis is not None:
+                if not generators_reduce_to_zero(
+                    self.ideal, self.groebner_basis, self.monomial_order
+                ):
+                    raise ValueError(
+                        "retained basis does not reduce every ideal generator to zero"
+                    )
+                if not retained_basis_in_ideal(
+                    self.ideal, self.groebner_basis, self.monomial_order
+                ):
+                    raise ValueError(
+                        "retained Gröbner basis element is not in the source ideal"
+                    )
+                if not retained_basis_is_groebner(
+                    self.ideal, self.groebner_basis, self.monomial_order
+                ):
+                    raise ValueError(
+                        "retained basis is not the Gröbner basis of the source ideal"
+                    )
+                if not replayed_remainder_exceeds_budget(
+                    self.ideal,
+                    self.groebner_basis,
+                    self.polynomial,
+                    self.monomial_order,
+                ):
+                    raise ValueError(
+                        "BUDGET_EXCEEDED contradicts an in-budget replayed reduction"
+                    )
             return self
         if self.groebner_basis is None or self.normal_form is None:
             raise ValueError(f"{self.status} requires the basis and the normal form")
@@ -528,6 +579,14 @@ class IdealMembershipResult(StrictModel):
             raise ValueError(
                 "retained basis does not reduce every ideal generator to zero"
             )
+        if not retained_basis_in_ideal(
+            self.ideal, self.groebner_basis, self.monomial_order
+        ):
+            raise ValueError("retained Gröbner basis element is not in the source ideal")
+        if not retained_basis_is_groebner(
+            self.ideal, self.groebner_basis, self.monomial_order
+        ):
+            raise ValueError("retained basis is not the Gröbner basis of the source ideal")
         if not remainder_matches_claim(
             self.ideal,
             self.groebner_basis,

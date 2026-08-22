@@ -22,6 +22,9 @@ from jacobian.math.additive_combinatorics._models import (
     RepresentationProfileResult,
     SumsetCardinalityRequest,
     SumsetCardinalityResult,
+    DifferenceClassEntry,
+    OrderedDifferenceProfileRequest,
+    OrderedDifferenceProfileResult,
 )
 
 
@@ -148,6 +151,56 @@ def decide_direct_sum_predicate(
         representatives=tuple(format_canonical_integer(r) for r in reps_sorted),
         collisions=tuple(format_canonical_integer(r) for r in collisions_sorted),
         missing=tuple(format_canonical_integer(r) for r in missing),
+    )
+
+
+
+def compute_ordered_difference_profile(
+    request: OrderedDifferenceProfileRequest,
+) -> OrderedDifferenceProfileResult:
+    """Compute the complete ordered-difference profile r_{A-A}(v)."""
+
+    vectors = request.vectors.vectors
+    n = len(vectors)
+
+    diff_map: dict[tuple[int, ...], list[tuple[int, int]]] = {}
+    for i in range(n):
+        for j in range(n):
+            if i == j:
+                continue
+            diff = tuple(vectors[i][d] - vectors[j][d] for d in range(len(vectors[i])))
+            if diff not in diff_map:
+                diff_map[diff] = []
+            diff_map[diff].append((i, j))
+
+    classes = []
+    max_mult = 0
+    first_repeated = None
+    for diff in sorted(diff_map.keys()):
+        pairs = diff_map[diff]
+        multiplicity = len(pairs)
+        classes.append(
+            DifferenceClassEntry(
+                difference=diff,
+                multiplicity=multiplicity,
+                source_pairs=tuple(pairs),
+            )
+        )
+        if multiplicity > max_mult:
+            max_mult = multiplicity
+        if first_repeated is None and multiplicity > 1:
+            first_repeated = diff
+
+    return OrderedDifferenceProfileResult(
+        vectors=request.vectors,
+        dimension=len(vectors[0]),
+        set_size=n,
+        total_ordered_pairs=n * (n - 1),
+        support_size=len(classes),
+        max_multiplicity=max_mult,
+        has_repeated_difference=max_mult > 1,
+        first_repeated_difference=first_repeated if max_mult > 1 else None,
+        classes=tuple(classes),
     )
 
 

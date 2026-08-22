@@ -24,6 +24,15 @@ class TestRank:
         result = compute_rank(req)
         assert result.rank == 2
 
+    def test_result_preserves_source_matrix(self) -> None:
+        """The rank result retains the source matrix for downstream composition."""
+        req = RankRequest(prime=3, entries=((1, 2), (2, 2)), columns=2)
+        result = compute_rank(req)
+        assert result.prime == 3
+        assert result.entries == ((1, 2), (2, 2))
+        assert result.columns == 2
+        assert result.rank == 2
+
     def test_characteristic_dependent_rank(self) -> None:
         """The same matrix can have different rank over different fields."""
         entries = [[1, 1, 0], [0, 1, 1], [1, 0, 1]]

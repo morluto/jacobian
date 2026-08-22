@@ -377,3 +377,13 @@ class TestOrderedDifferenceProfile:
     def test_accepts_64_digit_coordinate(self):
         vector = IntegerVector(coordinates=("-" + "1" * 64,))
         assert vector.coordinates == ("-" + "1" * 64,)
+
+
+class TestAdmissionRegistration:
+    def test_admissions_cover_candidates_exactly_once(self):
+        """A duplicate admission row breaks catalog import with a ValueError."""
+        from jacobian.math.additive_combinatorics._admission import REGISTRATION
+
+        ids = [record.operation_id for record in REGISTRATION.admissions]
+        assert len(ids) == len(set(ids))
+        assert set(ids) == {tool.operation_id for tool in REGISTRATION.candidates}

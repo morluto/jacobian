@@ -46,6 +46,31 @@ class TestDiscriminant:
         assert result.discriminant.as_fraction() == 512
         assert result.is_nonsingular
 
+    def test_coefficients_exceeding_result_height_rejected(self):
+        """-16(4A^3) for A=10^19999 has ~60k digits, past the canonical limit."""
+        curve = ShortWeierstrassCurve(
+            coefficient_a=_pt("1" + "0" * 19999), coefficient_b=_pt("0")
+        )
+        with pytest.raises(ValidationError, match="canonical result bound"):
+            EllipticCurveRequest(curve=curve)
+
+    def test_boundary_coefficients_accepted_and_returned(self):
+        """A=10^10920 would overflow; A=10^10919 stays within the bound."""
+        rejected = ShortWeierstrassCurve(
+            coefficient_a=_pt("1" + "0" * 10920), coefficient_b=_pt("0")
+        )
+        with pytest.raises(ValidationError, match="canonical result bound"):
+            EllipticCurveRequest(curve=rejected)
+        accepted = EllipticCurveRequest(
+            curve=ShortWeierstrassCurve(
+                coefficient_a=_pt("1" + "0" * 10919), coefficient_b=_pt("0")
+            )
+        )
+        result = compute_discriminant(accepted)
+        assert result.is_nonsingular
+        digits = max(len(result.discriminant.num), len(result.discriminant.den))
+        assert digits <= 32_768
+
 
 class TestPointOnCurve:
     def test_point_on_curve(self):

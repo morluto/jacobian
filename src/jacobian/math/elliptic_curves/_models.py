@@ -8,8 +8,8 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.math._rational_height import RationalHeight
 from jacobian._models import StrictModel
+from jacobian.math._rational_height import RationalHeight
 
 
 class ShortWeierstrassCurve(StrictModel):
@@ -25,10 +25,47 @@ class ShortWeierstrassCurve(StrictModel):
         return -16 * (4 * a**3 + 27 * b**2)
 
 
+def _discriminant_height(curve: ShortWeierstrassCurve) -> RationalHeight:
+    """Conservative height of Δ = -16(4A³ + 27B²) before reduction.
+
+    Cubing A triples each component's digit count, squaring B doubles them,
+    the integer multipliers add their own digits to the numerator only, and
+    summing over a product common denominator adds the denominator bounds.
+    """
+    a = RationalHeight.from_canonical(curve.coefficient_a)
+    b = RationalHeight.from_canonical(curve.coefficient_b)
+    four_a_cubed = RationalHeight(3 * a.numerator_digits + 1, 3 * a.denominator_digits)
+    twenty_seven_b_squared = RationalHeight(
+        2 * b.numerator_digits + 2, 2 * b.denominator_digits
+    )
+    total_den = (
+        four_a_cubed.denominator_digits + twenty_seven_b_squared.denominator_digits
+    )
+    total_num = (
+        max(
+            four_a_cubed.numerator_digits + twenty_seven_b_squared.denominator_digits,
+            twenty_seven_b_squared.numerator_digits + four_a_cubed.denominator_digits,
+        )
+        + 1
+        + 2
+    )
+    return RationalHeight(total_num, total_den)
+
+
 class EllipticCurveRequest(StrictModel):
     """Compute the discriminant of a short Weierstrass curve."""
 
     curve: ShortWeierstrassCurve
+
+    @model_validator(mode="after")
+    def require_discriminant_result_height(self) -> Self:
+        height = _discriminant_height(self.curve)
+        if height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
+            raise ValueError(
+                "curve coefficients would produce a discriminant exceeding the "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit canonical result bound"
+            )
+        return self
 
 
 class CurveDiscriminantResult(StrictModel):

@@ -7,8 +7,12 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+)
 from jacobian._models import StrictModel
+from jacobian.math._rational_height import RationalHeight, sum_heights
 
 
 class RationalPoint2D(StrictModel):
@@ -446,6 +450,35 @@ class LabelledPoint2D(StrictModel):
     point: RationalPoint2D
 
 
+def _circumradius_result_height(
+    points: tuple[LabelledPoint2D, ...],
+) -> RationalHeight:
+    """Conservative height of R^2 = |a-b|^2|b-c|^2|c-a|^2 / (4*(2*area)^2).
+
+    Every coordinate is bounded by the componentwise maximum input height.
+    A displacement sums two coordinates, a squared distance sums two squared
+    displacements, and the twice-area cross product subtracts two products of
+    two displacements, so it shares the squared-distance bound shape; the
+    quotient propagates both unreduced-fraction components.
+    """
+    heights = [
+        RationalHeight.from_canonical(rational)
+        for item in points
+        for rational in (item.point.x, item.point.y)
+    ]
+    coordinate = RationalHeight(
+        max(height.numerator_digits for height in heights),
+        max(height.denominator_digits for height in heights),
+    )
+    displacement = sum_heights((coordinate, coordinate))
+    displacement_squared = displacement.product(displacement)
+    side = sum_heights((displacement_squared, displacement_squared))
+    side_cubed = side.product(side).product(side)
+    cross = sum_heights((displacement_squared, displacement_squared))
+    four_cross_squared = cross.product(cross).product(RationalHeight(1, 1))
+    return side_cubed.quotient(four_cross_squared)
+
+
 class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration."""
 
@@ -467,12 +500,21 @@ class CircumradiusProfileRequest(StrictModel):
         )
         if len(keys) != len(set(keys)):
             raise ValueError("point coordinates must be unique")
-        # Bound coordinates so that squared circumradius stays within the
-        # canonical result limit.  The formula R^2 = (|a-b|^2|b-c|^2|c-a|^2)/(4*(2*area)^2)
-        # can produce ~6x digit growth; capping at 4096 keeps outputs <32768.
-        for item in self.points:
-            require_bounded_rational(item.point.x, max_digits=4096, label="point x")
-            require_bounded_rational(item.point.y, max_digits=4096, label="point y")
+        # The formula R^2 = |a-b|^2|b-c|^2|c-a|^2 / (4*(2*area)^2) multiplies
+        # three squared distances and divides by the squared twice-area
+        # cross product, so subtracting rationals, squaring, and multiplying
+        # grow digit counts well past any per-coordinate cap.  Propagate a
+        # conservative height bound through the complete formula instead and
+        # admit only configurations whose every triple result stays within
+        # the canonical limit.
+        if _circumradius_result_height(self.points).exceeds(
+            MAX_CANONICAL_RATIONAL_DIGITS
+        ):
+            raise ValueError(
+                "point configuration would produce squared circumradii "
+                f"exceeding the {MAX_CANONICAL_RATIONAL_DIGITS}-digit "
+                "canonical result bound"
+            )
         return self
 
 

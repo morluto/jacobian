@@ -2,13 +2,46 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 
 MAX_EXCHANGE_SIZE = 16
+# Admitted seeds carry bounded integer coefficients: entries and symmetrizer
+# entries stay below 10**MAX_EXCHANGE_ENTRY_DIGITS. Mutation forms
+# b_ij + b_ik * b_kj, whose magnitude reaches 10**(2 * D) - 10**D for admitted
+# entries below 10**D, so results admit that derived bound plus one digit of
+# slack while every skew-symmetrizability product stays bounded work.
+MAX_EXCHANGE_ENTRY_DIGITS = 64
+MAX_MUTATED_ENTRY_DIGITS = 2 * MAX_EXCHANGE_ENTRY_DIGITS + 1
+_MAX_INPUT_ENTRY_MAGNITUDE = 10**MAX_EXCHANGE_ENTRY_DIGITS
+
+
+def _require_bounded_entries(matrix: ExchangeMatrix, *, max_digits: int) -> None:
+    magnitude = 10**max_digits
+    if any(
+        abs(entry) >= magnitude
+        for row in matrix.entries
+        for entry in row
+    ):
+        raise ValueError(
+            f"exchange-matrix coefficients exceed the {max_digits}-digit bound"
+        )
+
+
+def _require_bounded_symmetrizer(matrix: ExchangeMatrix) -> None:
+    if any(abs(d) >= _MAX_INPUT_ENTRY_MAGNITUDE for d in matrix.symmetrizer):
+        raise ValueError(
+            "symmetrizer coefficients exceed the "
+            f"{MAX_EXCHANGE_ENTRY_DIGITS}-digit bound"
+        )
+
+
+def _require_input_seed(matrix: ExchangeMatrix) -> None:
+    """Narrow admitted seeds so mutation output stays within the result bound."""
+    _require_bounded_entries(matrix, max_digits=MAX_EXCHANGE_ENTRY_DIGITS)
 
 
 def _require_shape(matrix: ExchangeMatrix) -> None:
@@ -36,6 +69,12 @@ class ExchangeMatrix(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
+        # The representation ceiling keeps every skew-symmetrizability product
+        # bounded; admitted requests narrow this further via _require_input_seed.
+        _require_bounded_entries(
+            self, max_digits=MAX_MUTATED_ENTRY_DIGITS
+        )
+        _require_bounded_symmetrizer(self)
         _require_shape(self)
         for i in range(self.n):
             if self.symmetrizer[i] <= 0:
@@ -64,6 +103,7 @@ class SeedMutationRequest(StrictModel):
     def require_valid_index(self) -> Self:
         if self.mutation_index >= self.exchange_matrix.n:
             raise ValueError("mutation_index must be in 0..n-1")
+        _require_input_seed(self.exchange_matrix)
         return self
 
 
@@ -79,13 +119,34 @@ class GVectorRequest(StrictModel):
 
     exchange_matrix: ExchangeMatrix
 
+    @model_validator(mode="after")
+    def require_admissible_seed(self) -> Self:
+        _require_input_seed(self.exchange_matrix)
+        return self
+
+
+def _identity_matrix(n: int) -> tuple[tuple[int, ...], ...]:
+    return tuple(tuple(1 if i == j else 0 for j in range(n)) for i in range(n))
+
 
 class GVectorResult(StrictModel):
-    """The g-vector matrix (identity for the initial seed)."""
+    """The g-vector matrix (identity for the initial seed).
 
-    n: int = Field(ge=1)
+    Retains the source seed so an exact result must carry its identity matrix
+    under the single fixed convention.
+    """
+
+    exchange_matrix: ExchangeMatrix
     g_matrix: tuple[tuple[int, ...], ...]
-    convention: str = "FOMIN_ZELEVINSKY"
+    convention: Literal["FOMIN_ZELEVINSKY"] = "FOMIN_ZELEVINSKY"
+
+    @model_validator(mode="after")
+    def require_initial_g_vectors(self) -> Self:
+        if self.g_matrix != _identity_matrix(self.exchange_matrix.n):
+            raise ValueError(
+                "g_matrix must be the n x n identity of the source exchange matrix"
+            )
+        return self
 
 
 __all__ = [

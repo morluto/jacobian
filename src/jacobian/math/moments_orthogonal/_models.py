@@ -7,7 +7,11 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
@@ -18,10 +22,11 @@ from jacobian.math.moments_orthogonal.values import (
 MAX_RATIONAL_DIGITS = 4_096
 
 # Golub-Welsch converts admitted rationals to IEEE doubles; every accepted
-# coefficient must convert to a finite double and every subdiagonal entry must
-# stay far from both overflow and underflow so its square root is exact enough.
+# coefficient must convert to a finite nonzero double and every subdiagonal
+# entry must stay far from both overflow and underflow so its square root is
+# exact enough.
 MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
-MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10 ** 300)
+MIN_QUADRATURE_MAGNITUDE = Fraction(1, 10 ** 300)
 
 
 def _to_fractions(
@@ -30,7 +35,7 @@ def _to_fractions(
     return tuple(v.as_fraction() for v in values)
 
 
-def _from_fractions(values) -> tuple[CanonicalRational, ...]:
+def _from_fractions(values: tuple[Fraction, ...]) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
 
 
@@ -185,6 +190,42 @@ class JacobiMatrixResult(JacobiMatrixRequest):
         return self
 
 
+def _component_digits(value: CanonicalRational) -> int:
+    return max(len(value.num.lstrip("-")), len(value.den))
+
+
+def _require_bounded_kernel_growth(
+    alpha: tuple[CanonicalRational, ...],
+    beta: tuple[CanonicalRational, ...],
+    x: CanonicalRational,
+    y: CanonicalRational,
+) -> None:
+    """Reject requests whose forward-recurrence output cannot be returned.
+
+    The recurrence ``p_{k+1}(t) = (t - a_k) p_k(t) - b_k p_{k-1}(t)`` adds at
+    most the combined operand digits to each polynomial value per step, and
+    kernel terms accumulate the beta digits in their denominators. Requests
+    whose derived budget exceeds the canonical rational limit are rejected
+    before execution so result construction cannot fail after admission.
+    """
+    order = len(alpha)
+    operand_digits = max(
+        _component_digits(x),
+        _component_digits(y),
+        *(_component_digits(value) for value in (*alpha, *beta)),
+    )
+    beta_digit_total = sum(_component_digits(value) for value in beta)
+    polynomial_digits = 1 + max(order - 1, 0) * (3 * operand_digits + 2)
+    kernel_digits = (
+        2 * polynomial_digits + beta_digit_total + order.bit_length() + 2
+    )
+    if max(polynomial_digits, kernel_digits) > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise ValueError(
+            "Christoffel-Darboux operands exceed the derived "
+            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit output budget"
+        )
+
+
 # ---------------------------------------------------------------------------
 # Christoffel-Darboux kernel
 # ---------------------------------------------------------------------------
@@ -205,6 +246,7 @@ class ChristoffelDarbouxRequest(StrictModel):
         require_bounded_rational(
             self.y, max_digits=MAX_RATIONAL_DIGITS, label="y"
         )
+        _require_bounded_kernel_growth(self.alpha, self.beta, self.x, self.y)
         return self
 
 
@@ -262,6 +304,10 @@ class GaussianQuadratureRequest(StrictModel):
             raise ValueError(
                 "beta_0 (the zeroth moment of a positive functional) must be positive"
             )
+        if beta_zero < MIN_QUADRATURE_MAGNITUDE:
+            raise ValueError(
+                "beta_0 falls below the quadrature finite-float magnitude bound"
+            )
         # Subdiagonal entries feed math.sqrt after float conversion; they must
         # be positive and safely inside the finite IEEE-double range, and the
         # diagonal and mu_0 must convert to finite doubles without overflow.
@@ -271,7 +317,7 @@ class GaussianQuadratureRequest(StrictModel):
                 raise ValueError(
                     "subdiagonal beta entries must be positive squared-norm ratios"
                 )
-            if sub < MIN_QUADRATURE_SUBDIAGONAL:
+            if sub < MIN_QUADRATURE_MAGNITUDE:
                 raise ValueError(
                     "subdiagonal beta entries fall below the quadrature underflow bound"
                 )

@@ -8,6 +8,7 @@ from jacobian.math.cluster_algebras._models import (
     GVectorResult,
     SeedMutationRequest,
     SeedMutationResult,
+    _identity_matrix,
 )
 
 
@@ -64,10 +65,9 @@ def compute_g_vectors(request: GVectorRequest) -> GVectorResult:
     For the initial seed, the g-vector matrix is the identity matrix.
     """
     n = request.exchange_matrix.n
-    g = tuple(tuple(1 if i == j else 0 for j in range(n)) for i in range(n))
     return GVectorResult(
-        n=n,
-        g_matrix=g,
+        exchange_matrix=request.exchange_matrix,
+        g_matrix=_identity_matrix(n),
     )
 
 

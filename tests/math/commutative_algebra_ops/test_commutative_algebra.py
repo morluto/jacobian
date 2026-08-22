@@ -480,6 +480,7 @@ class TestSaturationSourceBinding:
                 source_polynomial=z_polynomial,
                 saturation=_ideal(("x", "y"), {(1, 0): 1}),
                 backend_version="4.4",
+                verification_budget=IdealComputationBudget(),
             )
 
 
@@ -620,6 +621,7 @@ class TestSaturationContainment:
                 source_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
                 saturation=_ideal(("x", "y"), {(0, 2): 1}),  # bogus (y^2)
                 backend_version="4.4",
+                verification_budget=IdealComputationBudget(),
             )
 
     def test_verified_result_round_trips_hermetically(self, monkeypatch) -> None:
@@ -631,15 +633,65 @@ class TestSaturationContainment:
 
         self._stub_verdict(monkeypatch, "VERIFIED")
         source = _ideal(("x", "y"), {(1, 0): 1})
+        budget = IdealComputationBudget()
         result = IdealSaturationResult(
             outcome="COMPUTED",
             source_ideal=source,
             source_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
             saturation=source,
             backend_version="4.4",
+            verification_budget=budget,
         )
         assert result.outcome == "COMPUTED"
         assert result.saturation == source
+
+    def test_computed_result_requires_retained_verification_budget(
+        self, monkeypatch
+    ) -> None:
+        """A COMPUTED payload cannot validate without the bounded budget
+        its defining-equality decision is replayed under."""
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationResult,
+        )
+
+        self._stub_verdict(monkeypatch, "VERIFIED")
+        source = _ideal(("x", "y"), {(1, 0): 1})
+        with pytest.raises(ValueError, match="verification budget"):
+            IdealSaturationResult(
+                outcome="COMPUTED",
+                source_ideal=source,
+                source_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
+                saturation=source,
+                backend_version="4.4",
+            )
+
+    def test_replay_honors_the_retained_budget(self, monkeypatch) -> None:
+        """Deserialization replays the defining equality under the retained
+        remaining budget, not a fresh default one."""
+        from jacobian.math.commutative_algebra_ops import _singular
+
+        seen = {}
+        budget = IdealComputationBudget(wall_seconds=7)
+
+        def _record(source, saturator, claimed, used):
+            seen["budget"] = used
+            return "VERIFIED"
+
+        monkeypatch.setattr(_singular, "run_singular_saturation_verification", _record)
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationResult,
+        )
+
+        source = _ideal(("x", "y"), {(1, 0): 1})
+        IdealSaturationResult(
+            outcome="COMPUTED",
+            source_ideal=source,
+            source_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
+            saturation=source,
+            backend_version="4.4",
+            verification_budget=budget,
+        )
+        assert seen["budget"] == budget
 
     @requires_singular
     @pytest.mark.requires_backend("singular")
@@ -657,6 +709,7 @@ class TestSaturationContainment:
                 source_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
                 saturation=_ideal(("x", "y"), {(0, 2): 1}),  # bogus (y^2)
                 backend_version="4.4",
+                verification_budget=IdealComputationBudget(),
             )
 
     @requires_singular
@@ -675,6 +728,7 @@ class TestSaturationContainment:
             source_polynomial=_polynomial(("x", "y"), {(0, 1): 1}),  # y
             saturation=source,
             backend_version="4.4",
+            verification_budget=IdealComputationBudget(),
         )
         assert result.saturation == source
 

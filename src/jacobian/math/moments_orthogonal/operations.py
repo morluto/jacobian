@@ -148,6 +148,14 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
             "moments: the maximum recurrence order consumes exactly "
             f"{maximum_moments} moments"
         )
+    # An even-length sequence would leave its final moment unconsumed by
+    # the returned coefficients; reject it instead of returning a truncated
+    # result as complete.
+    if m % 2 == 0:
+        raise ValueError(
+            "moment sequence must have odd length: an even-length sequence "
+            "determines more than the returned coefficients consume"
+        )
     if any(type(value) is not Fraction for value in moments):
         raise TypeError("moments must use exact Fractions")
     if moments[0] <= 0:
@@ -177,6 +185,28 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     return RecurrenceCoefficients(alpha=tuple(alpha), beta=tuple(beta))
 
 
+def _require_positive_recurrence_data(
+    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+) -> None:
+    """Mirror the wire model's positive-definite contract natively.
+
+    beta_0 is the zeroth mass of a positive functional and beta_1.. are
+    squared-norm ratios; every entry occupying one of those roles must be
+    strictly positive or the derived kernel data are not well defined.
+    """
+    if len(beta) == 0:
+        raise ValueError("beta must contain at least the zeroth moment")
+    if beta[0] <= 0:
+        raise ValueError(
+            "beta_0 (the zeroth moment of a positive functional) must be positive"
+        )
+    for index in range(1, min(len(alpha), len(beta))):
+        if beta[index] <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
+
+
 def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> JacobiMatrix:
     """Build the symmetric tridiagonal Jacobi matrix from recurrence coefficients.
 
@@ -196,8 +226,7 @@ def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> Jacobi
         raise TypeError("alpha must use exact Fractions")
     if any(type(value) is not Fraction for value in beta):
         raise TypeError("beta must use exact Fractions")
-    if beta[0] == 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    _require_positive_recurrence_data(alpha, beta)
     return JacobiMatrix(
         diagonal=tuple(alpha),
         # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is
@@ -233,8 +262,7 @@ def christoffel_darboux(
         raise ValueError("alpha must have length len(beta)-1 or len(beta)")
     if type(x) is not Fraction or type(y) is not Fraction:
         raise TypeError("x and y must use exact Fractions")
-    if beta[0] == 0:
-        raise ValueError("beta_0 must be nonzero")
+    _require_positive_recurrence_data(alpha, beta)
     n = len(alpha)
     if n == 0:
         return ChristoffelDarbouxKernel(
@@ -344,11 +372,27 @@ def gaussian_quadrature(
     eigenvalues, eigenvectors = np.linalg.eigh(jacobi)
     mu0 = float(beta[0])
     weights = mu0 * eigenvectors[0, :] ** 2
+    # A positive-definite functional has strictly positive masses at finite
+    # nodes; if float64 cannot represent a derived node or mass (scale
+    # disparity between coefficients can underflow an eigenvector component
+    # to zero), reject the data instead of returning a degenerate rule.
+    node_values = tuple(float(value) for value in eigenvalues)
+    weight_values = tuple(float(value) for value in weights)
+    if not all(math.isfinite(value) for value in node_values):
+        raise ValueError(
+            "quadrature derivation produced nodes outside the finite "
+            "float64 range for these recurrence data"
+        )
+    if any(not math.isfinite(value) or value <= 0.0 for value in weight_values):
+        raise ValueError(
+            "quadrature derivation underflows the positive float64 mass "
+            "range for these recurrence data; tighten the coefficient scale"
+        )
     # Each double is carried as its exact dyadic rational image so the result
     # stays canonical and reconstructible without JSON floating points.
     return GaussianQuadrature(
-        nodes=tuple(Fraction(float(v)) for v in eigenvalues),
-        weights=tuple(Fraction(float(w)) for w in weights),
+        nodes=tuple(Fraction(value) for value in node_values),
+        weights=tuple(Fraction(value) for value in weight_values),
         is_approximate=True,
         precision="FLOAT64",
     )

@@ -105,7 +105,7 @@ class TestRecurrenceCoefficients:
         assert all(a == _frac(1, 2) for a in result.alpha)
 
     def test_beta_zero_is_mu0(self) -> None:
-        moments = (_frac(2, 1), _frac(1, 1), _frac(2, 3), _frac(1, 2))
+        moments = (_frac(2, 1), _frac(1, 1), _frac(2, 3))
         result = recurrence_coefficients(moments)
         assert result.beta[0] == _frac(2, 1)
 
@@ -123,12 +123,28 @@ class TestRecurrenceCoefficients:
         with pytest.raises(ValueError, match="positive"):
             recurrence_coefficients((_frac(-1, 1),))
 
-    def test_insufficient_moments_for_recurrence(self) -> None:
-        """With only 2 moments we can't produce any recurrence coefficient."""
-        moments = (_frac(1, 1), _frac(1, 2))
-        result = recurrence_coefficients(moments)
+    def test_single_moment_has_no_recurrence_coefficients(self) -> None:
+        """One moment determines only beta_0 = mu_0."""
+        result = recurrence_coefficients((_frac(1, 1),))
         assert result.alpha == ()
         assert result.beta == (_frac(1, 1),)
+
+    def test_even_length_sequence_rejected(self) -> None:
+        """An even-length sequence leaves its final moment unconsumed by
+        the returned coefficients: (1, 2) and (1, 999) must not both be
+        reported as the complete first-order recurrence."""
+        with pytest.raises(ValueError, match="odd length"):
+            recurrence_coefficients((_frac(1, 1), _frac(2, 1)))
+        with pytest.raises(ValueError, match="odd length"):
+            recurrence_coefficients((_frac(1, 1), _frac(999, 1)))
+
+    def test_request_rejects_even_length_sequences(self) -> None:
+        """The wire request applies the odd-length admission too."""
+        moments = (_frac(1, 1), _frac(2, 1))
+        with pytest.raises(ValidationError, match="odd length"):
+            RecurrenceCoefficientsRequest(
+                moments=tuple(CanonicalRational.from_fraction(m) for m in moments)
+            )
 
     def test_moment_tail_beyond_order_16_rejected(self) -> None:
         """35 determined moments cannot be advertised as the complete
@@ -176,9 +192,16 @@ class TestJacobiMatrix:
         assert result.diagonal == ()
         assert result.off_diagonal == ()
 
-    def test_zero_beta_rejected(self) -> None:
-        with pytest.raises(ValueError, match="nonzero"):
+    def test_nonpositive_beta_rejected(self) -> None:
+        """The native boundary mirrors the wire model's positive-definite
+        contract: beta_0 is the zeroth mass, subdiagonals squared norms."""
+        with pytest.raises(ValueError, match="positive"):
             jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
+        with pytest.raises(ValueError, match="positive"):
+            jacobi_matrix(
+                (_frac(0, 1), _frac(0, 1)),
+                (_frac(1, 1), _frac(-1, 2), _frac(1, 3)),
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -261,6 +284,16 @@ class TestGaussianQuadrature:
                 (_frac(0, 1), _frac(0, 1)),
                 (_frac(1, 1), _frac(-1, 3)),
             )
+
+    def test_unrepresentable_derived_mass_rejected(self) -> None:
+        """Individually bounded coefficients with extreme relative scale can
+        underflow an eigenvector component: alpha=(0, 10^300),
+        beta=(1, 10^-300) would square to a zero quadrature weight. The
+        derivation rejects such data instead of returning a degenerate rule."""
+        huge = Fraction(10**300)
+        tiny = Fraction(1, 10**300)
+        with pytest.raises(ValueError, match="underflows"):
+            gaussian_quadrature((Fraction(0), huge), (_frac(1, 1), tiny))
 
 
 # ---------------------------------------------------------------------------

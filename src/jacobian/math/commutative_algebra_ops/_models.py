@@ -267,6 +267,15 @@ class IdealSaturationResult(StrictModel):
     method: Literal["SINGULAR_SATURATION"] = "SINGULAR_SATURATION"
     backend_version: str | None = None
     detail: str | None = None
+    verification_budget: IdealComputationBudget | None = Field(
+        default=None,
+        description=(
+            "For a computed saturation, the bounded budget that was left "
+            "of the request's declared wall time when its defining-equality "
+            "verification ran; deserialization replays the decision under "
+            "this same bound."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_outcome_shape(self) -> Self:
@@ -275,9 +284,15 @@ class IdealSaturationResult(StrictModel):
                 raise ValueError(
                     "computed saturation requires a value and backend version"
                 )
+            if self.verification_budget is None:
+                raise ValueError(
+                    "computed saturation requires the verification budget "
+                    "it was decided under"
+                )
         elif (
             self.saturation is not None
             or self.backend_version is not None
+            or self.verification_budget is not None
             or not self.detail
         ):
             raise ValueError(
@@ -295,19 +310,28 @@ class IdealSaturationResult(StrictModel):
                 "ideal's ordered ring"
             )
         # Anti-forgery replay: a COMPUTED conclusion must be re-decidable
-        # from the retained sources alone. The defining equality is decided
-        # inside the same bounded Singular subprocess flow as the operation,
-        # so a relayed payload claiming an unrelated ideal cannot validate.
+        # from the retained sources alone. The retained operands are first
+        # re-admitted through the request contract, so an independently
+        # authored payload cannot smuggle generators beyond the operation's
+        # bounded domain into the replay; the defining equality is then
+        # decided inside the same bounded Singular subprocess flow as the
+        # operation, under the budget retained from the original request.
         if self.outcome == "COMPUTED":
             from jacobian.math.commutative_algebra_ops._singular import (
                 run_singular_saturation_verification,
             )
 
             saturation = self.saturation
-            if saturation is None:
+            verification_budget = self.verification_budget
+            if saturation is None or verification_budget is None:
                 raise ValueError(
                     "computed saturation requires a value and backend version"
                 )
+            IdealSaturationRequest(
+                ideal=self.source_ideal,
+                saturation_polynomial=self.source_polynomial,
+                resource_budget=verification_budget,
+            )
             saturator = RationalPolynomialIdeal(
                 variables=self.source_ideal.variables,
                 generators=(self.source_polynomial,),
@@ -316,7 +340,7 @@ class IdealSaturationResult(StrictModel):
                 self.source_ideal,
                 saturator,
                 saturation,
-                IdealComputationBudget(),
+                verification_budget,
             )
             if verdict != "VERIFIED":
                 raise ValueError(

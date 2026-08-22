@@ -145,6 +145,19 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
                 source_polynomial=request.saturation_polynomial,
                 detail=detail,
             )
+        # The defining equality was just decided under this exact remaining
+        # budget; construct the validated result directly so producer-side
+        # validation does not launch the bounded verification a second time.
+        return IdealSaturationResult.model_construct(
+            outcome="COMPUTED",
+            source_ideal=request.ideal,
+            source_polynomial=request.saturation_polynomial,
+            saturation=backend.ideal,
+            method="SINGULAR_SATURATION",
+            backend_version=backend.backend_version,
+            detail=backend.detail,
+            verification_budget=verification_budget,
+        )
     return IdealSaturationResult(
         outcome=backend.outcome,
         source_ideal=request.ideal,

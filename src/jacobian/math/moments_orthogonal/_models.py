@@ -129,7 +129,8 @@ class RecurrenceCoefficientsRequest(StrictModel):
     def require_valid_moments(self) -> Self:
         # Order-16 coefficients consume exactly 2*16+1 = 33 moments; a
         # longer sequence determines more than the returned order while the
-        # result claims the complete recurrence.
+        # result claims the complete recurrence. An even-length sequence
+        # would leave its final moment unconsumed.
         maximum_moments = 2 * MAX_RECURRENCE_ORDER + 1
         if len(self.moments) > maximum_moments:
             raise ValueError(
@@ -137,6 +138,12 @@ class RecurrenceCoefficientsRequest(StrictModel):
                 f"{maximum_moments}-moment recurrence bound: order-"
                 f"{MAX_RECURRENCE_ORDER} coefficients consume exactly "
                 f"{maximum_moments} moments"
+            )
+        if len(self.moments) % 2 == 0:
+            raise ValueError(
+                "moment sequence must have odd length: an even-length "
+                "sequence determines more than the returned coefficients "
+                "consume"
             )
         _validate_moments(self.moments)
         # The Gram-Schmidt kernel requires a positive-definite moment

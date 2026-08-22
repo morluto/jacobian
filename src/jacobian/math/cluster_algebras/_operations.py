@@ -42,8 +42,9 @@ def mutate_seed(request: SeedMutationRequest) -> SeedMutationResult:
             else:
                 b_ik = old[i][k]
                 b_kj = old[k][j]
+                # Fomin-Zelevinsky: b_ij + [b_ik]_+[b_kj]_+ - [-b_ik]_+[-b_kj]_+
                 new[i][j] = old[i][j] + (
-                    max(0, b_ik) * max(0, b_kj) + min(0, b_ik) * min(0, b_kj)
+                    max(0, b_ik) * max(0, b_kj) - min(0, b_ik) * min(0, b_kj)
                 )
 
     mutated = ExchangeMatrix(

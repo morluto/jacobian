@@ -214,6 +214,120 @@ class IdealQuotientResult(StrictModel):
         return self
 
 
+class IdealSaturationRequest(StrictModel):
+    """Compute 'I : <d>^infinity' for a bounded ideal and a polynomial."""
+
+    ideal: RationalPolynomialIdeal = Field(
+        description=(
+            "An ideal in at most 6 variables with at most 16 generators and "
+            "256 aggregate terms; generator total degree is at most 12 and "
+            "coefficient components are at most 128 digits."
+        )
+    )
+    saturation_polynomial: RationalPolynomial = Field(
+        description=(
+            "A single polynomial d in the ideal ring, with "
+            "at most 256 terms, total degree at most 12, and coefficient "
+            "components at most 128 digits."
+        )
+    )
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
+
+    @model_validator(mode="after")
+    def require_backend_domain(self) -> Self:
+        _require_ideal_budget(self.ideal, label="ideal")
+        require_polynomial_budget(
+            self.saturation_polynomial,
+            maximum_terms=MAX_INPUT_TERMS,
+            maximum_exponent=MAX_INPUT_EXPONENT,
+            maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
+            label="saturation polynomial",
+        )
+        if any(
+            sum(term.exponents) > MAX_INPUT_EXPONENT
+            for term in self.saturation_polynomial.polynomial.terms
+        ):
+            raise ValueError(
+                f"saturation polynomial exceeds total degree {MAX_INPUT_EXPONENT}"
+            )
+        if self.saturation_polynomial.variables != self.ideal.variables:
+            raise ValueError("saturation polynomial must use the ideal's ordered ring")
+        return self
+
+
+class IdealSaturationResult(StrictModel):
+    """The saturation I : <d>^infinity bound to its source operands."""
+
+    outcome: IdealExecutionOutcome
+    source_ideal: RationalPolynomialIdeal
+    source_polynomial: RationalPolynomial
+    saturation: RationalPolynomialIdeal | None = None
+    method: Literal["SINGULAR_SATURATION"] = "SINGULAR_SATURATION"
+    backend_version: str | None = None
+    detail: str | None = None
+
+    @model_validator(mode="after")
+    def require_outcome_shape(self) -> Self:
+        if self.outcome == "COMPUTED":
+            if self.saturation is None or self.backend_version is None or self.detail:
+                raise ValueError(
+                    "computed saturation requires a value and backend version"
+                )
+        elif (
+            self.saturation is not None
+            or self.backend_version is not None
+            or not self.detail
+        ):
+            raise ValueError(
+                "failed saturation computation requires only a safe detail"
+            )
+        # Source binding: every retained ring must be the source ideal's
+        # ordered ring.
+        if self.source_polynomial.variables != self.source_ideal.variables or (
+            self.saturation is not None
+            and self.saturation.variables != self.source_ideal.variables
+        ):
+            raise ValueError(
+                "saturation operands and result must share the source "
+                "ideal's ordered ring"
+            )
+        # Defining relation for a COMPUTED claim: I subseteq J and J is
+        # saturated w.r.t. d (d*J subseteq J), so J = I:d^inf up to the
+        # maximality that the Singular backend guarantees.
+        if self.outcome == "COMPUTED" and self.saturation is not None:
+            import sympy
+
+            from jacobian.math.polynomials._conversions import (
+                rational_polynomial_to_sympy,
+            )
+
+            symbols = sympy.symbols(self.source_ideal.variables)
+            basis = sympy.groebner(
+                [
+                    rational_polynomial_to_sympy(gen).as_expr()
+                    for gen in self.saturation.generators
+                ],
+                *symbols,
+                domain=sympy.QQ,
+            )
+            for gen in self.source_ideal.generators:
+                if basis.reduce(rational_polynomial_to_sympy(gen).as_expr())[1] != 0:
+                    raise ValueError(
+                        "claimed saturation does not contain the source ideal"
+                    )
+            d_expr = rational_polynomial_to_sympy(self.source_polynomial).as_expr()
+            for gen in self.saturation.generators:
+                multiple = d_expr * rational_polynomial_to_sympy(gen).as_expr()
+                if basis.reduce(multiple)[1] != 0:
+                    raise ValueError(
+                        "claimed saturation is not saturated by the source "
+                        "polynomial (d*J not subseteq J)"
+                    )
+        return self
+
+
 __all__ = [
     "MAX_OUTPUT_GENERATORS",
     "MAX_OUTPUT_TERMS",
@@ -225,4 +339,6 @@ __all__ = [
     "IdealRadicalMembershipResult",
     "IdealRadicalRequest",
     "IdealRadicalResult",
+    "IdealSaturationRequest",
+    "IdealSaturationResult",
 ]

@@ -32,7 +32,7 @@ _COEFFICIENT = re.compile(r"^(0|-?[1-9][0-9]*)(?:/([1-9][0-9]*))?$")
 _STDOUT_LIMIT = 512 * 1024
 _STDERR_LIMIT = 64 * 1024
 
-SingularOperation = Literal["radical", "quotient"]
+SingularOperation = Literal["radical", "quotient", "saturation"]
 SingularOutcome = Literal[
     "COMPUTED", "UNAVAILABLE", "TIMEOUT", "LIMIT_EXCEEDED", "ERROR"
 ]
@@ -108,6 +108,11 @@ def _script(
     declarations = [_singular_ideal("jacobian_left", left)]
     if operation == "radical":
         operation_line = "ideal jacobian_result=radical(jacobian_left);"
+    elif operation == "saturation":
+        if right is None:
+            raise ValueError("saturation requires a saturation polynomial ideal")
+        declarations.append(_singular_ideal("jacobian_right", right))
+        operation_line = "ideal jacobian_result=sat(jacobian_left,jacobian_right[1]);"
     else:
         if right is None:
             raise ValueError("quotient requires a divisor ideal")

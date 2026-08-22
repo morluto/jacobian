@@ -7,7 +7,7 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 
 
@@ -467,6 +467,12 @@ class CircumradiusProfileRequest(StrictModel):
         )
         if len(keys) != len(set(keys)):
             raise ValueError("point coordinates must be unique")
+        # Bound coordinates so that squared circumradius stays within the
+        # canonical result limit.  The formula R^2 = (|a-b|^2|b-c|^2|c-a|^2)/(4*(2*area)^2)
+        # can produce ~6x digit growth; capping at 4096 keeps outputs <32768.
+        for item in self.points:
+            require_bounded_rational(item.point.x, max_digits=4096, label="point x")
+            require_bounded_rational(item.point.y, max_digits=4096, label="point y")
         return self
 
 
@@ -500,8 +506,29 @@ class CircumradiusProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_profile(self) -> Self:
+        import math
+
+        expected = math.comb(self.point_count, 3)
+        if self.triple_count != expected:
+            raise ValueError("triple_count must equal comb(point_count, 3)")
         if len(self.entries) != self.triple_count:
             raise ValueError("circumradius profile must be complete")
+        # Validate that entries cover every unordered triple exactly once in canonical order
+        seen: set[tuple[int, int, int]] = set()
+        for entry in self.entries:
+            idx = entry.indices
+            if idx != tuple(sorted(idx)):
+                raise ValueError("circumradius entry indices must be sorted")
+            if idx in seen:
+                raise ValueError("circumradius entries must be unique")
+            if not (0 <= idx[0] < idx[1] < idx[2] < self.point_count):
+                raise ValueError("circumradius entry indices out of range")
+            seen.add(idx)
+        # Check canonical lexicographic order
+        if tuple(self.entries) != tuple(sorted(self.entries, key=lambda e: e.indices)):
+            raise ValueError("circumradius entries must be in lexicographic order")
+        if len(seen) != expected:
+            raise ValueError("circumradius profile must cover every unordered triple")
         return self
 
 

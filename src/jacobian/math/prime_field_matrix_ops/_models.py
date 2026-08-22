@@ -14,13 +14,19 @@ from jacobian.math.prime_field_linear_algebra import (
 )
 
 MAX_DIMENSION = 256
+MAX_PRIME = 1000000
+
+
+def _require_prime(value: int) -> None:
+    if value < 2 or value > MAX_PRIME or any(value % d == 0 for d in range(2, int(value**0.5) + 1)):
+        raise ValueError("prime must be a prime modulus within the bounded domain")
 # Primality testing and modular elimination run on the raw modulus; an
 # unbounded accepted integer makes admitted-request work unbounded.
 MAX_MODULUS = 2**53 - 1
 
 
 class PrimeFieldMatrixRequest(StrictModel):
-    prime: int = Field(ge=2, le=MAX_MODULUS)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
@@ -50,7 +56,7 @@ class _PrimeFieldMatrixValidator:
 
 
 class RankRequest(StrictModel):
-    prime: int = Field(ge=2, le=MAX_MODULUS)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
@@ -70,9 +76,8 @@ class RankRequest(StrictModel):
         return self
 
 
-class RankResult(StrictModel):
+class RankResult(RankRequest):
     rank: int = Field(ge=0)
-    prime: int = Field(ge=2, le=MAX_MODULUS)
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_RANK"] = "EXACT_DOMAIN_MATRIX_RANK"
 
@@ -80,11 +85,18 @@ class RankResult(StrictModel):
     def bind_rank(self) -> Self:
         if self.rank > MAX_DIMENSION:
             raise ValueError("rank exceeds the supported dimension bound")
+        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix, rref
+
+        matrix = PrimeFieldMatrix(prime=self.prime, entries=self.entries, columns=self.columns)
+        _, expected_pivots = rref(matrix)
+        expected = len(expected_pivots)
+        if self.rank != expected:
+            raise ValueError("rank does not match recomputation from the source matrix")
         return self
 
 
 class RrefRequest(StrictModel):
-    prime: int = Field(ge=2, le=MAX_MODULUS)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
@@ -130,7 +142,7 @@ class RrefResult(RrefRequest):
 
 
 class NullspaceRequest(StrictModel):
-    prime: int = Field(ge=2, le=MAX_MODULUS)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 

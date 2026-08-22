@@ -6,13 +6,55 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math._rational_height import RationalHeight, sum_heights
 
 
 class RationalPoint2D(StrictModel):
     x: CanonicalRational
     y: CanonicalRational
+
+
+def _displacement_height(
+    left: CanonicalRational, right: CanonicalRational
+) -> RationalHeight:
+    return sum_heights(
+        (RationalHeight.from_canonical(left), RationalHeight.from_canonical(right))
+    )
+
+
+def _inversion_result_heights(
+    center_x: CanonicalRational,
+    center_y: CanonicalRational,
+    power: CanonicalRational,
+    point_x: CanonicalRational,
+    point_y: CanonicalRational,
+) -> tuple[RationalHeight, RationalHeight]:
+    """Conservative height of I(p) = c + s(p - c)/||p - c||^2 before reduction.
+
+    The admitted domain must be symmetric under unit inversion so every
+    accepted result can be consumed unchanged.  For the origin-centered unit
+    inversion, I(I(p)) == p exactly, and each application squares
+    numerator/denominator digit counts; bounding the input height by half the
+    canonical limit makes two successive accepted invocations stay within one
+    canonical limit, which the squaring growth dominates.
+    """
+
+    dx = _displacement_height(point_x, center_x)
+    dy = _displacement_height(point_y, center_y)
+    norm_squared = sum_heights((dx.product(dx), dy.product(dy)))
+    scale = RationalHeight.from_canonical(power).quotient(norm_squared)
+    inverted_x = sum_heights(
+        (RationalHeight.from_canonical(center_x), scale.product(dx))
+    )
+    inverted_y = sum_heights(
+        (RationalHeight.from_canonical(center_y), scale.product(dy))
+    )
+    return inverted_x, inverted_y
+
+
+_HALF_CANONICAL_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS // 2
 
 
 class CircleInversionRequest(StrictModel):
@@ -41,6 +83,35 @@ class CircleInversionRequest(StrictModel):
             and self.point_y.as_fraction() == self.center_y.as_fraction()
         ):
             raise ValueError("the inversion center cannot be inverted")
+
+        # Admit only inputs whose own height is at most half the canonical
+        # limit.  Unit inversion squares digit counts, so I(I(p)) for an
+        # admitted p is again admitted: the domain is symmetric under the
+        # advertised involution and every accepted result can be fed back.
+        for rational in (
+            self.center_x,
+            self.center_y,
+            self.point_x,
+            self.point_y,
+            self.power,
+        ):
+            height = RationalHeight.from_canonical(rational)
+            if height.exceeds(_HALF_CANONICAL_DIGITS):
+                raise ValueError(
+                    "circle inversion inputs must stay within the "
+                    f"{_HALF_CANONICAL_DIGITS}-digit symmetric admission bound"
+                )
+
+        inverted_x, inverted_y = _inversion_result_heights(
+            self.center_x, self.center_y, self.power, self.point_x, self.point_y
+        )
+        if inverted_x.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) or inverted_y.exceeds(
+            MAX_CANONICAL_RATIONAL_DIGITS
+        ):
+            raise ValueError(
+                "circle inversion rational height exceeds the "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound"
+            )
         return self
 
 

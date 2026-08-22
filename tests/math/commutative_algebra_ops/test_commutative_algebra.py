@@ -480,14 +480,34 @@ class TestSaturationSourceBinding:
 
 
 class TestSaturationContainment:
-    def test_bogus_result_rejected_in_bounded_flow(self) -> None:
-        from jacobian.math.commutative_algebra_ops._operations import (
-            _verify_saturation_containment,
+    def test_bogus_result_rejected_in_bounded_flow(self, monkeypatch) -> None:
+        """A COMPUTED backend claim violating the defining equality fails
+        verification inside the operation's bounded Singular flow."""
+        from jacobian.math.commutative_algebra_ops import _operations as ops
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationRequest,
+        )
+        from jacobian.math.polynomials.values import RationalPolynomialIdeal
+
+        bogus = RationalPolynomialIdeal(
+            variables=("x", "y"),
+            generators=(_polynomial(("x", "y"), {(0, 2): 1}),),  # (y^2)
         )
 
-        with pytest.raises(ValueError, match="does not contain"):
-            _verify_saturation_containment(
-                _ideal(("x", "y"), {(1, 0): 1}),
-                _polynomial(("x", "y"), {(1, 0): 1}),
-                _ideal(("x", "y"), {(0, 2): 1}),
-            )
+        class _FakeBackend:
+            outcome = "COMPUTED"
+            ideal = bogus
+            backend_version = "4.4"
+            detail = None
+
+        monkeypatch.setattr(
+            ops,
+            "run_singular_ideal_operation",
+            lambda *args, **kwargs: _FakeBackend(),
+        )
+        request = IdealSaturationRequest(
+            ideal=_ideal(("x", "y"), {(1, 0): 1}),
+            saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
+        )
+        with pytest.raises(ValueError, match="differs"):
+            ops.compute_ideal_saturation(request)

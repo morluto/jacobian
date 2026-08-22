@@ -545,6 +545,24 @@ def forbidden_patterns(request):
             - m[0][3] * _minor3(m, 1, 2, 3, 0, 1, 2)
         )
         if det == 0:
+            # A quadruple containing a collinear triple is degenerate:
+            # three distinct collinear points cannot lie on a finite circle.
+            # Exclude such cases from concyclicity witnesses.
+            is_collinear = False
+            for a, b, c in (
+                (i, j, k),
+                (i, j, ell),
+                (i, k, ell),
+                (j, k, ell),
+            ):
+                xa, ya = xy[a]
+                xb, yb = xy[b]
+                xc, yc = xy[c]
+                if (xb - xa) * (yc - ya) - (yb - ya) * (xc - xa) == 0:
+                    is_collinear = True
+                    break
+            if is_collinear:
+                continue
             has_concyclic = True
             concyclic_quadruple = ConcyclicQuadruple(
                 first=i, second=j, third=k, fourth=ell

@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
@@ -56,8 +57,8 @@ class PinnedDistanceResult(StrictModel):
             raise ValueError("distinct_line_count must match the line count")
         if self.lines:
             min_entry = min(self.lines, key=lambda e: Fraction(
-                int(e.squared_distance_numerator),
-                int(e.squared_distance_denominator),
+                parse_canonical_integer(e.squared_distance_numerator),
+                parse_canonical_integer(e.squared_distance_denominator),
             ))
             if self.min_squared_distance is None:
                 raise ValueError("min_squared_distance is required when lines exist")
@@ -105,9 +106,9 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
         if int_a < 0 or (int_a == 0 and int_b < 0):
             int_a, int_b, int_c = -int_a, -int_b, -int_c
         return (
-            str(int_a),
-            str(int_b),
-            str(int_c),
+            format_canonical_integer(int_a),
+            format_canonical_integer(int_b),
+            format_canonical_integer(int_c),
         )
 
     line_map: dict[
@@ -130,8 +131,8 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
             if key not in line_map:
                 line_map[key] = (
                     [],
-                    str(sq_dist.numerator),
-                    str(sq_dist.denominator),
+                    format_canonical_integer(sq_dist.numerator),
+                    format_canonical_integer(sq_dist.denominator),
                 )
             line_map[key][0].append((i, j))
 
@@ -146,8 +147,8 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
         entries.append(entry)
 
     min_entry = min(entries, key=lambda e: Fraction(
-        int(e.squared_distance_numerator),
-        int(e.squared_distance_denominator),
+        parse_canonical_integer(e.squared_distance_numerator),
+        parse_canonical_integer(e.squared_distance_denominator),
     )) if entries else None
 
     return PinnedDistanceResult(

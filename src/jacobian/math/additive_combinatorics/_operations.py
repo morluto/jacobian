@@ -188,9 +188,11 @@ def compute_ordered_difference_profile(
         )
         if multiplicity > max_mult:
             max_mult = multiplicity
+        if first_repeated is None and multiplicity > 1:
             first_repeated = diff
 
     return OrderedDifferenceProfileResult(
+        vectors=request.vectors,
         dimension=len(vectors[0]),
         set_size=n,
         total_ordered_pairs=n * (n - 1),

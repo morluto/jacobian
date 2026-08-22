@@ -68,6 +68,14 @@ class RankRequest(StrictModel):
 
 
 class RankResult(StrictModel):
+    """The exact rank of one retained source matrix over GF(prime).
+
+    Carries the matrix so result validation replays the rank invariant
+    instead of trusting an independently authored integer.
+    """
+
+    entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
+    columns: int = Field(ge=0, le=MAX_DIMENSION)
     rank: int = Field(ge=0)
     prime: int = Field(ge=2)
     complete: Literal[True] = True
@@ -75,8 +83,19 @@ class RankResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_rank(self) -> Self:
-        if self.rank > MAX_DIMENSION:
-            raise ValueError("rank exceeds the supported dimension bound")
+        if len(self.entries) > MAX_DIMENSION or any(
+            len(row) != self.columns for row in self.entries
+        ):
+            raise ValueError("entries must match the declared shape")
+        from jacobian.math.prime_field_linear_algebra import rank as _rank
+
+        expected = _rank(
+            PrimeFieldMatrix(
+                prime=self.prime, entries=self.entries, columns=self.columns
+            )
+        )
+        if self.rank != expected:
+            raise ValueError("rank must be the exact rank of the source matrix")
         return self
 
 

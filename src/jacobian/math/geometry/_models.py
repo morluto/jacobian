@@ -467,6 +467,10 @@ class CircumradiusProfileRequest(StrictModel):
         )
         if len(keys) != len(set(keys)):
             raise ValueError("point coordinates must be unique")
+        for entry in self.points:
+            for coord in (entry.point.x, entry.point.y):
+                if max(len(coord.num.lstrip("-")), len(coord.den)) > 256:
+                    raise ValueError("circumradius point coordinate exceeds digit bound")
         return self
 
 
@@ -493,6 +497,7 @@ class CircumradiusTripleEntry(StrictModel):
 
 
 class CircumradiusProfileResult(StrictModel):
+    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
     point_count: StrictInt = Field(ge=3, le=64)
     triple_count: StrictInt = Field(ge=1, le=41664)
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
@@ -500,8 +505,21 @@ class CircumradiusProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_profile(self) -> Self:
+        from fractions import Fraction
         from itertools import combinations
 
+        if self.point_count != len(self.points):
+            raise ValueError("point_count must match the retained points")
+        # Validate uniqueness as in request
+        labels = tuple(item.label for item in self.points)
+        if len(labels) != len(set(labels)):
+            raise ValueError("point labels must be unique")
+        keys = tuple(
+            (item.point.x.num, item.point.x.den, item.point.y.num, item.point.y.den)
+            for item in self.points
+        )
+        if len(keys) != len(set(keys)):
+            raise ValueError("point coordinates must be unique")
         expected = tuple(combinations(range(self.point_count), 3))
         if len(self.entries) != len(expected):
             raise ValueError("circumradius profile must be complete")
@@ -514,6 +532,29 @@ class CircumradiusProfileResult(StrictModel):
             raise ValueError(
                 "entries must carry the canonical C(point_count, 3) triple set"
             )
+        # Replay each entry's exact squared circumradius
+        coords: list[tuple[Fraction, Fraction]] = [
+            (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in self.points
+        ]
+        for entry, (i, j, k) in zip(self.entries, expected):
+            (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
+            if entry.labels != (self.points[i].label, self.points[j].label, self.points[k].label):
+                raise ValueError("entry labels must match the source points")
+            if entry.indices != (i, j, k):
+                raise ValueError("entry indices must match the canonical triple")
+            cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+            if cross == 0:
+                if not entry.collinear or entry.squared_circumradius is not None:
+                    raise ValueError("collinear triple must have no circumradius")
+            else:
+                if entry.collinear or entry.squared_circumradius is None:
+                    raise ValueError("noncollinear triple must carry a circumradius")
+                dab = (ax - bx) ** 2 + (ay - by) ** 2
+                dbc = (bx - cx) ** 2 + (by - cy) ** 2
+                dac = (ax - cx) ** 2 + (ay - cy) ** 2
+                expected_radius = (dab * dbc * dac) / (4 * cross * cross)
+                if entry.squared_circumradius.as_fraction() != expected_radius:
+                    raise ValueError("squared circumradius must match the exact formula")
         return self
 
 
@@ -527,7 +568,7 @@ class ForbiddenLabelledPoint(StrictModel):
 class ForbiddenConfiguration(StrictModel):
     """A finite set of labelled rational planar points."""
 
-    points: tuple[ForbiddenLabelledPoint, ...] = Field(min_length=1, max_length=128)
+    points: tuple[ForbiddenLabelledPoint, ...] = Field(min_length=1, max_length=32)
 
     @model_validator(mode="after")
     def require_unique_labels_and_coords(self) -> Self:
@@ -537,6 +578,13 @@ class ForbiddenConfiguration(StrictModel):
         keys = tuple(_point_key(item.point) for item in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("configuration point coordinates must be unique")
+        # Conservative enumeration budget: C(32,4)=35960 quadruples, each with exact
+        # Fraction arithmetic on bounded coordinates. Limit coordinate digits to
+        # keep per-determinant work and derived radii within CanonicalRational.
+        for entry in self.points:
+            for coord in (entry.point.x, entry.point.y):
+                if max(len(coord.num.lstrip("-")), len(coord.den)) > 256:
+                    raise ValueError("forbidden configuration coordinate exceeds digit bound")
         return self
 
 
@@ -549,9 +597,9 @@ class ForbiddenPatternsRequest(StrictModel):
 class CollinearTriple(StrictModel):
     """A triple of configuration point indices lying on one line."""
 
-    first: StrictInt = Field(ge=0, le=127)
-    second: StrictInt = Field(ge=0, le=127)
-    third: StrictInt = Field(ge=0, le=127)
+    first: StrictInt = Field(ge=0, le=31)
+    second: StrictInt = Field(ge=0, le=31)
+    third: StrictInt = Field(ge=0, le=31)
 
     @model_validator(mode="after")
     def require_strictly_ascending(self) -> Self:
@@ -563,10 +611,10 @@ class CollinearTriple(StrictModel):
 class ConcyclicQuadruple(StrictModel):
     """A quadruple of configuration point indices lying on one circle."""
 
-    first: StrictInt = Field(ge=0, le=127)
-    second: StrictInt = Field(ge=0, le=127)
-    third: StrictInt = Field(ge=0, le=127)
-    fourth: StrictInt = Field(ge=0, le=127)
+    first: StrictInt = Field(ge=0, le=31)
+    second: StrictInt = Field(ge=0, le=31)
+    third: StrictInt = Field(ge=0, le=31)
+    fourth: StrictInt = Field(ge=0, le=31)
 
     @model_validator(mode="after")
     def require_strictly_ascending(self) -> Self:
@@ -583,7 +631,7 @@ class ForbiddenPatternsResult(StrictModel):
     """
 
     configuration: ForbiddenConfiguration
-    point_count: StrictInt = Field(ge=1, le=128)
+    point_count: StrictInt = Field(ge=1, le=32)
     has_collinear_triple: bool
     has_concyclic_quadruple: bool
     collinear_triple: CollinearTriple | None = None

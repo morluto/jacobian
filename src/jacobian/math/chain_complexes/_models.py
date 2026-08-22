@@ -49,6 +49,24 @@ class VerifyDifferentialRequest(StrictModel):
     complex: ChainComplexValue
 
 
+def _require_component_entry_grammar(coefficient_field, matrix):
+    """Validate one component's entries; return its (cells, characters)."""
+    from jacobian.math.chain_complexes.values import (
+        _require_rational_entry_grammar,
+    )
+
+    for row in matrix:
+        for entry in row:
+            # Shape alone does not make an entry parseable: the exact
+            # kernels parse entries with Fraction/int and would turn an
+            # accepted request into a host exception.
+            _require_rational_entry_grammar(coefficient_field, entry)
+    return (
+        sum(len(row) for row in matrix),
+        sum(len(entry) for row in matrix for entry in row),
+    )
+
+
 def _require_chain_map_components(
     source: ChainComplexValue,
     target: ChainComplexValue,
@@ -89,9 +107,12 @@ def _require_chain_map_components(
             f"({expected_count}), got {len(map_matrices)}"
         )
     from jacobian.math.chain_complexes.values import (
-        _require_rational_entry_grammar,
+        MAX_CHAIN_MAP_CELLS,
+        MAX_CHAIN_MAP_ENTRY_CHARS,
     )
 
+    total_map_cells = 0
+    total_entry_chars = 0
     for index, matrix in enumerate(map_matrices):
         rows = target.basis_sizes[index]
         cols = source.basis_sizes[index]
@@ -100,12 +121,21 @@ def _require_chain_map_components(
                 f"{label} map component {index} must have shape "
                 f"{rows}x{cols} (target rows x source columns)"
             )
-        for row in matrix:
-            for entry in row:
-                # Shape alone does not make an entry parseable: the exact
-                # kernels parse entries with Fraction/int and would turn an
-                # accepted request into a host exception.
-                _require_rational_entry_grammar(source.coefficient_field, entry)
+        cells, chars = _require_component_entry_grammar(
+            source.coefficient_field, matrix
+        )
+        total_map_cells += cells
+        total_entry_chars += chars
+    if total_map_cells > MAX_CHAIN_MAP_CELLS:
+        raise ValueError(
+            f"{label} map components total {total_map_cells} cells, "
+            f"exceeding the {MAX_CHAIN_MAP_CELLS}-cell aggregate budget"
+        )
+    if total_entry_chars > MAX_CHAIN_MAP_ENTRY_CHARS:
+        raise ValueError(
+            f"{label} map components total {total_entry_chars} entry "
+            f"characters, exceeding the {MAX_CHAIN_MAP_ENTRY_CHARS}-character aggregate budget"
+        )
 
 
 class VerifyChainMapRequest(StrictModel):

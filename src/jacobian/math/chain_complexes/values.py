@@ -18,6 +18,11 @@ MAX_MATRIX_CELLS = 4096
 # accepted request can allocate an unbounded dense intermediate.
 MAX_TENSOR_GROUP_DIMENSION = 256
 MAX_TENSOR_TOTAL_CELLS = 65536
+# Chain-map admission bounds the aggregate component work: across all
+# components, dense cells and printed entry characters stay within these
+# conservative budgets.
+MAX_CHAIN_MAP_CELLS = 4096
+MAX_CHAIN_MAP_ENTRY_CHARS = 65536
 
 
 class CoefficientField(StrEnum):
@@ -185,6 +190,13 @@ class HomologyResult(StrictModel):
             or self.degree_max != self.complex.degree_max
         ):
             raise ValueError("degree interval must match the retained complex")
+        if (
+            self.coefficient_field != self.complex.coefficient_field
+            or self.prime != self.complex.prime
+        ):
+            raise ValueError(
+                "coefficient field and prime must match the retained complex"
+            )
         expected_degrees = list(
             range(self.complex.degree_min, self.complex.degree_max + 1)
         )

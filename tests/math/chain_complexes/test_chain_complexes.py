@@ -366,3 +366,51 @@ class TestHomologySourceBinding:
                 degree_max=0,
                 complex=_point_complex(),
             )
+
+
+class TestAggregateChainMapWork:
+    def test_aggregate_component_cells_bounded(self) -> None:
+        """Alternating (64, 0) sizes pass per-complex cell checks but would
+        admit dozens of dense 64x64 map components; the aggregate budget
+        rejects them."""
+        alternating = tuple(64 if i % 2 == 0 else 0 for i in range(33))
+        complex_value = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=32,
+            basis_sizes=alternating,
+            differential_matrices=tuple(
+                ((),) * 64 if i % 2 == 0 else () for i in range(32)
+            ),
+        )
+        identity_64 = tuple(
+            tuple("1" if i == j else "0" for j in range(64)) for i in range(64)
+        )
+        components = tuple(identity_64 if i % 2 == 0 else () for i in range(33))
+        with pytest.raises(ValueError, match="aggregate"):
+            VerifyChainMapRequest(
+                source=complex_value, target=complex_value, map_matrices=components
+            )
+
+
+class TestHomologyParentMatch:
+    def test_parent_mismatch_rejected(self) -> None:
+        from jacobian.math.chain_complexes.values import (
+            CoefficientField,
+            HomologyGroupValue,
+            HomologyResult,
+        )
+
+        with pytest.raises(ValueError, match="field and prime must match"):
+            HomologyResult(
+                homology_groups=(
+                    HomologyGroupValue(
+                        degree=0, cycle_rank=1, boundary_rank=0, betti_number=1
+                    ),
+                ),
+                coefficient_field=CoefficientField.PRIME_FIELD,
+                prime=2,
+                degree_min=0,
+                degree_max=0,
+                complex=_point_complex(),
+            )

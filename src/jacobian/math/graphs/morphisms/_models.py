@@ -186,8 +186,10 @@ class FixedLengthCycleResult(StrictModel):
     """Whether a simple ``k``-cycle exists, with one ordered witness.
 
     The result retains its source graph so validation can replay the witness
-    vertices and closing edges against it. The witness vertices are canonical
-    string labels from the source graph.
+    vertices and closing edges against it; a negative decision is accepted
+    only inside the bounded request domain and only after replaying the
+    exhaustive search on the retained graph. The witness vertices are
+    canonical string labels from the source graph.
     """
 
     model_config = ConfigDict(
@@ -237,6 +239,34 @@ class FixedLengthCycleResult(StrictModel):
         else:
             if self.cycle:
                 raise ValueError("a DOES_NOT_EXIST result must not carry a witness")
+            # A negative conclusion is exact only inside the bounded request
+            # domain; mirror that admission, then replay the exhaustive
+            # decision against the retained graph before accepting it.
+            n = len(self.graph.vertices)
+            d_max = _canonical_max_degree(self.graph)
+            work = n * (d_max ** (self.length - 1))
+            if (
+                self.length > n
+                or n > MORPHISM_MAX_VERTICES
+                or work > MAX_CYCLE_SEARCH_PATHS
+            ):
+                raise ValueError(
+                    "a DOES_NOT_EXIST decision requires the retained source "
+                    f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
+                    f"{MAX_CYCLE_SEARCH_PATHS}-path request budget"
+                )
+            from jacobian.math.graphs.morphisms._operations import find_cycle_of_length
+
+            if (
+                find_cycle_of_length(
+                    self.graph.vertices, self.graph.edges, self.length
+                )
+                is not None
+            ):
+                raise ValueError(
+                    "a DOES_NOT_EXIST decision contradicts the retained "
+                    f"graph, which contains a cycle of length {self.length}"
+                )
         return self
 
 
@@ -298,7 +328,9 @@ class SubgraphPatternFindResult(StrictModel):
     """Whether a non-induced subgraph embedding exists, with one witness map.
 
     The result retains both source graphs so validation can replay map
-    length, host bounds, injectivity, and exact edge preservation. The
+    length, host bounds, injectivity, and exact edge preservation; a
+    negative decision is accepted only inside the bounded request domain
+    and only after replaying the exhaustive containment search. The
     witness is ordered by the pattern's vertex order and contains host
     vertex labels.
     """
@@ -320,7 +352,7 @@ class SubgraphPatternFindResult(StrictModel):
     vertex_map: tuple[str, ...] = Field(default=())
 
     @model_validator(mode="after")
-    def require_consistent_witness(self) -> Self:
+    def require_consistent_witness(self) -> Self:  # noqa: C901
         if self.decision == "EXISTS":
             if len(self.vertex_map) != len(self.pattern.vertices):
                 raise ValueError(
@@ -355,4 +387,41 @@ class SubgraphPatternFindResult(StrictModel):
         else:
             if self.vertex_map:
                 raise ValueError("a DOES_NOT_EXIST result must not carry a vertex map")
+            # A negative conclusion is exact only inside the bounded request
+            # domain; mirror that admission, then replay the exhaustive
+            # containment decision against the retained graphs.
+            p_n = len(self.pattern.vertices)
+            h_n = len(self.host.vertices)
+            assignments = 1
+            for step in range(p_n):
+                assignments *= h_n - step
+                if assignments > MAX_CYCLE_SEARCH_PATHS:
+                    break
+            if (
+                p_n > MORPHISM_MAX_VERTICES
+                or p_n > h_n
+                or assignments > MAX_CYCLE_SEARCH_PATHS
+            ):
+                raise ValueError(
+                    "a DOES_NOT_EXIST decision requires the retained sources "
+                    f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
+                    f"{MAX_CYCLE_SEARCH_PATHS}-assignment request budget"
+                )
+            from jacobian.math.graphs.morphisms._operations import (
+                find_subgraph_embedding,
+            )
+
+            if (
+                find_subgraph_embedding(
+                    self.pattern.vertices,
+                    self.pattern.edges,
+                    self.host.vertices,
+                    self.host.edges,
+                )
+                is not None
+            ):
+                raise ValueError(
+                    "a DOES_NOT_EXIST decision contradicts the retained "
+                    "graphs, which admit an embedding"
+                )
         return self

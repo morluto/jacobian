@@ -193,22 +193,19 @@ def _canonical_label_adjacency(
     return index, adj
 
 
-def compute_fixed_length_cycle(
-    request: FixedLengthCycleRequest,
-) -> FixedLengthCycleResult:
-    """Decide whether ``graph`` contains a simple cycle of length ``length``.
+def find_cycle_of_length(
+    vertices: tuple[str, ...],
+    edges: tuple[tuple[str, str], ...],
+    length: int,
+) -> tuple[int, ...] | None:
+    """Return one simple cycle of exactly ``length`` vertices, or ``None``.
 
-    Returns ``EXISTS`` with one ordered cycle witness (a sequence of vertex
-    labels whose consecutive vertices and the last-to-first vertex are edges)
-    or ``DOES_NOT_EXIST`` after exhaustive bounded search.  The witness cycle is
-    a subgraph and may have chords; this is distinct from girth (shortest
-    cycle) and from Hamiltonicity (spanning).
+    Exhaustive bounded search over vertex indices.  Callers must enforce
+    the request's path-count admission before invoking this kernel so the
+    search terminates inside a tested budget.
     """
-    graph = request.graph
-    k = request.length
-    vertices = graph.vertices
+    _, adj = _canonical_label_adjacency(vertices, edges)
     n = len(vertices)
-    _, adj = _canonical_label_adjacency(vertices, graph.edges)
 
     # To avoid reporting rotations, fix the smallest vertex of the cycle as the
     # start and restrict every other vertex to be strictly larger than the
@@ -217,7 +214,7 @@ def compute_fixed_length_cycle(
     path: list[int] = []
 
     def dfs(start: int, last: int) -> bool:
-        if len(path) == k:
+        if len(path) == length:
             return start in adj[last]
         for nxt in range(start + 1, n):
             if nxt not in adj[last] or nxt in path:
@@ -231,13 +228,31 @@ def compute_fixed_length_cycle(
     for start in range(n):
         path = [start]
         if dfs(start, start):
-            cycle_labels = tuple(vertices[i] for i in path)
-            return FixedLengthCycleResult(
-                graph=graph,
-                decision="EXISTS",
-                length=k,
-                cycle=cycle_labels,
-            )
+            return tuple(path)
+    return None
+
+
+def compute_fixed_length_cycle(
+    request: FixedLengthCycleRequest,
+) -> FixedLengthCycleResult:
+    """Decide whether ``graph`` contains a simple cycle of length ``length``.
+
+    Returns ``EXISTS`` with one ordered cycle witness (a sequence of vertex
+    labels whose consecutive vertices and the last-to-first vertex are edges)
+    or ``DOES_NOT_EXIST`` after exhaustive bounded search.  The witness cycle is
+    a subgraph and may have chords; this is distinct from girth (shortest
+    cycle) and from Hamiltonicity (spanning).
+    """
+    graph = request.graph
+    k = request.length
+    found = find_cycle_of_length(graph.vertices, graph.edges, k)
+    if found is not None:
+        return FixedLengthCycleResult(
+            graph=graph,
+            decision="EXISTS",
+            length=k,
+            cycle=tuple(graph.vertices[i] for i in found),
+        )
     return FixedLengthCycleResult(
         graph=graph,
         decision="DOES_NOT_EXIST",
@@ -246,29 +261,27 @@ def compute_fixed_length_cycle(
     )
 
 
-def compute_subgraph_pattern_find(  # noqa: C901
-    request: SubgraphPatternFindRequest,
-) -> SubgraphPatternFindResult:
-    """Find an injective edge-preserving embedding of ``pattern`` in ``host``.
+def find_subgraph_embedding(  # noqa: C901
+    pattern_vertices: tuple[str, ...],
+    pattern_edges: tuple[tuple[str, str], ...],
+    host_vertices: tuple[str, ...],
+    host_edges: tuple[tuple[str, str], ...],
+) -> tuple[int, ...] | None:
+    """Return host indices ordered by pattern vertex order, or ``None``.
 
-    Ordinary (non-induced) subgraph containment: an injective map from pattern
-    vertices to host vertices such that every pattern edge maps to a host edge.
-    Returns ``EXISTS`` with one witness vertex map (ordered by pattern vertex
-    order) or ``DOES_NOT_EXIST`` after exhaustive bounded search.
+    Ordinary (non-induced) subgraph containment via exhaustive bounded
+    backtracking.  Callers must enforce the request's assignment-count
+    admission before invoking this kernel.
     """
-    pattern = request.pattern
-    host = request.host
     # Build host adjacency as set of unordered label pairs for fast check.
     host_edge_set: set[tuple[str, str]] = set()
-    for u, v in host.edges:
+    for u, v in host_edges:
         host_edge_set.add((u, v) if u < v else (v, u))
-    host_vertices = host.vertices
-    pattern_vertices = pattern.vertices
     p_n = len(pattern_vertices)
     h_n = len(host_vertices)
     # Map pattern vertex label -> degree for ordering.
     pattern_degree: dict[str, int] = dict.fromkeys(pattern_vertices, 0)
-    for u, v in pattern.edges:
+    for u, v in pattern_edges:
         pattern_degree[u] += 1
         pattern_degree[v] += 1
     pattern_order = sorted(
@@ -276,7 +289,7 @@ def compute_subgraph_pattern_find(  # noqa: C901
     )
     # Pattern edges as pairs of indices in pattern vertex order.
     pattern_edge_idx = tuple(
-        (pattern_vertices.index(u), pattern_vertices.index(v)) for u, v in pattern.edges
+        (pattern_vertices.index(u), pattern_vertices.index(v)) for u, v in pattern_edges
     )
     vertex_map_idx: list[int] = [-1] * p_n  # pattern idx -> host idx
     used_host_idx: set[int] = set()
@@ -319,19 +332,37 @@ def compute_subgraph_pattern_find(  # noqa: C901
             vertex_map_idx[p_idx] = -1
         return False
 
-    found = backtrack(0)
-    if found:
-        # Convert index map to host labels ordered by pattern vertex order.
-        vertex_map_labels = tuple(host_vertices[vertex_map_idx[i]] for i in range(p_n))
+    if backtrack(0):
+        return tuple(vertex_map_idx[i] for i in range(p_n))
+    return None
+
+
+def compute_subgraph_pattern_find(
+    request: SubgraphPatternFindRequest,
+) -> SubgraphPatternFindResult:
+    """Find an injective edge-preserving embedding of ``pattern`` in ``host``.
+
+    Ordinary (non-induced) subgraph containment: an injective map from pattern
+    vertices to host vertices such that every pattern edge maps to a host edge.
+    Returns ``EXISTS`` with one witness vertex map (ordered by pattern vertex
+    order) or ``DOES_NOT_EXIST`` after exhaustive bounded search.
+    """
+    found = find_subgraph_embedding(
+        request.pattern.vertices,
+        request.pattern.edges,
+        request.host.vertices,
+        request.host.edges,
+    )
+    if found is not None:
         return SubgraphPatternFindResult(
-            pattern=pattern,
-            host=host,
+            pattern=request.pattern,
+            host=request.host,
             decision="EXISTS",
-            vertex_map=vertex_map_labels,
+            vertex_map=tuple(request.host.vertices[i] for i in found),
         )
     return SubgraphPatternFindResult(
-        pattern=pattern,
-        host=host,
+        pattern=request.pattern,
+        host=request.host,
         decision="DOES_NOT_EXIST",
         vertex_map=(),
     )

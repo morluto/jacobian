@@ -242,7 +242,9 @@ class TestFixedLengthCycle:
     def test_composes_with_canonical_graph(self):
         # Verify direct composition with graph API: explicit_graph output can be passed unchanged.
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
-        from jacobian.math.graphs.morphisms._operations import compute_fixed_length_cycle
+        from jacobian.math.graphs.morphisms._operations import (
+            compute_fixed_length_cycle,
+        )
         from jacobian.math.graphs.operations import explicit_graph
 
         g = explicit_graph(
@@ -250,6 +252,69 @@ class TestFixedLengthCycle:
         )
         # explicit_graph returns canonical SimpleUndirectedGraph; pass directly
         result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
+        assert result.decision == "EXISTS"
+
+    def test_forged_negative_decision_is_rejected_by_replay(self):
+        import pytest
+
+        from jacobian.math.graphs.morphisms._models import FixedLengthCycleResult
+
+        triangle = self._g(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]])
+        with pytest.raises(ValueError, match="contradicts the retained"):
+            FixedLengthCycleResult(
+                graph=triangle, decision="DOES_NOT_EXIST", length=3, cycle=()
+            )
+
+    def test_negative_decision_replays_inside_request_domain(self):
+        from itertools import combinations
+
+        import pytest
+
+        from jacobian.math.graphs.morphisms._models import (
+            MORPHISM_MAX_VERTICES,
+            FixedLengthCycleRequest,
+            FixedLengthCycleResult,
+        )
+        from jacobian.math.graphs.morphisms._operations import (
+            compute_fixed_length_cycle,
+        )
+
+        # A path on 6 vertices has no triangle; the honest negative result
+        # must validate through replay like any operation-produced value.
+        path_edges = [[chr(ord("a") + i), chr(ord("a") + i + 1)] for i in range(5)]
+        g = self._g(list("abcdef"), path_edges)
+        result = compute_fixed_length_cycle(
+            FixedLengthCycleRequest(graph=g, length=3)
+        )
+        assert result.decision == "DOES_NOT_EXIST"
+        revalidated = FixedLengthCycleResult(
+            graph=g, decision=result.decision, length=result.length, cycle=result.cycle
+        )
+        assert revalidated.decision == "DOES_NOT_EXIST"
+
+        # Outside the bounded request domain a negative decision is not
+        # exact: reject an oversized retained graph with no witness check
+        # to lean on.
+        labels = [f"v{i}" for i in range(MORPHISM_MAX_VERTICES + 1)]
+        big = self._g(labels, [list(e) for e in combinations(labels, 2)][:10])
+        with pytest.raises(ValueError, match="request budget"):
+            FixedLengthCycleResult(graph=big, decision="DOES_NOT_EXIST", length=3)
+
+    def test_positive_witness_still_validates_beyond_search_domain(self):
+        from jacobian.math.graphs.morphisms._models import FixedLengthCycleResult
+
+        # An EXISTS conclusion is established by its witness alone; it stays
+        # valid even when the source exceeds the searchable request domain.
+        n = 24
+        labels = [f"v{i}" for i in range(n)]
+        cyc = [sorted((f"v{i}", f"v{(i + 1) % n}")) for i in range(n)]
+        g = self._g(labels, cyc)
+        result = FixedLengthCycleResult(
+            graph=g,
+            decision="EXISTS",
+            length=n,
+            cycle=tuple(labels),
+        )
         assert result.decision == "EXISTS"
 
 
@@ -334,10 +399,69 @@ class TestSubgraphPatternFind:
 
     def test_composes_with_canonical_graph(self):
         from jacobian.math.graphs.morphisms._models import SubgraphPatternFindRequest
-        from jacobian.math.graphs.morphisms._operations import compute_subgraph_pattern_find
+        from jacobian.math.graphs.morphisms._operations import (
+            compute_subgraph_pattern_find,
+        )
         from jacobian.math.graphs.operations import explicit_graph
 
         pat = explicit_graph(vertices=("x", "y"), edges=(("x", "y"),))
         host = explicit_graph(vertices=("a", "b", "c"), edges=(("a", "b"), ("b", "c")))
         result = compute_subgraph_pattern_find(SubgraphPatternFindRequest(pattern=pat, host=host))
         assert result.decision == "EXISTS"
+
+    def test_forged_negative_decision_is_rejected_by_replay(self):
+        import pytest
+
+        from jacobian.math.graphs.morphisms._models import SubgraphPatternFindResult
+
+        pat = self._g(["x", "y", "z"], [["x", "y"], ["x", "z"], ["y", "z"]])
+        host = self._g(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]])
+        with pytest.raises(ValueError, match="contradicts the retained"):
+            SubgraphPatternFindResult(
+                pattern=pat, host=host, decision="DOES_NOT_EXIST", vertex_map=()
+            )
+
+    def test_negative_decision_replays_inside_request_domain(self):
+        import pytest
+
+        from jacobian.math.graphs.morphisms._models import (
+            MAX_CYCLE_SEARCH_PATHS,
+            MORPHISM_MAX_VERTICES,
+            SubgraphPatternFindRequest,
+            SubgraphPatternFindResult,
+        )
+        from jacobian.math.graphs.morphisms._operations import (
+            compute_subgraph_pattern_find,
+        )
+
+        # An honest negative: a triangle pattern cannot embed in a path.
+        pat = self._g(["x", "y", "z"], [["x", "y"], ["x", "z"], ["y", "z"]])
+        host = self._g(
+            ["a", "b", "c"], [["a", "b"], ["b", "c"]]
+        )
+        result = compute_subgraph_pattern_find(
+            SubgraphPatternFindRequest(pattern=pat, host=host),
+        )
+        assert result.decision == "DOES_NOT_EXIST"
+        revalidated = SubgraphPatternFindResult(
+            pattern=pat, host=host, decision=result.decision, vertex_map=()
+        )
+        assert revalidated.decision == "DOES_NOT_EXIST"
+
+        # Outside the bounded request domain (pattern over the vertex cap)
+        # a negative conclusion is not exact and must be rejected.
+        big_pat_labels = [f"p{i:02d}" for i in range(MORPHISM_MAX_VERTICES + 1)]
+        host_labels = [f"h{i:02d}" for i in range(MORPHISM_MAX_VERTICES + 1)]
+        big_pat = self._g(
+            big_pat_labels,
+            [[f"p{i:02d}", f"p{i + 1:02d}"] for i in range(MORPHISM_MAX_VERTICES)],
+        )
+        big_host = self._g(
+            host_labels,
+            [[f"h{i:02d}", f"h{i + 1:02d}"] for i in range(MORPHISM_MAX_VERTICES)],
+        )
+        with pytest.raises(ValueError, match="request budget"):
+            SubgraphPatternFindResult(
+                pattern=big_pat, host=big_host, decision="DOES_NOT_EXIST", vertex_map=()
+            )
+        assert MAX_CYCLE_SEARCH_PATHS > 0

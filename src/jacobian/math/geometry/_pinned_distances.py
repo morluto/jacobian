@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
@@ -35,8 +36,7 @@ class PinnedDistanceRequest(StrictModel):
 class LineDistanceEntry(StrictModel):
     """One distinct line with its exact squared distance and source pairs."""
 
-    squared_distance_numerator: str
-    squared_distance_denominator: str
+    squared_distance: CanonicalRational
     source_pairs: tuple[tuple[int, int], ...]
 
 
@@ -76,8 +76,6 @@ def _distance_profile(
     Entries are keyed by the canonical integer line equation a*x + b*y = c so
     that distinct lines are never merged; the distance is entry data.
     """
-    from jacobian.canonical import parse_canonical_integer
-
     ax = anchor.x.as_fraction()
     ay = anchor.y.as_fraction()
     pts = [(p.x.as_fraction(), p.y.as_fraction()) for p in points]
@@ -111,7 +109,7 @@ def _distance_profile(
         )
 
     line_map: dict[
-        tuple[str, str, str], tuple[list[tuple[int, int]], str, str]
+        tuple[str, str, str], tuple[list[tuple[int, int]], Fraction]
     ] = {}
 
     for i in range(len(pts)):
@@ -128,28 +126,24 @@ def _distance_profile(
             sq_dist = Fraction(cross * cross, norm_sq)
             key = _canonical_line_key(xi, yi, xj, yj)
             if key not in line_map:
-                line_map[key] = (
-                    [],
-                    format_canonical_integer(sq_dist.numerator),
-                    format_canonical_integer(sq_dist.denominator),
-                )
+                line_map[key] = ([], sq_dist)
             line_map[key][0].append((i, j))
 
     entries = []
     for key in sorted(line_map.keys()):
-        pairs, num, den = line_map[key]
+        pairs, sq_dist = line_map[key]
         entries.append(
             LineDistanceEntry(
-                squared_distance_numerator=num,
-                squared_distance_denominator=den,
+                squared_distance=CanonicalRational.from_fraction(sq_dist),
                 source_pairs=tuple(pairs),
             )
         )
 
-    min_entry = min(entries, key=lambda e: Fraction(
-        parse_canonical_integer(e.squared_distance_numerator),
-        parse_canonical_integer(e.squared_distance_denominator),
-    )) if entries else None
+    min_entry = (
+        min(entries, key=lambda e: e.squared_distance.as_fraction())
+        if entries
+        else None
+    )
     return tuple(entries), min_entry
 
 

@@ -135,3 +135,29 @@ class TestBoundedEnumeration:
         )
         result = compute_conjugacy_classes(req)
         assert sum(cls.size for cls in result.classes) == 6
+
+
+class TestSourceBoundGroupResults:
+    def test_conjugacy_class_size_matches_elements(self) -> None:
+        from jacobian.math.group._models import ConjugacyClass
+
+        with pytest.raises(ValueError, match="class size"):
+            ConjugacyClass(elements=((1, 0, 2),), size=2)
+
+    def test_subgroup_order_must_match_generators(self) -> None:
+        from jacobian.math.group._models import SubgroupEntry
+
+        with pytest.raises(ValueError, match="does not match the order"):
+            SubgroupEntry(generators=((1, 0),), order=1)
+        accepted = SubgroupEntry(generators=((1, 0),), order=2)
+        assert accepted.order == 2
+
+    def test_subgroup_order_capped_at_enforced_limit(self) -> None:
+        from jacobian.math.group._models import SubgroupEntry
+
+        with pytest.raises(ValueError):
+            # A single degree-64 cycle has order 64; claim one more.
+            SubgroupEntry(
+                generators=((*range(1, 64), 0),),
+                order=65,
+            )

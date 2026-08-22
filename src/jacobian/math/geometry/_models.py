@@ -448,11 +448,15 @@ class LabelledPoint2D(StrictModel):
 
 
 def _circumradius_input_height_ok(point: RationalPoint2D) -> bool:
-    # Conservative: each coordinate within quarter of canonical digits ensures
-    # R^2 product of three squared distances over 4*cross^2 stays within limit.
-    # Squared distance height ~ 2*coord height, product of three ~6*coord, denominator ~2*coord.
-    # Bounding inputs at 4096 digits keeps result well under 32768.
-    max_input = 4096
+    # Conservative worst-case propagation for
+    # R^2 = (|a-b|^2 |b-c|^2 |c-a|^2) / (4 * cross^2).
+    # A coordinate difference of two H-digit rationals has numerator at most
+    # 2H+1 digits and denominator at most 2H; each squared side reaches
+    # ~4H+3 over 4H, the cross product ~4H+5 over 4H, so the reduced R^2
+    # stays within roughly (12H+9) + (8H+10) + small slack = 20H + 25
+    # digits. Requiring 20*1024 + 25 <= 32768 admits H = 1024; independent
+    # denominators cannot exceed the canonical limit at execution.
+    max_input = 1024
     for v in (point.x, point.y):
         if RationalHeight.from_canonical(v).exceeds(max_input):
             return False
@@ -462,7 +466,7 @@ def _circumradius_input_height_ok(point: RationalPoint2D) -> bool:
 class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration."""
 
-    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
+    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=24)
 
     @model_validator(mode="after")
     def require_unique_labels_and_coordinates(self) -> Self:
@@ -483,7 +487,7 @@ class CircumradiusProfileRequest(StrictModel):
         for item in self.points:
             if not _circumradius_input_height_ok(item.point):
                 raise ValueError(
-                    "circumradius coordinates exceed the conservative 4096-digit input bound for exact output"
+                    "circumradius coordinates exceed the conservative 1024-digit input bound for exact output"
                 )
         return self
 
@@ -498,6 +502,10 @@ class CircumradiusTripleEntry(StrictModel):
 
     @model_validator(mode="after")
     def bind_collinear_to_value(self) -> Self:
+        if len(set(self.indices)) != 3 or list(self.indices) != sorted(self.indices):
+            raise ValueError(
+                "triple indices must be three distinct ascending positions"
+            )
         if self.collinear is (self.squared_circumradius is not None):
             raise ValueError("exactly a collinear triple has no squared circumradius")
         if (
@@ -509,15 +517,45 @@ class CircumradiusTripleEntry(StrictModel):
 
 
 class CircumradiusProfileResult(StrictModel):
-    point_count: StrictInt = Field(ge=3, le=64)
-    triple_count: StrictInt = Field(ge=1, le=41664)
+    """The complete circumradius profile of a retained configuration."""
+
+    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=24)
+    point_count: StrictInt = Field(ge=3, le=24)
+    triple_count: StrictInt = Field(ge=1, le=2024)
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
     def require_complete_profile(self) -> Self:
+        if self.point_count != len(self.points):
+            raise ValueError("point count must match the retained configuration")
+        import math
+
+        expected_triples = math.comb(self.point_count, 3)
+        if self.triple_count != expected_triples:
+            raise ValueError(
+                f"triple_count {self.triple_count} must equal "
+                f"C(point_count,3)={expected_triples}"
+            )
         if len(self.entries) != self.triple_count:
             raise ValueError("circumradius profile must be complete")
+        seen = {tuple(sorted(entry.indices)) for entry in self.entries}
+        if len(seen) != expected_triples:
+            raise ValueError(
+                "circumradius entries must cover every unordered triple exactly once"
+            )
+        # Source-bound replay: every label and radius must be the exact
+        # circumradius data of the retained configuration.
+        from jacobian.math.geometry._operations import (
+            _compute_circumradius_entries,
+        )
+
+        expected = _compute_circumradius_entries(self.points)
+        if tuple(self.entries) != expected:
+            raise ValueError(
+                "circumradius entries must be the exact profile of the "
+                "retained configuration"
+            )
         return self
 
 

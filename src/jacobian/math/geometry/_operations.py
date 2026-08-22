@@ -438,9 +438,24 @@ def circumradius_profile(
     admitted height are rejected at the request boundary, and each
     computed radius is checked before constructing the result.
     """
-    from itertools import combinations
+    import math
 
     points = request.points
+    n = len(points)
+    return CircumradiusProfileResult(
+        points=points,
+        point_count=n,
+        triple_count=math.comb(n, 3),
+        entries=_compute_circumradius_entries(points),
+    )
+
+
+def _compute_circumradius_entries(points):
+    """Pure circumradius enumeration shared by the operation and the result
+    validator, so both replay identical bounded work."""
+
+    from itertools import combinations
+
     n = len(points)
     coords: list[tuple[Fraction, Fraction]] = [
         (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in points
@@ -481,11 +496,7 @@ def circumradius_profile(
                 squared_circumradius=cr_canonical,
             )
         )
-    return CircumradiusProfileResult(
-        point_count=n,
-        triple_count=len(entries),
-        entries=tuple(entries),
-    )
+    return tuple(entries)
 
 
 def _screen_configuration(

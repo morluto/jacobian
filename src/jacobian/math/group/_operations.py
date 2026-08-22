@@ -43,7 +43,9 @@ def compute_group_orbit(request: GroupOrbitRequest) -> GroupOrbitResult:
     return GroupOrbitResult(orbit=tuple(orbit), point=request.point)
 
 
-def compute_conjugacy_classes(request: GroupConjugacyClassesRequest) -> GroupConjugacyClassesResult:
+def compute_conjugacy_classes(
+    request: GroupConjugacyClassesRequest,
+) -> GroupConjugacyClassesResult:
     """Compute the conjugacy classes of a permutation group."""
     from jacobian.math.group._models import (
         ConjugacyClass,
@@ -64,7 +66,9 @@ def compute_conjugacy_classes(request: GroupConjugacyClassesRequest) -> GroupCon
     )
 
 
-def compute_subgroup_lattice(request: GroupSubgroupLatticeRequest) -> GroupSubgroupLatticeResult:
+def compute_subgroup_lattice(
+    request: GroupSubgroupLatticeRequest,
+) -> GroupSubgroupLatticeResult:
     """Enumerate all subgroups of a bounded permutation group."""
     from jacobian.math.group._models import (
         GroupSubgroupLatticeResult,

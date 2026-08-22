@@ -26,7 +26,12 @@ def _matrix(request: RankRequest) -> PrimeFieldMatrix:
 
 def compute_rank(request: RankRequest) -> RankResult:
     matrix = _matrix(request)
-    return RankResult(rank=rank(matrix), prime=request.prime)
+    return RankResult(
+        rank=rank(matrix),
+        prime=request.prime,
+        entries=request.entries,
+        columns=request.columns,
+    )
 
 
 def compute_rref(request: RrefRequest) -> RrefResult:

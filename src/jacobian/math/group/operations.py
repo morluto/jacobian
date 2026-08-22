@@ -113,31 +113,29 @@ def subgroup_lattice(
     identity = Permutation(list(range(degree)))
     trivial_key = frozenset((tuple(identity.array_form),))
     subgroup_keys: set[frozenset] = {trivial_key}
-    result: list[tuple[list[list[int]], int]] = [(
-        [list(identity.array_form)], 1)]
+    result: list[tuple[list[list[int]], int]] = [([list(identity.array_form)], 1)]
     frontier = [trivial_key]
     elements = list(group.elements)
     while frontier:
         current = frontier.pop()
-        [
-            Permutation(list(member)) for member in current
-        ]
+        [Permutation(list(member)) for member in current]
         for element in elements:
             element_form = tuple(element.array_form)
             if element_form in current:
                 continue
             generated = group.subgroup(
-                [Permutation(list(member)) for member in current]
-                + [element]
+                [Permutation(list(member)) for member in current] + [element]
             )
             key = frozenset(tuple(p.array_form) for p in generated.elements)
             if key not in subgroup_keys:
                 subgroup_keys.add(key)
-                result.append((
-                    sorted(
-                        (list(p.array_form) for p in generated.generators),
-                    ),
-                    int(generated.order()),
-                ))
+                result.append(
+                    (
+                        sorted(
+                            (list(p.array_form) for p in generated.generators),
+                        ),
+                        int(generated.order()),
+                    )
+                )
                 frontier.append(key)
     return result

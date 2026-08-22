@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -79,6 +80,68 @@ class OrthogonalPolynomialTerm(StrictModel):
     squared_norm: CanonicalRational
 
 
+def _decompose_residual_in_basis(
+    polynomials: tuple[OrthogonalPolynomialTerm, ...], k: int
+) -> list[Fraction]:
+    """Decompose ``R_k = x*p_k - p_{k+1}`` in the monic basis p_0..p_k.
+
+    Every p_j is monic of exact degree j, so greedy division from the top
+    degree downward yields the exact basis components; a nonzero remainder
+    after division is impossible for a complete decomposition and raises.
+    """
+    from fractions import Fraction
+
+    p_k = polynomials[k]
+    p_next = polynomials[k + 1]
+    shifted = [Fraction(0), *[c.as_fraction() for c in p_k.coefficients]]
+    next_coeffs = [c.as_fraction() for c in p_next.coefficients]
+    size = len(shifted)
+    remainder = [
+        shifted[i] - (next_coeffs[i] if i < len(next_coeffs) else Fraction(0))
+        for i in range(size)
+    ]
+    components = [Fraction(0)] * size
+    for j in range(size - 1, -1, -1):
+        if remainder[j] == 0:
+            continue
+        if j >= k + 1:
+            raise ValueError(
+                f"residual x*p_{k} - p_{k+1} leaves the span of the retained family"
+            )
+        basis = [c.as_fraction() for c in polynomials[j].coefficients]
+        components[j] = remainder[j]
+        for power, coefficient in enumerate(basis):
+            remainder[power] -= components[j] * coefficient
+    if any(coefficient != 0 for coefficient in remainder[: k + 1]):
+        raise ValueError(
+            f"p_{k + 1} does not satisfy the three-term recurrence against p_{k}"
+        )
+    return components
+
+
+def _require_three_term_consistency(family) -> None:
+    """R_k must lie in span{p_{k-1}, p_k} with beta_k = h_k / h_{k-1}."""
+    polynomials = family.polynomials
+    for k in range(len(polynomials) - 1):
+        components = _decompose_residual_in_basis(polynomials, k)
+        lowest_free = max(k - 1, 0)
+        if any(component != 0 for component in components[:lowest_free]):
+            raise ValueError(
+                f"p_{k + 1} does not satisfy the three-term recurrence "
+                f"against p_{k}: the residual has a nonzero component "
+                "below p_{k-1}"
+            )
+        if k >= 1:
+            norm_ratio = polynomials[k].squared_norm.as_fraction() / (
+                polynomials[k - 1].squared_norm.as_fraction()
+            )
+            if components[k - 1] != norm_ratio:
+                raise ValueError(
+                    "squared norms disagree with the three-term recurrence: "
+                    f"beta_{k} must equal h_{k}/h_{{k-1}}"
+                )
+
+
 class OrthogonalPolynomialFamily(StrictModel):
     """A family of monic orthogonal polynomials p_0,...,p_n."""
 
@@ -106,31 +169,13 @@ class OrthogonalPolynomialFamily(StrictModel):
                     f"p_{index} has zero squared norm; a quasi-definite "
                     "family requires nonzero norms"
                 )
-        # Three-term consistency: x*p_k - p_{k+1} must lie in the span of
-        # {p_{k-1}, p_k}, so its components below degree k-1 vanish.
-        from fractions import Fraction
-
-        for k in range(len(self.polynomials) - 1):
-            p_k = [c.as_fraction() for c in self.polynomials[k].coefficients]
-            p_next = [c.as_fraction() for c in self.polynomials[k + 1].coefficients]
-            shifted = [Fraction(0), *p_k]
-            residual = [
-                shifted[i] - (p_next[i] if i < len(p_next) else Fraction(0))
-                for i in range(len(shifted))
-            ]
-            lowest_free = max(k - 1, 0)
-            if any(
-                coefficient != 0
-                for position, coefficient in enumerate(residual)
-                if position < lowest_free
-            ) and any(
-                coefficient != 0
-                for position, coefficient in enumerate(residual[:lowest_free])
-            ):
-                raise ValueError(
-                    f"p_{k + 1} does not satisfy the three-term recurrence "
-                    f"against p_{k}"
-                )
+        # Three-term consistency: R_k = x*p_k - p_{k+1} must lie in the
+        # span of {p_{k-1}, p_k}. Because every p_j is monic, R_k is exactly
+        # decomposable in the p_0,...,p_k basis by greedy division; nonzero
+        # components below p_{k-1} break the recurrence. The component on
+        # p_{k-1} IS beta_k, so it must also equal the norm ratio
+        # h_k / h_{k-1}.
+        _require_three_term_consistency(self)
         return self
 
 
@@ -140,6 +185,19 @@ class ThreeTermRecurrence(StrictModel):
     alpha: tuple[CanonicalRational, ...]
     beta: tuple[CanonicalRational, ...]
     variable: str = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def require_recurrence_dimensions(self) -> Self:
+        """One beta per family term: len(beta) == len(alpha) + 1, with the
+        unused zero placeholder at index 0."""
+        if len(self.beta) != len(self.alpha) + 1:
+            raise ValueError(
+                "beta must carry exactly len(alpha) + 1 entries: one "
+                "placeholder plus one ratio per recurrence step"
+            )
+        if self.beta[0].as_fraction() != 0:
+            raise ValueError("beta[0] is the unused placeholder and must be zero")
+        return self
 
 
 class ChristoffelDarbouxKernel(StrictModel):

@@ -124,6 +124,32 @@ class JacobiMatrixRequest(StrictModel):
 
     family: OrthogonalPolynomialFamily
 
+    @model_validator(mode="after")
+    def require_representable_recurrence(self) -> Self:
+        """Pre-computation height bound on the derived recurrence entries.
+
+        Every derived alpha is a difference of admitted family
+        coefficients, but each derived beta is an adjacent-norm ratio
+        h_k / h_{k-1}, whose height can exceed the canonical result type
+        even when both norms fit. Reject such families here so every
+        accepted request can return its declared result.
+        """
+        polys = self.family.polynomials
+        # A canonical rational carries at most MAX_CANONICAL_RATIONAL_DIGITS
+        # digits, i.e. its absolute value stays below 10**that limit.
+        digit_limit = 10**MAX_CANONICAL_RATIONAL_DIGITS
+        for k in range(1, len(polys)):
+            h_k = polys[k].squared_norm.as_fraction()
+            h_prev = polys[k - 1].squared_norm.as_fraction()
+            ratio = h_k / h_prev
+            if abs(ratio.numerator) >= digit_limit or ratio.denominator >= digit_limit:
+                raise ValueError(
+                    f"adjacent-norm ratio beta_{k} exceeds the canonical "
+                    "rational digit limit; supply a family whose squared "
+                    "norm ratios stay representable"
+                )
+        return self
+
 
 class GaussianQuadratureRequest(StrictModel):
     """Compute an exact Gaussian quadrature rule."""

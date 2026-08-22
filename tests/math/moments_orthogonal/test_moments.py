@@ -369,3 +369,114 @@ class TestJacobiCrossField:
                 matrix=((CanonicalRational(num="1", den="1"),),),
                 variable="x",
             )
+
+
+class TestFamilyResidualBasisCheck:
+    def _term(self, deg, coeffs, norm):
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialTerm,
+        )
+
+        return OrthogonalPolynomialTerm(
+            degree=deg,
+            coefficients=tuple(
+                CanonicalRational.from_fraction(Fraction(c)) for c in coeffs
+            ),
+            squared_norm=CanonicalRational.from_fraction(Fraction(norm)),
+        )
+
+    def test_residual_component_below_p_prev_rejected(self) -> None:
+        """p_2 = x^2 + 1 with unit norms reconstructs x^2 - 1; the residual
+        decomposition in the p_0..p_k basis exposes the forgery."""
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+        )
+
+        with pytest.raises(ValidationError, match="three-term"):
+            OrthogonalPolynomialFamily(
+                polynomials=(
+                    self._term(0, (1,), 1),
+                    self._term(1, (0, 1), 1),
+                    self._term(2, (1, 0, 1), 1),
+                ),
+                variable="x",
+                is_quasi_definite=True,
+                is_positive_definite=True,
+            )
+
+    def test_consistent_family_accepted(self) -> None:
+        """The Legendre prefix p_0=1, p_1=x, p_2=x^2-1/3 with h=(1,1/3,1/45)
+        satisfies the recurrence and every norm ratio."""
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+        )
+
+        family = OrthogonalPolynomialFamily(
+            polynomials=(
+                self._term(0, (1,), 1),
+                self._term(1, (0, 1), Fraction(1, 3)),
+                self._term(2, (Fraction(-1, 3), 0, 1), Fraction(1, 45)),
+            ),
+            variable="x",
+            is_quasi_definite=True,
+            is_positive_definite=True,
+        )
+        assert len(family.polynomials) == 3
+
+
+class TestRecurrenceTupleDimensions:
+    def test_contradictory_dimensions_rejected(self) -> None:
+        from jacobian.math.moments_orthogonal.values import ThreeTermRecurrence
+
+        with pytest.raises(ValidationError, match=r"len\(alpha\)"):
+            ThreeTermRecurrence(
+                alpha=(CanonicalRational(num="0", den="1"),),
+                beta=(),
+                variable="x",
+            )
+
+    def test_nonzero_placeholder_rejected(self) -> None:
+        from jacobian.math.moments_orthogonal.values import ThreeTermRecurrence
+
+        with pytest.raises(ValidationError, match="placeholder"):
+            ThreeTermRecurrence(
+                alpha=(),
+                beta=(CanonicalRational(num="5", den="1"),),
+                variable="x",
+            )
+
+
+class TestJacobiNormRatioAdmission:
+    def test_unrepresentable_norm_ratio_rejected_at_request(self) -> None:
+        """h_0 = 10^-20000 and h_1 = 10^20000 derive beta_1 = 10^40000,
+        outside the canonical result type; admission rejects it before
+        execution instead of failing inside result conversion."""
+
+        def term(deg, coeffs, norm):
+            from jacobian.math.moments_orthogonal.values import (
+                OrthogonalPolynomialTerm,
+            )
+
+            return OrthogonalPolynomialTerm(
+                degree=deg,
+                coefficients=tuple(
+                    CanonicalRational.from_fraction(Fraction(c)) for c in coeffs
+                ),
+                squared_norm=CanonicalRational.from_fraction(Fraction(norm)),
+            )
+
+        from jacobian.math.moments_orthogonal.values import (
+            OrthogonalPolynomialFamily,
+        )
+
+        family = OrthogonalPolynomialFamily(
+            polynomials=(
+                term(0, (1,), Fraction(1, 10**20000)),
+                term(1, (0, 1), Fraction(10**20000)),
+            ),
+            variable="x",
+            is_quasi_definite=True,
+            is_positive_definite=True,
+        )
+        with pytest.raises(ValidationError, match="canonical"):
+            JacobiMatrixRequest(family=family)

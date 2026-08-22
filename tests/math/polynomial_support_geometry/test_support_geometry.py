@@ -401,3 +401,57 @@ class TestNewtonReplay:
         payload["affine_dimension"] = 2
         with pytest.raises(ValidationError, match="affine_dimension"):
             NewtonPolytope.model_validate(payload)
+
+
+class TestSupportValueInvariants:
+    def test_zero_coefficient_rejected_in_claimed_support(self) -> None:
+        """A nonzero support cannot retain a zero-coefficient exponent."""
+        from jacobian.math.polynomial_support_geometry.values import (
+            PolynomialSupport,
+        )
+
+        with pytest.raises(ValidationError, match="nonzero"):
+            PolynomialSupport(
+                is_zero=False,
+                term_count=1,
+                exponents=((1, 0),),
+                coefficients=({"num": "0", "den": "1"},),
+                variables=VARS,
+                total_degree_min=1,
+                total_degree_max=1,
+            )
+
+    def test_nonzero_newton_result_must_retain_support(self) -> None:
+        from jacobian.math.polynomial_support_geometry.values import NewtonPolytope
+
+        with pytest.raises(ValidationError, match="retain its support"):
+            NewtonPolytope.model_validate(
+                {
+                    "is_zero": False,
+                    "variables": ["x"],
+                    "ambient_dimension": 1,
+                    "affine_dimension": 0,
+                }
+            )
+
+    def test_duplicate_or_invalid_variables_rejected(self) -> None:
+        from jacobian.math.polynomial_support_geometry.values import (
+            PolynomialSupport,
+        )
+
+        with pytest.raises(ValidationError):
+            PolynomialSupport(
+                is_zero=False,
+                term_count=1,
+                exponents=((1, 0),),
+                coefficients=({"num": "1", "den": "1"},),
+                variables=("x", "x"),
+                total_degree_min=1,
+                total_degree_max=1,
+            )
+
+    def test_native_export_list_excludes_wire_handlers(self) -> None:
+        import jacobian.math.polynomial_support_geometry as package
+
+        assert not any(name.startswith("compute_") for name in package.__all__)
+        assert "exponent_support" in package.__all__

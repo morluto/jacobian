@@ -8,7 +8,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.polynomials.values import PolynomialVariable, RationalPolynomial
 
 MAX_SUPPORT_TERMS = 4096
 MAX_NEWTON_DIMENSION = 8
@@ -19,6 +19,15 @@ MAX_WEIGHT_COMPONENTS = 8
 # dense-grid, and 8-dimensional random sets) and stays within a few seconds
 # at this bound instead of inheriting the full canonical term budget.
 MAX_NEWTON_TERMS = 96
+
+
+def _require_nonzero_support(value: PolynomialSupport) -> None:
+    """A claimed nonzero support carries nonzero coefficients and extrema."""
+    # An exponent with a zero coefficient is not part of a support.
+    if any(coefficient.as_fraction() == 0 for coefficient in value.coefficients):
+        raise ValueError(
+            "support coefficients must be nonzero; zero terms are omitted"
+        )
 
 
 class PolynomialSupport(StrictModel):
@@ -32,7 +41,9 @@ class PolynomialSupport(StrictModel):
     coefficients: tuple[CanonicalRational, ...] = Field(
         default=(), max_length=MAX_SUPPORT_TERMS
     )
-    variables: tuple[str, ...] = Field(min_length=0, max_length=MAX_NEWTON_DIMENSION)
+    variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=0, max_length=MAX_NEWTON_DIMENSION
+    )
     coordinate_min: tuple[int, ...] = Field(default=(), max_length=MAX_NEWTON_DIMENSION)
     coordinate_max: tuple[int, ...] = Field(default=(), max_length=MAX_NEWTON_DIMENSION)
     # Empty support has no degree extrema; they are None exactly when the
@@ -52,6 +63,8 @@ class PolynomialSupport(StrictModel):
                 "term count must match the number of exponents and coefficients"
             )
         width = len(self.variables)
+        if len(set(self.variables)) != width:
+            raise ValueError("variables must be unique and canonically named")
         if any(len(exp) != width for exp in self.exponents):
             raise ValueError("exponent tuples must use the declared variable axis")
         if self.coordinate_min and len(self.coordinate_min) != width:
@@ -62,6 +75,7 @@ class PolynomialSupport(StrictModel):
             if self.exponents or self.coefficients:
                 raise ValueError("a zero support carries no terms")
             return self
+        _require_nonzero_support(self)
         if self.total_degree_min is None or self.total_degree_max is None:
             raise ValueError("a nonzero support must carry its degree extrema")
         degrees = [sum(exp) for exp in self.exponents]
@@ -82,6 +96,8 @@ class PolynomialSupport(StrictModel):
 
 def _require_newton_context(value: NewtonPolytope) -> None:
     """Dimension context and exponent widths precede any hull replay."""
+    if len(set(value.variables)) != len(value.variables):
+        raise ValueError("variables must be unique and canonically named")
     if value.ambient_dimension != len(value.variables):
         raise ValueError("ambient dimension must equal the retained variable count")
     if value.affine_dimension > value.ambient_dimension:
@@ -102,7 +118,9 @@ class NewtonPolytope(StrictModel):
     """
 
     is_zero: bool
-    variables: tuple[str, ...] = Field(min_length=1, max_length=MAX_NEWTON_DIMENSION)
+    variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=1, max_length=MAX_NEWTON_DIMENSION
+    )
     ambient_dimension: int = Field(ge=0)
     affine_dimension: int = Field(ge=0)
     # Retained support fields carry the admitted hull size (96 points): the
@@ -170,6 +188,11 @@ class NewtonPolytope(StrictModel):
                 )
         elif self.vertices or self.nonextreme or self.all_support_exponents:
             raise ValueError("the zero polynomial has an empty Newton polytope")
+        if not self.is_zero and not self.all_support_exponents:
+            raise ValueError(
+                "a nonzero Newton polytope must retain its support so the "
+                "classification stays reconstructible"
+            )
         return self
 
 

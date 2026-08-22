@@ -6,14 +6,6 @@ from jacobian.math.polynomial_support_geometry.native import (
     newton_polytope,
     weight_profile,
 )
-
-# Wire-envelope handlers and value types used by the MCP projection.
-from jacobian.math.polynomial_support_geometry.operations import (
-    compute_initial_form,
-    compute_newton_polytope,
-    compute_support,
-    compute_weight_profile,
-)
 from jacobian.math.polynomial_support_geometry.values import (
     NewtonPolytope,
     PolynomialFaceData,
@@ -21,18 +13,15 @@ from jacobian.math.polynomial_support_geometry.values import (
     PolynomialWeightProfile,
 )
 
-# The first four names are the native surface: they accept canonical
-# domain values directly. The remainder are wire-envelope handlers and
-# value types used by the MCP projection.
+# The native surface accepts canonical domain values directly. The
+# compute_* wire-envelope handlers stay private to the MCP declarations
+# (they require operation-specific request envelopes) and are not part
+# of the supported Python API.
 __all__ = [
     "NewtonPolytope",
     "PolynomialFaceData",
     "PolynomialSupport",
     "PolynomialWeightProfile",
-    "compute_initial_form",
-    "compute_newton_polytope",
-    "compute_support",
-    "compute_weight_profile",
     "exponent_support",
     "initial_form",
     "newton_polytope",

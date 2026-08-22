@@ -2,6 +2,10 @@
 
 from fractions import Fraction
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian._exact import CanonicalRational
 from jacobian.math.graphs.spectral import (
     adjacency_characteristic_polynomial,
     laplacian_characteristic_polynomial,
@@ -20,7 +24,11 @@ from jacobian.math.polynomials._elementary_operations import (
     rational_polynomial_derivative,
 )
 from jacobian.math.polynomials._models import RationalPolynomialRequest
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
 
 def _graph(edges, vc):
@@ -43,6 +51,31 @@ def _coeffs(polynomial: RationalPolynomial):
 
 def _exponents(polynomial: RationalPolynomial) -> tuple[int, ...]:
     return tuple(term.exponents[0] for term in polynomial.polynomial.terms)
+
+
+def _univariate_polynomial(coefficients: dict[int, str]) -> RationalPolynomial:
+    """Build a canonical univariate polynomial from {degree: numerator}."""
+    return RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=numerator, den="1"),
+                    exponents=(degree,),
+                )
+                for degree, numerator in sorted(coefficients.items(), reverse=True)
+            )
+        ),
+    )
+
+
+def _charpoly_payload(polynomial: RationalPolynomial) -> dict:
+    """Serialize a result payload bound to the P3 adjacency source."""
+    return {
+        "graph": GraphEdgeList(vertex_count=3, edges=((0, 1), (1, 2))).model_dump(),
+        "convention": "ADJACENCY",
+        "polynomial": polynomial.model_dump(),
+    }
 
 
 class TestAdjacencyCharacteristicPolynomial:
@@ -128,9 +161,6 @@ class TestLaplacianCharacteristicPolynomial:
 
 
 def test_forged_result_rejected():
-    import pytest
-    from pydantic import ValidationError
-
     graph = GraphEdgeList(vertex_count=3, edges=((0, 1), (1, 2)))
     with pytest.raises(ValidationError):
         GraphCharacteristicPolynomialResult.model_validate(
@@ -147,6 +177,50 @@ def test_forged_result_rejected():
                 },
             }
         )
+
+
+def test_replay_rejects_more_terms_than_any_admitted_charpoly_has():
+    # A degree-32 univariate characteristic polynomial has at most 33 nonzero
+    # terms, so a 34-term value is rejected before any backend conversion.
+    oversized = _univariate_polynomial(dict.fromkeys(range(34), "2"))
+    with pytest.raises(ValidationError, match="exceeds the 33-term operation budget"):
+        GraphCharacteristicPolynomialResult.model_validate(_charpoly_payload(oversized))
+
+
+def test_replay_rejects_exponents_beyond_the_32_vertex_degree_bound():
+    beyond = _univariate_polynomial({32: "1", 40: "1"})
+    with pytest.raises(ValidationError, match="exceeds the 32-degree operation budget"):
+        GraphCharacteristicPolynomialResult.model_validate(_charpoly_payload(beyond))
+
+
+def test_replay_rejects_coefficients_beyond_the_charpoly_digit_budget():
+    huge = _univariate_polynomial({3: "9" * 129})
+    with pytest.raises(ValidationError, match="exceeds the 128-digit bound"):
+        GraphCharacteristicPolynomialResult.model_validate(_charpoly_payload(huge))
+
+
+def test_maximum_shaped_nonmatching_polynomial_fails_only_on_source_binding():
+    # Exactly 33 terms of degree at most 32 with one-digit coefficients sits
+    # inside every replay budget, so validation must reach the determinant
+    # comparison and fail there instead.
+    dense = _univariate_polynomial(dict.fromkeys(range(33), "1"))
+    with pytest.raises(ValidationError, match="does not match the source graph"):
+        GraphCharacteristicPolynomialResult.model_validate(_charpoly_payload(dense))
+
+
+def test_maximal_path_round_trips_through_serialization():
+    # Degree exactly 32 exercises the replay degree bound from above.
+    graph = GraphEdgeList(vertex_count=32, edges=tuple((i, i + 1) for i in range(31)))
+    polynomial = adjacency_characteristic_polynomial(graph)
+    restored = GraphCharacteristicPolynomialResult.model_validate(
+        GraphCharacteristicPolynomialResult(
+            graph=graph,
+            convention="ADJACENCY",
+            polynomial=polynomial,
+        ).model_dump(mode="json")
+    )
+    assert restored.polynomial == polynomial
+    assert max(_exponents(restored.polynomial)) == 32
 
 
 def test_native_adjacency_returns_canonical_polynomial():

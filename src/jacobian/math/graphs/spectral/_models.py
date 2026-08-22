@@ -12,10 +12,13 @@ from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
+    require_polynomial_budget,
 )
 
 _VARIABLE = "x"
-_MAX_CHARPOLY_TERMS = 64
+_MAX_CHARPOLY_TERMS = 33
+_MAX_CHARPOLY_EXPONENT = 32
+_MAX_CHARPOLY_COEFFICIENT_DIGITS = 128
 
 
 class GraphEdgeList(StrictModel):
@@ -91,6 +94,13 @@ class GraphCharacteristicPolynomialResult(StrictModel):
 
         if self.polynomial.variables != (_VARIABLE,):
             raise ValueError("characteristic polynomial must be univariate in x")
+        require_polynomial_budget(
+            self.polynomial,
+            maximum_terms=_MAX_CHARPOLY_TERMS,
+            maximum_exponent=_MAX_CHARPOLY_EXPONENT,
+            maximum_coefficient_digits=_MAX_CHARPOLY_COEFFICIENT_DIGITS,
+            label="characteristic polynomial",
+        )
         matrix = (
             _adjacency_matrix(self.graph)
             if self.convention == "ADJACENCY"

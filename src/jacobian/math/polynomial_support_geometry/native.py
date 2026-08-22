@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.polynomial_support_geometry._models import (
-    InitialFormRequest,
     NewtonPolytopeRequest,
     SupportRequest,
-    WeightProfileRequest,
+)
+from jacobian.math.polynomial_support_geometry.operations import (  # noqa: F401
+    _compute_weight_layers,
+    _initial_form_terms,
+    compute_initial_form,
+    compute_newton_polytope,
+    compute_support,
+    compute_weight_profile,
 )
 from jacobian.math.polynomial_support_geometry.values import (
     NewtonPolytope,
@@ -14,7 +21,11 @@ from jacobian.math.polynomial_support_geometry.values import (
     PolynomialSupport,
     PolynomialWeightProfile,
 )
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
 __all__ = [
     "exponent_support",
@@ -24,16 +35,12 @@ __all__ = [
 ]
 
 
-def exponent_support(
-    polynomial: RationalPolynomial,
-) -> PolynomialSupport:
+def exponent_support(polynomial: RationalPolynomial) -> PolynomialSupport:
     """Exponent support of one canonical polynomial value."""
     return compute_support(SupportRequest(polynomial=polynomial))
 
 
-def newton_polytope(
-    polynomial: RationalPolynomial,
-) -> NewtonPolytope:
+def newton_polytope(polynomial: RationalPolynomial) -> NewtonPolytope:
     """Newton polytope of one canonical polynomial value."""
     return compute_newton_polytope(NewtonPolytopeRequest(polynomial=polynomial))
 
@@ -41,24 +48,43 @@ def newton_polytope(
 def weight_profile(
     polynomial: RationalPolynomial, weight: tuple[int, ...]
 ) -> PolynomialWeightProfile:
-    """Weight profile of a canonical polynomial under an integer weight."""
-    return compute_weight_profile(
-        WeightProfileRequest(polynomial=polynomial, weight=weight)
+    """Weight profile of a canonical polynomial under an integer weight.
+
+    Native callers bypass the wire transport caps and use the shared
+    kernel directly; the value validator still replays the profile.
+    """
+    minimum_weight, minimizing, layers = _compute_weight_layers(polynomial, weight)
+    return PolynomialWeightProfile(
+        polynomial=polynomial,
+        weight=weight,
+        minimum_weight=minimum_weight,
+        minimizing_exponents=minimizing,
+        weight_layers=layers,
     )
 
 
 def initial_form(
     polynomial: RationalPolynomial, weight: tuple[int, ...]
 ) -> PolynomialFaceData:
-    """Initial form of a canonical polynomial under an integer weight."""
-    return compute_initial_form(
-        InitialFormRequest(polynomial=polynomial, weight=weight)
+    """Initial form of a canonical polynomial under an integer weight.
+
+    Native callers bypass the wire transport caps and build the face via
+    the shared kernel; the value validator still replays it.
+    """
+    face_terms = _initial_form_terms(polynomial, weight)
+    initial_form_value = RationalPolynomial(
+        variables=polynomial.variables,
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_fraction(c), exponents=e
+                )
+                for c, e in face_terms
+            )
+        ),
     )
-
-
-from jacobian.math.polynomial_support_geometry.operations import (  # noqa: E402
-    compute_initial_form,
-    compute_newton_polytope,
-    compute_support,
-    compute_weight_profile,
-)
+    return PolynomialFaceData(
+        polynomial=polynomial,
+        weight=weight,
+        initial_form=initial_form_value,
+    )

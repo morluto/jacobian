@@ -116,6 +116,45 @@ class NewtonPolytope(StrictModel):
                 )
             if set(self.vertices) & set(self.nonextreme):
                 raise ValueError("an exponent cannot be both a vertex and non-extreme")
+            # Exact replay: the classification must be the true hull of the
+            # retained support (bounded by the 96-term admission).
+            from jacobian.math.polynomial_support_geometry.operations import (
+                _is_vertex,
+                _matrix_rank,
+            )
+
+            replayed_vertices = [
+                exp
+                for exp in self.all_support_exponents
+                if _is_vertex(exp, [q for q in self.all_support_exponents if q != exp])
+            ]
+            replayed_nonextreme = [
+                exp
+                for exp in self.all_support_exponents
+                if exp not in set(replayed_vertices)
+            ]
+            if set(self.vertices) != set(replayed_vertices) or set(
+                self.nonextreme
+            ) != set(replayed_nonextreme):
+                raise ValueError(
+                    "vertex classification must be the exact convex-hull "
+                    "classification of the retained support"
+                )
+            if len(replayed_vertices) > 1:
+                first = replayed_vertices[0]
+                dimension = _matrix_rank(
+                    [
+                        [v[j] - first[j] for j in range(len(first))]
+                        for v in replayed_vertices[1:]
+                    ]
+                )
+            else:
+                dimension = 0
+            if self.affine_dimension != dimension:
+                raise ValueError(
+                    f"affine_dimension {self.affine_dimension} must equal "
+                    f"the hull's exact affine dimension {dimension}"
+                )
         elif self.vertices or self.nonextreme or self.all_support_exponents:
             raise ValueError("the zero polynomial has an empty Newton polytope")
         return self

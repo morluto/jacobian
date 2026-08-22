@@ -309,3 +309,38 @@ class TestSupportCrossFieldValidation:
                 total_degree_min=2,
                 total_degree_max=2,
             )
+
+
+class TestNewtonReplay:
+    def test_forged_classification_rejected(self) -> None:
+        """A payload claiming an interior point is a vertex fails the exact
+        hull replay."""
+        from jacobian.math.polynomial_support_geometry.values import (
+            NewtonPolytope,
+        )
+
+        terms = (
+            _term("1", [4, 0]),
+            _term("1", [1, 1]),
+            _term("1", [0, 4]),
+            _term("1", [0, 0]),
+        )
+        polynomial = _polynomial(terms, VARS)
+        result = compute_newton_polytope(NewtonPolytopeRequest(polynomial=polynomial))
+        payload = result.model_dump()
+        good = payload["vertices"]
+        payload["vertices"] = list(good) + [[1, 1]]
+        payload["nonextreme"] = []
+        with pytest.raises(ValidationError, match="exact convex-hull"):
+            NewtonPolytope.model_validate(payload)
+
+    def test_wrong_affine_dimension_rejected(self) -> None:
+        from jacobian.math.polynomial_support_geometry.values import NewtonPolytope
+
+        result = compute_newton_polytope(
+            NewtonPolytopeRequest(polynomial=_polynomial(_XY_TERMS, VARS))
+        )
+        payload = result.model_dump()
+        payload["affine_dimension"] = 2
+        with pytest.raises(ValidationError, match="affine_dimension"):
+            NewtonPolytope.model_validate(payload)

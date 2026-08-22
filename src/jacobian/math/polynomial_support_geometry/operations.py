@@ -318,10 +318,7 @@ def compute_support(request: SupportRequest) -> PolynomialSupport:
         is_zero=False,
         term_count=len(terms),
         exponents=tuple(exponents),
-        coefficients=tuple(
-            CanonicalRational(num=str(c.numerator), den=str(c.denominator))
-            for c in coefficients
-        ),
+        coefficients=tuple(CanonicalRational.from_fraction(c) for c in coefficients),
         variables=request.polynomial.variables,
         coordinate_min=coord_min,
         coordinate_max=coord_max,

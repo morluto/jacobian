@@ -241,23 +241,25 @@ def _compute_membership_context(
 ) -> tuple[tuple[RationalPolynomial, ...] | None, Any]:
     """Compute the Gröbner basis and return its wire form with the SymPy basis.
 
-    The wire basis is ``None`` when the computed basis itself exceeds the
-    1,024-term aggregate output boundary; the caller then reports the typed
-    budget outcome instead of a partial exact artifact.
+    The wire basis is ``None`` when the computation exceeds a work or
+    representability boundary — including intermediate basis growth,
+    which the incremental bounded kernel checks after every generator —
+    so the caller reports the typed budget outcome instead of expanding
+    an unrepresentable exact artifact.
     """
 
     variables = request.ideal.variables
     symbols = symbols_for_variables(variables)
-    generators = [
-        rational_polynomial_to_sympy(generator).as_expr()
-        for generator in request.ideal.generators
-    ]
-    basis = sympy.groebner(
-        generators,
-        *symbols,
-        order=request.monomial_order,
-        domain=sympy.QQ,
+    from jacobian.math.polynomials._replay import incremental_source_groebner
+
+    source_basis, exceeded = incremental_source_groebner(
+        request.ideal, request.monomial_order
     )
+    if source_basis is None or exceeded:
+        return None, None
+    basis = source_basis
+    from pydantic import ValidationError
+
     try:
         wire_basis = tuple(
             _result_polynomial(
@@ -269,11 +271,9 @@ def _compute_membership_context(
         # _result_polynomial already maps ValidationError/exponent overflows to
         # PolynomialOutputBudgetError; any other validation failure during
         # retained-basis materialization is also a budget overflow.
-        if isinstance(exc, PolynomialOutputBudgetError):
+        if isinstance(exc, (PolynomialOutputBudgetError, ValidationError)):
             return None, basis
-        from pydantic import ValidationError
-
-        if isinstance(exc, ValidationError) or "exponent" in str(exc).lower() or "representation limit" in str(exc).lower():
+        if "exponent" in str(exc).lower() or "representation limit" in str(exc).lower():
             return None, basis
         raise
     if sum(len(element.polynomial.terms) for element in wire_basis) > 1024:

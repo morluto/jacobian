@@ -404,8 +404,10 @@ class IdealMembershipRequest(StrictModel):
     Accepts the domain-owned canonical ``RationalPolynomialIdeal`` value so
     serialized ideals compose without unpacking.  The ideal is bounded to 16
     generators with total degree at most 12 and the request polynomial to
-    1,024 terms so the bounded backend work cannot expand into an
-    unrepresentable exact result without the typed budget outcome.
+    1,024 terms, per-term total degree at most 12, and coefficient
+    components of at most 128 digits, so the bounded backend work cannot
+    expand into an unrepresentable exact result without the typed budget
+    outcome.
     """
 
     ideal: RationalPolynomialIdeal = Field(
@@ -416,7 +418,14 @@ class IdealMembershipRequest(StrictModel):
             "128 digits."
         ),
     )
-    polynomial: RationalPolynomial
+    polynomial: RationalPolynomial = Field(
+        description=(
+            "The queried polynomial in the ideal's ring: at most 1,024 "
+            "terms, per-term total degree at most 12, and coefficient "
+            "components of at most 128 digits; requests outside these "
+            "operation-specific limits are rejected."
+        ),
+    )
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
 
     @model_validator(mode="after")

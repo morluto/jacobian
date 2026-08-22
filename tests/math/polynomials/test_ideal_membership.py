@@ -401,3 +401,41 @@ def test_unsubstantiated_budget_outcome_without_basis_rejected() -> None:
             groebner_basis=None,
             normal_form=None,
         )
+
+
+def test_basis_growth_beyond_representability_reports_typed_outcome() -> None:
+    # The eight-variable lex chain <x1-C*x2^12, ..., x7-C*x8^12> with
+    # C = 10**127 has a reduced basis element whose coefficient would carry
+    # hundreds of millions of digits.  The incremental bounded kernel must
+    # report the typed budget outcome before constructing it.
+    variables = tuple(f"x{i}" for i in range(1, 9))
+    coefficient = 10**127
+
+    def chain_generator(shift: int) -> RationalPolynomial:
+        return _poly(
+            variables,
+            {
+                tuple(12 if index == shift + 1 else 0 for index in range(8)): coefficient,
+                tuple(1 if index == shift else 0 for index in range(8)): -1,
+            },
+        )
+
+    ideal = RationalPolynomialIdeal(
+        variables=variables,
+        generators=tuple(chain_generator(shift) for shift in range(7)),
+    )
+    request = IdealMembershipRequest(
+        ideal=ideal,
+        polynomial=_poly(variables, {(1,) + (0,) * 7: 1}),
+        monomial_order="lex",
+    )
+    result = polynomial_ideal_membership(request)
+    assert result.status == "BUDGET_EXCEEDED"
+
+
+def test_request_schema_publishes_polynomial_admission_limits() -> None:
+    schema = IdealMembershipRequest.model_json_schema()
+    description = schema["properties"]["polynomial"]["description"]
+    assert "degree at most 12" in description
+    assert "128" in description
+    assert "1,024" in description

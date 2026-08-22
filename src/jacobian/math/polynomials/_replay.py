@@ -42,6 +42,79 @@ def _component_exceeds_limit(numerator: int, denominator: int) -> bool:
     return abs(numerator) >= bound or abs(denominator) >= bound
 
 
+def _basis_exceeds_output_budget(basis: Any, symbols: tuple[Any, ...]) -> bool:
+    """Check one computed Gröbner basis against the retained-output budget."""
+
+    from sympy import Poly, QQ
+
+    from jacobian.math.polynomials.values import MAX_POLYNOMIAL_EXPONENT
+
+    aggregate_terms = 0
+    for expr in basis.exprs:
+        poly = Poly(expr, *symbols, domain=QQ)
+        terms = poly.terms()
+        aggregate_terms += len(terms)
+        if aggregate_terms > _MAX_OUTPUT_TERMS:
+            return True
+        for monom, coefficient in terms:
+            if any(exp > MAX_POLYNOMIAL_EXPONENT for exp in monom):
+                return True
+            if _component_exceeds_limit(int(coefficient.p), int(coefficient.q)):
+                return True
+    return False
+
+
+def incremental_source_groebner(
+    ideal: RationalPolynomialIdeal,
+    monomial_order: str,
+) -> tuple[Any | None, bool]:
+    """Compute the source reduced Gröbner basis with bounded basis growth.
+
+    The kernel runs incrementally, one generator at a time, and every
+    intermediate basis is checked against the output budget (aggregate
+    1,024-term, exponent, and canonical-coefficient limits) before the
+    next generator is added.  This conservatively bounds basis growth so
+    admitted requests cannot drive an unbounded intermediate coefficient
+    expansion inside the kernel.  Adding generators and re-reducing
+    converges to the unique reduced basis, so the final result equals a
+    single-shot computation whenever that stays within budget.
+
+    Returns ``(basis, exceeded)``: ``basis`` is ``None`` when the kernel
+    failed or an intermediate left the budget; ``exceeded`` distinguishes
+    a genuine budget overflow (evidence for a typed budget outcome) from
+    an opaque kernel failure.
+    """
+
+    from sympy import QQ, groebner
+
+    from jacobian.math.polynomials._conversions import (
+        rational_polynomial_to_sympy,
+        symbols_for_variables,
+    )
+
+    variables = ideal.variables
+    symbols = symbols_for_variables(variables)
+    try:
+        exprs = [rational_polynomial_to_sympy(gen).as_expr() for gen in ideal.generators]
+    except Exception:
+        return None, False
+    current: list[Any] = []
+    basis = None
+    for expr in exprs:
+        current.append(expr)
+        try:
+            basis = groebner(current, *symbols, order=monomial_order, domain=QQ)
+        except Exception:
+            return None, False
+        try:
+            exceeded = _basis_exceeds_output_budget(basis, symbols)
+        except Exception:
+            return None, False
+        if exceeded:
+            return None, True
+    return basis, False
+
+
 def _coefficient_exceeds_canonical_limit(value: Any) -> bool:
     """Check whether one exact QQ coefficient leaves the canonical rational domain."""
 
@@ -222,39 +295,8 @@ def retained_source_basis_exceeds_budget(
     returns ``False`` so authored results stay rejected.
     """
 
-    from sympy import QQ, Poly, groebner
-
-    from jacobian.math.polynomials._conversions import (
-        rational_polynomial_to_sympy,
-        symbols_for_variables,
-    )
-    from jacobian.math.polynomials.values import MAX_POLYNOMIAL_EXPONENT
-
-    variables = ideal.variables
-    symbols = symbols_for_variables(variables)
-    try:
-        source_exprs = [
-            rational_polynomial_to_sympy(gen).as_expr() for gen in ideal.generators
-        ]
-        source_gb = groebner(source_exprs, *symbols, order=monomial_order, domain=QQ)
-    except Exception:
-        return False
-    aggregate_terms = 0
-    try:
-        for expr in source_gb.exprs:
-            poly = Poly(expr, *symbols, domain=QQ)
-            terms = poly.terms()
-            aggregate_terms += len(terms)
-            if aggregate_terms > 1024:
-                return True
-            for monom, coefficient in terms:
-                if any(exp > MAX_POLYNOMIAL_EXPONENT for exp in monom):
-                    return True
-                if _component_exceeds_limit(int(coefficient.p), int(coefficient.q)):
-                    return True
-    except Exception:
-        return False
-    return False
+    _basis, exceeded = incremental_source_groebner(ideal, monomial_order)
+    return exceeded
 
 
 def retained_basis_is_groebner(
@@ -264,32 +306,28 @@ def retained_basis_is_groebner(
 ) -> bool:
     """Check the retained tuple is the reduced Gröbner basis of the ideal.
 
-    Recomputes the exact Gröbner basis from the source generators and
-    compares it to the retained wire basis as SymPy ``Poly`` sets.  This
-    ensures the retained basis is not merely a generating set but a
-    Gröbner basis, so remainder replay via sparse-ring division is the
-    unique normal form.
+    Recomputes the exact Gröbner basis from the source generators with
+    bounded basis growth and compares it to the retained wire basis as
+    wire-form sets.  This ensures the retained basis is not merely a
+    generating set but a Gröbner basis, so remainder replay via
+    sparse-ring division is the unique normal form.
     """
-
-    from sympy import QQ, groebner
 
     from jacobian.math.polynomials._conversions import (
         rational_polynomial_from_sympy,
-        rational_polynomial_to_sympy,
         symbols_for_variables,
     )
 
     variables = ideal.variables
     symbols = symbols_for_variables(variables)
+    source_gb, exceeded = incremental_source_groebner(ideal, monomial_order)
+    if source_gb is None or exceeded:
+        return False
     try:
-        source_exprs = [
-            rational_polynomial_to_sympy(gen).as_expr() for gen in ideal.generators
-        ]
-        source_gb = groebner(source_exprs, *symbols, order=monomial_order, domain=QQ)
         computed_polys = tuple(
             rational_polynomial_from_sympy(
-                # ``source_gb.polys`` are ``Poly``; ensure domain QQ
-                __import__("sympy").Poly(expr, *symbols, domain=QQ),
+                # ``source_gb.exprs`` convert to ``Poly`` over QQ
+                __import__("sympy").Poly(expr, *symbols, domain=__import__("sympy").QQ),
                 variables,
             )
             for expr in source_gb.exprs

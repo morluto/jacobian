@@ -180,6 +180,35 @@ class TestChristoffelDarboux:
         assert result.polynomials_evaluated == (_frac(1, 1),)
 
 
+class TestChristoffelDarbouxAdmission:
+    """Requests must be rejected when the recurrence output cannot fit."""
+
+    def test_recurrence_overflow_rejected_at_admission(self) -> None:
+        alpha = tuple(_cr(0, 1) for _ in range(16))
+        beta = tuple(_cr(1, 1) for _ in range(16))
+        huge = _cr(10**4095, 1)
+        with pytest.raises(ValidationError, match="output budget"):
+            ChristoffelDarbouxRequest(alpha=alpha, beta=beta, x=huge, y=huge)
+
+    def test_large_but_admissible_operands_run(self) -> None:
+        alpha = (_cr(0, 1), _cr(0, 1))
+        beta = (_cr(1, 1), _cr(1, 1), _cr(1, 1))
+        request = ChristoffelDarbouxRequest(
+            alpha=alpha, beta=beta, x=_cr(10**100, 1), y=_cr(10**100, 1)
+        )
+        result = compute_christoffel_darboux(request)
+        assert result.kernel.as_fraction() > 0
+
+    def test_moderate_order_with_full_width_coefficients_admitted(self) -> None:
+        alpha = (_cr(0, 1), _cr(0, 1))
+        beta = (_cr(10**4095 - 1, 1), _cr(1, 3), _cr(1, 7))
+        point = _cr(10**4095 - 1, 1)
+        request = ChristoffelDarbouxRequest(
+            alpha=alpha, beta=beta, x=point, y=point
+        )
+        assert compute_christoffel_darboux(request).kernel.as_fraction() > 0
+
+
 # ---------------------------------------------------------------------------
 # Gaussian quadrature
 # ---------------------------------------------------------------------------
@@ -212,6 +241,39 @@ class TestGaussianQuadrature:
     def test_alpha_empty_rejected(self) -> None:
         with pytest.raises(ValueError, match="between 1 and 16"):
             gaussian_quadrature((), (_frac(1, 1),))
+
+
+class TestGaussianQuadratureAdmission:
+    """Admitted coefficients must survive the finite-double conversion."""
+
+    def test_beta_zero_below_float_range_rejected(self) -> None:
+        request_payload = {
+            "alpha": (_cr(0, 1),),
+            "beta": (_cr(1, 10**1000), _cr(1, 3)),
+        }
+        with pytest.raises(ValidationError, match="finite-float magnitude"):
+            GaussianQuadratureRequest(**request_payload)
+
+    def test_beta_zero_at_underflow_boundary_accepted(self) -> None:
+        request = GaussianQuadratureRequest(
+            alpha=(_cr(0, 1),),
+            beta=(_cr(1, 10**300),),
+        )
+        result = compute_gaussian_quadrature(request)
+        assert result.weights[0] != 0
+
+    def test_beta_zero_below_underflow_boundary_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="finite-float magnitude"):
+            GaussianQuadratureRequest(
+                alpha=(_cr(0, 1),),
+                beta=(_cr(1, 10**301),),
+            )
+
+    def test_tiny_but_admissible_mass_reaches_the_weights(self) -> None:
+        mass = _frac(1, 10**200)
+        result = gaussian_quadrature((_frac(0, 1),), (mass,))
+        assert result.weights[0] == Fraction(float(mass))
+        assert result.weights[0] > 0
 
 
 # ---------------------------------------------------------------------------

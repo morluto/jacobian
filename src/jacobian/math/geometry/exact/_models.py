@@ -445,6 +445,18 @@ class PinnedLineDistanceResult(StrictModel):
                 "retained configuration must be a planar configuration "
                 "(exactly two coordinates per point)"
             )
+
+        # Apply the aggregate source-derived output budget to retained
+        # results as well: a deserialized profile must remain canonically
+        # serializable even when its geometry replays exactly.
+        if _maximum_pinned_profile_wire_bytes(
+            self.configuration, self.anchor
+        ) > MAX_PINNED_PROFILE_RESULT_BYTES:
+            raise ValueError(
+                "the complete pinned line-distance profile would exceed the "
+                f"{MAX_PINNED_PROFILE_RESULT_BYTES}-byte aggregate result "
+                "budget; reduce the point count or coordinate heights"
+            )
         if len(self.configuration.points) != self.point_count:
             raise ValueError("point_count must match the retained configuration")
         coords = {

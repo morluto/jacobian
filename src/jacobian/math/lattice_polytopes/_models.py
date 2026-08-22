@@ -36,10 +36,11 @@ bounds the total number of candidate integer points that are tested.
 MAX_LATTICE_POINTS = 1_000_000
 """Absolute upper bound on the number of returned lattice points.
 
-Both operations fail closed with a budget error before enumerating or
-counting more lattice points than this. ``enumerate`` lists every point
-up to the bound; ``count`` returns the count without materializing the
-full list but still refuses to count beyond the bound.
+``enumerate`` fails closed with a budget error before materializing more
+lattice points than this. ``count`` returns the small exact integer
+answer and therefore keeps scanning to the admitted bounding-box budget
+(the 10M-candidate scan bound) instead of enforcing this cap; its result
+is a single count, not a materialized list.
 """
 
 COORDINATE_DIGITS = 32_768
@@ -77,8 +78,10 @@ class LatticePolytopeRequest(StrictModel):
     vertices: tuple[Vertex, ...] | None = Field(
         default=None,
         description=(
-            "V-representation: the vertices of the convex hull. "
-            "Mutually exclusive with ``halfspaces``."
+            "V-representation: the vertices of the convex hull.  The "
+            "vertices must affinely span the ambient dimension "
+            "(full-dimensional hull); lower-dimensional V-representations "
+            "are rejected.  Mutually exclusive with ``halfspaces``."
         ),
     )
     halfspaces: tuple[Halfspace, ...] | None = Field(

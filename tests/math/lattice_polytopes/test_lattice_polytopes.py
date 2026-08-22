@@ -284,8 +284,26 @@ class TestBudgets:
             )
         )
         assert (side + 1) * (side + 1) > MAX_LATTICE_POINTS
-        with pytest.raises(LatticePointBudgetError, match="budget"):
-            count_lattice_points(request)
+        # Enumeration materializes the points, so it fails closed with a
+        # typed budget outcome (the point cap or the output-size estimate).
+        with pytest.raises(LatticePointBudgetError):
+            enumerate_lattice_points(request)
+        # ...while counting returns the small exact integer answer.
+        result = count_lattice_points(request)
+        assert result.point_count == (side + 1) * (side + 1)
+
+    def test_thousand_square_count_exceeding_the_cap(self) -> None:
+        # [0,1000]^2 holds 1_002_001 lattice points: above the
+        # materialization cap but inside the admitted scan budget.
+        request = LatticePolytopeRequest(
+            vertices=(
+                _v(("0", "1"), ("0", "1")),
+                _v(("1000", "1"), ("0", "1")),
+                _v(("1000", "1"), ("1000", "1")),
+                _v(("0", "1"), ("1000", "1")),
+            )
+        )
+        assert count_lattice_points(request).point_count == 1001 * 1001
 
 
 class TestLowerDimensionalRejection:
@@ -315,6 +333,22 @@ class TestLowerDimensionalRejection:
                     _v(("2", "1"), ("2", "1")),
                 )
             )
+
+    def test_declarations_advertise_full_dimensional_restriction(self) -> None:
+        """Both declarations and the request schema state the restriction."""
+        from jacobian.math.lattice_polytopes._tools import TOOLS
+
+        tools = {tool.operation_id: tool for tool in TOOLS}
+        for operation_id in (
+            "polytope.lattice_points.enumerate",
+            "polytope.lattice_points.count",
+        ):
+            description = tools[operation_id].description.lower()
+            assert "full-dimensional" in description
+            assert "affinely span" in description
+        schema = LatticePolytopeRequest.model_json_schema()
+        vertices_description = schema["properties"]["vertices"]["description"].lower()
+        assert "affinely span" in vertices_description
 
 
 class TestLargeCoordinateBounds:

@@ -53,7 +53,10 @@ LATTICE_POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "enumerate every lattice (integer) point inside it. The facets of "
         "the convex hull are built with exact rational linear algebra and "
         "every integer point in the bounding box is tested against the "
-        "exact half-space inequalities.",
+        "exact half-space inequalities. A V-representation must be "
+        "full-dimensional: its vertices must affinely span the ambient "
+        "dimension, so lower-dimensional hulls (for example a segment in "
+        "3-D space) are rejected.",
         LatticePolytopeRequest,
         EnumerateLatticePointsResult,
         enumerate_lattice_points,
@@ -103,7 +106,10 @@ LATTICE_POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "count the lattice (integer) points inside it without listing them. "
         "The count is exact: the facet half-spaces are built with exact "
         "rational linear algebra and every integer point in the bounding "
-        "box is tested against the exact inequalities.",
+        "box is tested against the exact inequalities. A V-representation "
+        "must be full-dimensional: its vertices must affinely span the "
+        "ambient dimension, so lower-dimensional hulls (for example a "
+        "segment in 3-D space) are rejected.",
         LatticePolytopeRequest,
         CountLatticePointsResult,
         count_lattice_points,

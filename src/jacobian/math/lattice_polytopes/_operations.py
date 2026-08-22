@@ -374,9 +374,11 @@ def _scan_box(
     """Scan the integer bounding box, returning collected points and a count.
 
     When ``collect`` is ``True`` every lattice point is materialised as a
-    ``LatticePoint``; otherwise only the count is tracked.  In both cases
-    the scan aborts with ``LatticePointBudgetError`` once more than
-    ``MAX_LATTICE_POINTS`` lattice points have been found.
+    ``LatticePoint``; otherwise only the count is tracked.  The
+    ``MAX_LATTICE_POINTS`` bound is a materialisation cap: enumeration
+    aborts with ``LatticePointBudgetError`` once more points than the cap
+    would be listed, while counting continues to the admitted scan limit
+    so its small exact integer answer can still be returned.
     """
     points: list[LatticePoint] = []
     count = 0
@@ -384,7 +386,7 @@ def _scan_box(
         if not _is_inside_int(coord, facets):
             continue
         count += 1
-        if count > MAX_LATTICE_POINTS:
+        if collect and count > MAX_LATTICE_POINTS:
             raise LatticePointBudgetError(
                 "lattice-point enumeration exceeds the "
                 f"{MAX_LATTICE_POINTS}-point budget bound"

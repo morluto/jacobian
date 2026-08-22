@@ -508,7 +508,6 @@ class CircumradiusProfileResult(StrictModel):
     @model_validator(mode="after")
     def require_complete_profile(self) -> Self:
         import math
-        from fractions import Fraction
 
         if self.point_count != len(self.points):
             raise ValueError("point_count must match the retained points length")
@@ -517,45 +516,57 @@ class CircumradiusProfileResult(StrictModel):
             raise ValueError("triple_count must equal comb(point_count, 3)")
         if len(self.entries) != self.triple_count:
             raise ValueError("circumradius profile must be complete")
-        # Validate that entries cover every unordered triple exactly once in canonical order
-        seen: set[tuple[int, int, int]] = set()
-        for entry in self.entries:
-            idx = entry.indices
-            if idx != tuple(sorted(idx)):
-                raise ValueError("circumradius entry indices must be sorted")
-            if idx in seen:
-                raise ValueError("circumradius entries must be unique")
-            if not (0 <= idx[0] < idx[1] < idx[2] < self.point_count):
-                raise ValueError("circumradius entry indices out of range")
-            # Check labels match points
-            expected_labels = (self.points[idx[0]].label, self.points[idx[1]].label, self.points[idx[2]].label)
-            if entry.labels != expected_labels:
-                raise ValueError("circumradius entry labels must match the source points")
-            seen.add(idx)
-        # Check canonical lexicographic order
-        if tuple(self.entries) != tuple(sorted(self.entries, key=lambda e: e.indices)):
-            raise ValueError("circumradius entries must be in lexicographic order")
-        if len(seen) != expected:
-            raise ValueError("circumradius profile must cover every unordered triple")
-        # Replay each entry's collinearity and radius from the retained points
-        coords = [(p.point.x.as_fraction(), p.point.y.as_fraction()) for p in self.points]
-        for entry in self.entries:
-            i, j, k = entry.indices
-            (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
-            cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
-            is_collinear = cross == 0
-            if entry.collinear != is_collinear:
-                raise ValueError("circumradius entry collinear flag does not match the points")
-            if not is_collinear:
-                dab = (ax - bx) ** 2 + (ay - by) ** 2
-                dbc = (bx - cx) ** 2 + (by - cy) ** 2
-                dac = (ax - cx) ** 2 + (ay - cy) ** 2
-                expected_r2 = (dab * dbc * dac) / (4 * cross * cross)
-                if entry.squared_circumradius is None or entry.squared_circumradius.as_fraction() != expected_r2:
-                    raise ValueError("squared circumradius does not match the exact value")
-            elif entry.squared_circumradius is not None:
-                raise ValueError("collinear entry must not have a circumradius")
+        _require_canonical_triple_coverage(self, expected)
+        _require_replayed_circumradii(self)
         return self
+
+
+def _require_canonical_triple_coverage(
+    result: CircumradiusProfileResult, expected: int
+) -> None:
+    """Every unordered triple appears exactly once in canonical order."""
+    seen: set[tuple[int, int, int]] = set()
+    for entry in result.entries:
+        idx = entry.indices
+        if idx != tuple(sorted(idx)):
+            raise ValueError("circumradius entry indices must be sorted")
+        if idx in seen:
+            raise ValueError("circumradius entries must be unique")
+        if not (0 <= idx[0] < idx[1] < idx[2] < result.point_count):
+            raise ValueError("circumradius entry indices out of range")
+        expected_labels = (
+            result.points[idx[0]].label,
+            result.points[idx[1]].label,
+            result.points[idx[2]].label,
+        )
+        if entry.labels != expected_labels:
+            raise ValueError("circumradius entry labels must match the source points")
+        seen.add(idx)
+    if tuple(result.entries) != tuple(sorted(result.entries, key=lambda e: e.indices)):
+        raise ValueError("circumradius entries must be in lexicographic order")
+    if len(seen) != expected:
+        raise ValueError("circumradius profile must cover every unordered triple")
+
+
+def _require_replayed_circumradii(result: CircumradiusProfileResult) -> None:
+    """Replay each entry's collinearity and radius from the retained points."""
+    coords = [(p.point.x.as_fraction(), p.point.y.as_fraction()) for p in result.points]
+    for entry in result.entries:
+        i, j, k = entry.indices
+        (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
+        cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+        is_collinear = cross == 0
+        if entry.collinear != is_collinear:
+            raise ValueError("circumradius entry collinear flag does not match the points")
+        if not is_collinear:
+            dab = (ax - bx) ** 2 + (ay - by) ** 2
+            dbc = (bx - cx) ** 2 + (by - cy) ** 2
+            dac = (ax - cx) ** 2 + (ay - cy) ** 2
+            expected_r2 = (dab * dbc * dac) / (4 * cross * cross)
+            if entry.squared_circumradius is None or entry.squared_circumradius.as_fraction() != expected_r2:
+                raise ValueError("squared circumradius does not match the exact value")
+        elif entry.squared_circumradius is not None:
+            raise ValueError("collinear entry must not have a circumradius")
 
 
 class ForbiddenLabelledPoint(StrictModel):
@@ -616,6 +627,71 @@ class ConcyclicQuadruple(StrictModel):
         return self
 
 
+def _minor3(
+    m: list[list[Fraction]], r0: int, r1: int, r2: int, c0: int, c1: int, c2: int
+) -> Fraction:
+    """3x3 determinant of selected rows and columns."""
+    return (
+        m[r0][c0] * (m[r1][c1] * m[r2][c2] - m[r1][c2] * m[r2][c1])
+        - m[r0][c1] * (m[r1][c0] * m[r2][c2] - m[r1][c2] * m[r2][c0])
+        + m[r0][c2] * (m[r1][c0] * m[r2][c1] - m[r1][c1] * m[r2][c0])
+    )
+
+
+def _scan_forbidden_patterns(
+    points: tuple[ForbiddenLabelledPoint, ...],
+) -> tuple[tuple[int, int, int] | None, tuple[int, int, int, int] | None, int, int]:
+    """Replay the bounded enumeration behind one forbidden-pattern decision.
+
+    Returns the first collinear triple and first non-degenerate concyclic
+    quadruple in combination order, together with the number of triples and
+    quadruples examined before each search stopped.
+    """
+    from itertools import combinations
+
+    coords = [_point_key(item.point) for item in points]
+    squares = [x * x + y * y for x, y in coords]
+
+    def collinear(a: int, b: int, c: int) -> bool:
+        return (
+            _cross(_subtract(coords[b], coords[a]), _subtract(coords[c], coords[a]))
+            == 0
+        )
+
+    collinear_triple = None
+    checked_triples = 0
+    for i, j, k in combinations(range(len(coords)), 3):
+        checked_triples += 1
+        if collinear(i, j, k):
+            collinear_triple = (i, j, k)
+            break
+
+    concyclic_quadruple = None
+    checked_quadruples = 0
+    for i, j, k, ell in combinations(range(len(coords)), 4):
+        checked_quadruples += 1
+        one = Fraction(1)
+        m: list[list[Fraction]] = [
+            [squares[i], coords[i][0], coords[i][1], one],
+            [squares[j], coords[j][0], coords[j][1], one],
+            [squares[k], coords[k][0], coords[k][1], one],
+            [squares[ell], coords[ell][0], coords[ell][1], one],
+        ]
+        determinant = (
+            m[0][0] * _minor3(m, 1, 2, 3, 1, 2, 3)
+            - m[0][1] * _minor3(m, 1, 2, 3, 0, 2, 3)
+            + m[0][2] * _minor3(m, 1, 2, 3, 0, 1, 3)
+            - m[0][3] * _minor3(m, 1, 2, 3, 0, 1, 2)
+        )
+        if determinant != 0:
+            continue
+        if any(collinear(a, b, c) for a, b, c in ((i, j, k), (i, j, ell), (i, k, ell), (j, k, ell))):
+            continue
+        concyclic_quadruple = (i, j, k, ell)
+        break
+    return collinear_triple, concyclic_quadruple, checked_triples, checked_quadruples
+
+
 class ForbiddenPatternsResult(StrictModel):
     """Result of screening a configuration for forbidden patterns."""
 
@@ -646,4 +722,38 @@ class ForbiddenPatternsResult(StrictModel):
             and self.concyclic_quadruple.fourth >= self.point_count
         ):
             raise ValueError("concyclic quadruple index exceeds configuration")
+        _require_replayed_patterns(self)
         return self
+
+
+def _require_replayed_patterns(result: ForbiddenPatternsResult) -> None:
+    """Recompute the bounded predicates and checked counts from the source."""
+    collinear, concyclic, checked_triples, checked_quadruples = (
+        _scan_forbidden_patterns(result.configuration.points)
+    )
+    if result.has_collinear_triple != (collinear is not None):
+        raise ValueError(
+            "collinear-triple flag does not match the retained configuration"
+        )
+    if result.has_concyclic_quadruple != (concyclic is not None):
+        raise ValueError(
+            "concyclic-quadruple flag does not match the retained configuration"
+        )
+    if collinear is not None and result.collinear_triple != CollinearTriple(
+        first=collinear[0], second=collinear[1], third=collinear[2]
+    ):
+        raise ValueError("collinear witness does not match the configuration")
+    if concyclic is not None and result.concyclic_quadruple != ConcyclicQuadruple(
+        first=concyclic[0],
+        second=concyclic[1],
+        third=concyclic[2],
+        fourth=concyclic[3],
+    ):
+        raise ValueError("concyclic witness does not match the configuration")
+    if (
+        result.checked_triples != checked_triples
+        or result.checked_quadruples != checked_quadruples
+    ):
+        raise ValueError(
+            "checked counts do not match the bounded enumeration of the configuration"
+        )

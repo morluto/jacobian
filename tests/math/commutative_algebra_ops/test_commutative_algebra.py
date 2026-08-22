@@ -8,6 +8,7 @@ from itertools import combinations
 
 import pytest
 import sympy
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.commutative_algebra_ops import _singular
@@ -16,11 +17,14 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealQuotientRequest,
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
+    IdealSaturationRequest,
+    IdealSaturationResult,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
     compute_ideal_radical,
     compute_ideal_radical_membership,
+    compute_ideal_saturation,
 )
 from jacobian.math.commutative_algebra_ops._tools import TOOLS
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
@@ -461,3 +465,50 @@ def test_ideal_quotient_by_product_equals_iterated_quotient() -> None:
     assert iterated.quotient is not None
     assert _equal(by_product.quotient, iterated.quotient)
     assert _equal(by_product.quotient, _ideal(variables, {(2, 1): 1}))
+
+
+@requires_singular
+@pytest.mark.requires_backend("singular")
+def test_ideal_saturation_binds_result_to_its_request() -> None:
+    # <xy> : <x>^infinity = <y>.
+    variables = ("x", "y")
+    ideal = _ideal(variables, {(1, 1): 1})
+    request = IdealSaturationRequest(
+        ideal=ideal,
+        saturation_polynomial=_polynomial(variables, {(1, 0): 1}),
+    )
+    result = compute_ideal_saturation(request)
+
+    assert result.outcome == "COMPUTED"
+    assert result.request == request
+    assert _equal(result.saturation, _ideal(variables, {(0, 1): 1}))
+
+    replayed = IdealSaturationResult.model_validate(result.model_dump())
+    assert replayed.saturation == result.saturation
+
+
+@requires_singular
+@pytest.mark.requires_backend("singular")
+def test_forged_saturation_value_rejected_against_retained_request() -> None:
+    variables = ("x", "y")
+    request = IdealSaturationRequest(
+        ideal=_ideal(variables, {(1, 1): 1}),
+        saturation_polynomial=_polynomial(variables, {(1, 0): 1}),
+    )
+    forged = {
+        "request": request.model_dump(),
+        "outcome": "COMPUTED",
+        "saturation": _ideal(variables, {(1, 1): 1}).model_dump(),
+        "backend_version": "4.4.0",
+    }
+    with pytest.raises(ValidationError, match="retained request"):
+        IdealSaturationResult.model_validate(forged)
+
+
+def test_detached_saturation_payload_requires_its_request() -> None:
+    with pytest.raises(ValidationError):
+        IdealSaturationResult(
+            outcome="COMPUTED",
+            saturation=_ideal(("x",), {(1,): 1}),
+            backend_version="4.4.0",
+        )

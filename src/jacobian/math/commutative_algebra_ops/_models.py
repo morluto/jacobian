@@ -260,6 +260,9 @@ class IdealSaturationRequest(StrictModel):
 
 
 class IdealSaturationResult(StrictModel):
+    """The exact saturation of one retained saturation request."""
+
+    request: IdealSaturationRequest
     outcome: IdealExecutionOutcome
     saturation: RationalPolynomialIdeal | None = None
     method: Literal["SINGULAR_SATURATION"] = "SINGULAR_SATURATION"
@@ -272,6 +275,24 @@ class IdealSaturationResult(StrictModel):
             if self.saturation is None or self.backend_version is None or self.detail:
                 raise ValueError(
                     "computed saturation requires a value and backend version"
+                )
+            from jacobian.math.commutative_algebra_ops._singular import (
+                run_singular_ideal_operation,
+            )
+
+            saturation_ideal = RationalPolynomialIdeal(
+                variables=self.request.ideal.variables,
+                generators=(self.request.saturation_polynomial,),
+            )
+            replay = run_singular_ideal_operation(
+                "saturation",
+                self.request.ideal,
+                saturation_ideal,
+                self.request.resource_budget,
+            )
+            if replay.outcome != "COMPUTED" or replay.ideal != self.saturation:
+                raise ValueError(
+                    "saturation must be the exact saturation of the retained request"
                 )
         elif (
             self.saturation is not None

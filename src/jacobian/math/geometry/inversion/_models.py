@@ -34,11 +34,9 @@ def _inversion_result_heights(
     """Conservative height of I(p) = c + s(p - c)/||p - c||^2 before reduction.
 
     The admitted domain must be symmetric under unit inversion so every
-    accepted result can be consumed unchanged.  For the origin-centered unit
-    inversion, I(I(p)) == p exactly, and each application squares
-    numerator/denominator digit counts; bounding the input height by half the
-    canonical limit makes two successive accepted invocations stay within one
-    canonical limit, which the squaring growth dominates.
+    accepted result can be consumed unchanged: inputs are admitted only within
+    half the canonical limit and estimated result heights must stay inside the
+    same half-limit domain, so I(I(p)) for an admitted p is again admitted.
     """
 
     dx = _displacement_height(point_x, center_x)
@@ -105,12 +103,12 @@ class CircleInversionRequest(StrictModel):
         inverted_x, inverted_y = _inversion_result_heights(
             self.center_x, self.center_y, self.power, self.point_x, self.point_y
         )
-        if inverted_x.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) or inverted_y.exceeds(
-            MAX_CANONICAL_RATIONAL_DIGITS
+        if inverted_x.exceeds(_HALF_CANONICAL_DIGITS) or inverted_y.exceeds(
+            _HALF_CANONICAL_DIGITS
         ):
             raise ValueError(
-                "circle inversion rational height exceeds the "
-                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound"
+                "circle inversion results must stay within the "
+                f"{_HALF_CANONICAL_DIGITS}-digit reusable admission domain"
             )
         return self
 

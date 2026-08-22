@@ -1,5 +1,8 @@
 """Wire adapters for exact moments and orthogonal polynomials."""
 
+from collections.abc import Sequence
+from fractions import Fraction
+
 from jacobian._exact import CanonicalRational
 from jacobian.math.moments_orthogonal._models import (
     ChristoffelDarbouxRequest,
@@ -8,6 +11,7 @@ from jacobian.math.moments_orthogonal._models import (
     GaussianQuadratureResult,
     HankelMatrixRequest,
     HankelMatrixResult,
+    JacobiCoefficients,
     JacobiMatrixRequest,
     JacobiMatrixResult,
     RecurrenceCoefficientsRequest,
@@ -15,11 +19,11 @@ from jacobian.math.moments_orthogonal._models import (
 )
 
 
-def _to_fractions(values):
+def _to_fractions(values: Sequence[CanonicalRational]) -> tuple[Fraction, ...]:
     return tuple(v.as_fraction() for v in values)
 
 
-def _from_fractions(values):
+def _from_fractions(values: Sequence[Fraction]) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
 
 
@@ -47,8 +51,10 @@ def compute_recurrence_coefficients(
     result = recurrence_coefficients(_to_fractions(request.moments))
     return RecurrenceCoefficientsResult(
         moments=request.moments,
-        alpha=_from_fractions(result.alpha),
-        beta=_from_fractions(result.beta),
+        coefficients=JacobiCoefficients(
+            alpha=_from_fractions(result.alpha),
+            beta=_from_fractions(result.beta),
+        ),
     )
 
 
@@ -56,11 +62,11 @@ def compute_jacobi_matrix(request: JacobiMatrixRequest) -> JacobiMatrixResult:
     from jacobian.math.moments_orthogonal.operations import jacobi_matrix
 
     result = jacobi_matrix(
-        _to_fractions(request.alpha), _to_fractions(request.beta)
+        _to_fractions(request.coefficients.alpha),
+        _to_fractions(request.coefficients.beta),
     )
     return JacobiMatrixResult(
-        alpha=request.alpha,
-        beta=request.beta,
+        coefficients=request.coefficients,
         diagonal=_from_fractions(result.diagonal),
         off_diagonal=_from_fractions(result.off_diagonal),
     )
@@ -72,14 +78,13 @@ def compute_christoffel_darboux(
     from jacobian.math.moments_orthogonal.operations import christoffel_darboux
 
     result = christoffel_darboux(
-        _to_fractions(request.alpha),
-        _to_fractions(request.beta),
+        _to_fractions(request.coefficients.alpha),
+        _to_fractions(request.coefficients.beta),
         request.x.as_fraction(),
         request.y.as_fraction(),
     )
     return ChristoffelDarbouxResult(
-        alpha=request.alpha,
-        beta=request.beta,
+        coefficients=request.coefficients,
         x=request.x,
         y=request.y,
         kernel=CanonicalRational.from_fraction(result.kernel),
@@ -93,11 +98,11 @@ def compute_gaussian_quadrature(
     from jacobian.math.moments_orthogonal.operations import gaussian_quadrature
 
     result = gaussian_quadrature(
-        _to_fractions(request.alpha), _to_fractions(request.beta)
+        _to_fractions(request.coefficients.alpha),
+        _to_fractions(request.coefficients.beta),
     )
     return GaussianQuadratureResult(
-        alpha=request.alpha,
-        beta=request.beta,
+        coefficients=request.coefficients,
         nodes=_from_fractions(result.nodes),
         weights=_from_fractions(result.weights),
     )

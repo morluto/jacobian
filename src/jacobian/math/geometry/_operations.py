@@ -485,107 +485,40 @@ def forbidden_patterns(request):
         (x2 - x1)(y3 - y1) - (y2 - y1)(x3 - x1)
 
     vanishes.  Four points are concyclic when the 4x4 determinant of the rows
-    [x^2 + y^2, x, y, 1] vanishes.  Both predicates are evaluated with exact
-    ``fractions.Fraction`` arithmetic!
+    [x^2 + y^2, x, y, 1] vanishes; quadruples containing a collinear triple are
+    degenerate and never witness concyclicity.  Both predicates are evaluated
+    with exact ``fractions.Fraction`` arithmetic!
     """
-    from itertools import combinations
-
     from jacobian.math.geometry._models import (
         CollinearTriple,
         ConcyclicQuadruple,
         ForbiddenPatternsResult,
+        _scan_forbidden_patterns,
     )
 
-    pts = request.configuration.points
-    n = len(pts)
-    xy = [
-        (entry.point.x.as_fraction(), entry.point.y.as_fraction())
-        for entry in pts
-    ]
-
-    collinear_triple = None
-    has_collinear = False
-    checked_triples = 0
-    for i, j, k in combinations(range(n), 3):
-        checked_triples += 1
-        xi, yi = xy[i]
-        xj, yj = xy[j]
-        xk, yk = xy[k]
-        determinant = (xj - xi) * (yk - yi) - (yj - yi) * (xk - xi)
-        if determinant == 0:
-            has_collinear = True
-            collinear_triple = CollinearTriple(first=i, second=j, third=k)
-            break
-
-    concyclic_quadruple = None
-    has_concyclic = False
-    checked_quadruples = 0
-    for i, j, k, ell in combinations(range(n), 4):
-        checked_quadruples += 1
-        xi, yi = xy[i]
-        xj, yj = xy[j]
-        xk, yk = xy[k]
-        xl, yl = xy[ell]
-        si = xi * xi + yi * yi
-        sj = xj * xj + yj * yj
-        sk = xk * xk + yk * yk
-        sl = xl * xl + yl * yl
-        # 4x4 determinant of [x^2+y^2, x, y, 1]
-        m = [
-            [si, xi, yi, 1],
-            [sj, xj, yj, 1],
-            [sk, xk, yk, 1],
-            [sl, xl, yl, 1],
-        ]
-        # Laplace expansion of the 4x4 determinant along row 0:
-        # each cofactor deletes row 0 and its own column, keeping rows 1-3.
-        det = (
-            m[0][0] * _minor3(m, 1, 2, 3, 1, 2, 3)
-            - m[0][1] * _minor3(m, 1, 2, 3, 0, 2, 3)
-            + m[0][2] * _minor3(m, 1, 2, 3, 0, 1, 3)
-            - m[0][3] * _minor3(m, 1, 2, 3, 0, 1, 2)
-        )
-        if det == 0:
-            # A quadruple containing a collinear triple is degenerate:
-            # three distinct collinear points cannot lie on a finite circle.
-            # Exclude such cases from concyclicity witnesses.
-            is_collinear = False
-            for a, b, c in (
-                (i, j, k),
-                (i, j, ell),
-                (i, k, ell),
-                (j, k, ell),
-            ):
-                xa, ya = xy[a]
-                xb, yb = xy[b]
-                xc, yc = xy[c]
-                if (xb - xa) * (yc - ya) - (yb - ya) * (xc - xa) == 0:
-                    is_collinear = True
-                    break
-            if is_collinear:
-                continue
-            has_concyclic = True
-            concyclic_quadruple = ConcyclicQuadruple(
-                first=i, second=j, third=k, fourth=ell
-            )
-            break
-
+    collinear, concyclic, checked_triples, checked_quadruples = (
+        _scan_forbidden_patterns(request.configuration.points)
+    )
     return ForbiddenPatternsResult(
         configuration=request.configuration,
-        point_count=n,
-        has_collinear_triple=has_collinear,
-        has_concyclic_quadruple=has_concyclic,
-        collinear_triple=collinear_triple,
-        concyclic_quadruple=concyclic_quadruple,
+        point_count=len(request.configuration.points),
+        has_collinear_triple=collinear is not None,
+        has_concyclic_quadruple=concyclic is not None,
+        collinear_triple=(
+            CollinearTriple(first=collinear[0], second=collinear[1], third=collinear[2])
+            if collinear is not None
+            else None
+        ),
+        concyclic_quadruple=(
+            ConcyclicQuadruple(
+                first=concyclic[0],
+                second=concyclic[1],
+                third=concyclic[2],
+                fourth=concyclic[3],
+            )
+            if concyclic is not None
+            else None
+        ),
         checked_triples=checked_triples,
         checked_quadruples=checked_quadruples,
-    )
-
-
-def _minor3(m, r0, r1, r2, c0, c1, c2):
-    """3x3 determinant of selected rows and columns."""
-    return (
-        m[r0][c0] * (m[r1][c1] * m[r2][c2] - m[r1][c2] * m[r2][c1])
-        - m[r0][c1] * (m[r1][c0] * m[r2][c2] - m[r1][c2] * m[r2][c0])
-        + m[r0][c2] * (m[r1][c0] * m[r2][c1] - m[r1][c1] * m[r2][c0])
     )

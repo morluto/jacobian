@@ -20,6 +20,7 @@ from jacobian.math.moments_orthogonal._models import (
     GaussianQuadratureResult,
     HankelMatrixRequest,
     HankelMatrixResult,
+    JacobiCoefficients,
     JacobiMatrixRequest,
     JacobiMatrixResult,
     RecurrenceCoefficientsRequest,
@@ -234,19 +235,24 @@ class TestWireAdapters:
         )
         result = compute_recurrence_coefficients(request)
         assert isinstance(result, RecurrenceCoefficientsResult)
-        assert len(result.alpha) == 3
+        assert len(result.coefficients.alpha) == 3
+        assert isinstance(result.coefficients, JacobiCoefficients)
 
     def test_jacobi_wire(self) -> None:
         request = JacobiMatrixRequest(
-            alpha=(_cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            coefficients=JacobiCoefficients(
+                alpha=(_cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            )
         )
         result = compute_jacobi_matrix(request)
         assert isinstance(result, JacobiMatrixResult)
     def test_christoffel_darboux_wire(self) -> None:
         request = ChristoffelDarbouxRequest(
-            alpha=(_cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            coefficients=JacobiCoefficients(
+                alpha=(_cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            ),
             x=_cr(1, 1),
             y=_cr(1, 1),
         )
@@ -255,12 +261,55 @@ class TestWireAdapters:
 
     def test_gaussian_quadrature_wire(self) -> None:
         request = GaussianQuadratureRequest(
-            alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+            coefficients=JacobiCoefficients(
+                alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+            )
         )
         result = compute_gaussian_quadrature(request)
         assert isinstance(result, GaussianQuadratureResult)
         assert len(result.nodes) == 3
+
+    def test_producer_coefficients_feed_every_consumer_unchanged(self) -> None:
+        """One domain-owned recurrence value composes with all consumers."""
+        producer_request = RecurrenceCoefficientsRequest(
+            moments=tuple(_cr(1, k) for k in range(1, 8))
+        )
+        result = compute_recurrence_coefficients(producer_request)
+        serialized = result.model_dump()["coefficients"]
+
+        reused = JacobiMatrixRequest(coefficients=result.coefficients)
+        deserialized = JacobiMatrixRequest.model_validate(
+            {"coefficients": serialized}
+        )
+        kernel = ChristoffelDarbouxRequest.model_validate(
+            {
+                "coefficients": serialized,
+                "x": {"num": "1", "den": "1"},
+                "y": {"num": "3", "den": "4"},
+            }
+        )
+        quadrature = GaussianQuadratureRequest.model_validate(
+            {"coefficients": serialized}
+        )
+
+        assert reused.coefficients is result.coefficients
+        assert compute_jacobi_matrix(reused).coefficients == result.coefficients
+        assert deserialized.coefficients == result.coefficients
+        assert (
+            compute_christoffel_darboux(kernel).coefficients == result.coefficients
+        )
+        assert (
+            compute_gaussian_quadrature(quadrature).coefficients
+            == result.coefficients
+        )
+
+    def test_coefficients_reject_invalid_subdiagonal(self) -> None:
+        with pytest.raises(ValidationError, match="subdiagonal"):
+            JacobiCoefficients(
+                alpha=(_cr(0, 1), _cr(0, 1)),
+                beta=(_cr(1, 1), _cr(-1, 2)),
+            )
 
     def test_hankel_validation_error(self) -> None:
         with pytest.raises(ValidationError):

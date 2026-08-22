@@ -85,6 +85,43 @@ class TestRejection:
             )
 
 
+class TestReusableDomain:
+    """Every accepted result must be re-admissible as a request point."""
+
+    def test_result_reenters_the_request_domain(self) -> None:
+        first = CircleInversionRequest(
+            center_x={"num": "0", "den": "1"},
+            center_y={"num": "0", "den": "1"},
+            power={"num": "1", "den": "1"},
+            point_x={"num": "4", "den": "1"},
+            point_y={"num": "0", "den": "1"},
+        )
+        result = compute_circle_inversion(first)
+        second = CircleInversionRequest(
+            center_x={"num": "0", "den": "1"},
+            center_y={"num": "0", "den": "1"},
+            power={"num": "1", "den": "1"},
+            point_x=result.inverted_x,
+            point_y=result.inverted_y,
+        )
+        round_trip = compute_circle_inversion(second)
+        assert round_trip.inverted_x == first.point_x
+        assert round_trip.inverted_y == first.point_y
+
+    def test_output_beyond_the_reusable_domain_rejected(self) -> None:
+        from jacobian.canonical import format_canonical_integer
+
+        n = 10**9000 + 7
+        with pytest.raises(ValidationError, match="reusable"):
+            CircleInversionRequest(
+                center_x={"num": "0", "den": "1"},
+                center_y={"num": "0", "den": "1"},
+                power={"num": "1", "den": "1"},
+                point_x={"num": "1", "den": format_canonical_integer(n)},
+                point_y={"num": "1", "den": "1"},
+            )
+
+
 class TestWireAdapter:
     def test_compute_circle_inversion(self) -> None:
         request = CircleInversionRequest(

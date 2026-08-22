@@ -88,6 +88,10 @@ def _require_chain_map_components(
             f"{label} requires one map component per chain degree "
             f"({expected_count}), got {len(map_matrices)}"
         )
+    from jacobian.math.chain_complexes.values import (
+        _require_rational_entry_grammar,
+    )
+
     for index, matrix in enumerate(map_matrices):
         rows = target.basis_sizes[index]
         cols = source.basis_sizes[index]
@@ -96,6 +100,12 @@ def _require_chain_map_components(
                 f"{label} map component {index} must have shape "
                 f"{rows}x{cols} (target rows x source columns)"
             )
+        for row in matrix:
+            for entry in row:
+                # Shape alone does not make an entry parseable: the exact
+                # kernels parse entries with Fraction/int and would turn an
+                # accepted request into a host exception.
+                _require_rational_entry_grammar(source.coefficient_field, entry)
 
 
 class VerifyChainMapRequest(StrictModel):
@@ -153,11 +163,13 @@ class TensorProductRequest(StrictModel):
             or self.left.prime != self.right.prime
         ):
             raise ValueError("tensor product requires same coefficient field and prime")
-        # Bound the derived tensor dimensions before any allocation: each
-        # tensor-product group and the total cell count stay within a
-        # conservative budget derived from the input bounds.
+        # Bound the derived tensor work before any allocation: each
+        # tensor-product group dimension, the total group cells, and the
+        # dense differential cells actually allocated between consecutive
+        # groups all stay within conservative budgets derived from the
+        # input bounds.
         group_count = len(self.left.basis_sizes) + len(self.right.basis_sizes) - 1
-        total = 0
+        group_sizes: list[int] = []
         for degree in range(group_count):
             size = 0
             for i in range(min(degree + 1, len(self.left.basis_sizes))):
@@ -169,11 +181,16 @@ class TensorProductRequest(StrictModel):
                     f"tensor product group dimension {size} exceeds the "
                     f"{MAX_TENSOR_GROUP_DIMENSION}-dimension work bound"
                 )
-            total += size
-        if total > MAX_TENSOR_TOTAL_CELLS:
+            group_sizes.append(size)
+        total = sum(group_sizes)
+        allocated_cells = sum(
+            group_sizes[degree - 1] * group_sizes[degree]
+            for degree in range(1, group_count)
+        )
+        if total > MAX_TENSOR_TOTAL_CELLS or allocated_cells > MAX_TENSOR_TOTAL_CELLS:
             raise ValueError(
-                f"tensor product totals {total} cells, exceeding the "
-                f"{MAX_TENSOR_TOTAL_CELLS}-cell work bound"
+                f"tensor product allocates {max(total, allocated_cells)} "
+                f"cells, exceeding the {MAX_TENSOR_TOTAL_CELLS}-cell work bound"
             )
         return self
 

@@ -270,9 +270,11 @@ def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
     )
 
 
-def compute_homology(request: ComputeHomologyRequest) -> HomologyResult:
-    """Compute the homology groups of a chain complex."""
-    cx = request.complex
+def _compute_homology_groups(
+    cx: ChainComplexValue,
+) -> tuple[HomologyGroupValue, ...]:
+    """Exact homology groups shared by the operation and its validator."""
+
     prime = cx.prime
     n = len(cx.basis_sizes)
 
@@ -323,12 +325,21 @@ def compute_homology(request: ComputeHomologyRequest) -> HomologyResult:
             )
         )
 
+    return tuple(groups)
+
+
+def compute_homology(request: ComputeHomologyRequest) -> HomologyResult:
+    """Compute the homology groups of a chain complex."""
+    cx = request.complex
+    prime = cx.prime
+    groups = _compute_homology_groups(cx)
     return HomologyResult(
         homology_groups=tuple(groups),
         coefficient_field=cx.coefficient_field,
         prime=prime,
         degree_min=cx.degree_min,
         degree_max=cx.degree_max,
+        complex=cx,
     )
 
 
@@ -404,7 +415,7 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
         cols = cone_basis_sizes[n]
         if rows == 0 or cols == 0:
             # Zero-cell differentials carry no entries.
-            cone_diffs.append(tuple())
+            cone_diffs.append(())
             continue
         # Build zero matrix
         block = [[Fraction(0) for _ in range(cols)] for _ in range(rows)]
@@ -500,6 +511,11 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
         for i, m in enumerate(right.differential_matrices)
     ]
 
+    # A tensor product of chain complexes is a chain complex only when both
+    # factors satisfy d^2 = 0; validate before building anything.
+    _require_square_zero(left_diffs, prime, label="left")
+    _require_square_zero(right_diffs, prime, label="right")
+
     def _to_str_matrix(mat: list[list[Fraction]]) -> tuple[tuple[str, ...], ...]:
         return tuple(
             tuple(
@@ -515,7 +531,7 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
         cols = tensor_basis_sizes[deg]
         if rows == 0 or cols == 0:
             # Zero-cell differentials carry no entries.
-            tensor_diffs.append(tuple())
+            tensor_diffs.append(())
             continue
         block = [[Fraction(0) for _ in range(cols)] for _ in range(rows)]
         # We need to map block structure: (C⊗D)_deg = ⊕_{i+j=deg} C_i⊗D_j

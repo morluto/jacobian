@@ -152,13 +152,14 @@ class HomologyGroupValue(StrictModel):
 
 
 class HomologyResult(StrictModel):
-    """Homology of a chain complex."""
+    """Homology of a retained source chain complex."""
 
     homology_groups: tuple[HomologyGroupValue, ...]
     coefficient_field: CoefficientField
     prime: int | None = Field(default=None, ge=2)
     degree_min: int = Field(ge=-MAX_CHAIN_DEGREE, le=MAX_CHAIN_DEGREE, default=0)
     degree_max: int = Field(ge=-MAX_CHAIN_DEGREE, le=MAX_CHAIN_DEGREE, default=0)
+    complex: ChainComplexValue
 
     @model_validator(mode="after")
     def require_prime_coupling(self) -> Self:
@@ -168,6 +169,46 @@ class HomologyResult(StrictModel):
         else:
             if self.prime is not None:
                 raise ValueError("QQ homology must not have a prime")
+        return self
+
+    @model_validator(mode="after")
+    def bind_profile_to_source(self) -> Self:
+        # Source-bound replay: the profile must be the exact homology of
+        # the retained complex, with contiguous degrees and the defining
+        # rank identity per group.
+        from jacobian.math.chain_complexes.operations import (
+            _compute_homology_groups,
+        )
+
+        if (
+            self.degree_min != self.complex.degree_min
+            or self.degree_max != self.complex.degree_max
+        ):
+            raise ValueError("degree interval must match the retained complex")
+        expected_degrees = list(
+            range(self.complex.degree_min, self.complex.degree_max + 1)
+        )
+        if [group.degree for group in self.homology_groups] != expected_degrees:
+            raise ValueError(
+                "homology groups must cover every degree of the retained "
+                "complex exactly once"
+            )
+        for group in self.homology_groups:
+            if (
+                group.betti_number != group.cycle_rank - group.boundary_rank
+                or group.betti_number < 0
+                or group.cycle_rank < 0
+                or group.boundary_rank < 0
+            ):
+                raise ValueError(
+                    f"homology group at degree {group.degree} violates "
+                    "betti_number = cycle_rank - boundary_rank"
+                )
+        expected = _compute_homology_groups(self.complex)
+        if self.homology_groups != tuple(expected):
+            raise ValueError(
+                "homology groups must be the exact homology of the retained complex"
+            )
         return self
 
 

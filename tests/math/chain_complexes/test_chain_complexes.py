@@ -273,3 +273,96 @@ class TestPrimeFieldEntries:
         )
         result = verify_differential(VerifyDifferentialRequest(complex=complex_value))
         assert result.is_valid
+
+
+class TestChainMapEntryGrammar:
+    def test_unparseable_entries_rejected_at_admission(self) -> None:
+        """Correctly shaped components with junk entries fail at the
+        boundary instead of inside _parse_fraction."""
+        circle = _circle_complex()
+        identity = (("1", "0", "0"), ("0", "1", "0"), ("0", "x", "1"))
+        with pytest.raises(ValueError, match="rational string grammar"):
+            VerifyChainMapRequest(
+                source=circle, target=circle, map_matrices=(identity, identity)
+            )
+        zero_den = (("1", "0", "0"), ("0", "1/0", "0"), ("0", "0", "1"))
+        with pytest.raises(ValueError):
+            MappingConeRequest(
+                source=circle, target=circle, map_matrices=(zero_den, zero_den)
+            )
+
+
+class TestTensorProductPreconditions:
+    def test_non_square_zero_factor_rejected(self) -> None:
+        """Tensoring complexes violating d^2=0 is rejected before building."""
+        bad = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=2,
+            basis_sizes=(1, 1, 1),
+            differential_matrices=((("1",),), (("1",),)),
+        )
+        point = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=0,
+            basis_sizes=(1,),
+            differential_matrices=(),
+        )
+        with pytest.raises(ValueError, match="d\\^2=0"):
+            compute_tensor_product(TensorProductRequest(left=bad, right=point))
+        with pytest.raises(ValueError, match="d\\^2=0"):
+            compute_tensor_product(TensorProductRequest(left=point, right=bad))
+
+    def test_allocated_differential_cells_are_bounded(self) -> None:
+        """A singleton 64-dim left factor against a 65-degree right factor
+        passes group-dimension checks but allocates ~4M dense cells; the
+        cell-count work bound rejects it."""
+        left = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=0,
+            basis_sizes=(64,),
+            differential_matrices=(),
+        )
+        right = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=32,
+            basis_sizes=(4,) * 33,
+            differential_matrices=((("0", "0", "0", "0"),) * 4,) * 32,
+        )
+        with pytest.raises(ValueError, match="work bound"):
+            TensorProductRequest(left=left, right=right)
+
+
+class TestHomologySourceBinding:
+    def test_result_retains_and_replays_source(self) -> None:
+        from jacobian.math.chain_complexes.values import HomologyResult
+
+        complex_value = _circle_complex()
+        request = ComputeHomologyRequest(complex=complex_value)
+        result = compute_homology(request)
+        assert result.complex == complex_value
+        revalidated = HomologyResult.model_validate(result.model_dump())
+        assert revalidated.homology_groups == result.homology_groups
+
+    def test_forged_profile_is_rejected(self) -> None:
+        from jacobian.math.chain_complexes.values import (
+            HomologyGroupValue,
+            HomologyResult,
+        )
+
+        payload_groups = (
+            HomologyGroupValue(
+                degree=0, cycle_rank=5, boundary_rank=0, betti_number=100
+            ),
+        )
+        with pytest.raises(ValueError, match="betti_number"):
+            HomologyResult(
+                homology_groups=payload_groups,
+                coefficient_field=CoefficientField.RATIONAL,
+                degree_min=0,
+                degree_max=0,
+                complex=_point_complex(),
+            )

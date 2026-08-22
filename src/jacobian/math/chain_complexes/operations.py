@@ -118,9 +118,13 @@ def _matrix_multiply(
     b: list[list[Fraction]],
     prime: int | None = None,
     result_columns: int | None = None,
+    left_declared_columns: int | None = None,
 ) -> list[list[Fraction]]:
     rows_a = len(a)
-    cols_a = len(a[0]) if a else 0
+    # A zero-row left operand keeps its declared column count so the
+    # inner product dimension matches the shape contract, mirroring how
+    # the right operand's outer width is preserved below.
+    cols_a = len(a[0]) if a else (left_declared_columns or 0)
     if b:
         cols_b = len(b[0])
         if len(b) != cols_a:
@@ -181,7 +185,14 @@ def _require_square_zero(
     """
     for i in range(len(diffs) - 1):
         result_columns = group_columns[i + 2] if group_columns is not None else None
-        product = _matrix_multiply(diffs[i], diffs[i + 1], prime, result_columns)
+        left_declared_columns = group_columns[i + 1] if group_columns is not None else None
+        product = _matrix_multiply(
+            diffs[i],
+            diffs[i + 1],
+            prime,
+            result_columns,
+            left_declared_columns=left_declared_columns,
+        )
         if any(value != 0 for row in product for value in row):
             raise ValueError(
                 f"{label} complex violates d^2=0 at chain degree {degree_min + i}"
@@ -241,12 +252,18 @@ def verify_differential(request: VerifyDifferentialRequest) -> VerificationResul
         # Correct order: d_i * d_{i+1} where diffs[i] is C_i x C_{i+1}, diffs[i+1] is C_{i+1} x C_{i+2}
         d_i = diffs[i]
         d_ip1 = diffs[i + 1]
-        product = _matrix_multiply(d_i, d_ip1, prime, cx.basis_sizes[i + 2])
+        product = _matrix_multiply(
+            d_i,
+            d_ip1,
+            prime,
+            cx.basis_sizes[i + 2],
+            left_declared_columns=cx.basis_sizes[i + 1],
+        )
         is_zero = all(all(val == 0 for val in row) for row in product)
         if not is_zero:
             return VerificationResult(
                 is_valid=False,
-                detail=f"d^2 != 0 at degree {i + 1}",
+                detail=f"d^2 != 0 at degree {cx.degree_min + i + 1}",
                 complex=request.complex,
             )
 

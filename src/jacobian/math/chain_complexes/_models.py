@@ -159,10 +159,35 @@ class VerifyChainMapRequest(StrictModel):
         return self
 
 
+def _require_square_zero_at_admission(
+    complex_value: ChainComplexValue, *, label: str
+) -> None:
+    """Homology-type outputs are defined only for genuine complexes."""
+    from jacobian.math.chain_complexes.operations import (
+        _parsed_differentials,
+        _require_square_zero,
+    )
+
+    _require_square_zero(
+        _parsed_differentials(complex_value),
+        complex_value.prime,
+        label=label,
+        group_columns=list(complex_value.basis_sizes),
+        degree_min=complex_value.degree_min,
+    )
+
+
 class ComputeHomologyRequest(StrictModel):
     """Compute homology of a chain complex."""
 
     complex: ChainComplexValue
+
+    @model_validator(mode="after")
+    def require_genuine_chain_complex(self) -> Self:
+        # Homology is defined only when d^2 = 0; checking here keeps an
+        # unbounded execution failure out of math.run's typed contract.
+        _require_square_zero_at_admission(self.complex, label="homology")
+        return self
 
 
 class MappingConeRequest(StrictModel):
@@ -180,6 +205,8 @@ class MappingConeRequest(StrictModel):
             self.map_matrices,
             label="mapping cone",
         )
+        _require_square_zero_at_admission(self.source, label="mapping cone source")
+        _require_square_zero_at_admission(self.target, label="mapping cone target")
         return self
 
 
@@ -245,6 +272,8 @@ class TensorProductRequest(StrictModel):
                 f"cells, exceeding the {MAX_TENSOR_TOTAL_CELLS}-cell work bound"
             )
         _require_serializable_entries(self.left, self.right)
+        _require_square_zero_at_admission(self.left, label="tensor product left")
+        _require_square_zero_at_admission(self.right, label="tensor product right")
         # Admission guarantees the derived complex value is canonical: the
         # degree interval must fit the shared chain-degree bounds, so
         # constructing it here fails at the boundary rather than inside

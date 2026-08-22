@@ -704,3 +704,46 @@ class TestTensorPrimeFieldResidues:
                 target=source,
                 map_matrices=((("4",),), (("4",),)),
             )
+
+
+class TestZeroWidthGroupComposition:
+    def test_zero_row_left_operand_preserves_declared_width(self) -> None:
+        """A (0 x 1) differential followed by (1 x 1) composes to a valid
+        zero product instead of raising an inner-dimension error."""
+        shifted = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=2,
+            basis_sizes=(0, 1, 1),
+            differential_matrices=((), (("1",),)),
+        )
+        result = verify_differential(VerifyDifferentialRequest(complex=shifted))
+        assert result.is_valid
+
+    def test_nonsquare_zero_homology_rejected_at_request(self) -> None:
+        """Homology requests whose d^2 != 0 fail at the typed boundary."""
+        bad = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=2,
+            basis_sizes=(1, 1, 1),
+            differential_matrices=((("1",),), (("1",),)),
+        )
+        with pytest.raises(ValueError, match="d\\^2"):
+            ComputeHomologyRequest(complex=bad)
+        with pytest.raises(ValueError, match="d\\^2"):
+            TensorProductRequest(left=bad, right=_point_complex())
+
+    def test_differential_failure_reports_declared_degree(self) -> None:
+        """A complex concentrated in degrees -5..-3 reports degree -4, not
+        the tuple index."""
+        neg = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=-5,
+            degree_max=-3,
+            basis_sizes=(1, 1, 1),
+            differential_matrices=((("1",),), (("1",),)),
+        )
+        result = verify_differential(VerifyDifferentialRequest(complex=neg))
+        assert not result.is_valid
+        assert "-4" in result.detail

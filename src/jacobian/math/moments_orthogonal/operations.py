@@ -138,8 +138,16 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     coefficients of the symmetric Jacobi matrix.
     """
     m = len(moments)
-    if not 1 <= m <= MAX_MOMENTS:
-        raise ValueError("moment sequence must contain between 1 and 64 moments")
+    # Order-16 coefficients consume exactly 2*16+1 = 33 moments; a longer
+    # admitted sequence would silently determine more than the returned
+    # order while the result claims the complete recurrence.
+    maximum_moments = 2 * MAX_RECURRENCE_ORDER + 1
+    if not 1 <= m <= maximum_moments:
+        raise ValueError(
+            f"moment sequence must contain between 1 and {maximum_moments} "
+            "moments: the maximum recurrence order consumes exactly "
+            f"{maximum_moments} moments"
+        )
     if any(type(value) is not Fraction for value in moments):
         raise TypeError("moments must use exact Fractions")
     if moments[0] <= 0:
@@ -262,6 +270,48 @@ def christoffel_darboux(
     )
 
 
+def _require_quadrature_coefficients(
+    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+) -> None:
+    """Apply the wire model's positivity and float-safety contract natively.
+
+    The wire model admits only positive-definite recurrence data; direct
+    native callers get the same bounds so they cannot produce negative
+    masses or overflow failures inside Golub-Welsch.
+    """
+    from jacobian.math.moments_orthogonal._models import (
+        MAX_QUADRATURE_MAGNITUDE,
+        MIN_QUADRATURE_SUBDIAGONAL,
+    )
+
+    n = len(alpha)
+    if not 1 <= n <= MAX_QUADRATURE_POINTS:
+        raise ValueError("alpha must contain between 1 and 16 entries")
+    if len(beta) != n and len(beta) != n + 1:
+        raise ValueError("beta must have length len(alpha) or len(alpha)+1")
+    if beta[0] <= 0:
+        raise ValueError(
+            "beta_0 (the zeroth moment of a positive functional) must be positive"
+        )
+    if abs(beta[0]) < MIN_QUADRATURE_SUBDIAGONAL:
+        raise ValueError("beta_0 falls below the quadrature underflow bound")
+    for value in (*alpha, *beta):
+        if abs(value) > MAX_QUADRATURE_MAGNITUDE:
+            raise ValueError(
+                "quadrature coefficients exceed the finite-float magnitude bound"
+            )
+    subdiagonal = beta[1 : min(len(alpha), len(beta))]
+    for sub in subdiagonal:
+        if sub <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
+        if sub < MIN_QUADRATURE_SUBDIAGONAL:
+            raise ValueError(
+                "subdiagonal beta entries fall below the quadrature underflow bound"
+            )
+
+
 def gaussian_quadrature(
     alpha: Sequence[Fraction], beta: Sequence[Fraction]
 ) -> GaussianQuadrature:
@@ -279,22 +329,14 @@ def gaussian_quadrature(
 
     import numpy as np
 
+    _require_quadrature_coefficients(alpha, beta)
     n = len(alpha)
-    if not 1 <= n <= MAX_QUADRATURE_POINTS:
-        raise ValueError("alpha must contain between 1 and 16 entries")
-    if len(beta) != n and len(beta) != n + 1:
-        raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-    if beta[0] == 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
     for k in range(n - 1):
         if k + 1 >= len(beta):
             break
-        sub = beta[k + 1]
-        if sub < 0:
-            raise ValueError("subdiagonal beta entries must be nonnegative")
-        off.append(math.sqrt(float(sub)))
+        off.append(math.sqrt(float(beta[k + 1])))
     jacobi = np.diag(diagonal)
     if off:
         off_arr = np.array(off, dtype=float)

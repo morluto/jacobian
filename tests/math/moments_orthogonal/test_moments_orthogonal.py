@@ -110,7 +110,7 @@ class TestRecurrenceCoefficients:
         assert result.beta[0] == _frac(2, 1)
 
     def test_empty_rejected(self) -> None:
-        with pytest.raises(ValueError, match="between 1 and 64"):
+        with pytest.raises(ValueError, match="between 1 and 33"):
             recurrence_coefficients(())
 
     def test_zeroth_moment_nonzero(self) -> None:
@@ -129,6 +129,31 @@ class TestRecurrenceCoefficients:
         result = recurrence_coefficients(moments)
         assert result.alpha == ()
         assert result.beta == (_frac(1, 1),)
+
+    def test_moment_tail_beyond_order_16_rejected(self) -> None:
+        """35 determined moments cannot be advertised as the complete
+        order-16 recurrence: sequences longer than 2*16+1 are rejected
+        instead of silently ignoring the tail."""
+        moments = tuple(_frac(1, k + 1) for k in range(35))
+        with pytest.raises(ValueError, match="33 moments"):
+            recurrence_coefficients(moments)
+
+    def test_boundary_33_moments_accepted_34_rejected(self) -> None:
+        """The exact boundary of the order-16 consumption window."""
+        accepted = tuple(_frac(1, k + 1) for k in range(33))
+        result = recurrence_coefficients(accepted)
+        assert len(result.alpha) == 16
+        assert len(result.beta) == 16
+        with pytest.raises(ValueError, match="33 moments"):
+            recurrence_coefficients((*accepted, _frac(1, 35)))
+
+    def test_request_rejects_tail_determining_more_coefficients(self) -> None:
+        """The wire request applies the same bound at admission."""
+        moments = tuple(_frac(1, k + 1) for k in range(35))
+        with pytest.raises(ValidationError, match="33-moment"):
+            RecurrenceCoefficientsRequest(
+                moments=tuple(CanonicalRational.from_fraction(m) for m in moments)
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +247,20 @@ class TestGaussianQuadrature:
     def test_alpha_empty_rejected(self) -> None:
         with pytest.raises(ValueError, match="between 1 and 16"):
             gaussian_quadrature((), (_frac(1, 1),))
+
+    def test_native_boundary_rejects_nonpositive_recurrence_data(self) -> None:
+        """Direct native callers get the wire model's positivity contract:
+        beta_0 must be a positive zeroth mass and subdiagonal entries must
+        be positive squared-norm ratios."""
+        with pytest.raises(ValueError, match="positive"):
+            gaussian_quadrature((_frac(0, 1),), (_frac(-1, 1),))
+        with pytest.raises(ValueError, match="positive"):
+            gaussian_quadrature((_frac(0, 1),), (_frac(0, 1),))
+        with pytest.raises(ValueError, match="positive"):
+            gaussian_quadrature(
+                (_frac(0, 1), _frac(0, 1)),
+                (_frac(1, 1), _frac(-1, 3)),
+            )
 
 
 # ---------------------------------------------------------------------------

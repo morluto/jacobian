@@ -294,6 +294,36 @@ class IdealSaturationResult(StrictModel):
                 "saturation operands and result must share the source "
                 "ideal's ordered ring"
             )
+        # Anti-forgery replay: a COMPUTED conclusion must be re-decidable
+        # from the retained sources alone. The defining equality is decided
+        # inside the same bounded Singular subprocess flow as the operation,
+        # so a relayed payload claiming an unrelated ideal cannot validate.
+        if self.outcome == "COMPUTED":
+            from jacobian.math.commutative_algebra_ops._singular import (
+                run_singular_saturation_verification,
+            )
+
+            saturation = self.saturation
+            if saturation is None:
+                raise ValueError(
+                    "computed saturation requires a value and backend version"
+                )
+            saturator = RationalPolynomialIdeal(
+                variables=self.source_ideal.variables,
+                generators=(self.source_polynomial,),
+            )
+            verdict = run_singular_saturation_verification(
+                self.source_ideal,
+                saturator,
+                saturation,
+                IdealComputationBudget(),
+            )
+            if verdict != "VERIFIED":
+                raise ValueError(
+                    "the computed saturation differs from the exact "
+                    "saturation of its retained sources; refusing to "
+                    f"report it (verification outcome: {verdict})"
+                )
 
         return self
 

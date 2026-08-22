@@ -127,6 +127,17 @@ class RecurrenceCoefficientsRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_moments(self) -> Self:
+        # Order-16 coefficients consume exactly 2*16+1 = 33 moments; a
+        # longer sequence determines more than the returned order while the
+        # result claims the complete recurrence.
+        maximum_moments = 2 * MAX_RECURRENCE_ORDER + 1
+        if len(self.moments) > maximum_moments:
+            raise ValueError(
+                "moment sequence exceeds the "
+                f"{maximum_moments}-moment recurrence bound: order-"
+                f"{MAX_RECURRENCE_ORDER} coefficients consume exactly "
+                f"{maximum_moments} moments"
+            )
         _validate_moments(self.moments)
         # The Gram-Schmidt kernel requires a positive-definite moment
         # functional; admit exactly the sequences it accepts so an accepted

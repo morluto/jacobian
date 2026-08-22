@@ -68,8 +68,8 @@ def compute_rank(request: MatroidRankRequest) -> MatroidRankResult:
     matrix = _column_matrix(request.matroid)
     rank = _gaussian_rank(matrix, request.matroid.prime)
     return MatroidRankResult(
+        matroid=request.matroid,
         rank=rank,
-        ground_size=len(request.matroid.columns),
     )
 
 
@@ -96,6 +96,8 @@ def compute_closure(request: MatroidClosureRequest) -> MatroidClosureResult:
 
     closure_sorted = sorted(closure)
     return MatroidClosureResult(
+        matroid=matroid,
+        subset=request.subset,
         closure=tuple(closure_sorted),
         closure_size=len(closure_sorted),
         rank=subset_rank,

@@ -52,15 +52,19 @@ class MatroidRankRequest(StrictModel):
     matroid: LinearMatroid
 
 
-class MatroidRankResult(StrictModel):
+class MatroidRankResult(MatroidRankRequest):
     """The rank of a matroid (dimension of its column space)."""
 
     rank: StrictInt = Field(ge=0)
-    ground_size: StrictInt = Field(ge=1, le=MAX_GROUND_SIZE)
 
     @model_validator(mode="after")
     def require_valid_rank(self) -> Self:
-        if self.rank > min(self.ground_size, MAX_ROWS):
+        from jacobian.math.matroids._operations import _column_matrix, _gaussian_rank
+
+        expected = _gaussian_rank(_column_matrix(self.matroid), self.matroid.prime)
+        if self.rank != expected:
+            raise ValueError("rank must be the exact matroid rank")
+        if self.rank > min(len(self.matroid.columns), MAX_ROWS):
             raise ValueError("rank cannot exceed ground size or number of rows")
         return self
 
@@ -81,7 +85,7 @@ class MatroidClosureRequest(StrictModel):
         return self
 
 
-class MatroidClosureResult(StrictModel):
+class MatroidClosureResult(MatroidClosureRequest):
     """The closure (flat) of a subset in a linear matroid."""
 
     closure: tuple[int, ...]
@@ -90,10 +94,31 @@ class MatroidClosureResult(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_closure(self) -> Self:
+        from jacobian.math.matroids._operations import _column_matrix, _gaussian_rank
+
         if len(set(self.closure)) != len(self.closure):
             raise ValueError("closure elements must be distinct")
         if self.closure_size != len(self.closure):
             raise ValueError("closure_size must match closure length")
+        for idx in self.closure:
+            if not (0 <= idx < len(self.matroid.columns)):
+                raise ValueError("closure indices must be in 0..n-1")
+        # Replay the bounded closure invariant: closure is subset plus all
+        # elements whose rank does not increase the subset's span.
+        subset_rank = _gaussian_rank(_column_matrix(self.matroid, list(self.subset)), self.matroid.prime)
+        if self.rank != subset_rank:
+            raise ValueError("rank must be the rank of the requested subset")
+        # Compute expected closure
+        expected = set(self.subset)
+        for i in range(len(self.matroid.columns)):
+            if i in expected:
+                continue
+            test = sorted(expected | {i})
+            test_rank = _gaussian_rank(_column_matrix(self.matroid, test), self.matroid.prime)
+            if test_rank == subset_rank:
+                expected.add(i)
+        if set(self.closure) != expected:
+            raise ValueError("closure must be the exact flat of the subset")
         return self
 
 

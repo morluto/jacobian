@@ -96,6 +96,10 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
         saturation_ideal,
         request.resource_budget,
     )
+    if backend.outcome == "COMPUTED" and backend.ideal is not None:
+        _verify_saturation_containment(
+            request.ideal, request.saturation_polynomial, backend.ideal
+        )
     return IdealSaturationResult(
         outcome=backend.outcome,
         source_ideal=request.ideal,
@@ -104,6 +108,31 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
         backend_version=backend.backend_version,
         detail=backend.detail,
     )
+
+
+def _verify_saturation_containment(source_ideal, d_poly, saturation) -> None:
+    """Verify I subseteq J exactly; bounded by the input budgets."""
+    import sympy
+
+    from jacobian.math.polynomials._conversions import (
+        rational_polynomial_to_sympy,
+    )
+
+    symbols = sympy.symbols(source_ideal.variables)
+    basis = sympy.groebner(
+        [
+            rational_polynomial_to_sympy(gen).as_expr()
+            for gen in saturation.generators
+        ],
+        *symbols,
+        domain=sympy.QQ,
+    )
+    for gen in source_ideal.generators:
+        if basis.reduce(rational_polynomial_to_sympy(gen).as_expr())[1] != 0:
+            raise ValueError(
+                "Singular returned an ideal that does not contain the "
+                "source ideal; refusing to report it as the saturation"
+            )
 
 
 __all__ = [

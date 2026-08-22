@@ -477,3 +477,17 @@ class TestSaturationSourceBinding:
                 saturation=_ideal(("x", "y"), {(1, 0): 1}),
                 backend_version="4.4",
             )
+
+
+class TestSaturationContainment:
+    def test_bogus_result_rejected_in_bounded_flow(self) -> None:
+        from jacobian.math.commutative_algebra_ops._operations import (
+            _verify_saturation_containment,
+        )
+
+        with pytest.raises(ValueError, match="does not contain"):
+            _verify_saturation_containment(
+                _ideal(("x", "y"), {(1, 0): 1}),
+                _polynomial(("x", "y"), {(1, 0): 1}),
+                _ideal(("x", "y"), {(0, 2): 1}),
+            )

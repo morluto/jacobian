@@ -183,8 +183,6 @@ def compute_ordered_difference_profile(
         )
         if multiplicity > max_mult:
             max_mult = multiplicity
-        # The advertised "first" repeated difference is the lexicographically
-        # smallest difference occurring more than once, not the modal one.
         if multiplicity > 1 and first_repeated is None:
             first_repeated = diff
 
@@ -208,4 +206,3 @@ __all__ = [
     "compute_sumset_cardinality",
     "decide_direct_sum_predicate",
 ]
-

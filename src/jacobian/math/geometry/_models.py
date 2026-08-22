@@ -467,10 +467,6 @@ class CircumradiusProfileRequest(StrictModel):
         )
         if len(keys) != len(set(keys)):
             raise ValueError("point coordinates must be unique")
-        for entry in self.points:
-            for coord in (entry.point.x, entry.point.y):
-                if max(len(coord.num.lstrip("-")), len(coord.den)) > 256:
-                    raise ValueError("circumradius point coordinate exceeds digit bound")
         return self
 
 
@@ -568,7 +564,7 @@ class ForbiddenLabelledPoint(StrictModel):
 class ForbiddenConfiguration(StrictModel):
     """A finite set of labelled rational planar points."""
 
-    points: tuple[ForbiddenLabelledPoint, ...] = Field(min_length=1, max_length=32)
+    points: tuple[ForbiddenLabelledPoint, ...] = Field(min_length=1, max_length=128)
 
     @model_validator(mode="after")
     def require_unique_labels_and_coords(self) -> Self:
@@ -578,13 +574,6 @@ class ForbiddenConfiguration(StrictModel):
         keys = tuple(_point_key(item.point) for item in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("configuration point coordinates must be unique")
-        # Conservative enumeration budget: C(32,4)=35960 quadruples, each with exact
-        # Fraction arithmetic on bounded coordinates. Limit coordinate digits to
-        # keep per-determinant work and derived radii within CanonicalRational.
-        for entry in self.points:
-            for coord in (entry.point.x, entry.point.y):
-                if max(len(coord.num.lstrip("-")), len(coord.den)) > 256:
-                    raise ValueError("forbidden configuration coordinate exceeds digit bound")
         return self
 
 
@@ -597,9 +586,9 @@ class ForbiddenPatternsRequest(StrictModel):
 class CollinearTriple(StrictModel):
     """A triple of configuration point indices lying on one line."""
 
-    first: StrictInt = Field(ge=0, le=31)
-    second: StrictInt = Field(ge=0, le=31)
-    third: StrictInt = Field(ge=0, le=31)
+    first: StrictInt = Field(ge=0, le=127)
+    second: StrictInt = Field(ge=0, le=127)
+    third: StrictInt = Field(ge=0, le=127)
 
     @model_validator(mode="after")
     def require_strictly_ascending(self) -> Self:
@@ -611,10 +600,10 @@ class CollinearTriple(StrictModel):
 class ConcyclicQuadruple(StrictModel):
     """A quadruple of configuration point indices lying on one circle."""
 
-    first: StrictInt = Field(ge=0, le=31)
-    second: StrictInt = Field(ge=0, le=31)
-    third: StrictInt = Field(ge=0, le=31)
-    fourth: StrictInt = Field(ge=0, le=31)
+    first: StrictInt = Field(ge=0, le=127)
+    second: StrictInt = Field(ge=0, le=127)
+    third: StrictInt = Field(ge=0, le=127)
+    fourth: StrictInt = Field(ge=0, le=127)
 
     @model_validator(mode="after")
     def require_strictly_ascending(self) -> Self:
@@ -631,7 +620,7 @@ class ForbiddenPatternsResult(StrictModel):
     """
 
     configuration: ForbiddenConfiguration
-    point_count: StrictInt = Field(ge=1, le=32)
+    point_count: StrictInt = Field(ge=1, le=128)
     has_collinear_triple: bool
     has_concyclic_quadruple: bool
     collinear_triple: CollinearTriple | None = None
@@ -720,4 +709,40 @@ class ForbiddenPatternsResult(StrictModel):
             and self.concyclic_quadruple.fourth >= self.point_count
         ):
             raise ValueError("concyclic quadruple index exceeds configuration")
+        # Validate that the supplied witnesses actually satisfy the predicates
+        if self.collinear_triple is not None:
+            i, j, k = self.collinear_triple.first, self.collinear_triple.second, self.collinear_triple.third
+            if (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0]) != 0:
+                raise ValueError("collinear_triple witness is not collinear")
+        if self.concyclic_quadruple is not None:
+            i, j, k, ell = (
+                self.concyclic_quadruple.first,
+                self.concyclic_quadruple.second,
+                self.concyclic_quadruple.third,
+                self.concyclic_quadruple.fourth,
+            )
+            cross_ijk = (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
+            cross_ijl = (xy[j][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
+            cross_ikl = (xy[k][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[k][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
+            cross_jkl = (xy[k][0] - xy[j][0]) * (xy[ell][1] - xy[j][1]) - (xy[k][1] - xy[j][1]) * (xy[ell][0] - xy[j][0])
+            if cross_ijk == 0 and cross_ijl == 0 and cross_ikl == 0 and cross_jkl == 0:
+                raise ValueError("concyclic witness is collinear")
+            si = xy[i][0] * xy[i][0] + xy[i][1] * xy[i][1]
+            sj = xy[j][0] * xy[j][0] + xy[j][1] * xy[j][1]
+            sk = xy[k][0] * xy[k][0] + xy[k][1] * xy[k][1]
+            sl = xy[ell][0] * xy[ell][0] + xy[ell][1] * xy[ell][1]
+            m = [
+                [si, xy[i][0], xy[i][1], 1],
+                [sj, xy[j][0], xy[j][1], 1],
+                [sk, xy[k][0], xy[k][1], 1],
+                [sl, xy[ell][0], xy[ell][1], 1],
+            ]
+            det = (
+                m[0][0] * (m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2]) - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1]) + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1]))
+                - m[0][1] * (m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2]) - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0]) + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0]))
+                + m[0][2] * (m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1]) - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0]) + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]))
+                - m[0][3] * (m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1]) - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0]) + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]))
+            )
+            if det != 0:
+                raise ValueError("concyclic witness is not concyclic")
         return self

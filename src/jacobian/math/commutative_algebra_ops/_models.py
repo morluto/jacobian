@@ -364,39 +364,43 @@ class IdealSaturationResult(StrictModel):
                 divisor,
                 self.resource_budget,
             )
-            if replay.outcome == "COMPUTED":
-                if (
-                    replay.ideal != self.saturation
-                    or replay.backend_version != self.backend_version
-                ):
-                    raise ValueError(
-                        "saturation must equal the exact Singular replay of "
-                        "the retained ideal and saturation polynomial"
-                    )
-                return self
-            require_deterministic_saturation_certificate(
-                self.ideal, self.saturation_polynomial, self.saturation
+            # Replay against the retained sources with an amplified wall
+            # budget so a computation near the configured boundary is not
+            # misjudged by second-process jitter; exact equality is required
+            # on every healthy replay.
+            from jacobian.math.commutative_algebra_ops._singular import (
+                run_singular_ideal_operation,
             )
+            from jacobian.math.polynomials.values import (
+                RationalPolynomialIdeal,
+            )
+
+            divisor = RationalPolynomialIdeal(
+                variables=self.ideal.variables,
+                generators=(self.saturation_polynomial,),
+            )
+            replay_budget = self.resource_budget.model_copy(
+                update={"wall_seconds": 60}
+            )
+            replay = run_singular_ideal_operation(
+                "saturation",
+                self.ideal,
+                divisor,
+                replay_budget,
+            )
+            if (
+                replay.outcome != "COMPUTED"
+                or replay.ideal != self.saturation
+                or replay.backend_version != self.backend_version
+            ):
+                raise ValueError(
+                    "saturation must equal the exact Singular replay of the "
+                    "retained ideal and saturation polynomial"
+                )
         elif (
-            self.saturation is not None
+            self.radical is not None
             or self.backend_version is not None
             or not self.detail
         ):
-            raise ValueError("failed saturation computation requires only a safe detail")
+            raise ValueError("failed radical computation requires only a safe detail")
         return self
-
-
-__all__ = [
-    "MAX_OUTPUT_GENERATORS",
-    "MAX_OUTPUT_TERMS",
-    "IdealComputationBudget",
-    "IdealExecutionOutcome",
-    "IdealQuotientRequest",
-    "IdealQuotientResult",
-    "IdealRadicalMembershipRequest",
-    "IdealRadicalMembershipResult",
-    "IdealRadicalRequest",
-    "IdealRadicalResult",
-    "IdealSaturationRequest",
-    "IdealSaturationResult",
-]

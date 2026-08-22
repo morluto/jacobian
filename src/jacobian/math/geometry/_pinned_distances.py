@@ -15,16 +15,21 @@ from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
 
-# With per-component digit bound b, the squared-distance fraction stays under
-# the canonical 32,768-digit limit (numerator growth <= 8b + 6 digits).
-_MAX_PINNED_COORDINATE_DIGITS = 2048
+# With per-component digit bound d, each squared-distance fraction carries
+# at most 8d+6 numerator and denominator digits. The pair count is capped at
+# C(32,2) = 496 lines so one request's aggregate exact output stays inside a
+# practical transport budget across execution and replay.
+MAX_PINNED_DISTANCE_POINTS = 32
+_MAX_PINNED_COORDINATE_DIGITS = 512
 
 
 class PinnedDistanceRequest(StrictModel):
     """Compute the complete pinned-distance profile from an anchor to all pair-spanned lines."""
 
     anchor: RationalPoint2D
-    points: tuple[RationalPoint2D, ...] = Field(min_length=2, max_length=128)
+    points: tuple[RationalPoint2D, ...] = Field(
+        min_length=2, max_length=MAX_PINNED_DISTANCE_POINTS
+    )
 
     @model_validator(mode="after")
     def require_unique_points(self) -> PinnedDistanceRequest:

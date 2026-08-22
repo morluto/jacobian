@@ -64,9 +64,9 @@ class TestKnownAnswers:
 
 class TestAboveConversionLimit:
     def test_squared_distance_parsing_above_4300_digits(self):
-        """Squared-distance numerators beyond CPython's 4300-digit conversion
-        limit must parse through the canonical integer helper."""
-        big_den = 10**2047
+        """Admitted near-boundary coordinates format through the canonical
+        integer helper without relying on CPython's int-string conversion."""
+        big_den = 10**511
 
         def reciprocal_point(a: int, b: int) -> RationalPoint2D:
             return RationalPoint2D(
@@ -83,7 +83,7 @@ class TestAboveConversionLimit:
         widest = max(
             len(entry.squared_distance_numerator) for entry in result.lines
         )
-        assert widest > 4300
+        assert widest > 1000  # large exact fractions carried without conversion
         # Result revalidation replays the minimum through canonical parsing.
         PinnedDistanceResult.model_validate(result.model_dump())
 

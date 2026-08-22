@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -162,8 +162,16 @@ class RecurrenceCoefficientsResult(RecurrenceCoefficientsRequest):
 
 
 class JacobiMatrixRequest(StrictModel):
+    """Accept the canonical recurrence result (or raw coefficient tuples).
+
+    A serialized ``RecurrenceCoefficientsResult`` validates unchanged as
+    the request's ``alpha``/``beta`` payload; the extra producer fields
+    are tolerated so consumers compose without reattachment.
+    """
+
     alpha: tuple[CanonicalRational, ...] = Field(min_length=0)
     beta: tuple[CanonicalRational, ...] = Field(min_length=1)
+    model_config = ConfigDict(extra="allow")
 
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
@@ -195,10 +203,13 @@ class JacobiMatrixResult(JacobiMatrixRequest):
 
 
 class ChristoffelDarbouxRequest(StrictModel):
+    """Accept the canonical recurrence result (or raw coefficient tuples)."""
+
     alpha: tuple[CanonicalRational, ...] = Field(min_length=0)
     beta: tuple[CanonicalRational, ...] = Field(min_length=1)
     x: CanonicalRational
     y: CanonicalRational
+    model_config = ConfigDict(extra="allow")
 
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:

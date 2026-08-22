@@ -131,3 +131,42 @@ class TestCircumradiusProfile:
             if not entry.is_degenerate and entry.radius_squared:
                 radii.add((entry.radius_squared.num, entry.radius_squared.den))
         assert len(radii) == 1
+
+
+class TestAdmissionBounds:
+    def test_circumradius_rejects_profile_exceeding_output_budget(self):
+        """32 points with 64-digit coordinates pass n*d=2048 but the exact
+        rational growth of C(32,3) radii exceeds the output budget; the
+        request must be rejected before execution."""
+        points = tuple(
+            _point(str(10**63 + 4 * i + 1), str(10**63 + 4 * i + 3)) for i in range(32)
+        )
+        with pytest.raises(ValueError, match="output budget"):
+            CircumradiusProfileRequest(points=points)
+
+    def test_circumradius_accepts_config_within_output_budget(self):
+        """A moderate configuration still runs end to end."""
+        points = tuple(_point(f"{i}", f"{i * i}") for i in range(12))
+        result = circumradius_profile(CircumradiusProfileRequest(points=points))
+        assert result.num_points == 12
+        assert len(result.entries) == 220
+
+    def test_general_position_rejects_work_bound_violation(self):
+        """32 points x 255-digit coordinates exceed n*max_digits <= 1024."""
+        big = 10**254 + 1
+        points = tuple(_point(str(big + i), str(big + 2 * i)) for i in range(32))
+        with pytest.raises(ValueError, match="work bound"):
+            GeneralPositionRequest(points=points)
+
+    def test_general_position_accepts_small_high_digit_config(self):
+        """Few points may still carry large coordinates (4 x 256 = 1024)."""
+        big = 10**254 + 1
+        points = (
+            _point("0", "0"),
+            _point(str(big), "0"),
+            _point("0", str(big)),
+            _point(str(big), str(big)),
+        )
+        result = general_position_search(GeneralPositionRequest(points=points))
+        assert result.has_concyclic_quadruple
+        assert not result.has_collinear_triple

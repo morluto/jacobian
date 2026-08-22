@@ -13,10 +13,15 @@ from jacobian._models import StrictModel
 
 MAX_CONFIGURATION_POINTS = 32
 MAX_COORDINATE_DIGITS = 256
-# Joint bound for circumradius: n * max_digits <= 2048 keeps serialized output
-# under the 10 MiB transport envelope (32 points with 256-digit coords would be
-# 8192 and is rejected; 32 points with 64-digit coords is 2048 and passes).
-_MAX_CIRCUMRADIUS_N_TIMES_DIGITS = 2048
+# Serialized-output budget for the circumradius profile, kept below the 10 MiB
+# transport envelope to leave room for request and JSON overhead.
+_MAX_PROFILE_OUTPUT_CHARS = 8_000_000
+# Joint work bound for the exhaustive general-position search: determinant
+# count grows like n^4 while every Fraction operation grows quadratically in
+# digit count, so n * max_digits <= 1024 keeps both the search and its
+# source-binding replay within the bounded-work envelope at any shape
+# (e.g. 32 points x 32 digits, or 4 points x 256 digits).
+_MAX_GENERAL_POSITION_N_TIMES_DIGITS = 1024
 
 
 def _require_bounded_point(point: RationalPoint2D) -> None:
@@ -33,28 +38,60 @@ def _require_bounded_configuration(points: tuple[RationalPoint2D, ...]) -> None:
         _require_bounded_point(point)
 
 
-def _require_circumradius_aggregate_bound(points: tuple[RationalPoint2D, ...]) -> None:
+def _max_coordinate_digits(points: tuple[RationalPoint2D, ...]) -> int:
+    return max(
+        max(
+            len(p.x.num.lstrip("-")),
+            len(p.x.den),
+            len(p.y.num.lstrip("-")),
+            len(p.y.den),
+        )
+        for p in points
+    )
+
+
+def _require_general_position_work_bound(
+    points: tuple[RationalPoint2D, ...],
+) -> None:
     n = len(points)
     if n == 0:
         return
-    max_digits = max(
-        max(len(p.x.num.lstrip("-")), len(p.x.den), len(p.y.num.lstrip("-")), len(p.y.den))
-        for p in points
-    )
-    if n * max_digits > _MAX_CIRCUMRADIUS_N_TIMES_DIGITS:
+    max_digits = _max_coordinate_digits(points)
+    if n * max_digits > _MAX_GENERAL_POSITION_N_TIMES_DIGITS:
         raise ValueError(
-            f"circumradius profile with {n} points and {max_digits}-digit coordinates "
-            f"would exceed the transport envelope (n*digits={n*max_digits} > "
-            f"{_MAX_CIRCUMRADIUS_N_TIMES_DIGITS}); reduce point count or coordinate size"
+            f"general-position search with {n} points and {max_digits}-digit "
+            f"coordinates exceeds the exhaustive work bound "
+            f"(n*digits={n * max_digits} > "
+            f"{_MAX_GENERAL_POSITION_N_TIMES_DIGITS}); reduce point count or "
+            "coordinate size"
         )
-    # Also bound total serialized estimate
+
+
+def _require_circumradius_output_bound(points: tuple[RationalPoint2D, ...]) -> None:
+    """Bound the serialized profile size before execution.
+
+    Derivation from exact rational growth with ``d`` = max coordinate digits:
+    a coordinate difference has numerator and denominator of at most ``2d``
+    digits; a squared length reaches ``8d`` digits on each side; the squared
+    circumradius ``|AB||BC||CA| / (2*cross)^2`` therefore carries at most
+    ``40d`` digits in its numerator and ``40d`` in its denominator. Allowing
+    80 characters of sign/slash/JSON overhead per entry gives the conservative
+    per-entry estimate ``80*d + 80`` characters.
+    """
+
+    n = len(points)
+    if n == 0:
+        return
+    max_digits = _max_coordinate_digits(points)
     triples = n * (n - 1) * (n - 2) // 6
-    # Rough estimate: each radius_squared needs ~4*max_digits digits (numerator+denominator)
-    estimated_chars = triples * (4 * max_digits + 50)
-    if estimated_chars > 8_000_000:
+    estimated_chars = triples * (80 * max_digits + 80)
+    if estimated_chars > _MAX_PROFILE_OUTPUT_CHARS:
         raise ValueError(
-            f"circumradius profile estimated size {estimated_chars} chars exceeds 8 MiB; "
-            "reduce point count or coordinate size"
+            f"circumradius profile for {n} points with {max_digits}-digit "
+            f"coordinates can serialize up to {estimated_chars} characters "
+            f"(worst-case rational growth), exceeding the "
+            f"{_MAX_PROFILE_OUTPUT_CHARS}-character output budget; reduce "
+            "point count or coordinate size"
         )
 
 
@@ -674,7 +711,9 @@ class GeneralPositionRequest(StrictModel):
 
     Each rational coordinate is bounded to at most 256 digits in numerator and
     denominator (operation-specific, stricter than the global 32,768-digit
-    CanonicalRational limit).
+    CanonicalRational limit). The exhaustive determinant work is coupled to the
+    point count: ``n * max_digits <= 1024`` keeps both the search and its
+    source-binding replay within the bounded-work envelope.
     """
 
     points: tuple[RationalPoint2D, ...] = Field(
@@ -683,13 +722,16 @@ class GeneralPositionRequest(StrictModel):
         description=(
             "Bounded point configuration with 3..32 points; each rational coordinate "
             f"(numerator/denominator) is bounded to at most {MAX_COORDINATE_DIGITS} digits "
-            "(operation-specific limit, stricter than CanonicalRational's 32768-digit global limit)"
+            "(operation-specific limit, stricter than CanonicalRational's 32768-digit "
+            "global limit); additionally n*max_digits <= 1024 bounds the exhaustive "
+            "determinant work"
         ),
     )
 
     @model_validator(mode="after")
     def require_unique(self) -> Self:
         _require_bounded_configuration(self.points)
+        _require_general_position_work_bound(self.points)
         keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
@@ -719,6 +761,7 @@ class GeneralPositionResult(StrictModel):
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
         _require_bounded_configuration(self.points)
+        _require_general_position_work_bound(self.points)
         _validate_general_position_points(self.points, self.num_points)
         _validate_general_position_witnesses(
             self.collinear_triples,
@@ -736,9 +779,12 @@ class GeneralPositionResult(StrictModel):
 class CircumradiusProfileRequest(StrictModel):
     """Compute circumradius data for every unordered triple in a point configuration.
 
-    Each rational coordinate is bounded to at most 256 digits, and the aggregate
-    output size is bounded by n*max_digits <= 2048 and an 8 MiB estimate (to keep
-    the profile under the 10 MiB transport envelope).
+    Each rational coordinate is bounded to at most 256 digits. The serialized
+    profile is bounded before execution by worst-case rational growth: with
+    ``d`` = max coordinate digits, each squared circumradius can carry ``40d``
+    digits in numerator and denominator, so the request is admitted only when
+    ``C(n,3) * (80*d + 80)`` characters stay within the 8,000,000-character
+    output budget (under the 10 MiB transport envelope).
     """
 
     points: tuple[RationalPoint2D, ...] = Field(
@@ -748,15 +794,15 @@ class CircumradiusProfileRequest(StrictModel):
             "Bounded point configuration with 3..32 points; each rational coordinate "
             f"is bounded to at most {MAX_COORDINATE_DIGITS} digits (operation-specific, "
             "stricter than CanonicalRational's 32768-digit limit); additionally "
-            "n*max_digits <= 2048 and estimated serialized size <=8 MiB to keep the "
-            f"C(n,3) profile under the 10 MiB envelope"
+            "C(n,3)*(80*max_digits+80) characters of worst-case profile size must "
+            "stay within the 8,000,000-character output budget"
         ),
     )
 
     @model_validator(mode="after")
     def require_unique(self) -> Self:
         _require_bounded_configuration(self.points)
-        _require_circumradius_aggregate_bound(self.points)
+        _require_circumradius_output_bound(self.points)
         keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
@@ -796,7 +842,7 @@ class CircumradiusProfileResult(StrictModel):
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
         _require_bounded_configuration(self.points)
-        _require_circumradius_aggregate_bound(self.points)
+        _require_circumradius_output_bound(self.points)
         keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")

@@ -141,8 +141,8 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
         raise ValueError("moment sequence must contain between 1 and 64 moments")
     if any(type(value) is not Fraction for value in moments):
         raise TypeError("moments must use exact Fractions")
-    if moments[0] == 0:
-        raise ValueError("the zeroth moment must be nonzero")
+    if moments[0] <= 0:
+        raise ValueError("the zeroth moment must be positive and nonzero")
     max_order = min(MAX_RECURRENCE_ORDER, (m - 1) // 2)
     if max_order < 1:
         return RecurrenceCoefficients(alpha=(), beta=(moments[0],))

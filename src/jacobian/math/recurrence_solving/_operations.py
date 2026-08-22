@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
-from jacobian.math.recurrence_solving import closed_form, find_recurrence
+from jacobian.math.recurrence_solving import (
+    berlekamp_massey,
+    closed_form,
+    find_recurrence,
+)
 from jacobian.math.recurrence_solving._models import (
     ClosedFormRequest,
     ClosedFormResult,
+    PrimeFieldRecurrenceFindRequest,
+    PrimeFieldRecurrenceFindResult,
     RecurrenceFindRequest,
     RecurrenceFindResult,
 )
@@ -26,3 +32,17 @@ def compute_closed_form(request: ClosedFormRequest) -> ClosedFormResult:
         request.initial_values,
     )
     return ClosedFormResult(expression=result.expression)
+
+
+def compute_prime_field_find_recurrence(
+    request: PrimeFieldRecurrenceFindRequest,
+) -> PrimeFieldRecurrenceFindResult:
+    """Find the minimal LFSR over ``GF(p)`` via Berlekamp-Massey."""
+    rec = berlekamp_massey(list(request.sequence), request.prime)
+    return PrimeFieldRecurrenceFindResult(
+        prime=rec.prime,
+        sequence=request.sequence,
+        coefficients=rec.coefficients,
+        order=rec.order,
+        status=rec.status,
+    )

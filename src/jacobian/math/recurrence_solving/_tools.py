@@ -9,12 +9,15 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.recurrence_solving._models import (
     ClosedFormRequest,
     ClosedFormResult,
+    PrimeFieldRecurrenceFindRequest,
+    PrimeFieldRecurrenceFindResult,
     RecurrenceFindRequest,
     RecurrenceFindResult,
 )
 from jacobian.math.recurrence_solving._operations import (
     compute_closed_form,
     compute_find_recurrence,
+    compute_prime_field_find_recurrence,
 )
 
 
@@ -41,6 +44,8 @@ def rs_operation[RequestT: StrictModel, ResultT: StrictModel](
         examples=examples,
     )
 
+
+FIBONACCI_MOD_7 = {"prime": 7, "sequence": [0, 1, 1, 2, 3, 5, 1, 6, 0]}
 
 RECURRENCE_SOLVING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     rs_operation(
@@ -107,6 +112,34 @@ RECURRENCE_SOLVING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
         version="2",
+    ),
+    rs_operation(
+        "sequence.recurrence.prime_field.find",
+        "Find the minimal linear recurrence over a prime field",
+        "Given a finite sequence over an explicitly supplied prime field "
+        "GF(p), find the minimal linear recurrence (LFSR connection) it "
+        "satisfies using the Berlekamp-Massey algorithm, returning the "
+        "recurrence coefficients over GF(p) or NO_FITTING_RECURRENCE.",
+        PrimeFieldRecurrenceFindRequest,
+        PrimeFieldRecurrenceFindResult,
+        compute_prime_field_find_recurrence,
+        "sequence",
+        "recurrence",
+        "berlekamp-massey",
+        "prime-field",
+        "exact",
+        examples=(
+            example(
+                "fibonacci_mod_7",
+                (
+                    "Find the minimal recurrence of Fibonacci mod 7 "
+                    "[0,1,1,2,3,5,1,6,0]; the result is s_n = s_{n-1} + "
+                    "s_{n-2}, i.e. coefficients (1, 1). Values must be "
+                    "residues modulo the prime."
+                ),
+                FIBONACCI_MOD_7,
+            ),
+        ),
     ),
 )
 

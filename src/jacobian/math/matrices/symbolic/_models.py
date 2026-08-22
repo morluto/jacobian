@@ -364,6 +364,27 @@ class SymbolicLinearSystemResult(StrictModel):
 
     @model_validator(mode="after")
     def require_consistent_result(self) -> Self:
+        # Solution growth bound: rational-function solutions of admitted
+        # systems can exceed the canonical result domain (Cramer-style
+        # determinants multiply entry heights); reject any solution whose
+        # components exceed the result term budget.
+        from jacobian.math.matrices.symbolic._models import (
+            MAX_SYMBOLIC_RESULT_TERMS,
+        )
+
+        def _entry_terms(value):
+            return len(value.numerator.terms) + len(value.denominator.terms)
+
+        for vector in (self.solution, self.particular_solution):
+            if vector is None:
+                continue
+            if len(vector) > MAX_SYMBOLIC_RESULT_TERMS:
+                raise ValueError("solution vector exceeds the term budget")
+            for value in vector:
+                if _entry_terms(value) > 512:
+                    raise ValueError(
+                        "solution component exceeds the serialized term budget"
+                    )
         if self.classification == "UNIQUE":
             if self.solution is None:
                 raise ValueError("UNIQUE must carry a solution vector")

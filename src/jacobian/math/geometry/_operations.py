@@ -8,7 +8,7 @@ from typing import Any, cast
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.math._rational_height import RationalHeight, sum_heights
+from jacobian.math._rational_height import RationalHeight
 from jacobian.math.geometry._models import (
     CircumcircleRequest,
     CircumradiusProfileRequest,
@@ -438,9 +438,24 @@ def circumradius_profile(
     admitted height are rejected at the request boundary, and each
     computed radius is checked before constructing the result.
     """
-    from itertools import combinations
+    import math
 
     points = request.points
+    entries = _compute_circumradius_entries(points)
+    return CircumradiusProfileResult(
+        points=points,
+        point_count=len(points),
+        triple_count=math.comb(len(points), 3),
+        entries=entries,
+    )
+
+
+def _compute_circumradius_entries(points):
+    """Pure circumradius enumeration shared by the operation and the result
+    validator, so both replay identical bounded work."""
+
+    from itertools import combinations
+
     n = len(points)
     coords: list[tuple[Fraction, Fraction]] = [
         (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in points
@@ -467,7 +482,9 @@ def circumradius_profile(
         squared_circumradius = (dab * dbc * dac) / (4 * cross * cross)
         # Validate result height before constructing CanonicalRational to avoid execution exception.
         cr_canonical = CanonicalRational.from_fraction(squared_circumradius)
-        if RationalHeight.from_canonical(cr_canonical).exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
+        if RationalHeight.from_canonical(cr_canonical).exceeds(
+            MAX_CANONICAL_RATIONAL_DIGITS
+        ):
             raise ValueError(
                 "circumradius squared result exceeds the 32768-digit canonical limit; input coordinates must be smaller"
             )
@@ -479,11 +496,7 @@ def circumradius_profile(
                 squared_circumradius=cr_canonical,
             )
         )
-    return CircumradiusProfileResult(
-        point_count=n,
-        triple_count=len(entries),
-        entries=tuple(entries),
-    )
+    return tuple(entries)
 
 
 def forbidden_patterns(request):
@@ -507,10 +520,7 @@ def forbidden_patterns(request):
 
     pts = request.configuration.points
     n = len(pts)
-    xy = [
-        (entry.point.x.as_fraction(), entry.point.y.as_fraction())
-        for entry in pts
-    ]
+    xy = [(entry.point.x.as_fraction(), entry.point.y.as_fraction()) for entry in pts]
 
     collinear_triple = None
     has_collinear = False
@@ -562,8 +572,11 @@ def forbidden_patterns(request):
             # Check whether all four points are collinear: if every triple
             # among the four is collinear, the quadruple is degenerate.
             def _tri_collinear(a, b, c):
-                xa, ya = xy[a]; xb, yb = xy[b]; xc, yc = xy[c]
+                xa, ya = xy[a]
+                xb, yb = xy[b]
+                xc, yc = xy[c]
                 return (xb - xa) * (yc - ya) - (yb - ya) * (xc - xa) == 0
+
             all_collinear = (
                 _tri_collinear(i, j, k)
                 and _tri_collinear(i, j, ell)

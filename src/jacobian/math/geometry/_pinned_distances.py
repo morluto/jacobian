@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
@@ -134,16 +135,18 @@ class PinnedDistanceResult(StrictModel):
                 raise ValueError("source_pairs must be sorted")
         if self.lines:
             min_entry = min(self.lines, key=lambda e: Fraction(
-                int(e.squared_distance_numerator),
-                int(e.squared_distance_denominator),
+                parse_canonical_integer(e.squared_distance_numerator),
+                parse_canonical_integer(e.squared_distance_denominator),
             ))
             if self.min_squared_distance is None:
                 raise ValueError("min_squared_distance is required when lines exist")
-            if (
-                self.min_squared_distance.squared_distance_numerator != min_entry.squared_distance_numerator
-                or self.min_squared_distance.squared_distance_denominator != min_entry.squared_distance_denominator
-            ):
-                raise ValueError("min_squared_distance must be the minimum entry")
+            # The reported minimum is a full LineDistanceEntry: it must equal
+            # an actual minimum line entry, including its source pairs, so a
+            # detached payload cannot rebind the ledger's identity.
+            if self.min_squared_distance != min_entry:
+                raise ValueError(
+                    "min_squared_distance must be an actual minimum line entry"
+                )
         else:
             if self.min_squared_distance is not None:
                 raise ValueError("empty line set cannot carry a minimum distance")
@@ -230,8 +233,8 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
         entries.append(entry)
 
     min_entry = min(entries, key=lambda e: Fraction(
-        int(e.squared_distance_numerator),
-        int(e.squared_distance_denominator),
+        parse_canonical_integer(e.squared_distance_numerator),
+        parse_canonical_integer(e.squared_distance_denominator),
     )) if entries else None
 
     return PinnedDistanceResult(

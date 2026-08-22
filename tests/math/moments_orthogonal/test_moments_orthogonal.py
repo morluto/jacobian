@@ -113,6 +113,37 @@ class TestRecurrenceCoefficients:
         with pytest.raises(ValueError, match="nonzero"):
             recurrence_coefficients(moments)
 
+    @staticmethod
+    def _overflowing_moments(count: int):
+        """Positive functional whose exact coefficients overflow canonically."""
+        moments = []
+        for k in range(count):
+            if k % 2 == 0:
+                num = sum(x ** k for x in range(-8, 9))
+                moments.append(CanonicalRational(num=str(num), den="1"))
+            else:
+                moments.append(
+                    CanonicalRational(num="1", den=str(10**135 + 2 * k + 1))
+                )
+        return tuple(moments)
+
+    def test_large_but_admissible_coefficients_pass(self) -> None:
+        """The height check admits coefficients within the canonical limit."""
+        request = RecurrenceCoefficientsRequest(
+            moments=self._overflowing_moments(21)
+        )
+        assert len(request.moments) == 21
+
+    @pytest.mark.exhaustive
+    def test_result_growth_rejected_before_execution(self) -> None:
+        """Positivity alone does not admit overflowing coefficients."""
+        # Every input component stays small, but one exact recurrence
+        # coefficient (alpha_7) exceeds the canonical digit limit.
+        with pytest.raises((ValueError, ValidationError), match="canonical"):
+            RecurrenceCoefficientsRequest(
+                moments=self._overflowing_moments(33)
+            )
+
     def test_insufficient_moments_for_recurrence(self) -> None:
         """With only 2 moments we can't produce any recurrence coefficient."""
         moments = (_frac(1, 1), _frac(1, 2))

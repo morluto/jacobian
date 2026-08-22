@@ -7,8 +7,6 @@ from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.additive_combinatorics._models import (
-    OrderedDifferenceProfileRequest,
-    OrderedDifferenceProfileResult,
     AdditiveEnergyRequest,
     AdditiveEnergyResult,
     DirectSumPredicateRequest,
@@ -21,7 +19,6 @@ from jacobian.math.additive_combinatorics._models import (
     SumsetCardinalityResult,
 )
 from jacobian.math.additive_combinatorics._operations import (
-    compute_ordered_difference_profile,
     compute_additive_energy,
     compute_ordered_difference_profile,
     compute_representation_profile,

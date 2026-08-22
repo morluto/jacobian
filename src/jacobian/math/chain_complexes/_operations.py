@@ -26,6 +26,28 @@ def _build_matrix(
     return mat
 
 
+def _pivot_row(aug: list[list[int]], col: int, start: int, rows: int, prime: int) -> int | None:
+    """First row at or below ``start`` with a nonzero entry in ``col``."""
+    for r in range(start, rows):
+        if aug[r][col] % prime != 0:
+            return r
+    return None
+
+
+def _scale_and_clear(
+    aug: list[list[int]], rank: int, col: int, cols: int, rows: int, prime: int
+) -> None:
+    """Scale the pivot row to a unit leading entry and clear its column."""
+    inv_pivot = pow(aug[rank][col] % prime, prime - 2, prime)
+    for c in range(cols):
+        aug[rank][c] = (aug[rank][c] * inv_pivot) % prime
+    for r, row in enumerate(aug):
+        factor = row[col] % prime
+        if r != rank and factor != 0:
+            for c in range(cols):
+                row[c] = (row[c] - factor * aug[rank][c]) % prime
+
+
 def _gaussian_rank(matrix: list[list[int]], prime: int) -> int:
     """Compute rank of a matrix over GF(prime) via Gaussian elimination."""
     rows = len(matrix)
@@ -37,24 +59,11 @@ def _gaussian_rank(matrix: list[list[int]], prime: int) -> int:
     aug = [row[:] for row in matrix]
     rank = 0
     for col in range(cols):
-        pivot = None
-        for r in range(rank, rows):
-            if aug[r][col] % prime != 0:
-                pivot = r
-                break
+        pivot = _pivot_row(aug, col, rank, rows, prime)
         if pivot is None:
             continue
         aug[rank], aug[pivot] = aug[pivot], aug[rank]
-        inv_pivot = pow(aug[rank][col] % prime, prime - 2, prime)
-        for c in range(cols):
-            aug[rank][c] = (aug[rank][c] * inv_pivot) % prime
-        for r in range(rows):
-            if r == rank:
-                continue
-            factor = aug[r][col] % prime
-            if factor != 0:
-                for c in range(cols):
-                    aug[r][c] = (aug[r][c] - factor * aug[rank][c]) % prime
+        _scale_and_clear(aug, rank, col, cols, rows, prime)
         rank += 1
         if rank >= rows:
             break
@@ -106,8 +115,8 @@ def compute_homology(request: HomologyRequest) -> HomologyResult:
     # betti = cycle_rank - boundary_rank
     groups = []
     for k in range(len(dims)):
-        rank_d_k = ranks[k] if k < len(ranks) else 0  # rank of d_k: C_k -> C_{k-1}
-        rank_d_k1 = ranks[k - 1] if k > 0 else 0  # rank of d_{k+1}: C_{k+1} -> C_k
+        ranks[k] if k < len(ranks) else 0  # rank of d_k: C_k -> C_{k-1}
+        ranks[k - 1] if k > 0 else 0  # rank of d_{k+1}: C_{k+1} -> C_k
 
         # d_k: C_k -> C_{k-1} is diffs[k-1] (differentials indexed by the gap)
         # Actually, differentials[i] is d: C_{i+n_min} -> C_{i+n_min-1}
@@ -133,10 +142,7 @@ def compute_homology(request: HomologyRequest) -> HomologyResult:
         # H^i = (dims[i] - ranks[i]) - ranks[i-1]
 
         # ranks[k] = rank of d^{k-1} (incoming), ranks[k+1] = rank of d^k (outgoing)
-        if k + 1 < len(ranks):
-            outgoing_rank = ranks[k + 1]
-        else:
-            outgoing_rank = 0
+        outgoing_rank = ranks[k + 1] if k + 1 < len(ranks) else 0
         incoming_rank = ranks[k] if k < len(ranks) else 0
 
         cycle_rank = dims[k] - outgoing_rank

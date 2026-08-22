@@ -131,7 +131,9 @@ def _is_bounded_h(halfspaces: list[tuple[list[Rational], Rational]], d: int) -> 
     if len(rows) < d + 1:
         return False
     # Affine rank via differences from first point
-    diff_rows = [[rows[i][k] - rows[0][k] for k in range(d)] for i in range(1, len(rows))]
+    diff_rows = [
+        [rows[i][k] - rows[0][k] for k in range(d)] for i in range(1, len(rows))
+    ]
     # Use Rational matrix rank for exactness
     try:
         if Matrix(diff_rows).rank() < d:
@@ -233,6 +235,37 @@ def _bounding_box(verts: list[list[Rational]], d: int) -> tuple[list[int], list[
     return lo, hi
 
 
+def _dedupe_normalized_halfspaces(
+    halfspaces: list[tuple[list[Fraction], Fraction]],
+) -> list[tuple[tuple[int, ...], int]]:
+    """Return the distinct half-spaces in primitive integer normal form.
+
+    Each inequality ``<a, x> <= b`` is scaled by the positive LCM of its
+    denominators, divided by the GCD of the resulting integers, and kept
+    as ``(A, C)`` with ``sum(A_k * x_k) <= C``.  Positive scaling
+    preserves the inequality exactly, so two half-spaces share a normal
+    form iff they define the same constraint; duplicates collapse and
+    repeated inequalities cannot multiply the scan's membership work.
+    """
+    unique: dict[tuple[tuple[int, ...], int], tuple[tuple[int, ...], int]] = {}
+    for coeffs, offset in halfspaces:
+        scale = 1
+        for value in (*coeffs, offset):
+            scale = scale * value.denominator // math.gcd(scale, value.denominator)
+        ints = [int(value * scale) for value in coeffs]
+        rhs = int(offset * scale)
+        g = 0
+        for item in (*ints, rhs):
+            g = math.gcd(g, abs(item))
+        if g > 1:
+            ints = [value // g for value in ints]
+            rhs //= g
+        key = (tuple(ints), rhs)
+        if key not in unique:
+            unique[key] = key
+    return list(unique.values())
+
+
 def _to_integer_facet(
     normal: Matrix, offset: Rational, d: int
 ) -> tuple[tuple[int, ...], int]:
@@ -262,7 +295,7 @@ def _facets_and_box(  # noqa: C901
     than ``MAX_BOUND_SPAN`` integer points in any axis, and
     ``ValueError`` when the polytope is empty or unbounded.
     """
-    rational_facets: list[tuple[Matrix, Rational]] = []
+    facets: list[tuple[tuple[int, ...], int]] = []
     if request.halfspaces is not None:
         halfspaces = [
             (
@@ -280,14 +313,10 @@ def _facets_and_box(  # noqa: C901
         verts, _ = _vertices_from_h_representation(halfspaces)
         if not verts:
             raise ValueError("the H-representation defines an empty polytope")
-        # Facets come directly from the half-spaces (already oriented as <=).
-        rational_facets = [
-            (
-                Matrix([Rational(x.numerator, x.denominator) for x in coeffs]),
-                Rational(offset),
-            )
-            for coeffs, offset in halfspaces
-        ]
+        # Facets are the distinct normalized half-spaces (already oriented
+        # as <=); normalization merges repeated inequalities so the scan's
+        # membership work matches the request-admission bound.
+        facets = _dedupe_normalized_halfspaces(halfspaces)
     else:
         d = request.dimension()
         vertex_models: tuple[Vertex, ...] = request.vertices  # type: ignore[assignment]
@@ -331,9 +360,9 @@ def _facets_and_box(  # noqa: C901
             ]
         else:
             rational_facets = _facets_from_points(verts, d)
-    facets = [
-        _to_integer_facet(normal, offset, d) for normal, offset in rational_facets
-    ]
+        facets = [
+            _to_integer_facet(normal, offset, d) for normal, offset in rational_facets
+        ]
     lo, hi = _bounding_box(verts, d)
     for k in range(d):
         if hi[k] - lo[k] + 1 > MAX_BOUND_SPAN:

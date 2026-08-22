@@ -307,6 +307,141 @@ class TestBudgets:
         assert count_lattice_points(request).point_count == 1001 * 1001
 
 
+class TestMembershipWorkBudget:
+    """Membership work is bounded by scan times *distinct* facet inequalities."""
+
+    def test_normalization_merges_equivalent_halfspaces(self) -> None:
+        from fractions import Fraction
+
+        from jacobian.math.lattice_polytopes._operations import (
+            _dedupe_normalized_halfspaces,
+        )
+
+        base = [
+            ([Fraction(1), Fraction(0)], Fraction(2499)),
+            ([Fraction(-1), Fraction(0)], Fraction(0)),
+            ([Fraction(0), Fraction(1)], Fraction(3999)),
+            ([Fraction(0), Fraction(-1)], Fraction(0)),
+        ]
+        deduped = _dedupe_normalized_halfspaces(base * 16)
+        assert len(deduped) == 4
+        assert _dedupe_normalized_halfspaces(base) == deduped
+        # Positive rescalings of the same inequality collapse onto the
+        # primitive form: 2x <= 4998 and -3x <= 0 are x <= 2499, x >= 0.
+        rescaled = [
+            *base,
+            ([Fraction(2), Fraction(0)], Fraction(4998)),
+            ([Fraction(-3), Fraction(0)], Fraction(0)),
+            ([Fraction(1, 2), Fraction(0)], Fraction(Fraction(2499, 2))),
+        ]
+        assert len(_dedupe_normalized_halfspaces(rescaled)) == 4
+        for coeffs, _ in _dedupe_normalized_halfspaces(rescaled):
+            assert all(c.denominator == 1 for c in coeffs)
+
+    def test_duplicated_inequalities_return_exact_counts(self) -> None:
+        # Each side of the [0,9]^2 box repeated 16 times: the scan must use
+        # the four distinct normalized facets and stay exact.
+        sides = (
+            _hs((("1", "1"), ("0", "1")), ("9", "1")),
+            _hs((("-1", "1"), ("0", "1")), ("0", "1")),
+            _hs((("0", "1"), ("1", "1")), ("9", "1")),
+            _hs((("0", "1"), ("-1", "1")), ("0", "1")),
+        )
+        request = LatticePolytopeRequest(halfspaces=sides * 16)
+        assert len(request.halfspaces) == 64
+        assert count_lattice_points(request).point_count == 100
+
+    def test_reviewer_wide_box_with_repeats_is_admitted(self) -> None:
+        # [0,2499] x [0,3999] with every inequality repeated 16 times passes
+        # the 10M-candidate scan bound; normalization keeps the membership
+        # work at 4 distinct facets so the request is admitted instead of
+        # failing internally after acceptance.
+        sides = (
+            _hs((("1", "1"), ("0", "1")), ("2499", "1")),
+            _hs((("-1", "1"), ("0", "1")), ("0", "1")),
+            _hs((("0", "1"), ("1", "1")), ("3999", "1")),
+            _hs((("0", "1"), ("-1", "1")), ("0", "1")),
+        )
+        request = LatticePolytopeRequest(halfspaces=sides * 16)
+        assert len(request.halfspaces) == 64
+
+    def test_distinct_facet_excess_is_rejected_at_validation(self) -> None:
+        # 4 box sides + 7 distinct redundant diagonal cuts = 11 distinct
+        # facets over a 10M-candidate scan: beyond the membership budget,
+        # so the domain is narrowed in the request model itself.
+        sides = [
+            _hs((("1", "1"), ("0", "1")), ("9999", "1")),
+            _hs((("-1", "1"), ("0", "1")), ("0", "1")),
+            _hs((("0", "1"), ("1", "1")), ("999", "1")),
+            _hs((("0", "1"), ("-1", "1")), ("0", "1")),
+        ]
+        diagonals = [
+            _hs((("1", "1"), ("1", "1")), (str(c), "1")) for c in range(10998, 11005)
+        ]
+        with pytest.raises(ValidationError, match="budget"):
+            LatticePolytopeRequest(halfspaces=tuple(sides + diagonals))
+
+    def test_membership_work_boundary_accepts_the_limit(self) -> None:
+        # Exactly 10 distinct facets over a 10M-candidate scan sits at the
+        # 100M-test budget and is admitted; duplicates do not push past it.
+        sides = [
+            _hs((("1", "1"), ("0", "1")), ("9999", "1")),
+            _hs((("-1", "1"), ("0", "1")), ("0", "1")),
+            _hs((("0", "1"), ("1", "1")), ("999", "1")),
+            _hs((("0", "1"), ("-1", "1")), ("0", "1")),
+        ]
+        six_cuts = [
+            _hs((("1", "1"), ("1", "1")), (str(c), "1")) for c in range(10998, 11004)
+        ]
+        boundary = LatticePolytopeRequest(halfspaces=tuple(sides + six_cuts))
+        padded = LatticePolytopeRequest(
+            halfspaces=tuple(list(boundary.halfspaces) + [sides[0]] * 6)
+        )
+        assert len(padded.halfspaces) == 16
+
+
+class TestCountResultConstraints:
+    def test_count_result_dimension_is_capped(self) -> None:
+        from jacobian.math.lattice_polytopes._models import (
+            MAX_DIMENSION,
+            CountLatticePointsResult,
+        )
+
+        assert (
+            CountLatticePointsResult(
+                dimension=MAX_DIMENSION,
+                point_count=0,
+                representation="vertices",
+            ).dimension
+            == MAX_DIMENSION
+        )
+        with pytest.raises(ValidationError):
+            CountLatticePointsResult(
+                dimension=MAX_DIMENSION + 1,
+                point_count=0,
+                representation="vertices",
+            )
+
+    def test_result_representation_is_a_closed_vocabulary(self) -> None:
+        from jacobian.math.lattice_polytopes._models import (
+            CountLatticePointsResult,
+            EnumerateLatticePointsResult,
+            LatticePoint,
+        )
+
+        with pytest.raises(ValidationError):
+            CountLatticePointsResult(
+                dimension=2, point_count=0, representation="anything"
+            )
+        with pytest.raises(ValidationError):
+            EnumerateLatticePointsResult(
+                dimension=2,
+                point_count=1,
+                points=(LatticePoint(coordinates=("0", "0")),),
+                representation="anything",
+            )
+
+
 class TestLowerDimensionalRejection:
     def test_segment_in_three_d_rejected_at_validation(self) -> None:
         # Two affinely dependent vertices in 3-D define a segment.  The old
@@ -462,3 +597,53 @@ class TestEnumerationResultInvariants:
         assert LatticePoint(coordinates=(exactly_at,)).coordinates == (exactly_at,)
         with pytest.raises(ValidationError, match="digit bound"):
             LatticePoint(coordinates=("9" * (COORDINATE_DIGITS + 1),))
+
+
+class TestVertexFacetMembershipBudget:
+    def test_parabola_vertex_facet_excess_rejected_at_validation(self) -> None:
+        """64 points on a strictly convex parabola fill a 7.88M-candidate
+        scan box and generate ~64 hull facets; scan-times-facet-count far
+        exceeds the 100M membership budget, so validation must reject the
+        request instead of permitting hundreds of millions of exact
+        evaluations (review counterexample shape)."""
+        vertices = tuple(
+            _v((str(i * 63), "1"), (str(i * i // 2), "1")) for i in range(64)
+        )
+        with pytest.raises(ValidationError, match="test budget"):
+            LatticePolytopeRequest(vertices=vertices)
+
+    def test_small_vertex_polygon_still_admitted(self) -> None:
+        """A small full-dimensional V-representation stays within the
+        combined scan-times-facet budget."""
+        triangle = (
+            _v(("0", "1"), ("0", "1")),
+            _v(("4", "1"), ("0", "1")),
+            _v(("0", "1"), ("4", "1")),
+        )
+        request = LatticePolytopeRequest(vertices=triangle)
+        assert count_lattice_points(request).point_count == 15
+
+
+class TestOneDimensionalSingletonException:
+    def test_declarations_document_the_one_dimensional_exception(self) -> None:
+        """The admitted 1-D singleton is a documented exception, not an
+        undocumented gap in the full-dimensional restriction."""
+        from jacobian.math.lattice_polytopes._tools import TOOLS
+
+        tools = {tool.operation_id: tool for tool in TOOLS}
+        for operation_id in (
+            "polytope.lattice_points.enumerate",
+            "polytope.lattice_points.count",
+        ):
+            description = tools[operation_id].description.lower()
+            assert "exception" in description
+            assert "one-dimensional" in description
+        schema = LatticePolytopeRequest.model_json_schema()
+        vertices_description = schema["properties"]["vertices"]["description"].lower()
+        assert "exception" in vertices_description
+
+    def test_singleton_roundtrip_unchanged(self) -> None:
+        result = enumerate_lattice_points(
+            LatticePolytopeRequest(vertices=(_v(("3", "1")),))
+        )
+        assert result.point_count == 1

@@ -55,7 +55,9 @@ LATTICE_POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "point in the bounding box is tested against the exact half-space "
         "inequalities. A V-representation must be full-dimensional: its "
         "vertices must affinely span the ambient dimension, so lower-"
-        "dimensional hulls are rejected.",
+        "dimensional hulls are rejected; the supported exception is a "
+        "one-dimensional input, where every vertex family (including a "
+        "single point) is processed exactly.",
         EnumerateLatticePointsRequest,
         EnumerateLatticePointsResult,
         enumerate_lattice_points,
@@ -106,7 +108,9 @@ LATTICE_POLYTOPE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "linear algebra; every integer point in the bounding box is "
         "tested against the exact inequalities. A V-representation must "
         "be full-dimensional: its vertices must affinely span the "
-        "ambient dimension, so lower-dimensional hulls are rejected.",
+        "ambient dimension, so lower-dimensional hulls are rejected; the "
+        "supported exception is a one-dimensional input, where every "
+        "vertex family (including a single point) is processed exactly.",
         LatticePolytopeRequest,
         CountLatticePointsResult,
         count_lattice_points,

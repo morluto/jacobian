@@ -198,6 +198,13 @@ def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> Jacobi
         raise TypeError("beta must use exact Fractions")
     if beta[0] == 0:
         raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    # Subdiagonal beta_1.. are squared-norm ratios and must be positive;
+    # negative entries would document a non-quasi-definite family.
+    for entry in beta[1 : len(alpha)]:
+        if entry <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
     return JacobiMatrix(
         diagonal=tuple(alpha),
         # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is

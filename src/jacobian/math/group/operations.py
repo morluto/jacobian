@@ -13,6 +13,7 @@ __all__ = [
 
 def group_order(degree: int, generators: list[list[int]]) -> int:
     """Return the exact order of a permutation group via Schreier-Sims."""
+    from jacobian.math.group._models import MAX_GROUP_ORDER
     from sympy.combinatorics import Permutation, PermutationGroup
 
     if not 1 <= degree <= 64:
@@ -61,6 +62,7 @@ def conjugacy_classes(
     Returns a list of (class_elements, class_size) tuples where each
     class_element is a list of permutation lists.
     """
+    from jacobian.math.group._models import MAX_GROUP_ORDER
     from sympy.combinatorics import Permutation, PermutationGroup
 
     if not 1 <= degree <= 64:
@@ -73,6 +75,12 @@ def conjugacy_classes(
             raise ValueError("each generator must be a permutation of 0..n-1")
         perms.append(Permutation(list(perm)))
     group = PermutationGroup(perms)
+    order = int(group.order())
+    if order > MAX_GROUP_ORDER:
+        raise ValueError(
+            f"group order {order} exceeds the bounded maximum "
+            f"{MAX_GROUP_ORDER} for full-element enumeration"
+        )
     classes = group.conjugacy_classes()
     result = []
     for cls in classes:
@@ -89,6 +97,7 @@ def subgroup_lattice(
     Returns a list of (generators_of_subgroup, subgroup_order) tuples.
     Bounded to groups of order at most 64 to avoid exponential blowup.
     """
+    from jacobian.math.group._models import MAX_GROUP_ORDER
     from sympy.combinatorics import Permutation, PermutationGroup
 
     if not 1 <= degree <= 64:

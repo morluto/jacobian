@@ -1,7 +1,5 @@
 """Polynomial support geometry operation declarations."""
 
-from typing import Any
-
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
 from jacobian.math.polynomial_support_geometry._models import (
@@ -23,11 +21,17 @@ from jacobian.math.polynomial_support_geometry.values import (
     PolynomialWeightProfile,
 )
 
-_TOY_TERMS = (
-    {"coefficient": {"num": "1", "den": "1"}, "exponents": [2, 0]},
-    {"coefficient": {"num": "1", "den": "1"}, "exponents": [0, 2]},
-    {"coefficient": {"num": "1", "den": "1"}, "exponents": [1, 1]},
-)
+# Canonical x^2 + xy + y^2 over the ordered ring QQ[x, y].
+_TOY_POLYNOMIAL = {
+    "variables": ["x", "y"],
+    "polynomial": {
+        "terms": [
+            {"coefficient": {"num": "1", "den": "1"}, "exponents": [2, 0]},
+            {"coefficient": {"num": "1", "den": "1"}, "exponents": [1, 1]},
+            {"coefficient": {"num": "1", "den": "1"}, "exponents": [0, 2]},
+        ]
+    },
+}
 
 _TOY_VARS = ("x", "y")
 
@@ -38,7 +42,7 @@ TOOLS: MathTools = (
         version="1",
         title="Compute polynomial exponent support",
         description=(
-            "Extract the exponent support of a nonzero exact sparse polynomial: "
+            "Extract the exponent support of an exact sparse polynomial: "
             "exponent set, term count, coordinatewise min/max, and total degree profile."
         ),
         request_type=SupportRequest,
@@ -49,7 +53,7 @@ TOOLS: MathTools = (
             example(
                 "xy_squared_support",
                 "Compute support of x^2 + xy + y^2.",
-                {"terms": list(_TOY_TERMS), "variables": list(_TOY_VARS)},
+                {"polynomial": dict(_TOY_POLYNOMIAL)},
             ),
         ),
     ),
@@ -59,7 +63,8 @@ TOOLS: MathTools = (
         title="Compute Newton polytope",
         description=(
             "Compute the Newton polytope (convex hull of support exponents) of a "
-            "nonzero polynomial, identifying vertices and non-extreme support points."
+            "polynomial with at most 256 terms, classifying every support point "
+            "exactly as a vertex or interior to the hull of the rest."
         ),
         request_type=NewtonPolytopeRequest,
         result_type=NewtonPolytope,
@@ -69,7 +74,7 @@ TOOLS: MathTools = (
             example(
                 "xy_squared_newton",
                 "Compute Newton polytope of x^2 + xy + y^2.",
-                {"terms": list(_TOY_TERMS), "variables": list(_TOY_VARS)},
+                {"polynomial": dict(_TOY_POLYNOMIAL)},
             ),
         ),
     ),
@@ -90,8 +95,7 @@ TOOLS: MathTools = (
                 "weight_profile_xy",
                 "Weight profile of x^2 + xy + y^2 under w=(1,1).",
                 {
-                    "terms": list(_TOY_TERMS),
-                    "variables": list(_TOY_VARS),
+                    "polynomial": dict(_TOY_POLYNOMIAL),
                     "weight": [1, 1],
                 },
             ),
@@ -112,11 +116,13 @@ TOOLS: MathTools = (
         examples=(
             example(
                 "initial_form_xy",
-                "Initial form of x^2 + xy + y^2 under w=(1,1) is xy (min weight 2).",
+                (
+                    "Initial form of x^2 + xy + y^2 under w=(1,2): weights are "
+                    "2, 3, and 4, so the initial form is x^2."
+                ),
                 {
-                    "terms": list(_TOY_TERMS),
-                    "variables": list(_TOY_VARS),
-                    "weight": [1, 1],
+                    "polynomial": dict(_TOY_POLYNOMIAL),
+                    "weight": [1, 2],
                 },
             ),
         ),

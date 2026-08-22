@@ -14,22 +14,35 @@ from jacobian.math.polynomial_support_geometry.operations import (
     compute_support,
     compute_weight_profile,
 )
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
-def _xy_terms():
-    return (
-        {"coefficient": {"num": "1", "den": "1"}, "exponents": [2, 0]},
-        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0, 2]},
-        {"coefficient": {"num": "1", "den": "1"}, "exponents": [1, 1]},
+def _polynomial(
+    terms: tuple[dict, ...], variables: tuple[str, ...]
+) -> RationalPolynomial:
+    return RationalPolynomial.model_validate(
+        {"variables": list(variables), "polynomial": {"terms": list(terms)}}
     )
 
+
+def _term(coeff: str, exponents: list[int]) -> dict:
+    return {"coefficient": {"num": coeff, "den": "1"}, "exponents": exponents}
+
+
+_XY_TERMS = (
+    _term("1", [2, 0]),
+    _term("1", [1, 1]),
+    _term("1", [0, 2]),
+)
 
 VARS = ("x", "y")
 
 
 class TestSupport:
     def test_nonzero_support(self) -> None:
-        result = compute_support(SupportRequest(terms=_xy_terms(), variables=VARS))
+        result = compute_support(
+            SupportRequest(polynomial=_polynomial(_XY_TERMS, VARS))
+        )
         assert not result.is_zero
         assert result.term_count == 3
         assert result.coordinate_min == (0, 0)
@@ -38,40 +51,87 @@ class TestSupport:
         assert result.total_degree_max == 2
 
     def test_zero_support(self) -> None:
-        terms = (
-            {"coefficient": {"num": "0", "den": "1"}, "exponents": [0, 0]},
-        )
-        result = compute_support(SupportRequest(terms=terms, variables=VARS))
+        result = compute_support(SupportRequest(polynomial=_polynomial((), VARS)))
         assert result.is_zero
         assert result.term_count == 0
+
+    def test_accepts_canonical_polynomial_value(self) -> None:
+        """A serialized producer result validates unchanged as request input."""
+        request = SupportRequest(polynomial=_polynomial(_XY_TERMS, VARS))
+        revalidated = SupportRequest.model_validate(request.model_dump())
+        assert revalidated.polynomial == request.polynomial
 
 
 class TestNewtonPolytope:
     def test_newton_of_xy(self) -> None:
         result = compute_newton_polytope(
-            NewtonPolytopeRequest(terms=_xy_terms(), variables=VARS)
+            NewtonPolytopeRequest(polynomial=_polynomial(_XY_TERMS, VARS))
         )
         assert not result.is_zero
         assert result.ambient_dimension == 2
-        # x^2 + xy + y^2 has support {(2,0), (0,2), (1,1)}
-        # All three are vertices (triangle)
-        assert len(result.vertices) == 2
+        # Support {(2,0), (1,1), (0,2)} is collinear on x+y=2: exactly the
+        # two endpoints are vertices.
+        assert set(result.vertices) == {(2, 0), (0, 2)}
+        assert result.nonextreme == ((1, 1),)
         assert result.affine_dimension == 1
 
-    def test_zero_newton(self) -> None:
+    def test_triangle_support_all_vertices(self) -> None:
+        terms = (_term("1", [2, 2]), _term("1", [2, 0]), _term("1", [0, 2]))
+        result = compute_newton_polytope(
+            NewtonPolytopeRequest(polynomial=_polynomial(terms, VARS))
+        )
+        assert set(result.vertices) == {(2, 0), (0, 2), (2, 2)}
+        assert result.affine_dimension == 2
+
+    def test_retains_ordered_variables(self) -> None:
+        """Identical exponents over different rings stay distinguishable."""
+        poly_xz = _polynomial(_XY_TERMS, ("x", "z"))
+        result = compute_newton_polytope(NewtonPolytopeRequest(polynomial=poly_xz))
+        assert result.variables == ("x", "z")
+
+    def test_interior_point_is_nonextreme(self) -> None:
         terms = (
-            {"coefficient": {"num": "0", "den": "1"}, "exponents": [0, 0]},
+            _term("1", [4, 0]),
+            _term("1", [1, 1]),
+            _term("1", [0, 4]),
+            _term("1", [0, 0]),
         )
         result = compute_newton_polytope(
-            NewtonPolytopeRequest(terms=terms, variables=VARS)
+            NewtonPolytopeRequest(polynomial=_polynomial(terms, VARS))
         )
-        assert result.is_zero
+        assert set(result.vertices) == {(0, 0), (4, 0), (0, 4)}
+        assert result.nonextreme == ((1, 1),)
+
+    def test_skew_vertex_requires_general_direction(self) -> None:
+        """(0,2) is a genuine vertex of [(0,0),(0,1),(0,2),(1,5)] even though
+        no axis-aligned or small-coordinate direction exposes it; the exact
+        extremality kernel must still certify it."""
+        terms = (
+            _term("1", [1, 5]),
+            _term("1", [0, 2]),
+            _term("1", [0, 1]),
+            _term("1", [0, 0]),
+        )
+        result = compute_newton_polytope(
+            NewtonPolytopeRequest(polynomial=_polynomial(terms, VARS))
+        )
+        assert set(result.vertices) == {(0, 0), (0, 2), (1, 5)}
+        assert result.nonextreme == ((0, 1),)
+        assert result.affine_dimension == 2
+
+    def test_term_bound_rejects_infeasible_scan(self) -> None:
+        """The Newton operation's term budget is narrower than the canonical one."""
+        pairs = sorted(((i % 11, i // 11) for i in range(97)), reverse=True)
+        many = tuple(_term("1", list(pair)) for pair in pairs)
+        assert len(many) == 97
+        with pytest.raises(ValueError, match="96"):
+            NewtonPolytopeRequest(polynomial=_polynomial(many, VARS))
 
 
 class TestWeightProfile:
     def test_weight_profile_uniform(self) -> None:
         result = compute_weight_profile(
-            WeightProfileRequest(terms=_xy_terms(), variables=VARS, weight=[1, 1])
+            WeightProfileRequest(polynomial=_polynomial(_XY_TERMS, VARS), weight=[1, 1])
         )
         # All exponents have weight 2, so min weight is 2
         assert result.minimum_weight == 2
@@ -82,7 +142,7 @@ class TestWeightProfile:
 
     def test_weight_profile_nonuniform(self) -> None:
         result = compute_weight_profile(
-            WeightProfileRequest(terms=_xy_terms(), variables=VARS, weight=[1, 0])
+            WeightProfileRequest(polynomial=_polynomial(_XY_TERMS, VARS), weight=[1, 0])
         )
         # Weights: (2,0)->2, (0,2)->0, (1,1)->1
         # min weight is 0 at (0,2)
@@ -90,35 +150,39 @@ class TestWeightProfile:
         assert result.minimizing_exponents == ((0, 2),)
 
     def test_dimension_mismatch(self) -> None:
-        with pytest.raises(Exception, match="dimension|weight"):
+        with pytest.raises(ValueError, match="weight vector length"):
             WeightProfileRequest(
-                terms=_xy_terms(), variables=VARS, weight=[1, 1, 1]
+                polynomial=_polynomial(_XY_TERMS, VARS), weight=[1, 1, 1]
             )
+
+    def test_zero_polynomial_rejected(self) -> None:
+        """The empty support has no minimum; the zero polynomial is inadmissible."""
+        with pytest.raises(ValueError, match="zero polynomial"):
+            WeightProfileRequest(polynomial=_polynomial((), VARS), weight=[1, 1])
+        with pytest.raises(ValueError, match="zero polynomial"):
+            InitialFormRequest(polynomial=_polynomial((), VARS), weight=[1, 1])
 
 
 class TestInitialForm:
     def test_initial_form_uniform(self) -> None:
         result = compute_initial_form(
-            InitialFormRequest(terms=_xy_terms(), variables=VARS, weight=[1, 1])
+            InitialFormRequest(polynomial=_polynomial(_XY_TERMS, VARS), weight=[1, 1])
         )
         # All terms at min weight 2, so initial form is the whole polynomial
         assert len(result.face_exponents) == 3
 
     def test_initial_form_nonuniform(self) -> None:
         result = compute_initial_form(
-            InitialFormRequest(terms=_xy_terms(), variables=VARS, weight=[1, 0])
+            InitialFormRequest(polynomial=_polynomial(_XY_TERMS, VARS), weight=[1, 0])
         )
         # Minimum weight 0 at (0,2), initial form is y^2
         assert result.face_exponents == ((0, 2),)
         assert int(result.face_coefficients[0].num) == 1
 
     def test_initial_form_with_coeffs(self) -> None:
-        terms = (
-            {"coefficient": {"num": "3", "den": "1"}, "exponents": [2, 0]},
-            {"coefficient": {"num": "5", "den": "1"}, "exponents": [0, 2]},
-        )
+        terms = (_term("3", [2, 0]), _term("5", [0, 2]))
         result = compute_initial_form(
-            InitialFormRequest(terms=terms, variables=VARS, weight=[1, 0])
+            InitialFormRequest(polynomial=_polynomial(terms, VARS), weight=[1, 0])
         )
         # Minimum weight 0 at (0,2), initial form is 5*y^2
         assert result.face_exponents == ((0, 2),)

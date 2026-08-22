@@ -448,6 +448,20 @@ class TestSubgraphPatternFind:
         with pytest.raises(ValueError, match="per-pass budget"):
             SubgraphPatternFindRequest(pattern=pat, host=host)
 
+    def test_request_admission_reserves_output_headroom_for_source_echo(self):
+        import pytest
+
+        from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
+
+        # An edgeless 20-vertex graph with one multi-megabyte NFC label fits
+        # the canonical input limit, but the result echoes the graph and adds
+        # the envelope; admission must reject before any search runs.
+        huge = "v" * (6 * 1024 * 1024)
+        labels = [huge] + [f"w{i}" for i in range(19)]
+        g = self._g(labels, [])
+        with pytest.raises(ValueError, match="canonical output limit"):
+            FixedLengthCycleRequest(graph=g, length=3)
+
     def test_forged_negative_decision_is_rejected_by_replay(self):
         import pytest
 

@@ -7,6 +7,7 @@ from typing import Literal, Self
 from pydantic import ConfigDict, Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_VERTICES = 64
@@ -136,6 +137,37 @@ MAX_CYCLE_SEARCH_PATHS = 10_000_000
 SEARCH_PASSES_PER_NEGATIVE_DECISION = 2
 _MAX_SEARCH_PATHS_PER_PASS = MAX_CYCLE_SEARCH_PATHS // SEARCH_PASSES_PER_NEGATIVE_DECISION
 
+# Results retain their source graphs, so a request near the canonical input
+# limit can produce a response past the identical output limit.  Admission
+# reserves this much for the result envelope beyond the echoed sources and
+# witness labels.
+_RESULT_ENVELOPE_RESERVE_BYTES = 1_024
+
+
+def _graph_wire_bytes(graph: SimpleUndirectedGraph) -> int:
+    return len(encode_strict_json(graph.model_dump(mode="json")))
+
+
+def _label_wire_bytes(graph: SimpleUndirectedGraph) -> int:
+    return sum(len(encode_strict_json(label) + b",") for label in graph.vertices)
+
+
+def _require_output_headroom(
+    source_bytes: int, witness_label_bytes: int, operation: str
+) -> None:
+    estimated_result_bytes = (
+        source_bytes
+        + witness_label_bytes
+        + _RESULT_ENVELOPE_RESERVE_BYTES
+    )
+    output_limit = CanonicalLimits().max_output_bytes
+    if estimated_result_bytes > output_limit:
+        raise ValueError(
+            f"the {operation} result retains its sources and would exceed the "
+            f"{output_limit}-byte canonical output limit; "
+            "shorten vertex labels or shrink the graphs"
+        )
+
 
 def _canonical_max_degree(graph: SimpleUndirectedGraph) -> int:
     degree: dict[str, int] = dict.fromkeys(graph.vertices, 0)
@@ -187,6 +219,13 @@ class FixedLengthCycleRequest(StrictModel):
                 f"{_MAX_SEARCH_PATHS_PER_PASS}-path per-pass budget "
                 f"({MAX_CYCLE_SEARCH_PATHS} including validation replay)"
             )
+        # The result echoes its source graph; reserve output headroom for
+        # the envelope and witness labels beyond that echo.
+        _require_output_headroom(
+            _graph_wire_bytes(self.graph),
+            _label_wire_bytes(self.graph),
+            "fixed-length cycle",
+        )
         return self
 
 
@@ -335,6 +374,13 @@ class SubgraphPatternFindRequest(StrictModel):
                     f"{_MAX_SEARCH_PATHS_PER_PASS}-assignment per-pass budget "
                     f"({MAX_CYCLE_SEARCH_PATHS} including validation replay)"
                 )
+        # The result echoes both source graphs; reserve output headroom for
+        # the envelope and witness labels beyond those echoes.
+        _require_output_headroom(
+            _graph_wire_bytes(self.pattern) + _graph_wire_bytes(self.host),
+            _label_wire_bytes(self.host),
+            "subgraph-pattern",
+        )
         return self
 
 

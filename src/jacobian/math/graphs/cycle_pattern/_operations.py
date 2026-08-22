@@ -125,33 +125,36 @@ def _search_cycle_from(
     return dfs(1)
 
 
-def find_subgraph_pattern(
-    request: SubgraphPatternRequest,
-) -> SubgraphPatternResult:
-    """Find an injective subgraph embedding of a pattern into a host graph.
+def _edges_preserved(
+    pv: int,
+    hv: int,
+    mapped: list[int],
+    pattern_adj: dict[int, set[int]],
+    host_adj: dict[int, set[int]],
+    mapping: dict[int, int],
+) -> bool:
+    """Every already-mapped pattern neighbor of pv maps to a host neighbor of hv."""
+    for prev_pv in mapped:
+        if prev_pv in pattern_adj[pv] and mapping[prev_pv] not in host_adj.get(
+            hv, set()
+        ):
+            return False
+    return True
 
-    Backtracking search assigns pattern vertices to distinct host vertices,
-    checking edge preservation at each step.  Returns the lexicographically
-    smallest embedding, if one exists.
-    """
-    host_g = _build_graph(request.host)
-    pattern_g = _build_graph(request.pattern)
-    pattern_vertices = sorted(pattern_g.nodes())
+
+def _search_embedding(
+    host_g: nx.Graph[int],
+    pattern_g: nx.Graph[int],
+    pattern_vertices: list[int],
+    pattern_adj: dict[int, set[int]],
+    host_adj: dict[int, set[int]],
+    mapping: dict[int, int],
+    budget: _NodeBudget,
+) -> bool:
+    """Backtracking injective search with degree pruning under a node budget."""
     n_pattern = len(pattern_vertices)
-
-    pattern_adj: dict[int, set[int]] = {
-        v: set(pattern_g.neighbors(v)) for v in pattern_vertices
-    }
-    host_adj: dict[int, set[int]] = {
-        v: set(host_g.neighbors(v)) for v in host_g.nodes()
-    }
-
-    pattern_degrees = {
-        v: len(pattern_adj[v]) for v in pattern_vertices
-    }
+    pattern_degrees = {v: len(pattern_adj[v]) for v in pattern_vertices}
     host_degrees = {v: len(host_adj.get(v, ())) for v in host_g.nodes()}
-    budget = _NodeBudget()
-    mapping: dict[int, int] = {}
     used: set[int] = set()
 
     def backtrack(idx: int) -> bool:
@@ -167,14 +170,9 @@ def find_subgraph_pattern(
         for hv in sorted(host_g.nodes()):
             if hv in used or host_degrees[hv] < required_degree:
                 continue
-            ok = True
-            for prev_pv in pattern_vertices[:idx]:
-                if prev_pv not in pattern_adj[pv]:
-                    continue
-                if mapping[prev_pv] not in host_adj.get(hv, set()):
-                    ok = False
-                    break
-            if not ok:
+            if not _edges_preserved(
+                pv, hv, pattern_vertices[:idx], pattern_adj, host_adj, mapping
+            ):
                 continue
             mapping[pv] = hv
             used.add(hv)
@@ -184,18 +182,57 @@ def find_subgraph_pattern(
             del mapping[pv]
         return False
 
-    try:
-        decided = backtrack(0)
-    except _BudgetExceededError:
+    return backtrack(0)
+
+
+def find_subgraph_pattern(
+    request: SubgraphPatternRequest,
+) -> SubgraphPatternResult:
+    """Find an injective subgraph embedding of a pattern into a host graph.
+
+    Backtracking search assigns pattern vertices to distinct host vertices,
+    checking edge preservation at each step.  Returns the lexicographically
+    smallest embedding, if one exists.
+    """
+    host_g = _build_graph(request.host)
+    pattern_g = _build_graph(request.pattern)
+    pattern_vertices = sorted(pattern_g.nodes())
+
+    pattern_adj: dict[int, set[int]] = {
+        v: set(pattern_g.neighbors(v)) for v in pattern_vertices
+    }
+    host_adj: dict[int, set[int]] = {
+        v: set(host_g.neighbors(v)) for v in host_g.nodes()
+    }
+
+    mapping: dict[int, int] = {}
+    budget = _NodeBudget()
+
+    def _budget_exceeded() -> SubgraphPatternResult:
         return SubgraphPatternResult(
             host_graph=request.host,
             pattern_graph=request.pattern,
+            host_vertex_count=request.host.vertex_count,
+            pattern_vertex_count=request.pattern.vertex_count,
             outcome="SEARCH_BUDGET_EXCEEDED",
             detail=(
                 f"subgraph search exceeded {MAX_SEARCH_NODES} recursion "
                 "nodes without deciding"
             ),
         )
+
+    try:
+        decided = _search_embedding(
+            host_g,
+            pattern_g,
+            pattern_vertices,
+            pattern_adj,
+            host_adj,
+            mapping,
+            budget,
+        )
+    except _BudgetExceededError:
+        return _budget_exceeded()
 
     if decided:
         emb = SubgraphEmbedding(

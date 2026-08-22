@@ -144,7 +144,7 @@ class TestSubgraphPattern:
         with pytest.raises(ValueError, match="pattern vertex count"):
             SubgraphPatternRequest(host=host, pattern=pattern)
 
-    def test_K3_in_K4(self):
+    def test_clique_in_larger_clique(self):
         host = UndirectedGraph(
             vertex_count=4,
             edges=((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)),
@@ -156,7 +156,7 @@ class TestSubgraphPattern:
         result = find_subgraph_pattern(SubgraphPatternRequest(host=host, pattern=pattern))
         assert result.exists
 
-    def test_K3_not_in_C6(self):
+    def test_triangle_not_in_cycle_six(self):
         host = UndirectedGraph(
             vertex_count=6,
             edges=((0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 0)),

@@ -266,119 +266,139 @@ class MultivariateFactorResult(StrictModel):
             raise ValueError("factorization coefficient must be nonzero")
         if not self.reconstructed.polynomial.terms:
             raise ValueError("reconstructed polynomial must be nonzero")
-        if any(
-            factor.factor.variables != self.reconstructed.variables
-            for factor in self.factors
-        ):
-            raise ValueError("irreducible factors must use the source ring")
-        # Enforce reconstruction-safe envelope before SymPy expansion
-        for record in self.factors:
-            require_polynomial_budget(
-                record.factor,
-                maximum_terms=_MAX_MULTIVARIATE_TERMS,
-                maximum_exponent=_MAX_MULTIVARIATE_EXPONENT,
-                maximum_coefficient_digits=_MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
-            )
-            # Nonconstant check: at least one exponent sum >0
-            if not any(sum(term.exponents) > 0 for term in record.factor.polynomial.terms):
-                raise ValueError("irreducible factor must be non-constant")
-            # Uniqueness within result is checked below; ordering also.
+        _check_factor_records(self.factors, self.reconstructed.variables)
         require_polynomial_budget(
             self.reconstructed,
             maximum_terms=_MAX_MULTIVARIATE_TERMS,
             maximum_exponent=_MAX_MULTIVARIATE_EXPONENT,
             maximum_coefficient_digits=_MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
         )
-        # Check duplicate factors (same polynomial content)
-        seen_polys: set[tuple[tuple[tuple[int, ...], str, str], ...]] = set()
-        for record in self.factors:
-            key = tuple(
-                (term.exponents, term.coefficient.num, term.coefficient.den)
-                for term in record.factor.polynomial.terms
-            )
-            if key in seen_polys:
-                raise ValueError("irreducible factors must be distinct")
-            seen_polys.add(key)
-        ordered = tuple(
-            sorted(
-                self.factors,
-                key=lambda record: (
-                    record.multiplicity,
-                    max(
-                        (
-                            sum(term.exponents)
-                            for term in record.factor.polynomial.terms
-                        ),
-                        default=0,
-                    ),
-                    tuple(
-                        (term.exponents, term.coefficient.num, term.coefficient.den)
-                        for term in record.factor.polynomial.terms
-                    ),
-                ),
-            )
+        _require_distinct_canonical_order(self.factors)
+        _verify_monic_irreducibles(self.factors)
+        _verify_exact_reconstruction(
+            self.coefficient,
+            self.factors,
+            self.reconstructed,
         )
-        if self.factors != ordered:
-            raise ValueError("irreducible factors must use canonical order")
-        # Enforce CONTENT_AND_MONIC_IRREDUCIBLES: each factor must be monic and irreducible
+        return self
+
+
+def _factor_content_key(record: MultivariateIrreducibleFactor) -> tuple:
+    return tuple(
+        (term.exponents, term.coefficient.num, term.coefficient.den)
+        for term in record.factor.polynomial.terms
+    )
+
+
+def _factor_total_degree(record: MultivariateIrreducibleFactor) -> int:
+    return max(
+        (sum(term.exponents) for term in record.factor.polynomial.terms),
+        default=0,
+    )
+
+
+def _check_factor_records(
+    factors: tuple[MultivariateIrreducibleFactor, ...],
+    variables: tuple[str, ...],
+) -> None:
+    """Enforce the reconstruction-safe envelope before any SymPy expansion."""
+
+    for record in factors:
+        if record.factor.variables != variables:
+            raise ValueError("irreducible factors must use the source ring")
+        require_polynomial_budget(
+            record.factor,
+            maximum_terms=_MAX_MULTIVARIATE_TERMS,
+            maximum_exponent=_MAX_MULTIVARIATE_EXPONENT,
+            maximum_coefficient_digits=_MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
+        )
+        if _factor_total_degree(record) == 0:
+            raise ValueError("irreducible factor must be non-constant")
+
+
+def _require_distinct_canonical_order(
+    factors: tuple[MultivariateIrreducibleFactor, ...],
+) -> None:
+    seen: set[tuple] = set()
+    for key in (_factor_content_key(record) for record in factors):
+        if key in seen:
+            raise ValueError("irreducible factors must be distinct")
+        seen.add(key)
+    ordered = tuple(
+        sorted(
+            factors,
+            key=lambda record: (
+                record.multiplicity,
+                _factor_total_degree(record),
+                _factor_content_key(record),
+            ),
+        ),
+    )
+    if factors != ordered:
+        raise ValueError("irreducible factors must use canonical order")
+
+
+def _require_monic(poly: object, factor: RationalPolynomial) -> None:
+    lc = poly.LC()
+    if getattr(lc, "p", None) != 1 or getattr(lc, "q", None) != 1:
+        raise ValueError(f"irreducible factor {factor} is not monic")
+
+
+def _verify_monic_irreducibles(
+    factors: tuple[MultivariateIrreducibleFactor, ...],
+) -> None:
+    """Enforce CONTENT_AND_MONIC_IRREDUCIBLES on every listed factor."""
+
+    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
+
+    for record in factors:
+        poly = rational_polynomial_to_sympy(record.factor)
         try:
-            from sympy import QQ
-
-            from jacobian.math.polynomials._conversions import (
-                rational_polynomial_to_sympy,
-            )
-
-            for record in self.factors:
-                poly = rational_polynomial_to_sympy(record.factor)
-                # Monic check: leading coefficient must be 1
-                # Poly.LC() returns leading coefficient in QQ
-                try:
-                    lc = poly.LC()
-                    # lc is SymPy Rational
-                    if int(lc.p) != 1 or int(lc.q) != 1:
-                        raise ValueError("irreducible factor must be monic")
-                except Exception:
-                    # If LC check fails, fallback to checking Poly is monic via is_monic?
-                    raise ValueError("irreducible factor must be monic")
-                # Irreducibility check
-                if not poly.is_irreducible:
-                    raise ValueError(f"factor {record.factor} is not irreducible")
+            _require_monic(poly, record.factor)
+            if not poly.is_irreducible:
+                raise ValueError(f"factor {record.factor} is not irreducible")
         except ValueError:
             raise
         except Exception as exc:  # pragma: no cover - defensive
             raise ValueError("invalid factor normalization check") from exc
-        # Exact reconstruction: coefficient * ∏ factor**multiplicity == reconstructed
-        try:
-            from sympy import QQ, Poly
-            from sympy import Rational as SymRational
 
-            from jacobian.math.polynomials._conversions import (
-                rational_polynomial_to_sympy,
-                symbols_for_variables,
-            )
 
-            reconstructed_poly = rational_polynomial_to_sympy(self.reconstructed)
-            coeff_frac = self.coefficient.as_fraction()
-            symbols = symbols_for_variables(self.reconstructed.variables)
-            coeff_poly = Poly(
-                SymRational(coeff_frac.numerator, coeff_frac.denominator),
-                *symbols,
-                domain=QQ,
+def _verify_exact_reconstruction(
+    coefficient: CanonicalRational,
+    factors: tuple[MultivariateIrreducibleFactor, ...],
+    reconstructed: RationalPolynomial,
+) -> None:
+    """Check coefficient * ∏ factor**multiplicity == reconstructed exactly."""
+
+    from sympy import QQ, Poly
+    from sympy import Rational as SymRational
+
+    from jacobian.math.polynomials._conversions import (
+        rational_polynomial_to_sympy,
+        symbols_for_variables,
+    )
+
+    try:
+        reconstructed_poly = rational_polynomial_to_sympy(reconstructed)
+        coeff_frac = coefficient.as_fraction()
+        symbols = symbols_for_variables(reconstructed.variables)
+        product = Poly(
+            SymRational(coeff_frac.numerator, coeff_frac.denominator),
+            *symbols,
+            domain=QQ,
+        )
+        for record in factors:
+            factor_poly = rational_polynomial_to_sympy(record.factor)
+            for _ in range(record.multiplicity):
+                product = product * factor_poly
+        if product != reconstructed_poly:
+            raise ValueError(
+                "factorization product does not equal reconstructed polynomial"
             )
-            product = coeff_poly
-            for record in self.factors:
-                factor_poly = rational_polynomial_to_sympy(record.factor)
-                for _ in range(record.multiplicity):
-                    product = product * factor_poly
-            if product != reconstructed_poly:
-                raise ValueError(
-                    "factorization product does not equal reconstructed polynomial"
-                )
-        except ValueError:
-            raise
-        except Exception as exc:  # pragma: no cover - defensive
-            raise ValueError("invalid factorization reconstruction") from exc
-        return self
+    except ValueError:
+        raise
+    except Exception as exc:  # pragma: no cover - defensive
+        raise ValueError("invalid factorization reconstruction") from exc
 
 
 __all__ = [

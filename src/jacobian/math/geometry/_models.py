@@ -448,11 +448,15 @@ class LabelledPoint2D(StrictModel):
 
 
 def _circumradius_input_height_ok(point: RationalPoint2D) -> bool:
-    # Conservative: each coordinate within quarter of canonical digits ensures
-    # R^2 product of three squared distances over 4*cross^2 stays within limit.
-    # Squared distance height ~ 2*coord height, product of three ~6*coord, denominator ~2*coord.
-    # Bounding inputs at 4096 digits keeps result well under 32768.
-    max_input = 4096
+    # Conservative worst-case propagation for
+    # R^2 = (|a-b|^2 |b-c|^2 |c-a|^2) / (4 * cross^2).
+    # A coordinate difference of two H-digit rationals has numerator at most
+    # 2H+1 digits and denominator at most 2H; each squared side reaches
+    # ~4H+3 over 4H, the cross product ~4H+5 over 4H, so the reduced R^2
+    # stays within roughly (12H+9) + (8H+10) + small slack = 20H + 25
+    # digits. Requiring 20*1024 + 25 <= 32768 admits H = 1024; independent
+    # denominators cannot exceed the canonical limit at execution.
+    max_input = 1024
     for v in (point.x, point.y):
         if RationalHeight.from_canonical(v).exceeds(max_input):
             return False
@@ -462,7 +466,7 @@ def _circumradius_input_height_ok(point: RationalPoint2D) -> bool:
 class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration."""
 
-    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
+    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=24)
 
     @model_validator(mode="after")
     def require_unique_labels_and_coordinates(self) -> Self:
@@ -483,7 +487,7 @@ class CircumradiusProfileRequest(StrictModel):
         for item in self.points:
             if not _circumradius_input_height_ok(item.point):
                 raise ValueError(
-                    "circumradius coordinates exceed the conservative 4096-digit input bound for exact output"
+                    "circumradius coordinates exceed the conservative 1024-digit input bound for exact output"
                 )
         return self
 
@@ -509,12 +513,13 @@ class CircumradiusTripleEntry(StrictModel):
 
 
 class CircumradiusProfileResult(StrictModel):
-    point_count: StrictInt = Field(ge=3, le=64)
-    triple_count: StrictInt = Field(ge=1, le=41664)
+    point_count: StrictInt = Field(ge=3, le=24)
+    triple_count: StrictInt = Field(ge=1, le=2024)
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
-    points: tuple[LabelledPoint2D, ...] | None = Field(
-        default=None,
-        description="Source labelled points for replay; when present, entries must match exact circumradius recomputation",
+    points: tuple[LabelledPoint2D, ...] = Field(
+        min_length=3,
+        max_length=24,
+        description="Source labelled points; every entry must match the exact circumradius recomputation",
     )
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
@@ -523,10 +528,9 @@ class CircumradiusProfileResult(StrictModel):
         if len(self.entries) != self.triple_count:
             raise ValueError("circumradius profile must be complete")
         _require_triple_index_coverage(self.point_count, self.entries)
-        if self.points is not None:
-            if len(self.points) != self.point_count:
-                raise ValueError("points length must match point_count")
-            _require_circumradius_source_replay(self.points, self.entries)
+        if len(self.points) != self.point_count:
+            raise ValueError("points length must match point_count")
+        _require_circumradius_source_replay(self.points, self.entries)
         return self
 
 
@@ -541,8 +545,15 @@ def _require_triple_index_coverage(
     seen: set[tuple[int, ...]] = set()
     for entry in entries:
         key = tuple(sorted(entry.indices))
-        if len(key) != 3 or key[0] < 0 or key[2] >= point_count:
-            raise ValueError("circumradius entry indices out of range")
+        if (
+            len(set(entry.indices)) != 3
+            or list(entry.indices) != list(key)
+            or key[0] < 0
+            or key[2] >= point_count
+        ):
+            raise ValueError(
+                "circumradius entry indices must be three distinct ascending positions in range"
+            )
         if key in seen:
             raise ValueError("circumradius entries must cover each triple exactly once")
         seen.add(key)

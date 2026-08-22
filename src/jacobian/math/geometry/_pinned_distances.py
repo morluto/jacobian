@@ -13,6 +13,8 @@ from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
 
+MAX_PINNED_COORDINATE_DIGITS = 512
+
 
 class PinnedDistanceRequest(StrictModel):
     """Compute the complete pinned-distance profile from an anchor to all pair-spanned lines."""
@@ -21,10 +23,35 @@ class PinnedDistanceRequest(StrictModel):
     points: tuple[RationalPoint2D, ...] = Field(min_length=2, max_length=128)
 
     @model_validator(mode="after")
-    def require_unique_points(self):
+    def require_unique_bounded_points(self):
         keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
+        # Canonical line keys are integer triples obtained by scaling with
+        # the LCM of up to three coordinate denominators and multiplying by
+        # numerators, so every printed component stays within roughly 4H+2
+        # digits for H-digit inputs. Capping H at 512 keeps str(int) far
+        # below CPython's 4300-digit int->str conversion limit, which would
+        # otherwise turn an accepted request into an execution failure.
+        from jacobian.math._rational_height import RationalHeight
+
+        for value in (self.anchor.x, self.anchor.y):
+            if RationalHeight.from_canonical(value).exceeds(
+                MAX_PINNED_COORDINATE_DIGITS
+            ):
+                raise ValueError(
+                    "anchor coordinates exceed the conservative "
+                    f"{MAX_PINNED_COORDINATE_DIGITS}-digit pinned-distance bound"
+                )
+        for point in self.points:
+            for value in (point.x, point.y):
+                if RationalHeight.from_canonical(value).exceeds(
+                    MAX_PINNED_COORDINATE_DIGITS
+                ):
+                    raise ValueError(
+                        "point coordinates exceed the conservative "
+                        f"{MAX_PINNED_COORDINATE_DIGITS}-digit pinned-distance bound"
+                    )
         return self
 
 

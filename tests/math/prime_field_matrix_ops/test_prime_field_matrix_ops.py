@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from jacobian.math.prime_field_matrix_ops._models import (
     NullspaceRequest,
     RankRequest,
+    RankResult,
     RrefRequest,
 )
 from jacobian.math.prime_field_matrix_ops._operations import (
@@ -63,6 +64,28 @@ class TestRank:
         with pytest.raises(ValidationError):
             RankRequest(prime=2, entries=[[1, 0], [0]], columns=2)
 
+    def test_rank_result_retains_source_matrix(self) -> None:
+        req = RankRequest(prime=5, entries=((1, 2), (3, 4)), columns=2)
+        result = compute_rank(req)
+        assert result.entries == ((1, 2), (3, 4))
+        assert result.columns == 2
+        assert result.prime == 5
+        assert result.rank == 2
+
+    def test_serialized_rank_result_revalidates(self) -> None:
+        req = RankRequest(prime=2, entries=[[1, 1, 0], [0, 1, 1]], columns=3)
+        result = compute_rank(req)
+        revived = RankResult.model_validate(result.model_dump())
+        assert revived == result
+
+    def test_rank_mismatch_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            RankResult(
+                prime=5,
+                entries=((1, 0), (0, 1)),
+                columns=2,
+                rank=1,
+            )
 
 class TestRref:
     def test_basic_rref(self) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from fractions import Fraction
 from typing import Literal, Self
 
@@ -30,7 +31,9 @@ def _to_fractions(
     return tuple(v.as_fraction() for v in values)
 
 
-def _from_fractions(values) -> tuple[CanonicalRational, ...]:
+def _from_fractions(
+    values: Iterable[Fraction],
+) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
 
 
@@ -204,32 +207,32 @@ class ChristoffelDarbouxRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
+        from jacobian.math.moments_orthogonal.operations import (
+            christoffel_darboux,
+        )
+
         _validate_alpha_beta(self.alpha, self.beta)
-        # Bound x,y more tightly than the generic 4096: the recurrence
-        # evaluates polynomials of degree up to len(alpha) and the kernel sums
-        # n terms, so digit growth is roughly n * digit(x).  For n=16, even
-        # 4095-digit x gives 122k-digit denominators.  Cap at 1024 to keep
-        # worst-case outputs within the 32768-digit canonical limit.
-        max_cd_digits = 1024
         require_bounded_rational(
-            self.x, max_digits=max_cd_digits, label="x"
+            self.x, max_digits=MAX_RATIONAL_DIGITS, label="x"
         )
         require_bounded_rational(
-            self.y, max_digits=max_cd_digits, label="y"
+            self.y, max_digits=MAX_RATIONAL_DIGITS, label="y"
         )
-        # Also check conservative output height estimate
-        # Rough estimate: output digits ~ n * max_input_digits
-        n = max(len(self.alpha), len(self.beta))
-        max_input = max(
-            max((len(v.num.lstrip("-")) for v in self.alpha), default=0),
-            max((len(v.num.lstrip("-")) for v in self.beta), default=0),
-            len(self.x.num.lstrip("-")),
-            len(self.x.den.lstrip("-")),
-            len(self.y.num.lstrip("-")),
-            len(self.y.den.lstrip("-")),
+        # Recurrence evaluation multiplies the heights of unrelated
+        # coefficients: p_k(x) accumulates k coordinate differences, h_k is a
+        # product of k+1 betas, and the kernel sums n such terms, so no
+        # per-component digit estimate bounds the output.  Admit exactly the
+        # requests whose exact kernel and evaluated polynomials are
+        # representable as canonical rationals.
+        result = christoffel_darboux(
+            _to_fractions(self.alpha),
+            _to_fractions(self.beta),
+            self.x.as_fraction(),
+            self.y.as_fraction(),
         )
-        if n * max_input > 30000:
-            raise ValueError("Christoffel-Darboux inputs would exceed the result digit bound")
+        CanonicalRational.from_fraction(result.kernel)
+        for value in result.polynomials_evaluated:
+            CanonicalRational.from_fraction(value)
         return self
 
 

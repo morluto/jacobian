@@ -10,6 +10,16 @@ from pydantic import Field, StrictInt, model_validator
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 
+# With every coordinate numerator and denominator bounded by d digits, the
+# squared circumradius
+#   R^2 = |a-b|^2 |b-c|^2 |c-a|^2 / (4 * cross^2)
+# has a numerator below 10^(40d+9) (each squared side length is below
+# 10^(8d+3) over 10^(8d), and the cross denominator squares into the
+# numerator) and a denominator below 10^(32d+7).  Requiring both components
+# under the canonical 32,768-digit limit gives 40d + 9 <= 32768, i.e. d <= 818;
+# the cap below keeps a margin under that derived bound.
+MAX_CIRCUMRADIUS_COORDINATE_DIGITS = 800
+
 
 class RationalPoint2D(StrictModel):
     x: CanonicalRational
@@ -467,12 +477,11 @@ class CircumradiusProfileRequest(StrictModel):
         )
         if len(keys) != len(set(keys)):
             raise ValueError("point coordinates must be unique")
-        # Bound coordinates so that squared circumradius stays within the
-        # canonical result limit.  The formula R^2 = (|a-b|^2|b-c|^2|c-a|^2)/(4*(2*area)^2)
-        # can produce ~6x digit growth; capping at 4096 keeps outputs <32768.
-        for item in self.points:
-            require_bounded_rational(item.point.x, max_digits=4096, label="point x")
-            require_bounded_rational(item.point.y, max_digits=4096, label="point y")
+        # Bound coordinates so that every squared circumradius of every
+        # triple stays within the canonical result limit: growth multiplies
+        # all six unrelated coordinate denominators, so a per-component
+        # aggregate cap is derived above and applied to each coordinate.
+        _require_bounded_circumradius_points(self.points)
         return self
 
 
@@ -498,8 +507,81 @@ class CircumradiusTripleEntry(StrictModel):
         return self
 
 
+def _require_replayed_circumradius_entries(
+    entries: tuple[CircumradiusTripleEntry, ...],
+    *,
+    labels: tuple[str, ...],
+    coords: list[tuple[Fraction, Fraction]],
+) -> None:
+    """Replay every collinearity flag and radius from the source points."""
+    for entry in entries:
+        i, j, k = entry.indices
+        if entry.labels != (labels[i], labels[j], labels[k]):
+            raise ValueError("entry labels must match the source points")
+        (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
+        cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+        if entry.collinear is (cross != 0):
+            raise ValueError(
+                "collinearity must equal the source-point determinant"
+            )
+        if entry.collinear:
+            continue
+        dab = (ax - bx) ** 2 + (ay - by) ** 2
+        dbc = (bx - cx) ** 2 + (by - cy) ** 2
+        dac = (ax - cx) ** 2 + (ay - cy) ** 2
+        replayed = CanonicalRational.from_fraction(
+            (dab * dbc * dac) / (4 * cross * cross)
+        )
+        if replayed != entry.squared_circumradius:
+            raise ValueError(
+                "squared circumradius must follow from the source points"
+            )
+
+
+def _require_circumradius_entry_coverage(
+    entries: tuple[CircumradiusTripleEntry, ...],
+    *,
+    point_count: int,
+    expected_triples: int,
+) -> None:
+    seen: set[tuple[int, int, int]] = set()
+    for entry in entries:
+        idx = entry.indices
+        if idx != tuple(sorted(idx)):
+            raise ValueError("circumradius entry indices must be sorted")
+        if idx in seen:
+            raise ValueError("circumradius entries must be unique")
+        if not (0 <= idx[0] < idx[1] < idx[2] < point_count):
+            raise ValueError("circumradius entry indices out of range")
+        seen.add(idx)
+    # Check canonical lexicographic order
+    if tuple(entries) != tuple(sorted(entries, key=lambda e: e.indices)):
+        raise ValueError("circumradius entries must be in lexicographic order")
+    if len(seen) != expected_triples:
+        raise ValueError(
+            "circumradius profile must cover every unordered triple"
+        )
+
+
+def _require_bounded_circumradius_points(
+    points: tuple[LabelledPoint2D, ...],
+) -> None:
+    for item in points:
+        require_bounded_rational(
+            item.point.x,
+            max_digits=MAX_CIRCUMRADIUS_COORDINATE_DIGITS,
+            label="point x",
+        )
+        require_bounded_rational(
+            item.point.y,
+            max_digits=MAX_CIRCUMRADIUS_COORDINATE_DIGITS,
+            label="point y",
+        )
+
+
 class CircumradiusProfileResult(StrictModel):
     point_count: StrictInt = Field(ge=3, le=64)
+    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
     triple_count: StrictInt = Field(ge=1, le=41664)
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
@@ -513,22 +595,40 @@ class CircumradiusProfileResult(StrictModel):
             raise ValueError("triple_count must equal comb(point_count, 3)")
         if len(self.entries) != self.triple_count:
             raise ValueError("circumradius profile must be complete")
-        # Validate that entries cover every unordered triple exactly once in canonical order
-        seen: set[tuple[int, int, int]] = set()
-        for entry in self.entries:
-            idx = entry.indices
-            if idx != tuple(sorted(idx)):
-                raise ValueError("circumradius entry indices must be sorted")
-            if idx in seen:
-                raise ValueError("circumradius entries must be unique")
-            if not (0 <= idx[0] < idx[1] < idx[2] < self.point_count):
-                raise ValueError("circumradius entry indices out of range")
-            seen.add(idx)
-        # Check canonical lexicographic order
-        if tuple(self.entries) != tuple(sorted(self.entries, key=lambda e: e.indices)):
-            raise ValueError("circumradius entries must be in lexicographic order")
-        if len(seen) != expected:
-            raise ValueError("circumradius profile must cover every unordered triple")
+        if self.point_count != len(self.points):
+            raise ValueError("point_count must match the retained source points")
+        labels = tuple(item.label for item in self.points)
+        if len(labels) != len(set(labels)):
+            raise ValueError("source point labels must be unique")
+        keys = tuple(
+            (
+                item.point.x.num,
+                item.point.x.den,
+                item.point.y.num,
+                item.point.y.den,
+            )
+            for item in self.points
+        )
+        if len(keys) != len(set(keys)):
+            raise ValueError("source point coordinates must be unique")
+        _require_bounded_circumradius_points(self.points)
+        _require_circumradius_entry_coverage(
+            self.entries,
+            point_count=self.point_count,
+            expected_triples=expected,
+        )
+        # Replay every collinearity flag and squared circumradius from the
+        # retained source points so a serialized result cannot detach its
+        # radii from their configuration.
+        coords = [
+            (item.point.x.as_fraction(), item.point.y.as_fraction())
+            for item in self.points
+        ]
+        _require_replayed_circumradius_entries(
+            self.entries,
+            labels=labels,
+            coords=coords,
+        )
         return self
 
 

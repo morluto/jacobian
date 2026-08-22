@@ -253,6 +253,38 @@ class TestWireAdapters:
         result = compute_christoffel_darboux(request)
         assert isinstance(result, ChristoffelDarbouxResult)
 
+    def test_christoffel_darboux_height_growth_rejected(self) -> None:
+        """Sixteen unrelated 501-digit coefficient denominators compound in
+        the exact kernel past the canonical result limit; the request must
+        be rejected at admission instead of raising during conversion."""
+
+        def tall(i: int) -> CanonicalRational:
+            return CanonicalRational(num="1", den=str(10**500 + 2 * i + 1))
+
+        with pytest.raises(ValidationError):
+            ChristoffelDarbouxRequest(
+                alpha=tuple(tall(i) for i in range(16)),
+                beta=tuple(tall(16 + i) for i in range(16)),
+                x=tall(32),
+                y=tall(33),
+            )
+
+    def test_christoffel_darboux_representable_growth_accepted(self) -> None:
+        """A request whose exact kernel stays representable is admitted even
+        when individual inputs carry hundreds of digits."""
+
+        def small(i: int) -> CanonicalRational:
+            return CanonicalRational(num="1", den=str(10**40 + 2 * i + 1))
+
+        request = ChristoffelDarbouxRequest(
+            alpha=tuple(small(i) for i in range(16)),
+            beta=tuple(small(16 + i) for i in range(16)),
+            x=small(32),
+            y=small(33),
+        )
+        result = compute_christoffel_darboux(request)
+        assert isinstance(result, ChristoffelDarbouxResult)
+
     def test_gaussian_quadrature_wire(self) -> None:
         request = GaussianQuadratureRequest(
             alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),

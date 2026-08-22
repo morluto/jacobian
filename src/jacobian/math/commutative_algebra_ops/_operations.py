@@ -83,6 +83,8 @@ def compute_ideal_quotient(request: IdealQuotientRequest) -> IdealQuotientResult
 def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturationResult:
     """Compute an exact ideal saturation I : <d>^infinity through the bounded Singular backend."""
 
+    import time
+
     from jacobian.math.polynomials.values import (
         RationalPolynomialIdeal,
     )
@@ -91,6 +93,7 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
         variables=request.ideal.variables,
         generators=(request.saturation_polynomial,),
     )
+    started = time.monotonic()
     backend = run_singular_ideal_operation(
         "saturation",
         request.ideal,
@@ -100,12 +103,27 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
     if backend.outcome == "COMPUTED" and backend.ideal is not None:
         # Defining-equality verification (I : d^inf == J) runs inside the
         # same bounded, supervised Singular subprocess flow, never as an
-        # unbounded host-process Groebner computation.
+        # unbounded host-process Groebner computation. The declared wall
+        # budget covers the complete operation: verification receives only
+        # the time the first computation left unspent.
+        elapsed = time.monotonic() - started
+        remaining = request.resource_budget.wall_seconds - int(elapsed + 0.5)
+        if remaining < 1:
+            return IdealSaturationResult(
+                outcome="TIMEOUT",
+                source_ideal=request.ideal,
+                source_polynomial=request.saturation_polynomial,
+                detail="The resource budget was exhausted by the saturation "
+                "computation before its bounded verification could run.",
+            )
+        verification_budget = request.resource_budget.model_copy(
+            update={"wall_seconds": remaining}
+        )
         verdict = run_singular_saturation_verification(
             request.ideal,
             saturation_ideal,
             backend.ideal,
-            request.resource_budget,
+            verification_budget,
         )
         if verdict == "REFUTED":
             raise ValueError(

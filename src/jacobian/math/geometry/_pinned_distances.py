@@ -158,6 +158,10 @@ class PinnedDistanceResult(StrictModel):
     def require_invariants(self):
         if self.distinct_line_count != len(self.lines):
             raise ValueError("distinct_line_count must match the line count")
+        # The retained source must itself satisfy the operation's full
+        # request admission (2-32 unique, height-bounded points) before
+        # the ledger replay; a deserialized result cannot bypass it.
+        PinnedDistanceRequest(anchor=self.anchor, points=self.points)
         # Source-bound replay: recompute the canonical line ledger from the
         # retained anchor and points and compare every entry, so a relayed
         # or truncated profile (e.g. missing lines for retained points)

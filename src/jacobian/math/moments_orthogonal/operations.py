@@ -287,6 +287,37 @@ def christoffel_darboux(
     )
 
 
+def _validate_quadrature_float_domain(
+    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+) -> None:
+    """Finite-Float64 admission shared with the wire request model.
+
+    Every coefficient must convert to a finite double, and no used entry
+    may underflow to zero where it would silently drop weight from the
+    rule.
+    """
+    from jacobian.math.moments_orthogonal._models import (
+        MAX_QUADRATURE_MAGNITUDE,
+        MIN_QUADRATURE_SUBDIAGONAL,
+    )
+
+    if beta[0] < MIN_QUADRATURE_SUBDIAGONAL:
+        raise ValueError("beta_0 falls below the quadrature underflow bound")
+    for value in (*alpha, *beta):
+        if abs(value) > MAX_QUADRATURE_MAGNITUDE:
+            raise ValueError(
+                "quadrature coefficients exceed the finite-float magnitude bound"
+            )
+    for index in range(1, min(len(alpha), len(beta))):
+        sub = beta[index]
+        if sub <= 0:
+            raise ValueError("subdiagonal beta entries must be positive")
+        if sub < MIN_QUADRATURE_SUBDIAGONAL:
+            raise ValueError(
+                "subdiagonal beta entries fall below the quadrature underflow bound"
+            )
+
+
 def gaussian_quadrature(
     alpha: Sequence[Fraction], beta: Sequence[Fraction]
 ) -> GaussianQuadrature:
@@ -316,15 +347,13 @@ def gaussian_quadrature(
         raise ValueError(
             "beta_0 must be positive for a Gaussian quadrature rule"
         )
+    _validate_quadrature_float_domain(alpha, beta)
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
     for k in range(n - 1):
         if k + 1 >= len(beta):
             break
-        sub = beta[k + 1]
-        if sub <= 0:
-            raise ValueError("subdiagonal beta entries must be positive")
-        off.append(math.sqrt(float(sub)))
+        off.append(math.sqrt(float(beta[k + 1])))
     jacobi = np.diag(diagonal)
     if off:
         off_arr = np.array(off, dtype=float)

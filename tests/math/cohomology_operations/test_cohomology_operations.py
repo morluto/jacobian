@@ -65,6 +65,48 @@ class TestSteenrodSquare:
         ))
         assert result2.is_zero
 
+    def test_sq0_duplicate_support_sums_modulo_two(self):
+        """Repeated simplex keys denote one cochain: coefficients sum in GF(2)."""
+        result = compute_steenrod_square(SteenrodSquareRequest(
+            cochain_degree=0,
+            simplex_values=((0,), (0,)),
+            simplex_coefficients=(1, 1),
+            square_degree=0,
+        ))
+        assert result.is_zero
+        assert result.result_simplex_values == ()
+        assert result.result_simplex_coefficients == ()
+
+    def test_sq0_duplicate_support_survivor(self):
+        """Only keys whose summed coefficient survives mod 2 remain."""
+        result = compute_steenrod_square(SteenrodSquareRequest(
+            cochain_degree=0,
+            simplex_values=((1,), (0,), (0,), (1,)),
+            simplex_coefficients=(1, 1, 1, 1),
+            square_degree=0,
+        ))
+        assert result.is_zero
+
+        result2 = compute_steenrod_square(SteenrodSquareRequest(
+            cochain_degree=0,
+            simplex_values=((1,), (0,), (0,)),
+            simplex_coefficients=(1, 1, 1),
+            square_degree=0,
+        ))
+        assert not result2.is_zero
+        assert result2.result_simplex_values == ((1,),)
+        assert result2.result_simplex_coefficients == (1,)
+
+    def test_cup_product_with_duplicate_support_is_linear(self):
+        """Sq^deg of a zero cochain represented by duplicated keys is zero."""
+        result = compute_steenrod_square(SteenrodSquareRequest(
+            cochain_degree=1,
+            simplex_values=((0, 1), (0, 1)),
+            simplex_coefficients=(1, 1),
+            square_degree=1,
+        ))
+        assert result.is_zero
+
 
 class TestBockstein:
     """Test Bockstein homomorphism."""

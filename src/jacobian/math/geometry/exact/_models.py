@@ -233,8 +233,10 @@ class PinnedLineDistanceResult(StrictModel):
     )
     dimension: int = Field(ge=2, le=2)
     point_count: int = Field(ge=2, le=MAX_POINTS)
-    lines: tuple[PinnedLineEntry, ...]
-    distance_multiplicities: tuple[tuple[CanonicalRational, int], ...]
+    lines: tuple[PinnedLineEntry, ...] = Field(max_length=MAX_PAIRS)
+    distance_multiplicities: tuple[tuple[CanonicalRational, int], ...] = Field(
+        max_length=MAX_PAIRS
+    )
 
     @model_validator(mode="after")
     def require_consistent_profile(self) -> Self:  # noqa: C901

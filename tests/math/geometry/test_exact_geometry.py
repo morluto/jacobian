@@ -402,6 +402,48 @@ class TestPinnedLineDistance:
                 distance_multiplicities=(),
             )
 
+    def test_outer_result_ledgers_are_schema_bounded_before_validation(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            MAX_PAIRS,
+            PinnedLineDistanceResult,
+            PinnedLineEntry,
+        )
+
+        result_schema = PinnedLineDistanceResult.model_json_schema()
+        assert result_schema["properties"]["lines"]["maxItems"] == MAX_PAIRS
+        assert (
+            result_schema["properties"]["distance_multiplicities"]["maxItems"]
+            == MAX_PAIRS
+        )
+
+        cfg = self._cfg([("a", 0, 0), ("b", 1, 0)])
+        cheap_entry = PinnedLineEntry(
+            line_coefficients=(_cr(0), _cr(0), _cr(1)),
+            squared_distance=_cr(0),
+            pairs=((0, 1),),
+        )
+        with pytest.raises(ValidationError, match="at most 2016 items"):
+            PinnedLineDistanceResult(
+                configuration=cfg,
+                anchor=self._anchor(0, 0),
+                dimension=2,
+                point_count=2,
+                lines=tuple([cheap_entry] * (MAX_PAIRS + 1)),
+                distance_multiplicities=(),
+            )
+        with pytest.raises(ValidationError, match="at most 2016 items"):
+            PinnedLineDistanceResult(
+                configuration=cfg,
+                anchor=self._anchor(0, 0),
+                dimension=2,
+                point_count=2,
+                lines=(),
+                distance_multiplicities=tuple([(_cr(1), 1)] * (MAX_PAIRS + 1)),
+            )
+
 
 def _cr(x):
     from fractions import Fraction

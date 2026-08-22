@@ -14,15 +14,22 @@ from jacobian.math.prime_field_linear_algebra import (
 )
 
 MAX_DIMENSION = 256
+MAX_PRIME = 10_000
 
 
 class PrimeFieldMatrixRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
+        import sympy
+
+        if self.prime > MAX_PRIME:
+            raise ValueError(f"prime exceeds the {MAX_PRIME} bound")
+        if not sympy.isprime(self.prime):
+            raise ValueError("prime must be prime")
         if len(self.entries) > MAX_DIMENSION:
             raise ValueError("matrix exceeds the supported dimension bound")
         if any(len(row) != self.columns for row in self.entries):
@@ -47,12 +54,18 @@ class _PrimeFieldMatrixValidator:
 
 
 class RankRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
+        import sympy
+
+        if self.prime > MAX_PRIME:
+            raise ValueError(f"prime exceeds the {MAX_PRIME} bound")
+        if not sympy.isprime(self.prime):
+            raise ValueError("prime must be prime")
         if len(self.entries) > MAX_DIMENSION:
             raise ValueError("matrix exceeds the supported dimension bound")
         if any(len(row) != self.columns for row in self.entries):
@@ -77,12 +90,18 @@ class RankResult(StrictModel):
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
     rank: int = Field(ge=0)
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_RANK"] = "EXACT_DOMAIN_MATRIX_RANK"
 
     @model_validator(mode="after")
     def bind_rank(self) -> Self:
+        import sympy
+
+        if self.prime > MAX_PRIME:
+            raise ValueError(f"prime exceeds the {MAX_PRIME} bound")
+        if not sympy.isprime(self.prime):
+            raise ValueError("prime must be prime")
         if len(self.entries) > MAX_DIMENSION or any(
             len(row) != self.columns for row in self.entries
         ):
@@ -100,12 +119,18 @@ class RankResult(StrictModel):
 
 
 class RrefRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
+        import sympy
+
+        if self.prime > MAX_PRIME:
+            raise ValueError(f"prime exceeds the {MAX_PRIME} bound")
+        if not sympy.isprime(self.prime):
+            raise ValueError("prime must be prime")
         if len(self.entries) > MAX_DIMENSION:
             raise ValueError("matrix exceeds the supported dimension bound")
         if any(len(row) != self.columns for row in self.entries):
@@ -146,12 +171,18 @@ class RrefResult(RrefRequest):
 
 
 class NullspaceRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
+        import sympy
+
+        if self.prime > MAX_PRIME:
+            raise ValueError(f"prime exceeds the {MAX_PRIME} bound")
+        if not sympy.isprime(self.prime):
+            raise ValueError("prime must be prime")
         if len(self.entries) > MAX_DIMENSION:
             raise ValueError("matrix exceeds the supported dimension bound")
         if any(len(row) != self.columns for row in self.entries):

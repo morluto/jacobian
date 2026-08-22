@@ -54,6 +54,84 @@ class PinnedDistanceResult(StrictModel):
     def require_invariants(self):
         if self.distinct_line_count != len(self.lines):
             raise ValueError("distinct_line_count must match the line count")
+        # Replay the exact pinned-distance construction from the retained anchor
+        # and points: distinct lines via canonical integer keys, pair coverage,
+        # and exact squared distances.
+        ax = self.anchor.x.as_fraction()
+        ay = self.anchor.y.as_fraction()
+        pts = [(p.x.as_fraction(), p.y.as_fraction()) for p in self.points]
+
+        def _canonical_line_key(
+            xi: Fraction, yi: Fraction, xj: Fraction, yj: Fraction
+        ) -> tuple[str, str, str]:
+            dx = xj - xi
+            dy = yj - yi
+            a = dy
+            b = -dx
+            c = a * xi + b * yi
+            scale_lcm = 1
+            for component in (a.denominator, b.denominator, c.denominator):
+                scale_lcm = scale_lcm * component // gcd(scale_lcm, component)
+            int_a = int(a * scale_lcm)
+            int_b = int(b * scale_lcm)
+            int_c = int(c * scale_lcm)
+            divisor = gcd(gcd(abs(int_a), abs(int_b)), abs(int_c))
+            if divisor:
+                int_a //= divisor
+                int_b //= divisor
+                int_c //= divisor
+            if int_a < 0 or (int_a == 0 and int_b < 0):
+                int_a, int_b, int_c = -int_a, -int_b, -int_c
+            return (str(int_a), str(int_b), str(int_c))
+
+        line_map: dict[tuple[str, str, str], tuple[list[tuple[int, int]], str, str]] = {}
+        for i in range(len(pts)):
+            for j in range(i + 1, len(pts)):
+                xi, yi = pts[i]
+                xj, yj = pts[j]
+                dx = xj - xi
+                dy = yj - yi
+                cross = dx * (ay - yi) - dy * (ax - xi)
+                norm_sq = dx * dx + dy * dy
+                if norm_sq == 0:
+                    continue
+                sq_dist = Fraction(cross * cross, norm_sq)
+                key = _canonical_line_key(xi, yi, xj, yj)
+                if key not in line_map:
+                    line_map[key] = ([], str(sq_dist.numerator), str(sq_dist.denominator))
+                line_map[key][0].append((i, j))
+                # All point pairs collapsing to the same canonical line must share
+                # the exact same squared distance.
+                if (
+                    line_map[key][1] != str(sq_dist.numerator)
+                    or line_map[key][2] != str(sq_dist.denominator)
+                ):
+                    raise ValueError("collinear point pairs must share the same squared distance")
+
+        expected_entries: list[LineDistanceEntry] = []
+        for key in sorted(line_map.keys()):
+            pairs, num, den = line_map[key]
+            expected_entries.append(
+                LineDistanceEntry(
+                    squared_distance_numerator=num,
+                    squared_distance_denominator=den,
+                    source_pairs=tuple(pairs),
+                )
+            )
+
+        if len(expected_entries) != len(self.lines):
+            raise ValueError("line count must match the exact pair-spanned lines")
+        # Exact line entries must match in sorted-key order.
+        for expected, actual in zip(expected_entries, self.lines):
+            if (
+                expected.squared_distance_numerator != actual.squared_distance_numerator
+                or expected.squared_distance_denominator != actual.squared_distance_denominator
+            ):
+                raise ValueError("squared distance must match the exact pinned distance")
+            if set(expected.source_pairs) != set(actual.source_pairs):
+                raise ValueError("source_pairs must cover the exact line pairs")
+            if tuple(sorted(actual.source_pairs)) != actual.source_pairs:
+                raise ValueError("source_pairs must be sorted")
         if self.lines:
             min_entry = min(self.lines, key=lambda e: Fraction(
                 int(e.squared_distance_numerator),
@@ -66,6 +144,12 @@ class PinnedDistanceResult(StrictModel):
                 or self.min_squared_distance.squared_distance_denominator != min_entry.squared_distance_denominator
             ):
                 raise ValueError("min_squared_distance must be the minimum entry")
+        else:
+            if self.min_squared_distance is not None:
+                raise ValueError("empty line set cannot carry a minimum distance")
+            # Every admissible request has at least two distinct points, hence at
+            # least one spanned line; an empty line set is never valid.
+            raise ValueError("pinned-distance profile must contain at least one line")
         return self
 
 

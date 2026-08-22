@@ -81,6 +81,46 @@ _SOS_CHECK_EXAMPLE: dict[str, Any] = {
     ],
 }
 
+_GRAM_CHECK_EXAMPLE: dict[str, Any] = {
+    "polynomial": {
+        "polynomial_schema_version": "1",
+        "domain": "QQ",
+        "variables": ["x"],
+        "polynomial": {
+            "terms": [
+                {"coefficient": {"num": "1", "den": "1"}, "exponents": [2]},
+                {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
+            ]
+        },
+    },
+    "monomial_basis": [
+        {
+            "polynomial_schema_version": "1",
+            "domain": "QQ",
+            "variables": ["x"],
+            "polynomial": {
+                "terms": [
+                    {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
+                ]
+            },
+        },
+        {
+            "polynomial_schema_version": "1",
+            "domain": "QQ",
+            "variables": ["x"],
+            "polynomial": {
+                "terms": [
+                    {"coefficient": {"num": "1", "den": "1"}, "exponents": [1]},
+                ]
+            },
+        },
+    ],
+    "gram_matrix": [
+        [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
+        [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
+    ],
+}
+
 
 SOS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     sos_operation(
@@ -119,7 +159,13 @@ SOS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "gram",
         "exact",
         "certificate",
-        examples=(),
+        examples=(
+            example(
+                "x_squared_plus_one_gram",
+                "Check that x^2+1 = [1, x]^T I [1, x] with identity Gram matrix.",
+                _GRAM_CHECK_EXAMPLE,
+            ),
+        ),
     ),
 )
 

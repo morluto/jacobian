@@ -43,30 +43,30 @@ def check_sos_decomposition(
     )
 
 
-def check_gram_certificate(
-    request: GramCertificateRequest,
-) -> GramCertificateResult:
-    """Check that p = z^T Q z with Q symmetric PSD over QQ."""
-    len(request.monomial_basis)
+def _check_gram_invariants(
+    polynomial,
+    monomial_basis,
+    gram_matrix,
+):
+    """Exact replay of Gram certificate checks."""
+    import sympy
 
+    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
+
+    n = len(monomial_basis)
     matrix = sympy.Matrix(
         [
-            [sympy.Rational(c) for c in row]
-            for row in request.gram_matrix
+            [sympy.Rational(c.as_fraction()) for c in row]
+            for row in gram_matrix
         ]
     )
-
     is_symmetric = matrix == matrix.T
-
     z = sympy.Matrix(
-        [[rational_polynomial_to_sympy(m).as_expr() for m in request.monomial_basis]]
+        [[rational_polynomial_to_sympy(m).as_expr() for m in monomial_basis]]
     ).T
-
     reconstructed = (z.T * matrix * z)[0, 0]
-    p_sympy = rational_polynomial_to_sympy(request.polynomial).as_expr()
-
+    p_sympy = rational_polynomial_to_sympy(polynomial).as_expr()
     reconstructs = sympy.simplify(sympy.expand(reconstructed - p_sympy)) == 0
-
     is_psd = False
     if is_symmetric:
         eigenvals = matrix.eigenvals()
@@ -75,7 +75,16 @@ def check_gram_certificate(
         sym_part = (matrix + matrix.T) / 2
         eigenvals = sym_part.eigenvals()
         is_psd = all(val >= 0 for val in eigenvals)
+    return is_symmetric, reconstructs, is_psd
 
+
+def check_gram_certificate(
+    request: GramCertificateRequest,
+) -> GramCertificateResult:
+    """Check that p = z^T Q z with Q symmetric PSD over QQ."""
+    is_symmetric, reconstructs, is_psd = _check_gram_invariants(
+        request.polynomial, request.monomial_basis, request.gram_matrix
+    )
     is_valid = is_symmetric and reconstructs and is_psd
 
     return GramCertificateResult(
@@ -83,6 +92,9 @@ def check_gram_certificate(
         is_symmetric=is_symmetric,
         reconstructs_polynomial=reconstructs,
         is_psd=is_psd,
+        polynomial=request.polynomial,
+        monomial_basis=request.monomial_basis,
+        gram_matrix=request.gram_matrix,
     )
 
 

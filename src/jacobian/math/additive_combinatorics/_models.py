@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable
 from typing import Annotated, Self
 
@@ -221,9 +222,54 @@ class DifferenceClassEntry(StrictModel):
     source_pairs: tuple[tuple[int, int], ...]
 
 
-class OrderedDifferenceProfileResult(StrictModel):
-    """The complete exact ordered-difference profile of a finite integer-vector set."""
+def _require_source_binding(result: OrderedDifferenceProfileResult) -> None:
+    """Dimension and size must describe the retained source vector set."""
+    if result.dimension != len(result.source_set.vectors[0]) or result.set_size != len(
+        result.source_set.vectors
+    ):
+        raise ValueError(
+            "dimension and set_size must match the retained source set"
+        )
 
+
+def _require_honest_repetition(
+    result: OrderedDifferenceProfileResult,
+    repeated: list[tuple[int, ...]],
+) -> None:
+    """Repetition claims must match the exact replayed difference multiset."""
+    if result.has_repeated_difference != bool(repeated):
+        raise ValueError("has_repeated_difference must match an exact replay")
+    if result.first_repeated_difference is not None:
+        canonical_first = min(repeated)
+        if result.first_repeated_difference != canonical_first:
+            raise ValueError(
+                "first_repeated_difference must be the lexicographically "
+                "first repeated difference"
+            )
+
+
+def _exact_difference_counts(
+    vectors: tuple[tuple[int, ...], ...],
+) -> Counter:
+    """Exact multiset of ordered differences of a finite integer-vector set."""
+    counts: Counter = Counter()
+    for i, vi in enumerate(vectors):
+        for j, vj in enumerate(vectors):
+            if i == j:
+                continue
+            diff = tuple(b - a for a, b in zip(vi, vj, strict=True))
+            counts[diff] += 1
+    return counts
+
+
+class OrderedDifferenceProfileResult(StrictModel):
+    """The complete exact ordered-difference profile of a finite integer-vector set.
+
+    Retains the canonical source vector set so every difference class replays
+    against the vectors it claims to describe.
+    """
+
+    source_set: FiniteIntegerVectorSet
     dimension: int = Field(ge=1)
     set_size: int = Field(ge=1)
     total_ordered_pairs: int = Field(ge=0)
@@ -235,6 +281,15 @@ class OrderedDifferenceProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_profile_invariants(self) -> Self:
+        _require_source_binding(self)
+        truth = _exact_difference_counts(self.source_set.vectors)
+        claimed = {cls.difference: cls.multiplicity for cls in self.classes}
+        if claimed != dict(truth):
+            raise ValueError(
+                "difference classes must replay against the source vectors"
+            )
+        repeated = [d for d, count in truth.items() if count > 1]
+        _require_honest_repetition(self, repeated)
         expected_total = self.set_size * (self.set_size - 1)
         if self.total_ordered_pairs != expected_total:
             raise ValueError("total_ordered_pairs must equal set_size * (set_size - 1)")
@@ -252,6 +307,33 @@ class OrderedDifferenceProfileResult(StrictModel):
         for cls in self.classes:
             if cls.multiplicity != len(cls.source_pairs):
                 raise ValueError("multiplicity must match the source pair count")
+        # Verify every ordered source pair is present exactly once and produces
+        # its claimed difference via the retained source vectors.
+        seen: set[tuple[int, int]] = set()
+        for cls in self.classes:
+            if len(cls.difference) != self.dimension:
+                raise ValueError("difference dimension must match the source set")
+            for a, b in cls.source_pairs:
+                if not (0 <= a < self.set_size and 0 <= b < self.set_size):
+                    raise ValueError("source pair index out of range")
+                if a == b:
+                    raise ValueError("source pair must be ordered distinct indices")
+                if (a, b) in seen:
+                    raise ValueError("source pairs must be unique across classes")
+                seen.add((a, b))
+                actual = tuple(
+                    self.source_set.vectors[a][d] - self.source_set.vectors[b][d]
+                    for d in range(self.dimension)
+                )
+                if actual != cls.difference:
+                    raise ValueError("source pair does not produce the claimed difference")
+        if len(seen) != self.total_ordered_pairs:
+            raise ValueError("source pair coverage must equal total_ordered_pairs")
+        expected_pairs = {
+            (i, j) for i in range(self.set_size) for j in range(self.set_size) if i != j
+        }
+        if seen != expected_pairs:
+            raise ValueError("source pair set must be the complete ordered pair set")
         return self
 
 

@@ -24,7 +24,12 @@ def _inversion_height_bound_ok(
     stay within MAX_CANONICAL_RATIONAL_DIGITS. Also enforces half-digit
     input bound so domain is symmetric under involution.
     """
-    half = MAX_CANONICAL_RATIONAL_DIGITS // 2
+    # Closure under involution: an admitted input's image must also be
+    # admissible. The estimator's worst-case output height grows like
+    # 4H + slack, so inputs are capped at a quarter of the canonical
+    # limit; requests whose estimated output still exceeds the limit are
+    # rejected by the explicit hx/hy check below.
+    half = MAX_CANONICAL_RATIONAL_DIGITS // 4
     for value in (center.x, center.y, point.x, point.y, power):
         if RationalHeight.from_canonical(value).exceeds(half):
             return False

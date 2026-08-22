@@ -286,3 +286,30 @@ class TestBoundedSearchAndWitnessBinding:
                 length=4,
                 exists=False,
             )
+
+
+class TestEmbeddingCodomainBounds:
+    def test_negative_host_vertices_rejected(self) -> None:
+        from jacobian.math.graphs.cycle_pattern._models import (
+            SubgraphEmbedding,
+            SubgraphPatternRequest,
+            SubgraphPatternResult,
+        )
+
+        host = {"vertex_count": 2, "edges": []}
+        pattern = {"vertex_count": 2, "edges": []}
+        request = SubgraphPatternRequest.model_validate(
+            {
+                "host": host,
+                "pattern": pattern,
+            }
+        )
+        with pytest.raises(ValidationError, match="host graph"):
+            SubgraphPatternResult(
+                host_graph=request.host,
+                pattern_graph=request.pattern,
+                host_vertex_count=2,
+                pattern_vertex_count=2,
+                exists=True,
+                embedding=SubgraphEmbedding(mapping=((0, -1), (1, -2))),
+            )

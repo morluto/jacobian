@@ -500,8 +500,20 @@ class CircumradiusProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_profile(self) -> Self:
-        if len(self.entries) != self.triple_count:
+        from itertools import combinations
+
+        expected = tuple(combinations(range(self.point_count), 3))
+        if len(self.entries) != len(expected):
             raise ValueError("circumradius profile must be complete")
+        if self.triple_count != len(expected):
+            raise ValueError(
+                "triple_count must equal C(point_count, 3)"
+            )
+        indices = tuple(entry.indices for entry in self.entries)
+        if indices != expected:
+            raise ValueError(
+                "entries must carry the canonical C(point_count, 3) triple set"
+            )
         return self
 
 
@@ -564,8 +576,13 @@ class ConcyclicQuadruple(StrictModel):
 
 
 class ForbiddenPatternsResult(StrictModel):
-    """Result of screening a configuration for forbidden patterns."""
+    """Result of screening a configuration for forbidden patterns.
 
+    Retains its source configuration so both predicates replay against the
+    exact points instead of trusting independently authored booleans.
+    """
+
+    configuration: ForbiddenConfiguration
     point_count: StrictInt = Field(ge=1, le=128)
     has_collinear_triple: bool
     has_concyclic_quadruple: bool
@@ -576,6 +593,64 @@ class ForbiddenPatternsResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_witnesses(self) -> Self:
+        if self.point_count != len(self.configuration.points):
+            raise ValueError("point_count must match the source configuration")
+
+        xy = [
+            (item.point.x.as_fraction(), item.point.y.as_fraction())
+            for item in self.configuration.points
+        ]
+        from itertools import combinations
+
+        recomputed_collinear = any(
+            (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1])
+            - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
+            == 0
+            for i, j, k in combinations(range(len(xy)), 3)
+        )
+        recomputed_concyclic = False
+        for i, j, k, ell in combinations(range(len(xy)), 4):
+            m = [
+                [x * x + y * y, x, y, 1]
+                for x, y in (xy[i], xy[j], xy[k], xy[ell])
+            ]
+            det = (
+                m[0][0]
+                * (
+                    m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
+                    - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
+                    + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
+                )
+                - m[0][1]
+                * (
+                    m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
+                    - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
+                    + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
+                )
+                + m[0][2]
+                * (
+                    m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
+                    - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
+                    + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
+                )
+                - m[0][3]
+                * (
+                    m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
+                    - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
+                    + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
+                )
+            )
+            if det == 0:
+                recomputed_concyclic = True
+                break
+        if (
+            self.has_collinear_triple != recomputed_collinear
+            or self.has_concyclic_quadruple != recomputed_concyclic
+        ):
+            raise ValueError(
+                "forbidden-pattern decisions must match an exact replay over "
+                "the retained configuration"
+            )
         if self.has_collinear_triple is (self.collinear_triple is None):
             raise ValueError("exactly a collinear triple carries one witness")
         if self.has_concyclic_quadruple is (self.concyclic_quadruple is None):

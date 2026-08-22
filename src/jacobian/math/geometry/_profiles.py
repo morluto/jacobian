@@ -54,9 +54,9 @@ PROFILE_OPERATIONS = (
         "incidence",
         examples=(
             example(
-                "no_forbidden_patterns",
-                "A unit square has no collinear triples or concyclic quadruples "
-                "when checked as four points.",
+                "collinear_witness_found",
+                "Three collinear points among four yield a forbidden-pattern "
+                "witness: A, B, and C lie on one line.",
                 {
                     "configuration": {
                         "points": [

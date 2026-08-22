@@ -183,9 +183,13 @@ def compute_ordered_difference_profile(
         )
         if multiplicity > max_mult:
             max_mult = multiplicity
+        # The advertised "first" repeated difference is the lexicographically
+        # smallest difference occurring more than once, not the modal one.
+        if multiplicity > 1 and first_repeated is None:
             first_repeated = diff
 
     return OrderedDifferenceProfileResult(
+        source_set=request.vectors,
         dimension=len(vectors[0]),
         set_size=n,
         total_ordered_pairs=n * (n - 1),

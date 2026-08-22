@@ -67,6 +67,34 @@ directly. `smt.solve` accepts one bounded QF SMT-LIB query. `lean.check` accepts
 one bounded source snippet and returns elaboration diagnostics after a one-shot
 process invocation.
 
+## Implementation selection
+
+Choose the smallest operational surface that can establish the admitted
+mathematical postcondition within its public bounds. Assess implementation
+options in this order:
+
+1. Use a maintained in-process Python backend when it supports the complete
+   bounded claim.
+2. Use a thin native binding when its build, packaging, platform, and runtime
+   costs are proportionate to the admitted domain.
+3. Use a Jacobian-owned bounded implementation when no lightweight maintained
+   backend fits, the admitted bounds make a simpler published algorithm
+   practical, the result has a complete reconstruction or defining invariant,
+   and ordinary repository tests can establish correctness independently. A
+   mature external implementation may provide additional differential evidence.
+4. Use a child process only for a concrete isolation, killability, or fixed
+   toolchain reason, with the complete process-boundary obligations described in
+   the [mathematical backend contract](mathematical-backends.md).
+5. Narrow or reject the operation when none of these options can support its
+   public claim and work bounds.
+
+Preferring maintained backends does not require importing an entire
+cross-language ecosystem when its build, ABI, installation, runtime, or failure
+surface is disproportionate to the bounded mathematical kernel Jacobian needs.
+The issue or pull request must record why the selected implementation class is
+proportionate; backend convenience alone does not justify a broader public
+contract.
+
 ## Operation preflight
 
 First diagnose the gap: a missing operation is only one of several possible

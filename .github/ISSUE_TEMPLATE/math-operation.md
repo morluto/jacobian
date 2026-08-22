@@ -28,7 +28,18 @@ assignees: []
 <!-- Public input, search, output, coefficient, dimension, and time budgets. -->
 
 ## Maintained implementation
-<!-- The backend or bounded native implementation supporting the claim. -->
+<!--
+Identify the implementation class:
+
+- maintained in-process Python backend;
+- thin native binding;
+- bounded Jacobian-owned kernel; or
+- child-process backend.
+
+Explain why its dependency and operational cost are proportionate to the
+admitted mathematical domain. List optional reference implementations
+separately; they are evidence, not runtime dependencies.
+-->
 
 ## Defining invariant
 <!--

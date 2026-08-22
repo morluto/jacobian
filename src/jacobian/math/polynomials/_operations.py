@@ -36,6 +36,11 @@ from jacobian.math.polynomials._models import (
     PolynomialSquareFreeRequest,
     PolynomialValue,
 )
+from jacobian.math.polynomials._replay import (
+    _ring_element,
+    _sparse_ring,
+    budgeted_reduce,
+)
 from jacobian.math.polynomials.values import RationalPolynomial
 
 _MAX_OUTPUT_TERMS = 1024
@@ -283,7 +288,7 @@ def polynomial_ideal_normal_form(
 
     variables = request.ideal.variables
     symbols = symbols_for_variables(variables)
-    wire_basis, basis = _compute_membership_context(request)
+    wire_basis, _source_basis = _compute_membership_context(request)
     source = {"ideal": request.ideal, "polynomial": request.polynomial}
     if wire_basis is None:
         return IdealNormalFormResult(
@@ -293,16 +298,40 @@ def polynomial_ideal_normal_form(
             groebner_basis=None,
             remainder=None,
         )
-    poly = rational_polynomial_to_sympy(request.polynomial).as_expr()
+    # Reduce with a bounded sparse-ring division so an admitted request can
+    # never expand an unbounded intermediate remainder before the 1,024-term
+    # output boundary is noticed; overflow becomes the typed budget outcome.
+    ring_context = _sparse_ring(variables, request.monomial_order)
+    divisors = [_ring_element(ring_context, element) for element in wire_basis]
+    dividend = _ring_element(ring_context, request.polynomial)
+    replayed = budgeted_reduce(ring_context, dividend, divisors)
+    if replayed is None:
+        return IdealNormalFormResult(
+            **source,
+            monomial_order=request.monomial_order,
+            status="BUDGET_EXCEEDED",
+            groebner_basis=wire_basis,
+            remainder=None,
+        )
     try:
         remainder = _result_polynomial(
-            sympy.Poly(basis.reduce(poly)[1], *symbols, domain=sympy.QQ),
+            sympy.Poly.from_dict(
+                {
+                    tuple(int(e) for e in monom): sympy.Rational(
+                        int(coefficient.numerator),
+                        int(coefficient.denominator),
+                    )
+                    for monom, coefficient in replayed.terms()
+                },
+                *symbols,
+                domain=sympy.QQ,
+            ),
             variables,
         )
     except (PolynomialOutputBudgetError, Exception) as exc:
         from pydantic import ValidationError
 
-        if isinstance(exc, PolynomialOutputBudgetError) or isinstance(exc, ValidationError) or "exponent" in str(exc).lower() or "representation limit" in str(exc).lower():
+        if isinstance(exc, (PolynomialOutputBudgetError, ValidationError)) or "exponent" in str(exc).lower() or "representation limit" in str(exc).lower():
             return IdealNormalFormResult(
                 **source,
                 monomial_order=request.monomial_order,

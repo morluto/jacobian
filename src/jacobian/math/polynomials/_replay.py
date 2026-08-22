@@ -20,10 +20,80 @@ if TYPE_CHECKING:
 __all__ = [
     "generators_reduce_to_zero",
     "remainder_matches_claim",
-    "replayed_remainder_term_count",
-    "retained_basis_in_ideal",
     "retained_basis_is_groebner",
 ]
+
+# Bounded-reduction budget: intermediate reduction work is capped so a
+# pathological request cannot expand an unbounded remainder before the
+# 1,024-term output boundary is noticed. The intermediate work cap is a
+# conservative multiple of the output term budget; the step cap bounds
+# the division loop itself.
+_MAX_OUTPUT_TERMS = 1_024
+_MAX_INTERMEDIATE_TERMS = 4_096
+_MAX_REDUCTION_STEPS = 200_000
+
+
+def _component_exceeds_limit(numerator: int, denominator: int) -> bool:
+    """Check one integer pair against the canonical rational digit limit."""
+
+    from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+
+    bound = 10**MAX_CANONICAL_RATIONAL_DIGITS
+    return abs(numerator) >= bound or abs(denominator) >= bound
+
+
+def _coefficient_exceeds_canonical_limit(value: Any) -> bool:
+    """Check whether one exact QQ coefficient leaves the canonical rational domain."""
+
+    return _component_exceeds_limit(
+        int(value.numerator), int(value.denominator)
+    )
+
+
+def budgeted_reduce(
+    ring_context: Any, dividend: Any, divisors: list[Any]
+) -> Any | None:
+    """Divide ``dividend`` by a fixed Gröbner basis with bounded work.
+
+    This is the standard multivariate long division: each step either
+    cancels the current leading monomial against the one basis element
+    whose leading monomial divides it (introducing only strictly smaller
+    monomials, so the loop terminates), or moves the leading term into
+    the remainder. Returns ``None`` when the work or output budget is
+    exceeded; the caller then reports a typed budget outcome instead of
+    materializing an unbounded intermediate polynomial.
+    """
+
+    remainder = ring_context.zero
+    work = dividend
+    steps = 0
+    while work:
+        steps += 1
+        if steps > _MAX_REDUCTION_STEPS:
+            return None
+        lead_monom = work.leading_expv()
+        reducer = None
+        for divisor in divisors:
+            lm = divisor.leading_expv()
+            if lm is not None and all(
+                lead_monom[k] >= lm[k] for k in range(len(lm))
+            ):
+                reducer = divisor
+                break
+        if reducer is not None:
+            lm = reducer.leading_expv()
+            diff = tuple(a - b for a, b in zip(lead_monom, lm, strict=True))
+            scale = ring_context.term_new(diff, work[lead_monom] / reducer[lm])
+            work = work - scale * reducer
+            if len(work.monoms()) > _MAX_INTERMEDIATE_TERMS:
+                return None
+        else:
+            lead_term = ring_context.term_new(lead_monom, work[lead_monom])
+            remainder = remainder + lead_term
+            work = work - lead_term
+            if len(remainder.monoms()) > _MAX_OUTPUT_TERMS:
+                return None
+    return remainder
 
 
 def _sparse_ring(variables: tuple[str, ...], order: str) -> Any:
@@ -55,14 +125,13 @@ def _replay_division(
     groebner_basis: tuple[RationalPolynomial, ...],
     polynomial: RationalPolynomial,
     monomial_order: str,
-) -> Any:
-    """Return the unique remainder of ``polynomial`` modulo ``groebner_basis``."""
+) -> Any | None:
+    """Return the unique remainder modulo ``groebner_basis``, or ``None`` on budget overflow."""
 
     ring_context = _sparse_ring(ideal.variables, monomial_order)
     divisors = [_ring_element(ring_context, element) for element in groebner_basis]
     dividend = _ring_element(ring_context, polynomial)
-    _, remainder = dividend.div(divisors)
-    return remainder
+    return budgeted_reduce(ring_context, dividend, divisors)
 
 
 def _term_count(element: Any) -> int:
@@ -76,10 +145,16 @@ def remainder_matches_claim(
     monomial_order: str,
     claimed_remainder: RationalPolynomial,
 ) -> bool:
-    """Check that the claimed wire remainder equals the replayed reduction."""
+    """Check that the claimed wire remainder equals the replayed reduction.
+
+    A replay whose bounded reduction overflows cannot corroborate a
+    ``COMPUTED`` claim, so it reports a mismatch.
+    """
 
     ring_context = _sparse_ring(ideal.variables, monomial_order)
     replayed = _replay_division(ideal, groebner_basis, polynomial, monomial_order)
+    if replayed is None:
+        return False
     claimed = _ring_element(ring_context, claimed_remainder)
     return replayed == claimed
 
@@ -91,36 +166,16 @@ def generators_reduce_to_zero(
 ) -> bool:
     """Check every retained ideal generator reduces to zero modulo the basis."""
 
+    ring_context = _sparse_ring(ideal.variables, monomial_order)
+    zero = ring_context.zero
     for generator in ideal.generators:
-        zero = _sparse_ring(ideal.variables, monomial_order).zero
-        replayed = _replay_division(ideal, groebner_basis, generator, monomial_order)
-        if replayed != zero:
+        replayed = _replay_division(
+            ideal, groebner_basis, generator, monomial_order
+        )
+        # An overflowing reduction cannot be corroborated, so fail closed.
+        if replayed is None or replayed != zero:
             return False
     return True
-
-
-def replayed_remainder_term_count(
-    ideal: RationalPolynomialIdeal,
-    groebner_basis: tuple[RationalPolynomial, ...],
-    polynomial: RationalPolynomial,
-    monomial_order: str,
-) -> int:
-    """Return the replayed remainder's term count without materializing wire data."""
-
-    return _term_count(
-        _replay_division(ideal, groebner_basis, polynomial, monomial_order)
-    )
-
-
-def _coefficient_exceeds_canonical_limit(value: Any) -> bool:
-    """Check whether one exact QQ coefficient leaves the canonical rational domain."""
-
-    from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
-
-    bound = 10**MAX_CANONICAL_RATIONAL_DIGITS
-    numerator = abs(int(value.numerator))
-    denominator = abs(int(value.denominator))
-    return numerator >= bound or denominator >= bound
 
 
 def replayed_remainder_exceeds_budget(
@@ -134,10 +189,11 @@ def replayed_remainder_exceeds_budget(
     from jacobian.math.polynomials.values import MAX_POLYNOMIAL_EXPONENT
 
     remainder = _replay_division(ideal, groebner_basis, polynomial, monomial_order)
-    if _term_count(remainder) > 1024:
+    if remainder is None:
+        # The bounded reduction itself overflowed: the remainder is
+        # certainly outside the output budget.
         return True
     try:
-        # Check exponent cap efficiently via monoms
         for monom in remainder.monoms():
             if any(exp > MAX_POLYNOMIAL_EXPONENT for exp in monom):
                 return True
@@ -153,28 +209,26 @@ def replayed_remainder_exceeds_budget(
     return False
 
 
-def retained_basis_in_ideal(
+def retained_source_basis_exceeds_budget(
     ideal: RationalPolynomialIdeal,
-    groebner_basis: tuple[RationalPolynomial, ...],
     monomial_order: str,
 ) -> bool:
-    """Check every retained basis element belongs to the source ideal.
+    """Recompute the source Gröbner basis and check it leaves the output budget.
 
-    Each ``groebner_basis`` element must reduce to zero modulo the Gröbner
-    basis of the source ``ideal``.  This catches forgeries such as
-    ``<x^2>`` with retained basis ``(1)`` where generators still reduce to
-    zero modulo ``(1)`` but ``1`` is not in ``<x^2>``.
+    This substantiates a ``BUDGET_EXCEEDED`` result that retains no basis:
+    such an outcome is accepted only when the recomputed source basis
+    genuinely violates the aggregate 1,024-term, exponent, or canonical
+    coefficient output boundary.  Any kernel failure is not evidence and
+    returns ``False`` so authored results stay rejected.
     """
 
-    if not groebner_basis:
-        return True
-    # Compute a Groebner basis for the source ideal once.
-    from sympy import QQ, groebner
+    from sympy import QQ, Poly, groebner
 
     from jacobian.math.polynomials._conversions import (
         rational_polynomial_to_sympy,
         symbols_for_variables,
     )
+    from jacobian.math.polynomials.values import MAX_POLYNOMIAL_EXPONENT
 
     variables = ideal.variables
     symbols = symbols_for_variables(variables)
@@ -185,19 +239,22 @@ def retained_basis_in_ideal(
         source_gb = groebner(source_exprs, *symbols, order=monomial_order, domain=QQ)
     except Exception:
         return False
-    # For the zero ideal, SymPy's Groebner basis is empty; no nonzero
-    # polynomial belongs to it, so any non-empty retained basis must be rejected
-    # (which the reduction check below will do: reducing a nonzero element
-    # modulo an empty basis leaves it unchanged, not zero).
-    for element in groebner_basis:
-        try:
-            expr = rational_polynomial_to_sympy(element).as_expr()
-            remainder = source_gb.reduce(expr)[1]
-            if remainder != 0:
-                return False
-        except Exception:
-            return False
-    return True
+    aggregate_terms = 0
+    try:
+        for expr in source_gb.exprs:
+            poly = Poly(expr, *symbols, domain=QQ)
+            terms = poly.terms()
+            aggregate_terms += len(terms)
+            if aggregate_terms > 1024:
+                return True
+            for monom, coefficient in terms:
+                if any(exp > MAX_POLYNOMIAL_EXPONENT for exp in monom):
+                    return True
+                if _component_exceeds_limit(int(coefficient.p), int(coefficient.q)):
+                    return True
+    except Exception:
+        return False
+    return False
 
 
 def retained_basis_is_groebner(

@@ -334,3 +334,70 @@ def test_computed_result_without_source_context_rejected() -> None:
             groebner_basis=result.groebner_basis,
             remainder=result.remainder,
         )
+
+
+def test_expansion_beyond_intermediate_budget_reports_typed_outcome_quickly() -> None:
+    # <x - (1+y1+y2+y3+y4+y5)^5> with polynomial x^12: the exact remainder
+    # would expand to millions of monomials.  The bounded reduction must
+    # report the typed budget outcome instead of materializing it.
+    variables = ("x", "y1", "y2", "y3", "y4", "y5")
+
+    def term(exponents: tuple[int, ...]) -> RationalPolynomialTerm:
+        return RationalPolynomialTerm(
+            coefficient=CanonicalRational.from_fraction(Fraction(1)),
+            exponents=exponents,
+        )
+
+    # Every monomial of degree at most 5 in y1..y5: exactly
+    # (1 + y1 + y2 + y3 + y4 + y5)^5, whose 252 terms plus the leading
+    # x term give the reviewed 253-term generator.
+    expansion_combos = [
+        combo
+        for combo in __import__("itertools").product(range(6), repeat=5)
+        if sum(combo) <= 5
+    ]
+    assert len(expansion_combos) == 252
+    generator_terms = [term((1, 0, 0, 0, 0, 0))] + [
+        term((0, *combo)) for combo in expansion_combos
+    ]
+    ideal = RationalPolynomialIdeal(
+        variables=variables,
+        generators=(
+            RationalPolynomial(
+                variables=variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=tuple(
+                        sorted(generator_terms, key=lambda t: t.exponents, reverse=True)
+                    )
+                ),
+            ),
+        ),
+    )
+    request = IdealMembershipRequest(
+        ideal=ideal,
+        polynomial=_poly(variables, {(12, 0, 0, 0, 0, 0): 1}),
+        monomial_order="lex",
+    )
+    result = polynomial_ideal_normal_form(request)
+    assert result.status == "BUDGET_EXCEEDED"
+    membership = polynomial_ideal_membership(request)
+    assert membership.status == "BUDGET_EXCEEDED"
+
+
+def test_unsubstantiated_budget_outcome_without_basis_rejected() -> None:
+    # <x^2>, polynomial x: the basis and remainder are in budget, so an
+    # authored BUDGET_EXCEEDED with both outputs stripped asserts an
+    # arbitrary execution outcome without evidence and must be rejected.
+    req = IdealMembershipRequest(
+        ideal=_ideal1(),
+        polynomial=_poly(("x",), {(1,): 1}),
+    )
+    with pytest.raises(ValidationError, match="source basis to exceed"):
+        IdealMembershipResult(
+            ideal=req.ideal,
+            polynomial=req.polynomial,
+            monomial_order="grevlex",
+            status="BUDGET_EXCEEDED",
+            groebner_basis=None,
+            normal_form=None,
+        )

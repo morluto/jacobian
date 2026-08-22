@@ -260,7 +260,14 @@ class IdealSaturationRequest(StrictModel):
 
 
 class IdealSaturationResult(StrictModel):
+    """The exact saturation I : <d>^infinity, bound to its source request."""
+
     outcome: IdealExecutionOutcome
+    ideal: RationalPolynomialIdeal
+    saturation_polynomial: RationalPolynomial
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
     saturation: RationalPolynomialIdeal | None = None
     method: Literal["SINGULAR_SATURATION"] = "SINGULAR_SATURATION"
     backend_version: str | None = None
@@ -272,6 +279,35 @@ class IdealSaturationResult(StrictModel):
             if self.saturation is None or self.backend_version is None or self.detail:
                 raise ValueError(
                     "computed saturation requires a value and backend version"
+                )
+            # Replay the bounded backend call against the retained sources:
+            # an authored payload cannot claim an arbitrary canonical ideal
+            # as the saturation.
+            from jacobian.math.commutative_algebra_ops._singular import (
+                run_singular_ideal_operation,
+            )
+            from jacobian.math.polynomials.values import (
+                RationalPolynomialIdeal,
+            )
+
+            divisor = RationalPolynomialIdeal(
+                variables=self.ideal.variables,
+                generators=(self.saturation_polynomial,),
+            )
+            replay = run_singular_ideal_operation(
+                "saturation",
+                self.ideal,
+                divisor,
+                self.resource_budget,
+            )
+            if (
+                replay.outcome != "COMPUTED"
+                or replay.ideal != self.saturation
+                or replay.backend_version != self.backend_version
+            ):
+                raise ValueError(
+                    "saturation must equal the exact Singular replay of the "
+                    "retained ideal and saturation polynomial"
                 )
         elif (
             self.saturation is not None

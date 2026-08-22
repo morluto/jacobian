@@ -133,6 +133,13 @@ class RecurrenceCoefficientsRequest(StrictModel):
                 f"moment sequence length {len(self.moments)} exceeds the {2 * MAX_RECURRENCE_ORDER + 1} moments "
                 "consumed by the maximum supported recurrence order"
             )
+        # A nonpositive zeroth moment is not a positive functional, and the
+        # kernel's short-sequence return would otherwise emit beta_0 = mu_0
+        # before any positive-definiteness check.
+        if self.moments[0].as_fraction() <= 0:
+            raise ValueError(
+                "the zeroth moment must be positive for a positive functional"
+            )
         # The Gram-Schmidt kernel requires a positive-definite moment
         # functional; admit exactly the sequences it accepts so an accepted
         # request cannot fail inside execution.

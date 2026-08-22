@@ -17,11 +17,13 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
     IdealSaturationRequest,
+    IdealSaturationResult,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
     compute_ideal_radical,
     compute_ideal_radical_membership,
+    compute_ideal_saturation,
 )
 from jacobian.math.commutative_algebra_ops._tools import TOOLS
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
@@ -484,3 +486,21 @@ def test_saturation_accepts_boundary_total_degree() -> None:
         saturation_polynomial=boundary,
     )
     assert request.saturation_polynomial == boundary
+
+
+@requires_singular
+@pytest.mark.requires_backend("singular")
+def test_ideal_saturation_result_binds_to_source() -> None:
+    result = compute_ideal_saturation(
+        IdealSaturationRequest(
+            ideal=_ideal(("x", "y"), {(1, 1): 1}),
+            saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
+        )
+    )
+    assert result.outcome == "COMPUTED"
+    assert _equal(result.saturation, _ideal(("x", "y"), {(0, 1): 1}))
+    payload = result.model_dump()
+    forged_unit = _ideal(("x", "y"), {(0, 0): 1})
+    payload["saturation"] = forged_unit.model_dump()
+    with pytest.raises(ValueError, match="replay"):
+        IdealSaturationResult.model_validate(payload)

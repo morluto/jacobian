@@ -99,6 +99,9 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
     )
     return IdealSaturationResult(
         outcome=backend.outcome,
+        ideal=request.ideal,
+        saturation_polynomial=request.saturation_polynomial,
+        resource_budget=request.resource_budget,
         saturation=backend.ideal,
         backend_version=backend.backend_version,
         detail=backend.detail,

@@ -344,3 +344,12 @@ class TestToolsAndExamples:
         for tool in TOOLS:
             names = [ex.name for ex in tool.examples]
             assert len(names) == len(set(names))
+
+
+class TestRecurrencePositiveFunctional:
+    def test_negative_zeroth_moment_rejected_before_kernel(self) -> None:
+        """A one-moment request with mu_0 < 0 cannot yield beta_0 = mu_0."""
+        with pytest.raises((ValueError, ValidationError), match="positive"):
+            RecurrenceCoefficientsRequest(
+                moments=(CanonicalRational(num="-1", den="1"),)
+            )

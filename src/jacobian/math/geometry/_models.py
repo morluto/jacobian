@@ -578,10 +578,19 @@ class ForbiddenLabelledPoint(StrictModel):
     point: RationalPoint2D
 
 
+# The forbidden-pattern screen enumerates every triple and quadruple and the
+# result validation replays it, so the point bound is derived from a
+# practical enumeration budget: C(32,3) + C(32,4) = 40,920 exact predicate
+# evaluations for one request.
+MAX_FORBIDDEN_PATTERN_POINTS = 32
+
+
 class ForbiddenConfiguration(StrictModel):
     """A finite set of labelled rational planar points."""
 
-    points: tuple[ForbiddenLabelledPoint, ...] = Field(min_length=1, max_length=128)
+    points: tuple[ForbiddenLabelledPoint, ...] = Field(
+        min_length=1, max_length=MAX_FORBIDDEN_PATTERN_POINTS
+    )
 
     @model_validator(mode="after")
     def require_unique_labels_and_coords(self) -> Self:
@@ -725,7 +734,7 @@ class ForbiddenPatternsResult(StrictModel):
     """Result of screening a configuration for forbidden patterns."""
 
     configuration: ForbiddenConfiguration
-    point_count: StrictInt = Field(ge=1, le=128)
+    point_count: StrictInt = Field(ge=1, le=MAX_FORBIDDEN_PATTERN_POINTS)
     has_collinear_triple: bool
     has_concyclic_quadruple: bool
     collinear_triple: CollinearTriple | None = None

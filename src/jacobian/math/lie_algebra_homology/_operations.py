@@ -8,6 +8,7 @@ from jacobian.math.lie_algebra_homology._models import (
     ChevalleyEilenbergComplexRequest,
     ChevalleyEilenbergComplexResult,
     DifferentialMatrix,
+    LieAlgebra,
     LieHomologyGroup,
     LieHomologyRequest,
     LieHomologyResult,
@@ -68,35 +69,23 @@ def _wedge_index(indices: tuple[int, ...], dim: int) -> int:
     return result
 
 
-def compute_chevalley_eilenberg_complex(
-    request: ChevalleyEilenbergComplexRequest,
-) -> ChevalleyEilenbergComplexResult:
-    """Compute the Chevalley-Eilenberg chain complex for a Lie algebra with trivial coefficients.
+def _chain_group_dimensions(dimension: int) -> tuple[int, ...]:
+    from math import comb
 
-    For a Lie algebra g of dimension n, the chain groups are:
-    C_p = Lambda^p(g) with dimension C(n, p) for p = 0, ..., n.
+    return tuple(comb(dimension, k) for k in range(dimension + 1))
 
-    The differential d_p: C_p -> C_{p-1} is defined by:
-    d_p(e_{i1} ^ ... ^ e_{ip}) = sum_{a<b} (-1)^(a+b+pi) * [e_ia, e_ib] ^ e_{i1} ^ ... ^ hat(e_ia) ^ ... ^ hat(e_ib) ^ ...
 
-    where pi is the parity of the permutation inserting the bracket basis
-    factor into the canonical sorted wedge position of the remaining
-    factors. With trivial coefficients, the module is the base field, so
-    the chain complex is purely determined by the Lie bracket structure
-    constants, which the request model validates as a Lie algebra.
-    """
-    g = request.lie_algebra
+def _ce_differentials(
+    g: LieAlgebra,
+) -> tuple[DifferentialMatrix, ...]:
+    """Build every CE differential matrix from the validated structure constants."""
+
     n = g.dimension
     p = g.prime
     c = g.structure_constants
-
-    group_dims = []
-    for k in range(n + 1):
-        from math import comb
-        group_dims.append(comb(n, k))
+    group_dims = _chain_group_dimensions(n)
 
     differentials = []
-
     for degree in range(1, n + 1):
         source_dim = group_dims[degree]
         target_dim = group_dims[degree - 1]
@@ -137,12 +126,33 @@ def compute_chevalley_eilenberg_complex(
             target_dim=target_dim,
             entries=tuple(tuple(row) for row in diff_matrix),
         ))
+    return tuple(differentials)
 
+
+def compute_chevalley_eilenberg_complex(
+    request: ChevalleyEilenbergComplexRequest,
+) -> ChevalleyEilenbergComplexResult:
+    """Compute the Chevalley-Eilenberg chain complex for a Lie algebra with trivial coefficients.
+
+    For a Lie algebra g of dimension n, the chain groups are:
+    C_p = Lambda^p(g) with dimension C(n, p) for p = 0, ..., n.
+
+    The differential d_p: C_p -> C_{p-1} is defined by:
+    d_p(e_{i1} ^ ... ^ e_{ip}) = sum_{a<b} (-1)^(a+b+pi) * [e_ia, e_ib] ^ e_{i1} ^ ... ^ hat(e_ia) ^ ... ^ hat(e_ib) ^ ...
+
+    where pi is the parity of the permutation inserting the bracket basis
+    factor into the canonical sorted wedge position of the remaining
+    factors. With trivial coefficients, the module is the base field, so
+    the chain complex is purely determined by the Lie bracket structure
+    constants, which the request model validates as a Lie algebra.
+    """
+    g = request.lie_algebra
     return ChevalleyEilenbergComplexResult(
-        dimension=n,
-        group_dimensions=tuple(group_dims),
-        differentials=tuple(differentials),
-        prime=p,
+        lie_algebra=g,
+        dimension=g.dimension,
+        group_dimensions=_chain_group_dimensions(g.dimension),
+        differentials=_ce_differentials(g),
+        prime=g.prime,
     )
 
 
@@ -156,46 +166,12 @@ def compute_lie_homology(request: LieHomologyRequest) -> LieHomologyResult:
     n = g.dimension
     p = g.prime
 
-    from math import comb
-    group_dims = [comb(n, k) for k in range(n + 1)]
+    group_dims = _chain_group_dimensions(n)
 
-    ranks = []
-    for degree in range(1, n + 1):
-        source_dim = group_dims[degree]
-        target_dim = group_dims[degree - 1]
-
-        if source_dim == 0 or target_dim == 0:
-            ranks.append(0)
-            continue
-
-        source_basis = list(combinations(range(n), degree))
-        target_basis = list(combinations(range(n), degree - 1))
-
-        diff_matrix = [[0] * len(source_basis) for _ in range(len(target_basis))]
-        c = g.structure_constants
-
-        for j, wedge in enumerate(source_basis):
-            for a_idx, a in enumerate(wedge):
-                for b_idx in range(a_idx + 1, len(wedge)):
-                    b = wedge[b_idx]
-                    bracket = c[a][b]
-                    remaining = tuple(x for k, x in enumerate(wedge) if k != a_idx and k != b_idx)
-                    for k, coeff in enumerate(bracket):
-                        if coeff == 0:
-                            continue
-                        if k in remaining:
-                            continue
-                        insertion_pos = sum(1 for x in remaining if x < k)
-                        new_wedge = tuple(sorted((*remaining, k)))
-                        # Same graded-antisymmetric sign as the complex
-                        # operation; see the comment there.
-                        entry_sign = (-1) ** (a_idx + b_idx + insertion_pos)
-                        target_idx = target_basis.index(new_wedge)
-                        entry = (entry_sign * int(coeff)) % p
-                        diff_matrix[target_idx][j] = (diff_matrix[target_idx][j] + entry) % p
-
-        ranks.append(_gaussian_rank(diff_matrix, p))
-
+    ranks = [
+        _gaussian_rank([list(row) for row in d.entries], p)
+        for d in _ce_differentials(g)
+    ]
     ranks.append(0)
 
     groups = []

@@ -141,8 +141,14 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
         raise ValueError("moment sequence must contain between 1 and 64 moments")
     if any(type(value) is not Fraction for value in moments):
         raise TypeError("moments must use exact Fractions")
-    if moments[0] == 0:
-        raise ValueError("the zeroth moment must be nonzero")
+    # beta_0 = mu_0 seeds every squared norm h_k of the recurrence; a
+    # nonpositive seed is never a positive-definite functional and the loop's
+    # h_curr check only fires after the first division by this initial norm.
+    if moments[0] <= 0:
+        raise ValueError(
+            "the zeroth moment of a positive-definite moment functional "
+            "must be positive"
+        )
     max_order = min(MAX_RECURRENCE_ORDER, (m - 1) // 2)
     if max_order < 1:
         return RecurrenceCoefficients(alpha=(), beta=(moments[0],))
@@ -171,8 +177,8 @@ def jacobi_matrix(
         raise TypeError("alpha must use exact Fractions")
     if any(type(value) is not Fraction for value in beta):
         raise TypeError("beta must use exact Fractions")
-    if beta[0] == 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    if beta[0] <= 0:
+        raise ValueError("beta_0 (the zeroth moment) must be positive")
     return JacobiMatrix(
         diagonal=tuple(alpha),
         # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is
@@ -208,8 +214,8 @@ def christoffel_darboux(
         raise ValueError("alpha must have length len(beta)-1 or len(beta)")
     if type(x) is not Fraction or type(y) is not Fraction:
         raise TypeError("x and y must use exact Fractions")
-    if beta[0] == 0:
-        raise ValueError("beta_0 must be nonzero")
+    if beta[0] <= 0:
+        raise ValueError("beta_0 must be positive")
     n = len(alpha)
     if n == 0:
         return ChristoffelDarbouxKernel(
@@ -267,8 +273,8 @@ def gaussian_quadrature(
         raise ValueError("alpha must contain between 1 and 16 entries")
     if len(beta) != n and len(beta) != n + 1:
         raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-    if beta[0] == 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    if beta[0] <= 0:
+        raise ValueError("beta_0 (the zeroth moment) must be positive")
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
     for k in range(n - 1):

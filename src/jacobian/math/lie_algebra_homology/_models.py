@@ -16,7 +16,9 @@ def _require_prime(prime: int) -> None:
         raise ValueError("prime must be a prime integer")
 
 
-def _require_alternating(c, n: int, p: int) -> None:
+def _require_alternating(
+    c: tuple[tuple[tuple[int, ...], ...], ...], n: int, p: int
+) -> None:
     for i in range(n):
         if any(value % p != 0 for value in c[i][i]):
             raise ValueError(
@@ -25,7 +27,9 @@ def _require_alternating(c, n: int, p: int) -> None:
             )
 
 
-def _require_antisymmetric(c, n: int, p: int) -> None:
+def _require_antisymmetric(
+    c: tuple[tuple[tuple[int, ...], ...], ...], n: int, p: int
+) -> None:
     for i in range(n):
         for j in range(i + 1, n):
             for k in range(n):
@@ -36,7 +40,9 @@ def _require_antisymmetric(c, n: int, p: int) -> None:
                     )
 
 
-def _require_jacobi(c, n: int, p: int) -> None:
+def _require_jacobi(
+    c: tuple[tuple[tuple[int, ...], ...], ...], n: int, p: int
+) -> None:
     for i in range(n):
         for j in range(n):
             for k in range(n):
@@ -111,17 +117,75 @@ class DifferentialMatrix(StrictModel):
 
 
 class ChevalleyEilenbergComplexResult(StrictModel):
-    """The Chevalley-Eilenberg chain complex with trivial coefficients."""
+    """The Chevalley-Eilenberg chain complex with trivial coefficients.
 
+    The result retains its defining ``LieAlgebra`` and every authoritative
+    claim (binomial chain-group dimensions, complete degree coverage, matrix
+    shapes, GF(p) residues, and the exact differentials of the bracket) is
+    replayed against that source at validation, so a malformed or relayed
+    complex cannot validate.
+    """
+
+    lie_algebra: LieAlgebra
     dimension: int = Field(ge=1)
     group_dimensions: tuple[int, ...] = Field(min_length=1)
-    differentials: tuple[DifferentialMatrix, ...] = Field(min_length=0)
+    differentials: tuple[DifferentialMatrix, ...]
     prime: int = Field(ge=2, le=10_000)
 
     @model_validator(mode="after")
-    def require_consistent_dimensions(self) -> Self:
-        if len(self.group_dimensions) != self.dimension + 1:
-            raise ValueError("group_dimensions must have dimension+1 entries")
+    def bind_complex_to_lie_algebra(self) -> Self:
+        from math import comb
+
+        n = self.lie_algebra.dimension
+        p = self.lie_algebra.prime
+        if self.prime != p:
+            raise ValueError("prime must match the source Lie algebra")
+        if self.dimension != n:
+            raise ValueError("dimension must match the source Lie algebra")
+        expected_dims = tuple(comb(n, k) for k in range(n + 1))
+        if self.group_dimensions != expected_dims:
+            raise ValueError(
+                "group_dimensions must be the binomial sequence of the "
+                "source Lie algebra dimension"
+            )
+        degrees = [differential.degree for differential in self.differentials]
+        if degrees != list(range(1, n + 1)):
+            raise ValueError(
+                "the complete complex must carry one differential for each "
+                f"degree 1..{n} in order"
+            )
+        for differential in self.differentials:
+            if (
+                differential.source_dim != expected_dims[differential.degree]
+                or differential.target_dim != expected_dims[differential.degree - 1]
+            ):
+                raise ValueError(
+                    "differential dimensions must match the chain groups of "
+                    "the source Lie algebra"
+                )
+            if len(differential.entries) != differential.target_dim or any(
+                len(row) != differential.source_dim
+                for row in differential.entries
+            ):
+                raise ValueError(
+                    "differential entries must form a "
+                    "target_dim x source_dim matrix"
+                )
+            if any(
+                not 0 <= value < p for row in differential.entries for value in row
+            ):
+                raise ValueError(
+                    "differential entries must be reduced GF(prime) residues"
+                )
+        from jacobian.math.lie_algebra_homology._operations import (
+            _ce_differentials,
+        )
+
+        if tuple(self.differentials) != _ce_differentials(self.lie_algebra):
+            raise ValueError(
+                "differentials must be the exact Chevalley-Eilenberg complex "
+                "reconstructed from the retained Lie algebra bracket"
+            )
         return self
 
 

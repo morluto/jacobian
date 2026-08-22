@@ -6,11 +6,17 @@ from collections.abc import Callable
 from fractions import Fraction
 from typing import Any, cast
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
+from jacobian.math._rational_height import RationalHeight
 from jacobian.math.geometry._models import (
     CircumcircleRequest,
+    CircumradiusProfileRequest,
+    CircumradiusProfileResult,
+    CircumradiusTripleEntry,
     ClosedSegment2D,
+    ForbiddenPatternsRequest,
+    ForbiddenPatternsResult,
     GeometryBooleanResult,
     GeometryCircleResult,
     GeometryConvexHullResult,
@@ -18,6 +24,7 @@ from jacobian.math.geometry._models import (
     GeometryOrientationResult,
     GeometryPointResult,
     GeometryRationalResult,
+    LabelledPoint2D,
     LinePairRequest,
     LineRequest,
     PointLineRequest,
@@ -419,3 +426,225 @@ def convex_hull_points(request: PointSetRequest) -> GeometryConvexHullResult:
     else:
         points = tuple(cast(Polygon, hull).vertices)
     return GeometryConvexHullResult(points=_canonical_points(points))
+
+
+def _minor3(
+    m: list[list[Fraction]],
+    r0: int,
+    r1: int,
+    r2: int,
+    c0: int,
+    c1: int,
+    c2: int,
+) -> Fraction:
+    """Determinant of the 3x3 submatrix on rows r* and columns c*."""
+    return (
+        m[r0][c0] * (m[r1][c1] * m[r2][c2] - m[r1][c2] * m[r2][c1])
+        - m[r0][c1] * (m[r1][c0] * m[r2][c2] - m[r1][c2] * m[r2][c0])
+        + m[r0][c2] * (m[r1][c0] * m[r2][c1] - m[r1][c1] * m[r2][c0])
+    )
+
+
+def _concyclic_determinant(
+    xy: list[tuple[Fraction, Fraction]], quad: tuple[int, int, int, int]
+) -> Fraction:
+    """Determinant of [x^2+y^2, x, y, 1] over one quadruple of points.
+
+    Vanishing is equivalent to concyclicity once a non-collinear triple
+    exists; the row-0 Laplace expansion keeps every cofactor on rows 1-3.
+    """
+    m = [
+        [
+            xy[index][0] * xy[index][0] + xy[index][1] * xy[index][1],
+            xy[index][0],
+            xy[index][1],
+            Fraction(1),
+        ]
+        for index in quad
+    ]
+    return (
+        m[0][0] * _minor3(m, 1, 2, 3, 1, 2, 3)
+        - m[0][1] * _minor3(m, 1, 2, 3, 0, 2, 3)
+        + m[0][2] * _minor3(m, 1, 2, 3, 0, 1, 3)
+        - m[0][3] * _minor3(m, 1, 2, 3, 0, 1, 2)
+    )
+
+
+def _screen_configuration(
+    pts: tuple[LabelledPoint2D, ...],
+) -> tuple[
+    bool,
+    bool,
+    tuple[int, int, int] | None,
+    tuple[int, int, int, int] | None,
+    int,
+    int,
+]:
+    """Complete bounded forbidden-pattern enumeration over distinct points.
+
+    Returns ``(has_collinear, has_concyclic, collinear_indices,
+    concyclic_indices, checked_triples, checked_quadruples)`` so execution and
+    result validation replay identical bounded work. A vanishing concyclic
+    determinant also covers collinear quadruples; such degenerate quadruples
+    lie on no circle and are skipped rather than reported.
+    """
+    from itertools import combinations
+
+    n = len(pts)
+    xy = [
+        (item.point.x.as_fraction(), item.point.y.as_fraction())
+        for item in pts
+    ]
+
+    def _collinear(a: int, b: int, c: int) -> bool:
+        xa, ya = xy[a]
+        xb, yb = xy[b]
+        xc, yc = xy[c]
+        return (xb - xa) * (yc - ya) - (yb - ya) * (xc - xa) == 0
+
+    collinear_indices = None
+    checked_triples = 0
+    for i, j, k in combinations(range(n), 3):
+        checked_triples += 1
+        if _collinear(i, j, k):
+            collinear_indices = (i, j, k)
+            break
+
+    concyclic_indices = None
+    checked_quadruples = 0
+    for i, j, k, ell in combinations(range(n), 4):
+        checked_quadruples += 1
+        if _concyclic_determinant(xy, (i, j, k, ell)) != 0:
+            continue
+        if (
+            _collinear(i, j, k)
+            and _collinear(i, j, ell)
+            and _collinear(i, k, ell)
+            and _collinear(j, k, ell)
+        ):
+            continue
+        concyclic_indices = (i, j, k, ell)
+        break
+
+    return (
+        collinear_indices is not None,
+        concyclic_indices is not None,
+        collinear_indices,
+        concyclic_indices,
+        checked_triples,
+        checked_quadruples,
+    )
+
+
+def forbidden_patterns(request: ForbiddenPatternsRequest) -> ForbiddenPatternsResult:
+    """Find a collinear triple or a nondegenerate concyclic quadruple.
+
+    Three configuration points are collinear when the exact determinant
+    ``(x_b-x_a)(y_c-y_a) - (y_b-y_a)(x_c-x_a)`` vanishes; four points are
+    concyclic when the exact ``[x^2+y^2, x, y, 1]`` determinant vanishes and
+    some triple among them is non-collinear. Either witness ends the bounded
+    enumeration; otherwise every triple and quadruple is checked exactly.
+    """
+    from jacobian.math.geometry._models import (
+        CollinearTriple,
+        ConcyclicQuadruple,
+    )
+
+    pts = request.configuration.points
+    (
+        has_collinear,
+        has_concyclic,
+        collinear_indices,
+        concyclic_indices,
+        checked_triples,
+        checked_quadruples,
+    ) = _screen_configuration(pts)
+
+    return ForbiddenPatternsResult(
+        configuration=request.configuration,
+        point_count=len(pts),
+        has_collinear_triple=has_collinear,
+        has_concyclic_quadruple=has_concyclic,
+        collinear_triple=(
+            CollinearTriple(
+                first=collinear_indices[0],
+                second=collinear_indices[1],
+                third=collinear_indices[2],
+            )
+            if collinear_indices is not None
+            else None
+        ),
+        concyclic_quadruple=(
+            ConcyclicQuadruple(
+                first=concyclic_indices[0],
+                second=concyclic_indices[1],
+                third=concyclic_indices[2],
+                fourth=concyclic_indices[3],
+            )
+            if concyclic_indices is not None
+            else None
+        ),
+        checked_triples=checked_triples,
+        checked_quadruples=checked_quadruples,
+    )
+
+
+def circumradius_profile(
+    request: CircumradiusProfileRequest,
+) -> CircumradiusProfileResult:
+    """Compute exact circumradius data for every unordered triple.
+
+    A nondegenerate triangle carries its exact squared circumradius
+    ``R^2 = (|a-b|^2 |b-c|^2 |c-a|^2) / (4 * cross(a,b,c)^2)``; a collinear
+    triple is flagged degenerate with no circumcircle. The admitted input
+    height bounds every derived entry inside CanonicalRational's digit limit,
+    and each computed value is re-checked before it enters the result.
+    """
+    from itertools import combinations
+
+    points = request.points
+    coords = [
+        (item.point.x.as_fraction(), item.point.y.as_fraction())
+        for item in points
+    ]
+    entries: list[CircumradiusTripleEntry] = []
+    for i, j, k in combinations(range(len(points)), 3):
+        ax, ay = coords[i]
+        bx, by = coords[j]
+        cx, cy = coords[k]
+        dab = (ax - bx) ** 2 + (ay - by) ** 2
+        dbc = (bx - cx) ** 2 + (by - cy) ** 2
+        dac = (ax - cx) ** 2 + (ay - cy) ** 2
+        cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+        labels = (points[i].label, points[j].label, points[k].label)
+        if cross == 0:
+            entries.append(
+                CircumradiusTripleEntry(
+                    labels=labels,
+                    indices=(i, j, k),
+                    collinear=True,
+                )
+            )
+            continue
+        squared = (dab * dbc * dac) / (4 * cross * cross)
+        canonical = CanonicalRational.from_fraction(squared)
+        if RationalHeight.from_canonical(canonical).exceeds(
+            MAX_CANONICAL_RATIONAL_DIGITS
+        ):
+            raise ValueError(
+                "squared circumradius exceeds the canonical rational limit"
+            )
+        entries.append(
+            CircumradiusTripleEntry(
+                labels=labels,
+                indices=(i, j, k),
+                collinear=False,
+                squared_circumradius=canonical,
+            )
+        )
+    return CircumradiusProfileResult(
+        point_count=len(points),
+        triple_count=len(entries),
+        entries=tuple(entries),
+        points=tuple(points),
+    )

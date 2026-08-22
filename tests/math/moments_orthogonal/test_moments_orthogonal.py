@@ -110,8 +110,22 @@ class TestRecurrenceCoefficients:
 
     def test_zeroth_moment_nonzero(self) -> None:
         moments = (_frac(0, 1), _frac(1, 1), _frac(1, 2))
-        with pytest.raises(ValueError, match="nonzero"):
+        with pytest.raises(ValueError, match="positive"):
             recurrence_coefficients(moments)
+
+    def test_negative_zeroth_moment_rejected(self) -> None:
+        """A negative mu_0 is not a positive functional and seeds beta_0 < 0."""
+        moments = (_frac(-1, 1), _frac(0, 1), _frac(1, 1))
+        with pytest.raises(ValueError, match="positive"):
+            recurrence_coefficients(moments)
+        with pytest.raises(ValidationError):
+            RecurrenceCoefficientsRequest(
+                moments=(
+                    CanonicalRational(num="-1", den="1"),
+                    CanonicalRational(num="0", den="1"),
+                    CanonicalRational(num="1", den="1"),
+                )
+            )
 
     def test_insufficient_moments_for_recurrence(self) -> None:
         """With only 2 moments we can't produce any recurrence coefficient."""
@@ -142,8 +156,12 @@ class TestJacobiMatrix:
         assert result.off_diagonal == ()
 
     def test_zero_beta_rejected(self) -> None:
-        with pytest.raises(ValueError, match="nonzero"):
+        with pytest.raises(ValueError, match="positive"):
             jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
+
+    def test_negative_beta_zero_rejected(self) -> None:
+        with pytest.raises(ValueError, match="positive"):
+            jacobi_matrix((_frac(0, 1),), (_frac(-2, 1), _frac(1, 1)))
 
 
 # ---------------------------------------------------------------------------

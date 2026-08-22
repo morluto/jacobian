@@ -7,6 +7,8 @@ from pydantic import ValidationError
 
 from jacobian.math.lie_algebra_homology._models import (
     ChevalleyEilenbergComplexRequest,
+    ChevalleyEilenbergComplexResult,
+    DifferentialMatrix,
     LieAlgebra,
     LieHomologyRequest,
 )
@@ -222,3 +224,132 @@ def test_malformed_middle_axis_rejected():
             dimension=2,
             structure_constants=(((0,),), ((0,),)),
         )
+
+
+class TestComplexResultBinding:
+    """The returned complex is validated against its retained source algebra."""
+
+    def test_computed_complex_round_trips_against_source(self):
+        from jacobian.math.lie_algebra_homology._models import (
+            ChevalleyEilenbergComplexResult,
+        )
+
+        result = compute_chevalley_eilenberg_complex(
+            ChevalleyEilenbergComplexRequest(lie_algebra=_sl2_gf5())
+        )
+        replayed = ChevalleyEilenbergComplexResult(
+            lie_algebra=result.lie_algebra,
+            dimension=result.dimension,
+            group_dimensions=result.group_dimensions,
+            differentials=result.differentials,
+            prime=result.prime,
+        )
+        assert replayed == result
+
+    def test_reviewer_payload_shape_rejected(self):
+        """A complex without its source algebra cannot validate."""
+        with pytest.raises(ValidationError):
+            ChevalleyEilenbergComplexResult(
+                dimension=1,
+                group_dimensions=(1, 1),
+                differentials=(),
+                prime=2,
+            )
+
+    def test_missing_differential_degree_rejected(self):
+        g = _sl2_gf5()
+        full = compute_chevalley_eilenberg_complex(
+            ChevalleyEilenbergComplexRequest(lie_algebra=g)
+        )
+        with pytest.raises(ValidationError, match="degree"):
+            ChevalleyEilenbergComplexResult(
+                lie_algebra=g,
+                dimension=3,
+                group_dimensions=(1, 3, 3, 1),
+                differentials=tuple(
+                    d for d in full.differentials if d.degree != 1
+                ),
+                prime=5,
+            )
+
+    def test_wrong_matrix_shape_rejected(self):
+        g = _sl2_gf5()
+        full = compute_chevalley_eilenberg_complex(
+            ChevalleyEilenbergComplexRequest(lie_algebra=g)
+        )
+        d2 = next(d for d in full.differentials if d.degree == 2)
+        truncated = DifferentialMatrix(
+            degree=2,
+            source_dim=2,
+            target_dim=3,
+            entries=d2.entries[:3],
+        )
+        tampered_rows = tuple(row[:2] for row in truncated.entries)
+        broken = DifferentialMatrix(
+            degree=2,
+            source_dim=2,
+            target_dim=3,
+            entries=tampered_rows,
+        )
+        others = tuple(d for d in full.differentials if d.degree != 2)
+        with pytest.raises(ValidationError):
+            ChevalleyEilenbergComplexResult(
+                lie_algebra=g,
+                dimension=3,
+                group_dimensions=(1, 3, 3, 1),
+                differentials=(others[0], broken, others[1]),
+                prime=5,
+            )
+
+    def test_broken_d_squared_composition_rejected(self):
+        """Tampering one d_2 entry must fail the bracket reconstruction.
+
+        d_1 of sl(2)/GF(5) is identically zero, so a composition-only check
+        cannot detect forged d_2 entries; reconstruction from the retained
+        bracket does.
+        """
+        g = _sl2_gf5()
+        full = compute_chevalley_eilenberg_complex(
+            ChevalleyEilenbergComplexRequest(lie_algebra=g)
+        )
+        d2 = next(d for d in full.differentials if d.degree == 2)
+        rows = [list(row) for row in d2.entries]
+        rows[0][0] = (rows[0][0] + 1) % 5
+        forged_d2 = DifferentialMatrix(
+            degree=2,
+            source_dim=d2.source_dim,
+            target_dim=d2.target_dim,
+            entries=tuple(tuple(row) for row in rows),
+        )
+        others = tuple(d for d in full.differentials if d.degree != 2)
+        with pytest.raises(ValidationError, match="reconstructed"):
+            ChevalleyEilenbergComplexResult(
+                lie_algebra=g,
+                dimension=3,
+                group_dimensions=(1, 3, 3, 1),
+                differentials=(others[0], forged_d2, others[1]),
+                prime=5,
+            )
+
+    def test_non_residue_entries_rejected(self):
+        g = _sl2_gf5()
+        full = compute_chevalley_eilenberg_complex(
+            ChevalleyEilenbergComplexRequest(lie_algebra=g)
+        )
+        d1 = next(d for d in full.differentials if d.degree == 1)
+        rows = [list(row) for row in d1.entries]
+        rows[0][0] = 5
+        forged = DifferentialMatrix(
+            degree=1,
+            source_dim=d1.source_dim,
+            target_dim=d1.target_dim,
+            entries=tuple(tuple(row) for row in rows),
+        )
+        with pytest.raises(ValidationError, match="residues"):
+            ChevalleyEilenbergComplexResult(
+                lie_algebra=g,
+                dimension=3,
+                group_dimensions=(1, 3, 3, 1),
+                differentials=(forged, full.differentials[1], full.differentials[2]),
+                prime=5,
+            )

@@ -171,8 +171,12 @@ def jacobi_matrix(
         raise TypeError("alpha must use exact Fractions")
     if any(type(value) is not Fraction for value in beta):
         raise TypeError("beta must use exact Fractions")
-    if beta[0] == 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    if beta[0] <= 0:
+        raise ValueError("beta_0 (the zeroth moment) must be positive")
+    # Subdiagonal entries are squared-norm ratios and must be positive
+    for idx in range(1, min(len(alpha), len(beta))):
+        if beta[idx] <= 0:
+            raise ValueError("subdiagonal beta entries must be positive")
     return JacobiMatrix(
         diagonal=tuple(alpha),
         # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is

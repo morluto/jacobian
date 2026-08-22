@@ -16,29 +16,36 @@ from jacobian.math.sum_of_squares._models import (
 )
 
 
+def _check_sos_invariants(polynomial, summands):
+    """Exact replay of SOS decomposition check."""
+    import sympy
+
+    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy, rational_polynomial_from_sympy
+
+    p_sympy = rational_polynomial_to_sympy(polynomial).as_expr()
+    sum_expr = sympy.Integer(0)
+    for summand in summands:
+        q_sympy = rational_polynomial_to_sympy(summand).as_expr()
+        sum_expr += q_sympy * q_sympy
+    is_valid = sympy.simplify(sympy.expand(p_sympy - sum_expr)) == 0
+    if is_valid:
+        computed_sum = polynomial
+    else:
+        variables = polynomial.variables
+        computed_poly = sympy.Poly(sum_expr, *sympy.symbols(list(variables)), domain=sympy.QQ)
+        computed_sum = rational_polynomial_from_sympy(computed_poly, variables)
+    return is_valid, computed_sum
+
+
 def check_sos_decomposition(
     request: SOSDecompositionCheckRequest,
 ) -> SOSDecompositionCheckResult:
     """Check that p = q_1^2 + ... + q_r^2 by exact coefficient identity."""
-    p_sympy = rational_polynomial_to_sympy(request.polynomial).as_expr()
-
-    sum_expr = sympy.Integer(0)
-    for summand in request.summands:
-        q_sympy = rational_polynomial_to_sympy(summand).as_expr()
-        sum_expr += q_sympy * q_sympy
-
-    is_valid = sympy.simplify(sympy.expand(p_sympy - sum_expr)) == 0
-
-    if is_valid:
-        computed_sum = request.polynomial
-    else:
-        variables = request.polynomial.variables
-        computed_poly = sympy.Poly(sum_expr, *sympy.symbols(list(variables)), domain=sympy.QQ)
-        computed_sum = rational_polynomial_from_sympy(computed_poly, variables)
-
+    is_valid, computed_sum = _check_sos_invariants(request.polynomial, request.summands)
     return SOSDecompositionCheckResult(
         is_valid=is_valid,
         polynomial=request.polynomial,
+        summands=request.summands,
         computed_sum=computed_sum,
     )
 

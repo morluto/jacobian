@@ -542,3 +542,22 @@ class TestTensorContextAndShapes:
         )
         assert result.is_valid is False
         assert "d^2=0" in result.detail
+
+
+class TestTensorValueComposition:
+    def test_tensor_result_exposes_chain_complex_value(self) -> None:
+        """The derived complex composes as a first-class value."""
+        from jacobian.math.chain_complexes.values import ChainComplexValue
+
+        result = compute_tensor_product(
+            TensorProductRequest(left=_point_complex(), right=_point_complex())
+        )
+        assert isinstance(result.value, ChainComplexValue)
+        assert result.value.basis_sizes == (1,)
+        homology_groups(result.value)
+
+
+def homology_groups(complex_value):
+    from jacobian.math.chain_complexes import homology_groups as native
+
+    return native(complex_value)

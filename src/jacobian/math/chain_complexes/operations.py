@@ -662,6 +662,8 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
     # on [deg_min, deg_min + group_count - 1].
     group_count = len(left.basis_sizes) + len(right.basis_sizes) - 1
     degree_min = left.degree_min + right.degree_min
+    from jacobian.math.chain_complexes.values import ChainComplexValue
+
     return TensorProductResult(
         tensor_basis_sizes=tensor_basis_sizes,
         tensor_differential_matrices=tuple(tensor_diffs),
@@ -669,4 +671,12 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
         prime=prime,
         degree_min=degree_min,
         degree_max=degree_min + group_count - 1,
+        value=ChainComplexValue(
+            coefficient_field=left.coefficient_field,
+            prime=prime,
+            degree_min=degree_min,
+            degree_max=degree_min + group_count - 1,
+            basis_sizes=tensor_basis_sizes,
+            differential_matrices=tuple(tensor_diffs),
+        ),
     )

@@ -23,6 +23,8 @@ MAX_TENSOR_TOTAL_CELLS = 65536
 # conservative budgets.
 MAX_CHAIN_MAP_CELLS = 4096
 MAX_CHAIN_MAP_ENTRY_CHARS = 65536
+# Serialization envelope for expanded tensor differentials.
+MAX_TENSOR_SERIALIZED_CHARS = 4_000_000
 
 
 class CoefficientField(StrEnum):
@@ -247,6 +249,7 @@ class TensorProductResult(StrictModel):
     prime: int | None = Field(default=None, ge=2)
     degree_min: int | None = None
     degree_max: int | None = None
+    value: ChainComplexValue | None = None
 
     @model_validator(mode="after")
     def require_consistent_context(self) -> Self:

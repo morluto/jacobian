@@ -9,6 +9,7 @@ from pydantic import Field, model_validator
 from jacobian._models import StrictModel
 from jacobian.math.chain_complexes.values import (
     MAX_TENSOR_GROUP_DIMENSION,
+    MAX_TENSOR_SERIALIZED_CHARS,
     MAX_TENSOR_TOTAL_CELLS,
     ChainComplexValue,
     CoefficientField,
@@ -180,6 +181,23 @@ class MappingConeRequest(StrictModel):
         return self
 
 
+def _require_serializable_entries(*complex_values) -> None:
+    """Tensor inputs stay within the serialization envelope: printed
+    entries are products/sums of two coefficients, so each component is
+    capped at 512 digits."""
+    for complex_value in complex_values:
+        for matrix in complex_value.differential_matrices:
+            for row in matrix:
+                for entry in row:
+                    numerator, slash, denominator = entry.partition("/")
+                    significant = denominator or numerator
+                    if len(significant.lstrip("-")) > 512:
+                        raise ValueError(
+                            "tensor product inputs are limited to "
+                            "512-digit coefficients"
+                        )
+
+
 class TensorProductRequest(StrictModel):
     """Compute the tensor product of two chain complexes."""
 
@@ -221,6 +239,14 @@ class TensorProductRequest(StrictModel):
             raise ValueError(
                 f"tensor product allocates {max(total, allocated_cells)} "
                 f"cells, exceeding the {MAX_TENSOR_TOTAL_CELLS}-cell work bound"
+            )
+        _require_serializable_entries(self.left, self.right)
+        max_entry_chars = 2 * 512 + 8
+        if max(allocated_cells, 1) * max_entry_chars > MAX_TENSOR_SERIALIZED_CHARS:
+            raise ValueError(
+                "tensor product serialization exceeds the canonical output "
+                f"ceiling ({allocated_cells} cells x ~{max_entry_chars} "
+                "characters); supply smaller coefficients"
             )
         return self
 

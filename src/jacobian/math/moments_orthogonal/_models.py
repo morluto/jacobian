@@ -55,7 +55,7 @@ def _validate_alpha_beta(
         raise ValueError("alpha must have length len(beta)-1 or len(beta)")
     if beta[0].num == "0" or beta[0].num.startswith("-"):
         raise ValueError(
-            "beta_0 (the zeroth moment of a positive functional) must be positive"
+            "beta_0 (the zeroth moment of a positive functional) must be nonzero"
         )
     # beta_1, ..., beta_{n-1} are squared-norm ratios of a positive-definite
     # sequence and occupy the Jacobi subdiagonal; each must be positive.
@@ -122,7 +122,7 @@ class RecurrenceCoefficientsRequest(StrictModel):
         # polynomial and must be positive even when the sequence is too short
         # to run the full recurrence.
         if self.moments[0].as_fraction() <= 0:
-            raise ValueError("the zeroth moment must be positive")
+            raise ValueError("the zeroth moment must be nonzero")
         # The Gram-Schmidt kernel requires a positive-definite moment
         # functional; admit exactly the sequences it accepts so an accepted
         # request cannot fail inside execution.
@@ -285,7 +285,7 @@ class GaussianQuadratureRequest(StrictModel):
         beta_zero = self.beta[0].as_fraction()
         if beta_zero <= 0:
             raise ValueError(
-                "beta_0 (the zeroth moment of a positive functional) must be positive"
+                "beta_0 (the zeroth moment of a positive functional) must be nonzero"
             )
         # Subdiagonal entries feed math.sqrt after float conversion; they must
         # be positive and safely inside the finite IEEE-double range, and the

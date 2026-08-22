@@ -42,6 +42,20 @@ class PolynomialSupport(StrictModel):
 
     @model_validator(mode="after")
     def bind_extrema_to_support(self) -> Self:
+        # Cross-field consistency: the term count, exponent tuples, and
+        # coefficients must agree, and the coordinate/degree extrema must
+        # match the retained support.
+        if len(self.exponents) != len(self.coefficients) or self.term_count != len(
+            self.exponents
+        ):
+            raise ValueError(
+                "term count must match the number of exponents and coefficients"
+            )
+        width = len(self.variables)
+        if any(len(exp) != width for exp in self.exponents):
+            raise ValueError("exponent tuples must use the declared variable axis")
+        if self.coordinate_min and len(self.coordinate_min) != width:
+            raise ValueError("coordinate extrema must use the declared variable axis")
         if self.is_zero:
             if self.total_degree_min is not None or self.total_degree_max is not None:
                 raise ValueError("an empty support carries no degree extrema")
@@ -50,6 +64,19 @@ class PolynomialSupport(StrictModel):
             return self
         if self.total_degree_min is None or self.total_degree_max is None:
             raise ValueError("a nonzero support must carry its degree extrema")
+        degrees = [sum(exp) for exp in self.exponents]
+        if (
+            self.total_degree_min != min(degrees)
+            or self.total_degree_max != max(degrees)
+            or tuple(self.coordinate_min)
+            != tuple(min(exp[i] for exp in self.exponents) for i in range(width))
+            or tuple(self.coordinate_max)
+            != tuple(max(exp[i] for exp in self.exponents) for i in range(width))
+        ):
+            raise ValueError(
+                "coordinate and degree extrema must be the exact extrema of "
+                "the retained support"
+            )
         return self
 
 

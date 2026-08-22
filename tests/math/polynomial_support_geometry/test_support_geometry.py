@@ -273,3 +273,39 @@ class TestNewtonInvariants:
         assert result.is_zero
         assert result.total_degree_min is None
         assert result.total_degree_max is None
+
+
+class TestNativeSurface:
+    def test_domain_value_kernels(self) -> None:
+        """Native exports accept canonical polynomial values."""
+        from jacobian.math.polynomial_support_geometry import (
+            exponent_support,
+            newton_polytope,
+        )
+
+        polynomial = _polynomial(_XY_TERMS, VARS)
+        support = exponent_support(polynomial)
+        assert support.term_count == 3
+        polytope = newton_polytope(polynomial)
+        assert polytope.vertices is not None
+
+
+class TestSupportCrossFieldValidation:
+    def test_forged_support_rejected(self) -> None:
+        from jacobian.math.polynomial_support_geometry.values import (
+            PolynomialSupport,
+        )
+
+        with pytest.raises(ValidationError, match="term count"):
+            PolynomialSupport(
+                is_zero=False,
+                term_count=1,
+                exponents=((2, 0), (0, 2)),
+                coefficients=(
+                    {"num": "1", "den": "1"},
+                    {"num": "1", "den": "1"},
+                ),
+                variables=VARS,
+                total_degree_min=2,
+                total_degree_max=2,
+            )

@@ -461,3 +461,19 @@ def test_ideal_quotient_by_product_equals_iterated_quotient() -> None:
     assert iterated.quotient is not None
     assert _equal(by_product.quotient, iterated.quotient)
     assert _equal(by_product.quotient, _ideal(variables, {(2, 1): 1}))
+
+
+class TestSaturationSourceBinding:
+    def test_result_ring_binding(self) -> None:
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationResult,
+        )
+
+        with pytest.raises(ValueError, match="ordered ring"):
+            IdealSaturationResult(
+                outcome="COMPUTED",
+                source_ideal=_ideal(("x", "y"), {(2, 0): 1}),
+                source_polynomial=_polynomial(("z",), {(1,): 1}),
+                saturation=_ideal(("x", "y"), {(1, 0): 1}),
+                backend_version="4.4",
+            )

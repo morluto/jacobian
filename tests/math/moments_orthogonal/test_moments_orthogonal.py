@@ -330,3 +330,30 @@ class TestRecurrenceOutputBound:
         )
         result = recurrence_coefficients(moments)
         assert len(result.alpha) == 2
+
+
+class TestRecurrenceComposition:
+    def test_serialized_result_feeds_consumers_unchanged(self) -> None:
+        """A serialized recurrence result composes into the Jacobi and
+        Christoffel-Darboux requests without stripping producer fields."""
+        from jacobian.math.moments_orthogonal._models import (
+            ChristoffelDarbouxRequest,
+            RecurrenceCoefficientsResult,
+        )
+
+        moments = tuple(
+            CanonicalRational.from_fraction(Fraction(1, k + 1)) for k in range(5)
+        )
+        kres = recurrence_coefficients([Fraction(1, k + 1) for k in range(5)])
+        result = RecurrenceCoefficientsResult(
+            moments=moments,
+            alpha=tuple(CanonicalRational.from_fraction(a) for a in kres.alpha),
+            beta=tuple(CanonicalRational.from_fraction(b) for b in kres.beta),
+        )
+        payload = result.model_dump()
+        jacobi = JacobiMatrixRequest.model_validate(payload)
+        assert len(jacobi.alpha) == len(result.alpha)
+        cd = ChristoffelDarbouxRequest.model_validate(
+            {**payload, "x": {"num": "1", "den": "1"}, "y": {"num": "1", "den": "1"}}
+        )
+        assert len(cd.beta) == len(result.beta)

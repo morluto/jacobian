@@ -83,6 +83,18 @@ class WeightProfileRequest(StrictModel):
             raise ValueError(
                 "the zero polynomial has no weight profile; supply a nonzero polynomial"
             )
+        # A degenerate weight repeats every exponent in the minimizing list
+        # and again inside the single layer; cap the serialized profile so
+        # it stays well inside the canonical output envelope.
+        terms = self.polynomial.polynomial.terms
+        if len(terms) > 1024:
+            raise ValueError("weight-profile requests are limited to 1024 terms")
+        for term in terms:
+            for component in (term.coefficient.num, term.coefficient.den):
+                if len(component.lstrip("-")) > 512:
+                    raise ValueError(
+                        "weight-profile coefficients are limited to 512 digits"
+                    )
         return self
 
 

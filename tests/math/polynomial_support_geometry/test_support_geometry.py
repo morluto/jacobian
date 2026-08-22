@@ -240,3 +240,36 @@ class TestTransportableBounds:
                 polynomial=_polynomial(many, VARS),
                 weight=[0, 0],
             )
+
+
+class TestNewtonInvariants:
+    def test_forged_polytope_rejected(self) -> None:
+        from jacobian.math.polynomial_support_geometry.values import NewtonPolytope
+
+        with pytest.raises(ValidationError, match="ambient dimension"):
+            NewtonPolytope(
+                is_zero=False,
+                variables=("x", "y"),
+                ambient_dimension=3,
+                affine_dimension=1,
+                vertices=((2, 0),),
+                nonextreme=(),
+                all_support_exponents=((2, 0),),
+            )
+        with pytest.raises(ValidationError, match="partition"):
+            NewtonPolytope(
+                is_zero=False,
+                variables=("x", "y"),
+                ambient_dimension=2,
+                affine_dimension=1,
+                vertices=((2, 0),),
+                nonextreme=((0, 2),),
+                all_support_exponents=((2, 0), (1, 1)),
+            )
+
+    def test_empty_support_has_no_degree_extrema(self) -> None:
+
+        result = compute_support(SupportRequest(polynomial=_polynomial((), VARS)))
+        assert result.is_zero
+        assert result.total_degree_min is None
+        assert result.total_degree_max is None

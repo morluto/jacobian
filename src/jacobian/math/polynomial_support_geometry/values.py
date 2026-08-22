@@ -35,8 +35,22 @@ class PolynomialSupport(StrictModel):
     variables: tuple[str, ...] = Field(min_length=0, max_length=MAX_NEWTON_DIMENSION)
     coordinate_min: tuple[int, ...] = Field(default=(), max_length=MAX_NEWTON_DIMENSION)
     coordinate_max: tuple[int, ...] = Field(default=(), max_length=MAX_NEWTON_DIMENSION)
-    total_degree_min: int = 0
-    total_degree_max: int = 0
+    # Empty support has no degree extrema; they are None exactly when the
+    # polynomial is zero instead of fabricating the constant polynomial's 0.
+    total_degree_min: int | None = None
+    total_degree_max: int | None = None
+
+    @model_validator(mode="after")
+    def bind_extrema_to_support(self) -> Self:
+        if self.is_zero:
+            if self.total_degree_min is not None or self.total_degree_max is not None:
+                raise ValueError("an empty support carries no degree extrema")
+            if self.exponents or self.coefficients:
+                raise ValueError("a zero support carries no terms")
+            return self
+        if self.total_degree_min is None or self.total_degree_max is None:
+            raise ValueError("a nonzero support must carry its degree extrema")
+        return self
 
 
 class NewtonPolytope(StrictModel):
@@ -60,6 +74,24 @@ class NewtonPolytope(StrictModel):
     all_support_exponents: tuple[tuple[int, ...], ...] = Field(
         default=(), max_length=MAX_SUPPORT_TERMS
     )
+
+    @model_validator(mode="after")
+    def require_newton_invariants(self) -> Self:
+        if self.ambient_dimension != len(self.variables):
+            raise ValueError("ambient dimension must equal the retained variable count")
+        if self.affine_dimension > self.ambient_dimension:
+            raise ValueError("affine dimension cannot exceed the ambient dimension")
+        if not self.is_zero:
+            support = set(self.all_support_exponents)
+            if support != set(self.vertices) | set(self.nonextreme):
+                raise ValueError(
+                    "vertices and nonextreme points must partition the retained support"
+                )
+            if set(self.vertices) & set(self.nonextreme):
+                raise ValueError("an exponent cannot be both a vertex and non-extreme")
+        elif self.vertices or self.nonextreme or self.all_support_exponents:
+            raise ValueError("the zero polynomial has an empty Newton polytope")
+        return self
 
 
 class PolynomialWeightProfile(StrictModel):

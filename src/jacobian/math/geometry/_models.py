@@ -612,11 +612,137 @@ class ConcyclicQuadruple(StrictModel):
         return self
 
 
+def _replay_collinear_prefix(
+    xy: list[tuple[Fraction, Fraction]],
+) -> tuple[bool, int]:
+    """Replay the lexicographic collinear-triple scan and its stopping prefix."""
+    from itertools import combinations
+
+    checked = 0
+    for i, j, k in combinations(range(len(xy)), 3):
+        checked += 1
+        if (
+            (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1])
+            - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
+            == 0
+        ):
+            return True, checked
+    return False, checked
+
+
+def _replay_concyclic_prefix(
+    xy: list[tuple[Fraction, Fraction]],
+) -> tuple[bool, int]:
+    """Replay the lexicographic concyclic-quadruple scan and its stopping prefix."""
+    from itertools import combinations
+
+    checked = 0
+    for i, j, k, ell in combinations(range(len(xy)), 4):
+        checked += 1
+        # Exclude collinear quadruples: see _operations.forbidden_patterns
+        cross_ijk = (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
+        cross_ijl = (xy[j][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
+        cross_ikl = (xy[k][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[k][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
+        cross_jkl = (xy[k][0] - xy[j][0]) * (xy[ell][1] - xy[j][1]) - (xy[k][1] - xy[j][1]) * (xy[ell][0] - xy[j][0])
+        if cross_ijk == 0 and cross_ijl == 0 and cross_ikl == 0 and cross_jkl == 0:
+            continue
+        m = [
+            [x * x + y * y, x, y, 1]
+            for x, y in (xy[i], xy[j], xy[k], xy[ell])
+        ]
+        det = (
+            m[0][0]
+            * (
+                m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
+                - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
+                + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
+            )
+            - m[0][1]
+            * (
+                m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
+                - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
+                + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
+            )
+            + m[0][2]
+            * (
+                m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
+                - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
+                + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
+            )
+            - m[0][3]
+            * (
+                m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
+                - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
+                + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
+            )
+        )
+        if det == 0:
+            return True, checked
+    return False, checked
+
+
+def _require_collinear_witness(
+    xy: list[tuple[Fraction, Fraction]],
+    witness: CollinearTriple,
+    point_count: int,
+) -> None:
+    if witness.third >= point_count:
+        raise ValueError("collinear triple index exceeds configuration")
+    i, j, k = witness.first, witness.second, witness.third
+    if (
+        (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1])
+        - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
+        != 0
+    ):
+        raise ValueError("collinear_triple witness is not collinear")
+
+
+def _require_concyclic_witness(
+    xy: list[tuple[Fraction, Fraction]],
+    witness: ConcyclicQuadruple,
+    point_count: int,
+) -> None:
+    if witness.fourth >= point_count:
+        raise ValueError("concyclic quadruple index exceeds configuration")
+    i, j, k, ell = (
+        witness.first,
+        witness.second,
+        witness.third,
+        witness.fourth,
+    )
+    cross_ijk = (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
+    cross_ijl = (xy[j][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
+    cross_ikl = (xy[k][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[k][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
+    cross_jkl = (xy[k][0] - xy[j][0]) * (xy[ell][1] - xy[j][1]) - (xy[k][1] - xy[j][1]) * (xy[ell][0] - xy[j][0])
+    if cross_ijk == 0 and cross_ijl == 0 and cross_ikl == 0 and cross_jkl == 0:
+        raise ValueError("concyclic witness is collinear")
+    si = xy[i][0] * xy[i][0] + xy[i][1] * xy[i][1]
+    sj = xy[j][0] * xy[j][0] + xy[j][1] * xy[j][1]
+    sk = xy[k][0] * xy[k][0] + xy[k][1] * xy[k][1]
+    sl = xy[ell][0] * xy[ell][0] + xy[ell][1] * xy[ell][1]
+    m = [
+        [si, xy[i][0], xy[i][1], 1],
+        [sj, xy[j][0], xy[j][1], 1],
+        [sk, xy[k][0], xy[k][1], 1],
+        [sl, xy[ell][0], xy[ell][1], 1],
+    ]
+    det = (
+        m[0][0] * (m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2]) - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1]) + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1]))
+        - m[0][1] * (m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2]) - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0]) + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0]))
+        + m[0][2] * (m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1]) - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0]) + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]))
+        - m[0][3] * (m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1]) - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0]) + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]))
+    )
+    if det != 0:
+        raise ValueError("concyclic witness is not concyclic")
+
+
 class ForbiddenPatternsResult(StrictModel):
     """Result of screening a configuration for forbidden patterns.
 
     Retains its source configuration so both predicates replay against the
-    exact points instead of trusting independently authored booleans.
+    exact points instead of trusting independently authored booleans, and the
+    reported checked counts must equal the exact lexicographic stopping
+    prefixes of that replay.
     """
 
     configuration: ForbiddenConfiguration
@@ -637,56 +763,9 @@ class ForbiddenPatternsResult(StrictModel):
             (item.point.x.as_fraction(), item.point.y.as_fraction())
             for item in self.configuration.points
         ]
-        from itertools import combinations
 
-        recomputed_collinear = any(
-            (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1])
-            - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
-            == 0
-            for i, j, k in combinations(range(len(xy)), 3)
-        )
-        recomputed_concyclic = False
-        for i, j, k, ell in combinations(range(len(xy)), 4):
-            # Exclude collinear quadruples: see _operations.forbidden_patterns
-            cross_ijk = (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
-            cross_ijl = (xy[j][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
-            cross_ikl = (xy[k][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[k][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
-            cross_jkl = (xy[k][0] - xy[j][0]) * (xy[ell][1] - xy[j][1]) - (xy[k][1] - xy[j][1]) * (xy[ell][0] - xy[j][0])
-            if cross_ijk == 0 and cross_ijl == 0 and cross_ikl == 0 and cross_jkl == 0:
-                continue
-            m = [
-                [x * x + y * y, x, y, 1]
-                for x, y in (xy[i], xy[j], xy[k], xy[ell])
-            ]
-            det = (
-                m[0][0]
-                * (
-                    m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
-                    - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
-                    + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
-                )
-                - m[0][1]
-                * (
-                    m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
-                    - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
-                    + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
-                )
-                + m[0][2]
-                * (
-                    m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
-                    - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
-                    + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
-                )
-                - m[0][3]
-                * (
-                    m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
-                    - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
-                    + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
-                )
-            )
-            if det == 0:
-                recomputed_concyclic = True
-                break
+        recomputed_collinear, checked_triples = _replay_collinear_prefix(xy)
+        recomputed_concyclic, checked_quadruples = _replay_concyclic_prefix(xy)
         if (
             self.has_collinear_triple != recomputed_collinear
             or self.has_concyclic_quadruple != recomputed_concyclic
@@ -695,54 +774,27 @@ class ForbiddenPatternsResult(StrictModel):
                 "forbidden-pattern decisions must match an exact replay over "
                 "the retained configuration"
             )
+        if self.checked_triples != checked_triples:
+            raise ValueError(
+                "checked_triples must equal the exact lexicographic scan "
+                "prefix over the retained configuration"
+            )
+        if self.checked_quadruples != checked_quadruples:
+            raise ValueError(
+                "checked_quadruples must equal the exact lexicographic scan "
+                "prefix over the retained configuration"
+            )
         if self.has_collinear_triple is (self.collinear_triple is None):
             raise ValueError("exactly a collinear triple carries one witness")
         if self.has_concyclic_quadruple is (self.concyclic_quadruple is None):
             raise ValueError("exactly a concyclic quadruple carries one witness")
-        if (
-            self.collinear_triple is not None
-            and self.collinear_triple.third >= self.point_count
-        ):
-            raise ValueError("collinear triple index exceeds configuration")
-        if (
-            self.concyclic_quadruple is not None
-            and self.concyclic_quadruple.fourth >= self.point_count
-        ):
-            raise ValueError("concyclic quadruple index exceeds configuration")
         # Validate that the supplied witnesses actually satisfy the predicates
         if self.collinear_triple is not None:
-            i, j, k = self.collinear_triple.first, self.collinear_triple.second, self.collinear_triple.third
-            if (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0]) != 0:
-                raise ValueError("collinear_triple witness is not collinear")
+            _require_collinear_witness(
+                xy, self.collinear_triple, self.point_count
+            )
         if self.concyclic_quadruple is not None:
-            i, j, k, ell = (
-                self.concyclic_quadruple.first,
-                self.concyclic_quadruple.second,
-                self.concyclic_quadruple.third,
-                self.concyclic_quadruple.fourth,
+            _require_concyclic_witness(
+                xy, self.concyclic_quadruple, self.point_count
             )
-            cross_ijk = (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
-            cross_ijl = (xy[j][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
-            cross_ikl = (xy[k][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[k][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
-            cross_jkl = (xy[k][0] - xy[j][0]) * (xy[ell][1] - xy[j][1]) - (xy[k][1] - xy[j][1]) * (xy[ell][0] - xy[j][0])
-            if cross_ijk == 0 and cross_ijl == 0 and cross_ikl == 0 and cross_jkl == 0:
-                raise ValueError("concyclic witness is collinear")
-            si = xy[i][0] * xy[i][0] + xy[i][1] * xy[i][1]
-            sj = xy[j][0] * xy[j][0] + xy[j][1] * xy[j][1]
-            sk = xy[k][0] * xy[k][0] + xy[k][1] * xy[k][1]
-            sl = xy[ell][0] * xy[ell][0] + xy[ell][1] * xy[ell][1]
-            m = [
-                [si, xy[i][0], xy[i][1], 1],
-                [sj, xy[j][0], xy[j][1], 1],
-                [sk, xy[k][0], xy[k][1], 1],
-                [sl, xy[ell][0], xy[ell][1], 1],
-            ]
-            det = (
-                m[0][0] * (m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2]) - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1]) + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1]))
-                - m[0][1] * (m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2]) - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0]) + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0]))
-                + m[0][2] * (m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1]) - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0]) + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]))
-                - m[0][3] * (m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1]) - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0]) + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]))
-            )
-            if det != 0:
-                raise ValueError("concyclic witness is not concyclic")
         return self

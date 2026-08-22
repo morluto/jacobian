@@ -15,6 +15,34 @@ from jacobian.math.prime_field_linear_algebra import (
 )
 
 MAX_DIMENSION = 256
+# The modulus carries at most MAX_MODULUS_DIGITS decimal digits (about 213
+# bits): dense elimination performs at most MAX_DIMENSION**3 modular
+# multiply-adds on residues below the modulus, so primality testing,
+# inversion, Gaussian elimination, and result replay stay inside the declared
+# work budget. Entries are canonical residues 0..prime-1 and therefore inherit
+# the same ceiling.
+MAX_MODULUS_DIGITS = 64
+_MAX_MODULUS_MAGNITUDE = 10**MAX_MODULUS_DIGITS
+
+
+def _require_bounded_prime_field_matrix(
+    *, prime: int, entries: tuple[tuple[int, ...], ...], columns: int
+) -> None:
+    if prime >= _MAX_MODULUS_MAGNITUDE:
+        raise ValueError(
+            f"prime exceeds the {MAX_MODULUS_DIGITS}-digit modulus bound"
+        )
+    if len(entries) > MAX_DIMENSION:
+        raise ValueError("matrix exceeds the supported dimension bound")
+    if any(len(row) != columns for row in entries):
+        raise ValueError("every row must match the declared column count")
+    if any(
+        type(value) is not int or not 0 <= value < prime
+        for row in entries
+        for value in row
+    ):
+        raise ValueError("entries must be canonical prime-field residues")
+    PrimeFieldMatrix(prime=prime, entries=entries, columns=columns)
 
 
 class PrimeFieldMatrixRequest(StrictModel):
@@ -24,27 +52,10 @@ class PrimeFieldMatrixRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
-        if len(self.entries) > MAX_DIMENSION:
-            raise ValueError("matrix exceeds the supported dimension bound")
-        if any(len(row) != self.columns for row in self.entries):
-            raise ValueError("every row must match the declared column count")
-        if any(
-            type(value) is not int or not 0 <= value < self.prime
-            for row in self.entries
-            for value in row
-        ):
-            raise ValueError("entries must be canonical prime-field residues")
-        if not self.entries and self.columns == 0:
-            return self
-        _PrimeFieldMatrixValidator(prime=self.prime, entries=self.entries, columns=self.columns)
+        _require_bounded_prime_field_matrix(
+            prime=self.prime, entries=self.entries, columns=self.columns
+        )
         return self
-
-
-class _PrimeFieldMatrixValidator:
-    """Trigger PrimeFieldMatrix validation."""
-
-    def __init__(self, prime, entries, columns):
-        PrimeFieldMatrix(prime=prime, entries=entries, columns=columns)
 
 
 class RankRequest(StrictModel):
@@ -54,17 +65,9 @@ class RankRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
-        if len(self.entries) > MAX_DIMENSION:
-            raise ValueError("matrix exceeds the supported dimension bound")
-        if any(len(row) != self.columns for row in self.entries):
-            raise ValueError("every row must match the declared column count")
-        if any(
-            type(value) is not int or not 0 <= value < self.prime
-            for row in self.entries
-            for value in row
-        ):
-            raise ValueError("entries must be canonical prime-field residues")
-        PrimeFieldMatrix(prime=self.prime, entries=self.entries, columns=self.columns)
+        _require_bounded_prime_field_matrix(
+            prime=self.prime, entries=self.entries, columns=self.columns
+        )
         return self
 
 
@@ -101,17 +104,9 @@ class RrefRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
-        if len(self.entries) > MAX_DIMENSION:
-            raise ValueError("matrix exceeds the supported dimension bound")
-        if any(len(row) != self.columns for row in self.entries):
-            raise ValueError("every row must match the declared column count")
-        if any(
-            type(value) is not int or not 0 <= value < self.prime
-            for row in self.entries
-            for value in row
-        ):
-            raise ValueError("entries must be canonical prime-field residues")
-        PrimeFieldMatrix(prime=self.prime, entries=self.entries, columns=self.columns)
+        _require_bounded_prime_field_matrix(
+            prime=self.prime, entries=self.entries, columns=self.columns
+        )
         return self
 
 
@@ -147,17 +142,9 @@ class NullspaceRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
-        if len(self.entries) > MAX_DIMENSION:
-            raise ValueError("matrix exceeds the supported dimension bound")
-        if any(len(row) != self.columns for row in self.entries):
-            raise ValueError("every row must match the declared column count")
-        if any(
-            type(value) is not int or not 0 <= value < self.prime
-            for row in self.entries
-            for value in row
-        ):
-            raise ValueError("entries must be canonical prime-field residues")
-        PrimeFieldMatrix(prime=self.prime, entries=self.entries, columns=self.columns)
+        _require_bounded_prime_field_matrix(
+            prime=self.prime, entries=self.entries, columns=self.columns
+        )
         return self
 
 
@@ -187,6 +174,7 @@ class NullspaceResult(NullspaceRequest):
 
 
 __all__ = [
+    "MAX_MODULUS_DIGITS",
     "NullspaceRequest",
     "NullspaceResult",
     "RankRequest",

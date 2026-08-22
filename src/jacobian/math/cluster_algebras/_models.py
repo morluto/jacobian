@@ -9,14 +9,19 @@ from pydantic import Field, model_validator
 from jacobian._models import StrictModel
 
 MAX_EXCHANGE_SIZE = 16
-# Admitted seeds carry bounded integer coefficients: entries and symmetrizer
-# entries stay below 10**MAX_EXCHANGE_ENTRY_DIGITS. Mutation forms
-# b_ij + b_ik * b_kj, whose magnitude reaches 10**(2 * D) - 10**D for admitted
-# entries below 10**D, so results admit that derived bound plus one digit of
-# slack while every skew-symmetrizability product stays bounded work.
+# Exchange-matrix values carry bounded integers so every skew-symmetrizability
+# product stays bounded work: symmetrizer entries stay below
+# 10**MAX_EXCHANGE_ENTRY_DIGITS and entries below 10**MAX_MUTATED_ENTRY_DIGITS.
+# Mutation forms b_ij + [b_ik]_+[b_kj]_+ - [-b_ik]_+[-b_kj]_+, whose magnitude
+# reaches roughly 10**(2 * D) for entries below 10**D, so no static seed cap
+# can admit its own results: SeedMutationRequest instead derives the exact
+# one-step growth of its matrix at the requested index and admits only seeds
+# whose mutated result stays within the representation ceiling. Every returned
+# mutation result is therefore itself an admissible input.
 MAX_EXCHANGE_ENTRY_DIGITS = 64
 MAX_MUTATED_ENTRY_DIGITS = 2 * MAX_EXCHANGE_ENTRY_DIGITS + 1
-_MAX_INPUT_ENTRY_MAGNITUDE = 10**MAX_EXCHANGE_ENTRY_DIGITS
+_MAX_SYMMETRIZER_MAGNITUDE = 10**MAX_EXCHANGE_ENTRY_DIGITS
+_MAX_ENTRY_MAGNITUDE = 10**MAX_MUTATED_ENTRY_DIGITS
 
 
 def _require_bounded_entries(matrix: ExchangeMatrix, *, max_digits: int) -> None:
@@ -32,16 +37,32 @@ def _require_bounded_entries(matrix: ExchangeMatrix, *, max_digits: int) -> None
 
 
 def _require_bounded_symmetrizer(matrix: ExchangeMatrix) -> None:
-    if any(abs(d) >= _MAX_INPUT_ENTRY_MAGNITUDE for d in matrix.symmetrizer):
+    if any(abs(d) >= _MAX_SYMMETRIZER_MAGNITUDE for d in matrix.symmetrizer):
         raise ValueError(
             "symmetrizer coefficients exceed the "
             f"{MAX_EXCHANGE_ENTRY_DIGITS}-digit bound"
         )
 
 
-def _require_input_seed(matrix: ExchangeMatrix) -> None:
-    """Narrow admitted seeds so mutation output stays within the result bound."""
-    _require_bounded_entries(matrix, max_digits=MAX_EXCHANGE_ENTRY_DIGITS)
+def _require_mutatable(matrix: ExchangeMatrix, index: int) -> None:
+    """Admit exactly those mutations whose result stays representable."""
+    rows = matrix.entries
+    pivot_row = rows[index]
+    for i, row in enumerate(rows):
+        positive_i = max(row[index], 0)
+        negative_i = max(-row[index], 0)
+        for j, b_ij in enumerate(row):
+            if i == index or j == index:
+                continue
+            b_kj = pivot_row[j]
+            growth = abs(
+                positive_i * max(b_kj, 0) - negative_i * max(-b_kj, 0)
+            )
+            if abs(b_ij) + growth >= _MAX_ENTRY_MAGNITUDE:
+                raise ValueError(
+                    "mutation result exceeds the "
+                    f"{MAX_MUTATED_ENTRY_DIGITS}-digit exchange-matrix bound"
+                )
 
 
 def _require_shape(matrix: ExchangeMatrix) -> None:
@@ -70,7 +91,8 @@ class ExchangeMatrix(StrictModel):
     @model_validator(mode="after")
     def require_valid_matrix(self) -> Self:
         # The representation ceiling keeps every skew-symmetrizability product
-        # bounded; admitted requests narrow this further via _require_input_seed.
+        # bounded; mutation requests further derive their one-step growth via
+        # _require_mutatable.
         _require_bounded_entries(
             self, max_digits=MAX_MUTATED_ENTRY_DIGITS
         )
@@ -103,7 +125,7 @@ class SeedMutationRequest(StrictModel):
     def require_valid_index(self) -> Self:
         if self.mutation_index >= self.exchange_matrix.n:
             raise ValueError("mutation_index must be in 0..n-1")
-        _require_input_seed(self.exchange_matrix)
+        _require_mutatable(self.exchange_matrix, self.mutation_index)
         return self
 
 
@@ -115,14 +137,13 @@ class SeedMutationResult(StrictModel):
 
 
 class GVectorRequest(StrictModel):
-    """Compute the g-vector matrix for principal coefficients."""
+    """Compute the g-vector matrix for principal coefficients.
+
+    The result is the identity matrix of the seed, so the exchange matrix's
+    own representation ceilings bound all accepted work.
+    """
 
     exchange_matrix: ExchangeMatrix
-
-    @model_validator(mode="after")
-    def require_admissible_seed(self) -> Self:
-        _require_input_seed(self.exchange_matrix)
-        return self
 
 
 def _identity_matrix(n: int) -> tuple[tuple[int, ...], ...]:

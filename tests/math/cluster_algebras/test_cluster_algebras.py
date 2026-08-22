@@ -85,22 +85,40 @@ class TestSeedMutation:
 
 
 class TestCoefficientBounds:
-    """Admitted seeds are bounded so mutation output stays bounded."""
+    """Admitted seeds derive their mutation budget from their own entries."""
 
-    def test_request_rejects_entry_beyond_input_bound(self):
+    def test_mutation_result_is_admissible_as_next_input(self):
+        # A valid mutation output composes back into the same operation.
+        edge = 10**63
         b = ExchangeMatrix(
-            n=2, entries=((0, 10**64), (-(10**64), 0)), symmetrizer=(1, 1)
+            n=3,
+            entries=((0, edge, 0), (-edge, 0, edge), (0, -edge, 0)),
+            symmetrizer=(1, 1, 1),
         )
-        with pytest.raises(ValidationError, match="64-digit bound"):
-            SeedMutationRequest(exchange_matrix=b, mutation_index=0)
+        result = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=1))
+        assert abs(result.exchange_matrix.entries[0][2]) == edge * edge
+        composed = SeedMutationRequest(
+            exchange_matrix=result.exchange_matrix, mutation_index=1
+        )
+        assert mutate_seed(composed).exchange_matrix.entries == b.entries
 
-    def test_request_accepts_entry_at_input_bound(self):
-        edge = 10**64 - 1
+    def test_request_rejects_mutation_exceeding_representation_ceiling(self):
+        edge = 10**100
+        b = ExchangeMatrix(
+            n=3,
+            entries=((0, edge, 0), (-edge, 0, edge), (0, -edge, 0)),
+            symmetrizer=(1, 1, 1),
+        )
+        with pytest.raises(ValidationError, match="mutation result exceeds"):
+            SeedMutationRequest(exchange_matrix=b, mutation_index=1)
+
+    def test_request_accepts_large_entries_under_negation_only_mutation(self):
+        edge = 10**129 - 1
         b = ExchangeMatrix(n=2, entries=((0, edge), (-edge, 0)), symmetrizer=(1, 1))
         result = mutate_seed(SeedMutationRequest(exchange_matrix=b, mutation_index=0))
         assert result.exchange_matrix.entries == ((0, -edge), (edge, 0))
 
-    def test_mutation_near_input_bound_stays_within_result_ceiling(self):
+    def test_mutation_near_bound_stays_within_result_ceiling(self):
         # Mutating a path matrix at the middle index forms an entry of
         # magnitude ~N^2; it must remain an admissible exchange matrix.
         edge = 10**63
@@ -132,12 +150,15 @@ class TestCoefficientBounds:
                 n=2, entries=((0, huge), (-huge, 0)), symmetrizer=(1, 1)
             )
 
-    def test_gvector_request_rejects_unbounded_coefficients(self):
+    def test_gvector_request_accepts_representable_coefficients(self):
+        # The g-vector result is the identity, so any representable seed works.
         b = ExchangeMatrix(
-            n=2, entries=((0, 10**64 + 1), (-(10**64 + 1), 0)), symmetrizer=(1, 1)
+            n=2,
+            entries=((0, 10**64 + 1), (-(10**64 + 1), 0)),
+            symmetrizer=(1, 1),
         )
-        with pytest.raises(ValidationError, match="64-digit bound"):
-            GVectorRequest(exchange_matrix=b)
+        result = compute_g_vectors(GVectorRequest(exchange_matrix=b))
+        assert result.g_matrix == ((1, 0), (0, 1))
 
 
 class TestGVectorBinding:

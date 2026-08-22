@@ -2,9 +2,11 @@
 
 import pytest
 from pydantic import ValidationError
+from sympy import prevprime
 
 from jacobian.math.prime_field_matrix_ops._models import (
     NullspaceRequest,
+    PrimeFieldMatrixRequest,
     RankRequest,
     RankResult,
     RrefRequest,
@@ -81,6 +83,30 @@ class TestRank:
     def test_ragged_rows_rejected(self) -> None:
         with pytest.raises(ValidationError):
             RankRequest(prime=2, entries=[[1, 0], [0]], columns=2)
+
+
+class TestModulusBound:
+    """Admitted prime fields derive a bounded-work modulus ceiling."""
+
+    def test_oversized_prime_rejected_even_without_entries(self) -> None:
+        huge = 10**64
+        with pytest.raises(ValidationError, match="64-digit modulus bound"):
+            RankRequest(prime=huge, entries=[], columns=0)
+        with pytest.raises(ValidationError, match="64-digit modulus bound"):
+            RrefRequest(prime=huge, entries=[], columns=0)
+        with pytest.raises(ValidationError, match="64-digit modulus bound"):
+            NullspaceRequest(prime=huge, entries=[], columns=0)
+        with pytest.raises(ValidationError, match="64-digit modulus bound"):
+            PrimeFieldMatrixRequest(prime=huge, entries=[], columns=0)
+
+    def test_prime_at_modulus_boundary_admitted(self) -> None:
+        edge = prevprime(10**64)
+        request = RankRequest(prime=edge, entries=[], columns=0)
+        assert request.prime == edge
+
+    def test_residues_inherit_the_modulus_ceiling(self) -> None:
+        with pytest.raises(ValidationError, match="canonical prime-field residues"):
+            RankRequest(prime=5, entries=[[10**64]], columns=1)
 
 
 class TestRref:

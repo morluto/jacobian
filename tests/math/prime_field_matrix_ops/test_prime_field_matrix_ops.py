@@ -63,13 +63,14 @@ class TestRref:
     def test_basic_rref(self) -> None:
         req = RrefRequest(matrix=PrimeFieldMatrix(prime=2, entries=[[1, 1, 0], [0, 1, 1]], columns=3))
         result = compute_rref(req)
-        assert result.rref_rows == ((1, 0, 1), (0, 1, 1))
+        assert result.rref_matrix.entries == ((1, 0, 1), (0, 1, 1))
+        assert result.rref_matrix.prime == 2
         assert result.pivot_columns == (0, 1)
 
     def test_identity_matrix(self) -> None:
         req = RrefRequest(matrix=PrimeFieldMatrix(prime=7, entries=[[1, 0], [0, 1]], columns=2))
         result = compute_rref(req)
-        assert result.rref_rows == ((1, 0), (0, 1))
+        assert result.rref_matrix.entries == ((1, 0), (0, 1))
         assert result.pivot_columns == (0, 1)
 
     def test_zero_matrix(self) -> None:

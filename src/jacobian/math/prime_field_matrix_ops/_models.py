@@ -54,7 +54,7 @@ class RrefRequest(_BoundedMatrixRequest):
 
 
 class RrefResult(RrefRequest):
-    rref_rows: tuple[tuple[int, ...], ...]
+    rref_matrix: PrimeFieldMatrix
     pivot_columns: tuple[int, ...]
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_RREF"] = "EXACT_DOMAIN_MATRIX_RREF"
@@ -62,8 +62,14 @@ class RrefResult(RrefRequest):
     @model_validator(mode="after")
     def bind_rref(self) -> Self:
         expected_rows, expected_pivots = rref(self.matrix)
-        if self.rref_rows != expected_rows:
-            raise ValueError("rref_rows must be the exact reduced row-echelon form")
+        if (
+            self.rref_matrix.entries != expected_rows
+            or self.rref_matrix.prime != self.matrix.prime
+            or self.rref_matrix.columns != self.matrix.columns
+        ):
+            raise ValueError(
+                "rref_matrix must be the exact reduced row-echelon form"
+            )
         if self.pivot_columns != expected_pivots:
             raise ValueError("pivot_columns must be the exact pivot column sequence")
         return self

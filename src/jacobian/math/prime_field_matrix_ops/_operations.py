@@ -1,6 +1,7 @@
 """Wire adapters for prime-field matrix operations."""
 
 from jacobian.math.prime_field_linear_algebra import (
+    PrimeFieldMatrix,
     nullspace,
     rank,
     rref,
@@ -21,9 +22,14 @@ def compute_rank(request: RankRequest) -> RankResult:
 
 def compute_rref(request: RrefRequest) -> RrefResult:
     rref_rows, pivot_columns = rref(request.matrix)
+    rref_matrix = PrimeFieldMatrix(
+        prime=request.matrix.prime,
+        entries=rref_rows,
+        columns=request.matrix.columns,
+    )
     return RrefResult(
         matrix=request.matrix,
-        rref_rows=rref_rows,
+        rref_matrix=rref_matrix,
         pivot_columns=pivot_columns,
     )
 

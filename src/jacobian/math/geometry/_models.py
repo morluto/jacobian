@@ -391,31 +391,31 @@ class CircumradiusProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_unique_labels_and_coordinates(self) -> Self:
-        labels = tuple(item.label for item in self.points)
-        if len(labels) != len(set(labels)):
-            raise ValueError("point labels must be unique")
-        keys = tuple(
-            (
-                item.point.x.num,
-                item.point.x.den,
-                item.point.y.num,
-                item.point.y.den,
-            )
-            for item in self.points
-        )
-        if len(keys) != len(set(keys)):
-            raise ValueError("point coordinates must be unique")
-        for item in self.points:
-            for value in (item.point.x, item.point.y):
-                if RationalHeight.from_canonical(value).exceeds(
-                    MAX_CIRCUMRADIUS_COORDINATE_DIGITS
-                ):
-                    raise ValueError(
-                        "circumradius coordinates exceed the conservative "
-                        f"{MAX_CIRCUMRADIUS_COORDINATE_DIGITS}-digit input "
-                        "bound for exact bounded output"
-                    )
+        _require_admitted_configuration(self.points)
         return self
+
+
+def _require_admitted_configuration(points: tuple[LabelledPoint2D, ...]) -> None:
+    """Admission checks shared by the request and retained profile points."""
+    labels = tuple(item.label for item in points)
+    if len(labels) != len(set(labels)):
+        raise ValueError("point labels must be unique")
+    keys = tuple(
+        (item.point.x.num, item.point.x.den, item.point.y.num, item.point.y.den)
+        for item in points
+    )
+    if len(keys) != len(set(keys)):
+        raise ValueError("point coordinates must be unique")
+    for item in points:
+        for value in (item.point.x, item.point.y):
+            if RationalHeight.from_canonical(value).exceeds(
+                MAX_CIRCUMRADIUS_COORDINATE_DIGITS
+            ):
+                raise ValueError(
+                    "circumradius coordinates exceed the conservative "
+                    f"{MAX_CIRCUMRADIUS_COORDINATE_DIGITS}-digit input "
+                    "bound for exact bounded output"
+                )
 
 
 class CircumradiusTripleEntry(StrictModel):
@@ -529,6 +529,9 @@ class CircumradiusProfileResult(StrictModel):
     def require_complete_source_bound_profile(self) -> Self:
         if len(self.entries) != self.triple_count:
             raise ValueError("circumradius profile must be complete")
+        # Revalidated results must carry an admissible configuration: apply
+        # the request's unique-label/coordinate and height constraints.
+        _require_admitted_configuration(self.points)
         _require_triple_index_coverage(self.point_count, self.entries)
         if len(self.points) != self.point_count:
             raise ValueError("points length must match point_count")

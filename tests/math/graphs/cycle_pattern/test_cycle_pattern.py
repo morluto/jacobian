@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.graphs.cycle_pattern._models import (
     FixedLengthCycleRequest,
+    FixedLengthCycleResult,
+    SubgraphEmbedding,
     SubgraphPatternRequest,
+    SubgraphPatternResult,
     UndirectedGraph,
 )
 from jacobian.math.graphs.cycle_pattern._operations import (
@@ -163,3 +167,55 @@ class TestSubgraphPattern:
         )
         result = find_subgraph_pattern(SubgraphPatternRequest(host=host, pattern=pattern))
         assert not result.exists
+
+
+class TestBoundedSearchAndWitnessBinding:
+    """Searches carry a deterministic work bound; witnesses replay sources."""
+
+    def _graph(self, n, edges):
+        return {"vertex_count": n, "edges": [list(e) for e in edges]}
+
+    def test_cycle_witness_replays_against_source_edges(self):
+        request = FixedLengthCycleRequest(
+            graph=UndirectedGraph.model_validate(self._graph(4, [(0, 1), (1, 2), (2, 3), (3, 0)])),
+            length=4,
+        )
+        result = decide_fixed_length_cycle(request)
+        assert result.exists and result.cycle is not None
+        # A witness whose edges do not exist in the source graph is rejected.
+        with pytest.raises(ValidationError, match="replay"):
+            FixedLengthCycleResult(
+                graph=request.graph,
+                vertex_count=4,
+                length=4,
+                exists=True,
+                cycle=(0, 1, 3, 2),
+            )
+
+    def test_embedding_preserves_pattern_edges_or_rejected(self):
+        host = UndirectedGraph.model_validate(self._graph(4, [(0, 1), (1, 2), (2, 3), (3, 0), (0, 2)]))
+        pattern = UndirectedGraph.model_validate(self._graph(3, [(0, 1), (1, 2), (2, 0)]))
+        result = find_subgraph_pattern(SubgraphPatternRequest(host=host, pattern=pattern))
+        assert result.exists
+        with pytest.raises(ValidationError):
+            SubgraphPatternResult(
+                host_graph=host,
+                pattern_graph=pattern,
+                host_vertex_count=4,
+                pattern_vertex_count=3,
+                exists=True,
+                embedding=SubgraphEmbedding(mapping=((0, 0), (1, 1), (2, 3))),
+            )
+
+    def test_budget_exceeded_is_typed_not_hang(self, monkeypatch):
+        """A triangle-free dense graph cannot decide k=3 within a tiny budget."""
+        from jacobian.math.graphs.cycle_pattern import _operations as ops
+
+        graph = UndirectedGraph.model_validate(
+            self._graph(32, [(a, b) for a in range(16) for b in range(16, 32)])
+        )
+        monkeypatch.setattr(ops, "MAX_SEARCH_NODES", 100)
+        request = FixedLengthCycleRequest(graph=graph, length=3)
+        result = ops.decide_fixed_length_cycle(request)
+        assert result.outcome == "SEARCH_BUDGET_EXCEEDED"
+        assert result.exists is None and result.cycle is None

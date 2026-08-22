@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -46,23 +46,66 @@ class FixedLengthCycleRequest(StrictModel):
         return self
 
 
-class FixedLengthCycleResult(StrictModel):
-    """Whether a simple k-cycle exists, with an explicit witness."""
+class SearchOutcome(StrictModel):
+    """Shared outcome discriminator for bounded exhaustive searches."""
 
+    outcome: Literal["DECIDED", "SEARCH_BUDGET_EXCEEDED"] = "DECIDED"
+    detail: str | None = None
+
+    @model_validator(mode="after")
+    def require_outcome_shape(self) -> Self:
+        if self.outcome == "DECIDED":
+            if self.detail is not None:
+                raise ValueError("decided searches carry no failure detail")
+        elif self.detail is None:
+            raise ValueError("an exceeded search budget carries a detail")
+        return self
+
+
+class FixedLengthCycleResult(SearchOutcome):
+    """Whether a simple k-cycle exists, with an explicit witness.
+
+    Carries its source graph so the witness replays against the exact edge
+    relation instead of trusting vertex bookkeeping.
+    """
+
+    graph: UndirectedGraph
     vertex_count: int = Field(ge=1, le=64)
     length: int = Field(ge=3, le=20)
-    exists: bool
+    exists: bool | None = None
     cycle: tuple[int, ...] | None = None
 
     @model_validator(mode="after")
     def bind_witness(self) -> Self:
+        if self.outcome != "DECIDED":
+            if self.exists is not None or self.cycle is not None:
+                raise ValueError(
+                    "a budget-exceeded search returns neither claim nor witness"
+                )
+            return self
+        if self.exists is None:
+            raise ValueError("a decided search states whether the cycle exists")
         if self.exists is (self.cycle is None):
             raise ValueError("exactly an existing cycle carries one witness")
         if self.cycle is not None:
             if len(self.cycle) != self.length:
-                raise ValueError("witness cycle length must match the declared length")
+                raise ValueError(
+                    "witness cycle length must match the declared length"
+                )
             if len(set(self.cycle)) != self.length:
                 raise ValueError("witness cycle vertices must be distinct")
+            if any(v >= self.graph.vertex_count for v in self.cycle):
+                raise ValueError("witness cycle vertices must lie in the graph")
+            edges = {
+                (min(a, b), max(a, b))
+                for a, b in self.graph.edges
+            }
+            for index, u in enumerate(self.cycle):
+                v = self.cycle[(index + 1) % len(self.cycle)]
+                if (min(u, v), max(u, v)) not in edges:
+                    raise ValueError(
+                        "witness cycle must replay as edges of the source graph"
+                    )
         return self
 
 
@@ -97,21 +140,50 @@ class SubgraphEmbedding(StrictModel):
         return self
 
 
-class SubgraphPatternResult(StrictModel):
-    """Whether a subgraph embedding exists, with an explicit witness."""
+class SubgraphPatternResult(SearchOutcome):
+    """Whether a subgraph embedding exists, with an explicit witness.
 
+    Carries both source graphs so the embedding replays injectivity, domain
+    coverage, and exact edge preservation against the inputs.
+    """
+
+    host_graph: UndirectedGraph
+    pattern_graph: UndirectedGraph
     host_vertex_count: int = Field(ge=1, le=64)
     pattern_vertex_count: int = Field(ge=1, le=64)
-    exists: bool
+    exists: bool | None = None
     embedding: SubgraphEmbedding | None = None
 
     @model_validator(mode="after")
     def bind_witness(self) -> Self:
+        if (
+            self.host_vertex_count != self.host_graph.vertex_count
+            or self.pattern_vertex_count != self.pattern_graph.vertex_count
+        ):
+            raise ValueError("vertex counts must match their source graphs")
+        if self.outcome != "DECIDED":
+            if self.exists is not None or self.embedding is not None:
+                raise ValueError(
+                    "a budget-exceeded search returns neither claim nor witness"
+                )
+            return self
+        if self.exists is None:
+            raise ValueError("a decided search states whether an embedding exists")
         if self.exists is (self.embedding is None):
             raise ValueError("exactly an existing embedding carries one witness")
         if self.embedding is not None:
-            if len(self.embedding.mapping) != self.pattern_vertex_count:
-                raise ValueError("embedding must map every pattern vertex")
+            mapping = dict(self.embedding.mapping)
+            if set(mapping) != set(range(self.pattern_graph.vertex_count)):
+                raise ValueError("embedding must cover every pattern vertex")
+            if any(hv >= self.host_graph.vertex_count for hv in mapping.values()):
+                raise ValueError("embedding codomain must lie in the host graph")
+            host_edges = {(min(a, b), max(a, b)) for a, b in self.host_graph.edges}
+            for a, b in self.pattern_graph.edges:
+                ha, hb = mapping[a], mapping[b]
+                if (min(ha, hb), max(ha, hb)) not in host_edges:
+                    raise ValueError(
+                        "embedding must preserve every pattern edge in the host"
+                    )
         return self
 
 

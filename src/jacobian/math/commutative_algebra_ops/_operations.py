@@ -86,7 +86,6 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
 
     from jacobian.math.polynomials.values import (
         RationalPolynomialIdeal,
-        SparseRationalPolynomial,
     )
     saturation_ideal = RationalPolynomialIdeal(
         variables=request.ideal.variables,

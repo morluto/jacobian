@@ -13,6 +13,10 @@ from jacobian.math.graphs.cycle_pattern._models import (
     UndirectedGraph,
 )
 
+# Backtracking recursion nodes across one request; a schema-valid request
+# cannot occupy the inline path beyond this deterministic work bound.
+MAX_SEARCH_NODES = 2_000_000
+
 
 def _build_graph(graph: UndirectedGraph) -> nx.Graph[int]:
     g: nx.Graph[int] = nx.Graph()
@@ -34,28 +38,58 @@ def decide_fixed_length_cycle(
     g = _build_graph(request.graph)
     k = request.length
     n = request.graph.vertex_count
+    budget = _NodeBudget()
 
     for start in range(n):
-        found = _search_cycle_from(g, start, k)
+        found = _search_cycle_from(g, start, k, budget)
         if found is not None:
             return FixedLengthCycleResult(
+                graph=request.graph,
                 vertex_count=n,
                 length=k,
                 exists=True,
                 cycle=tuple(found),
             )
+        if budget.exceeded():
+            return FixedLengthCycleResult(
+                graph=request.graph,
+                vertex_count=n,
+                length=k,
+                outcome="SEARCH_BUDGET_EXCEEDED",
+                detail=(
+                    f"cycle search exceeded {MAX_SEARCH_NODES} recursion "
+                    "nodes without deciding"
+                ),
+            )
 
     return FixedLengthCycleResult(
+        graph=request.graph,
         vertex_count=n,
         length=k,
         exists=False,
     )
 
 
+class _NodeBudget:
+    """Deterministic recursion-node counter bounding one search."""
+
+    def __init__(self, limit: int | None = None) -> None:
+        # Read the module bound at construction so tests can narrow it.
+        self._limit = MAX_SEARCH_NODES if limit is None else limit
+        self._used = 0
+
+    def tick(self) -> None:
+        self._used += 1
+
+    def exceeded(self) -> bool:
+        return self._used >= self._limit
+
+
 def _search_cycle_from(
     g: nx.Graph[int],
     start: int,
     k: int,
+    budget: _NodeBudget,
 ) -> list[int] | None:
     """Find the lexicographically smallest simple k-cycle through ``start``.
 
@@ -68,6 +102,7 @@ def _search_cycle_from(
     visited: set[int] = {start}
 
     def dfs(depth: int) -> list[int] | None:
+        budget.tick()
         if depth == k:
             if start in g.neighbors(path[-1]):
                 return list(path)
@@ -111,15 +146,26 @@ def find_subgraph_pattern(
         v: set(host_g.neighbors(v)) for v in host_g.nodes()
     }
 
+    pattern_degrees = {
+        v: len(pattern_adj[v]) for v in pattern_vertices
+    }
+    host_degrees = {v: len(host_adj.get(v, ())) for v in host_g.nodes()}
+    budget = _NodeBudget()
     mapping: dict[int, int] = {}
     used: set[int] = set()
 
     def backtrack(idx: int) -> bool:
+        budget.tick()
+        if budget.exceeded():
+            raise _BudgetExceededError()
         if idx == n_pattern:
             return True
         pv = pattern_vertices[idx]
+        # Necessary condition: a host vertex must have degree at least the
+        # pattern vertex's total degree to carry all of its edges.
+        required_degree = pattern_degrees[pv]
         for hv in sorted(host_g.nodes()):
-            if hv in used:
+            if hv in used or host_degrees[hv] < required_degree:
                 continue
             ok = True
             for prev_pv in pattern_vertices[:idx]:
@@ -138,11 +184,26 @@ def find_subgraph_pattern(
             del mapping[pv]
         return False
 
-    if backtrack(0):
+    try:
+        decided = backtrack(0)
+    except _BudgetExceededError:
+        return SubgraphPatternResult(
+            host_graph=request.host,
+            pattern_graph=request.pattern,
+            outcome="SEARCH_BUDGET_EXCEEDED",
+            detail=(
+                f"subgraph search exceeded {MAX_SEARCH_NODES} recursion "
+                "nodes without deciding"
+            ),
+        )
+
+    if decided:
         emb = SubgraphEmbedding(
             mapping=tuple((pv, mapping[pv]) for pv in pattern_vertices),
         )
         return SubgraphPatternResult(
+            host_graph=request.host,
+            pattern_graph=request.pattern,
             host_vertex_count=request.host.vertex_count,
             pattern_vertex_count=request.pattern.vertex_count,
             exists=True,
@@ -150,10 +211,16 @@ def find_subgraph_pattern(
         )
 
     return SubgraphPatternResult(
+        host_graph=request.host,
+        pattern_graph=request.pattern,
         host_vertex_count=request.host.vertex_count,
         pattern_vertex_count=request.pattern.vertex_count,
         exists=False,
     )
+
+
+class _BudgetExceededError(Exception):
+    """Internal control flow: recursion node budget exhausted."""
 
 
 __all__ = [

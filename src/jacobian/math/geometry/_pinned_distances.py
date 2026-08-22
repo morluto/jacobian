@@ -53,6 +53,11 @@ class PinnedDistanceResult(StrictModel):
 
     @model_validator(mode="after")
     def require_invariants(self):
+        from fractions import Fraction
+        from math import gcd
+
+        from jacobian.canonical import format_canonical_integer
+
         if self.distinct_line_count != len(self.lines):
             raise ValueError("distinct_line_count must match the line count")
         if self.lines:
@@ -67,6 +72,91 @@ class PinnedDistanceResult(StrictModel):
                 or self.min_squared_distance.squared_distance_denominator != min_entry.squared_distance_denominator
             ):
                 raise ValueError("min_squared_distance must be the minimum entry")
+        # Replay the bounded line ledger from the retained source values to ensure
+        # the result is not forged: recompute the expected lines and compare.
+        # This is the defining invariant for the pinned-distance profile.
+        ax = self.anchor.x.as_fraction()
+        ay = self.anchor.y.as_fraction()
+        pts = [(p.x.as_fraction(), p.y.as_fraction()) for p in self.points]
+
+        def _canonical_line_key(xi, yi, xj, yj):
+            from fractions import Fraction
+            from math import gcd
+
+            dx = xj - xi
+            dy = yj - yi
+            a = dy
+            b = -dx
+            c = a * xi + b * yi
+            scale_lcm = 1
+            for component in (a.denominator, b.denominator, c.denominator):
+                scale_lcm = scale_lcm * component // gcd(scale_lcm, component)
+            int_a = int(a * scale_lcm)
+            int_b = int(b * scale_lcm)
+            int_c = int(c * scale_lcm)
+            divisor = gcd(gcd(abs(int_a), abs(int_b)), abs(int_c))
+            if divisor:
+                int_a //= divisor
+                int_b //= divisor
+                int_c //= divisor
+            if int_a < 0 or (int_a == 0 and int_b < 0):
+                int_a, int_b, int_c = -int_a, -int_b, -int_c
+            return (
+                format_canonical_integer(int_a),
+                format_canonical_integer(int_b),
+                format_canonical_integer(int_c),
+            )
+
+        expected_map: dict[tuple[str, str, str], tuple[str, str]] = {}
+        # Also track source pairs for validation
+        pair_map: dict[tuple[str, str, str], set[tuple[int, int]]] = {}
+        for i in range(len(pts)):
+            for j in range(i + 1, len(pts)):
+                xi, yi = pts[i]
+                xj, yj = pts[j]
+                dx = xj - xi
+                dy = yj - yi
+                cross = dx * (ay - yi) - dy * (ax - xi)
+                norm_sq = dx * dx + dy * dy
+                if norm_sq == 0:
+                    continue
+                sq_dist = Fraction(cross * cross, norm_sq)
+                key = _canonical_line_key(xi, yi, xj, yj)
+                num_str = format_canonical_integer(sq_dist.numerator)
+                den_str = format_canonical_integer(sq_dist.denominator)
+                if key not in expected_map:
+                    expected_map[key] = (num_str, den_str)
+                    pair_map[key] = set()
+                else:
+                    # The distance for a given line must be the same for all pairs that generate it
+                    if expected_map[key] != (num_str, den_str):
+                        raise ValueError("inconsistent distance for the same line")
+                pair_map[key].add((i, j))
+
+        if len(expected_map) != len(self.lines):
+            raise ValueError("line count does not match the recomputed ledger")
+
+        # Build a map from line key to entry for the result
+        result_map: dict[tuple[str, str, str], LineDistanceEntry] = {}
+        # We need to reconstruct the key for each result entry; but the result does not store the key,
+        # only the distance and source pairs.  Instead, we can check that every result entry's distance
+        # and pairs correspond to a recomputed line.
+        # For each result entry, find a matching expected line by distance and pairs
+        # This is a bit indirect, but we can check that the set of distances and pair sets matches.
+
+        # Collect expected distances and pair sets
+        expected_entries = set()
+        for key, (num, den) in expected_map.items():
+            pairs = tuple(sorted(pair_map[key]))
+            expected_entries.add((num, den, pairs))
+
+        result_entries = set()
+        for entry in self.lines:
+            pairs = tuple(sorted(entry.source_pairs))
+            result_entries.add((entry.squared_distance_numerator, entry.squared_distance_denominator, pairs))
+
+        if result_entries != expected_entries:
+            raise ValueError("pinned-distance entries do not match the recomputed ledger from the source points and anchor")
         return self
 
 

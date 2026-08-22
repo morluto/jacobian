@@ -158,12 +158,14 @@ EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "geometry.points.pinned_line_distance_profile.compute",
         "Compute pinned distances to pair-spanned lines",
-        "Given a bounded labelled rational planar point configuration and a "
-        "rational anchor, construct every distinct line spanned by a pair of "
-        "configuration points, compute the exact squared distance from the "
-        "anchor to each line, collapse pairs defining the same geometric "
-        "line while retaining every source pair, and group lines at equal "
-        "squared distance into a sorted multiplicity partition.",
+        "Given a bounded labelled rational planar point configuration with "
+        "distinct coordinates (no two points share the same location) and a "
+        "planar rational anchor (both at most 256 digits per coordinate), "
+        "construct every distinct line spanned by a pair of configuration "
+        "points, compute the exact squared distance from the anchor to each "
+        "line, collapse pairs defining the same geometric line while retaining "
+        "every source pair, and group lines at equal squared distance into a "
+        "sorted multiplicity partition.",
         PinnedLineDistanceRequest,
         PinnedLineDistanceResult,
         compute_pinned_line_distance_profile,
@@ -178,13 +180,18 @@ EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     "For the inverted orthocentric points B'=(1/4,0), "
                     "C'=(1/5,2/5), H'=(4/13,6/13) with anchor (0,0), all three "
                     "pair-spanned lines have exact squared distance 4/65. The "
-                    "configuration must be planar and the anchor a planar point."
+                    "configuration must be planar with distinct coordinates and "
+                    "the anchor a planar point (each coordinate at most 256 digits)."
                 ),
                 INVERTED_ORTHOCENTRIC,
             ),
             example(
                 "unit_square_anchor_origin",
-                "Unit square with anchor at the origin; opposite sides and diagonals give distinct pinned distances.",
+                (
+                    "Unit square with anchor at the origin; opposite sides and "
+                    "diagonals give distinct pinned distances. The configuration "
+                    "must have distinct coordinates and the anchor must be planar."
+                ),
                 UNIT_SQUARE_ORIGIN,
             ),
         ),

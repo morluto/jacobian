@@ -100,3 +100,15 @@ class TestSourceBoundResult:
                 triple_count=4,
                 entries=entries,
             )
+
+
+class TestResultSourceContract:
+    def test_replay_sources_must_satisfy_request_contract(self) -> None:
+        """A deserialized result cannot carry sources violating the request
+        contract (here: duplicate labels)."""
+        payload = circumradius_profile(
+            CircumradiusProfileRequest(points=_right_triangle())
+        ).model_dump()
+        payload["points"][1]["label"] = "A"
+        with pytest.raises(ValidationError, match="labels must be unique"):
+            CircumradiusProfileResult.model_validate(payload)

@@ -159,6 +159,21 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     if max_order < 1:
         return RecurrenceCoefficients(alpha=(), beta=(moments[0],))
     alpha, beta = _monic_orthogonal_recurrence(moments, max_order)
+    # Gram-Schmidt on admitted inputs can still produce coefficients whose
+    # reduced numerators/denominators exceed the canonical rational limit;
+    # reject them here so an accepted request cannot fail later during
+    # canonical conversion.
+    from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+    from jacobian.math._rational_height import RationalHeight
+
+    for value in (*alpha, *beta):
+        if RationalHeight.from_canonical(
+            CanonicalRational.from_fraction(value)
+        ).exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
+            raise ValueError(
+                "recurrence coefficients exceed the canonical rational "
+                "digit limit for these moments"
+            )
     return RecurrenceCoefficients(alpha=tuple(alpha), beta=tuple(beta))
 
 

@@ -294,6 +294,29 @@ class IdealSaturationResult(StrictModel):
                 "saturation operands and result must share the source "
                 "ideal's ordered ring"
             )
+        # Defining relation for a COMPUTED claim: the source ideal must be
+        # contained in its claimed saturation (I subseteq I:d^inf).
+        if self.outcome == "COMPUTED" and self.saturation is not None:
+            import sympy
+
+            from jacobian.math.polynomials._conversions import (
+                rational_polynomial_to_sympy,
+            )
+
+            symbols = sympy.symbols(self.source_ideal.variables)
+            basis = sympy.groebner(
+                [
+                    rational_polynomial_to_sympy(gen).as_expr()
+                    for gen in self.saturation.generators
+                ],
+                *symbols,
+                domain=sympy.QQ,
+            )
+            for gen in self.source_ideal.generators:
+                if basis.reduce(rational_polynomial_to_sympy(gen).as_expr())[1] != 0:
+                    raise ValueError(
+                        "claimed saturation does not contain the source ideal"
+                    )
         return self
 
 

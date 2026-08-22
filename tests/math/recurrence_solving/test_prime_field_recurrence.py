@@ -79,6 +79,18 @@ class TestPrimeFieldRecurrenceFind:
         with pytest.raises(ValueError, match="residues"):
             PrimeFieldRecurrenceFindRequest(prime=3, sequence=(1, 3, 2))
 
+    def test_request_schema_publishes_canonical_residue_constraint(self):
+        schema = PrimeFieldRecurrenceFindRequest.model_json_schema()
+        assert "0 <= value < prime" in schema["properties"]["sequence"]["description"]
+        assert "2" in schema["properties"]["prime"]["description"]
+
+    def test_result_schema_publishes_canonical_residue_constraint(self):
+        schema = PrimeFieldRecurrenceFindResult.model_json_schema()
+        assert "0 <= value < prime" in schema["properties"]["sequence"]["description"]
+        assert (
+            "0 <= value < prime" in schema["properties"]["coefficients"]["description"]
+        )
+
     def test_result_accepts_minimal_fibonacci_recurrence(self):
         result = PrimeFieldRecurrenceFindResult(
             prime=7,

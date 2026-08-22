@@ -115,10 +115,19 @@ def _require_canonical_residues(
 class PrimeFieldRecurrenceFindRequest(StrictModel):
     """Find the minimal linear recurrence of a sequence over ``GF(p)``."""
 
-    prime: StrictInt = Field(ge=2, le=_MAX_FIELD_PRIME)
+    prime: StrictInt = Field(
+        ge=2,
+        le=_MAX_FIELD_PRIME,
+        description=f"Prime modulus p of the field GF(p), between 2 and {_MAX_FIELD_PRIME}.",
+    )
     sequence: tuple[StrictInt, ...] = Field(
         min_length=2,
         max_length=_MAX_FIELD_SEQUENCE_LENGTH,
+        description=(
+            "Finite sequence of canonical residues modulo the supplied prime: "
+            "each value must be an integer with 0 <= value < prime; negative "
+            "or oversized representatives are rejected."
+        ),
     )
 
     @model_validator(mode="after")
@@ -131,12 +140,26 @@ class PrimeFieldRecurrenceFindRequest(StrictModel):
 class PrimeFieldRecurrenceFindResult(StrictModel):
     """The minimal LFSR over ``GF(p)`` found by Berlekamp-Massey."""
 
-    prime: StrictInt = Field(ge=2, le=_MAX_FIELD_PRIME)
+    prime: StrictInt = Field(
+        ge=2,
+        le=_MAX_FIELD_PRIME,
+        description=f"Prime modulus p of the field GF(p), between 2 and {_MAX_FIELD_PRIME}.",
+    )
     sequence: tuple[StrictInt, ...] = Field(
         min_length=2,
         max_length=_MAX_FIELD_SEQUENCE_LENGTH,
+        description=(
+            "The supplied sequence of canonical residues modulo the prime: "
+            "each value satisfies 0 <= value < prime."
+        ),
     )
-    coefficients: tuple[StrictInt, ...] = Field(max_length=_MAX_FIELD_SEQUENCE_LENGTH)
+    coefficients: tuple[StrictInt, ...] = Field(
+        max_length=_MAX_FIELD_SEQUENCE_LENGTH,
+        description=(
+            "LFSR connection coefficients as canonical residues modulo the "
+            "prime: each value satisfies 0 <= value < prime."
+        ),
+    )
     order: StrictInt = Field(ge=0, le=_MAX_FIELD_SEQUENCE_LENGTH)
     status: Literal["FOUND", "NO_FITTING_RECURRENCE"]
     method: Literal["BERLEKAMP_MASSEY"] = "BERLEKAMP_MASSEY"

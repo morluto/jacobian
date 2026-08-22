@@ -126,3 +126,27 @@ class TestAdmissionBudget:
         )
         with pytest.raises(ValidationError):
             PinnedDistanceRequest(anchor=_pt("0", "0"), points=points)
+
+
+class TestResultAdmissionBounds:
+    def test_oversized_result_point_set_rejected_before_replay(self) -> None:
+        """A directly validated result cannot bypass the cardinality cap."""
+        points = tuple(_pt(str(index), str(index * index)) for index in range(40))
+        with pytest.raises(ValidationError, match="enumeration budget"):
+            PinnedDistanceResult(
+                anchor=_pt("0", "0"),
+                points=points,
+                lines=(),
+                distinct_line_count=0,
+                min_squared_distance=None,
+            )
+
+    def test_duplicate_points_in_result_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="unique"):
+            PinnedDistanceResult(
+                anchor=_pt("0", "0"),
+                points=(_pt("1", "0"), _pt("1", "0")),
+                lines=(),
+                distinct_line_count=0,
+                min_squared_distance=None,
+            )

@@ -10,7 +10,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
@@ -67,8 +67,23 @@ class PinnedDistanceResult(StrictModel):
 
     @model_validator(mode="after")
     def require_invariants(self):
-        from jacobian.canonical import parse_canonical_integer
+        from jacobian._exact import require_bounded_rational
 
+        # A directly supplied result bypasses PinnedDistanceRequest, so
+        # reapply the cardinality, uniqueness, and coordinate-height bounds
+        # before any replay work.
+        if len(self.points) > MAX_PINNED_DISTANCE_POINTS:
+            raise ValueError(
+                "point set exceeds the pinned-distance enumeration budget"
+            )
+        keys = tuple(
+            (p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points
+        )
+        if len(keys) != len(set(keys)):
+            raise ValueError("point-set coordinates must be unique")
+        for pt in (self.anchor, *self.points):
+            require_bounded_rational(pt.x, max_digits=_MAX_PINNED_COORDINATE_DIGITS, label="coordinate")
+            require_bounded_rational(pt.y, max_digits=_MAX_PINNED_COORDINATE_DIGITS, label="coordinate")
         if self.distinct_line_count != len(self.lines):
             raise ValueError("distinct_line_count must match the line count")
         # Replay the bounded computation from the retained points so an

@@ -53,7 +53,6 @@ class TestUnitCube:
         assert result.volume == CanonicalRational(num="1", den="1")
         assert result.dimension == 2
         assert result.representation == "vertices"
-        assert result.evidence == "COMPUTED"
 
     def test_unit_cube_vertices(self):
         """Unit cube [0,1]^3 has volume 1."""
@@ -221,6 +220,41 @@ class TestRejection:
         )
         with pytest.raises(ValueError, match="combinatorial bound"):
             _volume_via_vertices(vertices)
+
+    def test_derived_vertex_work_bound_rejected_for_halfspaces(self):
+        """An H-representation whose derived vertex set exceeds the hull
+        work bound is rejected at request validation.
+
+        The 12 half-spaces of [0,1]^6 enumerate 64 vertices; executing
+        would need C(64, 6) = 74,974,368 d-subsets, far beyond the
+        combinatorial admission bound.
+        """
+        halfspaces = []
+        for axis in range(6):
+            upper = [(0, 1)] * 6
+            upper[axis] = (1, 1)
+            lower = [(0, 1)] * 6
+            lower[axis] = (-1, 1)
+            halfspaces.append(_h(*upper, offset=(1, 1)))
+            halfspaces.append(_h(*lower, offset=(0, 1)))
+        with pytest.raises(ValueError, match="combinatorial bound"):
+            PolytopeVolumeRequest(halfspaces=tuple(halfspaces))
+
+    def test_result_carries_only_the_exact_volume(self):
+        """The result exposes no generic assurance field."""
+        result = _volume_via_vertices(
+            (
+                _v((0, 1), (0, 1)),
+                _v((1, 1), (0, 1)),
+                _v((1, 1), (1, 1)),
+                _v((0, 1), (1, 1)),
+            )
+        )
+        assert set(result.model_dump()) == {
+            "volume",
+            "dimension",
+            "representation",
+        }
 
 
 class TestRequestValidation:

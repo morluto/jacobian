@@ -176,6 +176,20 @@ def _validate_halfspaces(  # noqa: C901
     verts, _ = _vertices_from_h_representation(halfspaces)
     if not verts:
         raise ValueError("the H-representation defines an empty polytope")
+    # The derived vertex set drives the same brute-force hull enumeration as
+    # a caller-supplied V-representation, so the identical combinatorial
+    # admission applies before accepting the request.  Otherwise execution
+    # would raise the hull-budget error as a host exception after acceptance.
+    import math
+
+    from jacobian.math.polytope._operations import MAX_HULL_SUBFACETS
+
+    subfacets = math.comb(len(verts), dim)
+    if subfacets > MAX_HULL_SUBFACETS:
+        raise ValueError(
+            "polytope hull enumeration exceeds the combinatorial bound "
+            f"({subfacets} > {MAX_HULL_SUBFACETS} d-subsets)"
+        )
 
 
 class PolytopeVolumeResult(StrictModel):
@@ -187,8 +201,6 @@ class PolytopeVolumeResult(StrictModel):
     """The ambient dimension of the polytope."""
     representation: str
     """``"vertices"`` or ``"halfspaces"``: the input representation used."""
-    evidence: str = "COMPUTED"
-    """The volume is exact rational, not a floating-point approximation."""
 
 
 __all__ = [

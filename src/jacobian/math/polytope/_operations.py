@@ -52,12 +52,6 @@ MAX_SUBSYSTEM_SOLVES = 5_000_000
 # the standard simplex at every supported dimension.
 MAX_HULL_SUBFACETS = 200_000
 
-# Cache for H-representation vertex enumeration to avoid doing the same
-# ``C(m, d)`` subsystem solves twice (once during request validation and
-# again during execution).  The key is a hashable projection of the
-# half-space coefficients/offsets.
-_H_VERTEX_CACHE: dict[tuple[tuple[tuple[str, str], ...], str], tuple[list[tuple[Rational, ...]], int]] = {}
-
 
 def _hyperplane_normal(points: list[list[Rational]]) -> Matrix | None:
     """Return a normal vector to the hyperplane through ``points``.
@@ -533,17 +527,6 @@ def _vertices_from_h_representation(
     half-spaces is a bounded, exact vertex enumeration for the small
     dimensions this operation admits.
     """
-    # Use a cache keyed by the exact half-space data so the validation
-    # pass and the execution pass share the same enumeration.
-    cache_key = tuple(
-        (
-            tuple((c.num, c.den) for c in hs.coefficients),
-            (hs.offset.num, hs.offset.den),
-        )
-        for hs in halfspaces
-    )
-    if cache_key in _H_VERTEX_CACHE:
-        return _H_VERTEX_CACHE[cache_key]
     dim = len(halfspaces[0].coefficients)
     rows = _halfspace_rows(halfspaces)
     n = len(rows)
@@ -570,7 +553,6 @@ def _vertices_from_h_representation(
             unique_seen.add(point)
             unique.append(point)
     result: tuple[list[tuple[Rational, ...]], int] = (unique, dim)
-    _H_VERTEX_CACHE[cache_key] = result
     return result
 
 

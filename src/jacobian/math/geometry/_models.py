@@ -493,6 +493,7 @@ class CircumradiusTripleEntry(StrictModel):
 
 
 class CircumradiusProfileResult(StrictModel):
+    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
     point_count: StrictInt = Field(ge=3, le=64)
     triple_count: StrictInt = Field(ge=1, le=41664)
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
@@ -500,8 +501,56 @@ class CircumradiusProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_profile(self) -> Self:
-        if len(self.entries) != self.triple_count:
+        from fractions import Fraction
+        from itertools import combinations
+
+        if self.point_count != len(self.points):
+            raise ValueError("point_count must match the retained points")
+        # Validate uniqueness as in request
+        labels = tuple(item.label for item in self.points)
+        if len(labels) != len(set(labels)):
+            raise ValueError("point labels must be unique")
+        keys = tuple(
+            (item.point.x.num, item.point.x.den, item.point.y.num, item.point.y.den)
+            for item in self.points
+        )
+        if len(keys) != len(set(keys)):
+            raise ValueError("point coordinates must be unique")
+        expected = tuple(combinations(range(self.point_count), 3))
+        if len(self.entries) != len(expected):
             raise ValueError("circumradius profile must be complete")
+        if self.triple_count != len(expected):
+            raise ValueError(
+                "triple_count must equal C(point_count, 3)"
+            )
+        indices = tuple(entry.indices for entry in self.entries)
+        if indices != expected:
+            raise ValueError(
+                "entries must carry the canonical C(point_count, 3) triple set"
+            )
+        # Replay each entry's exact squared circumradius
+        coords: list[tuple[Fraction, Fraction]] = [
+            (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in self.points
+        ]
+        for entry, (i, j, k) in zip(self.entries, expected):
+            (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
+            if entry.labels != (self.points[i].label, self.points[j].label, self.points[k].label):
+                raise ValueError("entry labels must match the source points")
+            if entry.indices != (i, j, k):
+                raise ValueError("entry indices must match the canonical triple")
+            cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+            if cross == 0:
+                if not entry.collinear or entry.squared_circumradius is not None:
+                    raise ValueError("collinear triple must have no circumradius")
+            else:
+                if entry.collinear or entry.squared_circumradius is None:
+                    raise ValueError("noncollinear triple must carry a circumradius")
+                dab = (ax - bx) ** 2 + (ay - by) ** 2
+                dbc = (bx - cx) ** 2 + (by - cy) ** 2
+                dac = (ax - cx) ** 2 + (ay - cy) ** 2
+                expected_radius = (dab * dbc * dac) / (4 * cross * cross)
+                if entry.squared_circumradius.as_fraction() != expected_radius:
+                    raise ValueError("squared circumradius must match the exact formula")
         return self
 
 
@@ -564,8 +613,13 @@ class ConcyclicQuadruple(StrictModel):
 
 
 class ForbiddenPatternsResult(StrictModel):
-    """Result of screening a configuration for forbidden patterns."""
+    """Result of screening a configuration for forbidden patterns.
 
+    Retains its source configuration so both predicates replay against the
+    exact points instead of trusting independently authored booleans.
+    """
+
+    configuration: ForbiddenConfiguration
     point_count: StrictInt = Field(ge=1, le=128)
     has_collinear_triple: bool
     has_concyclic_quadruple: bool
@@ -576,6 +630,71 @@ class ForbiddenPatternsResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_witnesses(self) -> Self:
+        if self.point_count != len(self.configuration.points):
+            raise ValueError("point_count must match the source configuration")
+
+        xy = [
+            (item.point.x.as_fraction(), item.point.y.as_fraction())
+            for item in self.configuration.points
+        ]
+        from itertools import combinations
+
+        recomputed_collinear = any(
+            (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1])
+            - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
+            == 0
+            for i, j, k in combinations(range(len(xy)), 3)
+        )
+        recomputed_concyclic = False
+        for i, j, k, ell in combinations(range(len(xy)), 4):
+            # Exclude collinear quadruples: see _operations.forbidden_patterns
+            cross_ijk = (xy[j][0] - xy[i][0]) * (xy[k][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[k][0] - xy[i][0])
+            cross_ijl = (xy[j][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[j][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
+            cross_ikl = (xy[k][0] - xy[i][0]) * (xy[ell][1] - xy[i][1]) - (xy[k][1] - xy[i][1]) * (xy[ell][0] - xy[i][0])
+            cross_jkl = (xy[k][0] - xy[j][0]) * (xy[ell][1] - xy[j][1]) - (xy[k][1] - xy[j][1]) * (xy[ell][0] - xy[j][0])
+            if cross_ijk == 0 and cross_ijl == 0 and cross_ikl == 0 and cross_jkl == 0:
+                continue
+            m = [
+                [x * x + y * y, x, y, 1]
+                for x, y in (xy[i], xy[j], xy[k], xy[ell])
+            ]
+            det = (
+                m[0][0]
+                * (
+                    m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
+                    - m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
+                    + m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
+                )
+                - m[0][1]
+                * (
+                    m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
+                    - m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
+                    + m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
+                )
+                + m[0][2]
+                * (
+                    m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
+                    - m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
+                    + m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
+                )
+                - m[0][3]
+                * (
+                    m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
+                    - m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
+                    + m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0])
+                )
+            )
+            if det == 0:
+                recomputed_concyclic = True
+                break
+        if (
+            self.has_collinear_triple != recomputed_collinear
+            or self.has_concyclic_quadruple != recomputed_concyclic
+        ):
+            raise ValueError(
+                "forbidden-pattern decisions must match an exact replay over "
+                "the retained configuration"
+            )
         if self.has_collinear_triple is (self.collinear_triple is None):
             raise ValueError("exactly a collinear triple carries one witness")
         if self.has_concyclic_quadruple is (self.concyclic_quadruple is None):

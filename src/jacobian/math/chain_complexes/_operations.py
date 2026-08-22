@@ -74,9 +74,9 @@ def compute_homology(request: HomologyRequest) -> HomologyResult:
     """Compute the homology of a chain complex over GF(prime).
 
     H_n = ker(d_n) / im(d_{n+1})
-    Betti_n = dim(ker(d_n)) - rank(d_n)
-            = (dim(C_n) - rank(d_n)) - rank(d_{n+1})
-            = dim(C_n) - rank(d_n) - rank(d_{n+1})
+    Betti_n = dim(C_n) - rank(d_n) - rank(d_{n+1})
+    where d_n: C_n -> C_{n-1} has matrix dims[n-1] x dims[n] (target x source)
+    and differentials[i] is d_{min+i+1} with source dims[i+1] and target dims[i].
     """
     cx = request.complex
     prime = cx.prime
@@ -87,68 +87,29 @@ def compute_homology(request: HomologyRequest) -> HomologyResult:
 
     ranks = []
     for i, diff_entries in enumerate(diffs):
-        source_dim = dims[i]
-        target_dim = dims[i + 1]
+        # differential i is d_{min+i+1}: C_{min+i+1} -> C_{min+i}
+        source_dim = dims[i + 1]
+        target_dim = dims[i]
         mat = _build_matrix(diff_entries, target_dim, source_dim, prime)
         ranks.append(_gaussian_rank(mat, prime))
 
-    # rank of differential going OUT of the last degree is 0
-    # We need len(dims) ranks total (rank of d^i for each degree i)
-    # differentials has len(dims) - 1 entries (d^0, ..., d^{n-1})
-    # rank of d^n (for the last degree) is 0 (no differential)
-    # ranks[i] is the rank of d^i (the i-th differential)
-    # But we also need rank of d^{-1} (which is 0, for the first degree)
-    # Let's make ranks have len(dims) entries, with ranks[i] = rank of d^i
-    # and ranks[-1] = 0 (no differential before degree 0), ranks[n] = 0 (no differential after)
-    full_ranks = [0]  # rank of d^{-1} = 0
-    for i in range(len(diffs)):
-        full_ranks.append(ranks[i] if i < len(ranks) else 0)
-    full_ranks.append(0)  # rank of d^n = 0 (no differential out of last degree)
-    # Now full_ranks[k+1] is rank of d^k (for k = 0, ..., n-1)
-    # full_ranks[0] = rank of d^{-1} = 0
-    # full_ranks[n+1] = rank of d^n = 0
-    ranks = full_ranks
-
-    # For degree n (index k = n - n_min):
-    # cycle_rank = dims[k] - rank(d_k)  (kernel of d_k)
-    # boundary_rank = rank(d_{k+1})    (image of d_{k+1})
-    # betti = cycle_rank - boundary_rank
     groups = []
     for k in range(len(dims)):
-        ranks[k] if k < len(ranks) else 0  # rank of d_k: C_k -> C_{k-1}
-        ranks[k - 1] if k > 0 else 0  # rank of d_{k+1}: C_{k+1} -> C_k
-
-        # d_k: C_k -> C_{k-1} is diffs[k-1] (differentials indexed by the gap)
-        # Actually, differentials[i] is d: C_{i+n_min} -> C_{i+n_min-1}
-        # So for degree n = k + n_min, d_n is differentials[k] (going from C_n to C_{n-1})
-        # But in our model, differentials[i] goes from dimensions[i] to dimensions[i+1]
-        # So d_{i+1} = differentials[i] (going down in degree)
-
-        # Let's re-index: differentials[i] is the differential from degree (n_min + i) to (n_min + i - 1)
-        # Wait, looking at the model validation: differentials[i] has source dim[i] and target dim[i+1]
-        # So differentials[i]: C_{dim[i]} -> C_{dim[i+1]} which means degree n_min+i -> n_min+i+1
-        # Actually that's going UP in degree which doesn't make sense for homological...
-        # Let me re-read the model. The model says "differentials[i] entry row < target_dim=dimensions[i+1], col < source_dim=dimensions[i]"
-        # So differentials[i] is a matrix with dimensions[i] columns and dimensions[i+1] rows
-        # That means it maps from space i to space i+1, which is COchain convention (d: C^n -> C^{n+1})
-        # For a chain complex (homological), d: C_n -> C_{n-1}, so the matrix should have
-        # dimensions[i] columns (source) and dimensions[i-1] rows (target)
-        # But in our model, differentials[i] goes from dimensions[i] to dimensions[i+1]
-        # This is cochain! So let's just compute homology as if it's cochain:
-        # H^i = ker(d^i) / im(d^{i-1})
-        # rank(d^i) = ranks[i] (differential from i to i+1)
-        # ker(d^i) = dims[i] - ranks[i]
-        # im(d^{i-1}) = ranks[i-1] (if i > 0, else 0)
-        # H^i = (dims[i] - ranks[i]) - ranks[i-1]
-
-        # ranks[k] = rank of d^{k-1} (incoming), ranks[k+1] = rank of d^k (outgoing)
-        outgoing_rank = ranks[k + 1] if k + 1 < len(ranks) else 0
-        incoming_rank = ranks[k] if k < len(ranks) else 0
-
-        cycle_rank = dims[k] - outgoing_rank
-        boundary_rank = incoming_rank
+        # outgoing d_k: C_k -> C_{k-1} is diffs[k-1] if k>0
+        outgoing_rank = ranks[k - 1] if 0 < k < len(ranks) + 1 and k - 1 < len(ranks) else 0
+        # incoming d_{k+1}: C_{k+1} -> C_k is diffs[k] if k < len(ranks)
+        incoming_rank = ranks[k] if 0 <= k < len(ranks) else 0
+        # Actually for k index, outgoing = ranks[k-1] (d_{min+k}), incoming = ranks[k]
+        # But need to map: for k=0, outgoing=0, incoming=ranks[0] if exists
+        # For general, outgoing = ranks[k-1] when k>0
+        # Let's recompute cleanly:
+        out_rank = ranks[k - 1] if k > 0 and k - 1 < len(ranks) else 0
+        in_rank = ranks[k] if k < len(ranks) else 0
+        cycle_rank = dims[k] - out_rank
+        boundary_rank = in_rank
         betti = cycle_rank - boundary_rank
-
+        # The validator already ensures d^2=0, so betti should be >=0.
+        # Keep max(0, ...) as safety but a valid complex never triggers it.
         groups.append(
             HomologyGroup(
                 degree=n_min + k,
@@ -170,38 +131,136 @@ def compute_homology(request: HomologyRequest) -> HomologyResult:
 def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
     """Compute the mapping cone of a chain map f: C -> D.
 
-    The mapping cone has groups Cone(f)_n = C_{n-1} � D_n and the
-    differential is d_cone(c, d) = (d_C(c), f(c) - d_D(d)).
+    The mapping cone has groups Cone(f)_n = C_{n-1} ⊕ D_n and the
+    differential is
+
+        d_cone_n = [ -d^C_{n-1}   0
+                      f_{n-1}   d^D_n ]
+
+    where d^C, d^D are the source/target differentials and f is the chain map.
     """
     source = request.source
     target = request.target
     prime = source.prime
+    if source.prime != target.prime:
+        raise ValueError("source and target must have the same prime")
     s_dims = source.dimensions
     t_dims = target.dimensions
     s_min = source.min_degree
     t_min = target.min_degree
     s_max = source.max_degree
     t_max = target.max_degree
+    s_diffs = source.differentials
+    t_diffs = target.differentials
+    f_maps = request.chain_map
 
-    cone_min = min(s_min - 1, t_min)
-    cone_max = max(s_max - 1, t_max)
+    def dim_C(deg: int) -> int:
+        if s_min <= deg <= s_max:
+            return s_dims[deg - s_min]
+        return 0
+
+    def dim_D(deg: int) -> int:
+        if t_min <= deg <= t_max:
+            return t_dims[deg - t_min]
+        return 0
+
+    def mat_C(deg: int) -> list[list[int]]:
+        # d^C_deg: C_deg -> C_{deg-1}, matrix dim_C(deg-1) x dim_C(deg)
+        if deg <= s_min or deg > s_max:
+            return []
+        idx = deg - s_min - 1
+        if idx < 0 or idx >= len(s_diffs):
+            return []
+        entries = s_diffs[idx]
+        rows = dim_C(deg - 1)
+        cols = dim_C(deg)
+        return _build_matrix(entries, rows, cols, prime)
+
+    def mat_D(deg: int) -> list[list[int]]:
+        if deg <= t_min or deg > t_max:
+            return []
+        idx = deg - t_min - 1
+        if idx < 0 or idx >= len(t_diffs):
+            return []
+        entries = t_diffs[idx]
+        rows = dim_D(deg - 1)
+        cols = dim_D(deg)
+        return _build_matrix(entries, rows, cols, prime)
+
+    def mat_F(deg: int) -> list[list[int]]:
+        # f_deg: C_deg -> D_deg
+        if deg < s_min or deg > s_max or deg < t_min or deg > t_max:
+            return []
+        # chain_map is aligned to source degree range: f_maps[i] = f_{s_min + i}
+        idx = deg - s_min
+        if idx < 0 or idx >= len(f_maps):
+            return []
+        entries = f_maps[idx]
+        rows = dim_D(deg)
+        cols = dim_C(deg)
+        # If chain_map entry is empty tuple, it represents zero map
+        if not entries:
+            return [[0] * cols for _ in range(rows)] if rows and cols else []
+        return _build_matrix(entries, rows, cols, prime)
+
+    cone_min = min(s_min + 1, t_min)
+    cone_max = max(s_max + 1, t_max)
     n_cone = cone_max - cone_min + 1
-
     cone_dims = []
     for k in range(n_cone):
         deg = cone_min + k
-        s_idx = deg + 1 - s_min
-        t_idx = deg - t_min
-        s_dim = s_dims[s_idx] if 0 <= s_idx < len(s_dims) else 0
-        t_dim = t_dims[t_idx] if 0 <= t_idx < len(t_dims) else 0
-        cone_dims.append(s_dim + t_dim)
+        cone_dims.append(dim_C(deg - 1) + dim_D(deg))
+
+    # Build cone differentials: one per gap between cone degrees
+    cone_diffs: list[tuple[MatrixEntry, ...]] = []
+    for k in range(n_cone - 1):
+        # differential from Cone_{cone_min + k +1} -> Cone_{cone_min + k}
+        n = cone_min + k + 1
+        c_n_minus_1 = dim_C(n - 1)
+        d_n = dim_D(n)
+        c_n_minus_2 = dim_C(n - 2)
+        d_n_minus_1 = dim_D(n - 1)
+        rows = c_n_minus_2 + d_n_minus_1
+        cols = c_n_minus_1 + d_n
+        if rows == 0 or cols == 0:
+            cone_diffs.append(())
+            continue
+        # Build block matrix
+        mat = [[0] * cols for _ in range(rows)]
+        # Top-left: -d^C_{n-1}
+        dC = mat_C(n - 1)
+        if dC:
+            for r in range(min(len(dC), c_n_minus_2)):
+                for c_idx in range(min(len(dC[0]) if dC else 0, c_n_minus_1)):
+                    mat[r][c_idx] = (-dC[r][c_idx]) % prime
+        # Bottom-left: f_{n-1}
+        f = mat_F(n - 1)
+        if f:
+            for r in range(min(len(f), d_n_minus_1)):
+                for c_idx in range(min(len(f[0]) if f else 0, c_n_minus_1)):
+                    mat[c_n_minus_2 + r][c_idx] = f[r][c_idx] % prime
+        # Bottom-right: d^D_n
+        dD = mat_D(n)
+        if dD:
+            for r in range(min(len(dD), d_n_minus_1)):
+                for c_idx in range(min(len(dD[0]) if dD else 0, d_n)):
+                    mat[c_n_minus_2 + r][c_n_minus_1 + c_idx] = dD[r][c_idx] % prime
+        # Top-right remains zero
+        # Convert dense to sparse entries
+        entries = []
+        for r in range(rows):
+            for c_idx in range(cols):
+                val = mat[r][c_idx] % prime
+                if val != 0:
+                    entries.append(MatrixEntry(row=r, col=c_idx, value=str(val)))
+        cone_diffs.append(tuple(entries))
 
     cone_complex = ChainComplex(
         prime=prime,
         min_degree=cone_min,
         max_degree=cone_max,
         dimensions=tuple(cone_dims),
-        differentials=(),
+        differentials=tuple(cone_diffs),
     )
 
     return MappingConeResult(cone=cone_complex)

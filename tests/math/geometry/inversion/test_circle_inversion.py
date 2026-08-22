@@ -1,7 +1,8 @@
 """Tests for circle inversion of rational planar points."""
 
-import pytest
 from fractions import Fraction
+
+import pytest
 from pydantic import ValidationError
 
 from jacobian.math.geometry.inversion._models import (
@@ -24,13 +25,13 @@ class TestKnownAnswers:
         assert qx == Fraction(1, 4)
         assert qy == Fraction(0)
 
-    def test_C_inversion(self) -> None:
+    def test_center_inversion(self) -> None:
         # C = (1,2) -> (1/5, 2/5)
         qx, qy = invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(2))
         assert qx == Fraction(1, 5)
         assert qy == Fraction(2, 5)
 
-    def test_H_inversion(self) -> None:
+    def test_halfplane_inversion(self) -> None:
         # H = (1, 3/2) -> (4/13, 6/13)
         qx, qy = invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(3, 2))
         assert qx == Fraction(4, 13)

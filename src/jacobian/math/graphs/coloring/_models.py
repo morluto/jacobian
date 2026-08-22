@@ -193,7 +193,12 @@ class EdgeKColorabilityResult(StrictModel):
     colors: StrictInt = Field(ge=1, le=20)
     colorable: bool
     coloring: tuple[StrictInt, ...] | None = Field(
-        default=None, max_length=MAX_EDGE_COLORING_EDGES
+        default=None,
+        max_length=MAX_EDGE_COLORING_EDGES,
+        description=(
+            "Edge colors aligned to graph.edges: coloring[i] is the color of "
+            "graph.edges[i] in 0..colors-1 (graph.edges order is authoritative)."
+        ),
     )
     edge_count: StrictInt = Field(ge=0, le=MAX_EDGE_COLORING_EDGES)
 
@@ -211,6 +216,24 @@ class EdgeKColorabilityResult(StrictModel):
         else:
             if self.coloring is not None:
                 raise ValueError("a non-colorable result must not carry a coloring")
+            # Replay the bounded decision to prevent forged non-colorability.
+            # The graph + colors are retained, so we can re-execute the exact
+            # SAT check. Empty edge set is trivially colorable for any k>=1.
+            if not self.graph.edges:
+                raise ValueError(
+                    "empty graph is k-edge-colorable but result claims not colorable"
+                )
+            import z3
+
+            solver = z3.Solver()
+            edge_colors = [z3.Int(f"c_{i}") for i in range(len(self.graph.edges))]
+            solver.add(*(z3.And(c >= 0, c < self.colors) for c in edge_colors))
+            for a, b in _incident_edge_index_pairs_for_canonical_graph(self.graph):
+                solver.add(edge_colors[a] != edge_colors[b])
+            if solver.check() == z3.sat:
+                raise ValueError(
+                    "graph is k-edge-colorable but result claims not colorable"
+                )
         return self
 
 
@@ -219,7 +242,13 @@ class EdgeColoringCheckRequest(StrictModel):
 
     graph: SimpleUndirectedGraph
     colors: StrictInt = Field(ge=1, le=20)
-    coloring: tuple[StrictInt, ...] = Field(max_length=MAX_EDGE_COLORING_EDGES)
+    coloring: tuple[StrictInt, ...] = Field(
+        max_length=MAX_EDGE_COLORING_EDGES,
+        description=(
+            "Edge colors aligned to graph.edges: coloring[i] is the color of "
+            "graph.edges[i] in 0..colors-1 (graph.edges order is authoritative)."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_assignment_length(self) -> Self:
@@ -233,7 +262,13 @@ class EdgeColoringCheckResult(StrictModel):
 
     graph: SimpleUndirectedGraph
     colors: StrictInt = Field(ge=1, le=20)
-    coloring: tuple[StrictInt, ...] = Field(max_length=MAX_EDGE_COLORING_EDGES)
+    coloring: tuple[StrictInt, ...] = Field(
+        max_length=MAX_EDGE_COLORING_EDGES,
+        description=(
+            "Edge colors aligned to graph.edges: coloring[i] is the color of "
+            "graph.edges[i] in 0..colors-1 (graph.edges order is authoritative)."
+        ),
+    )
     proper: bool
     blocking_edge: tuple[str, str] | None = None
     conflicting_edge: tuple[str, str] | None = None

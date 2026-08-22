@@ -510,7 +510,6 @@ def forbidden_patterns(request):
     [x^2 + y^2, x, y, 1] vanishes.  Both predicates are evaluated with exact
     ``fractions.Fraction`` arithmetic!
     """
-    from itertools import combinations
 
     from jacobian.math.geometry._models import (
         CollinearTriple,
@@ -519,10 +518,53 @@ def forbidden_patterns(request):
     )
 
     pts = request.configuration.points
+    (
+        has_collinear,
+        has_concyclic,
+        collinear_indices,
+        concyclic_indices,
+        checked_triples,
+        checked_quadruples,
+    ) = _screen_configuration(pts)
+
+    return ForbiddenPatternsResult(
+        configuration=request.configuration,
+        point_count=len(pts),
+        has_collinear_triple=has_collinear,
+        has_concyclic_quadruple=has_concyclic,
+        collinear_triple=(
+            CollinearTriple(
+                first=collinear_indices[0],
+                second=collinear_indices[1],
+                third=collinear_indices[2],
+            )
+            if collinear_indices is not None
+            else None
+        ),
+        concyclic_quadruple=(
+            ConcyclicQuadruple(
+                first=concyclic_indices[0],
+                second=concyclic_indices[1],
+                third=concyclic_indices[2],
+                fourth=concyclic_indices[3],
+            )
+            if concyclic_indices is not None
+            else None
+        ),
+        checked_triples=checked_triples,
+        checked_quadruples=checked_quadruples,
+    )
+
+
+def _screen_configuration(pts):
+    """Pure forbidden-pattern enumeration shared by the operation and the
+    result validator, so both replay identical bounded work."""
+    from itertools import combinations
+
     n = len(pts)
     xy = [(entry.point.x.as_fraction(), entry.point.y.as_fraction()) for entry in pts]
 
-    collinear_triple = None
+    collinear_indices = None
     has_collinear = False
     checked_triples = 0
     for i, j, k in combinations(range(n), 3):
@@ -533,10 +575,10 @@ def forbidden_patterns(request):
         determinant = (xj - xi) * (yk - yi) - (yj - yi) * (xk - xi)
         if determinant == 0:
             has_collinear = True
-            collinear_triple = CollinearTriple(first=i, second=j, third=k)
+            collinear_indices = (i, j, k)
             break
 
-    concyclic_quadruple = None
+    concyclic_indices = None
     has_concyclic = False
     checked_quadruples = 0
     for i, j, k, ell in combinations(range(n), 4):
@@ -590,19 +632,16 @@ def forbidden_patterns(request):
             # well-defined circle; if all triples were collinear we already
             # continued. This guards the line case.
             has_concyclic = True
-            concyclic_quadruple = ConcyclicQuadruple(
-                first=i, second=j, third=k, fourth=ell
-            )
+            concyclic_indices = (i, j, k, ell)
             break
 
-    return ForbiddenPatternsResult(
-        point_count=n,
-        has_collinear_triple=has_collinear,
-        has_concyclic_quadruple=has_concyclic,
-        collinear_triple=collinear_triple,
-        concyclic_quadruple=concyclic_quadruple,
-        checked_triples=checked_triples,
-        checked_quadruples=checked_quadruples,
+    return (
+        has_collinear,
+        has_concyclic,
+        collinear_indices,
+        concyclic_indices,
+        checked_triples,
+        checked_quadruples,
     )
 
 

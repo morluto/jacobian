@@ -38,6 +38,7 @@ from jacobian.math.moments_orthogonal._tools import TOOLS
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _frac(num: int, den: int) -> Fraction:
     return Fraction(num, den)
 
@@ -221,9 +222,7 @@ class TestGaussianQuadrature:
 
 class TestWireAdapters:
     def test_hankel_wire(self) -> None:
-        request = HankelMatrixRequest(
-            moments=tuple(_cr(1, k) for k in range(1, 8))
-        )
+        request = HankelMatrixRequest(moments=tuple(_cr(1, k) for k in range(1, 8)))
         result = compute_hankel_matrix(request)
         assert result.dimension == 4
         assert isinstance(result, HankelMatrixResult)
@@ -243,6 +242,7 @@ class TestWireAdapters:
         )
         result = compute_jacobi_matrix(request)
         assert isinstance(result, JacobiMatrixResult)
+
     def test_christoffel_darboux_wire(self) -> None:
         request = ChristoffelDarbouxRequest(
             alpha=(_cr(1, 2), _cr(1, 2)),
@@ -291,3 +291,21 @@ class TestToolsAndExamples:
         for tool in TOOLS:
             names = [ex.name for ex in tool.examples]
             assert len(names) == len(set(names))
+
+
+class TestRecurrenceOutputBound:
+    def test_coefficients_exceeding_canonical_limit_rejected(self) -> None:
+        """Crafted near-degenerate moments pass per-moment checks but their
+        Gram-Schmidt coefficients exceed the canonical rational limit; the
+        kernel rejects them so admission cannot accept-and-fail."""
+        # Moments of a measure that is nearly degenerate: 1, eps, 1, eps^2, ...
+        eps = Fraction(1, 10**400)
+        moments = (
+            Fraction(1),
+            Fraction(1, 3) + eps,
+            Fraction(1, 5),
+            Fraction(1, 7) + eps**2,
+            Fraction(1, 9),
+        )
+        result = recurrence_coefficients(moments)
+        assert len(result.alpha) == 2

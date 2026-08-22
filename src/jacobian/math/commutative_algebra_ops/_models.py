@@ -258,7 +258,11 @@ class IdealSaturationRequest(StrictModel):
 
 
 class IdealSaturationResult(StrictModel):
+    """The saturation I : <d>^infinity bound to its source operands."""
+
     outcome: IdealExecutionOutcome
+    source_ideal: RationalPolynomialIdeal
+    source_polynomial: RationalPolynomial
     saturation: RationalPolynomialIdeal | None = None
     method: Literal["SINGULAR_SATURATION"] = "SINGULAR_SATURATION"
     backend_version: str | None = None
@@ -278,6 +282,17 @@ class IdealSaturationResult(StrictModel):
         ):
             raise ValueError(
                 "failed saturation computation requires only a safe detail"
+            )
+        # Source binding: every retained ring must be the source ideal's
+        # ordered ring, so a payload cannot revalidate as the saturation of
+        # an unrelated input or of another ring.
+        if self.source_polynomial.variables != self.source_ideal.variables or (
+            self.saturation is not None
+            and self.saturation.variables != self.source_ideal.variables
+        ):
+            raise ValueError(
+                "saturation operands and result must share the source "
+                "ideal's ordered ring"
             )
         return self
 

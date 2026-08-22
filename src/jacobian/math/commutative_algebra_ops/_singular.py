@@ -112,9 +112,13 @@ def _script(
         if right is None:
             raise ValueError("saturation requires a saturation polynomial ideal")
         declarations.append(_singular_ideal("jacobian_right", right))
+        # primdec.lib's sat returns the list [saturated_ideal, exponent];
+        # extract the ideal instead of binding the whole list to an ideal
+        # variable, and saturate by the full right ideal.
         operation_line = (
-            "ideal jacobian_result=sat(jacobian_left,"
-            "jacobian_right[1]);"
+            "list jacobian_saturation=sat(jacobian_left,"
+            "jacobian_right);"
+            "ideal jacobian_result=jacobian_saturation[1];"
         )
     else:
         if right is None:

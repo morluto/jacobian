@@ -27,7 +27,9 @@ def _require_determinant_representable(moments, order: int) -> None:
     moment's height keeps it inside MAX_CANONICAL_RATIONAL_DIGITS.
     """
     per_entry = MAX_CANONICAL_RATIONAL_DIGITS // ((order + 1) ** 2)
-    for value in moments:
+    # An order-r Hankel matrix reads only the first 2r+1 moments; extra
+    # canonical moments must not prevent composition.
+    for value in moments[: 2 * order + 1]:
         if RationalHeight.from_canonical(value).exceeds(max(per_entry - 2, 8)):
             raise ValueError(
                 f"moment heights exceed the conservative {max(per_entry - 2, 8)}-digit "
@@ -101,6 +103,20 @@ class RecurrenceRequest(StrictModel):
     """Compute three-term recurrence coefficients from a family."""
 
     family: OrthogonalPolynomialFamily
+
+    @model_validator(mode="after")
+    def require_quasi_definite_family(self) -> Self:
+        """The kernel divides by squared norms; a non-quasi-definite family
+        would leak ZeroDivisionError instead of a typed result."""
+        if not self.family.is_quasi_definite or any(
+            term.squared_norm.as_fraction() == 0
+            for term in self.family.polynomials
+        ):
+            raise ValueError(
+                "recurrence coefficients require a quasi-definite family "
+                "with nonzero squared norms"
+            )
+        return self
 
 
 class ChristoffelDarbouxRequest(StrictModel):

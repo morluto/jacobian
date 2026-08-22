@@ -148,7 +148,9 @@ def _require_three_term_consistency(family) -> None:
 class OrthogonalPolynomialFamily(StrictModel):
     """A family of monic orthogonal polynomials p_0,...,p_n."""
 
-    polynomials: tuple[OrthogonalPolynomialTerm, ...] = Field(min_length=1)
+    polynomials: tuple[OrthogonalPolynomialTerm, ...] = Field(
+        min_length=1, max_length=MAX_POLYNOMIAL_DEGREE + 1
+    )
     variable: str = Field(min_length=1, max_length=64)
     is_quasi_definite: bool
     is_positive_definite: bool
@@ -365,6 +367,13 @@ class JacobiMatrix(StrictModel):
     @model_validator(mode="after")
     def bind_matrix_to_coefficients(self) -> Self:
         size = len(self.alphas)
+        if len(self.betas) != size:
+            raise ValueError(
+                "betas must carry one entry per alpha: an unused zero "
+                "placeholder followed by one norm ratio per recurrence step"
+            )
+        if self.betas[0].as_fraction() != 0:
+            raise ValueError("betas[0] is the unused placeholder and must be zero")
         if len(self.matrix) != size or any(len(row) != size for row in self.matrix):
             raise ValueError("matrix must be a square size x size array")
         for i in range(size):

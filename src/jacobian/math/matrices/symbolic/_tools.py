@@ -66,7 +66,9 @@ def _rational_function(
                     "coefficient": {"num": str(coefficient), "den": "1"},
                     "exponents": list(exponents),
                 }
-                for coefficient, exponents in sorted(terms, key=lambda t: t[1], reverse=True)
+                for coefficient, exponents in sorted(
+                    terms, key=lambda t: t[1], reverse=True
+                )
                 if coefficient != 0
             ]
         }
@@ -233,7 +235,7 @@ SYMBOLIC_MATRIX_OPERATIONS = (
             "Classify one bounded system A x = b over the rational-function "
             "field QQ(t_1, ..., t_n) as UNIQUE, NON_UNIQUE, or INCONSISTENT. "
             "For a unique system, return the exact solution vector. For a "
- "non-unique consistent system, return a particular solution and nullspace "
+            "non-unique consistent system, return a particular solution and nullspace "
             "basis. The declared parameters are algebraically independent: the "
             "result is the generic solution, not a case split over parameter "
             "specializations. Backed by SymPy symbolic linear algebra."

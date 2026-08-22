@@ -96,6 +96,7 @@ def compute_symbolic_linear_system(
     )
 
     return SymbolicLinearSystemResult(
+        system=request,
         classification=classification,
         solution=solution,
         particular_solution=particular,

@@ -109,9 +109,7 @@ def symbolic_linear_system_solve(
     import sympy
 
     matrix = _matrix_from_values(entries)
-    rhs_vec = sympy.Matrix(
-        [[rational_function_to_sympy(v) for v in rhs]]
-    ).T
+    rhs_vec = sympy.Matrix([[rational_function_to_sympy(v) for v in rhs]]).T
 
     rank_coeff = matrix.rank()
     aug = matrix.row_join(rhs_vec)
@@ -124,21 +122,30 @@ def symbolic_linear_system_solve(
     if rank_coeff == n_cols:
         # Unique solution. An exact backend failure here is an execution
         # failure, not a mathematical classification: conversion limits
-        # prove nothing about consistency.
-        sol = matrix.LUsolve(rhs_vec)
-        solution = tuple(
-            rational_function_from_sympy(sol[i], variables)
-            for i in range(n_cols)
-        )
-        return "UNIQUE", solution, None, None
+        # prove nothing about consistency. LUsolve rejects overdetermined
+        # rectangular systems, so read the unique solution from the exact
+        # RREF of the augmented matrix, which handles any shape. With full
+        # column rank and consistency already established, every coefficient
+        # column is a pivot row and the augmented entry is the solution.
+        rref_mat, pivots = aug.rref()
+        entries = [None] * n_cols
+        for i, pivot_col in enumerate(pivots):
+            if pivot_col < n_cols:
+                entries[pivot_col] = rational_function_from_sympy(
+                    rref_mat[i, n_cols], variables
+                )
+        if any(entry is None for entry in entries):
+            raise ValueError(
+                "exact row reduction did not determine the unique solution"
+            )
+        return "UNIQUE", tuple(entries), None, None
 
     # Non-unique consistent system
     if True:
         null = matrix.nullspace()
         nullspace_basis: tuple[tuple[RationalFunction, ...], ...] = tuple(
             tuple(
-                rational_function_from_sympy(vec[i], variables)
-                for i in range(n_cols)
+                rational_function_from_sympy(vec[i], variables) for i in range(n_cols)
             )
             for vec in null
         )
@@ -151,9 +158,7 @@ def symbolic_linear_system_solve(
         # Extract from the RREF of the augmented matrix
         particular = []
         for _j in range(n_cols):
-            particular.append(
-                rational_function_from_sympy(sympy.Integer(0), variables)
-            )
+            particular.append(rational_function_from_sympy(sympy.Integer(0), variables))
 
         for i, pivot_col in enumerate(pivots):
             if pivot_col < n_cols:

@@ -87,6 +87,23 @@ class TestSymbolicLinearSystem:
         assert result.solution is not None
         assert len(result.solution) == 2
 
+    def test_rectangular_full_column_rank_system(self):
+        """An overdetermined full-rank system [[1],[2]] x = [1,2] is UNIQUE.
+
+        SymPy's LUsolve rejects rectangular systems, so the unique branch
+        must read the solution from an exact RREF instead.
+        """
+        vars_: tuple[str, ...] = ()
+        one = _rf(vars_, (1, ()))
+        two = _rf(vars_, (2, ()))
+        matrix = _matrix(vars_, ((one,), (two,)))
+        rhs = (one, two)
+        req = SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
+        result = compute_symbolic_linear_system(req)
+        assert result.classification == "UNIQUE"
+        assert result.solution is not None
+        assert result.solution[0].numerator.terms[0].coefficient.num == "1"
+
     def test_inconsistent_system(self):
         """Solve [[1], [1]] * x = [1, 2] -> INCONSISTENT."""
         vars_: tuple[str, ...] = ()
@@ -170,3 +187,64 @@ class TestSymbolicLinearSystem:
         result = compute_symbolic_linear_system(req)
         assert result.classification == "UNIQUE"
         assert result.solution is not None
+
+
+class TestSourceBoundResult:
+    """The retained result must be verifiable against its source system."""
+
+    def _request(self):
+        vars_ = ("a", "b")
+        one = _rf(vars_, (1, (0, 0)))
+        a_val = _rf(vars_, (1, (1, 0)))
+        b_val = _rf(vars_, (1, (0, 1)))
+        matrix = _matrix(vars_, ((one, a_val), (b_val, one)))
+        return SymbolicLinearSystemRequest(matrix=matrix, rhs=(one, one))
+
+    def test_result_retains_source_system(self):
+        request = self._request()
+        result = compute_symbolic_linear_system(request)
+        assert result.system == request
+
+    def test_serialized_result_revalidates(self):
+        from jacobian.math.matrices.symbolic._models import (
+            SymbolicLinearSystemResult,
+        )
+
+        result = compute_symbolic_linear_system(self._request())
+        revalidated = SymbolicLinearSystemResult.model_validate(result.model_dump())
+        assert revalidated.classification == "UNIQUE"
+        assert revalidated.solution == result.solution
+
+    def test_forged_solution_for_other_system_is_rejected(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.matrices.symbolic._models import (
+            SymbolicLinearSystemResult,
+        )
+
+        result = compute_symbolic_linear_system(self._request())
+        payload = result.model_dump()
+        vars_: tuple[str, ...] = ()
+        three = _rf(vars_, (3, ()))
+        payload["system"] = {
+            "matrix": {"variables": [], "entries": ((three,),)},
+            "rhs": (_rf(vars_, (7, ())),),
+        }
+        with pytest.raises(ValidationError, match="exact solve"):
+            SymbolicLinearSystemResult.model_validate(payload)
+
+    def test_wrong_solution_vector_is_rejected(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.matrices.symbolic._models import (
+            SymbolicLinearSystemResult,
+        )
+
+        result = compute_symbolic_linear_system(self._request())
+        payload = result.model_dump()
+        wrong = _rf(("a", "b"), (5, (1, 1)))
+        payload["solution"] = (wrong, wrong)
+        with pytest.raises(ValidationError, match="exact solve"):
+            SymbolicLinearSystemResult.model_validate(payload)

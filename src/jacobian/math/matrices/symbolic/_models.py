@@ -337,8 +337,13 @@ class SymbolicLinearSystemRequest(StrictModel):
 
 
 class SymbolicLinearSystemResult(StrictModel):
-    """Classification and solution data for one symbolic linear system."""
+    """Classification and solution data for one symbolic linear system.
 
+    The source system is retained so the classification and every solution
+    vector remain verifiable against it after serialization.
+    """
+
+    system: SymbolicLinearSystemRequest
     classification: Literal["UNIQUE", "NON_UNIQUE", "INCONSISTENT"]
     solution: tuple[RationalFunction, ...] | None = None
     particular_solution: tuple[RationalFunction, ...] | None = None
@@ -346,13 +351,26 @@ class SymbolicLinearSystemResult(StrictModel):
     consistency: Literal["EXACT_RATIONAL_FUNCTION"] = "EXACT_RATIONAL_FUNCTION"
     field_semantics: Literal["GENERIC_OVER_QQ_FIELD"] = "GENERIC_OVER_QQ_FIELD"
 
+    def _replayed_solution(self) -> tuple[str, object, object, object]:
+        from jacobian.math.matrices.symbolic.operations import (
+            symbolic_linear_system_solve,
+        )
+
+        return symbolic_linear_system_solve(
+            self.system.matrix.entries,
+            self.system.rhs,
+            self.system.matrix.variables,
+        )
+
     @model_validator(mode="after")
     def require_consistent_result(self) -> Self:
         if self.classification == "UNIQUE":
             if self.solution is None:
                 raise ValueError("UNIQUE must carry a solution vector")
             if self.particular_solution is not None or self.nullspace_basis is not None:
-                raise ValueError("UNIQUE must not populate particular_solution or nullspace_basis")
+                raise ValueError(
+                    "UNIQUE must not populate particular_solution or nullspace_basis"
+                )
         elif self.classification == "NON_UNIQUE":
             if self.particular_solution is None:
                 raise ValueError("NON_UNIQUE must carry a particular_solution")
@@ -365,4 +383,24 @@ class SymbolicLinearSystemResult(StrictModel):
                 or self.nullspace_basis is not None
             ):
                 raise ValueError("INCONSISTENT must not carry solution data")
+        # Source-bound replay: the retained decision must be the exact
+        # solve of this result's own coefficient matrix and right-hand side,
+        # so a relayed or forged payload cannot validate as a solution of an
+        # unrelated system.
+        (
+            expected_classification,
+            expected_solution,
+            expected_particular,
+            expected_nullspace,
+        ) = self._replayed_solution()
+        if (
+            self.classification != expected_classification
+            or self.solution != expected_solution
+            or self.particular_solution != expected_particular
+            or self.nullspace_basis != expected_nullspace
+        ):
+            raise ValueError(
+                "linear-system conclusion must be the exact solve of the "
+                "retained source system"
+            )
         return self

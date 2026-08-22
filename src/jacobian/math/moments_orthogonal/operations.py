@@ -142,7 +142,7 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     if any(type(value) is not Fraction for value in moments):
         raise TypeError("moments must use exact Fractions")
     if moments[0] <= 0:
-        raise ValueError("the zeroth moment must be positive")
+        raise ValueError("the zeroth moment must be positive (nonzero)")
     if m > 2 * MAX_RECURRENCE_ORDER + 1:
         raise ValueError(
             "moment sequence length exceeds the exact recurrence bound; "

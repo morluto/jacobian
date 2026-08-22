@@ -189,6 +189,37 @@ class TestSymbolicLinearSystem:
         assert result.solution is not None
 
 
+class TestSolutionGrowthAdmission:
+    """Derived-solution growth is bounded at request admission."""
+
+    def test_solution_exponent_overflow_rejected_at_request(self):
+        """[[1/t^64]] * x = [t^64] would solve to t^128, outside the result
+        type; the request is rejected before the backend runs."""
+        import pytest
+        from pydantic import ValidationError
+
+        vars_ = ("t",)
+        inv = RationalFunction.model_validate(
+            {
+                "variables": ["t"],
+                "numerator": {
+                    "terms": [
+                        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
+                    ]
+                },
+                "denominator": {
+                    "terms": [
+                        {"coefficient": {"num": "1", "den": "1"}, "exponents": [64]}
+                    ]
+                },
+            }
+        )
+        matrix = _matrix(vars_, ((inv,),))
+        rhs = (_rf(vars_, (1, (64,))),)
+        with pytest.raises(ValidationError, match="exponent"):
+            SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
+
+
 class TestSourceBoundResult:
     """The retained result must be verifiable against its source system."""
 

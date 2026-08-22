@@ -47,6 +47,10 @@ def _cr(num: int, den: int) -> CanonicalRational:
     return CanonicalRational.from_integer_ratio(num, den)
 
 
+def _cr_from(value: dict) -> CanonicalRational:
+    return CanonicalRational(num=value["num"], den=value["den"])
+
+
 _HARMONIC_MOMENTS = tuple(_cr(1, k) for k in range(1, 8))
 
 
@@ -239,6 +243,20 @@ class TestWireAdapters:
         result = compute_recurrence_coefficients(request)
         assert isinstance(result, RecurrenceCoefficientsResult)
         assert len(result.alpha) == 3
+
+    def test_recurrence_dump_enters_jacobi_consumer(self) -> None:
+        """The advertised producer-consumer composition accepts the dump."""
+        request = RecurrenceCoefficientsRequest(moments=_HARMONIC_MOMENTS)
+        dump = compute_recurrence_coefficients(request).model_dump()
+        composed = JacobiMatrixRequest(**dump)
+        assert composed.alpha == tuple(_cr_from(v) for v in dump["alpha"])
+
+    def test_recurrence_dump_enters_christoffel_darboux_consumer(self) -> None:
+        dump = compute_recurrence_coefficients(
+            RecurrenceCoefficientsRequest(moments=_HARMONIC_MOMENTS)
+        ).model_dump()
+        composed = ChristoffelDarbouxRequest(**dump, x=_cr(1, 1), y=_cr(1, 2))
+        assert composed.beta == tuple(_cr_from(v) for v in dump["beta"])
 
     def test_jacobi_wire(self) -> None:
         request = JacobiMatrixRequest(

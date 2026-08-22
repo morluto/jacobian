@@ -306,6 +306,130 @@ class SymbolicEigenvaluesResult(StrictModel):
 # ---------------------------------------------------------------------------
 
 
+def _entry_growth_factor(value: RationalFunction) -> int:
+    """Term-count factor one entry contributes to an unreduced product.
+
+    Polynomial entries contribute their numerator term count; rational
+    entries contribute squared factors because products of fractions
+    accumulate numerator and denominator terms on both sides.
+    """
+    numerator_terms = len(value.numerator.terms)
+    denominator_terms = len(value.denominator.terms)
+    unit_denominator = denominator_terms == 1 and all(
+        term.coefficient.num == "1" and all(e == 0 for e in term.exponents)
+        for term in value.denominator.terms
+    )
+    if unit_denominator:
+        return numerator_terms
+    return max(numerator_terms, denominator_terms) ** 2
+
+
+def _minor_expansion_bound(
+    entries: tuple[tuple[RationalFunction, ...], ...],
+    rhs: tuple[RationalFunction, ...],
+    row_indices: tuple[int, ...],
+    column_indices: tuple[int, ...],
+) -> int:
+    """Leibniz sum of per-entry growth factors for one minor of ``[A | b]``."""
+    columns = len(entries[0])
+    work = len(row_indices)
+    total = 0
+    for permutation in permutations(range(work)):
+        product = 1
+        for row_position, column_position in enumerate(permutation):
+            row_index = row_indices[row_position]
+            column_index = column_indices[column_position]
+            if column_index == columns:
+                if row_index >= len(rhs):
+                    return 0
+                value = rhs[row_index]
+            else:
+                value = entries[row_index][column_index]
+            product *= _entry_growth_factor(value)
+            if product == 0:
+                break
+        total += product
+    return total
+
+
+def _solution_component_growth_bound(
+    entries: tuple[tuple[RationalFunction, ...], ...],
+    rhs: tuple[RationalFunction, ...],
+) -> tuple[int, int, int]:
+    """Conservative (terms, exponent, coefficient digits) for solved components.
+
+    Every solution, particular-solution, and nullspace component is an
+    exact ratio of ``work``-size minors of the augmented system ``[A | b]``
+    over minors of ``A``, where ``work = min(rows, columns)`` (Cramer/RREF
+    structure). Both sides of such a ratio multiply up to ``2 * work``
+    entry factors, and each unreduced minor numerator expands over the
+    Leibniz sum of per-entry term-count products.
+    """
+    rows = len(entries)
+    columns = len(entries[0])
+    work = min(rows, columns)
+
+    # Every work-size minor of [A | b] bounds the expansion work behind any
+    # solution component; A's own minors are a subset of these.
+    maximum_expansion = max(
+        _minor_expansion_bound(entries, rhs, row_indices, column_indices)
+        for row_indices in combinations(range(rows), work)
+        for column_indices in combinations(range(columns + 1), work)
+    )
+
+    values = tuple(value for row in entries for value in row) + tuple(rhs)
+    maximum_exponent = max(
+        (
+            exponent
+            for value in values
+            for polynomial in (value.numerator, value.denominator)
+            for term in polynomial.terms
+            for exponent in term.exponents
+        ),
+        default=0,
+    )
+    coefficient_digits = max(
+        (
+            max(len(term.coefficient.num.lstrip("-")), len(term.coefficient.den))
+            for value in values
+            for polynomial in (value.numerator, value.denominator)
+            for term in polynomial.terms
+        ),
+        default=1,
+    )
+    terms_bound = maximum_expansion**2
+    exponent_bound = 2 * work * maximum_exponent
+    digits_bound = maximum_expansion * 2 * work * coefficient_digits + len(
+        str(max(maximum_expansion, 1))
+    )
+    return terms_bound, exponent_bound, digits_bound
+
+
+def _require_linear_system_solution_budget(request) -> None:
+    """Admit only systems whose derived solutions fit the result type.
+
+    Runs at request admission so no accepted request can fail inside the
+    backend conversion with a host exception instead of returning its
+    declared typed result.
+    """
+    growth = _solution_component_growth_bound(request.matrix.entries, request.rhs)
+    if growth[0] > MAX_SYMBOLIC_RESULT_TERMS:
+        raise ValueError(
+            "linear-system solution exceeds the derived result term budget; "
+            "reduce entry term counts or dimension"
+        )
+    if growth[1] > MAX_SYMBOLIC_RESULT_EXPONENT:
+        raise ValueError(
+            "linear-system solution exceeds the derived result exponent "
+            "budget; reduce entry exponents or dimension"
+        )
+    if growth[2] > MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS:
+        raise ValueError(
+            "linear-system solution exceeds the derived result coefficient "
+            "budget; reduce coefficient sizes or dimension"
+        )
+
+
 class SymbolicLinearSystemRequest(StrictModel):
     """Solve one bounded system ``A x = b`` over ``QQ(t_1, ..., t_n)``.
 
@@ -333,6 +457,10 @@ class SymbolicLinearSystemRequest(StrictModel):
                 raise ValueError(
                     "the right-hand side must use the declared ordered field"
                 )
+        # Derived-solution admission: bound exponent, term, and coefficient
+        # growth before the backend runs so every accepted system returns
+        # its declared typed result instead of failing inside conversion.
+        _require_linear_system_solution_budget(self)
         return self
 
 
@@ -364,27 +492,11 @@ class SymbolicLinearSystemResult(StrictModel):
 
     @model_validator(mode="after")
     def require_consistent_result(self) -> Self:
-        # Solution growth bound: rational-function solutions of admitted
-        # systems can exceed the canonical result domain (Cramer-style
-        # determinants multiply entry heights); reject any solution whose
-        # components exceed the result term budget.
-        from jacobian.math.matrices.symbolic._models import (
-            MAX_SYMBOLIC_RESULT_TERMS,
-        )
-
-        def _entry_terms(value):
-            return len(value.numerator.terms) + len(value.denominator.terms)
-
-        for vector in (self.solution, self.particular_solution):
-            if vector is None:
-                continue
-            if len(vector) > MAX_SYMBOLIC_RESULT_TERMS:
-                raise ValueError("solution vector exceeds the term budget")
-            for value in vector:
-                if _entry_terms(value) > 512:
-                    raise ValueError(
-                        "solution component exceeds the serialized term budget"
-                    )
+        # Solution growth is bounded at request admission
+        # (_require_linear_system_solution_budget), before the backend runs:
+        # a parsed canonical RationalFunction already caps each side at
+        # MAX_SYMBOLIC_RESULT_TERMS, so per-component term checks here would
+        # be ineffective anyway.
         if self.classification == "UNIQUE":
             if self.solution is None:
                 raise ValueError("UNIQUE must carry a solution vector")

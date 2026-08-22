@@ -162,6 +162,11 @@ class RecurrenceCoefficientsResult(RecurrenceCoefficientsRequest):
 
 
 class JacobiMatrixRequest(StrictModel):
+    # Producer composition: compute_recurrence_coefficients(...).model_dump()
+    # carries the producer's moments/complete/method fields; admit them
+    # unchanged instead of rejecting the advertised composition.
+    model_config = ConfigDict(extra="allow")
+
     alpha: tuple[CanonicalRational, ...] = Field(min_length=0)
     beta: tuple[CanonicalRational, ...] = Field(min_length=1)
 
@@ -195,6 +200,10 @@ class JacobiMatrixResult(JacobiMatrixRequest):
 
 
 class ChristoffelDarbouxRequest(StrictModel):
+    # Producer composition: recurrence-coefficient dumps carry extra
+    # producer fields; admit them unchanged like GaussianQuadratureRequest.
+    model_config = ConfigDict(extra="allow")
+
     alpha: tuple[CanonicalRational, ...] = Field(min_length=0)
     beta: tuple[CanonicalRational, ...] = Field(min_length=1)
     x: CanonicalRational

@@ -89,8 +89,6 @@ def subgroup_lattice(
     Returns a list of (generators_of_subgroup, subgroup_order) tuples.
     Bounded to groups of order at most 512 to avoid exponential blowup.
     """
-    from itertools import combinations
-
     from sympy.combinatorics import Permutation, PermutationGroup
 
     if not 1 <= degree <= 64:
@@ -103,21 +101,43 @@ def subgroup_lattice(
             raise ValueError("each generator must be a permutation of 0..n-1")
         perms.append(Permutation(list(perm)))
     group = PermutationGroup(perms)
-    order = int(group.order())
-    if order > 512:
+    if int(group.order()) > 512:
         raise ValueError(
             "subgroup lattice computation is bounded to groups of order at most 512"
         )
+    # Traverse distinct subgroups instead of the 2^|G|-element power set:
+    # every subgroup is the closure of an existing subgroup extended by one
+    # element, so a fixpoint frontier enumerates each exactly once with
+    # |subgroups| x |G| closure constructions - feasible under the admitted
+    # order bound.
+    identity = Permutation(list(range(degree)))
+    trivial_key = frozenset((tuple(identity.array_form),))
+    subgroup_keys: set[frozenset] = {trivial_key}
+    result: list[tuple[list[list[int]], int]] = [(
+        [list(identity.array_form)], 1)]
+    frontier = [trivial_key]
     elements = list(group.elements)
-    subgroup_keys: set[frozenset] = set()
-    result: list[tuple[list[list[int]], int]] = []
-    for size in range(1, len(elements) + 1):
-        for subset in combinations(elements, size):
-            sg = group.subgroup(list(subset))
-            key = frozenset(tuple(p.array_form) for p in sg.elements)
+    while frontier:
+        current = frontier.pop()
+        [
+            Permutation(list(member)) for member in current
+        ]
+        for element in elements:
+            element_form = tuple(element.array_form)
+            if element_form in current:
+                continue
+            generated = group.subgroup(
+                [Permutation(list(member)) for member in current]
+                + [element]
+            )
+            key = frozenset(tuple(p.array_form) for p in generated.elements)
             if key not in subgroup_keys:
                 subgroup_keys.add(key)
-                result.append(
-                    ([list(p.array_form) for p in sg.generators], int(sg.order()))
-                )
+                result.append((
+                    sorted(
+                        (list(p.array_form) for p in generated.generators),
+                    ),
+                    int(generated.order()),
+                ))
+                frontier.append(key)
     return result

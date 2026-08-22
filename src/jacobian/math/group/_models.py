@@ -86,6 +86,26 @@ class GroupOrbitResult(StrictModel):
     point: int = Field(ge=0, le=MAX_GROUP_DEGREE - 1)
 
 
+# The conjugacy result serializes every group element and the lattice
+# traverses the subgroup structure; both stay bounded only under an
+# explicit enumerated-order cap enforced at this typed boundary.
+MAX_GROUP_ORDER = 512
+
+
+def _require_bounded_group_order(
+    degree: int, generators: tuple[tuple[int, ...], ...]
+) -> None:
+    from sympy.combinatorics import Permutation, PermutationGroup
+
+    group = PermutationGroup(*(Permutation(list(g)) for g in generators))
+    order = int(group.order())
+    if order > MAX_GROUP_ORDER:
+        raise ValueError(
+            f"group order {order} exceeds the bounded maximum "
+            f"{MAX_GROUP_ORDER} for full-element enumeration"
+        )
+
+
 class GroupConjugacyClassesRequest(StrictModel):
     """Compute the conjugacy classes of a permutation group."""
 
@@ -101,6 +121,7 @@ class GroupConjugacyClassesRequest(StrictModel):
                 raise ValueError("each generator must have length equal to degree")
             if sorted(perm) != list(range(self.degree)):
                 raise ValueError("each generator must be a permutation of 0..n-1")
+        _require_bounded_group_order(self.degree, self.generators)
         return self
 
 
@@ -140,6 +161,7 @@ class GroupSubgroupLatticeRequest(StrictModel):
                 raise ValueError("each generator must have length equal to degree")
             if sorted(perm) != list(range(self.degree)):
                 raise ValueError("each generator must be a permutation of 0..n-1")
+        _require_bounded_group_order(self.degree, self.generators)
         return self
 
 

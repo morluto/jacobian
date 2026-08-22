@@ -96,3 +96,42 @@ class TestSubgroupLattice:
         result = compute_subgroup_lattice(req)
         orders = sorted(sg.order for sg in result.subgroups)
         assert orders == [1, 2, 4]
+
+
+class TestBoundedEnumeration:
+    """Admission bounds the enumerated order; traversal stays tractable."""
+
+    def test_oversized_group_rejected_at_validation(self):
+        """S6 (order 720) is rejected by the request model, not mid-run."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="bounded maximum"):
+            GroupSubgroupLatticeRequest(
+                degree=6,
+                generators=((1, 0, 2, 3, 4, 5), (1, 2, 3, 4, 5, 0)),
+            )
+        with pytest.raises(ValidationError, match="bounded maximum"):
+            GroupConjugacyClassesRequest(
+                degree=6,
+                generators=((1, 0, 2, 3, 4, 5), (1, 2, 3, 4, 5, 0)),
+            )
+
+    def test_c32_lattice_is_divisor_chain(self):
+        """C32 has exactly 6 subgroups, one per divisor of 32."""
+        req = GroupSubgroupLatticeRequest(
+            degree=32,
+            generators=((*tuple(range(1, 32)), 0),),
+        )
+        result = compute_subgroup_lattice(req)
+        assert result.subgroup_count == 6
+        orders = sorted(sg.order for sg in result.subgroups)
+        assert orders == [1, 2, 4, 8, 16, 32]
+
+    def test_conjugacy_classes_serialize_all_elements(self):
+        """Class sizes sum to the bounded group order."""
+        req = GroupConjugacyClassesRequest(
+            degree=3,
+            generators=((1, 0, 2), (0, 2, 1)),
+        )
+        result = compute_conjugacy_classes(req)
+        assert sum(cls.size for cls in result.classes) == 6

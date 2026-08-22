@@ -275,8 +275,11 @@ class ChristoffelDarbouxResult(ChristoffelDarbouxRequest):
 
 
 class GaussianQuadratureRequest(StrictModel):
+    """Accept the canonical recurrence result (or raw coefficient tuples)."""
+
     alpha: tuple[CanonicalRational, ...] = Field(min_length=1)
     beta: tuple[CanonicalRational, ...] = Field(min_length=1)
+    model_config = ConfigDict(extra="allow")
 
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:

@@ -855,6 +855,27 @@ class StarResult(TopologyExactResult):
     simplex: tuple[str, ...]
     star_facets: tuple[tuple[str, ...], ...]
     star_is_empty: bool
+    star_complex: FiniteSimplicialComplex | None = None
+
+    @model_validator(mode="after")
+    def require_star_canonical(self) -> Self:
+        if self.star_is_empty:
+            if self.star_complex is not None:
+                raise ValueError("empty star must have no complex")
+            if self.star_facets:
+                raise ValueError("empty star must have no facets")
+        else:
+            if self.star_complex is None:
+                raise ValueError("non-empty star requires star_complex")
+            if tuple(sorted(self.star_complex.maximal_simplices)) != tuple(
+                sorted(tuple(sorted(f)) for f in self.star_facets)
+            ):
+                raise ValueError("star_complex maximal simplices must match star_facets")
+            if set(self.star_complex.vertices) != set(
+                v for facet in self.star_facets for v in facet
+            ):
+                raise ValueError("star_complex vertices must match star_facets")
+        return self
 
 
 class VertexDeletionRequest(StrictModel):
@@ -879,6 +900,31 @@ class VertexDeletionResult(TopologyExactResult):
     deleted_vertices: tuple[str, ...]
     remaining_vertices: tuple[str, ...]
     remaining_facets: tuple[tuple[str, ...], ...]
+    remaining_complex: FiniteSimplicialComplex | None = None
+
+    @model_validator(mode="after")
+    def require_deletion_canonical(self) -> Self:
+        if not self.remaining_facets:
+            if self.remaining_complex is not None:
+                raise ValueError("empty deletion must have no remaining_complex")
+            if self.remaining_vertices:
+                raise ValueError("empty deletion must have no remaining_vertices")
+        else:
+            if self.remaining_complex is None:
+                raise ValueError("non-empty deletion requires remaining_complex")
+            if tuple(sorted(self.remaining_complex.maximal_simplices)) != tuple(
+                sorted(tuple(sorted(f)) for f in self.remaining_facets)
+            ):
+                raise ValueError(
+                    "remaining_complex maximal simplices must match remaining_facets"
+                )
+            if tuple(sorted(self.remaining_complex.vertices)) != tuple(
+                sorted(self.remaining_vertices)
+            ):
+                raise ValueError(
+                    "remaining_complex vertices must match remaining_vertices"
+                )
+        return self
 
 
 class SkeletonRequest(StrictModel):
@@ -894,6 +940,29 @@ class SkeletonResult(TopologyExactResult):
     k: int
     skeleton_facets: tuple[tuple[str, ...], ...]
     skeleton_vertices: tuple[str, ...]
+    skeleton_complex: FiniteSimplicialComplex | None = None
+
+    @model_validator(mode="after")
+    def require_skeleton_canonical(self) -> Self:
+        if not self.skeleton_facets:
+            if self.skeleton_complex is not None:
+                raise ValueError("empty skeleton must have no complex")
+        else:
+            if self.skeleton_complex is None:
+                raise ValueError("non-empty skeleton requires skeleton_complex")
+            if tuple(sorted(self.skeleton_complex.maximal_simplices)) != tuple(
+                sorted(tuple(sorted(f)) for f in self.skeleton_facets)
+            ):
+                raise ValueError(
+                    "skeleton_complex maximal simplices must match skeleton_facets"
+                )
+            if tuple(sorted(self.skeleton_complex.vertices)) != tuple(
+                sorted(self.skeleton_vertices)
+            ):
+                raise ValueError(
+                    "skeleton_complex vertices must match skeleton_vertices"
+                )
+        return self
 
 
 class JoinRequest(StrictModel):
@@ -919,12 +988,51 @@ class JoinResult(TopologyExactResult):
     join_vertices: tuple[str, ...]
     join_facets: tuple[tuple[str, ...], ...]
     join_dimension: int
+    join_complex: FiniteSimplicialComplex | None = None
+
+    @model_validator(mode="after")
+    def require_join_canonical(self) -> Self:
+        if not self.join_facets:
+            if self.join_complex is not None:
+                raise ValueError("empty join must have no complex")
+        else:
+            if self.join_complex is None:
+                raise ValueError("non-empty join requires join_complex")
+            if tuple(sorted(self.join_complex.maximal_simplices)) != tuple(
+                sorted(tuple(sorted(f)) for f in self.join_facets)
+            ):
+                raise ValueError("join_complex maximal simplices must match join_facets")
+            if tuple(sorted(self.join_complex.vertices)) != tuple(
+                sorted(self.join_vertices)
+            ):
+                raise ValueError("join_complex vertices must match join_vertices")
+            if self.join_complex.dimension != self.join_dimension:
+                raise ValueError("join_complex dimension must match join_dimension")
+        return self
 
 
 class BarycentricSubdivisionRequest(StrictModel):
     """Subdivide a complex via its order complex (barycentric subdivision)."""
 
     complex: SimplicialComplexRequest
+
+    @model_validator(mode="after")
+    def require_barycentric_work_bounds(self) -> Self:
+        closure = face_closure(tuple(tuple(sorted(f)) for f in self.complex.facets))
+        face_count = sum(len(part) for part in closure)
+        if face_count > 64:
+            raise ValueError(
+                f"barycentric subdivision requires at most 64 faces (got {face_count}); "
+                "input is too large for exact bounded subdivision"
+            )
+        # Bound subdivision output size: number of maximal chains for 64 faces is
+        # still bounded by factorial-like growth but with face_count<=64 the
+        # resulting facet count remains within transport limits for tested cases.
+        if face_count > 31:
+            # For 6-vertex simplex (63 faces) subdivision has 720 maximal chains;
+            # allow but note bound.
+            pass
+        return self
 
 
 class BarycentricSubdivisionResult(TopologyExactResult):
@@ -935,6 +1043,40 @@ class BarycentricSubdivisionResult(TopologyExactResult):
     subdivision_vertices: tuple[str, ...]
     subdivision_facets: tuple[tuple[str, ...], ...]
     num_new_vertices: int
+    subdivision_complex: FiniteSimplicialComplex | None = None
+    subdivision_vertex_faces: tuple[tuple[str, ...], ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_subdivision_canonical(self) -> Self:
+        if not self.subdivision_facets:
+            if self.subdivision_complex is not None:
+                raise ValueError("empty subdivision must have no complex")
+        else:
+            if self.subdivision_complex is None:
+                raise ValueError("non-empty subdivision requires subdivision_complex")
+            if tuple(sorted(self.subdivision_complex.maximal_simplices)) != tuple(
+                sorted(tuple(sorted(f)) for f in self.subdivision_facets)
+            ):
+                raise ValueError(
+                    "subdivision_complex maximal simplices must match subdivision_facets"
+                )
+            if tuple(sorted(self.subdivision_complex.vertices)) != tuple(
+                sorted(self.subdivision_vertices)
+            ):
+                raise ValueError(
+                    "subdivision_complex vertices must match subdivision_vertices"
+                )
+            if len(self.subdivision_vertex_faces) != len(self.subdivision_vertices):
+                raise ValueError(
+                    "subdivision_vertex_faces must align with subdivision_vertices"
+                )
+            # Validate vertex labels are bounded and injective
+            if len(set(self.subdivision_vertices)) != len(self.subdivision_vertices):
+                raise ValueError("subdivision vertices must be unique")
+            for label in self.subdivision_vertices:
+                if len(label) > 32 or not label[0].isalnum():
+                    raise ValueError(f"invalid subdivision vertex label: {label}")
+        return self
 
 
 class PseudomanifoldRequest(StrictModel):
@@ -944,13 +1086,47 @@ class PseudomanifoldRequest(StrictModel):
 
 
 class PseudomanifoldResult(TopologyExactResult):
-    """Pseudomanifold decision result."""
+    """Pseudomanifold decision result bound to its source complex."""
 
+    complex: SimplicialComplexRequest | None = None
     is_pseudomanifold: bool
     is_closed: bool
     dimension: int
     num_facets: int
     obstruction: str | None = None
+
+    @model_validator(mode="after")
+    def require_pseudomanifold_binding(self) -> Self:
+        if self.complex is None:
+            # Allow legacy payloads without binding to validate for backward compat,
+            # but require new code to provide binding.
+            return self
+        facets = [frozenset(f) for f in self.complex.facets]
+        dim = max(len(f) - 1 for f in facets) if facets else 0
+        if self.dimension != dim or self.num_facets != len(facets):
+            raise ValueError("dimension/num_facets must match source complex")
+        # Recompute pseudomanifold decision
+        is_pure = all(len(f) - 1 == dim for f in facets) if facets else False
+        if not is_pure and self.is_pseudomanifold:
+            raise ValueError("impure complex cannot be pseudomanifold")
+        if dim < 1 and self.is_pseudomanifold:
+            raise ValueError("dimension <1 cannot be pseudomanifold")
+        if self.is_pseudomanifold:
+            # Check codim-1 counts
+            codim1_count: dict[frozenset[str], int] = {}
+            for facet in facets:
+                for face in combinations(sorted(facet), len(facet) - 1):
+                    key = frozenset(face)
+                    codim1_count[key] = codim1_count.get(key, 0) + 1
+            for count in codim1_count.values():
+                if count > 2:
+                    raise ValueError("pseudomanifold must have codim-1 count <=2")
+            is_closed_expected = all(c == 2 for c in codim1_count.values()) if codim1_count else False
+            if self.is_closed != is_closed_expected:
+                raise ValueError("is_closed must match codim-1 incidence")
+            if self.is_closed and self.obstruction is not None:
+                raise ValueError("closed pseudomanifold must have no obstruction")
+        return self
 
 
 class ShellingCheckRequest(StrictModel):
@@ -1000,6 +1176,40 @@ class ElementaryCollapseResult(TopologyExactResult):
     coface: tuple[str, ...]
     remaining_facets: tuple[tuple[str, ...], ...]
     remaining_vertices: tuple[str, ...]
+    remaining_complex: FiniteSimplicialComplex | None = None
+
+    @model_validator(mode="after")
+    def require_collapse_canonical(self) -> Self:
+        if self.is_free_face:
+            if not self.remaining_facets:
+                if self.remaining_complex is not None:
+                    raise ValueError("empty collapsed complex must have no remaining_complex")
+                if self.remaining_vertices:
+                    raise ValueError("empty collapsed complex must have no remaining_vertices")
+            else:
+                if self.remaining_complex is None:
+                    raise ValueError("non-empty collapse requires remaining_complex")
+                if tuple(sorted(self.remaining_complex.maximal_simplices)) != tuple(
+                    sorted(tuple(sorted(f)) for f in self.remaining_facets)
+                ):
+                    raise ValueError(
+                        "remaining_complex maximal simplices must match remaining_facets"
+                    )
+                if tuple(sorted(self.remaining_complex.vertices)) != tuple(
+                    sorted(self.remaining_vertices)
+                ):
+                    raise ValueError(
+                        "remaining_complex vertices must match remaining_vertices"
+                    )
+        else:
+            # When not a free face, remaining should be unchanged; allow both but
+            # if complex present it must match.
+            if self.remaining_complex is not None:
+                if tuple(sorted(self.remaining_complex.maximal_simplices)) != tuple(
+                    sorted(tuple(sorted(f)) for f in self.remaining_facets)
+                ):
+                    raise ValueError("remaining_complex must match remaining_facets")
+        return self
 
 
 __all__.extend(

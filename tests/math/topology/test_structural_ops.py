@@ -191,7 +191,10 @@ class TestElementaryCollapse:
             )
         )
         assert result.is_free_face
-        assert result.remaining_facets == ()
+        assert result.remaining_facets == (("b",),)
+        assert result.remaining_vertices == ("b",)
+        assert result.remaining_complex is not None
+        assert result.remaining_complex.maximal_simplices == (("b",),)
 
     def test_non_free_face(self) -> None:
         # In the circle, vertex 'a' is in 2 facets, so it's not free

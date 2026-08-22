@@ -30,8 +30,8 @@ class TestPinnedDistanceProfile:
         assert len(result.lines) == 1
         assert result.lines[0].source_pairs == ((0, 1),)
         # Distance from (0,0) to x + y = 1 is 1/sqrt(2); squared is 1/2.
-        assert result.lines[0].squared_distance_numerator == "1"
-        assert result.lines[0].squared_distance_denominator == "2"
+        assert result.lines[0].squared_distance.num == "1"
+        assert result.lines[0].squared_distance.den == "2"
 
     def test_square_has_distinct_lines(self) -> None:
         request = PinnedDistanceRequest(
@@ -92,8 +92,7 @@ class TestSourceBoundLedger:
             ],
             "lines": [
                 {
-                    "squared_distance_numerator": "3",
-                    "squared_distance_denominator": "2",
+                    "squared_distance": {"num": "3", "den": "2"},
                     "source_pairs": [[0, 1]],
                 }
             ],
@@ -120,8 +119,8 @@ class TestCoordinateHeightBound:
     def test_huge_denominator_rejected_at_admission(self) -> None:
         """Coordinates whose canonical line keys would approach CPython's
         int->str conversion limit are rejected at the boundary."""
-        huge = "1" + "0" * 512
-        with pytest.raises(ValidationError, match="512-digit"):
+        huge = "1" + "0" * 128
+        with pytest.raises(ValidationError, match="128-digit"):
             PinnedDistanceRequest(
                 anchor=_point(0, 0),
                 points=(
@@ -138,3 +137,27 @@ class TestCoordinateHeightBound:
             points=(_point(0, 1), _point(1, 0)),
         )
         assert len(request.points) == 2
+
+
+class TestResultSourceContract:
+    def test_replay_sources_must_satisfy_request_contract(self) -> None:
+        """A deserialized result cannot carry sources that the request
+        contract would reject (here: oversized coordinates)."""
+        huge = "1" + "0" * 128
+        payload = {
+            "anchor": {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
+            "points": [
+                {"x": {"num": huge, "den": "1"}, "y": {"num": "0", "den": "1"}},
+                {"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}},
+            ],
+            "lines": [
+                {
+                    "squared_distance": {"num": "1", "den": "1"},
+                    "source_pairs": [[0, 1]],
+                }
+            ],
+            "distinct_line_count": 1,
+            "min_squared_distance": None,
+        }
+        with pytest.raises(ValidationError):
+            PinnedDistanceResult.model_validate(payload)

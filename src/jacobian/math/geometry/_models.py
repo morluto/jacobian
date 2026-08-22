@@ -525,6 +525,9 @@ class CircumradiusProfileResult(StrictModel):
     def require_complete_profile(self) -> Self:
         import math
 
+        # Replay sources must satisfy the request contract before the
+        # exact replay runs.
+        CircumradiusProfileRequest(points=self.points)
         if self.point_count != len(self.points):
             raise ValueError("point count must match the retained configuration")
         expected = math.comb(self.point_count, 3)

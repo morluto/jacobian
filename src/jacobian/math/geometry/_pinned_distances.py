@@ -8,19 +8,25 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
 
-MAX_PINNED_COORDINATE_DIGITS = 512
+# Coordinate heights are bounded so every printed integer stays below
+# CPython's 4300-digit int->str conversion limit even under compounding:
+# canonical line keys scale by LCMs over up to six independent coordinate
+# denominators (<= ~16H digits), and reduced squared distances reach about
+# 12H+10 digits. At H = 128 every printed component stays under ~2100.
+MAX_PINNED_COORDINATE_DIGITS = 128
 
 
 class PinnedDistanceRequest(StrictModel):
     """Compute the complete pinned-distance profile from an anchor to all pair-spanned lines."""
 
     anchor: RationalPoint2D
-    points: tuple[RationalPoint2D, ...] = Field(min_length=2, max_length=128)
+    points: tuple[RationalPoint2D, ...] = Field(min_length=2, max_length=32)
 
     @model_validator(mode="after")
     def require_unique_bounded_points(self):
@@ -28,11 +34,10 @@ class PinnedDistanceRequest(StrictModel):
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
         # Canonical line keys are integer triples obtained by scaling with
-        # the LCM of up to three coordinate denominators and multiplying by
-        # numerators, so every printed component stays within roughly 4H+2
-        # digits for H-digit inputs. Capping H at 512 keeps str(int) far
-        # below CPython's 4300-digit int->str conversion limit, which would
-        # otherwise turn an accepted request into an execution failure.
+        # the LCM of up to three coordinate denominators; see the module
+        # constant above for the height derivation. Capping points at 32
+        # keeps the aggregate ledger inside the canonical output ceiling:
+        # at most C(32,2)=496 entries of ~3000-digit distances.
         from jacobian.math._rational_height import RationalHeight
 
         for value in (self.anchor.x, self.anchor.y):
@@ -58,8 +63,7 @@ class PinnedDistanceRequest(StrictModel):
 class LineDistanceEntry(StrictModel):
     """One distinct line with its exact squared distance and source pairs."""
 
-    squared_distance_numerator: str
-    squared_distance_denominator: str
+    squared_distance: CanonicalRational
     source_pairs: tuple[tuple[int, int], ...]
 
 
@@ -86,10 +90,12 @@ def _canonical_line_key(
         int_c //= divisor
     if int_a < 0 or (int_a == 0 and int_b < 0):
         int_a, int_b, int_c = -int_a, -int_b, -int_c
+    from jacobian.canonical import format_canonical_integer
+
     return (
-        str(int_a),
-        str(int_b),
-        str(int_c),
+        format_canonical_integer(int_a),
+        format_canonical_integer(int_b),
+        format_canonical_integer(int_c),
     )
 
 
@@ -122,20 +128,15 @@ def _distance_ledger(
             sq_dist = Fraction(cross * cross, norm_sq)
             key = _canonical_line_key(xi, yi, xj, yj)
             if key not in line_map:
-                line_map[key] = (
-                    [],
-                    str(sq_dist.numerator),
-                    str(sq_dist.denominator),
-                )
+                line_map[key] = ([], sq_dist)
             line_map[key][0].append((i, j))
 
     entries = []
     for key in sorted(line_map.keys()):
-        pairs, num, den = line_map[key]
+        pairs, sq_dist = line_map[key]
         entries.append(
             LineDistanceEntry(
-                squared_distance_numerator=num,
-                squared_distance_denominator=den,
+                squared_distance=CanonicalRational.from_fraction(sq_dist),
                 source_pairs=tuple(pairs),
             )
         )
@@ -155,6 +156,10 @@ class PinnedDistanceResult(StrictModel):
 
     @model_validator(mode="after")
     def require_invariants(self):
+        # Replay sources must satisfy the request contract (length,
+        # uniqueness, coordinate-height bounds) before the quadratic
+        # ledger reconstruction runs.
+        PinnedDistanceRequest(anchor=self.anchor, points=self.points)
         if self.distinct_line_count != len(self.lines):
             raise ValueError("distinct_line_count must match the line count")
         # Source-bound replay: recompute the canonical line ledger from the
@@ -173,10 +178,7 @@ class PinnedDistanceResult(StrictModel):
             return self
         min_entry = min(
             expected,
-            key=lambda e: Fraction(
-                int(e.squared_distance_numerator),
-                int(e.squared_distance_denominator),
-            ),
+            key=lambda e: e.squared_distance.as_fraction(),
         )
         if self.min_squared_distance is None:
             raise ValueError("min_squared_distance is required when lines exist")
@@ -190,13 +192,7 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
     entries = _distance_ledger(request.anchor, request.points)
 
     min_entry = (
-        min(
-            entries,
-            key=lambda e: Fraction(
-                int(e.squared_distance_numerator),
-                int(e.squared_distance_denominator),
-            ),
-        )
+        min(entries, key=lambda e: e.squared_distance.as_fraction())
         if entries
         else None
     )

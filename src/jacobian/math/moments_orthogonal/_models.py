@@ -279,6 +279,10 @@ class GaussianQuadratureRequest(StrictModel):
             raise ValueError(
                 "beta_0 (the zeroth moment of a positive functional) must be positive"
             )
+        # Golub-Welsch converts mu_0 to a float64 weight; values below the
+        # finite-float range would underflow every mass to zero.
+        if abs(beta_zero) < MIN_QUADRATURE_SUBDIAGONAL:
+            raise ValueError("beta_0 falls below the quadrature underflow bound")
         # Subdiagonal entries feed math.sqrt after float conversion; they must
         # be positive and safely inside the finite IEEE-double range, and the
         # diagonal and mu_0 must convert to finite doubles without overflow.

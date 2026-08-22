@@ -171,18 +171,20 @@ def _require_square_zero(
     *,
     label: str,
     group_columns=None,
+    degree_min: int = 0,
 ) -> None:
     """Require d^2 = 0 for a parsed differential sequence.
 
     ``group_columns`` carries chain-group dimensions so zero-width groups
-    preserve outer product dimensions.
+    preserve outer product dimensions; diagnostics report the declared
+    chain degree (``degree_min + index``), not the tuple index.
     """
     for i in range(len(diffs) - 1):
         result_columns = group_columns[i + 2] if group_columns is not None else None
         product = _matrix_multiply(diffs[i], diffs[i + 1], prime, result_columns)
         if any(value != 0 for row in product for value in row):
             raise ValueError(
-                f"{label} complex violates d^2=0 at differential index {i}"
+                f"{label} complex violates d^2=0 at chain degree {degree_min + i}"
             )
 
 
@@ -341,7 +343,8 @@ def _compute_homology_groups(
         prod = _matrix_multiply(diffs[i], diffs[i + 1], prime, cx.basis_sizes[i + 2])
         if any(any(v != 0 for v in row) for row in prod):
             raise ValueError(
-                f"chain complex does not satisfy d^2=0 at index {i}: product non-zero"
+                f"chain complex does not satisfy d^2=0 at chain degree "
+                f"{cx.degree_min + i}: product non-zero"
             )
 
     groups = []
@@ -450,10 +453,18 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
     # complexes and the map is a genuine chain map; validate both defining
     # equations before returning any exact decomposition.
     _require_square_zero(
-        source_diffs, prime, label="source", group_columns=list(source.basis_sizes)
+        source_diffs,
+        prime,
+        label="source",
+        group_columns=list(source.basis_sizes),
+        degree_min=source.degree_min,
     )
     _require_square_zero(
-        target_diffs, prime, label="target", group_columns=list(target.basis_sizes)
+        target_diffs,
+        prime,
+        label="target",
+        group_columns=list(target.basis_sizes),
+        degree_min=target.degree_min,
     )
     _require_chain_map_relation(
         source_diffs,
@@ -578,10 +589,18 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
     # A tensor product of chain complexes is a chain complex only when both
     # factors satisfy d^2 = 0; validate before building anything.
     _require_square_zero(
-        left_diffs, prime, label="left", group_columns=list(left.basis_sizes)
+        left_diffs,
+        prime,
+        label="left",
+        group_columns=list(left.basis_sizes),
+        degree_min=left.degree_min,
     )
     _require_square_zero(
-        right_diffs, prime, label="right", group_columns=list(right.basis_sizes)
+        right_diffs,
+        prime,
+        label="right",
+        group_columns=list(right.basis_sizes),
+        degree_min=right.degree_min,
     )
 
     def _to_str_matrix(mat: list[list[Fraction]]) -> tuple[tuple[str, ...], ...]:

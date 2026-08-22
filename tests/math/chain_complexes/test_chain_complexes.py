@@ -561,3 +561,22 @@ def homology_groups(complex_value):
     from jacobian.math.chain_complexes import homology_groups as native
 
     return native(complex_value)
+
+
+class TestChainDegreeDiagnostics:
+    def test_diagnostics_report_declared_degree(self) -> None:
+        """A shifted complex reports its declared chain degree, not the
+        tuple index, in d^2 failures."""
+        from jacobian.math.chain_complexes._models import (
+            ComputeHomologyRequest,
+        )
+
+        bad = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=-2,
+            degree_max=0,
+            basis_sizes=(1, 1, 1),
+            differential_matrices=((("1",),), (("1",),)),
+        )
+        with pytest.raises(ValueError, match="chain degree -2"):
+            compute_homology(ComputeHomologyRequest(complex=bad))

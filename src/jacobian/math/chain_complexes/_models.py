@@ -190,8 +190,10 @@ def _require_serializable_entries(*complex_values) -> None:
             for row in matrix:
                 for entry in row:
                     numerator, slash, denominator = entry.partition("/")
-                    significant = denominator or numerator
-                    if len(significant.lstrip("-")) > 512:
+                    if (
+                        len(numerator.lstrip("-")) > 512
+                        or len(denominator.lstrip("-")) > 512
+                    ):
                         raise ValueError(
                             "tensor product inputs are limited to "
                             "512-digit coefficients"
@@ -241,6 +243,27 @@ class TensorProductRequest(StrictModel):
                 f"cells, exceeding the {MAX_TENSOR_TOTAL_CELLS}-cell work bound"
             )
         _require_serializable_entries(self.left, self.right)
+        # Admission guarantees the derived complex value is canonical: the
+        # degree interval must fit the shared chain-degree bounds, so
+        # constructing it here fails at the boundary rather than inside
+        # execution when the result is exposed as a ChainComplexValue.
+        from jacobian.math.chain_complexes.values import ChainComplexValue
+
+        tensor_degree_min = self.left.degree_min + self.right.degree_min
+        # Shape-correct zero placeholders: differential deg has
+        # group_sizes[deg] rows and group_sizes[deg+1] columns.
+        placeholder_diffs = tuple(
+            tuple(("0",) * group_sizes[deg + 1] for _ in range(group_sizes[deg]))
+            for deg in range(max(0, group_count - 1))
+        )
+        ChainComplexValue(
+            coefficient_field=self.left.coefficient_field,
+            prime=self.left.prime,
+            degree_min=tensor_degree_min,
+            degree_max=tensor_degree_min + group_count - 1,
+            basis_sizes=group_sizes,
+            differential_matrices=placeholder_diffs,
+        )
         max_entry_chars = 2 * 512 + 8
         if max(allocated_cells, 1) * max_entry_chars > MAX_TENSOR_SERIALIZED_CHARS:
             raise ValueError(

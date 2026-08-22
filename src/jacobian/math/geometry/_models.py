@@ -453,10 +453,19 @@ class LabelledPoint2D(StrictModel):
     point: RationalPoint2D
 
 
+# The profile emits C(n,3) exact radius fractions and result validation
+# replays them; with the 819-digit coordinate bound each fraction carries up
+# to ~16k characters, so n is capped at 24 (C(24,3) = 2024 entries) to keep
+# one request's aggregate output inside a practical transport budget.
+MAX_CIRCUMRADIUS_PROFILE_POINTS = 24
+
+
 class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration."""
 
-    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
+    points: tuple[LabelledPoint2D, ...] = Field(
+        min_length=3, max_length=MAX_CIRCUMRADIUS_PROFILE_POINTS
+    )
 
     @model_validator(mode="after")
     def require_unique_labels_and_coordinates(self) -> Self:
@@ -546,7 +555,7 @@ def _replay_circumradius_entry(
 class CircumradiusProfileResult(StrictModel):
     points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
     point_count: StrictInt = Field(ge=3, le=64)
-    triple_count: StrictInt = Field(ge=1, le=41664)
+    triple_count: StrictInt = Field(ge=1, le=2024)
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 

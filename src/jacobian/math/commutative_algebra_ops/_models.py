@@ -259,6 +259,70 @@ class IdealSaturationRequest(StrictModel):
         return self
 
 
+def require_deterministic_saturation_certificate(
+    ideal,
+    saturation_polynomial,
+    saturation,
+) -> None:
+    """Deterministic certificate check when backend replay is unavailable.
+
+    Verifies both inclusions that pin the saturation: I ⊆ S, and every
+    saturation generator is annihilated into I by some power of d (bounded
+    multiply-and-reduce search over the admitted input domain).
+    """
+    import sympy
+
+    from jacobian.math.polynomials._conversions import (
+        rational_polynomial_to_sympy,
+    )
+
+    d_expr = rational_polynomial_to_sympy(saturation_polynomial).as_expr()
+    symbols = saturation.variables
+    sat_basis = sympy.groebner(
+        [
+            rational_polynomial_to_sympy(generator).as_expr()
+            for generator in saturation.generators
+        ],
+        *sympy.symbols(symbols),
+        order="grevlex",
+        domain=sympy.QQ,
+    )
+    ideal_basis = sympy.groebner(
+        [
+            rational_polynomial_to_sympy(generator).as_expr()
+            for generator in ideal.generators
+        ],
+        *sympy.symbols(symbols),
+        order="grevlex",
+        domain=sympy.QQ,
+    )
+    for generator in ideal.generators:
+        if (
+            sat_basis.reduce(rational_polynomial_to_sympy(generator).as_expr())[1]
+            != 0
+        ):
+            raise ValueError(
+                "saturation must equal the exact Singular replay of the "
+                "retained ideal and saturation polynomial"
+            )
+    cur = [
+        rational_polynomial_to_sympy(generator).as_expr()
+        for generator in saturation.generators
+    ]
+    for _ in range(2 * MAX_INPUT_EXPONENT + 1):
+        remaining = []
+        for expr in cur:
+            if ideal_basis.reduce(expr)[1] != 0:
+                remaining.append(expr * d_expr)
+        if not remaining:
+            return
+        cur = remaining
+    raise ValueError(
+        "saturation must equal the exact Singular replay of the retained "
+        "ideal and saturation polynomial"
+    )
+
+
 class IdealSaturationResult(StrictModel):
     """The exact saturation I : <d>^infinity, bound to its source request."""
 
@@ -310,34 +374,9 @@ class IdealSaturationResult(StrictModel):
                         "the retained ideal and saturation polynomial"
                     )
                 return self
-            # The second execution can fail transiently (wall-time boundary,
-            # unavailable backend) even though the first one computed the
-            # exact value. Fall back to a deterministic defining-invariant
-            # subset check instead of turning a valid result into a host
-            # exception: every generator of the retained ideal must reduce
-            # to zero over the claimed saturation.
-            import sympy
-
-            from jacobian.math.polynomials._conversions import (
-                rational_polynomial_to_sympy,
+            require_deterministic_saturation_certificate(
+                self.ideal, self.saturation_polynomial, self.saturation
             )
-
-            symbols = sympy.symbols(self.saturation.variables)
-            basis = sympy.groebner(
-                [
-                    rational_polynomial_to_sympy(generator).as_expr()
-                    for generator in self.saturation.generators
-                ],
-                *symbols,
-                order="grevlex",
-                domain=sympy.QQ,
-            )
-            for generator in self.ideal.generators:
-                if basis.reduce(rational_polynomial_to_sympy(generator).as_expr())[1] != 0:
-                    raise ValueError(
-                        "saturation must equal the exact Singular replay of "
-                        "the retained ideal and saturation polynomial"
-                    )
         elif (
             self.saturation is not None
             or self.backend_version is not None

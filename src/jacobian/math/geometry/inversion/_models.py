@@ -34,16 +34,22 @@ def _inversion_height_bound_ok(
     for v in (center_x, center_y, point_x, point_y, power):
         if RationalHeight.from_canonical(v).exceeds(half):
             return False
+
     # Estimate heights
     def _disp(a: CanonicalRational, b: CanonicalRational) -> RationalHeight:
-        return sum_heights((RationalHeight.from_canonical(a), RationalHeight.from_canonical(b)))
+        return sum_heights(
+            (RationalHeight.from_canonical(a), RationalHeight.from_canonical(b))
+        )
+
     dx = _disp(point_x, center_x)
     dy = _disp(point_y, center_y)
     norm2 = sum_heights((dx.product(dx), dy.product(dy)))
     scale = RationalHeight.from_canonical(power).quotient(norm2)
     hx = sum_heights((RationalHeight.from_canonical(center_x), scale.product(dx)))
     hy = sum_heights((RationalHeight.from_canonical(center_y), scale.product(dy)))
-    return not hx.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) and not hy.exceeds(MAX_CANONICAL_RATIONAL_DIGITS)
+    return not hx.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) and not hy.exceeds(
+        MAX_CANONICAL_RATIONAL_DIGITS
+    )
 
 
 class CircleInversionRequest(StrictModel):
@@ -53,11 +59,21 @@ class CircleInversionRequest(StrictModel):
     radius), and point p ≠ c, returns q = c + (s / ||p - c||²) * (p - c).
     """
 
-    center_x: CanonicalRational = Field(description="x-coordinate of the inversion center")
-    center_y: CanonicalRational = Field(description="y-coordinate of the inversion center")
-    power: CanonicalRational = Field(description="Positive rational inversion power (squared radius)")
-    point_x: CanonicalRational = Field(description="x-coordinate of the point to invert")
-    point_y: CanonicalRational = Field(description="y-coordinate of the point to invert")
+    center_x: CanonicalRational = Field(
+        description="x-coordinate of the inversion center"
+    )
+    center_y: CanonicalRational = Field(
+        description="y-coordinate of the inversion center"
+    )
+    power: CanonicalRational = Field(
+        description="Positive rational inversion power (squared radius)"
+    )
+    point_x: CanonicalRational = Field(
+        description="x-coordinate of the point to invert"
+    )
+    point_y: CanonicalRational = Field(
+        description="y-coordinate of the point to invert"
+    )
 
     @model_validator(mode="after")
     def require_admissible_request(self) -> Self:
@@ -77,7 +93,7 @@ class CircleInversionRequest(StrictModel):
         ):
             raise ValueError(
                 "circle inversion inputs exceed the conservative height bound; "
-                f"each coordinate/power must be within {MAX_CANONICAL_RATIONAL_DIGITS//2} digits and result within {MAX_CANONICAL_RATIONAL_DIGITS} digits"
+                f"each coordinate/power must be within {MAX_CANONICAL_RATIONAL_DIGITS // 2} digits and result within {MAX_CANONICAL_RATIONAL_DIGITS} digits"
             )
         return self
 

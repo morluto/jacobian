@@ -111,8 +111,13 @@ class TestRecurrenceCoefficients:
 
     def test_zeroth_moment_nonzero(self) -> None:
         moments = (_frac(0, 1), _frac(1, 1), _frac(1, 2))
-        with pytest.raises(ValueError, match="nonzero"):
+        with pytest.raises(ValueError, match="positive"):
             recurrence_coefficients(moments)
+
+    def test_negative_singleton_moments_rejected(self) -> None:
+        """A non-positive zeroth moment cannot seed a positive functional."""
+        with pytest.raises(ValueError, match="positive"):
+            recurrence_coefficients((_frac(-1, 1),))
 
     def test_insufficient_moments_for_recurrence(self) -> None:
         """With only 2 moments we can't produce any recurrence coefficient."""

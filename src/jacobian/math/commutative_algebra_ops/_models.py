@@ -316,6 +316,14 @@ class IdealSaturationResult(StrictModel):
                     raise ValueError(
                         "claimed saturation does not contain the source ideal"
                     )
+            d_expr = rational_polynomial_to_sympy(self.source_polynomial).as_expr()
+            for gen in self.saturation.generators:
+                multiple = d_expr * rational_polynomial_to_sympy(gen).as_expr()
+                if basis.reduce(multiple)[1] != 0:
+                    raise ValueError(
+                        "claimed saturation is not saturated by the source "
+                        "polynomial (d*J not subseteq J)"
+                    )
         return self
 
 

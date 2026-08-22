@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -115,8 +115,8 @@ def _require_canonical_residues(
 class PrimeFieldRecurrenceFindRequest(StrictModel):
     """Find the minimal linear recurrence of a sequence over ``GF(p)``."""
 
-    prime: int = Field(ge=2, le=_MAX_FIELD_PRIME)
-    sequence: tuple[int, ...] = Field(
+    prime: StrictInt = Field(ge=2, le=_MAX_FIELD_PRIME)
+    sequence: tuple[StrictInt, ...] = Field(
         min_length=2,
         max_length=_MAX_FIELD_SEQUENCE_LENGTH,
     )
@@ -131,13 +131,13 @@ class PrimeFieldRecurrenceFindRequest(StrictModel):
 class PrimeFieldRecurrenceFindResult(StrictModel):
     """The minimal LFSR over ``GF(p)`` found by Berlekamp-Massey."""
 
-    prime: int = Field(ge=2, le=_MAX_FIELD_PRIME)
-    sequence: tuple[int, ...] = Field(
+    prime: StrictInt = Field(ge=2, le=_MAX_FIELD_PRIME)
+    sequence: tuple[StrictInt, ...] = Field(
         min_length=2,
         max_length=_MAX_FIELD_SEQUENCE_LENGTH,
     )
-    coefficients: tuple[int, ...] = Field(max_length=_MAX_FIELD_SEQUENCE_LENGTH)
-    order: int = Field(ge=0, le=_MAX_FIELD_SEQUENCE_LENGTH)
+    coefficients: tuple[StrictInt, ...] = Field(max_length=_MAX_FIELD_SEQUENCE_LENGTH)
+    order: StrictInt = Field(ge=0, le=_MAX_FIELD_SEQUENCE_LENGTH)
     status: Literal["FOUND", "NO_FITTING_RECURRENCE"]
     method: Literal["BERLEKAMP_MASSEY"] = "BERLEKAMP_MASSEY"
 

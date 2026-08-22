@@ -466,7 +466,7 @@ def _circumradius_input_height_ok(point: RationalPoint2D) -> bool:
 class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration."""
 
-    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=24)
+    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=10)
 
     @model_validator(mode="after")
     def require_unique_labels_and_coordinates(self) -> Self:
@@ -518,7 +518,7 @@ class CircumradiusProfileResult(StrictModel):
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
     points: tuple[LabelledPoint2D, ...] = Field(
         min_length=3,
-        max_length=24,
+        max_length=10,
         description="Source labelled points; every entry must match the exact circumradius recomputation",
     )
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"

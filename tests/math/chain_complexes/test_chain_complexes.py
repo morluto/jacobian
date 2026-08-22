@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import pytest
+
 from jacobian.math.chain_complexes._models import (
     ChainComplex,
     HomologyRequest,
     MatrixEntry,
 )
-from jacobian.math.chain_complexes._operations import compute_homology
+from jacobian.math.chain_complexes._operations import (
+    compute_homology,
+    compute_mapping_cone,
+)
+from jacobian.math.chain_complexes._tools import TOOLS
 
 
 class TestHomology:
@@ -87,3 +93,39 @@ class TestHomology:
         result = compute_homology(HomologyRequest(complex=cx))
         assert result.groups[0].betti == 2
         assert result.groups[1].betti == 2
+
+
+class TestPublishedExample:
+    @pytest.mark.parametrize(
+        "tool",
+        TOOLS,
+        ids=[t.operation_id for t in TOOLS],
+    )
+    def test_published_example_validates_and_runs(self, tool):
+        assert tool.examples
+        for published in tool.examples:
+            request = tool.request_type.model_validate(published.input)
+            assert tool.run(request) is not None
+
+    def test_published_homology_example_betti_numbers(self):
+        homology = next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id.endswith("homology.compute")
+        )
+        request = homology.request_type.model_validate(homology.examples[0].input)
+        result = compute_homology(request)
+        assert [group.betti for group in result.groups] == [0, 0, 1]
+
+    def test_published_mapping_cone_example_is_acyclic(self):
+        cone_tool = next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id.endswith("mapping_cone.compute")
+        )
+        request = cone_tool.request_type.model_validate(
+            cone_tool.examples[0].input
+        )
+        result = compute_mapping_cone(request)
+        assert result.cone.dimensions == (1, 1)
+        assert len(result.cone.differentials) == 1

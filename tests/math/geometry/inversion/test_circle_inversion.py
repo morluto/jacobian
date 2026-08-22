@@ -85,6 +85,22 @@ class TestRejection:
             )
 
 
+class TestDerivedOutputAdmission:
+    def test_extreme_representable_request_admitted(self) -> None:
+        """A derived 8191-digit result is admitted without CPython's str limit."""
+        power = 10 ** 4095
+        request = CircleInversionRequest(
+            center_x={"num": "0", "den": "1"},
+            center_y={"num": "0", "den": "1"},
+            power={"num": str(power), "den": "1"},
+            point_x={"num": "1", "den": str(power)},
+            point_y={"num": "0", "den": "1"},
+        )
+        result = compute_circle_inversion(request)
+        assert result.inverted_x.as_fraction() == Fraction(10 ** 8190)
+        assert result.inverted_y.as_fraction() == 0
+
+
 class TestWireAdapter:
     def test_compute_circle_inversion(self) -> None:
         request = CircleInversionRequest(

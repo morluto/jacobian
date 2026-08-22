@@ -7,8 +7,13 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
     MAX_QUADRATURE_POINTS,
@@ -30,7 +35,9 @@ def _to_fractions(
     return tuple(v.as_fraction() for v in values)
 
 
-def _from_fractions(values) -> tuple[CanonicalRational, ...]:
+def _from_fractions(
+    values: tuple[Fraction, ...],
+) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
 
 
@@ -67,6 +74,19 @@ def _validate_alpha_beta(
     for value in (*alpha, *beta):
         require_bounded_rational(
             value, max_digits=MAX_RATIONAL_DIGITS, label="coefficient"
+        )
+
+
+def _require_canonical_size(value: Fraction, label: str) -> None:
+    if (
+        len(format_canonical_integer(abs(value.numerator)))
+        > MAX_CANONICAL_RATIONAL_DIGITS
+        or len(format_canonical_integer(value.denominator))
+        > MAX_CANONICAL_RATIONAL_DIGITS
+    ):
+        raise ValueError(
+            f"derived {label} exceeds the canonical "
+            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit limit"
         )
 
 
@@ -205,6 +225,22 @@ class ChristoffelDarbouxRequest(StrictModel):
         require_bounded_rational(
             self.y, max_digits=MAX_RATIONAL_DIGITS, label="y"
         )
+        # The degree-n recurrence amplifies admitted coefficients beyond their
+        # per-value bounds; admit exactly the requests whose complete derived
+        # output fits the canonical rational limit.
+        from jacobian.math.moments_orthogonal.operations import (
+            christoffel_darboux,
+        )
+
+        result = christoffel_darboux(
+            _to_fractions(self.alpha),
+            _to_fractions(self.beta),
+            self.x.as_fraction(),
+            self.y.as_fraction(),
+        )
+        _require_canonical_size(result.kernel, "Christoffel-Darboux kernel")
+        for index, polynomial in enumerate(result.polynomials_evaluated):
+            _require_canonical_size(polynomial, f"evaluated polynomial p_{index}")
         return self
 
 

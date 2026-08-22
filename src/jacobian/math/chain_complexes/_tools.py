@@ -50,12 +50,36 @@ _HOMOLOGY_EXAMPLE: dict[str, Any] = {
         "prime": 2,
         "min_degree": 0,
         "max_degree": 2,
-        "dimensions": [1, 2, 1],
+        "dimensions": [1, 2, 2],
         "differentials": [
-            [{"row": 0, "col": 0, "value": "1"}, {"row": 1, "col": 1, "value": "1"}],
-            [{"row": 0, "col": 0, "value": "0"}, {"row": 0, "col": 1, "value": "1"}],
+            [{"row": 0, "col": 0, "value": "1"}, {"row": 0, "col": 1, "value": "1"}],
+            [
+                {"row": 0, "col": 0, "value": "1"},
+                {"row": 0, "col": 1, "value": "1"},
+                {"row": 1, "col": 0, "value": "1"},
+                {"row": 1, "col": 1, "value": "1"},
+            ],
         ],
     },
+}
+
+
+_MAPPING_CONE_EXAMPLE: dict[str, Any] = {
+    "source": {
+        "prime": 2,
+        "min_degree": 0,
+        "max_degree": 0,
+        "dimensions": [1],
+        "differentials": [],
+    },
+    "target": {
+        "prime": 2,
+        "min_degree": 0,
+        "max_degree": 0,
+        "dimensions": [1],
+        "differentials": [],
+    },
+    "chain_map": [[{"row": 0, "col": 0, "value": "1"}]],
 }
 
 
@@ -97,7 +121,14 @@ CHAIN_COMPLEX_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "chain-complex",
         "mapping-cone",
         "exact",
-        examples=(),
+        examples=(
+            example(
+                "identity_chain_map",
+                "Compute the mapping cone of the identity chain map; the cone "
+                "is acyclic.",
+                _MAPPING_CONE_EXAMPLE,
+            ),
+        ),
     ),
 )
 

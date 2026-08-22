@@ -180,6 +180,35 @@ class TestChristoffelDarboux:
         assert result.polynomials_evaluated == (_frac(1, 1),)
 
 
+class TestChristoffelDarbouxAdmission:
+    def test_unrepresentable_recurrence_growth_rejected(self) -> None:
+        """Degree-15 growth from 4096-digit inputs exceeds the canonical limit."""
+        with pytest.raises(ValidationError, match="canonical"):
+            ChristoffelDarbouxRequest(
+                alpha=tuple(_cr(0, 1) for _ in range(16)),
+                beta=tuple(_cr(1, 1) for _ in range(16)),
+                x=_cr(10**4095, 1),
+                y=_cr(10**4095, 1),
+            )
+
+    def test_large_but_representable_evaluation_admitted_and_exact(self) -> None:
+        x_value = Fraction(10) ** 1000
+        p_prev, p_curr = Fraction(0), Fraction(1)
+        for k in range(15):
+            rec_beta = Fraction(0) if k == 0 else Fraction(1)
+            p_prev, p_curr = p_curr, x_value * p_curr - rec_beta * p_prev
+        request = ChristoffelDarbouxRequest(
+            alpha=tuple(_cr(0, 1) for _ in range(16)),
+            beta=tuple(_cr(1, 1) for _ in range(16)),
+            x=_cr(10**1000, 1),
+            y=_cr(10**1000, 1),
+        )
+        result = compute_christoffel_darboux(request)
+        assert result.polynomials_evaluated[-1] == CanonicalRational.from_fraction(
+            p_curr
+        )
+
+
 # ---------------------------------------------------------------------------
 # Gaussian quadrature
 # ---------------------------------------------------------------------------

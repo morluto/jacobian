@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -146,17 +146,143 @@ class GroupConjugacyClassesRequest(StrictModel):
         return self
 
 
-class GroupConjugacyClassesResult(StrictModel):
-    """The conjugacy classes of a permutation group as array forms."""
+ConjugacyClassElement = Annotated[
+    tuple[int, ...],
+    Field(min_length=1, max_length=MAX_GROUP_DEGREE),
+]
 
-    classes: tuple[tuple[tuple[int, ...], ...], ...]
+ConjugacyClass = Annotated[
+    tuple[ConjugacyClassElement, ...],
+    Field(min_length=1, max_length=MAX_CONJUGACY_CLASSES_GROUP_ORDER),
+]
+
+
+class GroupConjugacyClassesResult(StrictModel):
+    """The exact conjugacy-class partition of a permutation group.
+
+    ``classes`` is canonically ordered (members lexicographically sorted,
+    classes sorted by smallest member) so equal groups serialize
+    identically. Validation replays the defining invariant: the listed
+    elements must form a group under composition and each class must be
+    exactly its representative's conjugation orbit in that group.
+    """
+
+    classes: tuple[ConjugacyClass, ...] = Field(
+        min_length=1,
+        max_length=MAX_CONJUGACY_CLASSES_GROUP_ORDER,
+    )
     method: Literal["SYMPY_CONJUGACY_CLASSES"] = "SYMPY_CONJUGACY_CLASSES"
 
     @model_validator(mode="after")
-    def require_nonempty_classes(self) -> Self:
-        if not self.classes:
-            raise ValueError("conjugacy classes must be nonempty")
+    def require_conjugacy_class_partition(self) -> Self:
+        elements = _require_canonical_partition(self.classes)
+
+        from sympy.combinatorics import Permutation, PermutationGroup
+
+        ordered_elements = sorted(elements)
+        backend_group = PermutationGroup(
+            [Permutation(list(p)) for p in ordered_elements]
+        )
+        # A finite subset of a symmetric group is a subgroup iff it is closed
+        # under composition; <S> equals S iff |<S>| == |S|.
+        if int(backend_group.order()) != len(ordered_elements):
+            raise ValueError("the listed elements must form a group under composition")
+
+        generators = _minimal_generator_subset(ordered_elements)
+        inverse_generators = [_invert_permutation(p) for p in generators]
         for cls in self.classes:
-            if not cls:
-                raise ValueError("each conjugacy class must be nonempty")
+            orbit = _conjugation_orbit(cls[0], generators, inverse_generators)
+            if orbit != set(cls):
+                raise ValueError(
+                    "each class must equal the conjugation orbit of its "
+                    "representative in the reconstructed group"
+                )
         return self
+
+
+def _require_canonical_partition(
+    classes: tuple[ConjugacyClass, ...],
+) -> set[tuple[int, ...]]:
+    degree = len(classes[0][0])
+    expected_range = list(range(degree))
+    elements: set[tuple[int, ...]] = set()
+    previous_representative: tuple[int, ...] | None = None
+    for cls in classes:
+        previous_member: tuple[int, ...] | None = None
+        for perm in cls:
+            if len(perm) != degree:
+                raise ValueError("all permutations must have one common degree")
+            if sorted(perm) != expected_range:
+                raise ValueError("every element must be a permutation of 0..degree-1")
+            if perm in elements:
+                raise ValueError("conjugacy classes must not repeat an element")
+            elements.add(perm)
+            if previous_member is not None and perm <= previous_member:
+                raise ValueError("class members must be strictly increasing")
+            previous_member = perm
+        representative = cls[0]
+        if (
+            previous_representative is not None
+            and representative <= previous_representative
+        ):
+            raise ValueError("classes must be ordered by canonical representative")
+        previous_representative = representative
+    if len(elements) > MAX_CONJUGACY_CLASSES_GROUP_ORDER:
+        raise ValueError(
+            f"a conjugacy-class partition may contain at most "
+            f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER} elements"
+        )
+    return elements
+
+
+def _minimal_generator_subset(
+    elements: list[tuple[int, ...]],
+) -> list[tuple[int, ...]]:
+    from sympy.combinatorics import Permutation, PermutationGroup
+
+    total = len(elements)
+    generators: list[tuple[int, ...]] = []
+    generated_order = 1
+    for element in elements:
+        if generated_order == total:
+            break
+        candidate = [*generators, element]
+        candidate_order = int(
+            PermutationGroup([Permutation(list(p)) for p in candidate]).order()
+        )
+        if candidate_order > generated_order:
+            generators = candidate
+            generated_order = candidate_order
+    return generators
+
+
+def _conjugation_orbit(
+    representative: tuple[int, ...],
+    generators: list[tuple[int, ...]],
+    inverse_generators: list[tuple[int, ...]],
+) -> set[tuple[int, ...]]:
+    orbit = {representative}
+    stack = [representative]
+    while stack:
+        current = stack.pop()
+        for generator, inverse in zip(generators, inverse_generators, strict=True):
+            conjugate = _compose_permutation(
+                _compose_permutation(generator, current), inverse
+            )
+            if conjugate not in orbit:
+                orbit.add(conjugate)
+                stack.append(conjugate)
+    return orbit
+
+
+def _compose_permutation(
+    first: tuple[int, ...], second: tuple[int, ...]
+) -> tuple[int, ...]:
+    return tuple(first[i] for i in second)
+
+
+def _invert_permutation(permutation: tuple[int, ...]) -> tuple[int, ...]:
+    inverse = [0] * len(permutation)
+    for index, value in enumerate(permutation):
+        inverse[value] = index
+    return tuple(inverse)

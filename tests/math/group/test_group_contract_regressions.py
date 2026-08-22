@@ -54,3 +54,145 @@ def test_group_conjugacy_classes_abelian_group_is_singletons() -> None:
     assert len(result.classes) == 3
     for cls in result.classes:
         assert len(cls) == 1
+
+
+def test_group_conjugacy_classes_canonical_order_s3() -> None:
+    """Members are lexicographically sorted; classes sort by representative."""
+    from jacobian.math.group._models import GroupConjugacyClassesRequest
+    from jacobian.math.group._operations import compute_group_conjugacy_classes
+
+    gens = ((1, 2, 0), (1, 0, 2))
+    result = compute_group_conjugacy_classes(
+        GroupConjugacyClassesRequest(degree=3, generators=gens),
+    )
+    assert result.classes == (
+        ((0, 1, 2),),
+        ((0, 2, 1), (1, 0, 2), (2, 1, 0)),
+        ((1, 2, 0), (2, 0, 1)),
+    )
+
+
+def test_group_conjugacy_classes_serialization_is_hash_seed_independent() -> None:
+    """Separate processes serialize the same partition identically."""
+    import os
+    import subprocess
+    import sys
+
+    script = (
+        "from jacobian.math.group.operations import group_conjugacy_classes;"
+        "import json;"
+        "print(json.dumps(group_conjugacy_classes(3, [[1, 2, 0], [1, 0, 2]])))"
+    )
+    outputs = set()
+    for seed in ("0", "1", "424242"):
+        env = dict(os.environ)
+        env["PYTHONHASHSEED"] = seed
+        proc = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            env=env,
+            check=True,
+        )
+        outputs.add(proc.stdout.strip())
+    assert len(outputs) == 1
+
+
+def test_group_conjugacy_classes_result_accepts_trivial_and_abelian_partitions() -> (
+    None
+):
+    from jacobian.math.group._models import GroupConjugacyClassesResult
+
+    trivial = GroupConjugacyClassesResult(classes=(((0,),),))
+    assert trivial.classes == (((0,),),)
+    cyclic_c4 = GroupConjugacyClassesResult(
+        classes=(
+            ((0, 1, 2, 3),),
+            ((1, 2, 3, 0),),
+            ((2, 3, 0, 1),),
+            ((3, 0, 1, 2),),
+        )
+    )
+    assert len(cyclic_c4.classes) == 4
+
+
+def test_group_conjugacy_classes_result_rejects_non_permutations() -> None:
+    from jacobian.math.group._models import GroupConjugacyClassesResult
+
+    with pytest.raises(ValidationError, match="permutation"):
+        GroupConjugacyClassesResult(classes=(((0, 0),),))
+
+
+def test_group_conjugacy_classes_result_rejects_mixed_degrees() -> None:
+    from jacobian.math.group._models import GroupConjugacyClassesResult
+
+    with pytest.raises(ValidationError, match="degree"):
+        GroupConjugacyClassesResult(
+            classes=(((0, 1),), ((0, 1, 2), (1, 2, 0))),
+        )
+
+
+def test_group_conjugacy_classes_result_rejects_duplicate_elements() -> None:
+    from jacobian.math.group._models import GroupConjugacyClassesResult
+
+    with pytest.raises(ValidationError, match="repeat"):
+        GroupConjugacyClassesResult(classes=(((1, 0),), ((1, 0),)))
+
+
+def test_group_conjugacy_classes_result_rejects_unclosed_element_set() -> None:
+    from jacobian.math.group._models import GroupConjugacyClassesResult
+
+    with pytest.raises(ValidationError, match="group under composition"):
+        GroupConjugacyClassesResult(classes=(((1, 0),),))
+
+
+def test_group_conjugacy_classes_result_rejects_wrong_partition_of_valid_group() -> (
+    None
+):
+    """A valid group split into non-conjugacy classes must be rejected."""
+    from jacobian.math.group._models import GroupConjugacyClassesResult
+
+    wrong = (
+        ((0, 1, 2),),
+        ((0, 2, 1), (2, 1, 0)),
+        ((1, 0, 2),),
+        ((1, 2, 0), (2, 0, 1)),
+    )
+    with pytest.raises(ValidationError, match="conjugation orbit"):
+        GroupConjugacyClassesResult(classes=wrong)
+
+
+def test_group_conjugacy_classes_result_requires_canonical_member_order() -> None:
+    from jacobian.math.group._models import GroupConjugacyClassesResult
+
+    unsorted_members = (
+        ((0, 1, 2),),
+        ((2, 0, 1), (1, 2, 0)),
+    )
+    with pytest.raises(ValidationError, match="strictly increasing"):
+        GroupConjugacyClassesResult(classes=unsorted_members)
+
+
+def test_group_conjugacy_classes_result_requires_representative_class_order() -> None:
+    from jacobian.math.group._models import GroupConjugacyClassesResult
+
+    reordered_classes = (
+        ((1, 2, 0), (2, 0, 1)),
+        ((0, 1, 2),),
+    )
+    with pytest.raises(ValidationError, match="canonical representative"):
+        GroupConjugacyClassesResult(classes=reordered_classes)
+
+
+def test_group_conjugacy_classes_result_round_trips_through_model_dump() -> None:
+    from jacobian.math.group._models import (
+        GroupConjugacyClassesRequest,
+        GroupConjugacyClassesResult,
+    )
+    from jacobian.math.group._operations import compute_group_conjugacy_classes
+
+    result = compute_group_conjugacy_classes(
+        GroupConjugacyClassesRequest(degree=3, generators=((1, 2, 0), (1, 0, 2))),
+    )
+    revived = GroupConjugacyClassesResult.model_validate(result.model_dump())
+    assert revived == result

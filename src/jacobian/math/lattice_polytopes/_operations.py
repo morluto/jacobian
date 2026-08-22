@@ -113,7 +113,12 @@ def _is_bounded_h(halfspaces: list[tuple[list[Rational], Rational]], d: int) -> 
     The polytope is bounded iff its recession cone ``{d : A d <= 0}`` is
     ``{0}``, which holds iff the origin lies strictly in the interior of
     the convex hull of the rows of ``A``.  That interior test is an exact
-    facet enumeration of the row normals.
+    facet enumeration of the row normals.  The rows must positively span
+    ``R^d``; equivalently their convex hull must be full-dimensional and
+    contain the origin strictly interior.  If the rows' hull is not
+    full-dimensional (e.g. normals ``(1,0)`` and ``(1,1)`` in 2D) the
+    polyhedron is unbounded even though the hull's single facet has
+    positive offset.
     """
     normals = [coeffs for coeffs, _ in halfspaces]
     if d == 1:
@@ -121,6 +126,18 @@ def _is_bounded_h(halfspaces: list[tuple[list[Rational], Rational]], d: int) -> 
         negative = any(n[0] < 0 for n in normals)
         return positive and negative
     rows = [list(n) for n in normals]
+    # Positive spanning requires the normals' convex hull to be full-
+    # dimensional.  Check affine rank of the point set.
+    if len(rows) < d + 1:
+        return False
+    # Affine rank via differences from first point
+    diff_rows = [[rows[i][k] - rows[0][k] for k in range(d)] for i in range(1, len(rows))]
+    # Use Rational matrix rank for exactness
+    try:
+        if Matrix(diff_rows).rank() < d:
+            return False
+    except Exception:
+        return False
     hull_facets = _facets_from_points([Matrix(r) for r in rows], d)
     if not hull_facets:
         return False
@@ -393,6 +410,25 @@ def enumerate_lattice_points(
         "vertices" if request.vertices is not None else "halfspaces"
     )
     facets, lo, hi, d = _facets_and_box(request)
+    # Conservative serialized-size admission for enumerate: the result must
+    # fit within the 10 MiB canonical JSON output limit.  Estimate the
+    # worst-case size from the actual lattice-point count (first pass
+    # without materializing) and reject before expansion when it can be
+    # exceeded.  This avoids materializing a 360k-point square that would
+    # fail at OperationResult.require_canonical_output only after heavy work.
+    _, count_for_estimate = _scan_box(facets, lo, hi, d, collect=False)
+    # Per-point JSON is roughly {"coordinates":["x",...]} with d strings.
+    # Max coordinate string length is bounded by the bounding box.
+    max_coord_len = max(max(len(str(lo[k])), len(str(hi[k]))) for k in range(d))
+    # Conservative: 20 bytes overhead + per-coordinate (digits+quotes+comma) + brackets
+    per_point = 20 + d * (max_coord_len + 4)
+    base_overhead = 80
+    estimated = base_overhead + count_for_estimate * per_point
+    if estimated > 10 * 1024 * 1024:
+        raise LatticePointBudgetError(
+            "lattice-point enumeration would exceed the 10 MiB canonical JSON output limit"
+        )
+    # Second pass now that size is known to fit.
     points, _count = _scan_box(facets, lo, hi, d, collect=True)
     return EnumerateLatticePointsResult(
         dimension=d,

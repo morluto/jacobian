@@ -13,6 +13,7 @@ from jacobian.math.graphs.multigraph._models import (
     CycleMulticoverRequest,
     CycleRecord,
     EulerianCyclesRequest,
+    EulerianCyclesResult,
     FiniteAbelianGroup,
     FlowEdgeAssignment,
     LooplessMultigraph,
@@ -648,3 +649,98 @@ class TestZeroEdgeIdentification:
         assert result.conservation_holds  # All zeros trivially conserves
         assert not result.nowhere_zero
         assert set(result.zero_edge_ids) == {"e0", "e1", "e2"}
+
+
+# ---------------------------------------------------------------------------
+# Source-binding replay of non-witness outcomes
+# ---------------------------------------------------------------------------
+
+
+class TestSourceBindingReplay:
+    def test_forged_exhausted_on_flow_admitting_graph_rejected(self):
+        """A triangle admits a nowhere-zero Z/3 flow; EXHAUSTED must not validate."""
+        payload = {
+            "graph": TRIANGLE.model_dump(),
+            "group": Z3.model_dump(),
+            "resource_budget": {"max_states": 1024, "require_nowhere_zero": True},
+            "status": "EXHAUSTED",
+            "flow": None,
+            "states_explored": 0,
+            "termination_reason": "SEARCH_EXHAUSTED",
+        }
+        with pytest.raises(ValidationError, match="search replay"):
+            MultigraphFlowFindResult.model_validate(payload)
+
+    def test_genuine_exhausted_roundtrips(self):
+        request = MultigraphFlowFindRequest(
+            graph=BRIDGE_GRAPH,
+            group=Z3,  # the bridge admits no nonzero flow: search exhausts
+            resource_budget={"max_states": 1_000_000, "require_nowhere_zero": True},
+        )
+        result = find_multigraph_flow(request)
+        assert result.status == "EXHAUSTED"
+        assert MultigraphFlowFindResult.model_validate(result.model_dump()) == result
+
+    def test_mutated_exhausted_state_count_rejected(self):
+        request = MultigraphFlowFindRequest(
+            graph=BRIDGE_GRAPH,
+            group=Z3,
+            resource_budget={"max_states": 1_000_000, "require_nowhere_zero": True},
+        )
+        genuine = find_multigraph_flow(request)
+        payload = genuine.model_dump()
+        payload["states_explored"] = int(payload["states_explored"]) + 1
+        with pytest.raises(ValidationError):
+            MultigraphFlowFindResult.model_validate(payload)
+
+    def test_status_swap_between_non_witness_outcomes_rejected(self):
+        request = MultigraphFlowFindRequest(
+            graph=TRIANGLE,
+            group=Z3,
+            resource_budget={"max_states": 1, "require_nowhere_zero": False},
+        )
+        unknown = find_multigraph_flow(request)
+        assert unknown.status == "UNKNOWN"
+        payload = unknown.model_dump()
+        payload["status"] = "EXHAUSTED"
+        payload["termination_reason"] = "SEARCH_EXHAUSTED"
+        with pytest.raises(ValidationError, match="search replay"):
+            MultigraphFlowFindResult.model_validate(payload)
+
+    def test_unbound_results_skip_replay(self):
+        """Internal unbound results (no retained source) validate on shape alone."""
+        result = MultigraphFlowFindResult(
+            status="EXHAUSTED",
+            flow=None,
+            states_explored=0,
+            termination_reason="SEARCH_EXHAUSTED",
+        )
+        assert result.graph is None
+
+
+class TestEulerianSourceRequired:
+    def test_result_requires_source_graph(self):
+        with pytest.raises(ValidationError):
+            EulerianCyclesResult(
+                cycles=(),
+                edge_usage=(),
+                covers_all=True,
+            )
+
+    def test_forged_empty_decomposition_rejected(self):
+        """cycles=()/covers_all=True against a graph with edges cannot validate."""
+        payload = {
+            "graph": SQUARE.model_dump(),
+            "edge_subset": None,
+            "cycles": (),
+            "edge_usage": (("s0", 0), ("s1", 0), ("s2", 0), ("s3", 0)),
+            "covers_all": True,
+        }
+        with pytest.raises(ValidationError, match="covers_all"):
+            EulerianCyclesResult.model_validate(payload)
+
+    def test_genuine_decomposition_roundtrips(self):
+        request = EulerianCyclesRequest(graph=SQUARE)
+        result = compute_eulerian_cycles(request)
+        rebuilt = EulerianCyclesResult.model_validate(result.model_dump())
+        assert rebuilt == result

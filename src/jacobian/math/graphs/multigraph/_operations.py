@@ -25,6 +25,7 @@ from jacobian.math.graphs.multigraph._models import (
     MultigraphFlowCheckResult,
     MultigraphFlowFindRequest,
     MultigraphFlowFindResult,
+    MultigraphFlowSearchBudget,
     VertexDivergence,
 )
 
@@ -269,6 +270,42 @@ def _search_dfs(
     )
 
 
+def _search_flow_unbound(
+    graph: LooplessMultigraph,
+    group: FiniteAbelianGroup,
+    resource_budget: MultigraphFlowSearchBudget,
+) -> MultigraphFlowFindResult:
+    """Run one bounded flow search and return it without a bound source.
+
+    The returned result carries no ``graph``/``group``/``resource_budget``
+    binding, so source-binding validators can replay it without recursion.
+    """
+
+    require_nz = resource_budget.require_nowhere_zero
+
+    # Special case: a graph with no edges trivially has the empty flow.
+    if not graph.edges:
+        return MultigraphFlowFindResult(
+            status="FOUND",
+            flow=(),
+            states_explored=0,
+            termination_reason="SPECIAL_CASE",
+        )
+
+    # Per-edge candidate values: all group elements (or nonzero if required).
+    choices = _build_edge_choices(group, require_nz)
+    if not choices:
+        return MultigraphFlowFindResult(
+            status="EXHAUSTED",
+            flow=None,
+            states_explored=0,
+            termination_reason="SEARCH_EXHAUSTED",
+        )
+
+    choices_per_edge = [choices] * len(graph.edges)
+    return _search_dfs(graph, group, choices_per_edge, resource_budget.max_states)
+
+
 def find_multigraph_flow(
     request: MultigraphFlowFindRequest,
 ) -> MultigraphFlowFindResult:
@@ -281,49 +318,17 @@ def find_multigraph_flow(
     complete search space is covered, the result is ``UNKNOWN``.  If the
     complete space is covered with no witness, the result is ``EXHAUSTED``.
     """
-    graph = request.graph
-    group = request.group
-    require_nz = request.resource_budget.require_nowhere_zero
 
-    def _bind(result: MultigraphFlowFindResult) -> MultigraphFlowFindResult:
-        return MultigraphFlowFindResult(
-            graph=graph,
-            group=group,
-            resource_budget=request.resource_budget,
-            status=result.status,
-            flow=result.flow,
-            states_explored=result.states_explored,
-            termination_reason=result.termination_reason,
-        )
-
-    # Special case: a graph with no edges trivially has the empty flow.
-    if not graph.edges:
-        return _bind(
-            MultigraphFlowFindResult(
-                status="FOUND",
-                flow=(),
-                states_explored=0,
-                termination_reason="SPECIAL_CASE",
-            )
-        )
-
-    # Per-edge candidate values: all group elements (or nonzero if required).
-    choices = _build_edge_choices(group, require_nz)
-    if not choices:
-        return _bind(
-            MultigraphFlowFindResult(
-                status="EXHAUSTED",
-                flow=None,
-                states_explored=0,
-                termination_reason="SEARCH_EXHAUSTED",
-            )
-        )
-
-    choices_per_edge = [choices] * len(graph.edges)
-    inner = _search_dfs(
-        graph, group, choices_per_edge, request.resource_budget.max_states
+    inner = _search_flow_unbound(request.graph, request.group, request.resource_budget)
+    return MultigraphFlowFindResult(
+        graph=request.graph,
+        group=request.group,
+        resource_budget=request.resource_budget,
+        status=inner.status,
+        flow=inner.flow,
+        states_explored=inner.states_explored,
+        termination_reason=inner.termination_reason,
     )
-    return _bind(inner)
 
 
 # ---------------------------------------------------------------------------

@@ -110,8 +110,13 @@ class TestRecurrenceCoefficients:
 
     def test_zeroth_moment_nonzero(self) -> None:
         moments = (_frac(0, 1), _frac(1, 1), _frac(1, 2))
-        with pytest.raises(ValueError, match="nonzero"):
+        with pytest.raises(ValueError, match="positive"):
             recurrence_coefficients(moments)
+
+    def test_negative_singleton_moments_rejected(self) -> None:
+        """A non-positive zeroth moment cannot seed a positive functional."""
+        with pytest.raises(ValueError, match="positive"):
+            recurrence_coefficients((_frac(-1, 1),))
 
     def test_insufficient_moments_for_recurrence(self) -> None:
         """With only 2 moments we can't produce any recurrence coefficient."""
@@ -252,6 +257,23 @@ class TestWireAdapters:
         )
         result = compute_christoffel_darboux(request)
         assert isinstance(result, ChristoffelDarbouxResult)
+
+    def test_kernel_growth_bound_rejects_unrepresentable_output(self) -> None:
+        """Sixteen recurrence steps at a huge evaluation point would drive the
+        exact kernel past the canonical rational digit limit; admission must
+        reject the request instead of failing during execution."""
+        alpha = tuple(_cr(0, 1) for _ in range(16))
+        beta = tuple(_cr(1, 1) for _ in range(16))
+        huge = CanonicalRational.from_fraction(Fraction(1, 10**4095))
+        with pytest.raises(ValidationError, match="order-and-height"):
+            ChristoffelDarbouxRequest(alpha=alpha, beta=beta, x=huge, y=huge)
+
+    def test_kernel_growth_bound_admits_moderate_inputs(self) -> None:
+        alpha = tuple(_cr(0, 1) for _ in range(4))
+        beta = tuple(_cr(1, k + 1) for k in range(5))
+        x = CanonicalRational.from_fraction(Fraction(10**80 + 1, 10**79 - 3))
+        request = ChristoffelDarbouxRequest(alpha=alpha, beta=beta, x=x, y=x)
+        assert compute_christoffel_darboux(request).kernel
 
     def test_gaussian_quadrature_wire(self) -> None:
         request = GaussianQuadratureRequest(

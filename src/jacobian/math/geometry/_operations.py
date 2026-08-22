@@ -8,7 +8,7 @@ from typing import Any, cast
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.math._rational_height import RationalHeight, sum_heights
+from jacobian.math._rational_height import RationalHeight
 from jacobian.math.geometry._models import (
     CircumcircleRequest,
     CircumradiusProfileRequest,
@@ -467,7 +467,9 @@ def circumradius_profile(
         squared_circumradius = (dab * dbc * dac) / (4 * cross * cross)
         # Validate result height before constructing CanonicalRational to avoid execution exception.
         cr_canonical = CanonicalRational.from_fraction(squared_circumradius)
-        if RationalHeight.from_canonical(cr_canonical).exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
+        if RationalHeight.from_canonical(cr_canonical).exceeds(
+            MAX_CANONICAL_RATIONAL_DIGITS
+        ):
             raise ValueError(
                 "circumradius squared result exceeds the 32768-digit canonical limit; input coordinates must be smaller"
             )
@@ -487,33 +489,23 @@ def circumradius_profile(
     )
 
 
-def forbidden_patterns(request):
-    """Find a collinear triple or concyclic quadruple, or establish neither exists.
+def _screen_configuration(
+    pts,
+) -> tuple[
+    bool, bool, tuple[int, int, int] | None, tuple[int, int, int, int] | None, int, int
+]:
+    """Pure forbidden-pattern enumeration over distinct configuration points.
 
-    Three points are collinear when the 2x2 cross-product determinant
-
-        (x2 - x1)(y3 - y1) - (y2 - y1)(x3 - x1)
-
-    vanishes.  Four points are concyclic when the 4x4 determinant of the rows
-    [x^2 + y^2, x, y, 1] vanishes.  Both predicates are evaluated with exact
-    ``fractions.Fraction`` arithmetic!
+    Returns ``(has_collinear, has_concyclic, collinear_indices,
+    concyclic_indices, checked_triples, checked_quadruples)`` so both the
+    operation and the result validator replay identical bounded work.
     """
     from itertools import combinations
 
-    from jacobian.math.geometry._models import (
-        CollinearTriple,
-        ConcyclicQuadruple,
-        ForbiddenPatternsResult,
-    )
-
-    pts = request.configuration.points
     n = len(pts)
-    xy = [
-        (entry.point.x.as_fraction(), entry.point.y.as_fraction())
-        for entry in pts
-    ]
+    xy = [(entry.point.x.as_fraction(), entry.point.y.as_fraction()) for entry in pts]
 
-    collinear_triple = None
+    collinear_indices = None
     has_collinear = False
     checked_triples = 0
     for i, j, k in combinations(range(n), 3):
@@ -524,10 +516,10 @@ def forbidden_patterns(request):
         determinant = (xj - xi) * (yk - yi) - (yj - yi) * (xk - xi)
         if determinant == 0:
             has_collinear = True
-            collinear_triple = CollinearTriple(first=i, second=j, third=k)
+            collinear_indices = (i, j, k)
             break
 
-    concyclic_quadruple = None
+    concyclic_indices = None
     has_concyclic = False
     checked_quadruples = 0
     for i, j, k, ell in combinations(range(n), 4):
@@ -563,8 +555,11 @@ def forbidden_patterns(request):
             # Check whether all four points are collinear: if every triple
             # among the four is collinear, the quadruple is degenerate.
             def _tri_collinear(a, b, c):
-                xa, ya = xy[a]; xb, yb = xy[b]; xc, yc = xy[c]
+                xa, ya = xy[a]
+                xb, yb = xy[b]
+                xc, yc = xy[c]
                 return (xb - xa) * (yc - ya) - (yb - ya) * (xc - xa) == 0
+
             all_collinear = (
                 _tri_collinear(i, j, k)
                 and _tri_collinear(i, j, ell)
@@ -572,23 +567,75 @@ def forbidden_patterns(request):
                 and _tri_collinear(j, k, ell)
             )
             if all_collinear:
-                checked_quadruples += 0  # still counted, but not concyclic
                 continue
             # Also require at least one non-collinear triple to have a
             # well-defined circle; if all triples were collinear we already
             # continued. This guards the line case.
             has_concyclic = True
-            concyclic_quadruple = ConcyclicQuadruple(
-                first=i, second=j, third=k, fourth=ell
-            )
+            concyclic_indices = (i, j, k, ell)
             break
 
+    return (
+        has_collinear,
+        has_concyclic,
+        collinear_indices,
+        concyclic_indices,
+        checked_triples,
+        checked_quadruples,
+    )
+
+
+def forbidden_patterns(request):
+    """Find a collinear triple or concyclic quadruple, or establish neither exists.
+
+    Three points are collinear when the 2x2 cross-product determinant
+
+        (x2 - x1)(y3 - y1) - (y2 - y1)(x3 - x1)
+
+    vanishes.  Four points are concyclic when the 4x4 determinant of the rows
+    [x^2 + y^2, x, y, 1] vanishes.  Both predicates are evaluated with exact
+    ``fractions.Fraction`` arithmetic!
+    """
+    from jacobian.math.geometry._models import (
+        CollinearTriple,
+        ConcyclicQuadruple,
+        ForbiddenPatternsResult,
+    )
+
+    pts = request.configuration.points
+    (
+        has_collinear,
+        has_concyclic,
+        collinear_indices,
+        concyclic_indices,
+        checked_triples,
+        checked_quadruples,
+    ) = _screen_configuration(pts)
+
     return ForbiddenPatternsResult(
-        point_count=n,
+        configuration=request.configuration,
+        point_count=len(pts),
         has_collinear_triple=has_collinear,
         has_concyclic_quadruple=has_concyclic,
-        collinear_triple=collinear_triple,
-        concyclic_quadruple=concyclic_quadruple,
+        collinear_triple=(
+            CollinearTriple(
+                first=collinear_indices[0],
+                second=collinear_indices[1],
+                third=collinear_indices[2],
+            )
+            if collinear_indices is not None
+            else None
+        ),
+        concyclic_quadruple=(
+            ConcyclicQuadruple(
+                first=concyclic_indices[0],
+                second=concyclic_indices[1],
+                third=concyclic_indices[2],
+                fourth=concyclic_indices[3],
+            )
+            if concyclic_indices is not None
+            else None
+        ),
         checked_triples=checked_triples,
         checked_quadruples=checked_quadruples,
     )

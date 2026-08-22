@@ -5,6 +5,7 @@ from __future__ import annotations
 from itertools import product
 
 from jacobian.math.coalgebras._models import (
+    Coalgebra,
     ComultiplicationRequest,
     ComultiplicationResult,
     CounitRequest,
@@ -32,6 +33,7 @@ def compute_comultiplication(request: ComultiplicationRequest) -> Comultiplicati
     )
 
     return ComultiplicationResult(
+        coalgebra=ca,
         element_index=i,
         coefficients=coeffs,
         dimension=n,
@@ -45,9 +47,47 @@ def compute_counit(request: CounitRequest) -> CounitResult:
     p = ca.prime
 
     return CounitResult(
+        coalgebra=ca,
         element_index=i,
         value=ca.counit[i] % p,
     )
+
+
+def _group_like_coefficients(
+    ca: Coalgebra,
+) -> tuple[tuple[int, ...], ...]:
+    """Enumerate every group-like coefficient vector of a coalgebra.
+
+    An element g = sum a_i c_i is group-like when epsilon(g) = 1 and
+    Delta(g) = g (x) g modulo p. The request model bounds prime**dimension
+    within the documented enumeration budget, so this scan is exhaustive and
+    deterministic; the result validator replays the identical enumeration.
+    """
+    n = ca.dimension
+    p = ca.prime
+
+    comult = tuple(
+        tuple(tuple(ca.comultiplication[i][j][k] % p for k in range(n)) for j in range(n))
+        for i in range(n)
+    )
+    counit = tuple(ca.counit[i] % p for i in range(n))
+
+    found: list[tuple[int, ...]] = []
+    for coeffs in product(range(p), repeat=n):
+        if sum(coeffs[i] * counit[i] for i in range(n)) % p != 1:
+            continue
+
+        delta = [
+            [
+                sum(coeffs[i] * comult[i][j][k] for i in range(n)) % p
+                for k in range(n)
+            ]
+            for j in range(n)
+        ]
+        tensor_square = [[coeffs[j] * coeffs[k] % p for k in range(n)] for j in range(n)]
+        if delta == tensor_square:
+            found.append(coeffs)
+    return tuple(found)
 
 
 def find_group_like_elements(request: GroupLikeElementsRequest) -> GroupLikeElementsResult:
@@ -65,34 +105,12 @@ def find_group_like_elements(request: GroupLikeElementsRequest) -> GroupLikeElem
     exhaustive and the result lists every group-like element.
     """
     ca = request.coalgebra
-    n = ca.dimension
-    p = ca.prime
-
-    comult = tuple(
-        tuple(tuple(ca.comultiplication[i][j][k] % p for k in range(n)) for j in range(n))
-        for i in range(n)
-    )
-    counit = tuple(ca.counit[i] % p for i in range(n))
-
-    group_like = []
-    for coeffs in product(range(p), repeat=n):
-        if sum(coeffs[i] * counit[i] for i in range(n)) % p != 1:
-            continue
-
-        delta = [
-            [
-                sum(coeffs[i] * comult[i][j][k] for i in range(n)) % p
-                for k in range(n)
-            ]
-            for j in range(n)
-        ]
-        tensor_square = [[coeffs[j] * coeffs[k] % p for k in range(n)] for j in range(n)]
-        if delta == tensor_square:
-            group_like.append(GroupLikeElement(coefficients=coeffs))
+    found = _group_like_coefficients(ca)
 
     return GroupLikeElementsResult(
-        elements=tuple(group_like),
-        count=len(group_like),
+        coalgebra=ca,
+        elements=tuple(GroupLikeElement(coefficients=coeffs) for coeffs in found),
+        count=len(found),
     )
 
 

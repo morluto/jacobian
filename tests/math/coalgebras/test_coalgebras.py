@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.coalgebras._models import (
     GROUP_LIKE_ENUMERATION_BUDGET,
     Coalgebra,
     ComultiplicationRequest,
+    ComultiplicationResult,
     CounitRequest,
+    CounitResult,
     GroupLikeElementsRequest,
+    GroupLikeElementsResult,
 )
 from jacobian.math.coalgebras._operations import (
     compute_comultiplication,
@@ -179,3 +183,78 @@ class TestGroupLikeElements:
         assert result.count == 2
         found = {tuple(e.coefficients) for e in result.elements}
         assert found == {(1, 0), (0, 1)}
+
+
+class TestSourceBoundResults:
+    """Results retain their coalgebra and replay the defining relations."""
+
+    def _two_dim_coalgebra(self) -> Coalgebra:
+        return Coalgebra(
+            prime=5,
+            dimension=2,
+            comultiplication=(
+                ((1, 0), (0, 0)),
+                ((0, 0), (0, 1)),
+            ),
+            counit=(1, 1),
+        )
+
+    def test_results_revalidate_round_trip(self):
+        ca = self._two_dim_coalgebra()
+        comult = compute_comultiplication(
+            ComultiplicationRequest(coalgebra=ca, element_index=1)
+        )
+        counit = compute_counit(CounitRequest(coalgebra=ca, element_index=0))
+        group_like = find_group_like_elements(
+            GroupLikeElementsRequest(coalgebra=ca)
+        )
+        assert ComultiplicationResult.model_validate(comult.model_dump()) == comult
+        assert CounitResult.model_validate(counit.model_dump()) == counit
+        assert (
+            GroupLikeElementsResult.model_validate(group_like.model_dump())
+            == group_like
+        )
+
+    def test_detached_empty_group_like_result_is_rejected(self):
+        with pytest.raises(ValidationError):
+            GroupLikeElementsResult(elements=(), count=0)
+
+    def test_forged_group_like_set_is_rejected(self):
+        """A nonempty coalgebra cannot validate an empty enumeration."""
+        ca = self._two_dim_coalgebra()
+        with pytest.raises(ValueError, match="exact group-like set"):
+            GroupLikeElementsResult(coalgebra=ca, elements=(), count=0)
+
+    def test_forged_comultiplication_coefficients_are_rejected(self):
+        ca = self._two_dim_coalgebra()
+        with pytest.raises(ValueError, match="exact comultiplication"):
+            ComultiplicationResult(
+                coalgebra=ca,
+                element_index=0,
+                coefficients=((4, 0), (0, 0)),
+                dimension=2,
+            )
+
+    def test_forged_counit_value_is_rejected(self):
+        ca = self._two_dim_coalgebra()
+        with pytest.raises(ValueError, match="exact counit"):
+            CounitResult(coalgebra=ca, element_index=0, value=3)
+
+    def test_result_from_other_coalgebra_is_rejected(self):
+        ca = self._two_dim_coalgebra()
+        other = Coalgebra(
+            prime=5,
+            dimension=2,
+            comultiplication=(
+                ((1, 0), (0, 0)),
+                ((0, 1), (1, 0)),
+            ),
+            counit=(1, 0),
+        )
+        result = compute_counit(CounitRequest(coalgebra=ca, element_index=1))
+        with pytest.raises(ValueError, match="exact counit"):
+            CounitResult(
+                coalgebra=other,
+                element_index=result.element_index,
+                value=result.value,
+            )

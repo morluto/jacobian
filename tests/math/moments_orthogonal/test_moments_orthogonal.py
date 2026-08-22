@@ -110,8 +110,15 @@ class TestRecurrenceCoefficients:
 
     def test_zeroth_moment_nonzero(self) -> None:
         moments = (_frac(0, 1), _frac(1, 1), _frac(1, 2))
-        with pytest.raises(ValueError, match="nonzero"):
+        with pytest.raises(ValueError, match="must be positive"):
             recurrence_coefficients(moments)
+
+    def test_negative_short_sequence_rejected(self) -> None:
+        """A one-moment sequence skips Gram-Schmidt but still needs mu_0 > 0."""
+        with pytest.raises(ValueError, match="must be positive"):
+            recurrence_coefficients((_frac(-1, 1),))
+        with pytest.raises(ValueError, match="must be positive"):
+            recurrence_coefficients((_frac(-1, 1), _frac(-1, 2)))
 
     def test_insufficient_moments_for_recurrence(self) -> None:
         """With only 2 moments we can't produce any recurrence coefficient."""
@@ -142,8 +149,27 @@ class TestJacobiMatrix:
         assert result.off_diagonal == ()
 
     def test_zero_beta_rejected(self) -> None:
-        with pytest.raises(ValueError, match="nonzero"):
+        with pytest.raises(ValueError, match="must be positive"):
             jacobi_matrix((_frac(0, 1),), (_frac(0, 1), _frac(1, 1)))
+
+    def test_negative_subdiagonal_rejected(self) -> None:
+        """beta_1.. are squared subdiagonal entries; negatives cannot rebuild
+        the claimed symmetric real Jacobi matrix."""
+        with pytest.raises(ValueError, match="positive squared-norm ratios"):
+            jacobi_matrix(
+                (_frac(0, 1), _frac(0, 1)), (_frac(1, 1), _frac(-1, 1))
+            )
+
+    def test_zero_subdiagonal_rejected(self) -> None:
+        with pytest.raises(ValueError, match="positive squared-norm ratios"):
+            jacobi_matrix(
+                (_frac(0, 1), _frac(0, 1)), (_frac(1, 1), _frac(0, 1))
+            )
+
+    def test_unused_trailing_beta_not_required_positive(self) -> None:
+        """alpha length bounds the used subdiagonal; unused tail is inert."""
+        result = jacobi_matrix((_frac(0, 1),), (_frac(2, 1), _frac(-1, 1)))
+        assert result.off_diagonal == ()
 
 
 # ---------------------------------------------------------------------------
@@ -286,6 +312,13 @@ class TestWireAdapters:
     def test_hankel_validation_error(self) -> None:
         with pytest.raises(ValidationError):
             HankelMatrixRequest(moments=())
+
+    def test_recurrence_wire_rejects_negative_short_sequence(self) -> None:
+        """mu_0 < 0 with fewer than three moments must fail at this boundary."""
+        with pytest.raises(ValidationError, match="must be positive"):
+            RecurrenceCoefficientsRequest(moments=(_cr(-1, 1),))
+        with pytest.raises(ValidationError, match="must be positive"):
+            RecurrenceCoefficientsRequest(moments=(_cr(-1, 1), _cr(-1, 2)))
 
 
 # ---------------------------------------------------------------------------

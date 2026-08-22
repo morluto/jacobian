@@ -124,8 +124,8 @@ COALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Find every group-like element g of a finite-dimensional coalgebra "
         "over GF(p): Delta(g) = g (x) g and epsilon(g) = 1. Enumerates the "
         "whole element space, so requests require prime**dimension <= 65536. "
-        "Group-like elements form a group under convolution and are "
-        "fundamental to Hopf algebra structure.",
+        "Group-like elements are linearly independent and each spans a "
+        "one-dimensional subcoalgebra.",
         GroupLikeElementsRequest,
         GroupLikeElementsResult,
         find_group_like_elements,

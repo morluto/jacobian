@@ -109,9 +109,31 @@ class ComultiplicationRequest(StrictModel):
 class ComultiplicationResult(StrictModel):
     """The comultiplication Delta(c_i) as a matrix of coefficients."""
 
+    coalgebra: Coalgebra
     element_index: int = Field(ge=0)
     coefficients: tuple[tuple[int, ...], ...]
     dimension: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def bind_comultiplication_to_source(self) -> Self:
+        """Replay Delta(c_i) against the retained canonical coalgebra."""
+        ca = self.coalgebra
+        n = ca.dimension
+        p = ca.prime
+        if self.element_index >= n:
+            raise ValueError("element_index must be in 0..dimension-1")
+        if self.dimension != n:
+            raise ValueError("dimension must match the retained coalgebra")
+        expected = tuple(
+            tuple(ca.comultiplication[self.element_index][j][k] % p for k in range(n))
+            for j in range(n)
+        )
+        if self.coefficients != expected:
+            raise ValueError(
+                "coefficients must be the exact comultiplication of the "
+                "retained coalgebra basis element"
+            )
+        return self
 
 
 class CounitRequest(StrictModel):
@@ -130,8 +152,22 @@ class CounitRequest(StrictModel):
 class CounitResult(StrictModel):
     """The counit value epsilon(c_i)."""
 
+    coalgebra: Coalgebra
     element_index: int = Field(ge=0)
     value: int
+
+    @model_validator(mode="after")
+    def bind_counit_to_source(self) -> Self:
+        """Replay epsilon(c_i) against the retained canonical coalgebra."""
+        ca = self.coalgebra
+        if self.element_index >= ca.dimension:
+            raise ValueError("element_index must be in 0..dimension-1")
+        if self.value != ca.counit[self.element_index] % ca.prime:
+            raise ValueError(
+                "value must be the exact counit of the retained coalgebra "
+                "basis element"
+            )
+        return self
 
 
 class GroupLikeElementsRequest(StrictModel):
@@ -166,13 +202,41 @@ class GroupLikeElement(StrictModel):
 class GroupLikeElementsResult(StrictModel):
     """All group-like elements of a coalgebra."""
 
+    coalgebra: Coalgebra
     elements: tuple[GroupLikeElement, ...]
     count: int = Field(ge=0)
 
     @model_validator(mode="after")
-    def require_consistent_count(self) -> Self:
+    def bind_group_like_to_source(self) -> Self:
+        """Replay the exhaustive enumeration against the retained coalgebra.
+
+        The request model bounds prime**dimension within the documented
+        enumeration budget, so replaying the defining relations
+        Delta(g) = g (x) g and epsilon(g) = 1 over the whole element space is
+        deterministic bounded work; the retained conclusion must be exactly
+        that enumeration.
+        """
+        from jacobian.math.coalgebras._operations import _group_like_coefficients
+
         if self.count != len(self.elements):
             raise ValueError("count must match element count")
+        n = self.coalgebra.dimension
+        seen = set()
+        for element in self.elements:
+            if len(element.coefficients) != n:
+                raise ValueError(
+                    "element coefficients must match the coalgebra dimension"
+                )
+            key = tuple(element.coefficients)
+            if key in seen:
+                raise ValueError("group-like elements must be distinct")
+            seen.add(key)
+        expected = _group_like_coefficients(self.coalgebra)
+        if tuple(element.coefficients for element in self.elements) != expected:
+            raise ValueError(
+                "elements must be the exact group-like set of the retained "
+                "coalgebra"
+            )
         return self
 
 

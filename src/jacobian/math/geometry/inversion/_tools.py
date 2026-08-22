@@ -45,7 +45,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute circle inversion of a rational planar point",
         "Given a rational planar center, a positive rational inversion power "
         "(squared radius), and a rational point p ≠ c, return the exact "
-        "rational inverted point q = c + (s / ||p-c||²) * (p-c).",
+        "rational inverted point q = c + (s / ||p-c||²) * (p-c). Every input "
+        "numerator and denominator must carry at most 2730 decimal digits so "
+        "the exact output stays within the canonical value limit.",
         CircleInversionRequest,
         CircleInversionResult,
         compute_circle_inversion,

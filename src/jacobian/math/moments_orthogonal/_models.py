@@ -117,6 +117,13 @@ class RecurrenceCoefficientsRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_moments(self) -> Self:
         _validate_moments(self.moments)
+        # beta_0 is the positive zeroth moment of a positive-definite
+        # functional; the delegated kernel only checks nonzero, so enforce
+        # positivity at this boundary before the short-sequence branch.
+        if self.moments[0].num == "0" or self.moments[0].num.startswith("-"):
+            raise ValueError(
+                "beta_0 (the zeroth moment of a positive functional) must be positive"
+            )
         # The Gram-Schmidt kernel requires a positive-definite moment
         # functional; admit exactly the sequences it accepts so an accepted
         # request cannot fail inside execution.

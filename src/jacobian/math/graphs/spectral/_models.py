@@ -89,19 +89,17 @@ class GraphCharacteristicPolynomialResult(StrictModel):
             rational_polynomial_to_sympy,
         )
 
+        if self.polynomial.variables != (_VARIABLE,):
+            raise ValueError("characteristic polynomial must be univariate in x")
         matrix = (
             _adjacency_matrix(self.graph)
             if self.convention == "ADJACENCY"
             else _laplacian_matrix(self.graph)
         )
-        expected = (
-            matrix.charpoly()
-            .as_expr()
-            .subs(
-                matrix.charpoly().gen, rational_polynomial_to_sympy(self.polynomial).gen
-            )
-        )
-        actual = rational_polynomial_to_sympy(self.polynomial).as_expr()
+        poly_sym = rational_polynomial_to_sympy(self.polynomial)
+        actual = poly_sym.as_expr()
+        charpoly = matrix.charpoly()
+        expected = charpoly.as_expr().subs(charpoly.gen, poly_sym.gen)
         if expected != actual:
             raise ValueError(
                 "characteristic polynomial does not match the source graph"

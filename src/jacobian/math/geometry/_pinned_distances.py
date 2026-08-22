@@ -8,12 +8,17 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
+
+# With per-component digit bound d, each squared-distance fraction carries at
+# most 8d+6 numerator and denominator digits, so d = 2048 keeps every exact
+# entry inside the canonical 32,768-digit limit before execution.
+_MAX_PINNED_COORDINATE_DIGITS = 2048
 
 
 class PinnedDistanceRequest(StrictModel):
@@ -30,6 +35,9 @@ class PinnedDistanceRequest(StrictModel):
         )
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
+        for pt in (self.anchor, *self.points):
+            require_bounded_rational(pt.x, max_digits=_MAX_PINNED_COORDINATE_DIGITS, label="coordinate")
+            require_bounded_rational(pt.y, max_digits=_MAX_PINNED_COORDINATE_DIGITS, label="coordinate")
         return self
 
 

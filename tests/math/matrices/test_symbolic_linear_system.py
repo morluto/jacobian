@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-
-from jacobian.math.polynomials.values import RationalFunction
 from jacobian.math.matrices.symbolic._models import (
     SymbolicLinearSystemRequest,
     SymbolicMatrix,
 )
 from jacobian.math.matrices.symbolic._operations import compute_symbolic_linear_system
+from jacobian.math.polynomials.values import RationalFunction
 
 
 def _rf(

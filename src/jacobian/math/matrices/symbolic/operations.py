@@ -122,19 +122,18 @@ def symbolic_linear_system_solve(
         return "INCONSISTENT", None, None, None
 
     if rank_coeff == n_cols:
-        # Unique solution
-        try:
-            sol = matrix.LUsolve(rhs_vec)
-            solution = tuple(
-                rational_function_from_sympy(sol[i], variables)
-                for i in range(n_cols)
-            )
-            return "UNIQUE", solution, None, None
-        except Exception:
-            pass
+        # Unique solution. An exact backend failure here is an execution
+        # failure, not a mathematical classification: conversion limits
+        # prove nothing about consistency.
+        sol = matrix.LUsolve(rhs_vec)
+        solution = tuple(
+            rational_function_from_sympy(sol[i], variables)
+            for i in range(n_cols)
+        )
+        return "UNIQUE", solution, None, None
 
     # Non-unique consistent system
-    try:
+    if True:
         null = matrix.nullspace()
         nullspace_basis: tuple[tuple[RationalFunction, ...], ...] = tuple(
             tuple(
@@ -151,7 +150,7 @@ def symbolic_linear_system_solve(
         # The particular solution: set free variables to 0
         # Extract from the RREF of the augmented matrix
         particular = []
-        for j in range(n_cols):
+        for _j in range(n_cols):
             particular.append(
                 rational_function_from_sympy(sympy.Integer(0), variables)
             )
@@ -168,7 +167,3 @@ def symbolic_linear_system_solve(
             tuple(particular),
             nullspace_basis if nullspace_basis else None,
         )
-    except Exception:
-        pass
-
-    return "INCONSISTENT", None, None, None

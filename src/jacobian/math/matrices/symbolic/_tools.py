@@ -66,7 +66,8 @@ def _rational_function(
                     "coefficient": {"num": str(coefficient), "den": "1"},
                     "exponents": list(exponents),
                 }
-                for coefficient, exponents in terms
+                for coefficient, exponents in sorted(terms, key=lambda t: t[1], reverse=True)
+                if coefficient != 0
             ]
         }
 

@@ -16,6 +16,8 @@ from jacobian.math.matrices.symbolic._models import (
     SymbolicDeterminantRequest,
     SymbolicDeterminantResult,
     SymbolicEigenvaluesResult,
+    SymbolicLinearSystemRequest,
+    SymbolicLinearSystemResult,
     SymbolicMatrixRequest,
     SymbolicRankResult,
 )
@@ -78,8 +80,8 @@ def compute_symbolic_eigenvalues(
 
 
 def compute_symbolic_linear_system(
-    request: "SymbolicLinearSystemRequest",
-) -> "SymbolicLinearSystemResult":
+    request: SymbolicLinearSystemRequest,
+) -> SymbolicLinearSystemResult:
     """Classify and solve ``A x = b`` over ``QQ(t_1, ..., t_n)``."""
 
     from jacobian.math.matrices.symbolic import symbolic_linear_system_solve

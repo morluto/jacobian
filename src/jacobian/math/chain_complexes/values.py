@@ -234,10 +234,34 @@ class MappingConeResult(StrictModel):
 
 
 class TensorProductResult(StrictModel):
-    """The tensor product of two chain complexes."""
+    """The tensor product of two chain complexes.
+
+    The derived complex retains its coefficient field, prime, and degree
+    interval so it composes into downstream consumers as a first-class
+    chain-complex value.
+    """
 
     tensor_basis_sizes: tuple[int, ...]
     tensor_differential_matrices: tuple[tuple[tuple[str, ...], ...], ...]
+    coefficient_field: CoefficientField | None = None
+    prime: int | None = Field(default=None, ge=2)
+    degree_min: int | None = None
+    degree_max: int | None = None
+
+    @model_validator(mode="after")
+    def require_consistent_context(self) -> Self:
+        if (self.degree_min is None) != (self.degree_max is None):
+            raise ValueError("degree interval must be provided for both endpoints")
+        if (
+            self.coefficient_field is CoefficientField.PRIME_FIELD
+            and self.prime is None
+        ):
+            raise ValueError("GF_p tensor products must carry their prime")
+        if self.coefficient_field is not CoefficientField.PRIME_FIELD and (
+            self.prime is not None
+        ):
+            raise ValueError("QQ tensor products must not carry a prime")
+        return self
 
 
 __all__ = [

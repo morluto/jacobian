@@ -45,7 +45,9 @@ def differential_squares_to_zero(
     return verify_differential(VerifyDifferentialRequest(complex=complex_value))
 
 
-def chain_map_commutes(source: ChainComplexValue, target: ChainComplexValue, map_matrices) -> VerificationResult:
+def chain_map_commutes(
+    source: ChainComplexValue, target: ChainComplexValue, map_matrices
+) -> VerificationResult:
     """Verify that a component-wise chain map commutes with differentials."""
     from jacobian.math.chain_complexes.operations import verify_chain_map
 
@@ -54,7 +56,9 @@ def chain_map_commutes(source: ChainComplexValue, target: ChainComplexValue, map
     )
 
 
-def mapping_cone(source: ChainComplexValue, target: ChainComplexValue, map_matrices) -> MappingConeResult:
+def mapping_cone(
+    source: ChainComplexValue, target: ChainComplexValue, map_matrices
+) -> MappingConeResult:
     """Compute the mapping cone of a chain-map value."""
     from jacobian.math.chain_complexes.operations import compute_mapping_cone
 
@@ -63,7 +67,9 @@ def mapping_cone(source: ChainComplexValue, target: ChainComplexValue, map_matri
     )
 
 
-def tensor_product_complex(left: ChainComplexValue, right: ChainComplexValue) -> TensorProductResult:
+def tensor_product_complex(
+    left: ChainComplexValue, right: ChainComplexValue
+) -> TensorProductResult:
     """Compute the tensor product of two chain-complex values."""
     from jacobian.math.chain_complexes.operations import compute_tensor_product
 

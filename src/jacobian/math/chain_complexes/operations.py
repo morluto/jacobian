@@ -154,6 +154,17 @@ def _matrix_multiply(
     return result
 
 
+def _parsed_differentials(
+    cx: ChainComplexValue,
+    prime: int | None = None,
+) -> list[list[list[Fraction]]]:
+    """Parse a complex's differentials into exact fraction matrices."""
+    return [
+        _matrix_to_fractions(m, cx.basis_sizes[i], cx.basis_sizes[i + 1], prime)
+        for i, m in enumerate(cx.differential_matrices)
+    ]
+
+
 def _require_square_zero(
     diffs: list[list[list[Fraction]]],
     prime: int | None = None,
@@ -167,9 +178,7 @@ def _require_square_zero(
     preserve outer product dimensions.
     """
     for i in range(len(diffs) - 1):
-        result_columns = (
-            group_columns[i + 2] if group_columns is not None else None
-        )
+        result_columns = group_columns[i + 2] if group_columns is not None else None
         product = _matrix_multiply(diffs[i], diffs[i + 1], prime, result_columns)
         if any(value != 0 for row in product for value in row):
             raise ValueError(
@@ -189,12 +198,8 @@ def _require_chain_map_relation(
         result_columns = (
             source_group_columns[i + 1] if source_group_columns is not None else None
         )
-        left = _matrix_multiply(
-            target_diffs[i], map_mats[i + 1], prime, result_columns
-        )
-        right = _matrix_multiply(
-            map_mats[i], source_diffs[i], prime, result_columns
-        )
+        left = _matrix_multiply(target_diffs[i], map_mats[i + 1], prime, result_columns)
+        right = _matrix_multiply(map_mats[i], source_diffs[i], prime, result_columns)
         if left != right:
             raise ValueError(
                 f"chain map does not commute with differentials at degree index {i}"
@@ -259,29 +264,22 @@ def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
     prime = source.prime
 
     # A chain map exists only between chain complexes; endpoints violating
-    # d^2=0 make the verification false by definition. Check the first
+    # d^2=0 make the verification false by definition. Check every
     # consecutive differential product of each endpoint.
     for label, complex_value in (("source", source), ("target", target)):
-        diffs = [
-            _matrix_to_fractions(
-                m, complex_value.basis_sizes[k], complex_value.basis_sizes[k + 1], prime
-            )
-            for k, m in enumerate(complex_value.differential_matrices)
-        ]
-        if len(diffs) > 1:
-            product = _matrix_multiply(
-                diffs[0],
-                diffs[1],
-                prime,
-                complex_value.basis_sizes[2],
-            )
-            if any(v != 0 for row in product for v in row):
+        if len(complex_value.differential_matrices) > 1:
+            try:
+                _require_square_zero(
+                    _parsed_differentials(complex_value, prime),
+                    prime,
+                    label=label,
+                    group_columns=list(complex_value.basis_sizes),
+                )
+            except ValueError as error:
                 return VerificationResult(
                     is_valid=False,
-                    detail=(
-                        f"{label} complex violates d^2=0, so no chain map "
-                        "between these endpoints exists"
-                    ),
+                    detail=str(error) + ", so no chain map between these "
+                    "endpoints exists",
                     source=source,
                     target=target,
                 )
@@ -307,12 +305,8 @@ def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
     # d_target_i * f_{i+1} == f_i * d_source_i.
     for i in range(len(source_diffs)):
         result_columns = source.basis_sizes[i + 1]
-        left = _matrix_multiply(
-            target_diffs[i], map_mats[i + 1], prime, result_columns
-        )
-        right = _matrix_multiply(
-            map_mats[i], source_diffs[i], prime, result_columns
-        )
+        left = _matrix_multiply(target_diffs[i], map_mats[i + 1], prime, result_columns)
+        right = _matrix_multiply(map_mats[i], source_diffs[i], prime, result_columns)
         if left != right:
             return VerificationResult(
                 is_valid=False,
@@ -483,8 +477,9 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
         rows = cone_basis_sizes[n - 1]
         cols = cone_basis_sizes[n]
         if rows == 0 or cols == 0:
-            # Zero-cell differentials carry no entries.
-            cone_diffs.append(())
+            # Zero-cell differentials keep their declared row count so the
+            # outer matrix shape stays reconstructible.
+            cone_diffs.append(tuple(() for _ in range(rows)))
             continue
         # Build zero matrix
         block = [[Fraction(0) for _ in range(cols)] for _ in range(rows)]
@@ -603,8 +598,9 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
         rows = tensor_basis_sizes[deg - 1]
         cols = tensor_basis_sizes[deg]
         if rows == 0 or cols == 0:
-            # Zero-cell differentials carry no entries.
-            tensor_diffs.append(())
+            # Zero-cell differentials keep their declared row count so the
+            # outer matrix shape stays reconstructible.
+            tensor_diffs.append(tuple(() for _ in range(rows)))
             continue
         block = [[Fraction(0) for _ in range(cols)] for _ in range(rows)]
         # We need to map block structure: (C⊗D)_deg = ⊕_{i+j=deg} C_i⊗D_j
@@ -662,7 +658,15 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
                             block[row][col] += coeff
         tensor_diffs.append(_to_str_matrix(block))
 
+    # Tensor degrees are pairwise sums: the derived complex concentrates
+    # on [deg_min, deg_min + group_count - 1].
+    group_count = len(left.basis_sizes) + len(right.basis_sizes) - 1
+    degree_min = left.degree_min + right.degree_min
     return TensorProductResult(
         tensor_basis_sizes=tensor_basis_sizes,
         tensor_differential_matrices=tuple(tensor_diffs),
+        coefficient_field=left.coefficient_field,
+        prime=prime,
+        degree_min=degree_min,
+        degree_max=degree_min + group_count - 1,
     )

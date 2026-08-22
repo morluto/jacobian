@@ -479,6 +479,66 @@ class TestZeroWidthProducts:
         # Component 0: 1x1 zero; component 1: target has no degree-1 group.
         map_matrices = ((("0",),), ())
         result = verify_chain_map(
-            VerifyChainMapRequest(source=source, target=target, map_matrices=map_matrices)
+            VerifyChainMapRequest(
+                source=source, target=target, map_matrices=map_matrices
+            )
         )
         assert result.is_valid
+
+
+class TestTensorContextAndShapes:
+    def test_tensor_carries_canonical_context(self) -> None:
+        result = compute_tensor_product(
+            TensorProductRequest(left=_point_complex(), right=_point_complex())
+        )
+        assert result.coefficient_field == CoefficientField.RATIONAL
+        assert result.prime is None
+        assert (result.degree_min, result.degree_max) == (0, 0)
+
+    def test_shifted_tensor_degree_interval(self) -> None:
+        left = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=-1,
+            degree_max=-1,
+            basis_sizes=(1,),
+            differential_matrices=(),
+        )
+        right = _point_complex()
+        result = compute_tensor_product(TensorProductRequest(left=left, right=right))
+        assert (result.degree_min, result.degree_max) == (-1, -1)
+
+    def test_zero_width_differential_keeps_rows(self) -> None:
+        """A (1,0)-by-point tensor must represent its zero differential as a
+        one-row zero-width matrix, not an empty matrix."""
+        left = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(1, 0),
+            differential_matrices=(((),),),
+        )
+        right = _point_complex()
+        result = compute_tensor_product(TensorProductRequest(left=left, right=right))
+        assert result.tensor_basis_sizes == (1, 0)
+        assert result.tensor_differential_matrices == (((),),)
+
+    def test_every_endpoint_product_checked(self) -> None:
+        """A four-term endpoint with differentials (0, 1, 1) has d0*d1 == 0
+        but d1*d2 != 0; the identity map must fail verification."""
+        from jacobian.math.chain_complexes.operations import verify_chain_map
+
+        bad = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=3,
+            basis_sizes=(1, 1, 1, 1),
+            differential_matrices=((("0",),), (("1",),), (("1",),)),
+        )
+        one = (("1",),)
+        result = verify_chain_map(
+            VerifyChainMapRequest(
+                source=bad, target=bad, map_matrices=(one, one, one, one)
+            )
+        )
+        assert result.is_valid is False
+        assert "d^2=0" in result.detail

@@ -236,8 +236,9 @@ MULTIVARIATE_POLYNOMIAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         (
             "Return the exact rational content and complete "
             "multiplicity-bearing irreducible factorization of one bounded "
-            "multivariate polynomial over QQ[x_1, ..., x_n].  Backed by "
-            "SymPy's factor_list."
+            "nonzero multivariate polynomial over QQ[x_1, ..., x_n] with at least "
+            "two variables (univariate inputs are handled by "
+            "polynomial.factor.compute).  Backed by SymPy's factor_list."
         ),
         MultivariateFactorRequest,
         MultivariateFactorResult,
@@ -249,8 +250,9 @@ MULTIVARIATE_POLYNOMIAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "factor_xy_squared_minus_x",
-                "Factor x^2*y - x in Q[x,y]; the polynomial must use "
-                "the same canonical ordered QQ ring.",
+                "Factor the nonzero multivariate polynomial x^2*y - x in Q[x,y]; "
+                "the polynomial must use the same canonical ordered QQ ring and "
+                "contain at least two variables.",
                 {
                     "polynomial": {
                         "polynomial_schema_version": "1",

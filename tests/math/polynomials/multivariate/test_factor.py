@@ -45,8 +45,8 @@ class TestMultivariateFactor:
         assert result.factors[0].multiplicity == 1
 
     def test_repeated_factor(self):
-        """x^2 - 2*x + 1 = (x-1)^2 should have multiplicity 2."""
-        poly = _poly(("x",), ((1, 1, (2,)), (-2, 1, (1,)), (1, 1, (0,))))
+        """(x*y -1)^2 = x^2*y^2 -2*x*y +1 should have multiplicity 2."""
+        poly = _poly(("x", "y"), ((1, 1, (2, 2)), (-2, 1, (1, 1)), (1, 1, (0, 0))))
         result = multivariate_factor(MultivariateFactorRequest(polynomial=poly))
         assert len(result.factors) >= 1
         mults = [f.multiplicity for f in result.factors]

@@ -11,8 +11,12 @@ from jacobian._models import StrictModel
 MAX_GROUP_ORDER = 64
 MAX_COCHAIN_DEGREE = 6
 # The bar differential over C^n = GF(p)^{|G|^n} is materialized densely;
-# bounding |G|^{max_degree+1} bounds every allocated matrix exactly.
+# bounding |G|^{max_degree+1} bounds every cochain vector and matrix row count.
 MAX_COCHAIN_TENSOR_ELEMENTS = 4_096
+# Each coboundary delta^n: C^n -> C^{n+1} is a dense |G|^(n+1)-by-|G|^n matrix,
+# so bounding |G|^(2*max_degree+1) bounds the full allocation and the Gaussian
+# elimination work (cells times pivot-row length) for every degree at once.
+MAX_BAR_MATRIX_CELLS = 65_536
 
 
 class PermutationGroup(StrictModel):
@@ -67,6 +71,12 @@ class GroupCohomologyRequest(StrictModel):
                 f"{MAX_COCHAIN_TENSOR_ELEMENTS}-element budget; reduce the "
                 "group order or max_degree"
             )
+        if order ** (2 * self.max_degree + 1) > MAX_BAR_MATRIX_CELLS:
+            raise ValueError(
+                "dense bar matrices |G|^(2n+1) exceed the supported "
+                f"{MAX_BAR_MATRIX_CELLS}-cell budget; reduce the group "
+                "order or max_degree"
+            )
         return self
 
 
@@ -79,16 +89,34 @@ class CohomologyGroup(StrictModel):
 
 
 class GroupCohomologyResult(StrictModel):
-    """Group cohomology groups with trivial coefficients."""
+    """Group cohomology groups with trivial coefficients.
 
+    Retains the source request so validation replays the exact bar-complex
+    relation instead of trusting an independently authored table.
+    """
+
+    request: GroupCohomologyRequest
     groups: tuple[CohomologyGroup, ...] = Field(min_length=1)
-    prime: int = Field(ge=2, le=10_000)
     group_order: int = Field(ge=1)
 
     @model_validator(mode="after")
     def require_consistent(self) -> Self:
+        from jacobian.math.group_cohomology._operations import _cohomology_profile
+
         if not self.groups:
             raise ValueError("at least one cohomology group is required")
+        if tuple(g.degree for g in self.groups) != tuple(
+            range(self.request.max_degree + 1)
+        ):
+            raise ValueError(
+                "groups must cover degrees 0..max_degree exactly once in order"
+            )
+        replay_groups, replay_order = _cohomology_profile(self.request)
+        if self.groups != replay_groups or self.group_order != replay_order:
+            raise ValueError(
+                "groups must be the exact cohomology of the retained source "
+                "request"
+            )
         return self
 
 

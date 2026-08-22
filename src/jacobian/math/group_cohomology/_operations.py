@@ -105,13 +105,10 @@ def _bar_delta_rank(
     return _gaussian_rank(matrix, p)
 
 
-def compute_group_cohomology(request: GroupCohomologyRequest) -> GroupCohomologyResult:
-    """Compute H^n(G, GF(p)) with trivial action via the exact bar complex.
-
-    The cochain groups are C^n = {functions G^n -> GF(p)} of dimension
-    |G|^n and the inhomogeneous bar coboundaries are materialized exactly;
-    each betti number is dim ker(delta^n) - rank(im(delta^{n-1})).
-    """
+def _cohomology_profile(
+    request: GroupCohomologyRequest,
+) -> tuple[tuple[CohomologyGroup, ...], int]:
+    """Exact cochain dimensions and Betti numbers for degrees 0..max_degree."""
     p = request.prime
     max_deg = request.max_degree
 
@@ -133,9 +130,20 @@ def compute_group_cohomology(request: GroupCohomologyRequest) -> GroupCohomology
             )
         groups.append(CohomologyGroup(degree=k, betti=betti, dimension=dims[k]))
 
+    return tuple(groups), group_order
+
+
+def compute_group_cohomology(request: GroupCohomologyRequest) -> GroupCohomologyResult:
+    """Compute H^n(G, GF(p)) with trivial action via the exact bar complex.
+
+    The cochain groups are C^n = {functions G^n -> GF(p)} of dimension
+    |G|^n and the inhomogeneous bar coboundaries are materialized exactly;
+    each betti number is dim ker(delta^n) - rank(im(delta^{n-1})).
+    """
+    groups, group_order = _cohomology_profile(request)
     return GroupCohomologyResult(
-        groups=tuple(groups),
-        prime=p,
+        request=request,
+        groups=groups,
         group_order=group_order,
     )
 

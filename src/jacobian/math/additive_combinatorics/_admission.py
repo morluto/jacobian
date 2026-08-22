@@ -35,11 +35,6 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.DROP,
         "cheap deterministic projection of additive.representation_profile.compute",
     ),
-    OperationAdmission(
-        "additive.ordered_difference_profile.compute",
-        AdmissionDecision.KEEP,
-        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
-    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

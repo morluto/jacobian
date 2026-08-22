@@ -2,15 +2,31 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
 MAX_POINTS = 64
 MAX_DIMENSION = 20
+MAX_QUADRUPLE_SEARCH_POINTS = 24
+"""Cap on configuration size for C(n,4) quadruple enumeration (10626 subsets)."""
+
+INCIDENCE_COORDINATE_DIGITS = 256
+"""Conservative per-coordinate digit bound; keeps 10k-quadruple Fractions bounded."""
+_INCIDENCE_INPUT_HEIGHT = INCIDENCE_COORDINATE_DIGITS // 4
+
+
+def _bounded_incidence_coordinate(value: CanonicalRational, label: str) -> None:
+    from jacobian._exact import require_bounded_rational
+
+    require_bounded_rational(
+        value,
+        max_digits=_INCIDENCE_INPUT_HEIGHT,
+        label=label,
+    )
 
 
 class LabelledRationalPoint(StrictModel):
@@ -91,12 +107,250 @@ class DistanceGraphResult(StrictModel):
     edges: tuple[tuple[int, int], ...]
 
 
+# ---------------------------------------------------------------------------
+# Configuration-wide incidence search: collinear triples and concyclic quadruples
+# ---------------------------------------------------------------------------
+
+
+class CollinearTriplesRequest(StrictModel):
+    """Search a planar configuration for collinear triples.
+
+    The configuration must be planar with 3..64 points (3..24 for concyclic
+    searches) and each coordinate must stay within the 64-digit
+    operation-specific bound so that enumeration with huge Fractions stays
+    bounded; see the validator for the precise bound.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Search a planar configuration for collinear triples. "
+                "Requires a planar configuration with 3..64 points; "
+                "each coordinate must stay within the 64-digit "
+                "operation-specific bound so enumeration stays bounded."
+            )
+        }
+    )
+
+    configuration: PointConfiguration = Field(
+        description=(
+            "Planar point configuration with 3..64 points; 4..24 points "
+            "for the sibling concyclic search. Each coordinate is bounded "
+            "to 64 digits so that all exact determinants stay representable."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_planar(self) -> Self:
+        if not self.configuration.points:
+            return self
+        if len(self.configuration.points[0].coordinates) != 2:
+            raise ValueError("collinear-triple search requires a planar configuration")
+        # A collinear triple needs three distinct points; two-point
+        # configurations cannot produce witnesses and are rejected at the
+        # boundary so the search scope is exact.
+        if len(self.configuration.points) < 3:
+            raise ValueError("collinear-triple search requires at least three points")
+        for idx, point in enumerate(self.configuration.points):
+            for dim, coord in enumerate(point.coordinates):
+                _bounded_incidence_coordinate(coord, f"point {idx} coordinate {dim}")
+        return self
+
+
+class ConcyclicQuadruplesRequest(StrictModel):
+    """Search a planar configuration for concyclic quadruples.
+
+    Requires a planar configuration with 4..24 points (C(n,4) capped at
+    10626 subsets) and each coordinate within the 64-digit operation-specific
+    bound.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Search a planar configuration for concyclic quadruples. "
+                "Requires a planar configuration with 4..24 points "
+                "(C(24,4)=10626); configurations with 25..64 points are "
+                "rejected. Each coordinate must stay within the 64-digit "
+                "operation-specific bound."
+            )
+        }
+    )
+
+    configuration: PointConfiguration = Field(
+        description=(
+            "Planar point configuration with 4..24 points; the enumeration "
+            "covers every unordered quadruple. Each coordinate is bounded "
+            "to 64 digits so that all exact determinants stay representable."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_planar(self) -> Self:
+        from jacobian.math.geometry.exact._models import MAX_QUADRUPLE_SEARCH_POINTS
+
+        if not self.configuration.points:
+            return self
+        if len(self.configuration.points[0].coordinates) != 2:
+            raise ValueError(
+                "concyclic-quadruple search requires a planar configuration"
+            )
+        if len(self.configuration.points) < 4:
+            raise ValueError("concyclic-quadruple search requires at least four points")
+        if len(self.configuration.points) > MAX_QUADRUPLE_SEARCH_POINTS:
+            raise ValueError(
+                "concyclic-quadruple search exceeds the "
+                f"{MAX_QUADRUPLE_SEARCH_POINTS}-point enumeration bound"
+            )
+        for idx, point in enumerate(self.configuration.points):
+            for dim, coord in enumerate(point.coordinates):
+                _bounded_incidence_coordinate(coord, f"point {idx} coordinate {dim}")
+        return self
+
+
+class IncidenceSearchResult(StrictModel):
+    """Witnesses to a forbidden planar incidence configuration, or none.
+
+    The result retains its source configuration so validation can replay
+    every witness exactly against the certified points and certify
+    completeness of the reported incidence set.
+    """
+
+    configuration: PointConfiguration
+    dimension: int = Field(ge=2, le=2)
+    point_count: int = Field(ge=3, le=64)
+    holds: bool = Field(
+        description="True iff at least one witness incidence exists.",
+    )
+    witnesses: tuple[tuple[int, ...], ...] = Field(default=())
+    kind: Literal["COLLINEAR_TRIPLE", "CONCYCLIC_QUADRUPLE"]
+
+    @model_validator(mode="after")
+    def require_consistent_witnesses(self) -> Self:  # noqa: C901
+        from fractions import Fraction
+        from itertools import combinations
+
+        if len(self.configuration.points) != self.point_count:
+            raise ValueError("point_count must match the retained configuration")
+        if (
+            self.kind == "CONCYCLIC_QUADRUPLE"
+            and self.point_count > MAX_QUADRUPLE_SEARCH_POINTS
+        ):
+            raise ValueError(
+                "concyclic result point_count exceeds the 24-point enumeration bound"
+            )
+        if self.holds and not self.witnesses:
+            raise ValueError("a holds=True result must list at least one witness")
+        if not self.holds and self.witnesses:
+            raise ValueError("a holds=False result must list no witnesses")
+
+        expected_size = 3 if self.kind == "COLLINEAR_TRIPLE" else 4
+        pts = [
+            tuple(c.as_fraction() for c in point.coordinates)
+            for point in self.configuration.points
+        ]
+
+        def cross(
+            o: tuple[Fraction, ...], a: tuple[Fraction, ...], b: tuple[Fraction, ...]
+        ) -> Fraction:
+            return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+        def det4(indices: tuple[int, ...]) -> Fraction:
+            rows = []
+            for idx in indices:
+                x, y = pts[idx]
+                rows.append((x * x + y * y, x, y, Fraction(1)))
+            total = Fraction(0)
+            for col in range(4):
+                sub = tuple(
+                    tuple(row[c] for c in range(4) if c != col) for row in rows[1:]
+                )
+                m = sub
+                sign = 1 if col % 2 == 0 else -1
+                det3 = (
+                    m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+                    - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+                    + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+                )
+                total += sign * rows[0][col] * det3
+            return total
+
+        seen: set[tuple[int, ...]] = set()
+        for witness in self.witnesses:
+            if len(witness) != expected_size:
+                raise ValueError(
+                    f"{self.kind} witnesses must list {expected_size} indices"
+                )
+            if witness != tuple(sorted(witness)):
+                raise ValueError("witness indices must be sorted ascending")
+            if len(set(witness)) != len(witness):
+                raise ValueError("witness indices must be distinct")
+            if any(i < 0 or i >= self.point_count for i in witness):
+                raise ValueError("witness index out of range")
+            if witness in seen:
+                raise ValueError("witnesses must be unique")
+            seen.add(witness)
+            if self.kind == "COLLINEAR_TRIPLE":
+                i, j, k = witness
+                if cross(pts[i], pts[j], pts[k]) != 0:
+                    raise ValueError("a collinear witness is not actually collinear")
+            else:
+                i, j, k, m = witness
+                # Concyclic excludes degenerate (collinear) quadruples.
+                if any(
+                    cross(pts[a], pts[b], pts[c]) == 0
+                    for a, b, c in (
+                        (i, j, k),
+                        (i, j, m),
+                        (i, k, m),
+                        (j, k, m),
+                    )
+                ):
+                    raise ValueError("a concyclic witness contains a collinear triple")
+                if det4(witness) != 0:
+                    raise ValueError("a concyclic witness is not actually concyclic")
+        # Replay the bounded search to certify completeness and absence.
+        expected: set[tuple[int, ...]]
+        if self.kind == "COLLINEAR_TRIPLE":
+            expected = set()
+            for triple in combinations(range(self.point_count), 3):
+                i, j, k = triple
+                if cross(pts[i], pts[j], pts[k]) == 0:
+                    expected.add(triple)
+        else:
+            expected = set()
+            for quad in combinations(range(self.point_count), 4):
+                i, j, k, m = quad
+                if any(
+                    cross(pts[a], pts[b], pts[c]) == 0
+                    for a, b, c in (
+                        (i, j, k),
+                        (i, j, m),
+                        (i, k, m),
+                        (j, k, m),
+                    )
+                ):
+                    continue
+                if det4(quad) == 0:
+                    expected.add(quad)
+        if seen != expected:
+            raise ValueError(
+                "witnesses must be the complete set of incidences for the retained configuration"
+            )
+        if self.holds != bool(expected):
+            raise ValueError("holds must match actual incidence existence")
+        return self
+
+
 __all__ = [
+    "CollinearTriplesRequest",
+    "ConcyclicQuadruplesRequest",
     "DistanceGraphRequest",
     "DistanceGraphResult",
     "DistanceMultiplicityEntry",
     "DistanceProfileRequest",
     "DistanceProfileResult",
+    "IncidenceSearchResult",
     "LabelledRationalPoint",
     "PointConfiguration",
 ]

@@ -10,6 +10,9 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry._models import (
     CircumcircleRequest,
+    CircumradiusProfileRequest,
+    CircumradiusProfileResult,
+    CircumradiusTripleEntry,
     ClosedSegment2D,
     GeometryBooleanResult,
     GeometryCircleResult,
@@ -419,3 +422,161 @@ def convex_hull_points(request: PointSetRequest) -> GeometryConvexHullResult:
     else:
         points = tuple(cast(Polygon, hull).vertices)
     return GeometryConvexHullResult(points=_canonical_points(points))
+
+
+def circumradius_profile(
+    request: CircumradiusProfileRequest,
+) -> CircumradiusProfileResult:
+    """Compute exact circumradius data for every unordered triple of a planar configuration.
+
+    Each triple is either nondegenerate (exact squared circumradius) or
+    degenerate (collinear, no circumcircle).
+    """
+    from itertools import combinations
+
+    points = request.points
+    n = len(points)
+    coords: list[tuple[Fraction, Fraction]] = [
+        (item.point.x.as_fraction(), item.point.y.as_fraction()) for item in points
+    ]
+    entries: list[CircumradiusTripleEntry] = []
+    for i, j, k in combinations(range(n), 3):
+        (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
+        # Squared side lengths of the triangle.
+        dab = (ax - bx) ** 2 + (ay - by) ** 2
+        dbc = (bx - cx) ** 2 + (by - cy) ** 2
+        dac = (ax - cx) ** 2 + (ay - cy) ** 2
+        # Twice the signed area (cross product) of the triangle.
+        cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+        if cross == 0:
+            entries.append(
+                CircumradiusTripleEntry(
+                    labels=(points[i].label, points[j].label, points[k].label),
+                    indices=(i, j, k),
+                    collinear=True,
+                )
+            )
+            continue
+        # R^2 = (|a-b|^2 |b-c|^2 |c-a|^2) / (4 * (2*area)^2)
+        squared_circumradius = (dab * dbc * dac) / (4 * cross * cross)
+        entries.append(
+            CircumradiusTripleEntry(
+                labels=(points[i].label, points[j].label, points[k].label),
+                indices=(i, j, k),
+                collinear=False,
+                squared_circumradius=CanonicalRational.from_fraction(
+                    squared_circumradius
+                ),
+            )
+        )
+    return CircumradiusProfileResult(
+        points=points,
+        point_count=n,
+        triple_count=len(entries),
+        entries=tuple(entries),
+    )
+
+
+def forbidden_patterns(request):
+    """Find a collinear triple or concyclic quadruple, or establish neither exists.
+
+    Three points are collinear when the 2x2 cross-product determinant
+
+        (x2 - x1)(y3 - y1) - (y2 - y1)(x3 - x1)
+
+    vanishes.  Four points are concyclic when the 4x4 determinant of the rows
+    [x^2 + y^2, x, y, 1] vanishes.  Both predicates are evaluated with exact
+    ``fractions.Fraction`` arithmetic!
+    """
+    from itertools import combinations
+
+    from jacobian.math.geometry._models import (
+        CollinearTriple,
+        ConcyclicQuadruple,
+        ForbiddenPatternsResult,
+    )
+
+    pts = request.configuration.points
+    n = len(pts)
+    xy = [
+        (entry.point.x.as_fraction(), entry.point.y.as_fraction())
+        for entry in pts
+    ]
+
+    collinear_triple = None
+    has_collinear = False
+    checked_triples = 0
+    for i, j, k in combinations(range(n), 3):
+        checked_triples += 1
+        xi, yi = xy[i]
+        xj, yj = xy[j]
+        xk, yk = xy[k]
+        determinant = (xj - xi) * (yk - yi) - (yj - yi) * (xk - xi)
+        if determinant == 0:
+            has_collinear = True
+            collinear_triple = CollinearTriple(first=i, second=j, third=k)
+            break
+
+    concyclic_quadruple = None
+    has_concyclic = False
+    checked_quadruples = 0
+    for i, j, k, ell in combinations(range(n), 4):
+        checked_quadruples += 1
+        xi, yi = xy[i]
+        xj, yj = xy[j]
+        xk, yk = xy[k]
+        xl, yl = xy[ell]
+        # Exclude collinear quadruples: no finite circle contains 4 distinct
+        # collinear points, yet the 4x4 determinant also vanishes in that
+        # degenerate case. Require a noncollinear triple within the quadruple.
+        cross_ijk = (xj - xi) * (yk - yi) - (yj - yi) * (xk - xi)
+        cross_ijl = (xj - xi) * (yl - yi) - (yj - yi) * (xl - xi)
+        cross_ikl = (xk - xi) * (yl - yi) - (yk - yi) * (xl - xi)
+        cross_jkl = (xk - xj) * (yl - yj) - (yk - yj) * (xl - xj)
+        if cross_ijk == 0 and cross_ijl == 0 and cross_ikl == 0 and cross_jkl == 0:
+            continue
+        si = xi * xi + yi * yi
+        sj = xj * xj + yj * yj
+        sk = xk * xk + yk * yk
+        sl = xl * xl + yl * yl
+        # 4x4 determinant of [x^2+y^2, x, y, 1]
+        m = [
+            [si, xi, yi, 1],
+            [sj, xj, yj, 1],
+            [sk, xk, yk, 1],
+            [sl, xl, yl, 1],
+        ]
+        # Laplace expansion of the 4x4 determinant along row 0:
+        # each cofactor deletes row 0 and its own column, keeping rows 1-3.
+        det = (
+            m[0][0] * _minor3(m, 1, 2, 3, 1, 2, 3)
+            - m[0][1] * _minor3(m, 1, 2, 3, 0, 2, 3)
+            + m[0][2] * _minor3(m, 1, 2, 3, 0, 1, 3)
+            - m[0][3] * _minor3(m, 1, 2, 3, 0, 1, 2)
+        )
+        if det == 0:
+            has_concyclic = True
+            concyclic_quadruple = ConcyclicQuadruple(
+                first=i, second=j, third=k, fourth=ell
+            )
+            break
+
+    return ForbiddenPatternsResult(
+        configuration=request.configuration,
+        point_count=n,
+        has_collinear_triple=has_collinear,
+        has_concyclic_quadruple=has_concyclic,
+        collinear_triple=collinear_triple,
+        concyclic_quadruple=concyclic_quadruple,
+        checked_triples=checked_triples,
+        checked_quadruples=checked_quadruples,
+    )
+
+
+def _minor3(m, r0, r1, r2, c0, c1, c2):
+    """3x3 determinant of selected rows and columns."""
+    return (
+        m[r0][c0] * (m[r1][c1] * m[r2][c2] - m[r1][c2] * m[r2][c1])
+        - m[r0][c1] * (m[r1][c0] * m[r2][c2] - m[r1][c2] * m[r2][c0])
+        + m[r0][c2] * (m[r1][c0] * m[r2][c1] - m[r1][c1] * m[r2][c0])
+    )

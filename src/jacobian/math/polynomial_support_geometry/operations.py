@@ -17,6 +17,11 @@ from jacobian.math.polynomial_support_geometry.values import (
     PolynomialSupport,
     PolynomialWeightProfile,
 )
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
 
 def _term_pairs(
@@ -40,6 +45,46 @@ def _term_pairs(
 
 def _dot_product(weight: tuple[int, ...], exponents: tuple[int, ...]) -> int:
     return sum(w * e for w, e in zip(weight, exponents, strict=True))
+
+
+def _compute_weight_layers(
+    polynomial: RationalPolynomial, weight: tuple[int, ...]
+) -> tuple[
+    int,
+    tuple[tuple[int, ...], ...],
+    tuple[tuple[int, tuple[tuple[int, ...], ...]], ...],
+]:
+    """Exact (minimum, minimizing exponents, sorted layers) shared by the
+    weight-profile operation and its value validator."""
+    weighted = [
+        (_dot_product(weight, tuple(term.exponents)), tuple(term.exponents))
+        for term in polynomial.polynomial.terms
+    ]
+    min_weight = min(w for w, _ in weighted)
+    minimizing = tuple(sorted(exp for w, exp in weighted if w == min_weight))
+
+    layer_dict: dict[int, list[tuple[int, ...]]] = {}
+    for w, exp in weighted:
+        layer_dict.setdefault(w, []).append(exp)
+
+    layers = tuple((w, tuple(sorted(layer_dict[w]))) for w in sorted(layer_dict.keys()))
+    return min_weight, minimizing, layers
+
+
+def _initial_form_terms(
+    polynomial: RationalPolynomial, weight: tuple[int, ...]
+) -> tuple[tuple[Fraction, tuple[int, ...]], ...]:
+    """Exact minimum-weight face terms shared by the initial-form operation
+    and its value validator."""
+    weighted = [
+        (_dot_product(weight, tuple(term.exponents)), term)
+        for term in polynomial.polynomial.terms
+    ]
+    min_weight = min(w for w, _ in weighted)
+    face = [term for w, term in weighted if w == min_weight]
+    return tuple(
+        (term.coefficient.as_fraction(), tuple(term.exponents)) for term in face
+    )
 
 
 def _solve_convex_membership(
@@ -334,27 +379,13 @@ def compute_newton_polytope(request: NewtonPolytopeRequest) -> NewtonPolytope:
 
 def compute_weight_profile(request: WeightProfileRequest) -> PolynomialWeightProfile:
     """Compute the weight profile of a polynomial's support."""
-    terms = _term_pairs(request)
-
-    weight = request.weight
-    weighted = [(_dot_product(weight, exp), exp) for _, exp in terms]
-
-    min_weight = min(w for w, _ in weighted)
-    minimizing = tuple(sorted(exp for w, exp in weighted if w == min_weight))
-
-    # Build weight layers
-    layer_dict: dict[int, list[tuple[int, ...]]] = {}
-    for w, exp in weighted:
-        if w not in layer_dict:
-            layer_dict[w] = []
-        layer_dict[w].append(exp)
-
-    weight_layers = tuple(
-        (w, tuple(sorted(layer_dict[w]))) for w in sorted(layer_dict.keys())
+    minimum_weight, minimizing, weight_layers = _compute_weight_layers(
+        request.polynomial, request.weight
     )
-
     return PolynomialWeightProfile(
-        minimum_weight=min_weight,
+        polynomial=request.polynomial,
+        weight=request.weight,
+        minimum_weight=minimum_weight,
         minimizing_exponents=minimizing,
         weight_layers=weight_layers,
     )
@@ -362,33 +393,26 @@ def compute_weight_profile(request: WeightProfileRequest) -> PolynomialWeightPro
 
 def compute_initial_form(request: InitialFormRequest) -> PolynomialFaceData:
     """Compute the initial form of a polynomial under a weight vector."""
-    terms = _term_pairs(request)
-    weight = request.weight
+    source = request.polynomial
+    face_terms = _initial_form_terms(source, request.weight)
 
-    # Compute weights for all terms
-    weighted = [(_dot_product(weight, exp), coeff, exp) for coeff, exp in terms]
-    min_weight = min(w for w, _, _ in weighted)
-
-    # Select terms at minimum weight
-    face_terms = [(c, e) for w, c, e in weighted if w == min_weight]
-
-    face_exponents = tuple(t[1] for t in face_terms)
-    face_coefficients = [
-        CanonicalRational(num=str(c.numerator), den=str(c.denominator))
-        for c, _ in face_terms
-    ]
-
-    # Build polynomial term dicts
-    face_polynomial_terms = tuple(
-        {
-            "coefficient": {"num": str(c.numerator), "den": str(c.denominator)},
-            "exponents": list(e),
-        }
-        for c, e in face_terms
+    initial_form = RationalPolynomial(
+        variables=source.variables,
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(
+                        num=str(c.numerator), den=str(c.denominator)
+                    ),
+                    exponents=e,
+                )
+                for c, e in face_terms
+            )
+        ),
     )
 
     return PolynomialFaceData(
-        face_exponents=face_exponents,
-        face_coefficients=tuple(face_coefficients),
-        face_polynomial_terms=face_polynomial_terms,
+        polynomial=source,
+        weight=request.weight,
+        initial_form=initial_form,
     )

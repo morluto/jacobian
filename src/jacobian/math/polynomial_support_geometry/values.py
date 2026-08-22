@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from typing import Self
+
+from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.polynomials.values import RationalPolynomial
 
 MAX_SUPPORT_TERMS = 4096
 MAX_NEWTON_DIMENSION = 8
@@ -60,16 +63,71 @@ class NewtonPolytope(StrictModel):
 
 
 class PolynomialWeightProfile(StrictModel):
-    """Weight profile of a polynomial support under a weight vector."""
+    """Weight profile of a polynomial support under a retained weight vector.
 
+    The source polynomial and weight are retained so the minimum,
+    minimizing exponents, and layers replay against their own inputs after
+    serialization instead of carrying detached integer data.
+    """
+
+    polynomial: RationalPolynomial
+    weight: tuple[int, ...] = Field(min_length=1)
     minimum_weight: int
     minimizing_exponents: tuple[tuple[int, ...], ...]
     weight_layers: tuple[tuple[int, tuple[tuple[int, ...], ...]], ...]
 
+    @model_validator(mode="after")
+    def bind_profile_to_source(self) -> Self:
+        if len(self.weight) != len(self.polynomial.variables):
+            raise ValueError("weight vector length must match variable count")
+        from jacobian.math.polynomial_support_geometry.operations import (
+            _compute_weight_layers,
+        )
+
+        expected = _compute_weight_layers(self.polynomial, self.weight)
+        if (
+            self.minimum_weight != expected[0]
+            or self.minimizing_exponents != expected[1]
+            or self.weight_layers != expected[2]
+        ):
+            raise ValueError(
+                "weight profile must be the exact weighting of its "
+                "retained polynomial and weight"
+            )
+        return self
+
 
 class PolynomialFaceData(StrictModel):
-    """exponents on the exposed face of the Newton polytope."""
+    """The initial (minimum-weight) form as a canonical polynomial.
 
-    face_exponents: tuple[tuple[int, ...], ...]
-    face_coefficients: tuple[CanonicalRational, ...]
-    face_polynomial_terms: tuple[dict, ...]
+    The exposed face carries the owner-defined ``RationalPolynomial`` value
+    over the source ring, alongside the retained source and weight, so it
+    composes with other polynomial consumers without reattaching context.
+    """
+
+    polynomial: RationalPolynomial
+    weight: tuple[int, ...] = Field(min_length=1)
+    initial_form: RationalPolynomial
+
+    @model_validator(mode="after")
+    def bind_initial_form_to_source(self) -> Self:
+        if len(self.weight) != len(self.polynomial.variables):
+            raise ValueError("weight vector length must match variable count")
+        from jacobian.math.polynomial_support_geometry.operations import (
+            _initial_form_terms,
+        )
+
+        expected = _initial_form_terms(self.polynomial, self.weight)
+        actual = tuple(
+            (term.coefficient.as_fraction(), tuple(term.exponents))
+            for term in self.initial_form.polynomial.terms
+        )
+        if (
+            self.initial_form.variables != self.polynomial.variables
+            or actual != expected
+        ):
+            raise ValueError(
+                "initial form must be the exact minimum-weight face of its "
+                "retained polynomial under the retained weight"
+            )
+        return self

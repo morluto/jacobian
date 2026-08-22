@@ -1,6 +1,7 @@
 """Tests for polynomial support geometry operations (#1797)."""
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.polynomial_support_geometry._models import (
     InitialFormRequest,
@@ -169,15 +170,17 @@ class TestInitialForm:
             InitialFormRequest(polynomial=_polynomial(_XY_TERMS, VARS), weight=[1, 1])
         )
         # All terms at min weight 2, so initial form is the whole polynomial
-        assert len(result.face_exponents) == 3
+        assert len(result.initial_form.polynomial.terms) == 3
 
     def test_initial_form_nonuniform(self) -> None:
         result = compute_initial_form(
             InitialFormRequest(polynomial=_polynomial(_XY_TERMS, VARS), weight=[1, 0])
         )
-        # Minimum weight 0 at (0,2), initial form is y^2
-        assert result.face_exponents == ((0, 2),)
-        assert int(result.face_coefficients[0].num) == 1
+        # Minimum weight 0 at (0,2), initial form is y^2 over the same ring
+        assert result.initial_form.variables == VARS
+        term = result.initial_form.polynomial.terms[0]
+        assert tuple(term.exponents) == (0, 2)
+        assert term.coefficient.num == "1"
 
     def test_initial_form_with_coeffs(self) -> None:
         terms = (_term("3", [2, 0]), _term("5", [0, 2]))
@@ -185,5 +188,55 @@ class TestInitialForm:
             InitialFormRequest(polynomial=_polynomial(terms, VARS), weight=[1, 0])
         )
         # Minimum weight 0 at (0,2), initial form is 5*y^2
-        assert result.face_exponents == ((0, 2),)
-        assert int(result.face_coefficients[0].num) == 5
+        term = result.initial_form.polynomial.terms[0]
+        assert tuple(term.exponents) == (0, 2)
+        assert term.coefficient.num == "5"
+
+    def test_initial_form_binds_to_canonical_value(self) -> None:
+        """A serialized producer result revalidates; a mismatched weight
+        fails against the retained source."""
+        from jacobian.math.polynomial_support_geometry.values import (
+            PolynomialFaceData,
+        )
+
+        result = compute_initial_form(
+            InitialFormRequest(polynomial=_polynomial(_XY_TERMS, VARS), weight=[1, 0])
+        )
+        revalidated = PolynomialFaceData.model_validate(result.model_dump())
+        assert revalidated.initial_form.variables == VARS
+
+        payload = result.model_dump()
+        payload["weight"] = [1, 1]
+        with pytest.raises(ValidationError, match="minimum-weight face"):
+            PolynomialFaceData.model_validate(payload)
+
+    def test_initial_form_composes_as_polynomial_input(self) -> None:
+        """The returned canonical value feeds another request unchanged."""
+        first = compute_initial_form(
+            InitialFormRequest(polynomial=_polynomial(_XY_TERMS, VARS), weight=[1, 0])
+        )
+        follow_up = compute_support(SupportRequest(polynomial=first.initial_form))
+        assert follow_up.term_count == 1
+
+
+class TestTransportableBounds:
+    def test_huge_weight_component_rejected(self) -> None:
+        """Derived weights must stay inside the interoperable JSON range."""
+        big = 9007199254740991
+        with pytest.raises(ValueError, match="transportable"):
+            WeightProfileRequest(
+                polynomial=_polynomial(_XY_TERMS, VARS), weight=[big, 1]
+            )
+
+    def test_initial_form_output_growth_bounded(self) -> None:
+        """A zero weight makes every term minimal; oversized sources are
+        rejected so the doubled serialization cannot breach the envelope."""
+        many = tuple(
+            _term("1", list(pair))
+            for pair in sorted(((i % 32, i // 32) for i in range(1025)), reverse=True)
+        )
+        with pytest.raises(ValueError, match="limited to 1024"):
+            InitialFormRequest(
+                polynomial=_polynomial(many, VARS),
+                weight=[0, 0],
+            )

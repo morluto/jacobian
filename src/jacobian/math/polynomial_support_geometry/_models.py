@@ -49,6 +49,23 @@ class NewtonPolytopeRequest(StrictModel):
         return self
 
 
+# Derived weights are sums of weight*exponent products; capping each
+# component at 2^31 keeps every derived integer inside the interoperable
+# JSON range (len(weight) <= 8, exponents <= 32768).
+MAX_WEIGHT_COMPONENT_MAGNITUDE = 2**31
+
+
+def _require_transportable_weight(weight, variables) -> None:
+    if len(weight) != len(variables):
+        raise ValueError("weight vector length must match variable count")
+    for component in weight:
+        if abs(component) > MAX_WEIGHT_COMPONENT_MAGNITUDE:
+            raise ValueError(
+                "weight components exceed the transportable integer range "
+                f"(max {MAX_WEIGHT_COMPONENT_MAGNITUDE})"
+            )
+
+
 class WeightProfileRequest(StrictModel):
     """Request the weight profile of a polynomial."""
 
@@ -59,8 +76,7 @@ class WeightProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_matching_dimensions(self) -> Self:
-        if len(self.weight) != len(self.polynomial.variables):
-            raise ValueError("weight vector length must match variable count")
+        _require_transportable_weight(self.weight, self.polynomial.variables)
         # The empty support has no minimum weight; admit only polynomials
         # whose weight profile exists.
         if not self.polynomial.polynomial.terms:
@@ -80,12 +96,23 @@ class InitialFormRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_matching_dimensions(self) -> Self:
-        if len(self.weight) != len(self.polynomial.variables):
-            raise ValueError("weight vector length must match variable count")
+        _require_transportable_weight(self.weight, self.polynomial.variables)
         if not self.polynomial.polynomial.terms:
             raise ValueError(
                 "the zero polynomial has no initial form; supply a nonzero polynomial"
             )
+        # A degenerate weight can make every term minimal, serializing the
+        # whole polynomial twice (source + face); admit only sources whose
+        # doubled serialization stays comfortably inside the envelope.
+        terms = self.polynomial.polynomial.terms
+        if len(terms) > 1024:
+            raise ValueError("initial-form requests are limited to 1024 terms")
+        for term in terms:
+            for component in (term.coefficient.num, term.coefficient.den):
+                if len(component.lstrip("-")) > 512:
+                    raise ValueError(
+                        "initial-form coefficients are limited to 512 digits"
+                    )
         return self
 
 

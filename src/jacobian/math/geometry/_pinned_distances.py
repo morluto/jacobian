@@ -22,10 +22,7 @@ class PinnedDistanceRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_unique_points(self):
-        keys = tuple(
-            (p.x.num, p.x.den, p.y.num, p.y.den)
-            for p in self.points
-        )
+        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
         return self
@@ -55,15 +52,20 @@ class PinnedDistanceResult(StrictModel):
         if self.distinct_line_count != len(self.lines):
             raise ValueError("distinct_line_count must match the line count")
         if self.lines:
-            min_entry = min(self.lines, key=lambda e: Fraction(
-                int(e.squared_distance_numerator),
-                int(e.squared_distance_denominator),
-            ))
+            min_entry = min(
+                self.lines,
+                key=lambda e: Fraction(
+                    int(e.squared_distance_numerator),
+                    int(e.squared_distance_denominator),
+                ),
+            )
             if self.min_squared_distance is None:
                 raise ValueError("min_squared_distance is required when lines exist")
             if (
-                self.min_squared_distance.squared_distance_numerator != min_entry.squared_distance_numerator
-                or self.min_squared_distance.squared_distance_denominator != min_entry.squared_distance_denominator
+                self.min_squared_distance.squared_distance_numerator
+                != min_entry.squared_distance_numerator
+                or self.min_squared_distance.squared_distance_denominator
+                != min_entry.squared_distance_denominator
             ):
                 raise ValueError("min_squared_distance must be the minimum entry")
         return self
@@ -110,9 +112,7 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
             str(int_c),
         )
 
-    line_map: dict[
-        tuple[str, str, str], tuple[list[tuple[int, int]], str, str]
-    ] = {}
+    line_map: dict[tuple[str, str, str], tuple[list[tuple[int, int]], str, str]] = {}
 
     for i in range(len(pts)):
         for j in range(i + 1, len(pts)):
@@ -145,10 +145,17 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
         )
         entries.append(entry)
 
-    min_entry = min(entries, key=lambda e: Fraction(
-        int(e.squared_distance_numerator),
-        int(e.squared_distance_denominator),
-    )) if entries else None
+    min_entry = (
+        min(
+            entries,
+            key=lambda e: Fraction(
+                int(e.squared_distance_numerator),
+                int(e.squared_distance_denominator),
+            ),
+        )
+        if entries
+        else None
+    )
 
     return PinnedDistanceResult(
         anchor=request.anchor,

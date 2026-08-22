@@ -32,10 +32,34 @@ PROFILE_OPERATIONS = (
                 "Compute circumradius data for four points of a unit square.",
                 {
                     "points": [
-                        {"label": "A", "point": {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}}},
-                        {"label": "B", "point": {"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}}},
-                        {"label": "C", "point": {"x": {"num": "1", "den": "1"}, "y": {"num": "1", "den": "1"}}},
-                        {"label": "D", "point": {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}}},
+                        {
+                            "label": "A",
+                            "point": {
+                                "x": {"num": "0", "den": "1"},
+                                "y": {"num": "0", "den": "1"},
+                            },
+                        },
+                        {
+                            "label": "B",
+                            "point": {
+                                "x": {"num": "1", "den": "1"},
+                                "y": {"num": "0", "den": "1"},
+                            },
+                        },
+                        {
+                            "label": "C",
+                            "point": {
+                                "x": {"num": "1", "den": "1"},
+                                "y": {"num": "1", "den": "1"},
+                            },
+                        },
+                        {
+                            "label": "D",
+                            "point": {
+                                "x": {"num": "0", "den": "1"},
+                                "y": {"num": "1", "den": "1"},
+                            },
+                        },
                     ],
                 },
             ),
@@ -44,7 +68,8 @@ PROFILE_OPERATIONS = (
     geometry_operation(
         "geometry.configuration.forbidden_patterns.check",
         "Find collinear triples and concyclic quadruples",
-        "Given a bounded labelled rational planar point configuration, find a "
+        "Given a labelled rational planar point configuration of at most 32 "
+        "points whose coordinates carry at most 64 digits, find a "
         "witness to either a collinear triple or a concyclic quadruple, or "
         "establish after complete bounded enumeration that neither exists.",
         ForbiddenPatternsRequest,
@@ -59,10 +84,34 @@ PROFILE_OPERATIONS = (
                 {
                     "configuration": {
                         "points": [
-                            {"label": "A", "point": {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}}},
-                            {"label": "B", "point": {"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}}},
-                            {"label": "C", "point": {"x": {"num": "0", "den": "1"}, "y": {"num": "1", "den": "1"}}},
-                            {"label": "D", "point": {"x": {"num": "2", "den": "1"}, "y": {"num": "3", "den": "1"}}},
+                            {
+                                "label": "A",
+                                "point": {
+                                    "x": {"num": "0", "den": "1"},
+                                    "y": {"num": "0", "den": "1"},
+                                },
+                            },
+                            {
+                                "label": "B",
+                                "point": {
+                                    "x": {"num": "1", "den": "1"},
+                                    "y": {"num": "0", "den": "1"},
+                                },
+                            },
+                            {
+                                "label": "C",
+                                "point": {
+                                    "x": {"num": "0", "den": "1"},
+                                    "y": {"num": "1", "den": "1"},
+                                },
+                            },
+                            {
+                                "label": "D",
+                                "point": {
+                                    "x": {"num": "2", "den": "1"},
+                                    "y": {"num": "3", "den": "1"},
+                                },
+                            },
                         ],
                     },
                 },

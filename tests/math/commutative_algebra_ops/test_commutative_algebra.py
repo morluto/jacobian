@@ -16,6 +16,7 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealQuotientRequest,
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
+    IdealSaturationRequest,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
@@ -133,6 +134,23 @@ def test_ideal_contract_rejects_mixed_polynomial_rings() -> None:
             variables=("x",),
             generators=(_polynomial(("y",), {(1,): 1}),),
         )
+
+
+def test_saturation_request_rejects_total_degree_beyond_budget() -> None:
+    """Per-exponent bounds alone admit x^12*y^12; the saturation polynomial
+    must satisfy the same total-degree-at-most-12 backend domain as the
+    ideal generators."""
+    ideal = _ideal(("x", "y"), {(2, 0): 1})
+    with pytest.raises(ValueError, match="total degree"):
+        IdealSaturationRequest(
+            ideal=ideal,
+            saturation_polynomial=_polynomial(("x", "y"), {(12, 12): 1}),
+        )
+    accepted = IdealSaturationRequest(
+        ideal=ideal,
+        saturation_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
+    )
+    assert accepted.saturation_polynomial is not None
 
 
 def test_backend_unavailability_is_a_typed_execution_outcome(

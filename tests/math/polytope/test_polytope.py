@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.polytope._models import (
     Halfspace,
     PolytopeVolumeRequest,
@@ -12,6 +13,10 @@ from jacobian.math.polytope._models import (
     Vertex,
 )
 from jacobian.math.polytope._operations import compute_polytope_volume
+
+
+def _cr0() -> CanonicalRational:
+    return CanonicalRational(num="0", den="1")
 
 
 def _v(*coords: tuple[int, int]) -> Vertex:
@@ -255,6 +260,60 @@ class TestRejection:
             "dimension",
             "representation",
         }
+
+    def test_coordinates_whose_volume_leaves_the_canonical_bound_rejected(self):
+        """The triangle (0,0),(10^20000,0),(0,10^20000) has a 40,000-digit
+        area numerator; admission rejects it instead of failing result
+        conversion after acceptance."""
+
+        huge = format_canonical_integer(10**20000)
+        with pytest.raises(ValueError, match="result bound"):
+            PolytopeVolumeRequest(
+                vertices=(
+                    Vertex(coordinates=(_cr0(), _cr0())),
+                    Vertex(coordinates=(
+                        CanonicalRational(num=huge, den="1"),
+                        _cr0(),
+                    )),
+                    Vertex(coordinates=(
+                        _cr0(),
+                        CanonicalRational(num=huge, den="1"),
+                    )),
+                )
+            )
+
+    def test_large_but_representable_triangle_is_returned(self):
+        """A triangle whose 20,000-digit area still fits is computed."""
+        big = format_canonical_integer(10**10000)
+        result = compute_polytope_volume(
+            PolytopeVolumeRequest(
+                vertices=(
+                    Vertex(coordinates=(_cr0(), _cr0())),
+                    Vertex(coordinates=(
+                        CanonicalRational(num=big, den="1"),
+                        _cr0(),
+                    )),
+                    Vertex(coordinates=(
+                        _cr0(),
+                        CanonicalRational(num=big, den="1"),
+                    )),
+                )
+            )
+        )
+        assert len(result.volume.num) == 20_000
+
+    def test_request_schema_advertises_representation_size_bounds(self):
+        """The generated schema exposes the vertex/half-space count bounds."""
+        import math
+
+        schema = PolytopeVolumeRequest.model_json_schema()
+        vertices_schema = schema["properties"]["vertices"]["anyOf"][0]
+        halfspaces_schema = schema["properties"]["halfspaces"]["anyOf"][0]
+        assert vertices_schema["minItems"] == 1
+        assert vertices_schema["maxItems"] == 64
+        assert halfspaces_schema["minItems"] == 1
+        assert halfspaces_schema["maxItems"] == 64
+        assert vertices_schema["maxItems"] >= math.comb(4, 2)
 
 
 class TestRequestValidation:

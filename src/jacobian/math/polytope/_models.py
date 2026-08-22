@@ -27,6 +27,37 @@ MAX_FACETS = 64
 COORDINATE_DIGITS = 32_768
 """Per-component digit bound forwarded to the canonical rational validator."""
 
+MAX_RESULT_COMPONENT_DIGITS = 32_768
+"""Digit bound each exact-volume component must respect to be returnable.
+
+The volume is a canonical rational whose components cannot exceed the
+global ``CanonicalRational`` limit; requests whose exact volume can
+provably leave that domain are rejected at admission.
+"""
+
+
+def _require_volume_within_result_bound(
+    vertex_component_digits: int, dim: int
+) -> None:
+    """Reject inputs whose exact volume cannot fit the canonical result type.
+
+    Each simplex in the triangulation uses ``dim + 1`` vertices. Scaling
+    by the common denominator and applying Hadamard's bound to the
+    resulting integer determinant bounds every volume component by
+    ``(dim + 1) * (component_digits + 1) + log10(dim!)`` digits; the sum
+    over at most ``MAX_VERTICES`` simplices adds two further digits. The
+    bound is conservative: it may reject inputs whose concrete volume
+    happens to be short, never accepts one that cannot be represented.
+    """
+
+    bound = (dim + 1) * (vertex_component_digits + 1) + dim + 2
+    if bound > MAX_RESULT_COMPONENT_DIGITS:
+        raise ValueError(
+            "coordinate magnitudes can grow the exact volume beyond the "
+            f"{MAX_RESULT_COMPONENT_DIGITS}-digit canonical rational "
+            "result bound"
+        )
+
 
 class Vertex(StrictModel):
     """One rational vertex of a V-representation."""
@@ -50,6 +81,8 @@ class PolytopeVolumeRequest(StrictModel):
 
     vertices: tuple[Vertex, ...] | None = Field(
         default=None,
+        min_length=1,
+        max_length=MAX_VERTICES,
         description=(
             "V-representation: the vertices of the convex hull. "
             "Mutually exclusive with ``halfspaces``."
@@ -57,6 +90,8 @@ class PolytopeVolumeRequest(StrictModel):
     )
     halfspaces: tuple[Halfspace, ...] | None = Field(
         default=None,
+        min_length=1,
+        max_length=MAX_FACETS,
         description=(
             "H-representation: the half-spaces ``<a_i, x> <= b_i``. "
             "Mutually exclusive with ``vertices``."
@@ -95,10 +130,16 @@ def _validate_vertices(vertices: tuple[Vertex, ...], dimension_bound: int) -> No
         raise ValueError("`vertices` must be non-empty")
     if len(vertices) > MAX_VERTICES:
         raise ValueError(f"`vertices` exceeds the {MAX_VERTICES}-vertex bound")
+    component_digits = 0
     for vertex in vertices:
         for coord in vertex.coordinates:
             require_bounded_rational(
                 coord, max_digits=COORDINATE_DIGITS, label="vertex coordinate"
+            )
+            component_digits = max(
+                component_digits,
+                len(coord.num.lstrip("-")),
+                len(coord.den.lstrip("-")),
             )
     dim = len(vertices[0].coordinates)
     if dim > dimension_bound:
@@ -108,6 +149,7 @@ def _validate_vertices(vertices: tuple[Vertex, ...], dimension_bound: int) -> No
     for vertex in vertices:
         if len(vertex.coordinates) != dim:
             raise ValueError("all vertices must share one dimension")
+    _require_volume_within_result_bound(component_digits, dim)
     # Combinatorial admission: C(n, d) d-subsets for hull enumeration.
     # The operation's brute-force hull needs to consider each d-subset;
     # reject here so the request never reaches the host exception at
@@ -190,6 +232,20 @@ def _validate_halfspaces(  # noqa: C901
             "polytope hull enumeration exceeds the combinatorial bound "
             f"({subfacets} > {MAX_HULL_SUBFACETS} d-subsets)"
         )
+    # Derived vertices also drive the exact-volume growth bound: measure the
+    # solved vertex coordinates themselves, since Cramer-rule solutions can
+    # carry more digits than the declaring half-space coefficients.
+    from jacobian.canonical import format_canonical_integer
+
+    derived_digits = max(
+        max(
+            len(format_canonical_integer(abs(int(c.p)))),
+            len(format_canonical_integer(int(c.q))),
+        )
+        for point in verts
+        for c in point
+    )
+    _require_volume_within_result_bound(derived_digits, dim)
 
 
 class PolytopeVolumeResult(StrictModel):

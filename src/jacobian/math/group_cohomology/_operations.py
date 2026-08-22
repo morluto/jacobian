@@ -27,7 +27,7 @@ def _cayley_table(elements: list[tuple[int, ...]]) -> list[list[int]]:
 
     index = {element: i for i, element in enumerate(elements)}
     perms = [Permutation(list(e)) for e in elements]
-    pg = PermutationGroup(perms)
+    PermutationGroup(perms)
     table = [[0] * len(elements) for _ in elements]
     for i, a in enumerate(perms):
         for j, b in enumerate(perms):
@@ -91,18 +91,17 @@ def _bar_delta_rank(
     rows = group_size ** (n + 1)
     cols = group_size**n if n > 0 else 1
     matrix = [[0] * cols for _ in range(rows)]
+    def add(row: int, arg: tuple[int, ...], coeff: int) -> None:
+        col = _encode(arg, group_size)
+        matrix[row][col] = (matrix[row][col] + coeff) % p
+
     for h in iproduct(range(group_size), repeat=n + 1):
         row = _encode(h, group_size)
-
-        def add(arg: tuple[int, ...], coeff: int) -> None:
-            col = _encode(arg, group_size)
-            matrix[row][col] = (matrix[row][col] + coeff) % p
-
-        add(h[1:], 1)
+        add(row, h[1:], 1)
         for i in range(n):
             merged = cayley[h[i]][h[i + 1]]
-            add(h[:i] + (merged,) + h[i + 2 :], (-1) ** (i + 1))
-        add(h[:n], (-1) ** (n + 1))
+            add(row, (*h[:i], merged, *h[i + 2 :]), (-1) ** (i + 1))
+        add(row, h[:n], (-1) ** (n + 1))
     return _gaussian_rank(matrix, p)
 
 

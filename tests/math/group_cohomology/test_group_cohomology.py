@@ -123,7 +123,7 @@ class TestExactBarComplex:
         so force rejection through order instead."""
         with pytest.raises(ValidationError, match="budget"):
             GroupCohomologyRequest(
-                group=PermutationGroup(degree=6, generators=(tuple(range(1, 6)) + (0,),)),
+                group=PermutationGroup(degree=6, generators=((*tuple(range(1, 6)), 0),)),
                 prime=2,
                 max_degree=4,
             )

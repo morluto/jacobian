@@ -112,13 +112,24 @@ def replayed_remainder_term_count(
     )
 
 
+def _coefficient_exceeds_canonical_limit(value: Any) -> bool:
+    """Check whether one exact QQ coefficient leaves the canonical rational domain."""
+
+    from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+
+    bound = 10**MAX_CANONICAL_RATIONAL_DIGITS
+    numerator = abs(int(value.numerator))
+    denominator = abs(int(value.denominator))
+    return numerator >= bound or denominator >= bound
+
+
 def replayed_remainder_exceeds_budget(
     ideal: RationalPolynomialIdeal,
     groebner_basis: tuple[RationalPolynomial, ...],
     polynomial: RationalPolynomial,
     monomial_order: str,
 ) -> bool:
-    """Check whether the replayed remainder exceeds the 1,024-term or 32,768-exponent budget."""
+    """Check whether the replayed remainder exceeds the 1,024-term, 32,768-exponent, or canonical-coefficient budget."""
 
     from jacobian.math.polynomials.values import MAX_POLYNOMIAL_EXPONENT
 
@@ -129,6 +140,12 @@ def replayed_remainder_exceeds_budget(
         # Check exponent cap efficiently via monoms
         for monom in remainder.monoms():
             if any(exp > MAX_POLYNOMIAL_EXPONENT for exp in monom):
+                return True
+        # A remainder whose coefficients leave the canonical rational domain is
+        # likewise outside the representable result contract: the operation
+        # reports BUDGET_EXCEEDED for it, so the replay predicate must agree.
+        for _, coefficient in remainder.terms():
+            if _coefficient_exceeds_canonical_limit(coefficient):
                 return True
     except Exception:
         # If we cannot inspect monoms, conservatively treat as exceeding

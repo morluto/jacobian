@@ -226,6 +226,41 @@ def test_budget_exceeded_with_retained_basis_validates() -> None:
     )
 
 
+def test_coefficient_growth_beyond_canonical_rational_reports_typed_budget() -> None:
+    # Reducing x1^12 modulo <x1-C*x2^12, x2-C*x3^12, x3-C*x4^12> with
+    # C=10**127 yields the single term C^1884*x4^20736: its term count and
+    # exponent respect the output budgets while its 239,269-digit coefficient
+    # leaves the canonical rational domain.  Both operations must report the
+    # typed budget outcome instead of failing result validation.
+    variables = ("x1", "x2", "x3", "x4")
+    coefficient = 10**127
+
+    def chain_generator(shift: int) -> RationalPolynomial:
+        return _poly(
+            variables,
+            {
+                tuple(12 if index == shift else 0 for index in range(4)): coefficient,
+                tuple(1 if index == shift - 1 else 0 for index in range(4)): -1,
+            },
+        )
+
+    ideal = RationalPolynomialIdeal(
+        variables=variables,
+        generators=tuple(chain_generator(shift) for shift in (1, 2, 3)),
+    )
+    request = IdealMembershipRequest(
+        ideal=ideal,
+        polynomial=_poly(variables, {(12, 0, 0, 0): 1}),
+        monomial_order="lex",
+    )
+    result = polynomial_ideal_normal_form(request)
+    assert result.status == "BUDGET_EXCEEDED"
+    assert result.remainder is None
+    membership = polynomial_ideal_membership(request)
+    assert membership.status == "BUDGET_EXCEEDED"
+    assert membership.normal_form is None
+
+
 def test_generator_count_and_total_degree_budgets_enforced() -> None:
     generators = tuple(_poly(("x", "y"), {(1, 0): 1}) for _ in range(17))
     with pytest.raises(ValueError, match="16-generator"):

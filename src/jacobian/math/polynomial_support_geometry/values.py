@@ -65,6 +65,11 @@ class PolynomialSupport(StrictModel):
         width = len(self.variables)
         if len(set(self.variables)) != width:
             raise ValueError("variables must be unique and canonically named")
+        # An exponent set cannot contain duplicates: a canonical polynomial
+        # has unique exponent tuples, so duplicated support entries would
+        # report a term count no polynomial can reconstruct.
+        if len(set(self.exponents)) != len(self.exponents):
+            raise ValueError("support exponents must be distinct")
         if any(len(exp) != width for exp in self.exponents):
             raise ValueError("exponent tuples must use the declared variable axis")
         if self.coordinate_min and len(self.coordinate_min) != width:
@@ -72,6 +77,8 @@ class PolynomialSupport(StrictModel):
         if self.is_zero:
             if self.total_degree_min is not None or self.total_degree_max is not None:
                 raise ValueError("an empty support carries no degree extrema")
+            if self.coordinate_min or self.coordinate_max:
+                raise ValueError("an empty support carries no coordinate extrema")
             if self.exponents or self.coefficients:
                 raise ValueError("a zero support carries no terms")
             return self

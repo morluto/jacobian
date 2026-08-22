@@ -455,3 +455,29 @@ class TestSupportValueInvariants:
 
         assert not any(name.startswith("compute_") for name in package.__all__)
         assert "exponent_support" in package.__all__
+
+    def test_duplicate_support_exponents_rejected(self) -> None:
+        from jacobian.math.polynomial_support_geometry.values import PolynomialSupport
+
+        with pytest.raises(ValidationError, match="distinct"):
+            PolynomialSupport(
+                is_zero=False,
+                term_count=2,
+                exponents=((1,), (1,)),
+                coefficients=({"num": "1", "den": "1"}, {"num": "2", "den": "1"}),
+                variables=("x",),
+                total_degree_min=1,
+                total_degree_max=1,
+            )
+
+    def test_zero_support_cannot_carry_coordinate_extrema(self) -> None:
+        from jacobian.math.polynomial_support_geometry.values import PolynomialSupport
+
+        with pytest.raises(ValidationError, match="coordinate extrema"):
+            PolynomialSupport(
+                is_zero=True,
+                term_count=0,
+                variables=("x",),
+                coordinate_min=(3,),
+                coordinate_max=(5,),
+            )

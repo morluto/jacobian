@@ -13,13 +13,12 @@ from jacobian.math.chain_complexes._models import (
     VerifyDifferentialRequest,
 )
 from jacobian.math.chain_complexes.values import (
-    VerificationResult,
     ChainComplexValue,
-    CoefficientField,
     HomologyGroupValue,
     HomologyResult,
     MappingConeResult,
     TensorProductResult,
+    VerificationResult,
 )
 
 
@@ -28,8 +27,10 @@ def _parse_fraction(s: str, prime: int | None = None) -> Fraction:
         # Prime-field entries are canonical residues 0..p-1; accept integer strings only
         try:
             val = int(s)
-        except ValueError:
-            raise ValueError(f"prime-field entry '{s}' must be an integer residue")
+        except ValueError as error:
+            raise ValueError(
+                f"prime-field entry '{s}' must be an integer residue"
+            ) from error
         return Fraction(val % prime)
     if "/" in s:
         num, den = s.split("/", 1)
@@ -143,6 +144,37 @@ def _matrix_multiply(
     return result
 
 
+def _require_square_zero(
+    diffs: list[list[list[Fraction]]],
+    prime: int | None = None,
+    *,
+    label: str,
+) -> None:
+    """Require d^2 = 0 for a parsed differential sequence."""
+    for i in range(len(diffs) - 1):
+        product = _matrix_multiply(diffs[i], diffs[i + 1], prime)
+        if any(value != 0 for row in product for value in row):
+            raise ValueError(
+                f"{label} complex violates d^2=0 at differential index {i}"
+            )
+
+
+def _require_chain_map_relation(
+    source_diffs: list[list[list[Fraction]]],
+    target_diffs: list[list[list[Fraction]]],
+    map_mats: list[list[list[Fraction]]],
+    prime: int | None = None,
+) -> None:
+    """Require d_target * f_{i+1} == f_i * d_source at every differential."""
+    for i in range(len(source_diffs)):
+        left = _matrix_multiply(target_diffs[i], map_mats[i + 1], prime)
+        right = _matrix_multiply(map_mats[i], source_diffs[i], prime)
+        if left != right:
+            raise ValueError(
+                f"chain map does not commute with differentials at degree index {i}"
+            )
+
+
 def construct_chain_complex(request: ConstructChainComplexRequest) -> ChainComplexValue:
     """Construct a chain complex from differential matrices."""
     basis_sizes = request.basis_sizes
@@ -177,13 +209,11 @@ def verify_differential(request: VerifyDifferentialRequest) -> VerificationResul
         d_i = diffs[i]
         d_ip1 = diffs[i + 1]
         product = _matrix_multiply(d_i, d_ip1, prime)
-        is_zero = all(
-            all(val == 0 for val in row) for row in product
-        )
+        is_zero = all(all(val == 0 for val in row) for row in product)
         if not is_zero:
             return VerificationResult(
                 is_valid=False,
-                detail= f"d^2 != 0 at degree {i + 1}",
+                detail=f"d^2 != 0 at degree {i + 1}",
                 complex=request.complex,
             )
 
@@ -194,38 +224,21 @@ def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
     """Verify that a chain map commutes with differentials.
 
     Returns a dictionary with 'is_valid' (bool) and 'detail' (str).
+
+    Request admission guarantees equal coefficient fields and prime, so a
+    field mismatch can never reach this kernel as a verdict.
     """
     source = request.source
     target = request.target
-    # Reject incompatible fields
-    if source.coefficient_field != target.coefficient_field:
-        return VerificationResult(
-            is_valid=False,
-            detail=f"chain map between incompatible coefficient fields {source.coefficient_field} vs {target.coefficient_field}",
-            source=source,
-            target=target,
-        )
-    if source.prime != target.prime:
-        return VerificationResult(
-            is_valid=False,
-            detail=f"chain map between different primes {source.prime} vs {target.prime}",
-            source=source,
-            target=target,
-        )
     prime = source.prime
 
-    if len(source.basis_sizes) != len(target.basis_sizes):
-        # For simplicity require same length; otherwise need to handle different degree ranges
-        # But we can still proceed with min length
-        pass
-    if len(request.map_matrices) != len(source.basis_sizes):
-        return VerificationResult(
-            is_valid=False,
-            detail=f"map_matrices count {len(request.map_matrices)} != basis count {len(source.basis_sizes)}",
-            source=source,
-            target=target,
-        )
-
+    # Request admission guarantees one component per degree, equal shape
+    # (target rows x source columns) per component, and coinciding degree
+    # intervals, so tuple index equals actual chain degree.
+    map_mats = [
+        _matrix_to_fractions(m, target.basis_sizes[i], source.basis_sizes[i], prime)
+        for i, m in enumerate(request.map_matrices)
+    ]
     source_diffs = [
         _matrix_to_fractions(m, source.basis_sizes[i], source.basis_sizes[i + 1], prime)
         for i, m in enumerate(source.differential_matrices)
@@ -234,52 +247,27 @@ def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
         _matrix_to_fractions(m, target.basis_sizes[i], target.basis_sizes[i + 1], prime)
         for i, m in enumerate(target.differential_matrices)
     ]
-    map_mats = [
-        _matrix_to_fractions(m, target.basis_sizes[i], source.basis_sizes[i], prime)  # note: rows=target, cols=source, so transpose from previous
-        for i, m in enumerate(request.map_matrices)
-    ]
-    # Actually _matrix_to_fractions expects rows=target_basis[i], cols=source_basis[i] to represent map C_i -> D_i as matrix D_i x C_i
-    # The original code had rows=source, cols=target which is transposed. We need to check dimensions.
-    # Let's instead construct maps as (target_basis[i] rows x source_basis[i] cols) by transposing the input if needed.
-    # The input map_matrices[i] is given as tuple of rows where each row length = target_basis? No, spec says map_matrices[i] has shape source_basis[i] x target_basis[i]? We need to infer from tests.
-    # Tests use identity 3x3 for circle (basis 3,3). Identity 3x3 is square, so ambiguous.
-    # For now we will keep original orientation (source rows x target cols) and compute correctly: we need d_target * f_{i+1} == f_i * d_source
-    # Let's recompute with correct orientation assuming f_i is target_rows x source_cols? Wait we need to decide.
-    # For now, we will implement the mathematically correct check using the stored orientation as source_rows x target_cols (as in original code).
-    # That means f_i has shape source_basis[i] rows x target_basis[i] cols? But then d_target * f_{i+1} would be (target_basis[i] x target_basis[i+1]) * (source_basis[i+1] x target_basis[i+1]) -> dimensions mismatch.
-    # So original orientation must be target x source? Let's re-evaluate: In original code, they called _matrix_to_fractions(m, source_basis[i], target_basis[i], prime) where rows=source, cols=target. That would create matrix with rows=source, cols=target, i.e., source x target. But a map C_i -> D_i should be D_i rows x C_i cols. So that is transposed.
-    # To make multiplication work, they did left = f_n * d_target where f_n is source x target and d_target is target x target_next. That product would be source x target_next, while right is source_next x source * source_next x target? Not matching.
-    # The correct is to have f as D x C, so rows=target, cols=source. So we should call _matrix_to_fractions with rows=target, cols=source.
-    # Let's fix map_mats construction to use target rows, source cols.
 
-    # Rebuild map_mats correctly
-    map_mats = [
-        _matrix_to_fractions(m, target.basis_sizes[i], source.basis_sizes[i], prime)
-        for i, m in enumerate(request.map_matrices)
-    ]
-
+    # f_i: C_i -> D_i has shape target_basis[i] x source_basis[i], so the
+    # chain-map equation at every differential is
+    # d_target_i * f_{i+1} == f_i * d_source_i.
     for i in range(len(source_diffs)):
-        d_source = source_diffs[i]  # rows=source_basis[i], cols=source_basis[i+1]
-        d_target = target_diffs[i]  # rows=target_basis[i], cols=target_basis[i+1]
-        # f_{i+1}: C_{i+1} -> D_{i+1}, shape target_basis[i+1] x source_basis[i+1]
-        # f_i: C_i -> D_i, shape target_basis[i] x source_basis[i]
-        f_ip1 = map_mats[i + 1] if i + 1 < len(map_mats) else None
-        f_i = map_mats[i]
-        if f_ip1 is None:
-            continue  # No next map, skip? But need to check at top degree where no differential?
-        # left = d_target * f_{i+1}: (target_i x target_{i+1}) * (target_{i+1} x source_{i+1}) => target_i x source_{i+1}
-        left = _matrix_multiply(d_target, f_ip1, prime)
-        # right = f_i * d_source: (target_i x source_i) * (source_i x source_{i+1}) => target_i x source_{i+1}
-        right = _matrix_multiply(f_i, d_source, prime)
+        left = _matrix_multiply(target_diffs[i], map_mats[i + 1], prime)
+        right = _matrix_multiply(map_mats[i], source_diffs[i], prime)
         if left != right:
             return VerificationResult(
                 is_valid=False,
-                detail=f"chain map does not commute at degree {i+1}",
+                detail=f"chain map does not commute at degree {source.degree_min + i}",
                 source=source,
                 target=target,
             )
 
-    return VerificationResult(is_valid=True, detail="chain map commutes with differentials", source=source, target=target)
+    return VerificationResult(
+        is_valid=True,
+        detail="chain map commutes with differentials",
+        source=source,
+        target=target,
+    )
 
 
 def compute_homology(request: ComputeHomologyRequest) -> HomologyResult:
@@ -297,7 +285,9 @@ def compute_homology(request: ComputeHomologyRequest) -> HomologyResult:
     for i in range(len(diffs) - 1):
         prod = _matrix_multiply(diffs[i], diffs[i + 1], prime)
         if any(any(v != 0 for v in row) for row in prod):
-            raise ValueError(f"chain complex does not satisfy d^2=0 at index {i}: product non-zero")
+            raise ValueError(
+                f"chain complex does not satisfy d^2=0 at index {i}: product non-zero"
+            )
 
     groups = []
     for idx in range(n):
@@ -320,7 +310,9 @@ def compute_homology(request: ComputeHomologyRequest) -> HomologyResult:
         cycle_rank = chain_rank - outgoing_rank
         betti = cycle_rank - incoming_rank
         if betti < 0:
-            raise ValueError(f"negative Betti number at degree {actual_degree}: indicates invalid complex")
+            raise ValueError(
+                f"negative Betti number at degree {actual_degree}: indicates invalid complex"
+            )
 
         groups.append(
             HomologyGroupValue(
@@ -348,7 +340,10 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
     """
     source = request.source
     target = request.target
-    if source.coefficient_field != target.coefficient_field or source.prime != target.prime:
+    if (
+        source.coefficient_field != target.coefficient_field
+        or source.prime != target.prime
+    ):
         raise ValueError("mapping cone requires same coefficient field and prime")
     prime = source.prime
 
@@ -357,12 +352,13 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
     max_len = max(len(source.basis_sizes), len(target.basis_sizes))
     cone_basis_sizes = []
     for i in range(max_len + 1):
-        c_size = source.basis_sizes[i - 1] if 0 < i < len(source.basis_sizes) + 1 and i-1 < len(source.basis_sizes) else 0
-        # Actually C_{n-1} corresponds to source index n-1 - (source.degree_min offset). For degree_min 0, this simplifies.
-        # For general degree_min, we align by index offset.
-        # Simplify to degree_min 0 case as in tests; for non-zero, use same logic with index shift.
+        # C_{n-1} corresponds to source index n-1 - (source.degree_min offset). For degree_min 0, this simplifies.
         d_size = target.basis_sizes[i] if i < len(target.basis_sizes) else 0
-        c_size2 = source.basis_sizes[i - 1] if i > 0 and i - 1 < len(source.basis_sizes) else 0
+        c_size2 = (
+            source.basis_sizes[i - 1]
+            if i > 0 and i - 1 < len(source.basis_sizes)
+            else 0
+        )
         cone_basis_sizes.append(c_size2 + d_size)
     cone_basis_sizes = tuple(cone_basis_sizes)
 
@@ -386,22 +382,42 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
         for i, m in enumerate(request.map_matrices)
     ]
 
+    # A mapping cone is a chain complex only when both inputs are chain
+    # complexes and the map is a genuine chain map; validate both defining
+    # equations before returning any exact decomposition.
+    _require_square_zero(source_diffs, prime, label="source")
+    _require_square_zero(target_diffs, prime, label="target")
+    _require_chain_map_relation(source_diffs, target_diffs, map_mats, prime)
+
     def _to_str_matrix(mat: list[list[Fraction]]) -> tuple[tuple[str, ...], ...]:
-        return tuple(tuple(str(int(v)) if v.denominator == 1 else f"{v.numerator}/{v.denominator}" for v in row) for row in mat)
+        return tuple(
+            tuple(
+                str(int(v)) if v.denominator == 1 else f"{v.numerator}/{v.denominator}"
+                for v in row
+            )
+            for row in mat
+        )
 
     cone_diffs: list[tuple[tuple[str, ...], ...]] = []
     for n in range(1, len(cone_basis_sizes)):
         rows = cone_basis_sizes[n - 1]
         cols = cone_basis_sizes[n]
         if rows == 0 or cols == 0:
-            cone_diffs.append(tuple(tuple("0" for _ in range(cols)) for _ in range(rows)) if rows and cols else tuple())
+            # Zero-cell differentials carry no entries.
+            cone_diffs.append(tuple())
             continue
         # Build zero matrix
         block = [[Fraction(0) for _ in range(cols)] for _ in range(rows)]
         # Sizes for decomposition: cone_{n} = C_{n-1} ⊕ D_n, cone_{n-1}= C_{n-2} ⊕ D_{n-1}
-        c_n_minus1 = source.basis_sizes[n - 1] if 0 <= n - 1 < len(source.basis_sizes) else 0
+        c_n_minus1 = (
+            source.basis_sizes[n - 1] if 0 <= n - 1 < len(source.basis_sizes) else 0
+        )
         d_n = target.basis_sizes[n] if n < len(target.basis_sizes) else 0
-        c_n_minus2 = source.basis_sizes[n - 2] if n - 2 >= 0 and n - 2 < len(source.basis_sizes) else 0
+        c_n_minus2 = (
+            source.basis_sizes[n - 2]
+            if n - 2 >= 0 and n - 2 < len(source.basis_sizes)
+            else 0
+        )
         d_n_minus1 = target.basis_sizes[n - 1] if n - 1 < len(target.basis_sizes) else 0
 
         # Fill blocks
@@ -427,6 +443,16 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
                         block[c_n_minus2 + i][j] = f[i][j]
 
         cone_diffs.append(_to_str_matrix(block))
+
+    # Defining invariant of the returned decomposition: the cone
+    # differentials must themselves be square-zero.
+    cone_parsed = [
+        _matrix_to_fractions(
+            cone_diffs[i], cone_basis_sizes[i], cone_basis_sizes[i + 1], prime
+        )
+        for i in range(len(cone_diffs))
+    ]
+    _require_square_zero(cone_parsed, prime, label="mapping cone")
 
     return MappingConeResult(
         cone_basis_sizes=cone_basis_sizes,
@@ -475,19 +501,23 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
     ]
 
     def _to_str_matrix(mat: list[list[Fraction]]) -> tuple[tuple[str, ...], ...]:
-        return tuple(tuple(str(int(v)) if v.denominator == 1 else f"{v.numerator}/{v.denominator}" for v in row) for row in mat)
+        return tuple(
+            tuple(
+                str(int(v)) if v.denominator == 1 else f"{v.numerator}/{v.denominator}"
+                for v in row
+            )
+            for row in mat
+        )
 
     tensor_diffs: list[tuple[tuple[str, ...], ...]] = []
     for deg in range(1, n):
         rows = tensor_basis_sizes[deg - 1]
         cols = tensor_basis_sizes[deg]
         if rows == 0 or cols == 0:
-            tensor_diffs.append(tuple(tuple("0" for _ in range(cols)) for _ in range(rows)) if rows and cols else tuple())
+            # Zero-cell differentials carry no entries.
+            tensor_diffs.append(tuple())
             continue
         block = [[Fraction(0) for _ in range(cols)] for _ in range(rows)]
-        # Iterate over i,j for source degree deg
-        row_offset = 0
-        col_offset = 0
         # We need to map block structure: (C⊗D)_deg = ⊕_{i+j=deg} C_i⊗D_j
         # Similarly for deg-1 = ⊕_{p+q=deg-1} C_p⊗D_q
         # For each i,j contributing to deg, its differential contributes to two possible targets:
@@ -500,23 +530,23 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
         for i in range(min(deg + 1, len(left.basis_sizes))):
             j = deg - i
             if j < len(right.basis_sizes):
-                offsets_deg[(i,j)] = off
+                offsets_deg[(i, j)] = off
                 off += left.basis_sizes[i] * right.basis_sizes[j]
         offsets_deg_minus1 = {}
         off = 0
         for p in range(min(deg, len(left.basis_sizes))):
             q = deg - 1 - p
-            if q < len(right.basis_sizes) and q >=0:
-                offsets_deg_minus1[(p,q)] = off
+            if q < len(right.basis_sizes) and q >= 0:
+                offsets_deg_minus1[(p, q)] = off
                 off += left.basis_sizes[p] * right.basis_sizes[q]
 
-        for (i,j), col_off in offsets_deg.items():
+        for (i, j), col_off in offsets_deg.items():
             # d_C contribution
-            if i > 0 and (i-1, j) in offsets_deg_minus1:
+            if i > 0 and (i - 1, j) in offsets_deg_minus1:
                 d_left = left_diffs[i - 1]  # shape left_basis[i-1] x left_basis[i]
-                row_off = offsets_deg_minus1[(i-1, j)]
+                row_off = offsets_deg_minus1[(i - 1, j)]
                 # Tensor product with identity on D_j
-                for a in range(left.basis_sizes[i-1]):
+                for a in range(left.basis_sizes[i - 1]):
                     for b in range(left.basis_sizes[i]):
                         coeff = d_left[a][b]
                         if coeff == 0:
@@ -525,18 +555,20 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
                             row = row_off + a * right.basis_sizes[j] + c
                             col = col_off + b * right.basis_sizes[j] + c
                             block[row][col] += coeff
-            # d_D contribution with sign (-1)^i
-            if j > 0 and (i, j-1) in offsets_deg_minus1:
+            # d_D contribution with sign (-1)^i where i is the actual chain
+            # degree of the left factor, not its tuple index.
+            if j > 0 and (i, j - 1) in offsets_deg_minus1:
                 d_right = right_diffs[j - 1]
-                sign = -1 if i % 2 == 1 else 1
-                row_off = offsets_deg_minus1[(i, j-1)]
+                left_degree = left.degree_min + i
+                sign = -1 if left_degree % 2 == 1 else 1
+                row_off = offsets_deg_minus1[(i, j - 1)]
                 for a in range(left.basis_sizes[i]):
-                    for c2 in range(right.basis_sizes[j-1]):
+                    for c2 in range(right.basis_sizes[j - 1]):
                         for d in range(right.basis_sizes[j]):
                             coeff = d_right[c2][d] * sign
                             if coeff == 0:
                                 continue
-                            row = row_off + a * right.basis_sizes[j-1] + c2
+                            row = row_off + a * right.basis_sizes[j - 1] + c2
                             col = col_off + a * right.basis_sizes[j] + d
                             block[row][col] += coeff
         tensor_diffs.append(_to_str_matrix(block))

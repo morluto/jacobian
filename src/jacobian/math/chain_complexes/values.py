@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from fractions import Fraction
+from typing import Self
 
 from pydantic import Field, model_validator
 
@@ -12,6 +13,11 @@ from jacobian._models import StrictModel
 MAX_CHAIN_DEGREE = 32
 MAX_BASIS_SIZE = 64
 MAX_MATRIX_CELLS = 4096
+# Derived tensor-product work bounds: each tensor group dimension and the
+# total tensor cell count stay within these conservative limits so no
+# accepted request can allocate an unbounded dense intermediate.
+MAX_TENSOR_GROUP_DIMENSION = 256
+MAX_TENSOR_TOTAL_CELLS = 65536
 
 
 class CoefficientField(StrEnum):
@@ -31,31 +37,7 @@ class ChainComplexValue(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_chain_complex(self) -> Self:
-        import re
-        from fractions import Fraction
-
-        # Prime coupling
-        if self.coefficient_field == CoefficientField.PRIME_FIELD:
-            if self.prime is None:
-                raise ValueError("GF_p requires a prime modulus")
-            # Check prime is within bound and is prime
-            if not 2 <= self.prime <= 1000003:
-                raise ValueError("prime modulus exceeds the bounded prime limit")
-            # simple primality
-            n = self.prime
-            if n % 2 == 0:
-                if n != 2:
-                    raise ValueError(f"prime {n} is not prime")
-            else:
-                d = 3
-                while d * d <= n:
-                    if n % d == 0:
-                        raise ValueError(f"prime {n} is not prime")
-                    d += 2
-        else:
-            if self.prime is not None:
-                raise ValueError("QQ coefficient field must not have a prime modulus")
-
+        _require_prime_coupling(self.coefficient_field, self.prime)
         # Degree consistency
         if self.degree_max < self.degree_min:
             raise ValueError("degree_max must be >= degree_min")
@@ -66,45 +48,98 @@ class ChainComplexValue(StrictModel):
             raise ValueError("basis_sizes length out of bounds")
         for sz in self.basis_sizes:
             if not 0 <= sz <= MAX_BASIS_SIZE:
-                raise ValueError(f"basis size {sz} exceeds MAX_BASIS_SIZE {MAX_BASIS_SIZE}")
+                raise ValueError(
+                    f"basis size {sz} exceeds MAX_BASIS_SIZE {MAX_BASIS_SIZE}"
+                )
 
         if len(self.differential_matrices) != max(0, len(self.basis_sizes) - 1):
             raise ValueError("differential_matrices count must be len(basis_sizes)-1")
 
+        self._require_matrix_shapes()
+        return self
+
+    def _require_matrix_shapes(self) -> None:
+        """Every differential has basis-size shape and bounded exact entries."""
         total_cells = 0
-        entry_pat = re.compile(r"^-?\d+(/\d+)?$")
         for idx, mat in enumerate(self.differential_matrices):
             rows_expected = self.basis_sizes[idx]
             cols_expected = self.basis_sizes[idx + 1]
             if len(mat) != rows_expected:
-                raise ValueError(f"differential_matrices[{idx}] row count {len(mat)} != basis size {rows_expected}")
+                raise ValueError(
+                    f"differential_matrices[{idx}] row count {len(mat)} != basis size {rows_expected}"
+                )
             for row in mat:
                 if len(row) != cols_expected:
-                    raise ValueError(f"differential_matrices[{idx}] column count {len(row)} != {cols_expected}")
+                    raise ValueError(
+                        f"differential_matrices[{idx}] column count {len(row)} != {cols_expected}"
+                    )
                 for entry in row:
-                    if not isinstance(entry, str):
-                        raise ValueError("differential entries must be strings")
-                    if not entry_pat.match(entry):
-                        raise ValueError(f"entry '{entry}' does not match rational string grammar")
-                    # Check denominator not zero and digits bound
-                    if "/" in entry:
-                        num_str, den_str = entry.split("/", 1)
-                        if den_str.lstrip("-").lstrip("0") == "" or int(den_str) == 0:
-                            raise ValueError(f"entry '{entry}' has zero denominator")
-                        if len(num_str.lstrip("-")) > 4096 or len(den_str.lstrip("-")) > 4096:
-                            raise ValueError("differential entry exceeds digit bound")
-                    else:
-                        if len(entry.lstrip("-")) > 4096:
-                            raise ValueError("differential entry exceeds digit bound")
-                    # Ensure it parses as Fraction
-                    try:
-                        Fraction(entry)
-                    except Exception as e:
-                        raise ValueError(f"entry '{entry}' is not a valid rational: {e}")
+                    _require_rational_entry_grammar(
+                        self.coefficient_field,
+                        entry,
+                    )
             total_cells += rows_expected * cols_expected
         if total_cells > MAX_MATRIX_CELLS:
-            raise ValueError(f"total matrix cells {total_cells} exceeds MAX_MATRIX_CELLS {MAX_MATRIX_CELLS}")
-        return self
+            raise ValueError(
+                f"total matrix cells {total_cells} exceeds MAX_MATRIX_CELLS {MAX_MATRIX_CELLS}"
+            )
+
+
+def _require_prime_coupling(
+    coefficient_field: CoefficientField, prime: int | None
+) -> None:
+    """GF_p carries a bounded prime modulus; QQ carries none."""
+    if coefficient_field == CoefficientField.PRIME_FIELD:
+        if prime is None:
+            raise ValueError("GF_p requires a prime modulus")
+        if not 2 <= prime <= 1000003:
+            raise ValueError("prime modulus exceeds the bounded prime limit")
+        if prime % 2 == 0:
+            if prime != 2:
+                raise ValueError(f"prime {prime} is not prime")
+            return
+        divisor = 3
+        while divisor * divisor <= prime:
+            if prime % divisor == 0:
+                raise ValueError(f"prime {prime} is not prime")
+            divisor += 2
+    elif prime is not None:
+        raise ValueError("QQ coefficient field must not have a prime modulus")
+
+
+def _require_rational_entry_grammar(
+    coefficient_field: CoefficientField, entry: object
+) -> None:
+    """One matrix entry: exact rational grammar with digit bounds.
+
+    Prime-field entries are integer residues; a fractional string such as
+    "1/2" would pass the rational regex but every downstream kernel parses
+    prime-field entries with int(), so admitting it here would turn an
+    accepted request into an execution failure.
+    """
+    import re
+
+    if not isinstance(entry, str):
+        raise ValueError("differential entries must be strings")
+    if not re.fullmatch(r"-?\d+(/\d+)?", entry):
+        raise ValueError(f"entry '{entry}' does not match rational string grammar")
+    if coefficient_field == CoefficientField.PRIME_FIELD and "/" in entry:
+        raise ValueError(f"prime-field entry '{entry}' must be an integer residue")
+    # Check denominator not zero and digits bound
+    if "/" in entry:
+        num_str, den_str = entry.split("/", 1)
+        if den_str.lstrip("-").lstrip("0") == "" or int(den_str) == 0:
+            raise ValueError(f"entry '{entry}' has zero denominator")
+        if len(num_str.lstrip("-")) > 4096 or len(den_str.lstrip("-")) > 4096:
+            raise ValueError("differential entry exceeds digit bound")
+    else:
+        if len(entry.lstrip("-")) > 4096:
+            raise ValueError("differential entry exceeds digit bound")
+    # Ensure it parses as Fraction
+    try:
+        Fraction(entry)
+    except Exception as error:
+        raise ValueError(f"entry '{entry}' is not a valid rational: {error}") from error
 
 
 class HomologyGroupValue(StrictModel):
@@ -153,15 +188,17 @@ class TensorProductResult(StrictModel):
 
 
 __all__ = [
+    "MAX_BASIS_SIZE",
+    "MAX_CHAIN_DEGREE",
+    "MAX_MATRIX_CELLS",
+    "MAX_TENSOR_GROUP_DIMENSION",
+    "MAX_TENSOR_TOTAL_CELLS",
     "ChainComplexValue",
     "CoefficientField",
     "HomologyGroupValue",
     "HomologyResult",
     "MappingConeResult",
     "TensorProductResult",
-    "MAX_BASIS_SIZE",
-    "MAX_CHAIN_DEGREE",
-    "MAX_MATRIX_CELLS",
 ]
 
 

@@ -1,7 +1,5 @@
 """Chain complex operation declarations."""
 
-from typing import Any
-
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools
 from jacobian.math.chain_complexes._models import (
@@ -21,13 +19,12 @@ from jacobian.math.chain_complexes.operations import (
     verify_differential,
 )
 from jacobian.math.chain_complexes.values import (
-    VerificationResult,
     ChainComplexValue,
     HomologyResult,
     MappingConeResult,
     TensorProductResult,
+    VerificationResult,
 )
-
 
 _CIRCLE_COMPLEX = {
     "coefficient_field": "QQ",

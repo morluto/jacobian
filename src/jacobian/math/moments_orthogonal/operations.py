@@ -146,7 +146,15 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
             "the zeroth moment must be positive: a positive-definite "
             "moment functional requires mu_0 > 0"
         )
-    max_order = min(MAX_RECURRENCE_ORDER, (m - 1) // 2)
+    if (m - 1) // 2 > MAX_RECURRENCE_ORDER:
+        # Silently truncating would report complete=True while ignoring
+        # usable moments; admit only fully computable sequences.
+        raise ValueError(
+            "moment sequence supports at most "
+            f"{2 * MAX_RECURRENCE_ORDER + 1} entries for a complete "
+            f"recurrence computation (got {m})"
+        )
+    max_order = (m - 1) // 2
     if max_order < 1:
         return RecurrenceCoefficients(alpha=(), beta=(moments[0],))
     alpha, beta = _monic_orthogonal_recurrence(moments, max_order)

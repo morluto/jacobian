@@ -12,6 +12,8 @@ from jacobian._models import StrictModel
 
 MAX_POINTS = 64
 MAX_DIMENSION = 20
+MAX_PAIRS = MAX_POINTS * (MAX_POINTS - 1) // 2
+"""Maximum distinct source pairs spanned by a bounded configuration: C(64, 2)."""
 COORDINATE_DIGITS = 256
 """Per-coordinate digit bound for pinned line-distance profile so squared distances stay representable."""
 
@@ -192,7 +194,7 @@ class PinnedLineEntry(StrictModel):
 
     line_coefficients: tuple[CanonicalRational, ...] = Field(min_length=3, max_length=3)
     squared_distance: CanonicalRational
-    pairs: tuple[tuple[int, int], ...] = Field(min_length=1)
+    pairs: tuple[tuple[int, int], ...] = Field(min_length=1, max_length=MAX_PAIRS)
 
     @model_validator(mode="after")
     def require_sorted_pairs(self) -> Self:

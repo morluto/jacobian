@@ -356,6 +356,52 @@ class TestPinnedLineDistance:
                     distance_multiplicities=(),
                 )
 
+    def test_pair_ledger_is_schema_bounded_before_validation(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            MAX_PAIRS,
+            PinnedLineDistanceResult,
+            PinnedLineEntry,
+        )
+
+        # Schema-visible bound derived from the mathematics: a bounded
+        # configuration spans at most C(MAX_POINTS, 2) distinct pairs.
+        assert MAX_PAIRS == 2016
+        pairs_schema = PinnedLineEntry.model_json_schema()["properties"]["pairs"]
+        assert pairs_schema["maxItems"] == MAX_PAIRS
+
+        entry_schema = PinnedLineDistanceResult.model_json_schema()
+        assert (
+            entry_schema["$defs"]["PinnedLineEntry"]["properties"]["pairs"]["maxItems"]
+            == MAX_PAIRS
+        )
+
+        cfg = self._cfg([("a", 0, 0), ("b", 1, 0)])
+        oversized = tuple((i, i + 1) for i in range(MAX_PAIRS + 1))
+        with pytest.raises(ValidationError, match="at most 2016 items"):
+            PinnedLineEntry(
+                line_coefficients=(_cr(0), _cr(0), _cr(0)),
+                squared_distance=_cr(1),
+                pairs=oversized,
+            )
+        with pytest.raises(ValidationError, match="at most 2016 items"):
+            PinnedLineDistanceResult(
+                configuration=cfg,
+                anchor=self._anchor(0, 0),
+                dimension=2,
+                point_count=2,
+                lines=(
+                    PinnedLineEntry(
+                        line_coefficients=(_cr(0), _cr(1), _cr(0)),
+                        squared_distance=_cr(1),
+                        pairs=oversized,
+                    ),
+                ),
+                distance_multiplicities=(),
+            )
+
 
 def _cr(x):
     from fractions import Fraction

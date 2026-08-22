@@ -470,26 +470,28 @@ class CircumradiusProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_unique_labels_and_coordinates(self) -> Self:
-        labels = tuple(item.label for item in self.points)
-        if len(labels) != len(set(labels)):
-            raise ValueError("point labels must be unique")
-        keys = tuple(
-            (
-                item.point.x.num,
-                item.point.x.den,
-                item.point.y.num,
-                item.point.y.den,
-            )
-            for item in self.points
-        )
-        if len(keys) != len(set(keys)):
-            raise ValueError("point coordinates must be unique")
-        for item in self.points:
-            if not _circumradius_input_height_ok(item.point):
-                raise ValueError(
-                    "circumradius coordinates exceed the conservative 1024-digit input bound for exact output"
-                )
+        _require_admitted_circumradius_configuration(self.points)
         return self
+
+
+def _require_admitted_circumradius_configuration(
+    points: tuple[LabelledPoint2D, ...],
+) -> None:
+    """Admission checks shared by the request and retained profile points."""
+    labels = tuple(item.label for item in points)
+    if len(labels) != len(set(labels)):
+        raise ValueError("point labels must be unique")
+    keys = tuple(
+        (item.point.x.num, item.point.x.den, item.point.y.num, item.point.y.den)
+        for item in points
+    )
+    if len(keys) != len(set(keys)):
+        raise ValueError("point coordinates must be unique")
+    for item in points:
+        if not _circumradius_input_height_ok(item.point):
+            raise ValueError(
+                "circumradius coordinates exceed the conservative 1024-digit input bound for exact output"
+            )
 
 
 class CircumradiusTripleEntry(StrictModel):
@@ -525,6 +527,8 @@ class CircumradiusProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_profile(self) -> Self:
+        # Revalidated results must carry an admissible configuration.
+        _require_admitted_circumradius_configuration(self.points)
         if len(self.entries) != self.triple_count:
             raise ValueError("circumradius profile must be complete")
         _require_triple_index_coverage(self.point_count, self.entries)

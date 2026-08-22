@@ -14,6 +14,7 @@ from jacobian.math.coalgebras._models import (
     GroupLikeElementsRequest,
     GroupLikeElementsResult,
 )
+from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
 
 def compute_comultiplication(request: ComultiplicationRequest) -> ComultiplicationResult:
@@ -35,7 +36,7 @@ def compute_comultiplication(request: ComultiplicationRequest) -> Comultiplicati
     return ComultiplicationResult(
         coalgebra=ca,
         element_index=i,
-        coefficients=coeffs,
+        matrix=PrimeFieldMatrix(prime=p, entries=coeffs, columns=n),
         dimension=n,
     )
 

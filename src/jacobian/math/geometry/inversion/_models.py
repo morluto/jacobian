@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.math.geometry._models import RationalPoint2D as GeometryPoint
 
 # Inversion q = c + (s / ||p-c||^2) * (p - c) grows rational components by a
 # derivable factor. With every input numerator and denominator bounded at D
@@ -43,20 +44,18 @@ class CircleInversionRequest(StrictModel):
     inverted coordinates stay within the canonical 32,768-digit limit.
     """
 
-    center_x: CanonicalRational = Field(description="x-coordinate of the inversion center")
-    center_y: CanonicalRational = Field(description="y-coordinate of the inversion center")
+    center: GeometryPoint = Field(description="Inversion center as a canonical geometry point")
     power: CanonicalRational = Field(description="Positive rational inversion power (squared radius)")
-    point_x: CanonicalRational = Field(description="x-coordinate of the point to invert")
-    point_y: CanonicalRational = Field(description="y-coordinate of the point to invert")
+    point: GeometryPoint = Field(description="Point to invert as a canonical geometry point")
 
     @model_validator(mode="after")
     def require_admissible_request(self) -> Self:
         for value in (
-            self.center_x,
-            self.center_y,
+            self.center.x,
+            self.center.y,
             self.power,
-            self.point_x,
-            self.point_y,
+            self.point.x,
+            self.point.y,
         ):
             require_bounded_rational(
                 value,
@@ -70,16 +69,15 @@ class CircleInversionRequest(StrictModel):
         # The contract requires p != c; inverting the center would divide by
         # the zero displacement, so reject it at this typed boundary.
         if (
-            self.point_x.as_fraction() == self.center_x.as_fraction()
-            and self.point_y.as_fraction() == self.center_y.as_fraction()
+            self.point.x.as_fraction() == self.center.x.as_fraction()
+            and self.point.y.as_fraction() == self.center.y.as_fraction()
         ):
             raise ValueError("the inversion center cannot be inverted")
         return self
 
 
 class CircleInversionResult(CircleInversionRequest):
-    inverted_x: CanonicalRational
-    inverted_y: CanonicalRational
+    inverted_point: GeometryPoint
     complete: Literal[True] = True
     method: Literal["EXACT_RATIONAL_INVERSION"] = "EXACT_RATIONAL_INVERSION"
 
@@ -87,17 +85,19 @@ class CircleInversionResult(CircleInversionRequest):
     def bind_inversion(self) -> Self:
         from jacobian.math.geometry.inversion._operations import invert_point
 
-        cx, cy = self.center_x.as_fraction(), self.center_y.as_fraction()
-        s = self.power.as_fraction()
-        px, py = self.point_x.as_fraction(), self.point_y.as_fraction()
-
-        result = invert_point(cx, cy, s, px, py)
-        expected_x = CanonicalRational.from_fraction(result[0])
-        expected_y = CanonicalRational.from_fraction(result[1])
-        if self.inverted_x != expected_x:
-            raise ValueError("inverted_x must be the exact inversion result")
-        if self.inverted_y != expected_y:
-            raise ValueError("inverted_y must be the exact inversion result")
+        result = invert_point(
+            self.center.x.as_fraction(),
+            self.center.y.as_fraction(),
+            self.power.as_fraction(),
+            self.point.x.as_fraction(),
+            self.point.y.as_fraction(),
+        )
+        expected = GeometryPoint(
+            x=CanonicalRational.from_fraction(result[0]),
+            y=CanonicalRational.from_fraction(result[1]),
+        )
+        if self.inverted_point != expected:
+            raise ValueError("inverted_point must be the exact inversion result")
         return self
 
 

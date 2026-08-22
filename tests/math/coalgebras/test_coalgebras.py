@@ -36,7 +36,7 @@ class TestComultiplication:
         result = compute_comultiplication(
             ComultiplicationRequest(coalgebra=ca, element_index=0)
         )
-        assert result.coefficients[0][0] == 1
+        assert result.matrix.entries[0][0] == 1
 
     def test_two_dim(self):
         """Compute comultiplication for a 2D coalgebra."""
@@ -52,8 +52,8 @@ class TestComultiplication:
         result = compute_comultiplication(
             ComultiplicationRequest(coalgebra=ca, element_index=0)
         )
-        assert result.coefficients[0][0] == 1
-        assert result.coefficients[1][1] == 0
+        assert result.matrix.entries[0][0] == 1
+        assert result.matrix.entries[1][1] == 0
 
 
 class TestCounit:
@@ -226,12 +226,18 @@ class TestSourceBoundResults:
             GroupLikeElementsResult(coalgebra=ca, elements=(), count=0)
 
     def test_forged_comultiplication_coefficients_are_rejected(self):
+        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+
         ca = self._two_dim_coalgebra()
         with pytest.raises(ValueError, match="exact comultiplication"):
             ComultiplicationResult(
                 coalgebra=ca,
                 element_index=0,
-                coefficients=((4, 0), (0, 0)),
+                matrix=PrimeFieldMatrix(
+                    prime=ca.prime,
+                    entries=((4, 0), (0, 0)),
+                    columns=2,
+                ),
                 dimension=2,
             )
 

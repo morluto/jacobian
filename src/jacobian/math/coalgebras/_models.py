@@ -7,6 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
 MAX_DIM = 8
 
@@ -126,11 +127,11 @@ class ComultiplicationRequest(StrictModel):
 
 
 class ComultiplicationResult(StrictModel):
-    """The comultiplication Delta(c_i) as a matrix of coefficients."""
+    """The comultiplication Delta(c_i) as a canonical prime-field matrix."""
 
     coalgebra: Coalgebra
     element_index: int = Field(ge=0)
-    coefficients: tuple[tuple[int, ...], ...]
+    matrix: PrimeFieldMatrix
     dimension: int = Field(ge=1)
 
     @model_validator(mode="after")
@@ -143,11 +144,19 @@ class ComultiplicationResult(StrictModel):
             raise ValueError("element_index must be in 0..dimension-1")
         if self.dimension != n:
             raise ValueError("dimension must match the retained coalgebra")
+        if self.dimension != self.matrix.columns or len(self.matrix.entries) != n:
+            raise ValueError("dimension must match the retained coalgebra")
+        # The canonical value carries its own field: a GF(p) coalgebra cannot
+        # describe a matrix over a different modulus.
+        if self.matrix.prime != p:
+            raise ValueError(
+                "matrix prime must match the retained coalgebra's field"
+            )
         expected = tuple(
             tuple(ca.comultiplication[self.element_index][j][k] % p for k in range(n))
             for j in range(n)
         )
-        if self.coefficients != expected:
+        if self.matrix.entries != expected:
             raise ValueError(
                 "coefficients must be the exact comultiplication of the "
                 "retained coalgebra basis element"

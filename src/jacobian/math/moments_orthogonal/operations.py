@@ -258,6 +258,26 @@ def christoffel_darboux(
     )
 
 
+def _require_finite_doubles(
+    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+) -> None:
+    """Golub-Welsch converts to IEEE doubles; reject out-of-range coefficients
+    deliberately instead of surfacing host overflow exceptions."""
+    import math
+
+    for value in (*alpha, *beta):
+        try:
+            converted = float(value)
+        except (OverflowError, ValueError) as err:
+            raise ValueError(
+                "quadrature coefficients exceed the finite IEEE-double range"
+            ) from err
+        if not math.isfinite(converted):
+            raise ValueError(
+                "quadrature coefficients exceed the finite IEEE-double range"
+            )
+
+
 def gaussian_quadrature(
     alpha: Sequence[Fraction], beta: Sequence[Fraction]
 ) -> GaussianQuadrature:
@@ -280,16 +300,21 @@ def gaussian_quadrature(
         raise ValueError("alpha must contain between 1 and 16 entries")
     if len(beta) != n and len(beta) != n + 1:
         raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-    if beta[0] == 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    if beta[0] <= 0:
+        raise ValueError(
+            "beta_0 (the zeroth moment of a positive functional) must be positive"
+        )
+    _require_finite_doubles(alpha, beta)
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
     for k in range(n - 1):
         if k + 1 >= len(beta):
             break
         sub = beta[k + 1]
-        if sub < 0:
-            raise ValueError("subdiagonal beta entries must be nonnegative")
+        if sub <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
         off.append(math.sqrt(float(sub)))
     jacobi = np.diag(diagonal)
     if off:

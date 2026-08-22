@@ -14,10 +14,13 @@ from jacobian.math.prime_field_linear_algebra import (
 )
 
 MAX_DIMENSION = 256
+# Dense elimination and sympy primality testing stay cheap only for bounded
+# moduli; residues are < prime, so this caps every residue's size too.
+MAX_MATRIX_PRIME = 1_000_000_007
 
 
 class PrimeFieldMatrixRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_MATRIX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
@@ -47,7 +50,7 @@ class _PrimeFieldMatrixValidator:
 
 
 class RankRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_MATRIX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
@@ -92,7 +95,7 @@ class RankResult(RankRequest):
 
 
 class RrefRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_MATRIX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 
@@ -138,7 +141,7 @@ class RrefResult(RrefRequest):
 
 
 class NullspaceRequest(StrictModel):
-    prime: int = Field(ge=2)
+    prime: int = Field(ge=2, le=MAX_MATRIX_PRIME)
     entries: tuple[tuple[int, ...], ...] = Field(min_length=0)
     columns: int = Field(ge=0, le=MAX_DIMENSION)
 

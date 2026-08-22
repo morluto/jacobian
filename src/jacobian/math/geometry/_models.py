@@ -545,6 +545,8 @@ def _maximum_profile_wire_bytes(configuration: PointConfiguration) -> int:
     entry_base = len(encode_strict_json(skeleton))
     total = len(encode_strict_json(configuration.model_dump(mode="json")))
     triple_count = 0
+    radius_numerator_digits_max = 0
+    radius_denominator_digits_max = 0
     for first, second, third in combinations(range(len(points)), 3):
         numerator_bound = 0
         denominator_bound = 0
@@ -577,16 +579,39 @@ def _maximum_profile_wire_bytes(configuration: PointConfiguration) -> int:
         radius_denominator_digits = (
             denominator_bound + 2 * cross_numerator_digits + 1
         )
+        radius_numerator_digits_max = max(
+            radius_numerator_digits_max, radius_numerator_digits
+        )
+        radius_denominator_digits_max = max(
+            radius_denominator_digits_max, radius_denominator_digits
+        )
         total += (
             entry_base
             + sum(label_bytes[index] - 2 for index in (first, second, third))
-            + sum(index_bytes[index] - 1 for index in (first, second, third))
+            + sum(index_bytes[index] - 1 for index in (first, third, second))
             + radius_numerator_digits
             + radius_denominator_digits
             + _CIRCUMRADIUS_ENTRY_SLACK_BYTES
         )
         triple_count += 1
-    total += triple_count + 1 + _CIRCUMRADIUS_RESULT_BOUND_PADDING_BYTES
+    multiplicity_entry_skeleton = len(
+        encode_strict_json(
+            {"squared_circumradius": {"num": "", "den": ""}, "triple_count": 0}
+        )
+    )
+    total += triple_count * (
+        multiplicity_entry_skeleton
+        + radius_numerator_digits_max
+        + radius_denominator_digits_max
+        + _CIRCUMRADIUS_ENTRY_SLACK_BYTES
+    )
+    total += (
+        len(encode_strict_json({"degenerate_triple_count": 0}))
+        + len(encode_strict_json({"nondegenerate_triple_count": triple_count}))
+        + triple_count
+        + 1
+        + _CIRCUMRADIUS_RESULT_BOUND_PADDING_BYTES
+    )
     return total
 
 
@@ -680,10 +705,20 @@ class CircumradiusProfileResult(StrictModel):
     point_count: StrictInt = Field(ge=3, le=64)
     triple_count: StrictInt = Field(ge=1, le=41664)
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1, max_length=41664)
+    radius_multiplicities: tuple[tuple[CanonicalRational, StrictInt], ...] = Field(
+        default=(),
+        description=(
+            "Distinct positive squared circumradii of the nondegenerate "
+            "triples with their multiplicities, sorted ascending by value; "
+            "empty when every triple is collinear."
+        ),
+    )
+    degenerate_triple_count: StrictInt = Field(ge=0)
+    nondegenerate_triple_count: StrictInt = Field(ge=0)
     exactness: Literal["EXACT_RATIONAL"] = "EXACT_RATIONAL"
 
     @model_validator(mode="after")
-    def require_complete_profile(self) -> Self:
+    def require_complete_profile(self) -> Self:  # noqa: C901
         import math
 
         # Cap point_count before enumerating expected triples.
@@ -734,4 +769,27 @@ class CircumradiusProfileResult(StrictModel):
                 raise ValueError("entry does not match its recomputed radius")
             d = entry.squared_circumradius.as_fraction()
             histogram[d] = histogram.get(d, 0) + 1
+
+        # The advertised multiplicity profile is a defining invariant of the
+        # flat entries: reconstruct it from the replayed radii and compare.
+        degenerate_count = sum(1 for entry in self.entries if entry.collinear)
+        nondegenerate_count = len(self.entries) - degenerate_count
+        if self.degenerate_triple_count != degenerate_count:
+            raise ValueError("degenerate triple count does not match the entries")
+        if self.nondegenerate_triple_count != nondegenerate_count:
+            raise ValueError(
+                "nondegenerate triple count does not match the entries"
+            )
+        reconstructed = tuple(
+            (
+                CanonicalRational.from_fraction(d),
+                count,
+            )
+            for d, count in sorted(histogram.items())
+        )
+        if reconstructed != tuple(self.radius_multiplicities):
+            raise ValueError(
+                "radius multiplicities must partition the replayed "
+                "nondegenerate radii and be sorted by value"
+            )
         return self

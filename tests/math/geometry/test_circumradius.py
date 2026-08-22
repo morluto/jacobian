@@ -250,6 +250,8 @@ class TestCatalogContractParity:
         result = circumradius_profile(_request(pts))
         assert result.point_count == 5
         assert result.triple_count == 10
+        assert result.degenerate_triple_count == 0
+        assert result.nondegenerate_triple_count == 10
         collision = [
             entry.indices
             for entry in result.entries
@@ -257,6 +259,36 @@ class TestCatalogContractParity:
             and entry.squared_circumradius.as_fraction() == Fraction(2166905)
         ]
         assert collision == [(0, 1, 4), (1, 2, 3)]
+        # The advertised multiplicity ledger groups the replayed radii.
+        multiplicities = {
+            radius.as_fraction(): count
+            for radius, count in result.radius_multiplicities
+        }
+        assert multiplicities[Fraction(2166905)] == 2
+        assert sum(count for _, count in result.radius_multiplicities) == 10
+        values = [radius.as_fraction() for radius, _ in result.radius_multiplicities]
+        assert values == sorted(values)
+
+    def test_result_rejects_forged_multiplicity_ledger(self):
+        from jacobian.math.geometry._models import CircumradiusProfileResult
+
+        pts = (
+            _lp("a", "0", "1", "0", "1"),
+            _lp("b", "2", "1", "0", "1"),
+            _lp("c", "0", "1", "2", "1"),
+        )
+        honest = circumradius_profile(_request(pts))
+        forged_radius = CanonicalRational(num="999", den="1")
+        with pytest.raises(ValidationError, match="multiplicit"):
+            CircumradiusProfileResult(
+                configuration=honest.configuration,
+                point_count=3,
+                triple_count=1,
+                entries=honest.entries,
+                radius_multiplicities=((forged_radius, 1),),
+                degenerate_triple_count=0,
+                nondegenerate_triple_count=1,
+            )
 
     def test_collinear_triple_is_degenerate(self):
         pts = (
@@ -304,6 +336,10 @@ class TestAggregateResultBudget:
         assert encoded <= MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES
 
     def test_maximum_point_count_with_small_coordinates_stays_within_budget(self):
+        # 59 points with single-digit coordinates is the largest
+        # configuration whose complete profile - entries plus the advertised
+        # multiplicity ledger and triple counts - still fits the aggregate
+        # output budget.
         points = tuple(
             {
                 "label": f"p{index}",
@@ -312,11 +348,12 @@ class TestAggregateResultBudget:
                     {"num": str(index * index % 89), "den": "1"},
                 ],
             }
-            for index in range(64)
+            for index in range(59)
         )
         request = CircumradiusProfileRequest(configuration={"points": tuple(points)})
         result = circumradius_profile(request)
-        assert result.triple_count == math.comb(64, 3)
+        assert result.triple_count == math.comb(59, 3)
+        assert len(result.radius_multiplicities) > 0
         wire = result.model_dump(mode="json")
         actual = len(encode_strict_json(wire))
         assert actual <= MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES

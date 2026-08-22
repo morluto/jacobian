@@ -440,6 +440,7 @@ def circumradius_profile(
         for item in points
     ]
     entries: list[CircumradiusTripleEntry] = []
+    radii: list[Fraction] = []
     for i, j, k in combinations(range(n), 3):
         (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
         # Squared side lengths of the triangle.
@@ -459,6 +460,7 @@ def circumradius_profile(
             continue
         # R^2 = (|a-b|^2 |b-c|^2 |c-a|^2) / (4 * (2*area)^2)
         squared_circumradius = (dab * dbc * dac) / (4 * cross * cross)
+        radii.append(squared_circumradius)
         entries.append(
             CircumradiusTripleEntry(
                 labels=(points[i].label, points[j].label, points[k].label),
@@ -469,9 +471,18 @@ def circumradius_profile(
                 ),
             )
         )
+    histogram: dict[Fraction, int] = {}
+    for radius in radii:
+        histogram[radius] = histogram.get(radius, 0) + 1
     return CircumradiusProfileResult(
         configuration=request,
         point_count=n,
         triple_count=len(entries),
         entries=tuple(entries),
+        radius_multiplicities=tuple(
+            (CanonicalRational.from_fraction(radius), count)
+            for radius, count in sorted(histogram.items())
+        ),
+        degenerate_triple_count=len(entries) - len(radii),
+        nondegenerate_triple_count=len(radii),
     )

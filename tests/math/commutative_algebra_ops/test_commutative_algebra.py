@@ -16,6 +16,7 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealQuotientRequest,
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
+    IdealSaturationRequest,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
@@ -123,6 +124,7 @@ def test_catalog_contains_only_audited_operations() -> None:
         "polynomial.ideal.radical.compute",
         "polynomial.ideal.radical_membership.decide",
         "polynomial.ideal.quotient.compute",
+        "polynomial.ideal.saturation.compute",
     }
 
 
@@ -460,3 +462,51 @@ def test_ideal_quotient_by_product_equals_iterated_quotient() -> None:
     assert iterated.quotient is not None
     assert _equal(by_product.quotient, iterated.quotient)
     assert _equal(by_product.quotient, _ideal(variables, {(2, 1): 1}))
+
+
+class TestSaturationSourceBinding:
+    def test_result_ring_binding(self) -> None:
+        """A saturation result bound to sources in another ring fails."""
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationResult,
+        )
+
+        xy_ideal = _ideal(("x", "y"), {(2, 0): 1})
+        z_polynomial = _polynomial(("z",), {(1,): 1})
+        with pytest.raises(ValueError, match="ordered ring"):
+            IdealSaturationResult(
+                outcome="COMPUTED",
+                source_ideal=xy_ideal,
+                source_polynomial=z_polynomial,
+                saturation=_ideal(("x", "y"), {(1, 0): 1}),
+                backend_version="4.4",
+            )
+
+
+class TestSaturationRequestGrammar:
+    def test_saturation_polynomial_terms_read_from_value(self) -> None:
+        """The total-degree check reads terms via .polynomial.terms; a valid
+        request must not crash with AttributeError during validation."""
+        request = IdealSaturationRequest(
+            ideal=_ideal(("x", "y"), {(2, 0): 1}),
+            saturation_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
+        )
+        assert request.saturation_polynomial is not None
+
+
+class TestSaturationContainment:
+    def test_computed_claim_must_contain_source_ideal(self) -> None:
+        """A COMPUTED payload whose saturation does not contain the source
+        ideal violates the defining relation and fails validation."""
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationResult,
+        )
+
+        with pytest.raises(ValueError, match="does not contain"):
+            IdealSaturationResult(
+                outcome="COMPUTED",
+                source_ideal=_ideal(("x", "y"), {(1, 0): 1}),  # (x)
+                source_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
+                saturation=_ideal(("x", "y"), {(0, 2): 1}),  # (y^2): x not in it
+                backend_version="4.4",
+            )

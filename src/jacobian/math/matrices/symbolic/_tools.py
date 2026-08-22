@@ -12,6 +12,8 @@ from jacobian.math.matrices.symbolic._models import (
     SymbolicDeterminantRequest,
     SymbolicDeterminantResult,
     SymbolicEigenvaluesResult,
+    SymbolicLinearSystemRequest,
+    SymbolicLinearSystemResult,
     SymbolicMatrixRequest,
     SymbolicRankResult,
 )
@@ -19,6 +21,7 @@ from jacobian.math.matrices.symbolic._operations import (
     compute_symbolic_characteristic_polynomial,
     compute_symbolic_determinant,
     compute_symbolic_eigenvalues,
+    compute_symbolic_linear_system,
     compute_symbolic_rank,
 )
 
@@ -63,7 +66,10 @@ def _rational_function(
                     "coefficient": {"num": str(coefficient), "den": "1"},
                     "exponents": list(exponents),
                 }
-                for coefficient, exponents in terms
+                for coefficient, exponents in sorted(
+                    terms, key=lambda t: t[1], reverse=True
+                )
+                if coefficient != 0
             ]
         }
 
@@ -91,6 +97,31 @@ def _generic_two_by_two() -> dict[str, Any]:
             ],
         ],
     }
+
+
+_LINEAR_SYSTEM_EXAMPLE = example(
+    "symbolic_linear_system_unique",
+    "Solve [[1, t], [0, 1]] x = [t, 1] over QQ(t); solution is x = [0, 1].",
+    {
+        "matrix": {
+            "variables": ["t"],
+            "entries": [
+                [
+                    _rational_function(("t",), (1, (0,))),
+                    _rational_function(("t",), (1, (1,))),
+                ],
+                [
+                    _rational_function(("t",), (0, (0,))),
+                    _rational_function(("t",), (1, (0,))),
+                ],
+            ],
+        },
+        "rhs": [
+            _rational_function(("t",), (1, (1,))),
+            _rational_function(("t",), (1, (0,))),
+        ],
+    },
+)
 
 
 SYMBOLIC_MATRIX_OPERATIONS = (
@@ -196,6 +227,28 @@ SYMBOLIC_MATRIX_OPERATIONS = (
             ),
         ),
         version="2",
+    ),
+    symbolic_matrix_operation(
+        "matrix.symbolic.linear_system.solve",
+        "Classify and solve a symbolic linear system over QQ(t_1, ..., t_n)",
+        (
+            "Classify one bounded system A x = b over the rational-function "
+            "field QQ(t_1, ..., t_n) as UNIQUE, NON_UNIQUE, or INCONSISTENT. "
+            "For a unique system, return the exact solution vector. For a "
+            "non-unique consistent system, return a particular solution and nullspace "
+            "basis. The declared parameters are algebraically independent: the "
+            "result is the generic solution, not a case split over parameter "
+            "specializations. Backed by SymPy symbolic linear algebra."
+        ),
+        SymbolicLinearSystemRequest,
+        SymbolicLinearSystemResult,
+        compute_symbolic_linear_system,
+        "matrix",
+        "symbolic",
+        "linear-system",
+        "rational-function-field",
+        "exact",
+        examples=(_LINEAR_SYSTEM_EXAMPLE,),
     ),
 )
 

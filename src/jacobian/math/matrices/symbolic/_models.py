@@ -299,3 +299,108 @@ class SymbolicEigenvaluesResult(StrictModel):
                     "characteristic polynomial coefficients must equal degree plus one"
                 )
         return self
+
+
+# ---------------------------------------------------------------------------
+# Symbolic linear system over QQ(t_1, ..., t_n)
+# ---------------------------------------------------------------------------
+
+
+class SymbolicLinearSystemRequest(StrictModel):
+    """Solve one bounded system ``A x = b`` over ``QQ(t_1, ..., t_n)``.
+
+    The declared parameters are algebraically independent: the result is the
+    generic solution over the rational-function field, not a case split over
+    parameter specializations.  The coefficient matrix ``A`` and right-hand
+    side ``b`` must use the same declared ordered variable list.
+    """
+
+    matrix: SymbolicMatrix
+    rhs: tuple[RationalFunction, ...] = Field(
+        min_length=1,
+        max_length=MAX_SYMBOLIC_MATRIX_DIMENSION,
+    )
+
+    @model_validator(mode="after")
+    def require_consistent_system(self) -> Self:
+        rows = len(self.matrix.entries)
+        if len(self.rhs) != rows:
+            raise ValueError(
+                "the right-hand side length must equal the coefficient row count"
+            )
+        for value in self.rhs:
+            if value.variables != self.matrix.variables:
+                raise ValueError(
+                    "the right-hand side must use the declared ordered field"
+                )
+        return self
+
+
+class SymbolicLinearSystemResult(StrictModel):
+    """Classification and solution data for one symbolic linear system.
+
+    The source system is retained so the classification and every solution
+    vector remain verifiable against it after serialization.
+    """
+
+    system: SymbolicLinearSystemRequest
+    classification: Literal["UNIQUE", "NON_UNIQUE", "INCONSISTENT"]
+    solution: tuple[RationalFunction, ...] | None = None
+    particular_solution: tuple[RationalFunction, ...] | None = None
+    nullspace_basis: tuple[tuple[RationalFunction, ...], ...] | None = None
+    consistency: Literal["EXACT_RATIONAL_FUNCTION"] = "EXACT_RATIONAL_FUNCTION"
+    field_semantics: Literal["GENERIC_OVER_QQ_FIELD"] = "GENERIC_OVER_QQ_FIELD"
+
+    def _replayed_solution(self) -> tuple[str, object, object, object]:
+        from jacobian.math.matrices.symbolic.operations import (
+            symbolic_linear_system_solve,
+        )
+
+        return symbolic_linear_system_solve(
+            self.system.matrix.entries,
+            self.system.rhs,
+            self.system.matrix.variables,
+        )
+
+    @model_validator(mode="after")
+    def require_consistent_result(self) -> Self:
+        if self.classification == "UNIQUE":
+            if self.solution is None:
+                raise ValueError("UNIQUE must carry a solution vector")
+            if self.particular_solution is not None or self.nullspace_basis is not None:
+                raise ValueError(
+                    "UNIQUE must not populate particular_solution or nullspace_basis"
+                )
+        elif self.classification == "NON_UNIQUE":
+            if self.particular_solution is None:
+                raise ValueError("NON_UNIQUE must carry a particular_solution")
+            if self.solution is not None:
+                raise ValueError("NON_UNIQUE must not populate the unique solution")
+        elif self.classification == "INCONSISTENT":
+            if (
+                self.solution is not None
+                or self.particular_solution is not None
+                or self.nullspace_basis is not None
+            ):
+                raise ValueError("INCONSISTENT must not carry solution data")
+        # Source-bound replay: the retained decision must be the exact
+        # solve of this result's own coefficient matrix and right-hand side,
+        # so a relayed or forged payload cannot validate as a solution of an
+        # unrelated system.
+        (
+            expected_classification,
+            expected_solution,
+            expected_particular,
+            expected_nullspace,
+        ) = self._replayed_solution()
+        if (
+            self.classification != expected_classification
+            or self.solution != expected_solution
+            or self.particular_solution != expected_particular
+            or self.nullspace_basis != expected_nullspace
+        ):
+            raise ValueError(
+                "linear-system conclusion must be the exact solve of the "
+                "retained source system"
+            )
+        return self

@@ -11,6 +11,8 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealRadicalMembershipResult,
     IdealRadicalRequest,
     IdealRadicalResult,
+    IdealSaturationRequest,
+    IdealSaturationResult,
 )
 from jacobian.math.commutative_algebra_ops._singular import (
     run_singular_ideal_operation,
@@ -77,8 +79,36 @@ def compute_ideal_quotient(request: IdealQuotientRequest) -> IdealQuotientResult
     )
 
 
+def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturationResult:
+    """Compute an exact ideal saturation I : <d>^infinity through the bounded Singular backend."""
+
+    from jacobian.math.polynomials.values import (
+        RationalPolynomialIdeal,
+    )
+
+    saturation_ideal = RationalPolynomialIdeal(
+        variables=request.ideal.variables,
+        generators=(request.saturation_polynomial,),
+    )
+    backend = run_singular_ideal_operation(
+        "saturation",
+        request.ideal,
+        saturation_ideal,
+        request.resource_budget,
+    )
+    return IdealSaturationResult(
+        outcome=backend.outcome,
+        source_ideal=request.ideal,
+        source_polynomial=request.saturation_polynomial,
+        saturation=backend.ideal,
+        backend_version=backend.backend_version,
+        detail=backend.detail,
+    )
+
+
 __all__ = [
     "compute_ideal_quotient",
     "compute_ideal_radical",
     "compute_ideal_radical_membership",
+    "compute_ideal_saturation",
 ]

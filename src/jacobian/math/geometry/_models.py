@@ -7,14 +7,19 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
 
-# The circumradius formula R^2 = (|a-b|^2|b-c|^2|c-a|^2)/(4*Area^2) can at most
-# square the input digit length; bounding inputs to 8192 digits keeps the
-# exact numerator within the canonical 32,768-digit limit while staying
-# generous for exact geometry.
-MAX_CIRCUMRADIUS_COORDINATE_DIGITS = 8192
+# R^2 = (|a-b|^2|b-c|^2|c-a|^2)/(4*cross^2). With coordinate components of at
+# most d digits each, squared side lengths carry at most 4d+3 numerator and
+# denominator digits and cross at most 4d+3, so both reduced components of R^2
+# stay within 20d+18 digits. Derive d from the canonical limit so rational
+# coordinate growth cannot push the result past it.
+MAX_CIRCUMRADIUS_COORDINATE_DIGITS = (MAX_CANONICAL_RATIONAL_DIGITS - 24) // 20
 
 
 class RationalPoint2D(StrictModel):

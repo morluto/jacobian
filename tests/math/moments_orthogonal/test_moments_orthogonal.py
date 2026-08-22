@@ -267,6 +267,79 @@ class TestWireAdapters:
             HankelMatrixRequest(moments=())
 
 
+class TestQuadratureUnderflowBound:
+    """Semantically nonzero coefficients must survive float conversion."""
+
+    def test_subnormal_beta_zero_rejected(self) -> None:
+        tiny = CanonicalRational.from_integer_ratio(1, 10 ** 400)
+        with pytest.raises(ValidationError, match="underflow"):
+            GaussianQuadratureRequest(
+                alpha=(_cr(0, 1),),
+                beta=(tiny,),
+            )
+
+    def test_subnormal_alpha_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="underflow"):
+            GaussianQuadratureRequest(
+                alpha=(CanonicalRational.from_integer_ratio(1, 10 ** 400),),
+                beta=(_cr(1, 1), _cr(1, 4)),
+            )
+
+    def test_zero_alpha_still_admitted(self) -> None:
+        GaussianQuadratureRequest(
+            alpha=(_cr(0, 1), _cr(0, 1)),
+            beta=(_cr(1, 1), _cr(1, 4)),
+        )
+
+    def test_ordinary_quadrature_still_admitted(self) -> None:
+        request = GaussianQuadratureRequest(
+            alpha=(_cr(1, 2), _cr(1, 2)),
+            beta=(_cr(1, 1), _cr(1, 12)),
+        )
+        result = compute_gaussian_quadrature(request)
+        total = sum(w.as_fraction() for w in result.weights)
+        # Weights are exact dyadic images of IEEE doubles, so the sum sits
+        # within a few ulps of mu_0 = 1.
+        assert abs(total - _frac(1, 1)) < _frac(1, 10 ** 15)
+
+
+class TestChristoffelDarbouxGrowthBound:
+    """Admission bounds recurrence and kernel digit growth."""
+
+    def test_powered_evaluation_points_rejected(self) -> None:
+        zero = _cr(0, 1)
+        one = _cr(1, 1)
+        big = CanonicalRational.from_integer_ratio(10 ** 1999, 1)
+        with pytest.raises(ValidationError, match="digit"):
+            ChristoffelDarbouxRequest(
+                alpha=tuple(zero for _ in range(16)),
+                beta=tuple(one for _ in range(16)),
+                x=big,
+                y=big,
+            )
+
+    def test_moderate_request_still_admitted(self) -> None:
+        request = ChristoffelDarbouxRequest(
+            alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
+            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+            x=_cr(3, 1),
+            y=_cr(-7, 3),
+        )
+        result = compute_christoffel_darboux(request)
+        assert result.kernel.num
+
+    def test_denominator_growth_rejected(self) -> None:
+        # Denominators compound multiplicatively across the recurrence even
+        # when numerators stay small.
+        with pytest.raises(ValidationError, match="digit"):
+            ChristoffelDarbouxRequest(
+                alpha=(_cr(0, 1),) * 15,
+                beta=(_cr(1, 1),) + (_cr(1, 10 ** 300),) * 15,
+                x=_cr(1, 2),
+                y=_cr(1, 2),
+            )
+
+
 # ---------------------------------------------------------------------------
 # Tools and examples
 # ---------------------------------------------------------------------------

@@ -6,7 +6,9 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.group_cohomology._models import (
+    CohomologyGroup,
     GroupCohomologyRequest,
+    GroupCohomologyResult,
     PermutationGroup,
 )
 from jacobian.math.group_cohomology._operations import compute_group_cohomology
@@ -56,7 +58,7 @@ class TestGroupCohomology:
             max_degree=1,
         )
         result = compute_group_cohomology(req)
-        assert result.prime == 7
+        assert result.request.prime == 7
 
     def test_trivial_group(self):
         """The trivial group has H^0 = K and higher groups = 0."""
@@ -126,4 +128,72 @@ class TestExactBarComplex:
                 group=PermutationGroup(degree=6, generators=((*tuple(range(1, 6)), 0),)),
                 prime=2,
                 max_degree=4,
+            )
+
+    def test_dense_bar_matrix_budget_rejected(self):
+        """Order 4 at max_degree 5 fits the cochain budget but its degree-5
+        coboundary is a dense 4096x1024 matrix; the cell bound rejects it."""
+        with pytest.raises(ValidationError, match="cell"):
+            GroupCohomologyRequest(
+                group=PermutationGroup(degree=4, generators=((1, 2, 3, 0),)),
+                prime=2,
+                max_degree=5,
+            )
+
+    def test_dense_bar_matrix_budget_admits_bounded_requests(self):
+        """C2 at the maximum degree and C4 at degree 3 stay inside the cells."""
+        GroupCohomologyRequest(
+            group=PermutationGroup(degree=2, generators=((1, 0),)),
+            prime=2,
+            max_degree=6,
+        )
+        GroupCohomologyRequest(
+            group=PermutationGroup(degree=4, generators=((1, 2, 3, 0),)),
+            prime=3,
+            max_degree=3,
+        )
+
+
+class TestResultBinding:
+    """Results retain their source request and replay the bar complex."""
+
+    def _request(self):
+        return GroupCohomologyRequest(
+            group=PermutationGroup(degree=3, generators=((1, 0, 2), (0, 2, 1))),
+            prime=3,
+            max_degree=2,
+        )
+
+    def test_result_retains_request_and_replays(self):
+        request = self._request()
+        result = compute_group_cohomology(request)
+        assert result.request == request
+        assert GroupCohomologyResult(
+            request=request,
+            groups=result.groups,
+            group_order=result.group_order,
+        )
+
+    def test_forged_table_rejected(self):
+        request = self._request()
+        with pytest.raises(ValidationError):
+            GroupCohomologyResult(
+                request=request,
+                groups=(CohomologyGroup(degree=0, betti=5, dimension=7),),
+                group_order=request.max_degree + 1,
+            )
+
+    def test_composite_prime_table_rejected_via_source_request(self):
+        with pytest.raises(ValidationError, match="prime"):
+            GroupCohomologyResult(
+                request=GroupCohomologyRequest(
+                    group=PermutationGroup(degree=2, generators=((1, 0),)),
+                    prime=4,
+                    max_degree=1,
+                ),
+                groups=(
+                    CohomologyGroup(degree=0, betti=1, dimension=1),
+                    CohomologyGroup(degree=1, betti=0, dimension=2),
+                ),
+                group_order=2,
             )

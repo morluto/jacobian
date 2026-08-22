@@ -114,3 +114,27 @@ class TestSourceBoundLedger:
                 distinct_line_count=0,
                 min_squared_distance=None,
             )
+
+
+class TestCoordinateHeightBound:
+    def test_huge_denominator_rejected_at_admission(self) -> None:
+        """Coordinates whose canonical line keys would approach CPython's
+        int->str conversion limit are rejected at the boundary."""
+        huge = "1" + "0" * 512
+        with pytest.raises(ValidationError, match="512-digit"):
+            PinnedDistanceRequest(
+                anchor=_point(0, 0),
+                points=(
+                    RationalPoint2D(
+                        x={"num": huge, "den": "1"}, y={"num": "0", "den": "1"}
+                    ),
+                    _point(1, 0),
+                ),
+            )
+
+    def test_moderate_coordinates_accepted(self) -> None:
+        request = PinnedDistanceRequest(
+            anchor=_point(0, 0),
+            points=(_point(0, 1), _point(1, 0)),
+        )
+        assert len(request.points) == 2

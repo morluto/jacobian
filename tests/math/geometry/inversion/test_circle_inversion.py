@@ -21,19 +21,25 @@ class TestKnownAnswers:
 
     def test_unit_inversion_at_origin(self) -> None:
         # B = (4,0) -> (1/4, 0)
-        qx, qy = invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(4), Fraction(0))
+        qx, qy = invert_point(
+            Fraction(0), Fraction(0), Fraction(1), Fraction(4), Fraction(0)
+        )
         assert qx == Fraction(1, 4)
         assert qy == Fraction(0)
 
     def test_center_inversion(self) -> None:
         # C = (1,2) -> (1/5, 2/5)
-        qx, qy = invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(2))
+        qx, qy = invert_point(
+            Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(2)
+        )
         assert qx == Fraction(1, 5)
         assert qy == Fraction(2, 5)
 
     def test_halfplane_inversion(self) -> None:
         # H = (1, 3/2) -> (4/13, 6/13)
-        qx, qy = invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(3, 2))
+        qx, qy = invert_point(
+            Fraction(0), Fraction(0), Fraction(1), Fraction(1), Fraction(3, 2)
+        )
         assert qx == Fraction(4, 13)
         assert qy == Fraction(6, 13)
 
@@ -72,41 +78,37 @@ class TestInvariance:
 class TestRejection:
     def test_center_rejected(self) -> None:
         with pytest.raises(ValueError, match="center"):
-            invert_point(Fraction(0), Fraction(0), Fraction(1), Fraction(0), Fraction(0))
+            invert_point(
+                Fraction(0), Fraction(0), Fraction(1), Fraction(0), Fraction(0)
+            )
 
     def test_zero_power_rejected(self) -> None:
         with pytest.raises(ValidationError):
             CircleInversionRequest(
-                center_x={"num": "0", "den": "1"},
-                center_y={"num": "0", "den": "1"},
+                center={"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
                 power={"num": "0", "den": "1"},
-                point_x={"num": "1", "den": "1"},
-                point_y={"num": "0", "den": "1"},
+                point={"x": {"num": "1", "den": "1"}, "y": {"num": "0", "den": "1"}},
             )
 
 
 class TestWireAdapter:
     def test_compute_circle_inversion(self) -> None:
         request = CircleInversionRequest(
-            center_x={"num": "0", "den": "1"},
-            center_y={"num": "0", "den": "1"},
+            center={"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
             power={"num": "1", "den": "1"},
-            point_x={"num": "4", "den": "1"},
-            point_y={"num": "0", "den": "1"},
+            point={"x": {"num": "4", "den": "1"}, "y": {"num": "0", "den": "1"}},
         )
         result = compute_circle_inversion(request)
-        assert result.inverted_x.num == "1"
-        assert result.inverted_x.den == "4"
-        assert result.inverted_y.num == "0"
-        assert result.inverted_y.den == "1"
+        assert result.inverted.x.num == "1"
+        assert result.inverted.x.den == "4"
+        assert result.inverted.y.num == "0"
+        assert result.inverted.y.den == "1"
 
     def test_non_origin_center(self) -> None:
         request = CircleInversionRequest(
-            center_x={"num": "3", "den": "1"},
-            center_y={"num": "2", "den": "1"},
+            center={"x": {"num": "3", "den": "1"}, "y": {"num": "2", "den": "1"}},
             power={"num": "5", "den": "1"},
-            point_x={"num": "1", "den": "1"},
-            point_y={"num": "7", "den": "1"},
+            point={"x": {"num": "1", "den": "1"}, "y": {"num": "7", "den": "1"}},
         )
         result = compute_circle_inversion(request)
         assert isinstance(result, CircleInversionResult)

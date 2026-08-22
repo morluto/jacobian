@@ -47,6 +47,27 @@ def _dot_product(weight: tuple[int, ...], exponents: tuple[int, ...]) -> int:
     return sum(w * e for w, e in zip(weight, exponents, strict=True))
 
 
+def _require_weighted_polynomial_domain(
+    polynomial: RationalPolynomial, weight: tuple[int, ...]
+) -> None:
+    """Mathematical preconditions shared by native and wire weighted calls.
+
+    The minimum-weight kernels need a nonzero polynomial and a weight per
+    declared variable; enforcing this at the domain level keeps the native
+    API inside the same mathematical domain as the MCP operation without
+    importing transport-size caps.
+    """
+    if len(weight) != len(polynomial.variables):
+        raise ValueError("weight vector length must match variable count")
+    if all(
+        term.coefficient.as_fraction() == 0
+        for term in polynomial.polynomial.terms
+    ):
+        raise ValueError(
+            "the zero polynomial has no weight profile; supply a nonzero polynomial"
+        )
+
+
 def _compute_weight_layers(
     polynomial: RationalPolynomial, weight: tuple[int, ...]
 ) -> tuple[
@@ -56,6 +77,7 @@ def _compute_weight_layers(
 ]:
     """Exact (minimum, minimizing exponents, sorted layers) shared by the
     weight-profile operation and its value validator."""
+    _require_weighted_polynomial_domain(polynomial, weight)
     weighted = [
         (_dot_product(weight, tuple(term.exponents)), tuple(term.exponents))
         for term in polynomial.polynomial.terms
@@ -76,6 +98,7 @@ def _initial_form_terms(
 ) -> tuple[tuple[Fraction, tuple[int, ...]], ...]:
     """Exact minimum-weight face terms shared by the initial-form operation
     and its value validator."""
+    _require_weighted_polynomial_domain(polynomial, weight)
     weighted = [
         (_dot_product(weight, tuple(term.exponents)), term)
         for term in polynomial.polynomial.terms

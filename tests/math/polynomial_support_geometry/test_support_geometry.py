@@ -289,6 +289,25 @@ class TestNativeSurface:
         polytope = newton_polytope(polynomial)
         assert polytope.vertices is not None
 
+    def test_native_weighted_functions_keep_domain_validation(self) -> None:
+        """Native weighted calls reject the zero polynomial and mismatched
+        weight dimensions instead of leaking host exceptions."""
+        from jacobian.math.polynomial_support_geometry import (
+            initial_form,
+            weight_profile,
+        )
+
+        zero = _polynomial((), VARS)
+        with pytest.raises(ValueError, match="nonzero"):
+            weight_profile(zero, (1, 1))
+        with pytest.raises(ValueError, match="nonzero"):
+            initial_form(zero, (1, 1))
+        nonzero = _polynomial(_XY_TERMS, VARS)
+        with pytest.raises(ValueError, match="weight vector length"):
+            weight_profile(nonzero, (1,))
+        with pytest.raises(ValueError, match="weight vector length"):
+            initial_form(nonzero, (1,))
+
 
 class TestSupportCrossFieldValidation:
     def test_forged_support_rejected(self) -> None:
@@ -312,6 +331,44 @@ class TestSupportCrossFieldValidation:
 
 
 class TestNewtonReplay:
+    def test_ragged_exponent_widths_rejected(self) -> None:
+        """Exponents narrower than the ambient dimension are rejected with a
+        ValidationError instead of leaking an IndexError from the replay."""
+        from jacobian.math.polynomial_support_geometry.values import NewtonPolytope
+
+        payload = {
+            "is_zero": False,
+            "variables": ["x", "y"],
+            "ambient_dimension": 2,
+            "affine_dimension": 0,
+            "vertices": [[0, 0]],
+            "nonextreme": [[0]],
+            "all_support_exponents": [[0, 0], [0]],
+        }
+        with pytest.raises(ValidationError, match="ambient dimension"):
+            NewtonPolytope.model_validate(payload)
+
+    def test_oversized_retained_support_rejected(self) -> None:
+        """A caller-authored payload cannot bypass the admitted hull size."""
+        from jacobian.math.polynomial_support_geometry.values import (
+            MAX_NEWTON_TERMS,
+            NewtonPolytope,
+        )
+
+        exponents = [[i] for i in range(MAX_NEWTON_TERMS + 1)]
+        with pytest.raises(ValidationError):
+            NewtonPolytope.model_validate(
+                {
+                    "is_zero": False,
+                    "variables": ["x"],
+                    "ambient_dimension": 1,
+                    "affine_dimension": 0,
+                    "vertices": exponents,
+                    "nonextreme": [],
+                    "all_support_exponents": exponents,
+                }
+            )
+
     def test_forged_classification_rejected(self) -> None:
         """A payload claiming an interior point is a vertex fails the exact
         hull replay."""

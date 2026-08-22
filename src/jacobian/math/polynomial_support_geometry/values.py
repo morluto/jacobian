@@ -80,6 +80,19 @@ class PolynomialSupport(StrictModel):
         return self
 
 
+def _require_newton_context(value: NewtonPolytope) -> None:
+    """Dimension context and exponent widths precede any hull replay."""
+    if value.ambient_dimension != len(value.variables):
+        raise ValueError("ambient dimension must equal the retained variable count")
+    if value.affine_dimension > value.ambient_dimension:
+        raise ValueError("affine dimension cannot exceed the ambient dimension")
+    if any(
+        len(exp) != value.ambient_dimension
+        for exp in (*value.vertices, *value.nonextreme, *value.all_support_exponents)
+    ):
+        raise ValueError("every retained exponent must use the ambient dimension")
+
+
 class NewtonPolytope(StrictModel):
     """The Newton polytope: convex hull of support exponents.
 
@@ -92,22 +105,22 @@ class NewtonPolytope(StrictModel):
     variables: tuple[str, ...] = Field(min_length=1, max_length=MAX_NEWTON_DIMENSION)
     ambient_dimension: int = Field(ge=0)
     affine_dimension: int = Field(ge=0)
+    # Retained support fields carry the admitted hull size (96 points): the
+    # exact replay below runs one convex-membership LP per point, so a
+    # deserialized payload must not bypass the operation's work admission.
     vertices: tuple[tuple[int, ...], ...] = Field(
-        default=(), max_length=MAX_SUPPORT_TERMS
+        default=(), max_length=MAX_NEWTON_TERMS
     )
     nonextreme: tuple[tuple[int, ...], ...] = Field(
-        default=(), max_length=MAX_SUPPORT_TERMS
+        default=(), max_length=MAX_NEWTON_TERMS
     )
     all_support_exponents: tuple[tuple[int, ...], ...] = Field(
-        default=(), max_length=MAX_SUPPORT_TERMS
+        default=(), max_length=MAX_NEWTON_TERMS
     )
 
     @model_validator(mode="after")
     def require_newton_invariants(self) -> Self:
-        if self.ambient_dimension != len(self.variables):
-            raise ValueError("ambient dimension must equal the retained variable count")
-        if self.affine_dimension > self.ambient_dimension:
-            raise ValueError("affine dimension cannot exceed the ambient dimension")
+        _require_newton_context(self)
         if not self.is_zero:
             support = set(self.all_support_exponents)
             if support != set(self.vertices) | set(self.nonextreme):

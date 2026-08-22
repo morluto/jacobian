@@ -117,10 +117,20 @@ def _matrix_multiply(
     a: list[list[Fraction]],
     b: list[list[Fraction]],
     prime: int | None = None,
+    result_columns: int | None = None,
 ) -> list[list[Fraction]]:
     rows_a = len(a)
     cols_a = len(a[0]) if a else 0
-    cols_b = len(b[0]) if b else 0
+    if b:
+        cols_b = len(b[0])
+        if len(b) != cols_a:
+            raise ValueError("inner product dimensions do not match")
+    else:
+        # A zero-row right operand keeps its declared column count so the
+        # outer dimensions of a zero-width product are preserved.
+        cols_b = result_columns if result_columns is not None else 0
+        if cols_a and not b:
+            raise ValueError("inner product dimensions do not match")
     result = [[Fraction(0)] * cols_b for _ in range(rows_a)]
     for i in range(rows_a):
         for j in range(cols_b):
@@ -149,10 +159,18 @@ def _require_square_zero(
     prime: int | None = None,
     *,
     label: str,
+    group_columns=None,
 ) -> None:
-    """Require d^2 = 0 for a parsed differential sequence."""
+    """Require d^2 = 0 for a parsed differential sequence.
+
+    ``group_columns`` carries chain-group dimensions so zero-width groups
+    preserve outer product dimensions.
+    """
     for i in range(len(diffs) - 1):
-        product = _matrix_multiply(diffs[i], diffs[i + 1], prime)
+        result_columns = (
+            group_columns[i + 2] if group_columns is not None else None
+        )
+        product = _matrix_multiply(diffs[i], diffs[i + 1], prime, result_columns)
         if any(value != 0 for row in product for value in row):
             raise ValueError(
                 f"{label} complex violates d^2=0 at differential index {i}"
@@ -164,11 +182,19 @@ def _require_chain_map_relation(
     target_diffs: list[list[list[Fraction]]],
     map_mats: list[list[list[Fraction]]],
     prime: int | None = None,
+    source_group_columns=None,
 ) -> None:
     """Require d_target * f_{i+1} == f_i * d_source at every differential."""
     for i in range(len(source_diffs)):
-        left = _matrix_multiply(target_diffs[i], map_mats[i + 1], prime)
-        right = _matrix_multiply(map_mats[i], source_diffs[i], prime)
+        result_columns = (
+            source_group_columns[i + 1] if source_group_columns is not None else None
+        )
+        left = _matrix_multiply(
+            target_diffs[i], map_mats[i + 1], prime, result_columns
+        )
+        right = _matrix_multiply(
+            map_mats[i], source_diffs[i], prime, result_columns
+        )
         if left != right:
             raise ValueError(
                 f"chain map does not commute with differentials at degree index {i}"
@@ -208,7 +234,7 @@ def verify_differential(request: VerifyDifferentialRequest) -> VerificationResul
         # Correct order: d_i * d_{i+1} where diffs[i] is C_i x C_{i+1}, diffs[i+1] is C_{i+1} x C_{i+2}
         d_i = diffs[i]
         d_ip1 = diffs[i + 1]
-        product = _matrix_multiply(d_i, d_ip1, prime)
+        product = _matrix_multiply(d_i, d_ip1, prime, cx.basis_sizes[i + 2])
         is_zero = all(all(val == 0 for val in row) for row in product)
         if not is_zero:
             return VerificationResult(
@@ -232,6 +258,34 @@ def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
     target = request.target
     prime = source.prime
 
+    # A chain map exists only between chain complexes; endpoints violating
+    # d^2=0 make the verification false by definition. Check the first
+    # consecutive differential product of each endpoint.
+    for label, complex_value in (("source", source), ("target", target)):
+        diffs = [
+            _matrix_to_fractions(
+                m, complex_value.basis_sizes[k], complex_value.basis_sizes[k + 1], prime
+            )
+            for k, m in enumerate(complex_value.differential_matrices)
+        ]
+        if len(diffs) > 1:
+            product = _matrix_multiply(
+                diffs[0],
+                diffs[1],
+                prime,
+                complex_value.basis_sizes[2],
+            )
+            if any(v != 0 for row in product for v in row):
+                return VerificationResult(
+                    is_valid=False,
+                    detail=(
+                        f"{label} complex violates d^2=0, so no chain map "
+                        "between these endpoints exists"
+                    ),
+                    source=source,
+                    target=target,
+                )
+
     # Request admission guarantees one component per degree, equal shape
     # (target rows x source columns) per component, and coinciding degree
     # intervals, so tuple index equals actual chain degree.
@@ -252,8 +306,13 @@ def verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
     # chain-map equation at every differential is
     # d_target_i * f_{i+1} == f_i * d_source_i.
     for i in range(len(source_diffs)):
-        left = _matrix_multiply(target_diffs[i], map_mats[i + 1], prime)
-        right = _matrix_multiply(map_mats[i], source_diffs[i], prime)
+        result_columns = source.basis_sizes[i + 1]
+        left = _matrix_multiply(
+            target_diffs[i], map_mats[i + 1], prime, result_columns
+        )
+        right = _matrix_multiply(
+            map_mats[i], source_diffs[i], prime, result_columns
+        )
         if left != right:
             return VerificationResult(
                 is_valid=False,
@@ -285,7 +344,7 @@ def _compute_homology_groups(
 
     # Require square-zero before computing homology
     for i in range(len(diffs) - 1):
-        prod = _matrix_multiply(diffs[i], diffs[i + 1], prime)
+        prod = _matrix_multiply(diffs[i], diffs[i + 1], prime, cx.basis_sizes[i + 2])
         if any(any(v != 0 for v in row) for row in prod):
             raise ValueError(
                 f"chain complex does not satisfy d^2=0 at index {i}: product non-zero"
@@ -396,9 +455,19 @@ def compute_mapping_cone(request: MappingConeRequest) -> MappingConeResult:
     # A mapping cone is a chain complex only when both inputs are chain
     # complexes and the map is a genuine chain map; validate both defining
     # equations before returning any exact decomposition.
-    _require_square_zero(source_diffs, prime, label="source")
-    _require_square_zero(target_diffs, prime, label="target")
-    _require_chain_map_relation(source_diffs, target_diffs, map_mats, prime)
+    _require_square_zero(
+        source_diffs, prime, label="source", group_columns=list(source.basis_sizes)
+    )
+    _require_square_zero(
+        target_diffs, prime, label="target", group_columns=list(target.basis_sizes)
+    )
+    _require_chain_map_relation(
+        source_diffs,
+        target_diffs,
+        map_mats,
+        prime,
+        source_group_columns=list(source.basis_sizes),
+    )
 
     def _to_str_matrix(mat: list[list[Fraction]]) -> tuple[tuple[str, ...], ...]:
         return tuple(
@@ -513,8 +582,12 @@ def compute_tensor_product(request: TensorProductRequest) -> TensorProductResult
 
     # A tensor product of chain complexes is a chain complex only when both
     # factors satisfy d^2 = 0; validate before building anything.
-    _require_square_zero(left_diffs, prime, label="left")
-    _require_square_zero(right_diffs, prime, label="right")
+    _require_square_zero(
+        left_diffs, prime, label="left", group_columns=list(left.basis_sizes)
+    )
+    _require_square_zero(
+        right_diffs, prime, label="right", group_columns=list(right.basis_sizes)
+    )
 
     def _to_str_matrix(mat: list[list[Fraction]]) -> tuple[tuple[str, ...], ...]:
         return tuple(

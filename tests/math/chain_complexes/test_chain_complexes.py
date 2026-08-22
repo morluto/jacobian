@@ -414,3 +414,71 @@ class TestHomologyParentMatch:
                 degree_max=0,
                 complex=_point_complex(),
             )
+
+
+class TestNativeSurface:
+    def test_domain_value_functions(self) -> None:
+        """Native exports accept domain values, not request envelopes."""
+        from jacobian.math.chain_complexes import (
+            chain_map_commutes,
+            homology_groups,
+            tensor_product_complex,
+        )
+
+        circle = _circle_complex()
+        groups = homology_groups(circle)
+        assert groups[0].betti_number == 1 and groups[1].betti_number == 1
+
+        identity = (("1", "0", "0"), ("0", "1", "0"), ("0", "0", "1"))
+        verdict = chain_map_commutes(circle, circle, (identity, identity))
+        assert verdict.is_valid
+
+        product = tensor_product_complex(_point_complex(), _point_complex())
+        assert product.tensor_basis_sizes == (1,)
+
+
+class TestChainMapEndpointPrecondition:
+    def test_non_square_zero_endpoints_fail_verification(self) -> None:
+        """Endpoints violating d^2=0 admit no chain map; the identity
+        components must not validate as commuting."""
+        from jacobian.math.chain_complexes.operations import verify_chain_map
+
+        bad = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=2,
+            basis_sizes=(1, 1, 1),
+            differential_matrices=((("1",),), (("1",),)),
+        )
+        one = (("1",),)
+        result = verify_chain_map(
+            VerifyChainMapRequest(source=bad, target=bad, map_matrices=(one, one, one))
+        )
+        assert result.is_valid is False
+        assert "d^2=0" in result.detail
+
+
+class TestZeroWidthProducts:
+    def test_zero_row_operand_preserves_columns(self) -> None:
+        from jacobian.math.chain_complexes.operations import verify_chain_map
+
+        source = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(1, 1),
+            differential_matrices=((("0",),),),
+        )
+        target = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(1, 0),
+            differential_matrices=(((),),),
+        )
+        # Component 0: 1x1 zero; component 1: target has no degree-1 group.
+        map_matrices = ((("0",),), ())
+        result = verify_chain_map(
+            VerifyChainMapRequest(source=source, target=target, map_matrices=map_matrices)
+        )
+        assert result.is_valid

@@ -1,5 +1,12 @@
 """Finite based chain complexes over exact fields."""
 
+from jacobian.math.chain_complexes.native import (
+    chain_map_commutes,
+    differential_squares_to_zero,
+    homology_groups,
+    mapping_cone,
+    tensor_product_complex,
+)
 from jacobian.math.chain_complexes.operations import (
     compute_homology,
     compute_mapping_cone,
@@ -9,7 +16,15 @@ from jacobian.math.chain_complexes.operations import (
     verify_differential,
 )
 
+# The first five names are the native surface: they accept domain values
+# directly. The remainder are the wire-envelope handlers used by MCP.
 __all__ = [
+    "chain_map_commutes",
+    "differential_squares_to_zero",
+    "homology_groups",
+    "mapping_cone",
+    "tensor_product_complex",
+    # Wire-envelope handlers used by the MCP projection.
     "compute_homology",
     "compute_mapping_cone",
     "compute_tensor_product",

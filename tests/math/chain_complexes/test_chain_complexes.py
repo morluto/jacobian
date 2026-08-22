@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from jacobian.math.chain_complexes._models import (
     ChainComplex,
     HomologyRequest,

@@ -156,21 +156,20 @@ def compute_chevalley_eilenberg_complex(
     )
 
 
-def compute_lie_homology(request: LieHomologyRequest) -> LieHomologyResult:
-    """Compute Lie algebra homology with trivial coefficients.
+def lie_homology_groups(lie_algebra: LieAlgebra) -> tuple[LieHomologyGroup, ...]:
+    """Pure Lie-homology core returning the exact groups for one algebra.
 
-    H_p(g, K) = ker(d_p) / im(d_{p+1})
-    betti_p = dim(C_p) - rank(d_p) - rank(d_{p+1})
+    Kept free of result-model construction so result validation can replay
+    the bounded rank computation without recursion.
     """
-    g = request.lie_algebra
-    n = g.dimension
-    p = g.prime
+    n = lie_algebra.dimension
+    p = lie_algebra.prime
 
     group_dims = _chain_group_dimensions(n)
 
     ranks = [
         _gaussian_rank([list(row) for row in d.entries], p)
-        for d in _ce_differentials(g)
+        for d in _ce_differentials(lie_algebra)
     ]
     ranks.append(0)
 
@@ -188,11 +187,22 @@ def compute_lie_homology(request: LieHomologyRequest) -> LieHomologyResult:
             betti=betti,
             dimension=dim,
         ))
+    return tuple(groups)
+
+
+def compute_lie_homology(request: LieHomologyRequest) -> LieHomologyResult:
+    """Compute Lie algebra homology with trivial coefficients.
+
+    H_p(g, K) = ker(d_p) / im(d_{p+1})
+    betti_p = dim(C_p) - rank(d_p) - rank(d_{p+1})
+    """
+    g = request.lie_algebra
 
     return LieHomologyResult(
-        groups=tuple(groups),
-        dimension=n,
-        prime=p,
+        lie_algebra=g,
+        groups=lie_homology_groups(g),
+        dimension=g.dimension,
+        prime=g.prime,
     )
 
 

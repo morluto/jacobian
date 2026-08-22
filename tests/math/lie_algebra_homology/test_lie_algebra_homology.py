@@ -11,6 +11,7 @@ from jacobian.math.lie_algebra_homology._models import (
     DifferentialMatrix,
     LieAlgebra,
     LieHomologyRequest,
+    LieHomologyResult,
 )
 from jacobian.math.lie_algebra_homology._operations import (
     compute_chevalley_eilenberg_complex,
@@ -353,3 +354,28 @@ class TestComplexResultBinding:
                 differentials=(forged, full.differentials[1], full.differentials[2]),
                 prime=5,
             )
+
+
+class TestHomologySourceBinding:
+    def test_forged_groups_rejected(self):
+        from pydantic import ValidationError
+
+        genuine = compute_lie_homology(LieHomologyRequest(lie_algebra=_sl2_gf5()))
+        payload = genuine.model_dump()
+        payload["groups"] = [
+            {"degree": 0, "betti": 0, "dimension": 9},
+            {"degree": 1, "betti": 99, "dimension": 9},
+            {"degree": 2, "betti": 0, "dimension": 9},
+            {"degree": 3, "betti": 1, "dimension": 27},
+        ]
+        with pytest.raises(ValidationError, match="replay"):
+            LieHomologyResult.model_validate(payload)
+
+    def test_dimension_mismatch_with_source_rejected(self):
+        from pydantic import ValidationError
+
+        genuine = compute_lie_homology(LieHomologyRequest(lie_algebra=_sl2_gf5()))
+        payload = genuine.model_dump()
+        payload["prime"] = 7
+        with pytest.raises(ValidationError, match="retained Lie algebra"):
+            LieHomologyResult.model_validate(payload)

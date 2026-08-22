@@ -7,7 +7,11 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
@@ -119,12 +123,26 @@ class RecurrenceCoefficientsRequest(StrictModel):
         _validate_moments(self.moments)
         # The Gram-Schmidt kernel requires a positive-definite moment
         # functional; admit exactly the sequences it accepts so an accepted
-        # request cannot fail inside execution.
+        # request cannot fail inside execution. The positivity replay also
+        # yields the exact coefficients, so admission can prove the returned
+        # result fits the canonical limit before the operation runs.
+        from jacobian._exact import CanonicalRational
+        from jacobian.math._rational_height import RationalHeight
         from jacobian.math.moments_orthogonal.operations import (
             recurrence_coefficients,
         )
 
-        recurrence_coefficients(_to_fractions(self.moments))
+        computed = recurrence_coefficients(_to_fractions(self.moments))
+        for value in (*computed.alpha, *computed.beta):
+            canonical = CanonicalRational.from_fraction(value)
+            if RationalHeight.from_canonical(canonical).exceeds(
+                MAX_CANONICAL_RATIONAL_DIGITS
+            ):
+                raise ValueError(
+                    "recurrence coefficient growth exceeds the canonical "
+                    f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result limit; "
+                    "reduce the moment component magnitude"
+                )
         return self
 
 

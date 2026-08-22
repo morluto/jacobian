@@ -206,14 +206,32 @@ class LieHomologyGroup(StrictModel):
 class LieHomologyResult(StrictModel):
     """Lie algebra homology groups with trivial coefficients."""
 
+    lie_algebra: LieAlgebra
     groups: tuple[LieHomologyGroup, ...] = Field(min_length=1)
     dimension: int = Field(ge=1)
     prime: int = Field(ge=2, le=10_000)
 
     @model_validator(mode="after")
-    def require_consistent_groups(self) -> Self:
+    def bind_to_source_lie_algebra(self) -> Self:
+        from jacobian.math.lie_algebra_homology._operations import (
+            lie_homology_groups,
+        )
+
         if len(self.groups) != self.dimension + 1:
             raise ValueError("homology groups must cover degrees 0..dimension")
+        if (
+            self.dimension != self.lie_algebra.dimension
+            or self.prime != self.lie_algebra.prime
+        ):
+            raise ValueError(
+                "dimension and prime must match the retained Lie algebra"
+            )
+        expected = lie_homology_groups(self.lie_algebra)
+        if self.groups != expected:
+            raise ValueError(
+                "groups must equal the exact Lie-homology replay of the "
+                "retained Lie algebra"
+            )
         return self
 
 

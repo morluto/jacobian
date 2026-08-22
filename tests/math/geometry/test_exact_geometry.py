@@ -1,6 +1,21 @@
 """Tests for exact geometry operations."""
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
+from jacobian.math.geometry._models import (
+    CircumradiusProfileRequest,
+    LabelledPoint2D,
+    RationalPoint2D,
+)
+from jacobian.math.geometry._operations import circumradius_profile
+from jacobian.math.geometry._pinned_distances import (
+    LineDistanceEntry,
+    PinnedDistanceRequest,
+    PinnedDistanceResult,
+    compute_pinned_distances,
+)
 from jacobian.math.geometry.exact._models import (
     DistanceGraphRequest,
     DistanceProfileRequest,
@@ -91,4 +106,109 @@ class TestDistanceGraph:
             DistanceGraphRequest(
                 configuration=configuration,
                 target_squared_distance=CanonicalRational(num="-1", den="1"),
+            )
+
+
+class TestCircumradiusCoordinateBound:
+    """The coordinate cap derives from rational result growth, not N^2."""
+
+    def _point(self, label: str, xn: str, xd: str, yn: str = "0", yd: str = "1"):
+        return LabelledPoint2D(
+            label=label,
+            point=RationalPoint2D(
+                x=CanonicalRational(num=xn, den=xd),
+                y=CanonicalRational(num=yn, den=yd),
+            ),
+        )
+
+    def test_reviewer_construction_rejected(self):
+        # (0,0), (1/N, 0), (0, 1/M) with 8192-digit odd N, M produced a
+        # 2N^2M^2 denominator beyond the canonical limit after admission.
+        n = "9" * 8192
+        m = "9" * 8191 + "7"
+        with pytest.raises(ValidationError, match="digit"):
+            CircumradiusProfileRequest(
+                points=(
+                    self._point("o", "0", "1", "0", "1"),
+                    self._point("a", "1", n),
+                    self._point("b", "0", "1", "1", m),
+                )
+            )
+
+    def test_bounded_rational_triangle_admitted(self):
+        request = CircumradiusProfileRequest(
+            points=(
+                self._point("o", "0", "1", "0", "1"),
+                self._point("a", "3", "1", "0", "1"),
+                self._point("b", "0", "1", "4", "1"),
+            )
+        )
+        result = circumradius_profile(request)
+        assert result.entries[0].squared_circumradius == CanonicalRational(
+            num="25", den="4"
+        )
+
+
+class TestPinnedDistanceReplay:
+    """Ledger entries replay against the retained anchor and points."""
+
+    def _result(self):
+        request = PinnedDistanceRequest(
+            anchor=RationalPoint2D(
+                x=CanonicalRational(num="0", den="1"),
+                y=CanonicalRational(num="0", den="1"),
+            ),
+            points=(
+                RationalPoint2D(
+                    x=CanonicalRational(num="1", den="1"),
+                    y=CanonicalRational(num="0", den="1"),
+                ),
+                RationalPoint2D(
+                    x=CanonicalRational(num="2", den="1"),
+                    y=CanonicalRational(num="0", den="1"),
+                ),
+            ),
+        )
+        return compute_pinned_distances(request)
+
+    def test_genuine_result_round_trips(self):
+        result = self._result()
+        assert PinnedDistanceResult(
+            anchor=result.anchor,
+            points=result.points,
+            lines=result.lines,
+            distinct_line_count=result.distinct_line_count,
+            min_squared_distance=result.min_squared_distance,
+        )
+
+    def test_forged_source_pairs_rejected(self):
+        genuine = self._result()
+        forged_entry = LineDistanceEntry(
+            squared_distance_numerator=genuine.lines[0].squared_distance_numerator,
+            squared_distance_denominator=genuine.lines[0].squared_distance_denominator,
+            source_pairs=((8, 9),),
+        )
+        with pytest.raises(ValidationError):
+            PinnedDistanceResult(
+                anchor=genuine.anchor,
+                points=genuine.points,
+                lines=(forged_entry,),
+                distinct_line_count=1,
+                min_squared_distance=forged_entry,
+            )
+
+    def test_forged_distance_rejected(self):
+        genuine = self._result()
+        forged_entry = LineDistanceEntry(
+            squared_distance_numerator="123",
+            squared_distance_denominator="7",
+            source_pairs=genuine.lines[0].source_pairs,
+        )
+        with pytest.raises(ValidationError):
+            PinnedDistanceResult(
+                anchor=genuine.anchor,
+                points=genuine.points,
+                lines=(forged_entry,),
+                distinct_line_count=1,
+                min_squared_distance=forged_entry,
             )

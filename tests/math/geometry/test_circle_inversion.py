@@ -239,3 +239,19 @@ class TestCircleInversion:
         assert "p != c" in schema.get("description", "")
         assert "p != c" in schema["properties"]["center"]["description"]
         assert "p != c" in schema["properties"]["point"]["description"]
+
+    def test_schema_publishes_numeric_admission_bound(self):
+        from jacobian.math.geometry._models import INVERSION_ADMISSION_DIGITS
+
+        assert INVERSION_ADMISSION_DIGITS == 2048
+        schema = CircleInversionRequest.model_json_schema()
+        description = schema.get("description", "")
+        assert "INVERSION_ADMISSION_DIGITS" not in description
+        assert f"{INVERSION_ADMISSION_DIGITS} decimal digits" in description
+        assert (
+            schema.get("inversion_admission_digit_bound")
+            == INVERSION_ADMISSION_DIGITS
+        )
+        for field in ("center", "power", "point"):
+            field_description = schema["properties"][field]["description"]
+            assert f"{INVERSION_ADMISSION_DIGITS} decimal digits" in field_description

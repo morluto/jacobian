@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
@@ -198,31 +198,45 @@ class CircleInversionRequest(StrictModel):
     """Invert a rational planar point ``p`` in a circle.
 
     The circle has center ``c`` and positive squared radius ``s``. Requires
-    ``p != c``. Admission requires every canonical component of ``c``, ``s``,
-    and ``p`` — and of the exact inverted point ``I(p)`` — to stay within
-    ``INVERSION_ADMISSION_DIGITS``. Because inversion is an involution and
-    both sides carry the same bound, an accepted request's result is itself
-    an admissible point: the admitted domain is closed under the advertised
-    involution, and the input-side bound keeps every admission check inside
-    bounded intermediate work.
+    ``p != c``. See the published schema metadata for the effective numeric
+    admission bounds on both sides of the transform.
     """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Invert a rational planar point p in a circle with center c "
+                "and positive squared radius s (the inversion power). The "
+                "point must satisfy p != c; inverting the center is "
+                "undefined. Every canonical component of c, s, and p - and "
+                "of the exact inverted point I(p) = c + (s / ||p - c||^2) * "
+                f"(p - c) - carries at most {INVERSION_ADMISSION_DIGITS} "
+                "decimal digits, so an accepted result can be re-fed as a "
+                "request: the admitted domain is closed under the involution."
+            ),
+            "inversion_admission_digit_bound": INVERSION_ADMISSION_DIGITS,
+        },
+    )
 
     center: RationalPoint2D = Field(
         description=(
             "Rational planar inversion center c. The point to invert must "
-            "satisfy p != c."
+            f"satisfy p != c; every component is bounded to "
+            f"{INVERSION_ADMISSION_DIGITS} decimal digits."
         ),
     )
     power: CanonicalRational = Field(
         description=(
             "Positive rational inversion power, interpreted as the squared "
-            "inversion radius. Must be strictly positive."
+            "inversion radius. Must be strictly positive and bounded to "
+            f"{INVERSION_ADMISSION_DIGITS} decimal digits per component."
         ),
     )
     point: RationalPoint2D = Field(
         description=(
-            "Rational planar point p to invert. Must satisfy p != c; "
-            "inversion of the center is undefined."
+            "Rational planar point p to invert. Must satisfy p != c; every "
+            f"component is bounded to {INVERSION_ADMISSION_DIGITS} decimal "
+            "digits."
         ),
     )
 

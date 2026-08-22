@@ -74,8 +74,8 @@ Before implementing an exact decomposition, certificate, or authoritative
 derived value, state its defining invariant: the reconstruction equation,
 preservation law, or independently checkable property that makes a returned
 value mathematically valid. Then name the smallest set of tests that establishes
-that invariant and distinguishes the intended algorithm from plausible weaker
-ones.
+that invariant and rejects plausible results that satisfy only a weaker
+mathematical claim.
 
 Use a source-backed reference fixture when a standard example helps fix
 terminology, normalization, or another convention-sensitive output. Cite the

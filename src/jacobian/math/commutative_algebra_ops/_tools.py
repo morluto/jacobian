@@ -13,11 +13,14 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealRadicalMembershipResult,
     IdealRadicalRequest,
     IdealRadicalResult,
+    IdealSaturationRequest,
+    IdealSaturationResult,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
     compute_ideal_radical,
     compute_ideal_radical_membership,
+    compute_ideal_saturation,
 )
 
 
@@ -149,6 +152,34 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         ((1, 1, (1, 1)),),
                     ),
                     "divisor": _ideal(
+                        ("x", "y"),
+                        ((1, 1, (1, 0)),),
+                    ),
+                },
+            ),
+        ),
+    ),
+    _op(
+        "polynomial.ideal.saturation.compute",
+        "Compute the ideal saturation I : <d>^infinity",
+        "Compute the exact saturation (I : <d>^infinity) = union_k(I : <d>^k) "
+        "over QQ using the private Singular backend.",
+        IdealSaturationRequest,
+        IdealSaturationResult,
+        compute_ideal_saturation,
+        "commutative-algebra",
+        "ideal-saturation",
+        "exact",
+        examples=(
+            example(
+                "saturation_xy",
+                "Compute (<xy> : <x>^infinity) in Q[x,y]; the result should be <y>.",
+                {
+                    "ideal": _ideal(
+                        ("x", "y"),
+                        ((1, 1, (1, 1)),),
+                    ),
+                    "saturation_polynomial": _polynomial(
                         ("x", "y"),
                         ((1, 1, (1, 0)),),
                     ),

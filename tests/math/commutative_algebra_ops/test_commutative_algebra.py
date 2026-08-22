@@ -16,6 +16,7 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealQuotientRequest,
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
+    IdealSaturationRequest,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
@@ -123,6 +124,7 @@ def test_catalog_contains_only_audited_operations() -> None:
         "polynomial.ideal.radical.compute",
         "polynomial.ideal.radical_membership.decide",
         "polynomial.ideal.quotient.compute",
+        "polynomial.ideal.saturation.compute",
     }
 
 
@@ -132,6 +134,23 @@ def test_ideal_contract_rejects_mixed_polynomial_rings() -> None:
             variables=("x",),
             generators=(_polynomial(("y",), {(1,): 1}),),
         )
+
+
+def test_saturation_request_rejects_total_degree_beyond_budget() -> None:
+    """Per-exponent bounds alone admit x^12*y^12; the saturation polynomial
+    must satisfy the same total-degree-at-most-12 backend domain as the
+    ideal generators."""
+    ideal = _ideal(("x", "y"), {(2, 0): 1})
+    with pytest.raises(ValueError, match="total degree"):
+        IdealSaturationRequest(
+            ideal=ideal,
+            saturation_polynomial=_polynomial(("x", "y"), {(12, 12): 1}),
+        )
+    accepted = IdealSaturationRequest(
+        ideal=ideal,
+        saturation_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
+    )
+    assert accepted.saturation_polynomial is not None
 
 
 def test_backend_unavailability_is_a_typed_execution_outcome(
@@ -460,3 +479,37 @@ def test_ideal_quotient_by_product_equals_iterated_quotient() -> None:
     assert iterated.quotient is not None
     assert _equal(by_product.quotient, iterated.quotient)
     assert _equal(by_product.quotient, _ideal(variables, {(2, 1): 1}))
+
+
+class TestSaturationRelationVerification:
+    def test_bogus_backend_result_rejected_by_relation_check(self, monkeypatch) -> None:
+        """A COMPUTED backend result violating the defining relation is
+        rejected inside the operation's bounded flow."""
+        from jacobian.math.commutative_algebra_ops import _operations as ops
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationRequest,
+        )
+        from jacobian.math.polynomials.values import RationalPolynomialIdeal
+
+        bogus = RationalPolynomialIdeal(
+            variables=("x", "y"),
+            generators=(_polynomial(("x", "y"), {(0, 2): 1}),),  # (y^2)
+        )
+
+        class _FakeBackend:
+            outcome = "COMPUTED"
+            ideal = bogus
+            backend_version = "4.4"
+            detail = None
+
+        monkeypatch.setattr(
+            ops,
+            "run_singular_ideal_operation",
+            lambda *args, **kwargs: _FakeBackend(),
+        )
+        request = IdealSaturationRequest(
+            ideal=_ideal(("x", "y"), {(1, 0): 1}),  # (x)
+            saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),  # x
+        )
+        with pytest.raises(ValueError, match="does not contain"):
+            ops.compute_ideal_saturation(request)

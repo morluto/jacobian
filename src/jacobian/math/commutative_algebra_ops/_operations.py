@@ -11,6 +11,8 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealRadicalMembershipResult,
     IdealRadicalRequest,
     IdealRadicalResult,
+    IdealSaturationRequest,
+    IdealSaturationResult,
 )
 from jacobian.math.commutative_algebra_ops._singular import (
     run_singular_ideal_operation,
@@ -77,8 +79,74 @@ def compute_ideal_quotient(request: IdealQuotientRequest) -> IdealQuotientResult
     )
 
 
+def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturationResult:
+    """Compute an exact ideal saturation I : <d>^infinity through the bounded Singular backend."""
+
+    from jacobian.math.polynomials.values import (
+        RationalPolynomialIdeal,
+    )
+
+    saturation_ideal = RationalPolynomialIdeal(
+        variables=request.ideal.variables,
+        generators=(request.saturation_polynomial,),
+    )
+    backend = run_singular_ideal_operation(
+        "saturation",
+        request.ideal,
+        saturation_ideal,
+        request.resource_budget,
+    )
+    if backend.outcome == "COMPUTED" and backend.ideal is not None:
+        # Defining-relation verification runs here, inside the operation's
+        # bounded flow, rather than in the wire validator: the containment
+        # and d-saturation checks use exact Groebner reduction bounded by
+        # the same input budgets (<=6 variables, <=12 degree, <=256 terms).
+        _verify_saturation_relation(
+            request.ideal, request.saturation_polynomial, backend.ideal
+        )
+    return IdealSaturationResult(
+        outcome=backend.outcome,
+        source_ideal=request.ideal,
+        source_polynomial=request.saturation_polynomial,
+        saturation=backend.ideal,
+        backend_version=backend.backend_version,
+        detail=backend.detail,
+    )
+
+
+def _verify_saturation_relation(source_ideal, d_poly, saturation) -> None:
+    """Verify I subseteq J and d*J subseteq J exactly (bounded inputs)."""
+    import sympy
+
+    from jacobian.math.polynomials._conversions import (
+        rational_polynomial_to_sympy,
+    )
+
+    symbols = sympy.symbols(source_ideal.variables)
+    basis = sympy.groebner(
+        [rational_polynomial_to_sympy(gen).as_expr() for gen in saturation.generators],
+        *symbols,
+        domain=sympy.QQ,
+    )
+    for gen in source_ideal.generators:
+        if basis.reduce(rational_polynomial_to_sympy(gen).as_expr())[1] != 0:
+            raise ValueError(
+                "Singular returned an ideal that does not contain the "
+                "source ideal; refusing to report it as the saturation"
+            )
+    d_expr = rational_polynomial_to_sympy(d_poly).as_expr()
+    for gen in saturation.generators:
+        multiple = d_expr * rational_polynomial_to_sympy(gen).as_expr()
+        if basis.reduce(multiple)[1] != 0:
+            raise ValueError(
+                "Singular returned an ideal that is not saturated by the "
+                "source polynomial; refusing to report it"
+            )
+
+
 __all__ = [
     "compute_ideal_quotient",
     "compute_ideal_radical",
     "compute_ideal_radical_membership",
+    "compute_ideal_saturation",
 ]

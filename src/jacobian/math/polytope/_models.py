@@ -108,6 +108,24 @@ def _validate_vertices(vertices: tuple[Vertex, ...], dimension_bound: int) -> No
     for vertex in vertices:
         if len(vertex.coordinates) != dim:
             raise ValueError("all vertices must share one dimension")
+    # Combinatorial admission: C(n, d) d-subsets for hull enumeration.
+    # The operation's brute-force hull needs to consider each d-subset;
+    # reject here so the request never reaches the host exception at
+    # execution time.  This admits the 5-cube (C(32,5)=201376) test
+    # threshold but rejects larger hulls.
+    import math
+
+    from jacobian.math.polytope._operations import MAX_HULL_SUBFACETS
+
+    try:
+        subfacets = math.comb(len(vertices), dim)
+    except ValueError:
+        subfacets = 10**18
+    if subfacets > MAX_HULL_SUBFACETS:
+        raise ValueError(
+            "polytope hull enumeration exceeds the combinatorial bound "
+            f"({subfacets} > {MAX_HULL_SUBFACETS} d-subsets)"
+        )
 
 
 def _validate_halfspaces(  # noqa: C901
@@ -163,8 +181,8 @@ def _validate_halfspaces(  # noqa: C901
 class PolytopeVolumeResult(StrictModel):
     """The exact rational volume of a bounded rational polytope."""
 
-    volume: str
-    """The exact rational volume as a reduced ``num/den`` canonical string."""
+    volume: CanonicalRational
+    """The exact rational volume as a canonical reduced rational."""
     dimension: int
     """The ambient dimension of the polytope."""
     representation: str

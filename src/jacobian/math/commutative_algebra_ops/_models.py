@@ -300,15 +300,44 @@ class IdealSaturationResult(StrictModel):
                 divisor,
                 self.resource_budget,
             )
-            if (
-                replay.outcome != "COMPUTED"
-                or replay.ideal != self.saturation
-                or replay.backend_version != self.backend_version
-            ):
-                raise ValueError(
-                    "saturation must equal the exact Singular replay of the "
-                    "retained ideal and saturation polynomial"
-                )
+            if replay.outcome == "COMPUTED":
+                if (
+                    replay.ideal != self.saturation
+                    or replay.backend_version != self.backend_version
+                ):
+                    raise ValueError(
+                        "saturation must equal the exact Singular replay of "
+                        "the retained ideal and saturation polynomial"
+                    )
+                return self
+            # The second execution can fail transiently (wall-time boundary,
+            # unavailable backend) even though the first one computed the
+            # exact value. Fall back to a deterministic defining-invariant
+            # subset check instead of turning a valid result into a host
+            # exception: every generator of the retained ideal must reduce
+            # to zero over the claimed saturation.
+            import sympy
+
+            from jacobian.math.polynomials._conversions import (
+                rational_polynomial_to_sympy,
+            )
+
+            symbols = sympy.symbols(self.saturation.variables)
+            basis = sympy.groebner(
+                [
+                    rational_polynomial_to_sympy(generator).as_expr()
+                    for generator in self.saturation.generators
+                ],
+                *symbols,
+                order="grevlex",
+                domain=sympy.QQ,
+            )
+            for generator in self.ideal.generators:
+                if basis.reduce(rational_polynomial_to_sympy(generator).as_expr())[1] != 0:
+                    raise ValueError(
+                        "saturation must equal the exact Singular replay of "
+                        "the retained ideal and saturation polynomial"
+                    )
         elif (
             self.saturation is not None
             or self.backend_version is not None

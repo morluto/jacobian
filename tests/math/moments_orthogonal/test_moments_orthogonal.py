@@ -113,12 +113,20 @@ class TestRecurrenceCoefficients:
         with pytest.raises(ValueError, match="nonzero"):
             recurrence_coefficients(moments)
 
-    def test_insufficient_moments_for_recurrence(self) -> None:
-        """With only 2 moments we can't produce any recurrence coefficient."""
+    def test_two_moments_determine_one_pair(self) -> None:
+        """Two moments determine exactly alpha_0 and beta_0."""
         moments = (_frac(1, 1), _frac(1, 2))
         result = recurrence_coefficients(moments)
-        assert result.alpha == ()
+        assert result.alpha == (_frac(1, 2),)
         assert result.beta == (_frac(1, 1),)
+
+    def test_even_length_sequence_fully_consumed(self) -> None:
+        """Four uniform moments determine both coefficient pairs."""
+        result = recurrence_coefficients(
+            tuple(_frac(1, k) for k in range(1, 5))
+        )
+        assert result.alpha == (_frac(1, 2), _frac(1, 2))
+        assert result.beta == (_frac(1, 1), _frac(1, 12))
 
 
 # ---------------------------------------------------------------------------

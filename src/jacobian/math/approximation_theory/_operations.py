@@ -12,6 +12,7 @@ from jacobian.math.approximation_theory._models import (
     LagrangeInterpolationRequest,
     LagrangeInterpolationResult,
 )
+from jacobian.math.polynomials.values import RationalPolynomial, RationalPolynomialTerm, SparseRationalPolynomial
 
 
 def _frac_from_rational(value) -> Fraction:
@@ -20,6 +21,32 @@ def _frac_from_rational(value) -> Fraction:
 
 def _rational_from_frac(value: Fraction) -> CanonicalRational:
     return CanonicalRational.from_integer_ratio(value.numerator, value.denominator)
+
+
+def _polynomial_from_coeffs(coeffs: list[Fraction]) -> RationalPolynomial:
+    """Convert dense coefficient list [a0, a1, ...] to RationalPolynomial on 'x'."""
+    terms = []
+    for exp, coeff in enumerate(coeffs):
+        if coeff == 0:
+            continue
+        terms.append(
+            RationalPolynomialTerm(
+                coefficient=_rational_from_frac(coeff),
+                exponents=(exp,),
+            )
+        )
+    # Ensure descending lexicographic order (highest exponent first)
+    terms.sort(key=lambda t: t.exponents, reverse=True)
+    if not terms:
+        # Zero polynomial is represented as empty term tuple
+        return RationalPolynomial(
+            variables=("x",),
+            polynomial=SparseRationalPolynomial(terms=()),
+        )
+    return RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(terms=tuple(terms)),
+    )
 
 
 def _poly_multiply(a: list[Fraction], b: list[Fraction]) -> list[Fraction]:
@@ -78,11 +105,10 @@ def compute_lagrange_basis(request: LagrangeBasisRequest) -> LagrangeBasisResult
 
         # Normalize the polynomial by the denominator to get l_k(x)
         poly = _poly_scale(poly, Fraction(1) / denom)
-        coeffs = [_rational_from_frac(c) for c in poly]
         basis_polys.append(
             LagrangeBasisPolynomial(
                 index=k,
-                coefficients=tuple(coeffs),
+                polynomial=_polynomial_from_coeffs(poly),
                 barycentric_weight=_rational_from_frac(bary_weight),
             )
         )
@@ -130,12 +156,8 @@ def compute_lagrange_interpolation(
     while len(result_poly) > 1 and result_poly[-1] == 0:
         result_poly.pop()
 
-    degree = len(result_poly) - 1
-    coeffs = tuple(_rational_from_frac(c) for c in result_poly)
-
     return LagrangeInterpolationResult(
-        degree=degree,
-        coefficients=coeffs,
+        polynomial=_polynomial_from_coeffs(result_poly),
     )
 
 

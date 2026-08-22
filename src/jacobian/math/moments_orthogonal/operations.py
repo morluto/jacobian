@@ -262,6 +262,19 @@ def compute_recurrence(request: RecurrenceRequest) -> ThreeTermRecurrence:
         ]
         alphas.append(residual[k])
 
+    # Norm ratios can be mathematically valid yet exceed the canonical
+    # result range; reject them before constructing wire values.
+    from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+    from jacobian.math._rational_height import RationalHeight
+
+    for value in (*alphas, *betas):
+        if RationalHeight.from_canonical(
+            CanonicalRational.from_fraction(value)
+        ).exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
+            raise ValueError(
+                "recurrence coefficients exceed the canonical rational "
+                "digit limit for this family"
+            )
     return ThreeTermRecurrence(
         alpha=tuple(_from_fraction(a) for a in alphas),
         beta=tuple(_from_fraction(b) for b in betas),

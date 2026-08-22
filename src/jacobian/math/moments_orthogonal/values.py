@@ -49,6 +49,20 @@ class HankelMomentMatrix(StrictModel):
             _rational_rank,
         )
 
+        # Hankel structure: entries depend only on i+j.
+        for i in range(side):
+            for j in range(side):
+                reference = self.entries[i][j]
+                if any(
+                    self.entries[a][b] != reference
+                    for a in range(side)
+                    for b in range(side)
+                    if a + b == i + j
+                ):
+                    raise ValueError(
+                        "entries along each anti-diagonal of a Hankel "
+                        "matrix must be equal"
+                    )
         matrix = [[value.as_fraction() for value in row] for row in self.entries]
         if self.determinant.as_fraction() != _rational_det(matrix):
             raise ValueError("determinant must match the retained entries")
@@ -91,6 +105,31 @@ class OrthogonalPolynomialFamily(StrictModel):
                 raise ValueError(
                     f"p_{index} has zero squared norm; a quasi-definite "
                     "family requires nonzero norms"
+                )
+        # Three-term consistency: x*p_k - p_{k+1} must lie in the span of
+        # {p_{k-1}, p_k}, so its components below degree k-1 vanish.
+        from fractions import Fraction
+
+        for k in range(len(self.polynomials) - 1):
+            p_k = [c.as_fraction() for c in self.polynomials[k].coefficients]
+            p_next = [c.as_fraction() for c in self.polynomials[k + 1].coefficients]
+            shifted = [Fraction(0), *p_k]
+            residual = [
+                shifted[i] - (p_next[i] if i < len(p_next) else Fraction(0))
+                for i in range(len(shifted))
+            ]
+            lowest_free = max(k - 1, 0)
+            if any(
+                coefficient != 0
+                for position, coefficient in enumerate(residual)
+                if position < lowest_free
+            ) and any(
+                coefficient != 0
+                for position, coefficient in enumerate(residual[:lowest_free])
+            ):
+                raise ValueError(
+                    f"p_{k + 1} does not satisfy the three-term recurrence "
+                    f"against p_{k}"
                 )
         return self
 

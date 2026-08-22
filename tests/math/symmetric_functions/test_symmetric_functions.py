@@ -114,3 +114,44 @@ def test_schur_rejects_mismatched_dimensions() -> None:
             variables=("x1", "x2"),
             point=(1,),
         )
+
+
+def test_request_schema_publishes_schur_invariants() -> None:
+    """math.find must expose the Schur preconditions without a failed call."""
+    schema = SchurExpansionRequest.model_json_schema()
+    variables = schema["properties"]["variables"]
+    point = schema["properties"]["point"]
+    assert "istinct" in variables["description"]
+    assert "equal" in variables["description"]
+    assert variables.get("uniqueItems") is True
+    assert variables["minItems"] == 1 and variables["maxItems"] == 20
+    assert point["items"]["minimum"] == -999_999
+    assert point["items"]["maximum"] == 999_999
+    assert "decimal digits" in point["items"]["description"]
+    partition = schema["$defs"]["IntegerPartition"]["properties"]["parts"]
+    assert "100" in partition["description"]
+    assert schema["$defs"]["IntegerPartition"]["properties"]["parts"]["maxItems"] == 50
+    assert "100" in schema["$defs"]["IntegerPartition"]["description"]
+
+
+def test_schur_rejects_coordinate_exceeding_digit_bound() -> None:
+    with pytest.raises(ValueError):
+        SchurExpansionRequest(
+            partition=IntegerPartition(parts=(1,)),
+            variables=("x1",),
+            point=(1_000_000,),
+        )
+
+
+def test_schur_accepts_boundary_coordinate() -> None:
+    request = SchurExpansionRequest(
+        partition=IntegerPartition(parts=(1,)),
+        variables=("x1",),
+        point=(-999_999,),
+    )
+    assert request.point == (-999_999,)
+
+
+def test_partition_schema_rejects_size_above_cap() -> None:
+    with pytest.raises(ValueError, match="bound"):
+        IntegerPartition(parts=(51, 50))

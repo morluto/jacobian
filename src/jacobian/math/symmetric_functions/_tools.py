@@ -52,7 +52,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "schur_1_at_1_1",
-                "Evaluate s_(1)(1,1) = 2.",
+                "Evaluate s_(1)(1,1) = 2. Needs: decreasing positive parts "
+                "with total size <=100; distinct variables whose count equals "
+                "the point length (both 1..20); |coordinate| <=999999.",
                 {
                     "partition": {"parts": [1]},
                     "variables": ["x1", "x2"],

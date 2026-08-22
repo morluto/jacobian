@@ -55,20 +55,46 @@ def _op[RequestT: StrictModel, ResultT: StrictModel](
 
 
 CYCLE_C4_WITH_CHORD = {
-    "graph": {"vertex_count": 4, "edges": [[0, 1], [1, 2], [2, 3], [3, 0], [0, 2]]},
+    "graph": {
+        "vertices": ["a", "b", "c", "d"],
+        "edges": [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["c", "d"]],
+    },
+    "length": 3,
+}
+# For the chorded case we need at least triangle a-b-c. Using edges a-b, b-c, a-c plus rest.
+CYCLE_C4_WITH_CHORD_SIMPLE = {
+    "graph": {
+        "vertices": ["a", "b", "c", "d"],
+        "edges": [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["c", "d"]],
+    },
     "length": 3,
 }
 CYCLE_C4_PLAIN = {
-    "graph": {"vertex_count": 4, "edges": [[0, 1], [1, 2], [2, 3], [3, 0]]},
+    "graph": {
+        "vertices": ["a", "b", "c", "d"],
+        "edges": [["a", "b"], ["a", "d"], ["b", "c"], ["c", "d"]],
+    },
     "length": 3,
 }
 SUBGRAPH_TRIANGLE_IN_C4_CHORD = {
-    "pattern": {"vertex_count": 3, "edges": [[0, 1], [1, 2], [0, 2]]},
-    "host": {"vertex_count": 4, "edges": [[0, 1], [1, 2], [2, 3], [3, 0], [0, 2]]},
+    "pattern": {
+        "vertices": ["x", "y", "z"],
+        "edges": [["x", "y"], ["x", "z"], ["y", "z"]],
+    },
+    "host": {
+        "vertices": ["a", "b", "c", "d"],
+        "edges": [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["c", "d"]],
+    },
 }
 SUBGRAPH_P3_NOT_IN_MATCHING = {
-    "pattern": {"vertex_count": 3, "edges": [[0, 1], [1, 2]]},
-    "host": {"vertex_count": 4, "edges": [[0, 1], [2, 3]]},
+    "pattern": {
+        "vertices": ["x", "y", "z"],
+        "edges": [["x", "y"], ["y", "z"]],
+    },
+    "host": {
+        "vertices": ["a", "b", "c", "d"],
+        "edges": [["a", "b"], ["c", "d"]],
+    },
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -187,7 +213,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "the graph contains a simple cycle of exactly length k, returning an "
         "ordered cycle witness when one exists. The cycle is a subgraph and "
         "may have chords; this is distinct from girth (shortest cycle) and "
-        "from Hamiltonicity (spanning).",
+        "from Hamiltonicity (spanning). Accepts the canonical "
+        "`SimpleUndirectedGraph` so `explicit_graph` output composes directly.",
         FixedLengthCycleRequest,
         FixedLengthCycleResult,
         compute_fixed_length_cycle,
@@ -201,7 +228,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "A 4-cycle with a chord contains a 3-cycle (triangle); the "
                     "cycle length k must be at least 3 and at most the vertex count."
                 ),
-                CYCLE_C4_WITH_CHORD,
+                CYCLE_C4_WITH_CHORD_SIMPLE,
             ),
             example(
                 "c4_plain_no_triangle",
@@ -213,10 +240,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "graph.subgraph_pattern.find",
         "Find a subgraph-pattern embedding",
-        "Given bounded simple graphs pattern H and host G, find an injective "
+        "Given bounded canonical simple graphs pattern H and host G, find an injective "
         "embedding of H into G such that every edge of H maps to an edge of G "
-        "(ordinary, non-induced subgraph containment). Returns one witness "
-        "vertex map when one exists.",
+        "(ordinary, non-induced subgraph containment). Both graphs are canonical "
+        "`SimpleUndirectedGraph` values for direct composition. Returns one witness "
+        "vertex map ordered by the pattern's vertex order when one exists.",
         SubgraphPatternFindRequest,
         SubgraphPatternFindResult,
         compute_subgraph_pattern_find,

@@ -14,6 +14,7 @@ from jacobian.math.graphs.morphisms._operations import (
     compute_retraction_check,
 )
 from jacobian.math.graphs.morphisms._tools import TOOLS
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 def test_catalog_contains_only_audited_operations() -> None:
@@ -157,9 +158,15 @@ def test_retraction_check_c4_to_edge() -> None:
     assert result.is_retraction is True
 
 
+def _canonical_graph(vertices: list[str], edges: list[list[str]]) -> SimpleUndirectedGraph:
+    return SimpleUndirectedGraph(
+        vertices=tuple(vertices), edges=tuple(tuple(e) for e in edges)  # type: ignore[arg-type]
+    )
+
+
 class TestFixedLengthCycle:
-    def _g(self, vc, edges):
-        return SimpleGraph(vertex_count=vc, edges=tuple(tuple(e) for e in edges))
+    def _g(self, vertices, edges):
+        return _canonical_graph(vertices, edges)
 
     def test_triangle_in_c4_with_chord(self):
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
@@ -167,12 +174,12 @@ class TestFixedLengthCycle:
             compute_fixed_length_cycle,
         )
 
-        g = self._g(4, [[0, 1], [1, 2], [2, 3], [3, 0], [0, 2]])
+        g = self._g(["a", "b", "c", "d"], [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["c", "d"]])
         result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         assert result.decision == "EXISTS"
         assert len(result.cycle) == 3
         assert len(set(result.cycle)) == 3
-        # verify the cycle closes
+        # verify the cycle closes via string edges
         adj = set()
         for u, v in g.edges:
             adj.add((u, v))
@@ -181,6 +188,8 @@ class TestFixedLengthCycle:
 
         cyc = [*list(result.cycle), result.cycle[0]]
         assert all((a, b) in adj for a, b in pairwise(cyc))
+        # witness vertices must be from canonical graph
+        assert all(v in g.vertices for v in result.cycle)
 
     def test_plain_c4_has_no_triangle(self):
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
@@ -188,7 +197,7 @@ class TestFixedLengthCycle:
             compute_fixed_length_cycle,
         )
 
-        g = self._g(4, [[0, 1], [1, 2], [2, 3], [3, 0]])
+        g = self._g(["a", "b", "c", "d"], [["a", "b"], ["a", "d"], ["b", "c"], ["c", "d"]])
         result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         assert result.decision == "DOES_NOT_EXIST"
         assert result.cycle == ()
@@ -199,7 +208,7 @@ class TestFixedLengthCycle:
             compute_fixed_length_cycle,
         )
 
-        g = self._g(4, [[0, 1], [1, 2], [2, 3], [3, 0]])
+        g = self._g(["a", "b", "c", "d"], [["a", "b"], ["a", "d"], ["b", "c"], ["c", "d"]])
         result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=4))
         assert result.decision == "EXISTS"
         assert len(result.cycle) == 4
@@ -212,7 +221,10 @@ class TestFixedLengthCycle:
             compute_fixed_length_cycle,
         )
 
-        g = self._g(4, [[0, 1], [1, 2], [2, 0], [2, 3], [3, 0]])
+        g = self._g(
+            ["a", "b", "c", "d"],
+            [["a", "b"], ["a", "d"], ["b", "c"], ["a", "c"], ["c", "d"]],
+        )
         r3 = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
         r4 = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=4))
         assert r3.decision == "EXISTS"
@@ -223,14 +235,27 @@ class TestFixedLengthCycle:
 
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
 
-        g = self._g(3, [[0, 1], [1, 2], [2, 0]])
+        g = self._g(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]])
         with pytest.raises(ValueError, match="vertex count"):
             FixedLengthCycleRequest(graph=g, length=4)
 
+    def test_composes_with_canonical_graph(self):
+        # Verify direct composition with graph API: explicit_graph output can be passed unchanged.
+        from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
+        from jacobian.math.graphs.morphisms._operations import compute_fixed_length_cycle
+        from jacobian.math.graphs.operations import explicit_graph
+
+        g = explicit_graph(
+            vertices=("a", "b", "c"), edges=(("a", "b"), ("b", "c"), ("a", "c"))
+        )
+        # explicit_graph returns canonical SimpleUndirectedGraph; pass directly
+        result = compute_fixed_length_cycle(FixedLengthCycleRequest(graph=g, length=3))
+        assert result.decision == "EXISTS"
+
 
 class TestSubgraphPatternFind:
-    def _g(self, vc, edges):
-        return SimpleGraph(vertex_count=vc, edges=tuple(tuple(e) for e in edges))
+    def _g(self, vertices, edges):
+        return _canonical_graph(vertices, edges)
 
     def test_triangle_embeds_in_c4_with_chord(self):
         from jacobian.math.graphs.morphisms._models import (
@@ -240,20 +265,24 @@ class TestSubgraphPatternFind:
             compute_subgraph_pattern_find,
         )
 
-        pat = self._g(3, [[0, 1], [1, 2], [0, 2]])
-        host = self._g(4, [[0, 1], [1, 2], [2, 3], [3, 0], [0, 2]])
+        pat = self._g(["x", "y", "z"], [["x", "y"], ["x", "z"], ["y", "z"]])
+        host = self._g(["a", "b", "c", "d"], [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["c", "d"]])
         result = compute_subgraph_pattern_find(
             SubgraphPatternFindRequest(pattern=pat, host=host),
         )
         assert result.decision == "EXISTS"
         m = result.vertex_map
         assert len(set(m)) == 3  # injective
-        adj = set()
+        # m is ordered by pattern vertex order: pattern.vertices = (x,y,z)
+        pat_vertices = pat.vertices
+        host_edges = set()
         for u, v in host.edges:
-            adj.add((u, v))
-            adj.add((v, u))
+            host_edges.add((u, v))
+            host_edges.add((v, u))
+        # Build map from pattern label to host label
+        mapping = {pat_vertices[i]: m[i] for i in range(len(pat_vertices))}
         for u, v in pat.edges:
-            assert (m[u], m[v]) in adj
+            assert (mapping[u], mapping[v]) in host_edges
 
     def test_p3_not_in_matching(self):
         from jacobian.math.graphs.morphisms._models import (
@@ -263,8 +292,8 @@ class TestSubgraphPatternFind:
             compute_subgraph_pattern_find,
         )
 
-        pat = self._g(3, [[0, 1], [1, 2]])
-        host = self._g(4, [[0, 1], [2, 3]])
+        pat = self._g(["x", "y", "z"], [["x", "y"], ["y", "z"]])
+        host = self._g(["a", "b", "c", "d"], [["a", "b"], ["c", "d"]])
         result = compute_subgraph_pattern_find(
             SubgraphPatternFindRequest(pattern=pat, host=host),
         )
@@ -281,8 +310,11 @@ class TestSubgraphPatternFind:
             compute_subgraph_pattern_find,
         )
 
-        pat = self._g(3, [[0, 1], [1, 2], [0, 2]])
-        host = self._g(4, [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]])
+        pat = self._g(["x", "y", "z"], [["x", "y"], ["x", "z"], ["y", "z"]])
+        host = self._g(
+            ["a", "b", "c", "d"],
+            [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["b", "d"], ["c", "d"]],
+        )
         result = compute_subgraph_pattern_find(
             SubgraphPatternFindRequest(pattern=pat, host=host),
         )
@@ -295,7 +327,17 @@ class TestSubgraphPatternFind:
             SubgraphPatternFindRequest,
         )
 
-        pat = self._g(3, [[0, 1], [1, 2]])
-        host = self._g(2, [[0, 1]])
+        pat = self._g(["x", "y", "z"], [["x", "y"], ["y", "z"]])
+        host = self._g(["a", "b"], [["a", "b"]])
         with pytest.raises(ValueError, match="more vertices"):
             SubgraphPatternFindRequest(pattern=pat, host=host)
+
+    def test_composes_with_canonical_graph(self):
+        from jacobian.math.graphs.morphisms._models import SubgraphPatternFindRequest
+        from jacobian.math.graphs.morphisms._operations import compute_subgraph_pattern_find
+        from jacobian.math.graphs.operations import explicit_graph
+
+        pat = explicit_graph(vertices=("x", "y"), edges=(("x", "y"),))
+        host = explicit_graph(vertices=("a", "b", "c"), edges=(("a", "b"), ("b", "c")))
+        result = compute_subgraph_pattern_find(SubgraphPatternFindRequest(pattern=pat, host=host))
+        assert result.decision == "EXISTS"

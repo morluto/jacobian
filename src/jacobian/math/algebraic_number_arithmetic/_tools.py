@@ -8,13 +8,13 @@ from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.algebraic_number_arithmetic._models import (
     AlgebraicAdditionRequest,
-    AlgebraicArithmeticResult,
     AlgebraicMultiplicationRequest,
 )
 from jacobian.math.algebraic_number_arithmetic._operations import (
     compute_algebraic_add,
     compute_algebraic_multiply,
 )
+from jacobian.math.real_quadratic import RealQuadraticValue
 
 
 def _an_op[RequestT: StrictModel, ResultT: StrictModel](
@@ -61,7 +61,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "rational bound; requests whose sum would exceed that bound "
         "are rejected.",
         AlgebraicAdditionRequest,
-        AlgebraicArithmeticResult,
+        RealQuadraticValue,
         compute_algebraic_add,
         "algebraic-number",
         "quadratic-field",
@@ -91,7 +91,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "within the 256-digit canonical rational bound; requests whose "
         "product would exceed that bound are rejected.",
         AlgebraicMultiplicationRequest,
-        AlgebraicArithmeticResult,
+        RealQuadraticValue,
         compute_algebraic_multiply,
         "algebraic-number",
         "quadratic-field",

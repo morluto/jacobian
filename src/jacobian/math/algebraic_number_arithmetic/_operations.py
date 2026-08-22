@@ -7,7 +7,6 @@ from fractions import Fraction
 from jacobian._exact import CanonicalRational
 from jacobian.math.algebraic_number_arithmetic._models import (
     AlgebraicAdditionRequest,
-    AlgebraicArithmeticResult,
     AlgebraicMultiplicationRequest,
 )
 from jacobian.math.real_quadratic import RealQuadraticValue
@@ -17,10 +16,10 @@ def _normalize(
     rational_part: Fraction,
     irrational_part: Fraction,
     radicand: int,
-) -> AlgebraicArithmeticResult:
+) -> RealQuadraticValue:
     """Normalize Fraction components to canonical bounded rationals."""
 
-    return AlgebraicArithmeticResult(
+    return RealQuadraticValue(
         rational_part=CanonicalRational.from_fraction(rational_part),
         radical_coefficient=CanonicalRational.from_fraction(irrational_part),
         radicand=radicand,
@@ -36,7 +35,7 @@ def _to_fractions(element: RealQuadraticValue) -> tuple[Fraction, Fraction]:
 
 def compute_algebraic_add(
     request: AlgebraicAdditionRequest,
-) -> AlgebraicArithmeticResult:
+) -> RealQuadraticValue:
     """Compute (a + b*sqrt(d)) + (c + e*sqrt(d)) = (a+c) + (b+e)*sqrt(d)."""
 
     a, b = _to_fractions(request.left)
@@ -46,7 +45,7 @@ def compute_algebraic_add(
 
 def compute_algebraic_multiply(
     request: AlgebraicMultiplicationRequest,
-) -> AlgebraicArithmeticResult:
+) -> RealQuadraticValue:
     """Compute (a + b*sqrt(d)) * (c + e*sqrt(d)) = (ac + b*e*d) + (ae + bc)*sqrt(d)."""
 
     a, b = _to_fractions(request.left)

@@ -119,20 +119,9 @@ class AlgebraicMultiplicationRequest(AlgebraicArithmeticRequest):
         return self
 
 
-class AlgebraicArithmeticResult(RealQuadraticValue):
-    """The exact result element a + b*sqrt(d) of one operation.
-
-    Subclassing ``RealQuadraticValue`` reuses its square-free radicand
-    enforcement (P2 line 33) and 256-digit bounded-rational validation,
-    guaranteeing every returned element remains consumable as a subsequent
-    operand (P2 line 41).
-    """
-
-
 __all__ = [
     "AlgebraicAdditionRequest",
     "AlgebraicArithmeticRequest",
-    "AlgebraicArithmeticResult",
     "AlgebraicMultiplicationRequest",
     "QuadraticElement",
 ]

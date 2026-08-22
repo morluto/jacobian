@@ -142,7 +142,7 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
     if any(type(value) is not Fraction for value in moments):
         raise TypeError("moments must use exact Fractions")
     if moments[0] <= 0:
-        raise ValueError("the zeroth moment must be positive")
+        raise ValueError("the zeroth moment must be nonzero")
     max_order = min(MAX_RECURRENCE_ORDER, (m - 1) // 2)
     if max_order < 1:
         return RecurrenceCoefficients(alpha=(), beta=(moments[0],))
@@ -172,7 +172,7 @@ def jacobi_matrix(
     if any(type(value) is not Fraction for value in beta):
         raise TypeError("beta must use exact Fractions")
     if beta[0] <= 0:
-        raise ValueError("beta_0 (the zeroth moment) must be positive")
+        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
     return JacobiMatrix(
         diagonal=tuple(alpha),
         # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is
@@ -266,7 +266,7 @@ def gaussian_quadrature(
     if len(beta) != n and len(beta) != n + 1:
         raise ValueError("beta must have length len(alpha) or len(alpha)+1")
     if beta[0] <= 0:
-        raise ValueError("beta_0 (the zeroth moment) must be positive")
+        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
     for k in range(n - 1):

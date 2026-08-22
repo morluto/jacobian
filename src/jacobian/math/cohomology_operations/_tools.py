@@ -47,16 +47,16 @@ def cohomology_operation[
 
 _SQ_EXAMPLE: dict[str, Any] = {
     "cochain_degree": 1,
-    "simplex_values": [[0, 1, 2]],
-    "simplex_coefficients": [1],
+    "simplex_values": [[0, 1], [1, 2], [0, 2]],
+    "simplex_coefficients": [1, 1, 1],
     "square_degree": 0,
 }
 
 _BOCKSTEIN_EXAMPLE: dict[str, Any] = {
     "prime": 2,
     "cochain_degree": 1,
-    "simplex_values": [[0, 1, 2]],
-    "simplex_coefficients": [1],
+    "simplex_values": [[0, 1], [1, 2], [0, 2]],
+    "simplex_coefficients": [2, 2, 2],
 }
 
 
@@ -99,7 +99,7 @@ COHOMOLOGY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "bockstein_gf2",
-                "Compute the Bockstein of a cocycle over GF(2).",
+                "Compute the Bockstein of the trivial cocycle over GF(2).",
                 _BOCKSTEIN_EXAMPLE,
             ),
         ),

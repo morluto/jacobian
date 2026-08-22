@@ -110,14 +110,39 @@ class TestRecurrenceCoefficients:
 
     def test_zeroth_moment_nonzero(self) -> None:
         moments = (_frac(0, 1), _frac(1, 1), _frac(1, 2))
-        with pytest.raises(ValueError, match="nonzero"):
+        with pytest.raises(ValueError, match="positive"):
             recurrence_coefficients(moments)
 
-    def test_insufficient_moments_for_recurrence(self) -> None:
-        """With only 2 moments we can't produce any recurrence coefficient."""
+    def test_negative_zeroth_moment_rejected_before_short_return(self) -> None:
+        """A one-term sequence must not publish a negative beta_0."""
+        with pytest.raises(ValueError, match="positive"):
+            recurrence_coefficients((_frac(-1, 1),))
+
+    def test_even_length_sequence_fully_consumed(self) -> None:
+        """The first four standard-normal moments determine two coefficient pairs."""
+        moments = (_frac(1, 1), _frac(0, 1), _frac(1, 1), _frac(0, 1))
+        result = recurrence_coefficients(moments)
+        assert result.alpha == (_frac(0, 1), _frac(0, 1))
+        assert result.beta == (_frac(1, 1), _frac(1, 1))
+
+    def test_odd_length_sequence_unchanged(self) -> None:
+        """Five standard-normal moments still give the same two coefficient pairs."""
+        moments = (
+            _frac(1, 1),
+            _frac(0, 1),
+            _frac(1, 1),
+            _frac(0, 1),
+            _frac(3, 1),
+        )
+        result = recurrence_coefficients(moments)
+        assert result.alpha == (_frac(0, 1), _frac(0, 1))
+        assert result.beta == (_frac(1, 1), _frac(1, 1))
+
+    def test_two_moments_determine_one_coefficient_pair(self) -> None:
+        """Two moments fully determine alpha_0 = mu_1/mu_0 and beta_0 = mu_0."""
         moments = (_frac(1, 1), _frac(1, 2))
         result = recurrence_coefficients(moments)
-        assert result.alpha == ()
+        assert result.alpha == (_frac(1, 2),)
         assert result.beta == (_frac(1, 1),)
 
 

@@ -88,8 +88,9 @@ def _monic_orthogonal_recurrence(
     ``p_{k+1}(x) = (x - alpha_k) p_k(x) - beta_k p_{k-1}(x)``
     with ``p_{-1} = 0``, ``p_0 = 1``, ``beta_0 = mu_0``.
 
-    ``max_order`` recurrence coefficients ``alpha`` are produced, requiring
-    at least ``2 * max_order + 1`` moments.
+    ``max_order`` recurrence coefficients ``alpha`` are produced, consuming
+    at most moments up to index ``2 * max_order - 1``: the final coefficient
+    pair never requires the norm of the last generated polynomial.
     """
     alpha: list[Fraction] = []
     beta: list[Fraction] = [moments[0]]
@@ -100,24 +101,21 @@ def _monic_orthogonal_recurrence(
     for k in range(max_order):
         alpha_k = _inner_product(moments, _shift_up(p_curr), p_curr) / h_curr
         alpha.append(alpha_k)
-        beta_k = Fraction(0) if k == 0 else (h_curr / h_prev if h_prev != 0 else Fraction(0))
+        beta_k = Fraction(0) if k == 0 else h_curr / h_prev
         x_p = _shift_up(p_curr)
         p_next = _subtract(_subtract(x_p, _scale(alpha_k, p_curr)),
                            _scale(beta_k, p_prev))
         h_prev = h_curr
         p_prev = p_curr
         p_curr = p_next
+        if k == max_order - 1:
+            break
         h_curr = _inner_product(moments, p_curr, p_curr)
         if h_curr <= 0:
-            if h_curr == 0:
-                raise ValueError(
-                    "moment sequence does not define a positive-definite measure"
-                )
             raise ValueError(
                 "moment sequence does not define a positive-definite measure"
             )
-        if k < max_order - 1:
-            beta.append(h_curr / h_prev)
+        beta.append(h_curr / h_prev)
     return alpha, beta
 
 
@@ -141,9 +139,9 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
         raise ValueError("moment sequence must contain between 1 and 64 moments")
     if any(type(value) is not Fraction for value in moments):
         raise TypeError("moments must use exact Fractions")
-    if moments[0] == 0:
-        raise ValueError("the zeroth moment must be nonzero")
-    max_order = min(MAX_RECURRENCE_ORDER, (m - 1) // 2)
+    if moments[0] <= 0:
+        raise ValueError("the zeroth moment must be positive")
+    max_order = min(MAX_RECURRENCE_ORDER, m // 2)
     if max_order < 1:
         return RecurrenceCoefficients(alpha=(), beta=(moments[0],))
     alpha, beta = _monic_orthogonal_recurrence(moments, max_order)

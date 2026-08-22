@@ -10,6 +10,46 @@ from jacobian.math.cohomology_operations._models import (
 )
 
 
+def _reduce_support(
+    simplices: tuple[tuple[int, ...], ...],
+    coeffs: tuple[int, ...],
+) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...]]:
+    """Combine repeated simplex keys modulo 2 and drop vanished support.
+
+    The sparse cochain notation denotes one cochain, so a repeated key
+    contributes the sum of its coefficients in GF(2).
+    """
+    combined: dict[tuple[int, ...], int] = {}
+    for simplex, coeff in zip(simplices, coeffs, strict=True):
+        key = tuple(sorted(simplex))
+        combined[key] = (combined.get(key, 0) + coeff) % 2
+    surviving = {key: value for key, value in combined.items() if value != 0}
+    keys = sorted(surviving)
+    return tuple(keys), tuple(surviving[key] for key in keys)
+
+
+def _combined_face(
+    front: tuple[int, ...],
+    back: tuple[int, ...],
+    left_degree: int,
+    right_degree: int,
+) -> tuple[int, ...] | None:
+    """Return the simplex carrying ``front cup back`` via Alexander-Whitney.
+
+    The faces must meet at exactly one shared vertex that closes the front
+    face and opens the back face, and the sorted union must have the front
+    ``left_degree + 1`` vertices followed by the back ``right_degree + 1``.
+    """
+    if front[-1] != back[0]:
+        return None
+    combined = tuple(sorted(set(front) | set(back)))
+    if len(combined) != left_degree + right_degree + 1:
+        return None
+    if combined[: left_degree + 1] != front or combined[left_degree:] != back:
+        return None
+    return combined
+
+
 def _cup_product(
     left_simplices: tuple[tuple[int, ...], ...],
     left_coeffs: tuple[int, ...],
@@ -43,23 +83,10 @@ def _cup_product(
             rs_sorted = tuple(sorted(rs))
             if len(rs_sorted) != right_degree + 1:
                 continue
-            # Alexander-Whitney requires the faces meet at exactly one vertex
-            # and that vertex is the last of the front face and first of the back face.
-            if ls_sorted[-1] != rs_sorted[0]:
+            combined = _combined_face(ls_sorted, rs_sorted, left_degree, right_degree)
+            if combined is None:
                 continue
-            # Combined simplex is the sorted union; it must have size p+q+1
-            # and its front p+1 vertices must be ls and its last q+1 must be rs.
-            combined = tuple(sorted(set(ls_sorted) | set(rs_sorted)))
-            if len(combined) != left_degree + right_degree + 1:
-                continue
-            # Check that ls is the front face and rs is the back face of combined
-            if combined[: left_degree + 1] != ls_sorted:
-                continue
-            if combined[left_degree :] != rs_sorted:
-                continue
-            product = (lc_mod * rc_mod) % 2
-            if product != 0:
-                result_map[combined] = (result_map.get(combined, 0) + product) % 2
+            result_map[combined] = (result_map.get(combined, 0) + lc_mod * rc_mod) % 2
 
     # Filter zero results
     result_map = {k: v for k, v in result_map.items() if v % 2 != 0}
@@ -94,27 +121,27 @@ def compute_steenrod_square(request: SteenrodSquareRequest) -> SteenrodSquareRes
             square_degree=k,
         )
 
+    support_values, support_coeffs = _reduce_support(
+        request.simplex_values, request.simplex_coefficients
+    )
+
     if k == 0:
-        # Reduce coefficients mod 2 and drop zero support
-        reduced = tuple(c % 2 for c in request.simplex_coefficients)
-        filtered_values = tuple(v for v, c in zip(request.simplex_values, reduced, strict=False) if c != 0)
-        filtered_coeffs = tuple(c for c in reduced if c != 0)
-        is_zero = len(filtered_coeffs) == 0
+        is_zero = not support_coeffs
         return SteenrodSquareResult(
             result_degree=p,
-            result_simplex_values=filtered_values if not is_zero else (),
-            result_simplex_coefficients=filtered_coeffs if not is_zero else (),
+            result_simplex_values=support_values,
+            result_simplex_coefficients=support_coeffs,
             is_zero=is_zero,
             square_degree=k,
         )
 
     if k == p:
         simplices, coeffs = _cup_product(
-            request.simplex_values,
-            tuple(c % 2 for c in request.simplex_coefficients),
+            support_values,
+            support_coeffs,
             p,
-            request.simplex_values,
-            tuple(c % 2 for c in request.simplex_coefficients),
+            support_values,
+            support_coeffs,
             p,
         )
         is_zero = len(coeffs) == 0 or all(c == 0 for c in coeffs)

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import gcd
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
 from jacobian._exact import require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry._support import geometry_operation
@@ -25,7 +25,7 @@ class PinnedDistanceRequest(StrictModel):
     points: tuple[RationalPoint2D, ...] = Field(min_length=2, max_length=128)
 
     @model_validator(mode="after")
-    def require_unique_points(self):
+    def require_unique_points(self) -> Self:
         keys = tuple(
             (p.x.num, p.x.den, p.y.num, p.y.den)
             for p in self.points
@@ -46,49 +46,22 @@ class LineDistanceEntry(StrictModel):
     source_pairs: tuple[tuple[int, int], ...]
 
 
-class PinnedDistanceResult(StrictModel):
-    """The complete pinned-distance profile."""
-
-    anchor: RationalPoint2D
-    points: tuple[RationalPoint2D, ...]
-    lines: tuple[LineDistanceEntry, ...]
-    distinct_line_count: int = Field(ge=0)
-    min_squared_distance: LineDistanceEntry | None = None
-    complete: Literal[True] = True
-    method: Literal["EXACT_PINNED_DISTANCES"] = "EXACT_PINNED_DISTANCES"
-
-    @model_validator(mode="after")
-    def require_invariants(self):
-        if self.distinct_line_count != len(self.lines):
-            raise ValueError("distinct_line_count must match the line count")
-        if self.lines:
-            min_entry = min(self.lines, key=lambda e: Fraction(
-                int(e.squared_distance_numerator),
-                int(e.squared_distance_denominator),
-            ))
-            if self.min_squared_distance is None:
-                raise ValueError("min_squared_distance is required when lines exist")
-            if (
-                self.min_squared_distance.squared_distance_numerator != min_entry.squared_distance_numerator
-                or self.min_squared_distance.squared_distance_denominator != min_entry.squared_distance_denominator
-            ):
-                raise ValueError("min_squared_distance must be the minimum entry")
-        return self
+def _entry_distance(entry: LineDistanceEntry) -> Fraction:
+    return Fraction(
+        parse_canonical_integer(entry.squared_distance_numerator),
+        parse_canonical_integer(entry.squared_distance_denominator),
+    )
 
 
-def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceResult:
-    """Compute exact squared distances from an anchor to all pair-spanned lines."""
-    ax = request.anchor.x.as_fraction()
-    ay = request.anchor.y.as_fraction()
+def _profile_entries(
+    anchor: RationalPoint2D,
+    points: tuple[RationalPoint2D, ...],
+) -> tuple[LineDistanceEntry, ...]:
+    """Reconstruct the complete canonical line ledger from the configuration."""
+    ax = anchor.x.as_fraction()
+    ay = anchor.y.as_fraction()
+    pts = [(p.x.as_fraction(), p.y.as_fraction()) for p in points]
 
-    pts = [(p.x.as_fraction(), p.y.as_fraction()) for p in request.points]
-
-    # For each pair (i, j), compute the line and the squared distance from anchor
-    # Line through points i, j: direction (dx, dy) = (p_j - p_i)
-    # Squared distance from point P to line through A with direction D:
-    # d^2 = cross(D, P-A)^2 / |D|^2
-    # Entries are keyed by the canonical integer line equation a*x + b*y = c so
-    # that distinct lines are never merged; the distance is entry data.
     def _canonical_line_key(
         xi: Fraction, yi: Fraction, xj: Fraction, yj: Fraction
     ) -> tuple[str, str, str]:
@@ -131,7 +104,7 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
             cross = dx * (ay - yi) - dy * (ax - xi)
             norm_sq = dx * dx + dy * dy
             if norm_sq == 0:
-                continue  # duplicate points shouldn't happen, but be safe
+                raise ValueError("point-set coordinates must be unique")
             sq_dist = Fraction(cross * cross, norm_sq)
             key = _canonical_line_key(xi, yi, xj, yj)
             if key not in line_map:
@@ -145,22 +118,56 @@ def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceRe
     entries = []
     for key in sorted(line_map.keys()):
         pairs, num, den = line_map[key]
-        entry = LineDistanceEntry(
-            squared_distance_numerator=num,
-            squared_distance_denominator=den,
-            source_pairs=tuple(pairs),
+        entries.append(
+            LineDistanceEntry(
+                squared_distance_numerator=num,
+                squared_distance_denominator=den,
+                source_pairs=tuple(pairs),
+            )
         )
-        entries.append(entry)
+    return tuple(entries)
 
-    min_entry = min(entries, key=lambda e: Fraction(
-        int(e.squared_distance_numerator),
-        int(e.squared_distance_denominator),
-    )) if entries else None
+
+class PinnedDistanceResult(StrictModel):
+    """The complete pinned-distance profile."""
+
+    anchor: RationalPoint2D
+    points: tuple[RationalPoint2D, ...]
+    lines: tuple[LineDistanceEntry, ...]
+    distinct_line_count: int = Field(ge=0)
+    min_squared_distance: LineDistanceEntry | None = None
+    complete: Literal[True] = True
+    method: Literal["EXACT_PINNED_DISTANCES"] = "EXACT_PINNED_DISTANCES"
+
+    @model_validator(mode="after")
+    def require_invariants(self) -> Self:
+        expected_lines = _profile_entries(self.anchor, self.points)
+        if self.distinct_line_count != len(expected_lines):
+            raise ValueError("distinct_line_count must match the line count")
+        if self.lines != expected_lines:
+            raise ValueError(
+                "lines must be the exact profile derived from the retained anchor and points"
+            )
+        if expected_lines:
+            min_entry = min(expected_lines, key=_entry_distance)
+            if self.min_squared_distance is None:
+                raise ValueError("min_squared_distance is required when lines exist")
+            if self.min_squared_distance != min_entry:
+                raise ValueError("min_squared_distance must be the minimum entry")
+        elif self.min_squared_distance is not None:
+            raise ValueError("min_squared_distance must be absent without lines")
+        return self
+
+
+def compute_pinned_distances(request: PinnedDistanceRequest) -> PinnedDistanceResult:
+    """Compute exact squared distances from an anchor to all pair-spanned lines."""
+    entries = _profile_entries(request.anchor, request.points)
+    min_entry = min(entries, key=_entry_distance) if entries else None
 
     return PinnedDistanceResult(
         anchor=request.anchor,
         points=request.points,
-        lines=tuple(entries),
+        lines=entries,
         distinct_line_count=len(entries),
         min_squared_distance=min_entry,
     )

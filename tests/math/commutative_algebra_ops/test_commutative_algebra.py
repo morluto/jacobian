@@ -123,6 +123,7 @@ def test_catalog_contains_only_audited_operations() -> None:
         "polynomial.ideal.radical.compute",
         "polynomial.ideal.radical_membership.decide",
         "polynomial.ideal.quotient.compute",
+        "polynomial.ideal.saturation.compute",
     }
 
 

@@ -91,18 +91,15 @@ class TestRejection:
             )
 
     def test_admission_closed_under_returned_point(self) -> None:
-        """A near-unit point whose image would fail re-admission is rejected.
-
-        For p = (1/a, 1/b) the first estimator pass accepts, but feeding the
-        exact image back through the same predicate must also succeed since
-        inversion is an involution; admission requires both directions.
-        """
-        a = 10**2000
+        """A point whose image would not be reusable as a later input is
+        rejected: estimated output heights must stay within the reusable
+        quarter-limit cap, and the exact image must satisfy the predicate."""
+        a = 2**7500
         with pytest.raises(ValidationError, match="height bound"):
             CircleInversionRequest(
                 center={"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
                 power={"num": "1", "den": "1"},
-                point={"x": {"num": "1", "den": str(a)}, "y": {"num": "1", "den": str(a + 1)}},
+                point={"x": {"num": "1", "den": str(a)}, "y": {"num": "1", "den": str(3**7500)}},
             )
 
     def test_image_of_admitted_point_is_admitted(self) -> None:

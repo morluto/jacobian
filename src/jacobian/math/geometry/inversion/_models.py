@@ -20,17 +20,21 @@ def _inversion_height_bound_ok(
     """Conservative admission for inversion growth, closed under involution.
 
     Uses RationalHeight to estimate result digits of
-    q = c + (s/||p-c||^2)*(p-c).  Requires that both inverted coordinates
-    stay within MAX_CANONICAL_RATIONAL_DIGITS and that every input stays
-    within half of that limit. Because inverting an accepted input must
-    yield a point the same predicate admits, the exact image is checked
-    through the identical estimator; inversion is an involution, so this
-    single closure step makes the admitted domain closed under its
+    q = c + (s/||p-c||^2)*(p-c).  Inputs stay within half of the canonical
+    limit, while estimated output heights must stay within the quarter
+    limit -- the reusable input cap -- so a returned point remains usable
+    as a subsequent inversion input. Because inverting an accepted input
+    must yield a point the same predicate admits, the exact image is
+    checked through the identical estimator; inversion is an involution,
+    so this single closure step makes the admitted domain closed under its
     returned points.
     """
     from jacobian.math.geometry.inversion._operations import invert_point
 
     half = MAX_CANONICAL_RATIONAL_DIGITS // 2
+    # Outputs must be reusable as later inputs, whose coordinates are
+    # capped at half: keep estimated results within half of that.
+    reusable = MAX_CANONICAL_RATIONAL_DIGITS // 4
 
     def _admits(x: CanonicalRational, y: CanonicalRational) -> bool:
         for value in (x, y, power):
@@ -49,10 +53,9 @@ def _inversion_height_bound_ok(
         scale = RationalHeight.from_canonical(power).quotient(norm2)
         hx = sum_heights((RationalHeight.from_canonical(center.x), scale.product(dx)))
         hy = sum_heights((RationalHeight.from_canonical(center.y), scale.product(dy)))
-        # Closure: the image must itself be an admissible input, so its
-        # height is compared against the same input cap, not the full
-        # canonical limit.
-        return not hx.exceeds(half) and not hy.exceeds(half)
+        # Closure: the image must itself be an admissible, reusable input,
+        # so its height is compared against the reusable cap.
+        return not hx.exceeds(reusable) and not hy.exceeds(reusable)
 
     if not _admits(point.x, point.y):
         return False
@@ -99,7 +102,7 @@ class CircleInversionRequest(StrictModel):
         if not _inversion_height_bound_ok(self.center, self.power, self.point):
             raise ValueError(
                 "circle inversion inputs exceed the conservative height bound; "
-                f"each coordinate/power must be within {MAX_CANONICAL_RATIONAL_DIGITS // 2} digits and result within {MAX_CANONICAL_RATIONAL_DIGITS} digits"
+                f"each coordinate/power must be within {MAX_CANONICAL_RATIONAL_DIGITS // 2} digits and the reusable result within {MAX_CANONICAL_RATIONAL_DIGITS // 4} digits"
             )
         return self
 

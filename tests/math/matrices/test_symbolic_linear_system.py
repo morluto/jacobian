@@ -219,6 +219,37 @@ class TestSolutionGrowthAdmission:
         with pytest.raises(ValidationError, match="exponent"):
             SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
 
+    def test_rank_deficient_large_coefficients_rejected(self):
+        """All work-size minors can be structurally zero while a smaller
+        minor drives a large particular solution; lower-rank minors are
+        included in the growth bound."""
+        import pytest
+        from pydantic import ValidationError
+
+        def rf(num: int, den: int) -> RationalFunction:
+            terms = (
+                [{"coefficient": {"num": str(num), "den": str(den)}, "exponents": [0]}]
+                if num != 0
+                else []
+            )
+            return RationalFunction.model_validate(
+                {
+                    "variables": ["t"],
+                    "numerator": {"terms": terms},
+                    "denominator": {
+                        "terms": [
+                            {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
+                        ]
+                    },
+                }
+            )
+
+        big = 10**127
+        matrix = _matrix(("t",), ((rf(1, big), rf(0, 1)), (rf(0, 1), rf(0, 1))))
+        rhs = (rf(big, 1), rf(0, 1))
+        with pytest.raises(ValidationError, match="coefficient"):
+            SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
+
 
 class TestSourceBoundResult:
     """The retained result must be verifiable against its source system."""

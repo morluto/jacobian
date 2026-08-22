@@ -332,9 +332,9 @@ def _minor_expansion_bound(
 ) -> int:
     """Leibniz sum of per-entry growth factors for one minor of ``[A | b]``."""
     columns = len(entries[0])
-    work = len(row_indices)
+    size = len(row_indices)
     total = 0
-    for permutation in permutations(range(work)):
+    for permutation in permutations(range(size)):
         product = 1
         for row_position, column_position in enumerate(permutation):
             row_index = row_indices[row_position]
@@ -359,23 +359,31 @@ def _solution_component_growth_bound(
     """Conservative (terms, exponent, coefficient digits) for solved components.
 
     Every solution, particular-solution, and nullspace component is an
-    exact ratio of ``work``-size minors of the augmented system ``[A | b]``
-    over minors of ``A``, where ``work = min(rows, columns)`` (Cramer/RREF
-    structure). Both sides of such a ratio multiply up to ``2 * work``
-    entry factors, and each unreduced minor numerator expands over the
-    Leibniz sum of per-entry term-count products.
+    exact ratio of minors of the augmented system ``[A | b]`` over minors
+    of ``A`` of every size up to ``work = min(rows, columns)`` (Cramer/RREF
+    structure; rank-deficient systems are decided by their largest
+    nonvanishing minors). Both sides of such a ratio multiply up to
+    ``2 * size`` entry factors, and each unreduced minor numerator expands
+    over the Leibniz sum of per-entry term-count products.
     """
     rows = len(entries)
     columns = len(entries[0])
     work = min(rows, columns)
 
-    # Every work-size minor of [A | b] bounds the expansion work behind any
-    # solution component; A's own minors are a subset of these.
-    maximum_expansion = max(
-        _minor_expansion_bound(entries, rhs, row_indices, column_indices)
-        for row_indices in combinations(range(rows), work)
-        for column_indices in combinations(range(columns + 1), work)
-    )
+    # Every k-size minor of [A | b] with 1 <= k <= work bounds the
+    # expansion work behind some solution component; A's own minors are a
+    # subset of these. Lower-rank minors matter when all work-size minors
+    # are structurally zero.
+    maximum_expansion_by_size = [0] * (work + 1)
+    for size in range(1, work + 1):
+        for row_indices in combinations(range(rows), size):
+            for column_indices in combinations(range(columns + 1), size):
+                expansion = _minor_expansion_bound(
+                    entries, rhs, row_indices, column_indices
+                )
+                maximum_expansion_by_size[size] = max(
+                    maximum_expansion_by_size[size], expansion
+                )
 
     values = tuple(value for row in entries for value in row) + tuple(rhs)
     maximum_exponent = max(
@@ -397,10 +405,15 @@ def _solution_component_growth_bound(
         ),
         default=1,
     )
-    terms_bound = maximum_expansion**2
+    terms_bound = max(expansion**2 for expansion in maximum_expansion_by_size)
     exponent_bound = 2 * work * maximum_exponent
-    digits_bound = maximum_expansion * 2 * work * coefficient_digits + len(
-        str(max(maximum_expansion, 1))
+    digits_bound = max(
+        (
+            expansion * 2 * size * coefficient_digits + len(str(max(expansion, 1)))
+            for size, expansion in enumerate(maximum_expansion_by_size)
+            if size >= 1
+        ),
+        default=1,
     )
     return terms_bound, exponent_bound, digits_bound
 

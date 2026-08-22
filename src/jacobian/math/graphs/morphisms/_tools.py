@@ -232,7 +232,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
             example(
                 "c4_plain_no_triangle",
-                "A plain 4-cycle has no 3-cycle.",
+                (
+                    "A plain 4-cycle has no 3-cycle, so the decision is "
+                    "DOES_NOT_EXIST. Preconditions: length 3..20 and at most "
+                    "the vertex count, inside the per-pass path budget."
+                ),
                 CYCLE_C4_PLAIN,
             ),
         ),
@@ -262,7 +266,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
             example(
                 "p3_not_in_matching",
-                "A path P3 pattern does not embed in a host of two disjoint edges.",
+                (
+                    "A path P3 pattern does not embed in a host of two "
+                    "disjoint edges, so the decision is DOES_NOT_EXIST. "
+                    "Preconditions: at most 20 pattern vertices, no more "
+                    "pattern than host vertices, inside the per-pass budget."
+                ),
                 SUBGRAPH_P3_NOT_IN_MATCHING,
             ),
         ),

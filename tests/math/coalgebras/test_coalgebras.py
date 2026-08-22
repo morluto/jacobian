@@ -279,3 +279,23 @@ class TestEnumerationBudgetBeforeReplay:
         with pytest.raises(ValidationError, match="enumeration requires"):
             GroupLikeElementsResult(coalgebra=big, elements=(), count=0)
         assert time.monotonic() - started < 5
+
+
+class TestCanonicalResidues:
+    def test_noncanonical_structure_constant_rejected(self):
+        with pytest.raises(ValidationError, match="canonical residues"):
+            Coalgebra(
+                prime=2,
+                dimension=1,
+                comultiplication=(((3,),),),
+                counit=(1,),
+            )
+
+    def test_noncanonical_counit_rejected(self):
+        with pytest.raises(ValidationError, match="canonical residues"):
+            Coalgebra(
+                prime=3,
+                dimension=1,
+                comultiplication=(((1,),),),
+                counit=(5,),
+            )

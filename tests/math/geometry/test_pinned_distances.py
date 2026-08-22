@@ -102,3 +102,27 @@ class TestSourceReplayBinding:
                 distinct_line_count=genuine.distinct_line_count,
                 min_squared_distance=other,
             )
+
+
+class TestAdmissionBudget:
+    def test_huge_coordinates_rejected(self) -> None:
+        big = "1" + "0" * 256
+        with pytest.raises(ValidationError):
+            PinnedDistanceRequest(
+                anchor=_pt("0", "0"),
+                points=(
+                    _pt("1", "0"),
+                    RationalPoint2D(
+                        x=CanonicalRational(num="1", den=big),
+                        y=CanonicalRational(num="3", den=big),
+                    ),
+                ),
+            )
+
+    def test_point_count_capped_by_enumeration_budget(self) -> None:
+        points = tuple(
+            _pt(str(index), str(index * index))
+            for index in range(33)
+        )
+        with pytest.raises(ValidationError):
+            PinnedDistanceRequest(anchor=_pt("0", "0"), points=points)

@@ -46,8 +46,27 @@ class Coalgebra(StrictModel):
 
         if not isprime(self.prime):
             raise ValueError("prime must be a prime integer")
+        self._require_canonical_residues()
         self._require_coalgebra_axioms()
         return self
+
+    def _require_canonical_residues(self) -> None:
+        """Reject noncanonical entries: each must already lie in 0..p-1 to
+        avoid implicit field coercion and nonunique serialized identities."""
+        for row in self.comultiplication:
+            for v in row:
+                for value in v:
+                    if not 0 <= value < self.prime:
+                        raise ValueError(
+                            "structure constants must be canonical residues "
+                            f"in 0..{self.prime - 1}"
+                        )
+        for value in self.counit:
+            if not 0 <= value < self.prime:
+                raise ValueError(
+                    "counit entries must be canonical residues in "
+                    f"0..{self.prime - 1}"
+                )
 
     def _require_coalgebra_axioms(self) -> None:
         """Validate coassociativity and both counit identities modulo p.

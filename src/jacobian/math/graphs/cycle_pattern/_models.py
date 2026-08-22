@@ -221,7 +221,7 @@ def _require_embedding_witness_replay(
     mapping = dict(embedding.mapping)
     if set(mapping) != set(range(pattern_graph.vertex_count)):
         raise ValueError("embedding must cover every pattern vertex")
-    if any(hv >= host_graph.vertex_count for hv in mapping.values()):
+    if any(hv < 0 or hv >= host_graph.vertex_count for hv in mapping.values()):
         raise ValueError("embedding codomain must lie in the host graph")
     host_edges = {(min(a, b), max(a, b)) for a, b in host_graph.edges}
     for a, b in pattern_graph.edges:

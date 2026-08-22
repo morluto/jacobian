@@ -11,6 +11,13 @@ from jacobian._models import StrictModel
 
 MAX_GROUP_DEGREE = 64
 
+# Conjugacy classes materialize every group element as an array form
+# (``|G|`` permutations of length ``degree``).  The degree cap alone does
+# not bound this enumeration: S12 already has 479M elements.  Use a
+# conservative group-order bound derived before backend expansion via
+# Schreier-Sims (cheap) rather than after enumeration.
+MAX_CONJUGACY_CLASSES_GROUP_ORDER = 5000
+
 
 class PermutationGroupRequest(StrictModel):
     """A finite permutation group given by generator permutations on {0,...,n-1}."""
@@ -84,3 +91,72 @@ class GroupOrbitResult(StrictModel):
 
     orbit: tuple[int, ...] = Field(min_length=1, max_length=MAX_GROUP_DEGREE)
     point: int = Field(ge=0, le=MAX_GROUP_DEGREE - 1)
+
+
+class GroupConjugacyClassesRequest(StrictModel):
+    """Request the conjugacy classes of a permutation group.
+
+    The generated group must have order at most 5000 (degree up to 64
+    alone does not bound enumeration; e.g., S8 has order 40320 and S12
+    has order 479M). Validators compute ``|G|`` via Schreier-Sims and
+    reject groups exceeding the 5000-element bound before enumeration.
+    """
+
+    degree: int = Field(
+        ge=1,
+        le=MAX_GROUP_DEGREE,
+        description=(
+            "Degree n of the permutation group acting on {0,...,n-1}; "
+            "the generated group must have order at most 5000 (degree 64 alone "
+            "does not bound enumeration)."
+        ),
+    )
+    generators: tuple[tuple[int, ...], ...] = Field(
+        min_length=1,
+        max_length=MAX_GROUP_DEGREE,
+        description=(
+            "Generator permutations as array forms of length degree; "
+            "the generated group must have order at most 5000."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_valid_generators(self) -> Self:
+        for perm in self.generators:
+            if len(perm) != self.degree:
+                raise ValueError("each generator must have length equal to degree")
+            if sorted(perm) != list(range(self.degree)):
+                raise ValueError("each generator must be a permutation of 0..n-1")
+        # Bound enumeration by the generated group's order before invoking
+        # the SymPy backend which materializes every element.  The degree
+        # cap alone does not bound work: S12 has order 479M and would
+        # exhaust memory; compute |G| cheaply via Schreier-Sims and reject
+        # when it exceeds the conservative limit.
+        from sympy.combinatorics import Permutation, PermutationGroup
+
+        perms = [Permutation(list(p)) for p in self.generators]
+        group = PermutationGroup(perms)
+        order = int(group.order())
+        if order > MAX_CONJUGACY_CLASSES_GROUP_ORDER:
+            raise ValueError(
+                f"group order {order} exceeds the bounded maximum "
+                f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER} for conjugacy classes "
+                f"(would materialize |G|={order} elements)"
+            )
+        return self
+
+
+class GroupConjugacyClassesResult(StrictModel):
+    """The conjugacy classes of a permutation group as array forms."""
+
+    classes: tuple[tuple[tuple[int, ...], ...], ...]
+    method: Literal["SYMPY_CONJUGACY_CLASSES"] = "SYMPY_CONJUGACY_CLASSES"
+
+    @model_validator(mode="after")
+    def require_nonempty_classes(self) -> Self:
+        if not self.classes:
+            raise ValueError("conjugacy classes must be nonempty")
+        for cls in self.classes:
+            if not cls:
+                raise ValueError("each conjugacy class must be nonempty")
+        return self

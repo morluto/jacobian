@@ -47,7 +47,7 @@ def check_gram_certificate(
     request: GramCertificateRequest,
 ) -> GramCertificateResult:
     """Check that p = z^T Q z with Q symmetric PSD over QQ."""
-    n = len(request.monomial_basis)
+    len(request.monomial_basis)
 
     matrix = sympy.Matrix(
         [

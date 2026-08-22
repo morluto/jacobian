@@ -483,6 +483,14 @@ def _require_circumradius_source_replay(
     ]
     for entry in entries:
         first, second, third = entry.indices
+        # Bind entry identity to the source before either branch so a
+        # collinear entry cannot claim the wrong labels.
+        if entry.labels != (
+            points[first].label,
+            points[second].label,
+            points[third].label,
+        ):
+            raise ValueError("circumradius labels must match source points")
         ax, ay = coords[first]
         bx, by = coords[second]
         cx, cy = coords[third]
@@ -504,12 +512,6 @@ def _require_circumradius_source_replay(
                 "squared_circumradius must equal the exact value replayed "
                 "from the retained source points"
             )
-        if entry.labels != (
-            points[first].label,
-            points[second].label,
-            points[third].label,
-        ):
-            raise ValueError("circumradius labels must match the source points")
 
 
 class CircumradiusProfileResult(StrictModel):

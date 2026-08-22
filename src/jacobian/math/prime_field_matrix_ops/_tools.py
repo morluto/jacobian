@@ -48,9 +48,11 @@ def _op[
 
 
 _MATRIX = {
-    "prime": 2,
-    "entries": [[1, 1, 0], [0, 1, 1]],
-    "columns": 3,
+    "matrix": {
+        "prime": 2,
+        "entries": [[1, 1, 0], [0, 1, 1]],
+        "columns": 3,
+    }
 }
 
 _TOOLS: tuple[MathTool[Any, Any], ...] = (

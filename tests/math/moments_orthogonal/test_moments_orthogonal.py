@@ -22,6 +22,7 @@ from jacobian.math.moments_orthogonal._models import (
     HankelMatrixResult,
     JacobiMatrixRequest,
     JacobiMatrixResult,
+    RecurrenceCoefficients,
     RecurrenceCoefficientsRequest,
     RecurrenceCoefficientsResult,
 )
@@ -303,19 +304,23 @@ class TestWireAdapters:
         )
         result = compute_recurrence_coefficients(request)
         assert isinstance(result, RecurrenceCoefficientsResult)
-        assert len(result.alpha) == 3
+        assert len(result.coefficients.alpha) == 3
 
     def test_jacobi_wire(self) -> None:
         request = JacobiMatrixRequest(
-            alpha=(_cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            coefficients=RecurrenceCoefficients(
+                alpha=(_cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            ),
         )
         result = compute_jacobi_matrix(request)
         assert isinstance(result, JacobiMatrixResult)
     def test_christoffel_darboux_wire(self) -> None:
         request = ChristoffelDarbouxRequest(
-            alpha=(_cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            coefficients=RecurrenceCoefficients(
+                alpha=(_cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15)),
+            ),
             x=_cr(1, 1),
             y=_cr(1, 1),
         )
@@ -324,8 +329,10 @@ class TestWireAdapters:
 
     def test_gaussian_quadrature_wire(self) -> None:
         request = GaussianQuadratureRequest(
-            alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
-            beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+            coefficients=RecurrenceCoefficients(
+                alpha=(_cr(1, 2), _cr(1, 2), _cr(1, 2)),
+                beta=(_cr(1, 1), _cr(1, 12), _cr(1, 15), _cr(4, 45)),
+            ),
         )
         result = compute_gaussian_quadrature(request)
         assert isinstance(result, GaussianQuadratureResult)

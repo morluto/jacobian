@@ -1,7 +1,6 @@
 """Wire adapters for prime-field matrix operations."""
 
 from jacobian.math.prime_field_linear_algebra import (
-    PrimeFieldMatrix,
     nullspace,
     rank,
     rref,
@@ -16,52 +15,22 @@ from jacobian.math.prime_field_matrix_ops._models import (
 )
 
 
-def _matrix(request: RankRequest) -> PrimeFieldMatrix:
-    return PrimeFieldMatrix(
-        prime=request.prime,
-        entries=request.entries,
-        columns=request.columns,
-    )
-
-
 def compute_rank(request: RankRequest) -> RankResult:
-    matrix = _matrix(request)
-    return RankResult(
-        prime=request.prime,
-        entries=request.entries,
-        columns=request.columns,
-        rank=rank(matrix),
-    )
+    return RankResult(matrix=request.matrix, rank=rank(request.matrix))
 
 
 def compute_rref(request: RrefRequest) -> RrefResult:
-    matrix = PrimeFieldMatrix(
-        prime=request.prime,
-        entries=request.entries,
-        columns=request.columns,
-    )
-    rref_rows, pivot_columns = rref(matrix)
+    rref_rows, pivot_columns = rref(request.matrix)
     return RrefResult(
-        prime=request.prime,
-        entries=request.entries,
-        columns=request.columns,
+        matrix=request.matrix,
         rref_rows=rref_rows,
         pivot_columns=pivot_columns,
     )
 
 
 def compute_nullspace(request: NullspaceRequest) -> NullspaceResult:
-    matrix = PrimeFieldMatrix(
-        prime=request.prime,
-        entries=request.entries,
-        columns=request.columns,
-    )
-    ns = nullspace(matrix)
     return NullspaceResult(
-        prime=request.prime,
-        entries=request.entries,
-        columns=request.columns,
-        nullspace_rows=ns,
+        matrix=request.matrix, nullspace_rows=nullspace(request.matrix)
     )
 
 

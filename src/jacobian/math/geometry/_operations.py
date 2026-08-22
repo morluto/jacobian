@@ -470,6 +470,7 @@ def circumradius_profile(
             )
         )
     return CircumradiusProfileResult(
+        points=request.points,
         point_count=n,
         triple_count=len(entries),
         entries=tuple(entries),
@@ -570,6 +571,7 @@ def forbidden_patterns(request):
             break
 
     return ForbiddenPatternsResult(
+        configuration=request.configuration,
         point_count=n,
         has_collinear_triple=has_collinear,
         has_concyclic_quadruple=has_concyclic,

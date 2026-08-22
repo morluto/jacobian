@@ -499,6 +499,7 @@ class CircumradiusTripleEntry(StrictModel):
 
 
 class CircumradiusProfileResult(StrictModel):
+    points: tuple[LabelledPoint2D, ...] = Field(min_length=3, max_length=64)
     point_count: StrictInt = Field(ge=3, le=64)
     triple_count: StrictInt = Field(ge=1, le=41664)
     entries: tuple[CircumradiusTripleEntry, ...] = Field(min_length=1)
@@ -507,7 +508,10 @@ class CircumradiusProfileResult(StrictModel):
     @model_validator(mode="after")
     def require_complete_profile(self) -> Self:
         import math
+        from fractions import Fraction
 
+        if self.point_count != len(self.points):
+            raise ValueError("point_count must match the retained points length")
         expected = math.comb(self.point_count, 3)
         if self.triple_count != expected:
             raise ValueError("triple_count must equal comb(point_count, 3)")
@@ -523,12 +527,34 @@ class CircumradiusProfileResult(StrictModel):
                 raise ValueError("circumradius entries must be unique")
             if not (0 <= idx[0] < idx[1] < idx[2] < self.point_count):
                 raise ValueError("circumradius entry indices out of range")
+            # Check labels match points
+            expected_labels = (self.points[idx[0]].label, self.points[idx[1]].label, self.points[idx[2]].label)
+            if entry.labels != expected_labels:
+                raise ValueError("circumradius entry labels must match the source points")
             seen.add(idx)
         # Check canonical lexicographic order
         if tuple(self.entries) != tuple(sorted(self.entries, key=lambda e: e.indices)):
             raise ValueError("circumradius entries must be in lexicographic order")
         if len(seen) != expected:
             raise ValueError("circumradius profile must cover every unordered triple")
+        # Replay each entry's collinearity and radius from the retained points
+        coords = [(p.point.x.as_fraction(), p.point.y.as_fraction()) for p in self.points]
+        for entry in self.entries:
+            i, j, k = entry.indices
+            (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
+            cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+            is_collinear = cross == 0
+            if entry.collinear != is_collinear:
+                raise ValueError("circumradius entry collinear flag does not match the points")
+            if not is_collinear:
+                dab = (ax - bx) ** 2 + (ay - by) ** 2
+                dbc = (bx - cx) ** 2 + (by - cy) ** 2
+                dac = (ax - cx) ** 2 + (ay - cy) ** 2
+                expected_r2 = (dab * dbc * dac) / (4 * cross * cross)
+                if entry.squared_circumradius is None or entry.squared_circumradius.as_fraction() != expected_r2:
+                    raise ValueError("squared circumradius does not match the exact value")
+            elif entry.squared_circumradius is not None:
+                raise ValueError("collinear entry must not have a circumradius")
         return self
 
 
@@ -593,6 +619,7 @@ class ConcyclicQuadruple(StrictModel):
 class ForbiddenPatternsResult(StrictModel):
     """Result of screening a configuration for forbidden patterns."""
 
+    configuration: ForbiddenConfiguration
     point_count: StrictInt = Field(ge=1, le=128)
     has_collinear_triple: bool
     has_concyclic_quadruple: bool
@@ -603,6 +630,8 @@ class ForbiddenPatternsResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_witnesses(self) -> Self:
+        if len(self.configuration.points) != self.point_count:
+            raise ValueError("point_count must match the retained configuration")
         if self.has_collinear_triple is (self.collinear_triple is None):
             raise ValueError("exactly a collinear triple carries one witness")
         if self.has_concyclic_quadruple is (self.concyclic_quadruple is None):

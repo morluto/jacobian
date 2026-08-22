@@ -27,11 +27,14 @@ from jacobian.math.moments_orthogonal.values import (
 
 
 def _to_fraction(r: CanonicalRational) -> Fraction:
-    return Fraction(int(r.num), int(r.den))
+    # Canonical chunked parsing: int() on the decimal strings would trip
+    # CPython's 4300-digit conversion limit inside the admitted range.
+    return r.as_fraction()
 
 
 def _from_fraction(f: Fraction) -> CanonicalRational:
-    return CanonicalRational(num=str(f.numerator), den=str(f.denominator))
+    # Canonical chunked formatting mirrors _to_fraction.
+    return CanonicalRational.from_fraction(f)
 
 
 def _rational_det(matrix: list[list[Fraction]]) -> Fraction:
@@ -406,6 +409,18 @@ def _construct_quadrature_rule(
     return nodes_frac, weights
 
 
+def _build_quadrature_rule(prefix, order: int) -> tuple[list[Fraction], list[Fraction]]:
+    """Pure nodes+weights construction shared by execution and validation."""
+    from jacobian.math.moments_orthogonal._models import OrthogonalPolynomialRequest
+
+    moments = [_to_fraction(m) for m in prefix.moments]
+    family = compute_orthogonal_polynomials(
+        OrthogonalPolynomialRequest(prefix=prefix, max_degree=order)
+    )
+    p_n = [_to_fraction(c) for c in family.polynomials[order].coefficients]
+    return _construct_quadrature_rule(p_n, moments, order)
+
+
 def compute_gaussian_quadrature(
     request: GaussianQuadratureRequest,
 ) -> GaussianQuadratureRule:
@@ -415,26 +430,10 @@ def compute_gaussian_quadrature(
     degree-n orthogonal polynomial. We compute weights from the Vandermonde
     moment system.
     """
-    moments = [_to_fraction(m) for m in request.prefix.moments]
     n = request.order
     var = request.prefix.variable
 
-    # Build orthogonal polynomial family up to degree n
-    from jacobian.math.moments_orthogonal._models import OrthogonalPolynomialRequest
-
-    family = compute_orthogonal_polynomials(
-        OrthogonalPolynomialRequest(
-            prefix=request.prefix,
-            max_degree=n,
-        )
-    )
-
-    # The degree-n orthogonal polynomial p_n has n roots
-    # For exact rational moments, the roots may be irrational
-    # For now, we handle the case where roots are rational
-    # (e.g., symmetric distributions)
-
-    p_n = [_to_fraction(c) for c in family.polynomials[n].coefficients]
+    nodes_frac, weights = _build_quadrature_rule(request.prefix, n)
 
     # Find rational roots using the rational root theorem
     # For a monic polynomial with rational coefficients, rational roots
@@ -452,8 +451,6 @@ def compute_gaussian_quadrature(
     # Actually, let's use sympy for exact root finding
     import sympy  # noqa: F401 - availability guard for the exact backend
 
-    nodes_frac, weights = _construct_quadrature_rule(p_n, moments, n)
-
     if weights is None:
         raise ValueError("Vandermonde system is singular")
 
@@ -462,10 +459,11 @@ def compute_gaussian_quadrature(
         if w <= 0:
             raise ValueError(f"Non-positive weight {w} in Gaussian quadrature")
 
-    # Verify exactness through degree 2n-1
+    # Verify exactness through degree 2n-1 against the retained prefix.
+    prefix_moments = [_to_fraction(m) for m in request.prefix.moments]
     for k in range(2 * n):
         approx = sum(weights[i] * nodes_frac[i] ** k for i in range(n))
-        if k < len(moments) and approx != moments[k]:
+        if k < len(prefix_moments) and approx != prefix_moments[k]:
             raise ValueError(f"Quadrature not exact at degree {k}")
 
     nodes = [
@@ -481,6 +479,7 @@ def compute_gaussian_quadrature(
         nodes=tuple(nodes),
         variable=var,
         exactness_degree=2 * n - 1,
+        prefix=request.prefix,
     )
 
 

@@ -135,12 +135,68 @@ class QuadratureNode(StrictModel):
 
 
 class GaussianQuadratureRule(StrictModel):
-    """An exact Gaussian quadrature rule."""
+    """An exact Gaussian quadrature rule bound to its source prefix."""
 
     order: int = Field(ge=1, le=MAX_QUADRATURE_ORDER)
     nodes: tuple[QuadratureNode, ...]
     variable: str = Field(min_length=1, max_length=64)
     exactness_degree: int = Field(ge=0)
+    prefix: MomentFunctionalPrefix
+
+    @model_validator(mode="after")
+    def bind_rule_to_source(self) -> Self:
+        if len(self.nodes) != self.order:
+            raise ValueError(
+                f"order {self.order} rules carry exactly {self.order} nodes"
+            )
+        expected_degree = 2 * self.order - 1
+        if self.exactness_degree != expected_degree:
+            raise ValueError(
+                f"exactness degree must be {expected_degree} for order {self.order}"
+            )
+        # Pure-kernel replay: rebuild nodes and weights from the retained
+        # prefix without constructing another result model.
+
+        from jacobian.math.moments_orthogonal.operations import (
+            _to_fraction,
+        )
+
+        p_n = [
+            _to_fraction(c) for c in _family_p_n(self.prefix, self.order).coefficients
+        ]
+        moments = [_to_fraction(m) for m in self.prefix.moments]
+        nodes_frac, weights = _construct_quadrature_rule(p_n, moments, self.order)
+        if tuple(self.nodes) != tuple(
+            QuadratureNode(
+                node=CanonicalRational.from_fraction(node),
+                weight=CanonicalRational.from_fraction(weight),
+            )
+            for node, weight in zip(nodes_frac, weights, strict=True)
+        ):
+            raise ValueError(
+                "quadrature nodes must be the exact rule of the retained moment prefix"
+            )
+        return self
+
+
+def _family_p_n(prefix, order: int):
+    from jacobian.math.moments_orthogonal._models import OrthogonalPolynomialRequest
+    from jacobian.math.moments_orthogonal.operations import (
+        compute_orthogonal_polynomials,
+    )
+
+    family = compute_orthogonal_polynomials(
+        OrthogonalPolynomialRequest(prefix=prefix, max_degree=order)
+    )
+    return family.polynomials[order]
+
+
+def _construct_quadrature_rule(p_n, moments, order):
+    from jacobian.math.moments_orthogonal.operations import (
+        _construct_quadrature_rule as _kernel,
+    )
+
+    return _kernel(p_n, moments, order)
 
 
 __all__ = [

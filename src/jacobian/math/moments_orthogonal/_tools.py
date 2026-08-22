@@ -282,15 +282,17 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "+-1 and 5 at +-2: nodes +-3/2 with weight 12."
                 ),
                 {
-                    "moments": [
-                        {"num": "24", "den": "1"},
-                        {"num": "0", "den": "1"},
-                        {"num": "54", "den": "1"},
-                        {"num": "0", "den": "1"},
-                        {"num": "174", "den": "1"},
-                    ],
+                    "prefix": {
+                        "moments": [
+                            {"num": "24", "den": "1"},
+                            {"num": "0", "den": "1"},
+                            {"num": "54", "den": "1"},
+                            {"num": "0", "den": "1"},
+                            {"num": "174", "den": "1"},
+                        ],
+                        "variable": "x",
+                    },
                     "order": 2,
-                    "variable": "x",
                 },
             ),
         ),

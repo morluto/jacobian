@@ -3,6 +3,7 @@
 from fractions import Fraction
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.moments_orthogonal._models import (
@@ -16,11 +17,16 @@ from jacobian.math.moments_orthogonal._models import (
 )
 from jacobian.math.moments_orthogonal.operations import (
     compute_christoffel_darboux,
+    compute_gaussian_quadrature,
     compute_hankel_matrix,
     compute_jacobi_matrix,
     compute_orthogonal_polynomials,
     compute_recurrence,
     compute_shifted_hankel,
+)
+from jacobian.math.moments_orthogonal.values import (
+    GaussianQuadratureRule,
+    QuadratureNode,
 )
 
 
@@ -312,3 +318,41 @@ class TestGaussianQuadrature:
         uniform = tuple(CanonicalRational(num="1", den=str(k + 1)) for k in range(5))
         with pytest.raises(ValueError, match="rational"):
             GaussianQuadratureRequest(prefix=_prefix(uniform), order=2)
+
+
+class TestQuadratureSourceBinding:
+    def _prefix(self):
+        from jacobian.math.moments_orthogonal.values import (
+            MomentFunctionalPrefix,
+        )
+
+        moments = tuple(
+            CanonicalRational(num=v, den="1") for v in ("24", "0", "54", "0", "174")
+        )
+        return MomentFunctionalPrefix(moments=moments, variable="x")
+
+    def test_rule_retains_prefix_and_replays(self) -> None:
+        result = compute_gaussian_quadrature(
+            GaussianQuadratureRequest(prefix=self._prefix(), order=2)
+        )
+        assert result.prefix == self._prefix()
+        revalidated = GaussianQuadratureRule.model_validate(result.model_dump())
+        assert revalidated.exactness_degree == 3
+
+        payload = result.model_dump()
+        payload["exactness_degree"] = 999
+        with pytest.raises(ValidationError, match="exactness degree"):
+            GaussianQuadratureRule.model_validate(payload)
+
+    def test_node_count_matches_order(self) -> None:
+        one_node = QuadratureNode(
+            node={"num": "0", "den": "1"}, weight={"num": "1", "den": "1"}
+        )
+        with pytest.raises(ValueError, match="exactly 2 nodes"):
+            GaussianQuadratureRule(
+                order=2,
+                nodes=(one_node,),
+                variable="x",
+                exactness_degree=3,
+                prefix=self._prefix(),
+            )

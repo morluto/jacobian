@@ -214,6 +214,28 @@ class TestGaussianQuadrature:
             gaussian_quadrature((), (_frac(1, 1),))
 
 
+class TestGaussianQuadratureWireBoundaries:
+    def test_underflowing_beta_zero_rejected(self) -> None:
+        """beta_0 that converts to the double 0.0 must not reach Golub-Welsch."""
+        underflowing = _cr(1, 10**4000)
+        with pytest.raises(ValidationError, match="underflow"):
+            GaussianQuadratureRequest(alpha=(_cr(0, 1),), beta=(underflowing,))
+
+    def test_beta_zero_at_underflow_boundary_is_admitted(self) -> None:
+        boundary = _cr(1, 10**300)
+        request = GaussianQuadratureRequest(
+            alpha=(_cr(0, 1),), beta=(boundary, _cr(1, 12))
+        )
+        result = compute_gaussian_quadrature(request)
+        assert len(result.weights) == 1
+        assert result.weights[0].as_fraction() > 0
+
+    def test_beta_zero_below_underflow_boundary_rejected(self) -> None:
+        below = _cr(1, 10**301)
+        with pytest.raises(ValidationError, match="underflow"):
+            GaussianQuadratureRequest(alpha=(_cr(0, 1),), beta=(below,))
+
+
 # ---------------------------------------------------------------------------
 # Wire adapter tests
 # ---------------------------------------------------------------------------

@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Literal, Self
+from itertools import combinations
+from typing import Literal, NamedTuple, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
+from jacobian.math._rational_height import RationalHeight, sum_heights
 
 
 class RationalPoint2D(StrictModel):
@@ -42,6 +48,23 @@ def _on_segment(
     return _cross(_subtract(point, start), _subtract(end, start)) == 0 and all(
         min(left, right) <= value <= max(left, right)
         for value, left, right in zip(point, start, end, strict=True)
+    )
+
+
+def _minor3(
+    m: tuple[list[Fraction], ...],
+    r0: int,
+    r1: int,
+    r2: int,
+    c0: int,
+    c1: int,
+    c2: int,
+) -> Fraction:
+    """3x3 determinant of selected rows and columns."""
+    return (
+        m[r0][c0] * (m[r1][c1] * m[r2][c2] - m[r1][c2] * m[r2][c1])
+        - m[r0][c1] * (m[r1][c0] * m[r2][c2] - m[r1][c2] * m[r2][c0])
+        + m[r0][c2] * (m[r1][c0] * m[r2][c1] - m[r1][c1] * m[r2][c0])
     )
 
 
@@ -446,6 +469,40 @@ class LabelledPoint2D(StrictModel):
     point: RationalPoint2D
 
 
+def _circumradius_squared_height(
+    xs: tuple[RationalHeight, ...],
+    ys: tuple[RationalHeight, ...],
+    triple: tuple[int, int, int],
+) -> RationalHeight:
+    """Conservatively bound the decimal digits of one squared circumradius.
+
+    For a triple with side-squared sums ``d`` and cross product ``c``, the
+    exact value is ``R^2 = d_ab * d_bc * d_ac / (4 * c^2)``.  Every
+    subtraction, square, sum, and product is bounded by rational-height
+    propagation, so any accepted triple keeps its exact result within the
+    canonical limit regardless of reduction.
+    """
+    first, second, third = triple
+    dx_ab = sum_heights((xs[first], xs[second]))
+    dy_ab = sum_heights((ys[first], ys[second]))
+    dx_bc = sum_heights((xs[second], xs[third]))
+    dy_bc = sum_heights((ys[second], ys[third]))
+    dx_ac = sum_heights((xs[first], xs[third]))
+    dy_ac = sum_heights((ys[first], ys[third]))
+
+    def side(delta_x: RationalHeight, delta_y: RationalHeight) -> RationalHeight:
+        return sum_heights((delta_x.product(delta_x), delta_y.product(delta_y)))
+
+    cross = sum_heights((dx_ab.product(dy_ac), dy_ab.product(dx_ac)))
+    return (
+        side(dx_ab, dy_ab)
+        .product(side(dx_bc, dy_bc))
+        .product(side(dx_ac, dy_ac))
+        .quotient(cross.product(cross))
+        .quotient(RationalHeight(1, 1))
+    )
+
+
 class CircumradiusProfileRequest(StrictModel):
     """A bounded labelled rational planar point configuration."""
 
@@ -467,12 +524,23 @@ class CircumradiusProfileRequest(StrictModel):
         )
         if len(keys) != len(set(keys)):
             raise ValueError("point coordinates must be unique")
-        # Bound coordinates so that squared circumradius stays within the
-        # canonical result limit.  The formula R^2 = (|a-b|^2|b-c|^2|c-a|^2)/(4*(2*area)^2)
-        # can produce ~6x digit growth; capping at 4096 keeps outputs <32768.
         for item in self.points:
             require_bounded_rational(item.point.x, max_digits=4096, label="point x")
             require_bounded_rational(item.point.y, max_digits=4096, label="point y")
+        return self
+
+    @model_validator(mode="after")
+    def require_bounded_circumradius_growth(self) -> Self:
+        xs = tuple(RationalHeight.from_canonical(item.point.x) for item in self.points)
+        ys = tuple(RationalHeight.from_canonical(item.point.y) for item in self.points)
+        for triple in combinations(range(len(self.points)), 3):
+            if _circumradius_squared_height(xs, ys, triple).exceeds(
+                MAX_CANONICAL_RATIONAL_DIGITS
+            ):
+                raise ValueError(
+                    f"triple {triple} has a squared-circumradius height "
+                    f"exceeding the canonical {MAX_CANONICAL_RATIONAL_DIGITS}-digit limit"
+                )
         return self
 
 
@@ -590,9 +658,91 @@ class ConcyclicQuadruple(StrictModel):
         return self
 
 
+class _ForbiddenScreening(NamedTuple):
+    """Exhaustive enumeration outcome for one configuration."""
+
+    has_collinear_triple: bool
+    collinear_triple: tuple[int, int, int] | None
+    has_concyclic_quadruple: bool
+    concyclic_quadruple: tuple[int, int, int, int] | None
+    checked_triples: int
+    checked_quadruples: int
+
+
+def _collinear(
+    first: tuple[Fraction, Fraction],
+    second: tuple[Fraction, Fraction],
+    third: tuple[Fraction, Fraction],
+) -> bool:
+    (xi, yi), (xj, yj), (xk, yk) = first, second, third
+    return (xj - xi) * (yk - yi) - (yj - yi) * (xk - xi) == 0
+
+
+def _concyclic_det4(
+    first: tuple[Fraction, Fraction],
+    second: tuple[Fraction, Fraction],
+    third: tuple[Fraction, Fraction],
+    fourth: tuple[Fraction, Fraction],
+) -> Fraction:
+    def row(point: tuple[Fraction, Fraction]) -> list[Fraction]:
+        x, y = point
+        return [x * x + y * y, x, y, Fraction(1)]
+
+    m = (row(first), row(second), row(third), row(fourth))
+    return (
+        m[0][0] * _minor3(m, 1, 2, 3, 1, 2, 3)
+        - m[0][1] * _minor3(m, 1, 2, 3, 0, 2, 3)
+        + m[0][2] * _minor3(m, 1, 2, 3, 0, 1, 3)
+        - m[0][3] * _minor3(m, 1, 2, 3, 0, 1, 2)
+    )
+
+
+def _screen_forbidden_patterns(
+    points: tuple[ForbiddenLabelledPoint, ...],
+) -> _ForbiddenScreening:
+    """Enumerate every triple and quadruple of one configuration exactly."""
+    xy = [
+        (item.point.x.as_fraction(), item.point.y.as_fraction())
+        for item in points
+    ]
+    collinear_triple = None
+    checked_triples = 0
+    for i, j, k in combinations(range(len(xy)), 3):
+        checked_triples += 1
+        if _collinear(xy[i], xy[j], xy[k]):
+            collinear_triple = (i, j, k)
+            break
+
+    concyclic_quadruple = None
+    checked_quadruples = 0
+    for i, j, k, ell in combinations(range(len(xy)), 4):
+        checked_quadruples += 1
+        if _concyclic_det4(xy[i], xy[j], xy[k], xy[ell]) != 0:
+            continue
+        # A quadruple containing a collinear triple is degenerate: three
+        # distinct collinear points cannot lie on a finite circle.
+        if any(
+            _collinear(xy[a], xy[b], xy[c])
+            for a, b, c in ((i, j, k), (i, j, ell), (i, k, ell), (j, k, ell))
+        ):
+            continue
+        concyclic_quadruple = (i, j, k, ell)
+        break
+
+    return _ForbiddenScreening(
+        has_collinear_triple=collinear_triple is not None,
+        collinear_triple=collinear_triple,
+        has_concyclic_quadruple=concyclic_quadruple is not None,
+        concyclic_quadruple=concyclic_quadruple,
+        checked_triples=checked_triples,
+        checked_quadruples=checked_quadruples,
+    )
+
+
 class ForbiddenPatternsResult(StrictModel):
     """Result of screening a configuration for forbidden patterns."""
 
+    configuration: ForbiddenConfiguration
     point_count: StrictInt = Field(ge=1, le=128)
     has_collinear_triple: bool
     has_concyclic_quadruple: bool
@@ -603,6 +753,8 @@ class ForbiddenPatternsResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_witnesses(self) -> Self:
+        if self.point_count != len(self.configuration.points):
+            raise ValueError("point_count must match the retained configuration")
         if self.has_collinear_triple is (self.collinear_triple is None):
             raise ValueError("exactly a collinear triple carries one witness")
         if self.has_concyclic_quadruple is (self.concyclic_quadruple is None):
@@ -617,4 +769,36 @@ class ForbiddenPatternsResult(StrictModel):
             and self.concyclic_quadruple.fourth >= self.point_count
         ):
             raise ValueError("concyclic quadruple index exceeds configuration")
+        screening = _screen_forbidden_patterns(self.configuration.points)
+        expected_collinear = (
+            None
+            if screening.collinear_triple is None
+            else CollinearTriple(
+                first=screening.collinear_triple[0],
+                second=screening.collinear_triple[1],
+                third=screening.collinear_triple[2],
+            )
+        )
+        expected_concyclic = (
+            None
+            if screening.concyclic_quadruple is None
+            else ConcyclicQuadruple(
+                first=screening.concyclic_quadruple[0],
+                second=screening.concyclic_quadruple[1],
+                third=screening.concyclic_quadruple[2],
+                fourth=screening.concyclic_quadruple[3],
+            )
+        )
+        if (
+            self.has_collinear_triple != screening.has_collinear_triple
+            or self.has_concyclic_quadruple != screening.has_concyclic_quadruple
+            or self.collinear_triple != expected_collinear
+            or self.concyclic_quadruple != expected_concyclic
+            or self.checked_triples != screening.checked_triples
+            or self.checked_quadruples != screening.checked_quadruples
+        ):
+            raise ValueError(
+                "decisions and witnesses must equal the exhaustive enumeration "
+                "of the retained configuration"
+            )
         return self

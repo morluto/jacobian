@@ -18,10 +18,11 @@ from jacobian.math.moments_orthogonal.values import (
 MAX_RATIONAL_DIGITS = 4_096
 
 # Golub-Welsch converts admitted rationals to IEEE doubles; every accepted
-# coefficient must convert to a finite double and every subdiagonal entry must
-# stay far from both overflow and underflow so its square root is exact enough.
+# coefficient must convert to a finite double, beta_0 must survive conversion
+# as a positive mass, and every subdiagonal entry must stay far from both
+# overflow and underflow so its square root is exact enough.
 MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
-MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10 ** 300)
+MIN_QUADRATURE_MAGNITUDE = Fraction(1, 10 ** 300)
 
 
 def _to_fractions(
@@ -30,7 +31,9 @@ def _to_fractions(
     return tuple(v.as_fraction() for v in values)
 
 
-def _from_fractions(values) -> tuple[CanonicalRational, ...]:
+def _from_fractions(
+    values: tuple[Fraction, ...],
+) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(v) for v in values)
 
 
@@ -287,6 +290,10 @@ class GaussianQuadratureRequest(StrictModel):
             raise ValueError(
                 "beta_0 (the zeroth moment of a positive functional) must be nonzero"
             )
+        if beta_zero < MIN_QUADRATURE_MAGNITUDE:
+            raise ValueError(
+                "beta_0 falls below the quadrature finite-double underflow bound"
+            )
         # Subdiagonal entries feed math.sqrt after float conversion; they must
         # be positive and safely inside the finite IEEE-double range, and the
         # diagonal and mu_0 must convert to finite doubles without overflow.
@@ -296,7 +303,7 @@ class GaussianQuadratureRequest(StrictModel):
                 raise ValueError(
                     "subdiagonal beta entries must be positive squared-norm ratios"
                 )
-            if sub < MIN_QUADRATURE_SUBDIAGONAL:
+            if sub < MIN_QUADRATURE_MAGNITUDE:
                 raise ValueError(
                     "subdiagonal beta entries fall below the quadrature underflow bound"
                 )

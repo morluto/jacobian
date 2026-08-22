@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import ConfigDict, Field, model_validator
 
@@ -27,6 +27,25 @@ def _bounded_incidence_coordinate(value: CanonicalRational, label: str) -> None:
         max_digits=_INCIDENCE_INPUT_HEIGHT,
         label=label,
     )
+
+
+def _require_distinct_incidence_coordinates(points: Any) -> None:
+    """Reject coordinate-coincident labelled entries.
+
+    Coincident points make collinearity and concyclicity degenerate: every
+    triple containing a repeated point has zero cross product, so the
+    concyclicity guard would silently skip such quadruples and report a
+    false negative.  Labels alone do not establish distinct points.
+    """
+
+    coords = {
+        tuple(c.as_fraction() for c in point.coordinates) for point in points
+    }
+    if len(coords) != len(points):
+        raise ValueError(
+            "incidence configurations require pairwise distinct coordinates; "
+            "repeated labels at one location are rejected"
+        )
 
 
 class LabelledRationalPoint(StrictModel):
@@ -154,6 +173,7 @@ class CollinearTriplesRequest(StrictModel):
         for idx, point in enumerate(self.configuration.points):
             for dim, coord in enumerate(point.coordinates):
                 _bounded_incidence_coordinate(coord, f"point {idx} coordinate {dim}")
+        _require_distinct_incidence_coordinates(self.configuration.points)
         return self
 
 
@@ -205,6 +225,7 @@ class ConcyclicQuadruplesRequest(StrictModel):
         for idx, point in enumerate(self.configuration.points):
             for dim, coord in enumerate(point.coordinates):
                 _bounded_incidence_coordinate(coord, f"point {idx} coordinate {dim}")
+        _require_distinct_incidence_coordinates(self.configuration.points)
         return self
 
 
@@ -232,6 +253,15 @@ class IncidenceSearchResult(StrictModel):
 
         if len(self.configuration.points) != self.point_count:
             raise ValueError("point_count must match the retained configuration")
+        retained_dimension = len(self.configuration.points[0].coordinates)
+        if retained_dimension != self.dimension:
+            raise ValueError(
+                "dimension must match the retained configuration coordinates"
+            )
+        if retained_dimension != 2:
+            raise ValueError(
+                "incidence replay requires a planar retained configuration"
+            )
         if (
             self.kind == "CONCYCLIC_QUADRUPLE"
             and self.point_count > MAX_QUADRUPLE_SEARCH_POINTS
@@ -243,6 +273,15 @@ class IncidenceSearchResult(StrictModel):
             raise ValueError("a holds=True result must list at least one witness")
         if not self.holds and self.witnesses:
             raise ValueError("a holds=False result must list no witnesses")
+
+        # Apply the operation's arithmetic admission to the retained
+        # configuration before converting and replaying it: a deserialized
+        # result must not bypass the 64-digit coordinate cap through plain
+        # PointConfiguration, and its points must stay pairwise distinct.
+        for idx, point in enumerate(self.configuration.points):
+            for dim, coord in enumerate(point.coordinates):
+                _bounded_incidence_coordinate(coord, f"point {idx} coordinate {dim}")
+        _require_distinct_incidence_coordinates(self.configuration.points)
 
         expected_size = 3 if self.kind == "COLLINEAR_TRIPLE" else 4
         pts = [

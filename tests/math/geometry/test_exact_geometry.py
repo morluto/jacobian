@@ -216,3 +216,178 @@ class TestConcyclicQuadruples:
         )
         with pytest.raises(ValueError, match="planar"):
             ConcyclicQuadruplesRequest(configuration=PointConfiguration(points=pts))
+
+
+class TestIncidenceSearchResultSourceBinding:
+    def _point(self, label: str, *coords):
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.geometry.exact._models import LabelledRationalPoint
+
+        return LabelledRationalPoint(
+            label=label,
+            coordinates=tuple(
+                CanonicalRational.from_fraction(__import__("fractions").Fraction(c))
+                for c in coords
+            ),
+        )
+
+    def test_rejects_nonplanar_source_with_forged_collinear_witness(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            IncidenceSearchResult,
+            PointConfiguration,
+        )
+
+        configuration = PointConfiguration(
+            points=(
+                self._point("a", 0, 0, 0),
+                self._point("b", 1, 0, 1),
+                self._point("c", 2, 0, 0),
+            )
+        )
+        with pytest.raises(ValidationError, match="dimension must match"):
+            IncidenceSearchResult(
+                configuration=configuration,
+                dimension=2,
+                point_count=3,
+                holds=True,
+                witnesses=((0, 1, 2),),
+                kind="COLLINEAR_TRIPLE",
+            )
+
+    def test_rejects_one_dimensional_source_without_index_error(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            IncidenceSearchResult,
+            PointConfiguration,
+        )
+
+        configuration = PointConfiguration(
+            points=(self._point("a", 0), self._point("b", 1), self._point("c", 2))
+        )
+        with pytest.raises(ValidationError, match="dimension must match"):
+            IncidenceSearchResult(
+                configuration=configuration,
+                dimension=2,
+                point_count=3,
+                holds=False,
+                witnesses=(),
+                kind="COLLINEAR_TRIPLE",
+            )
+
+    def test_rejects_nonplanar_source_for_concyclic_kind(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            IncidenceSearchResult,
+            PointConfiguration,
+        )
+
+        configuration = PointConfiguration(
+            points=(
+                self._point("a", 0, 0, 0),
+                self._point("b", 1, 0, 0),
+                self._point("c", 0, 1, 0),
+                self._point("d", 0, 0, 1),
+            )
+        )
+        with pytest.raises(ValidationError, match="dimension must match"):
+            IncidenceSearchResult(
+                configuration=configuration,
+                dimension=2,
+                point_count=4,
+                holds=True,
+                witnesses=((0, 1, 2, 3),),
+                kind="CONCYCLIC_QUADRUPLE",
+            )
+
+    def test_planar_result_round_trips(self):
+        from jacobian.math.geometry.exact._models import (
+            CollinearTriplesRequest,
+            IncidenceSearchResult,
+            PointConfiguration,
+        )
+        from jacobian.math.geometry.exact._operations import compute_collinear_triples
+
+        configuration = PointConfiguration(
+            points=(
+                self._point("a", 0, 0),
+                self._point("b", 1, 0),
+                self._point("c", 2, 0),
+            )
+        )
+        result = compute_collinear_triples(
+            CollinearTriplesRequest(configuration=configuration)
+        )
+        replayed = IncidenceSearchResult.model_validate(result.model_dump())
+        assert replayed == result
+        assert replayed.holds is True
+        assert replayed.witnesses == ((0, 1, 2),)
+
+
+class TestIncidenceDistinctCoordinatesAndCap:
+    def test_requests_reject_coordinate_coincident_points(self):
+        """(1,0),(1,0),(0,1),(-1,0) all lie on the unit circle, but a
+        repeated point makes the concyclicity guard skip the quadruple;
+        coincident coordinates are therefore rejected at the boundary."""
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            CollinearTriplesRequest,
+            ConcyclicQuadruplesRequest,
+            PointConfiguration,
+        )
+
+        def _cr(value):
+            return CanonicalRational(num=str(value), den="1")
+
+        points = (
+            LabelledRationalPoint(label="a", coordinates=(_cr(1), _cr(0))),
+            LabelledRationalPoint(label="b", coordinates=(_cr(1), _cr(0))),
+            LabelledRationalPoint(label="c", coordinates=(_cr(0), _cr(1))),
+            LabelledRationalPoint(label="d", coordinates=(_cr(-1), _cr(0))),
+        )
+        with pytest.raises(ValidationError, match="distinct coordinates"):
+            CollinearTriplesRequest(configuration=PointConfiguration(points=points))
+        with pytest.raises(ValidationError, match="distinct coordinates"):
+            ConcyclicQuadruplesRequest(
+                configuration=PointConfiguration(points=points)
+            )
+
+    def test_result_rejects_retained_configuration_over_coordinate_cap(self):
+        """A deserialized result whose retained configuration carries
+        beyond-cap rationals must be rejected before any replay work."""
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.canonical import format_canonical_integer
+        from jacobian.math.geometry.exact._models import (
+            IncidenceSearchResult,
+            PointConfiguration,
+        )
+
+        def _cr(value):
+            return CanonicalRational(num=str(value), den="1")
+
+        huge_num = format_canonical_integer(10**30000)
+        huge = CanonicalRational(num=huge_num, den="1")
+        points = (
+            LabelledRationalPoint(label="a", coordinates=(huge, _cr(0))),
+            LabelledRationalPoint(label="b", coordinates=(_cr(0), _cr(1))),
+            LabelledRationalPoint(label="c", coordinates=(_cr(1), _cr(1))),
+        )
+        with pytest.raises(ValidationError, match="point 0 coordinate 0"):
+            IncidenceSearchResult(
+                configuration=PointConfiguration(points=points),
+                dimension=2,
+                point_count=3,
+                holds=False,
+                witnesses=(),
+                kind="COLLINEAR_TRIPLE",
+            )

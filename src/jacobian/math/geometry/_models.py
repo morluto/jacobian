@@ -13,6 +13,10 @@ from jacobian._models import StrictModel
 
 MAX_CONFIGURATION_POINTS = 32
 MAX_COORDINATE_DIGITS = 256
+# Joint bound for circumradius: n * max_digits <= 2048 keeps serialized output
+# under the 10 MiB transport envelope (32 points with 256-digit coords would be
+# 8192 and is rejected; 32 points with 64-digit coords is 2048 and passes).
+_MAX_CIRCUMRADIUS_N_TIMES_DIGITS = 2048
 
 
 def _require_bounded_point(point: RationalPoint2D) -> None:
@@ -27,6 +31,31 @@ def _require_bounded_point(point: RationalPoint2D) -> None:
 def _require_bounded_configuration(points: tuple[RationalPoint2D, ...]) -> None:
     for point in points:
         _require_bounded_point(point)
+
+
+def _require_circumradius_aggregate_bound(points: tuple[RationalPoint2D, ...]) -> None:
+    n = len(points)
+    if n == 0:
+        return
+    max_digits = max(
+        max(len(p.x.num.lstrip("-")), len(p.x.den), len(p.y.num.lstrip("-")), len(p.y.den))
+        for p in points
+    )
+    if n * max_digits > _MAX_CIRCUMRADIUS_N_TIMES_DIGITS:
+        raise ValueError(
+            f"circumradius profile with {n} points and {max_digits}-digit coordinates "
+            f"would exceed the transport envelope (n*digits={n*max_digits} > "
+            f"{_MAX_CIRCUMRADIUS_N_TIMES_DIGITS}); reduce point count or coordinate size"
+        )
+    # Also bound total serialized estimate
+    triples = n * (n - 1) * (n - 2) // 6
+    # Rough estimate: each radius_squared needs ~4*max_digits digits (numerator+denominator)
+    estimated_chars = triples * (4 * max_digits + 50)
+    if estimated_chars > 8_000_000:
+        raise ValueError(
+            f"circumradius profile estimated size {estimated_chars} chars exceeds 8 MiB; "
+            "reduce point count or coordinate size"
+        )
 
 
 def _is_collinear_frac(
@@ -641,10 +670,21 @@ class ConvexPolygonTriangulationResult(StrictModel):
 
 
 class GeneralPositionRequest(StrictModel):
-    """Search a bounded point configuration for collinear triples and concyclic quadruples."""
+    """Search a bounded point configuration for collinear triples and concyclic quadruples.
+
+    Each rational coordinate is bounded to at most 256 digits in numerator and
+    denominator (operation-specific, stricter than the global 32,768-digit
+    CanonicalRational limit).
+    """
 
     points: tuple[RationalPoint2D, ...] = Field(
-        min_length=3, max_length=MAX_CONFIGURATION_POINTS
+        min_length=3,
+        max_length=MAX_CONFIGURATION_POINTS,
+        description=(
+            "Bounded point configuration with 3..32 points; each rational coordinate "
+            f"(numerator/denominator) is bounded to at most {MAX_COORDINATE_DIGITS} digits "
+            "(operation-specific limit, stricter than CanonicalRational's 32768-digit global limit)"
+        ),
     )
 
     @model_validator(mode="after")
@@ -694,15 +734,29 @@ class GeneralPositionResult(StrictModel):
 
 
 class CircumradiusProfileRequest(StrictModel):
-    """Compute circumradius data for every unordered triple in a point configuration."""
+    """Compute circumradius data for every unordered triple in a point configuration.
+
+    Each rational coordinate is bounded to at most 256 digits, and the aggregate
+    output size is bounded by n*max_digits <= 2048 and an 8 MiB estimate (to keep
+    the profile under the 10 MiB transport envelope).
+    """
 
     points: tuple[RationalPoint2D, ...] = Field(
-        min_length=3, max_length=MAX_CONFIGURATION_POINTS
+        min_length=3,
+        max_length=MAX_CONFIGURATION_POINTS,
+        description=(
+            "Bounded point configuration with 3..32 points; each rational coordinate "
+            f"is bounded to at most {MAX_COORDINATE_DIGITS} digits (operation-specific, "
+            "stricter than CanonicalRational's 32768-digit limit); additionally "
+            "n*max_digits <= 2048 and estimated serialized size <=8 MiB to keep the "
+            f"C(n,3) profile under the 10 MiB envelope"
+        ),
     )
 
     @model_validator(mode="after")
     def require_unique(self) -> Self:
         _require_bounded_configuration(self.points)
+        _require_circumradius_aggregate_bound(self.points)
         keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")
@@ -742,6 +796,7 @@ class CircumradiusProfileResult(StrictModel):
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
         _require_bounded_configuration(self.points)
+        _require_circumradius_aggregate_bound(self.points)
         keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")

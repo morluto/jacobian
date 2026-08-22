@@ -17,9 +17,10 @@ CONFIGURATION_OPERATIONS = (
     geometry_operation(
         "geometry.points.general_position.search",
         "Search for collinear triples and concyclic quadruples",
-        "Given a bounded rational planar point configuration, exhaustively "
-        "find all collinear triples and all concyclic quadruples, or establish "
-        "that none exist. Returns source-labelled witnesses with sorted indices.",
+        "Given a bounded rational planar point configuration (3..32 points, each "
+        "coordinate at most 256 digits) exhaustively find all collinear triples and "
+        "all concyclic quadruples, or establish that none exist. Returns "
+        "source-labelled witnesses with sorted indices.",
         GeneralPositionRequest,
         GeneralPositionResult,
         general_position_search,
@@ -30,7 +31,8 @@ CONFIGURATION_OPERATIONS = (
             example(
                 "square_general_position",
                 "Search a unit square for collinear triples and concyclic "
-                "quadruples; the four vertices of a square are concyclic.",
+                "quadruples; the four vertices of a square are concyclic (points "
+                "are bounded: 3..32 points, each coordinate <=256 digits).",
                 {
                     "points": [
                         {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
@@ -45,9 +47,10 @@ CONFIGURATION_OPERATIONS = (
     geometry_operation(
         "geometry.points.circumradius_profile.compute",
         "Compute circumradius data for all triples",
-        "Given a bounded rational planar point configuration, return the "
-        "complete circumradius squared for every unordered triple, with "
-        "explicit degenerate (collinear) disposition. Each entry includes "
+        "Given a bounded rational planar point configuration (3..32 points, each "
+        "coordinate at most 256 digits, aggregate n*max_digits<=2048 and estimated "
+        "8 MiB envelope) return the complete circumradius squared for every unordered "
+        "triple, with explicit degenerate (collinear) disposition. Each entry includes "
         "the source-labelled triple indices and the exact rational squared "
         "circumradius.",
         CircumradiusProfileRequest,
@@ -60,7 +63,8 @@ CONFIGURATION_OPERATIONS = (
             example(
                 "unit_triangle",
                 "Compute circumradius profile for a triangle; the three "
-                "vertices must be unique points.",
+                "vertices must be unique points and coordinates are bounded to "
+                "256 digits with aggregate n*digits<=2048.",
                 {
                     "points": [
                         {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},

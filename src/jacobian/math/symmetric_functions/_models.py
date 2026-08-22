@@ -50,6 +50,8 @@ class SchurExpansionRequest(StrictModel):
     def require_matching_dimensions(self) -> Self:
         if len(self.variables) != len(self.point):
             raise ValueError("variables and point must have the same length")
+        if len(set(self.variables)) != len(self.variables):
+            raise ValueError("variables must be distinct (duplicate axis)")
         for coord in self.point:
             if len(str(abs(coord))) > _MAX_POINT_COORDINATE_DIGITS:
                 raise ValueError(

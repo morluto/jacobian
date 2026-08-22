@@ -87,7 +87,7 @@ def subgroup_lattice(
     """Return all subgroups of a permutation group.
 
     Returns a list of (generators_of_subgroup, subgroup_order) tuples.
-    Bounded to groups of order at most 512 to avoid exponential blowup.
+    Bounded to groups of order at most 64 to avoid exponential blowup.
     """
     from sympy.combinatorics import Permutation, PermutationGroup
 
@@ -101,9 +101,9 @@ def subgroup_lattice(
             raise ValueError("each generator must be a permutation of 0..n-1")
         perms.append(Permutation(list(perm)))
     group = PermutationGroup(perms)
-    if int(group.order()) > 512:
+    if int(group.order()) > 64:
         raise ValueError(
-            "subgroup lattice computation is bounded to groups of order at most 512"
+            "subgroup lattice computation is bounded to groups of order at most 64"
         )
     # Traverse distinct subgroups instead of the 2^|G|-element power set:
     # every subgroup is the closure of an existing subgroup extended by one

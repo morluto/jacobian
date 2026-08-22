@@ -249,6 +249,13 @@ class IdealSaturationRequest(StrictModel):
             raise ValueError(
                 "saturation polynomial must use the ideal's ordered ring"
             )
+        if any(
+            sum(term.exponents) > MAX_INPUT_EXPONENT
+            for term in self.saturation_polynomial.polynomial.terms
+        ):
+            raise ValueError(
+                f"saturation polynomial exceeds total degree {MAX_INPUT_EXPONENT}"
+            )
         return self
 
 
@@ -408,6 +415,11 @@ class EliminationIdealRequest(StrictModel):
                 raise ValueError(
                     "eliminated variables must be a subset of the ideal's variables"
                 )
+        remaining = tuple(v for v in self.ideal.variables if v not in eliminated)
+        if not remaining:
+            raise ValueError(
+                "elimination cannot remove every variable; at least one must remain"
+            )
         return self
 
 

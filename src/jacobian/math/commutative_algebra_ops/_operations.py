@@ -180,6 +180,21 @@ def compute_groebner_basis(request: GroebnerBasisRequest) -> GroebnerBasisResult
         for expr in basis
     )
 
+    if not basis_generators:
+        # sympy.groebner yields an empty iterable for the zero ideal
+        # represented by a single zero polynomial; canonicalize to the
+        # domain's zero-polynomial generator.
+        from jacobian.math.polynomials.values import (
+            RationalPolynomial,
+            SparseRationalPolynomial,
+        )
+
+        zero = RationalPolynomial(
+            variables=variables,
+            polynomial=SparseRationalPolynomial(terms=()),
+        )
+        basis_generators = (zero,)
+
     ideal = RationalPolynomialIdeal(
         variables=variables,
         generators=basis_generators,
@@ -205,21 +220,44 @@ def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFor
     ]
     poly = rational_polynomial_to_sympy(request.polynomial).as_expr()
 
-    # Membership is decided only against a Groebner basis; reducing against
-    # the raw generators computes a division remainder that proves nothing.
-    basis = sympy.groebner(
-        ideal_generators,
-        *variable_symbols,
-        order="grevlex",
-        domain=sympy.QQ,
-    )
-    _, remainder = sympy.reduced(
-        poly,
-        list(basis.exprs),
-        *variable_symbols,
-        order="grevlex",
-        domain=sympy.QQ,
-    )
+    import signal
+
+    class _NormalFormTimeout(TimeoutError):
+        pass
+
+    def _on_timeout(signum, frame):
+        raise _NormalFormTimeout("normal form Groebner computation exceeded wall time")
+
+    # Use a conservative 10-second budget for the inline Groebner computation;
+    # hard ideals would otherwise occupy the execution path indefinitely.
+    prev_handler = signal.signal(signal.SIGALRM, _on_timeout)
+    signal.setitimer(signal.ITIMER_REAL, 10)
+    try:
+        # Membership is decided only against a Groebner basis; reducing against
+        # the raw generators computes a division remainder that proves nothing.
+        basis = sympy.groebner(
+            ideal_generators,
+            *variable_symbols,
+            order="grevlex",
+            domain=sympy.QQ,
+        )
+        _, remainder = sympy.reduced(
+            poly,
+            list(basis.exprs),
+            *variable_symbols,
+            order="grevlex",
+            domain=sympy.QQ,
+        )
+    except _NormalFormTimeout:
+        # Map timeout to a typed result that indicates incompleteness rather than
+        # occupying the execution path indefinitely.  For now, raise as ValueError
+        # to be caught as a validation error; the operation's contract is to
+        # return a remainder, so a timeout is a host failure that should be
+        # surfaced as such.  We choose to raise a clear error.
+        raise TimeoutError("normal form computation exceeded the 10s wall-time bound")
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, prev_handler)
 
     remainder_poly = rational_polynomial_from_sympy(
         sympy.Poly(remainder, *variable_symbols, domain=sympy.QQ),
@@ -257,12 +295,30 @@ def compute_elimination_ideal(request: EliminationIdealRequest) -> EliminationId
         for generator in request.ideal.generators
     ]
 
-    basis = sympy.groebner(
-        ideal_generators,
-        *ordered_symbols,
-        order="lex",
-        domain=sympy.QQ,
-    )
+    import signal
+
+    class _EliminationTimeout(TimeoutError):
+        pass
+
+    def _on_elim_timeout(signum, frame):
+        raise _EliminationTimeout("elimination Groebner computation exceeded wall_seconds")
+
+    prev_handler = signal.signal(signal.SIGALRM, _on_elim_timeout)
+    signal.setitimer(signal.ITIMER_REAL, request.resource_budget.wall_seconds)
+    try:
+        basis = sympy.groebner(
+            ideal_generators,
+            *ordered_symbols,
+            order="lex",
+            domain=sympy.QQ,
+        )
+    except _EliminationTimeout:
+        raise TimeoutError(
+            f"elimination computation exceeded the enforced {request.resource_budget.wall_seconds}s budget"
+        )
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, prev_handler)
 
     remaining_symbols = symbols_for_variables(tuple(remaining))
     elimination_generators = []

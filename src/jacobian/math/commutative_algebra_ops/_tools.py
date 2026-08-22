@@ -240,7 +240,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "normal_form_xy",
-                "Reduce x^2 modulo <x^2 - y^2> in Q[x,y]; x^2 is in the ideal.",
+                "Reduce x^2 modulo <x^2 - y^2> in Q[x,y]; the remainder is y^2, so x^2 is not in the ideal.",
                 {
                     "ideal": _ideal(
                         ("x", "y"),

@@ -1,4 +1,4 @@
-"""Domain-owned cohomology operations."""
+"""Domain functions for cohomology operations over GF(2) and Z/p."""
 
 from __future__ import annotations
 
@@ -14,18 +14,16 @@ def _reduce_support(
     simplices: tuple[tuple[int, ...], ...],
     coeffs: tuple[int, ...],
 ) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...]]:
-    """Combine repeated simplex keys modulo 2 and drop vanished support.
+    """Merge duplicate simplex keys, summing coefficients in GF(2)."""
 
-    The sparse cochain notation denotes one cochain, so a repeated key
-    contributes the sum of its coefficients in GF(2).
-    """
-    combined: dict[tuple[int, ...], int] = {}
-    for simplex, coeff in zip(simplices, coeffs, strict=True):
+    merged: dict[tuple[int, ...], int] = {}
+    for simplex, coefficient in zip(simplices, coeffs, strict=True):
         key = tuple(sorted(simplex))
-        combined[key] = (combined.get(key, 0) + coeff) % 2
-    surviving = {key: value for key, value in combined.items() if value != 0}
-    keys = sorted(surviving)
-    return tuple(keys), tuple(surviving[key] for key in keys)
+        merged[key] = (merged.get(key, 0) + coefficient) % 2
+    surviving = sorted(key for key, value in merged.items() if value != 0)
+    values = tuple(surviving)
+    coefficients = tuple(merged[key] for key in surviving)
+    return values, coefficients
 
 
 def _combined_face(
@@ -57,6 +55,7 @@ def _cup_product(
     right_simplices: tuple[tuple[int, ...], ...],
     right_coeffs: tuple[int, ...],
     right_degree: int,
+    allowed_faces: frozenset[tuple[int, ...]] | None = None,
 ) -> tuple[list[tuple[int, ...]], list[int]]:
     """Compute the cup product of two cochains over GF(2) via Alexander-Whitney.
 
@@ -66,7 +65,9 @@ def _cup_product(
 
     Over GF(2), all signs are 1. Only pairs where the front face of the
     combined simplex equals the left simplex and the back face equals the
-    right simplex contribute.
+    right simplex contribute. When ``allowed_faces`` is provided, target
+    simplices outside the ambient complex are dropped: the cup product lives
+    on the ambient complex's simplices only.
     """
     result_map: dict[tuple[int, ...], int] = {}
     for ls, lc in zip(left_simplices, left_coeffs, strict=False):
@@ -86,6 +87,8 @@ def _cup_product(
             combined = _combined_face(ls_sorted, rs_sorted, left_degree, right_degree)
             if combined is None:
                 continue
+            if allowed_faces is not None and combined not in allowed_faces:
+                continue
             result_map[combined] = (result_map.get(combined, 0) + lc_mod * rc_mod) % 2
 
     # Filter zero results
@@ -93,6 +96,57 @@ def _cup_product(
     simplices = sorted(result_map.keys())
     coeffs = [result_map[s] for s in simplices]
     return simplices, coeffs
+
+
+def steenrod_square_fields(
+    cochain_degree: int,
+    simplex_values: tuple[tuple[int, ...], ...],
+    simplex_coefficients: tuple[int, ...],
+    square_degree: int,
+    ambient_simplices: tuple[tuple[int, ...], ...],
+) -> tuple[int, tuple[tuple[int, ...], ...], tuple[int, ...], bool]:
+    """Pure Sq^k core returning ``(degree, values, coefficients, is_zero)``.
+
+    Kept free of models so result validation can replay the exact
+    computation without recursion.
+    """
+    p = cochain_degree
+    k = square_degree
+
+    if k > p:
+        return (p + k, (), (), True)
+
+    support_values, support_coeffs = _reduce_support(
+        simplex_values, simplex_coefficients
+    )
+
+    if k == 0:
+        is_zero = not support_coeffs
+        return (p, support_values, support_coeffs, is_zero)
+
+    if k == p:
+        allowed = frozenset(ambient_simplices) if ambient_simplices else None
+        simplices, coeffs = _cup_product(
+            support_values,
+            support_coeffs,
+            p,
+            support_values,
+            support_coeffs,
+            p,
+            allowed_faces=allowed,
+        )
+        is_zero = len(coeffs) == 0 or all(c == 0 for c in coeffs)
+        return (
+            2 * p,
+            tuple(simplices) if not is_zero else (),
+            tuple(coeffs) if not is_zero else (),
+            is_zero,
+        )
+
+    # Intermediate squares 0<k<p are not supported; request validation should have rejected.
+    raise ValueError(
+        "intermediate Steenrod squares 0<k<deg require cup-i products and are not supported"
+    )
 
 
 def compute_steenrod_square(request: SteenrodSquareRequest) -> SteenrodSquareResult:
@@ -109,53 +163,44 @@ def compute_steenrod_square(request: SteenrodSquareRequest) -> SteenrodSquareRes
     - Sq^k(x) = 0 for k > n (instability)
     - Sq^k(x) for 0 < k < n requires the cup-i product structure
     """
-    p = request.cochain_degree
-    k = request.square_degree
-
-    if k > p:
-        return SteenrodSquareResult(
-            result_degree=p + k,
-            result_simplex_values=(),
-            result_simplex_coefficients=(),
-            is_zero=True,
-            square_degree=k,
-        )
-
-    support_values, support_coeffs = _reduce_support(
-        request.simplex_values, request.simplex_coefficients
+    (
+        result_degree,
+        result_simplex_values,
+        result_simplex_coefficients,
+        is_zero,
+    ) = steenrod_square_fields(
+        request.cochain_degree,
+        request.simplex_values,
+        request.simplex_coefficients,
+        request.square_degree,
+        request.ambient_simplices,
+    )
+    return SteenrodSquareResult(
+        cochain_degree=request.cochain_degree,
+        simplex_values=request.simplex_values,
+        simplex_coefficients=request.simplex_coefficients,
+        square_degree=request.square_degree,
+        ambient_simplices=request.ambient_simplices,
+        result_degree=result_degree,
+        result_simplex_values=result_simplex_values,
+        result_simplex_coefficients=result_simplex_coefficients,
+        is_zero=is_zero,
     )
 
-    if k == 0:
-        is_zero = not support_coeffs
-        return SteenrodSquareResult(
-            result_degree=p,
-            result_simplex_values=support_values,
-            result_simplex_coefficients=support_coeffs,
-            is_zero=is_zero,
-            square_degree=k,
-        )
 
-    if k == p:
-        simplices, coeffs = _cup_product(
-            support_values,
-            support_coeffs,
-            p,
-            support_values,
-            support_coeffs,
-            p,
-        )
-        is_zero = len(coeffs) == 0 or all(c == 0 for c in coeffs)
-        return SteenrodSquareResult(
-            result_degree=2 * p,
-            result_simplex_values=tuple(simplices) if not is_zero else (),
-            result_simplex_coefficients=tuple(coeffs) if not is_zero else (),
-            is_zero=is_zero,
-            square_degree=k,
-        )
+def bockstein_fields(
+    prime: int,
+    cochain_degree: int,
+    simplex_coefficients: tuple[int, ...],
+) -> tuple[int, tuple[tuple[int, ...], ...], tuple[int, ...], bool]:
+    """Pure Bockstein core returning ``(degree, values, coefficients, is_zero)``."""
 
-    # Intermediate squares 0<k<p are not supported; request validation should have rejected.
+    if not simplex_coefficients or all(
+        c % prime == 0 for c in simplex_coefficients
+    ):
+        return (cochain_degree + 1, (), (), True)
     raise ValueError(
-        "intermediate Steenrod squares 0<k<deg require cup-i products and are not supported"
+        "non-zero Bockstein requires the ambient simplicial complex and is not supported"
     )
 
 
@@ -170,25 +215,31 @@ def compute_bockstein(request: BocksteinRequest) -> BocksteinResult:
     the Bockstein is provably zero. Non-zero inputs are rejected at the
     request boundary as unsupported.
     """
-    p = request.prime
-    n = request.cochain_degree
-
-    # Only zero cocycles are supported; non-zero requires the complex.
-    if not request.simplex_coefficients or all(c % p == 0 for c in request.simplex_coefficients):
-        return BocksteinResult(
-            result_degree=n + 1,
-            result_simplex_values=(),
-            result_simplex_coefficients=(),
-            is_zero=True,
-            prime=p,
-        )
-
-    raise ValueError(
-        "non-zero Bockstein requires the ambient simplicial complex and is not supported"
+    (
+        result_degree,
+        result_simplex_values,
+        result_simplex_coefficients,
+        is_zero,
+    ) = bockstein_fields(
+        request.prime,
+        request.cochain_degree,
+        request.simplex_coefficients,
+    )
+    return BocksteinResult(
+        prime=request.prime,
+        cochain_degree=request.cochain_degree,
+        simplex_values=request.simplex_values,
+        simplex_coefficients=request.simplex_coefficients,
+        result_degree=result_degree,
+        result_simplex_values=result_simplex_values,
+        result_simplex_coefficients=result_simplex_coefficients,
+        is_zero=is_zero,
     )
 
 
 __all__ = [
+    "bockstein_fields",
     "compute_bockstein",
     "compute_steenrod_square",
+    "steenrod_square_fields",
 ]

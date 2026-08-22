@@ -14,19 +14,17 @@ def compute_circle_inversion(request: CircleInversionRequest) -> CircleInversion
 
     from jacobian.math.geometry._models import RationalPoint2D as GeometryPoint
 
-    cx = request.center_x.as_fraction()
-    cy = request.center_y.as_fraction()
-    s = request.power.as_fraction()
-    px = request.point_x.as_fraction()
-    py = request.point_y.as_fraction()
-
-    result = invert_point(cx, cy, s, px, py)
+    result = invert_point(
+        request.center.x.as_fraction(),
+        request.center.y.as_fraction(),
+        request.power.as_fraction(),
+        request.point.x.as_fraction(),
+        request.point.y.as_fraction(),
+    )
     return CircleInversionResult(
-        center_x=request.center_x,
-        center_y=request.center_y,
+        center=request.center,
         power=request.power,
-        point_x=request.point_x,
-        point_y=request.point_y,
+        point=request.point,
         inverted_point=GeometryPoint(
             x=CanonicalRational.from_fraction(result[0]),
             y=CanonicalRational.from_fraction(result[1]),

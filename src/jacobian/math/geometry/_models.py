@@ -7,10 +7,24 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
 
-_MAX_CIRCUMRADIUS_COORDINATE_DIGITS = 4096
+# R^2 = (|a-b|^2|b-c|^2|c-a|^2)/(4*cross^2). Coordinate numerators and
+# denominators carry at most d digits, so each coordinate difference carries
+# at most 2d+1 numerator and 2d denominator digits, each squared side length
+# at most 8d+5 numerator and 8d denominator digits (their product at most
+# 24d+15 and 24d), and the cross product at most 8d+3 numerator and 8d
+# denominator digits (cross^2 at most 16d+6 and 16d). Both reduced components
+# of R^2 therefore stay within 40d+15 digits. Derive d from the canonical
+# limit so rational coordinate growth cannot push the result past it; a plain
+# 4x estimate is unsound for reciprocal-denominated coordinates whose
+# differences compound denominators.
+_MAX_CIRCUMRADIUS_COORDINATE_DIGITS = (MAX_CANONICAL_RATIONAL_DIGITS - 15) // 40
 _MAX_PINNED_COORDINATE_DIGITS = 2048
 
 

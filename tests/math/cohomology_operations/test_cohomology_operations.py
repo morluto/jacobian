@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
 from jacobian.math.cohomology_operations._models import (
     BocksteinRequest,
     SteenrodSquareRequest,
+    SteenrodSquareResult,
 )
 from jacobian.math.cohomology_operations._operations import (
     compute_bockstein,
@@ -48,20 +51,62 @@ class TestSteenrodSquare:
 
     def test_sq_n_cup_n(self):
         """Sq^n(x) = x cup x for a degree-n cocycle."""
-        # For degree 1, x supported on edges (0,1) and (1,2) cups to triangle (0,1,2)
+        # For degree 1, x supported on edges (0,1) and (1,2) cups to triangle
+        # (0,1,2) only when that 2-simplex lies in the ambient complex.
+        ambient = ((0, 1), (1, 2), (0, 1, 2))
         result = compute_steenrod_square(SteenrodSquareRequest(
             cochain_degree=1,
             simplex_values=((0, 1), (1, 2)),
             simplex_coefficients=(1, 1),
             square_degree=1,
+            ambient_simplices=ambient,
         ))
         assert result.result_degree == 2
-        # Cups that don't share the middle vertex should not contribute
+        assert result.result_simplex_values == ((0, 1, 2),)
+
+    def test_top_square_requires_target_in_ambient(self):
+        """Edges [0,1],[1,2] of a graph emit no absent triangle [0,1,2]."""
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="ambient"):
+            SteenrodSquareRequest(
+                cochain_degree=1,
+                simplex_values=((0, 1), (1, 2)),
+                simplex_coefficients=(1, 1),
+                square_degree=1,
+            )
+        # With the triangle absent from the complex, the square is zero.
+        result = compute_steenrod_square(SteenrodSquareRequest(
+            cochain_degree=1,
+            simplex_values=((0, 1), (1, 2)),
+            simplex_coefficients=(1, 1),
+            square_degree=1,
+            ambient_simplices=((0, 1), (1, 2)),
+        ))
+        assert result.is_zero
+        assert result.result_simplex_values == ()
+
+    def test_support_must_lie_in_ambient_complex(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="inside the ambient"):
+            SteenrodSquareRequest(
+                cochain_degree=1,
+                simplex_values=((5, 6),),
+                simplex_coefficients=(1,),
+                square_degree=1,
+                ambient_simplices=((0, 1),),
+            )
+
+    # Cups that don't share the middle vertex should not contribute
+    def test_disjoint_edges_do_not_contribute(self):
         result2 = compute_steenrod_square(SteenrodSquareRequest(
             cochain_degree=1,
             simplex_values=((0, 1), (0, 2)),
             simplex_coefficients=(1, 1),
             square_degree=1,
+            ambient_simplices=((0, 1), (0, 2), (0, 1, 2)),
         ))
         assert result2.is_zero
 
@@ -104,8 +149,30 @@ class TestSteenrodSquare:
             simplex_values=((0, 1), (0, 1)),
             simplex_coefficients=(1, 1),
             square_degree=1,
+            ambient_simplices=((0, 1), (0, 2), (1, 2), (0, 1, 2)),
         ))
         assert result.is_zero
+
+    def test_forged_result_rejected(self):
+        """An authored payload cannot detach from the retained cochain."""
+        import pytest
+        from pydantic import ValidationError
+
+        request = SteenrodSquareRequest(
+            cochain_degree=1,
+            simplex_values=((0, 1), (1, 2)),
+            simplex_coefficients=(1, 1),
+            square_degree=1,
+            ambient_simplices=((0, 1), (1, 2), (0, 1, 2)),
+        )
+        genuine = compute_steenrod_square(request)
+        assert genuine.result_simplex_values == ((0, 1, 2),)
+        payload = genuine.model_dump()
+        payload["result_simplex_values"] = [[2, 3, 4]]
+        payload["result_simplex_coefficients"] = [1]
+        payload["is_zero"] = False
+        with pytest.raises(ValidationError, match="replay"):
+            SteenrodSquareResult.model_validate(payload)
 
 
 class TestBockstein:

@@ -5,6 +5,8 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
+from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry.inversion._models import (
     CircleInversionRequest,
     CircleInversionResult,
@@ -14,6 +16,17 @@ from jacobian.math.geometry.inversion._operations import (
     invert_point,
 )
 from jacobian.math.geometry.inversion._tools import TOOLS
+
+
+def _point(x: int, y: int):
+    from jacobian.math.geometry._models import RationalPoint2D
+
+    return RationalPoint2D.model_validate(
+        {
+            "x": {"num": str(x), "den": "1"},
+            "y": {"num": str(y), "den": "1"},
+        }
+    )
 
 
 class TestKnownAnswers:
@@ -77,22 +90,18 @@ class TestRejection:
     def test_zero_power_rejected(self) -> None:
         with pytest.raises(ValidationError):
             CircleInversionRequest(
-                center_x={"num": "0", "den": "1"},
-                center_y={"num": "0", "den": "1"},
+                center=_point(0, 0),
                 power={"num": "0", "den": "1"},
-                point_x={"num": "1", "den": "1"},
-                point_y={"num": "0", "den": "1"},
+                point=_point(1, 0),
             )
 
 
 class TestWireAdapter:
     def test_compute_circle_inversion(self) -> None:
         request = CircleInversionRequest(
-            center_x={"num": "0", "den": "1"},
-            center_y={"num": "0", "den": "1"},
+            center=_point(0, 0),
             power={"num": "1", "den": "1"},
-            point_x={"num": "4", "den": "1"},
-            point_y={"num": "0", "den": "1"},
+            point=_point(4, 0),
         )
         result = compute_circle_inversion(request)
         assert result.inverted_point.x.num == "1"
@@ -102,11 +111,9 @@ class TestWireAdapter:
 
     def test_non_origin_center(self) -> None:
         request = CircleInversionRequest(
-            center_x={"num": "3", "den": "1"},
-            center_y={"num": "2", "den": "1"},
+            center=_point(3, 2),
             power={"num": "5", "den": "1"},
-            point_x={"num": "1", "den": "1"},
-            point_y={"num": "7", "den": "1"},
+            point=_point(1, 7),
         )
         result = compute_circle_inversion(request)
         assert isinstance(result, CircleInversionResult)
@@ -126,3 +133,47 @@ class TestToolsAndExamples:
             request = tool.request_type.model_validate(ex.input)
             result = tool.run(request)
             assert result is not None
+
+
+class TestSourceBindingAndAdmission:
+    def test_result_composes_as_next_request_point(self) -> None:
+        """The serialized inverted point feeds the next call unchanged."""
+        request = CircleInversionRequest(
+            center=_point(0, 0),
+            power={"num": "1", "den": "1"},
+            point=_point(4, 2),
+        )
+        result = compute_circle_inversion(request)
+        follow_up = CircleInversionRequest.model_validate(
+            {
+                "center": result.inverted_point.model_dump(),
+                "power": {"num": "1", "den": "1"},
+                "point": result.point.model_dump(),
+            }
+        )
+        assert follow_up.point == result.point
+
+    def test_multiplicative_growth_rejected_before_execution(self) -> None:
+        """Six independent ~7,900-digit components overflow the result."""
+        big = "1" + "0" * 7900
+        with pytest.raises(ValidationError, match="canonical"):
+            CircleInversionRequest(
+                center=_point(0, 0),
+                power=CanonicalRational(num=big, den="3"),
+                point=RationalPoint2D(
+                    x=CanonicalRational(num="1", den=big),
+                    y=CanonicalRational(num="3", den=big),
+                ),
+            )
+
+    def test_moderate_components_still_admitted(self) -> None:
+        big = "1" + "0" * 100
+        request = CircleInversionRequest(
+            center=_point(0, 0),
+            power=CanonicalRational(num=big, den="3"),
+            point=RationalPoint2D(
+                x=CanonicalRational(num="1", den=big),
+                y=CanonicalRational(num="3", den=big),
+            ),
+        )
+        assert compute_circle_inversion(request).inverted_point is not None

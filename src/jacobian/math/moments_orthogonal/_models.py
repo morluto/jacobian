@@ -7,7 +7,11 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
@@ -198,6 +202,102 @@ class JacobiMatrixResult(JacobiMatrixRequest):
 # ---------------------------------------------------------------------------
 
 
+def _digits(count: int) -> int:
+    return len(str(abs(count)))
+
+
+def _require_bounded_kernel_growth(
+    alpha: tuple[Fraction, ...],
+    beta: tuple[Fraction, ...],
+    x: Fraction,
+    y: Fraction,
+) -> None:
+    """Bound recurrence and kernel digit growth before the backend runs.
+
+    The forward recurrence p_{k+1}(t) = (t - alpha_k) p_k(t) - beta_k p_{k-1}(t)
+    compounds numerator and denominator digits across steps; derive a
+    conservative upper bound from the concrete request (coefficient sizes,
+    evaluation-point sizes, and order) and reject any request whose kernel or
+    evaluated polynomials could exceed the canonical limit.
+    """
+    limit = MAX_CANONICAL_RATIONAL_DIGITS
+
+    def parts(value: Fraction) -> tuple[int, int]:
+        return _digits(value.numerator), _digits(value.denominator)
+
+    xn, xd = parts(x)
+    yn, yd = parts(y)
+    an = [_digits(v.numerator) for v in alpha]
+    ad = [_digits(v.denominator) for v in alpha]
+    bn = [_digits(v.numerator) for v in beta]
+    bd = [_digits(v.denominator) for v in beta]
+
+    def recurrence(point_n: int, point_d: int) -> tuple[list[int], list[int]]:
+        # Digit bounds (numerator, denominator) of p_k evaluated at one point;
+        # no reduction credit is taken, so these are strict upper bounds.
+        pn = [0]
+        pd = [0]
+        if not alpha:
+            return pn, pd
+        # u_k = point - alpha_k over a common denominator; each evaluation
+        # point derives its own bounds so coefficient sizes are charged at
+        # every step.
+        un = [max(point_n + ad[k], an[k] + point_d) + 1 for k in range(len(alpha))]
+        ud = [point_d + ad[k] for k in range(len(alpha))]
+        pn.append(un[0])
+        pd.append(ud[0])
+        for k in range(1, len(alpha)):
+            w_num, w_den = bn[k], bd[k]
+            pn.append(
+                max(
+                    un[k] + pn[k] + w_den + pd[k - 1],
+                    w_num + pn[k - 1] + ud[k] + pd[k],
+                )
+                + 1
+            )
+            pd.append(ud[k] + pd[k] + w_den + pd[k - 1])
+        return pn, pd
+
+    px_num, px_den = recurrence(xn, xd)
+    py_num, py_den = recurrence(yn, yd)
+
+    # The kernel evaluates p_0..p_{n-1} and advances h by beta[1..n-1].
+    for k in range(len(alpha)):
+        if max(px_num[k], px_den[k], py_num[k], py_den[k]) > limit:
+            raise ValueError(
+                "Christoffel-Darboux recurrence growth exceeds the canonical "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result limit; reduce "
+                "coefficient or evaluation-point magnitude"
+            )
+
+    h_num = 0
+    h_den = 0
+    total_den = 0
+    term_bounds: list[tuple[int, int]] = []
+    for k in range(len(alpha)):
+        h_num += bn[k]
+        h_den += bd[k]
+        # term_k = p_k(x) p_k(y) / h_k before reduction.
+        term_bounds.append((px_num[k] + py_num[k] + h_den,
+                            px_den[k] + py_den[k] + h_num))
+        total_den += term_bounds[-1][1]
+    # Summing over the common denominator multiplies each term numerator by
+    # every other term's denominator; reduction only shrinks the result.
+    kernel_num = (
+        max(term_num + total_den - term_den for term_num, term_den in term_bounds)
+        + len(term_bounds).bit_length()
+        + 1
+        if term_bounds
+        else 1
+    )
+    if max(kernel_num, total_den) > limit:
+        raise ValueError(
+            "Christoffel-Darboux kernel growth exceeds the canonical "
+            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result limit; reduce "
+            "coefficient or evaluation-point magnitude"
+        )
+
+
 class ChristoffelDarbouxRequest(StrictModel):
     alpha: tuple[CanonicalRational, ...] = Field(min_length=0)
     beta: tuple[CanonicalRational, ...] = Field(min_length=1)
@@ -207,23 +307,18 @@ class ChristoffelDarbouxRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_coefficients(self) -> Self:
         _validate_alpha_beta(self.alpha, self.beta)
-        # Bound x,y so exact polynomial values stay within CanonicalRational limits.
-        # For order n, p_n(x) ~ x^n, so n * digits(x) must stay < 32,768.
-        max_output_digits = 32768
-        order = len(self.alpha)
-        # Conservative per-input digit bound: leave headroom for coefficient growth.
-        max_input_digits = max_output_digits // max(1, order) if order else MAX_RATIONAL_DIGITS
-        # Cap at 2048 to be safe even for order 16 (16*2048=32768).
-        max_input_digits = min(max_input_digits, 2048)
         require_bounded_rational(
-            self.x, max_digits=max_input_digits, label="x"
+            self.x, max_digits=MAX_RATIONAL_DIGITS, label="x"
         )
         require_bounded_rational(
-            self.y, max_digits=max_input_digits, label="y"
+            self.y, max_digits=MAX_RATIONAL_DIGITS, label="y"
         )
-        # Also ensure the computed kernel would not overflow before execution
-        # by a conservative estimate: kernel terms can be as large as x^order.
-        # If order*digits would exceed limit, reject early.
+        _require_bounded_kernel_growth(
+            tuple(v.as_fraction() for v in self.alpha),
+            tuple(v.as_fraction() for v in self.beta),
+            self.x.as_fraction(),
+            self.y.as_fraction(),
+        )
         return self
 
 

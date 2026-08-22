@@ -204,6 +204,30 @@ class TestChristoffelDarboux:
         assert result.kernel == _frac(0, 1)
         assert result.polynomials_evaluated == (_frac(1, 1),)
 
+    def test_huge_coefficients_charged_at_every_recurrence_step(self) -> None:
+        """x=y=0 with 4,096-digit alphas must overflow the admission bound."""
+        big = "1" + "0" * 4095  # exactly 4,096 digits: admissible per coefficient
+        with pytest.raises((ValueError, ValidationError), match="growth exceeds"):
+            ChristoffelDarbouxRequest(
+                alpha=tuple(_cr(int(big), 1) for _ in range(15)),
+                beta=tuple(_cr(1, 1) for _ in range(16)),
+                x=_cr(0, 1),
+                y=_cr(0, 1),
+            )
+
+    def test_large_y_charged_at_every_recurrence_step(self) -> None:
+        """A huge y must be charged at every step, not only the first."""
+        alpha = tuple(_frac(0, 1) for _ in range(15))
+        beta = tuple(_frac(1, 1) for _ in range(16))
+        y = Fraction(10) ** 3000
+        with pytest.raises((ValueError, ValidationError), match="growth exceeds"):
+            ChristoffelDarbouxRequest(
+                alpha=tuple(_cr(a.numerator, a.denominator) for a in alpha),
+                beta=tuple(_cr(b.numerator, b.denominator) for b in beta),
+                x=_cr(2, 1),
+                y=_cr(y.numerator, y.denominator),
+            )
+
 
 # ---------------------------------------------------------------------------
 # Gaussian quadrature

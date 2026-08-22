@@ -261,6 +261,47 @@ def christoffel_darboux(
     )
 
 
+def _validate_quadrature_float_domain(
+    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+) -> None:
+    """Finite-Float64 admission shared by native and wire callers.
+
+    The Golub-Welsch backend converts every coefficient to an IEEE double.
+    Reject the unsupported domain here so callers get a typed rejection
+    instead of an OverflowError at conversion, and so no accepted input
+    underflows to all-zero weights.
+    """
+    from jacobian.math.moments_orthogonal._models import (
+        MAX_QUADRATURE_MAGNITUDE,
+        MIN_QUADRATURE_SUBDIAGONAL,
+    )
+
+    if beta[0] < MIN_QUADRATURE_SUBDIAGONAL:
+        raise ValueError("beta_0 falls below the quadrature underflow bound")
+    for value in (*alpha, *beta):
+        if abs(value) > MAX_QUADRATURE_MAGNITUDE:
+            raise ValueError(
+                "quadrature coefficients exceed the finite-float magnitude bound"
+            )
+
+
+    if beta[0] < MIN_QUADRATURE_SUBDIAGONAL:
+        raise ValueError("beta_0 falls below the quadrature underflow bound")
+    for value in (*alpha, *beta):
+        if abs(value) > MAX_QUADRATURE_MAGNITUDE:
+            raise ValueError(
+                "quadrature coefficients exceed the finite-float magnitude bound"
+            )
+    for index in range(1, min(len(alpha), len(beta))):
+        sub = beta[index]
+        if sub <= 0:
+            raise ValueError("subdiagonal beta entries must be positive")
+        if sub < MIN_QUADRATURE_SUBDIAGONAL:
+            raise ValueError(
+                "subdiagonal beta entries fall below the quadrature underflow bound"
+            )
+
+
 def gaussian_quadrature(
     alpha: Sequence[Fraction], beta: Sequence[Fraction]
 ) -> GaussianQuadrature:
@@ -283,17 +324,17 @@ def gaussian_quadrature(
         raise ValueError("alpha must contain between 1 and 16 entries")
     if len(beta) != n and len(beta) != n + 1:
         raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-    if beta[0] == 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    if beta[0] <= 0:
+        raise ValueError(
+            "beta_0 (the zeroth moment of a positive functional) must be positive"
+        )
+    _validate_quadrature_float_domain(alpha, beta)
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
     for k in range(n - 1):
         if k + 1 >= len(beta):
             break
-        sub = beta[k + 1]
-        if sub < 0:
-            raise ValueError("subdiagonal beta entries must be nonnegative")
-        off.append(math.sqrt(float(sub)))
+        off.append(math.sqrt(float(beta[k + 1])))
     jacobi = np.diag(diagonal)
     if off:
         off_arr = np.array(off, dtype=float)

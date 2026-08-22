@@ -219,6 +219,19 @@ class TestGaussianQuadrature:
         with pytest.raises(ValueError, match="between 1 and 16"):
             gaussian_quadrature((), (_frac(1, 1),))
 
+    def test_overflowing_alpha_rejected_not_raised(self) -> None:
+        """The native API rejects the unsupported Float64 domain explicitly."""
+        with pytest.raises(ValueError, match="magnitude"):
+            gaussian_quadrature((_frac(10**400, 1),), (_frac(1, 1),))
+
+    def test_underflowing_beta0_rejected(self) -> None:
+        """beta_0 below the double subnormal range cannot scale weights."""
+        with pytest.raises(ValueError, match="underflow"):
+            gaussian_quadrature(
+                (_frac(0, 1),),
+                (_frac(1, 10**4000), _frac(1, 1)),
+            )
+
 
 # ---------------------------------------------------------------------------
 # Wire adapter tests
@@ -283,6 +296,14 @@ class TestWireAdapters:
         result = compute_gaussian_quadrature(request)
         assert isinstance(result, GaussianQuadratureResult)
         assert len(result.nodes) == 3
+
+    def test_gaussian_quadrature_wire_rejects_underflowing_beta0(self) -> None:
+        """A positive beta_0 below the double subnormal range is rejected."""
+        with pytest.raises(ValidationError, match="underflow"):
+            GaussianQuadratureRequest(
+                alpha=(_cr(0, 1),),
+                beta=(_cr(1, 10**4000), _cr(1, 1)),
+            )
 
     def test_hankel_validation_error(self) -> None:
         with pytest.raises(ValidationError):

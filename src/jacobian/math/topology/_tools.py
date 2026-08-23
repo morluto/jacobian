@@ -133,7 +133,9 @@ _vertex_deletion_tool = MathTool(
     description=(
         "Delete a vertex subset from a finite simplicial complex and return "
         "the induced subcomplex on the remaining vertices: every face "
-        "disjoint from the deleted set, given by its maximal facets."
+        "disjoint from the deleted set, given by its maximal facets. The "
+        "deletion must leave at least one simplex on the remaining "
+        "vertices; deleting every vertex is out of contract."
     ),
     request_type=VertexDeletionRequest,
     result_type=VertexDeletionResult,
@@ -142,7 +144,8 @@ _vertex_deletion_tool = MathTool(
     examples=(
         example(
             "delete_vertex_from_triangle",
-            "Delete one vertex from a triangle, leaving an edge.",
+            "Delete one vertex from a triangle, leaving the opposite edge; "
+            "the deletion must leave at least one simplex.",
             {
                 "complex": {
                     "vertices": ["v0", "v1", "v2"],

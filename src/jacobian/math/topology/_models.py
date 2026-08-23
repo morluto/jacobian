@@ -1293,12 +1293,22 @@ class StarResult(TopologyExactResult):
 
 
 class VertexDeletionRequest(StrictModel):
-    """Delete a vertex subset from a simplicial complex."""
+    """Delete a vertex subset from a simplicial complex.
+
+    The deletion must leave at least one simplex on the remaining vertices;
+    deleting every vertex is rejected because the empty complex has no
+    canonical value.
+    """
 
     complex: SimplicialComplexRequest
     vertices_to_delete: tuple[VertexLabel, ...] = Field(
         min_length=1,
         max_length=MAX_TOPOLOGY_VERTICES,
+        description=(
+            "Vertex subset to remove. The deletion must leave at least one "
+            "simplex on the remaining vertices: deleting every vertex is "
+            "rejected because the empty complex has no canonical value."
+        ),
     )
 
     @model_validator(mode="after")

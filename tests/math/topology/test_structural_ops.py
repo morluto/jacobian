@@ -33,6 +33,7 @@ from jacobian.math.topology._operations import (
     compute_star,
     compute_vertex_deletion,
 )
+from jacobian.math.topology._tools import TOOLS
 
 TRIANGLE = {"vertices": ["v0", "v1", "v2"], "facets": [["v0", "v1", "v2"]]}
 CIRCLE = {
@@ -118,6 +119,27 @@ class TestVertexDeletion:
                 complex={"vertices": ["a"], "facets": [["a"]]},
                 vertices_to_delete=["a"],
             )
+
+    def test_nonempty_residual_precondition_is_schema_visible(self) -> None:
+        """The reviewer counterexample: deleting 'a' from the singleton {a}
+        satisfies the generated field schema, so the nonempty-residual
+        restriction must be stated in the published schema guidance rather
+        than discovered only through a failed invocation."""
+        schema = VertexDeletionRequest.model_json_schema()
+        field_schema = schema["properties"]["vertices_to_delete"]
+        assert "at least one simplex" in field_schema["description"]
+        assert "empty complex" in field_schema["description"]
+
+    def test_deletion_discovery_metadata_states_precondition(self) -> None:
+        tool = next(
+            t
+            for t in TOOLS
+            if t.operation_id == "topology.simplicial_complex.deletion.compute"
+        )
+        assert "leave at least one simplex" in tool.description
+        assert all(
+            "at least one simplex" in example.description for example in tool.examples
+        )
 
     def test_delete_leaving_single_vertex_admitted(self) -> None:
         result = compute_vertex_deletion(

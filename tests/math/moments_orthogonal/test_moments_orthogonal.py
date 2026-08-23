@@ -455,14 +455,10 @@ class TestRecurrenceAdmissionBoundaries:
         instead of returning coefficients with complete=True.
         """
         with pytest.raises(ValueError, match="positive-definite"):
-            recurrence_coefficients(
-                (Fraction(1), Fraction(0), Fraction(-1))
-            )
+            recurrence_coefficients((Fraction(1), Fraction(0), Fraction(-1)))
         # The same prefix extended to a positive sequence stays admitted and
         # keeps its known answer alpha=(0).
-        result = recurrence_coefficients(
-            (Fraction(1), Fraction(0), Fraction(1))
-        )
+        result = recurrence_coefficients((Fraction(1), Fraction(0), Fraction(1)))
         assert result.alpha == (Fraction(0),)
         assert result.beta == (Fraction(1),)
 

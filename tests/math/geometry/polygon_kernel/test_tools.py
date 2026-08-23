@@ -9,15 +9,15 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.geometry.polygon_kernel import (
-    KernelPolygon,
-    PolygonKernelRequest,
-    PolygonKernelResult,
-    compute_visibility_kernel,
-)
 from jacobian.math.geometry.polygon_kernel._models import (
     MAX_KERNEL_COORDINATE_DIGITS,
     MAX_KERNEL_SOURCE_VERTICES,
+    KernelPolygon,
+    PolygonKernelRequest,
+    PolygonKernelResult,
+)
+from jacobian.math.geometry.polygon_kernel._operations import (
+    compute_visibility_kernel,
 )
 
 

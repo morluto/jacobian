@@ -140,7 +140,10 @@ class DeterministicTerminalGameSolution(StrictModel):
     The source game is retained so validation can replay the exact threshold
     games. Value classes are ordered by payoff and list members in declared
     position order. Strategy choices follow the corresponding player's declared
-    positions and break equivalent choices by declared target order.
+    positions. Reachability choices use the first declared successor of strictly
+    smaller canonical threshold-attractor rank; safety choices use the first
+    declared safe successor. Where no stricter threshold exists, the first
+    declared successor is used.
     """
 
     game: DeterministicTerminalGame

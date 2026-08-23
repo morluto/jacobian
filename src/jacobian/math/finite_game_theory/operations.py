@@ -58,7 +58,7 @@ def _arena(game: DeterministicTerminalGame) -> _Arena:
 
 def _attractor(
     arena: _Arena,
-    targets: frozenset[int],
+    targets: tuple[int, ...],
     existential_owner: PositionOwner,
 ) -> tuple[frozenset[int], tuple[int | None, ...]]:
     """Return one reachability attractor and its strict progress ranks."""
@@ -70,7 +70,7 @@ def _attractor(
 
     remaining = [len(options) for options in arena.successors]
     maximum_seen_rank = [-1] * len(arena.labels)
-    pending = deque(sorted(targets))
+    pending = deque(targets)
     while pending:
         target = pending.popleft()
         target_rank = ranks[target]
@@ -96,7 +96,7 @@ def _attractor(
 def _threshold_region(arena: _Arena, threshold: Fraction) -> _ThresholdRegion:
     vertices = frozenset(range(len(arena.labels)))
     if threshold > arena.draw_payoff:
-        good_terminals = frozenset(
+        good_terminals = tuple(
             index
             for index, payoff in enumerate(arena.terminal_payoffs)
             if payoff is not None and payoff >= threshold
@@ -108,7 +108,7 @@ def _threshold_region(arena: _Arena, threshold: Fraction) -> _ThresholdRegion:
             ranks=ranks,
         )
 
-    bad_terminals = frozenset(
+    bad_terminals = tuple(
         index
         for index, payoff in enumerate(arena.terminal_payoffs)
         if payoff is not None and payoff < threshold

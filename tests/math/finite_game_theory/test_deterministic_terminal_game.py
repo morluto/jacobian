@@ -219,6 +219,32 @@ def test_exact_fractional_thresholds_choose_reachability_over_draw() -> None:
     assert result.max_strategy == (StationaryChoice(position="x", target="high"),)
 
 
+def test_reachability_strategy_uses_canonical_strict_progress_rank() -> None:
+    game = DeterministicTerminalGame(
+        positions=(
+            DeterministicGamePosition(label="x", owner="MAX"),
+            DeterministicGamePosition(label="y", owner="MAX"),
+            DeterministicGamePosition(label="t", owner="TERMINAL", payoff=_r(1)),
+        ),
+        moves=(
+            DeterministicGameMove(source="x", target="y"),
+            DeterministicGameMove(source="x", target="t"),
+            DeterministicGameMove(source="y", target="t"),
+        ),
+        draw_payoff=_r(0),
+    )
+
+    result = solve_terminal_game(game)
+
+    assert result.value_classes == (
+        TerminalGameValueClass(payoff=_r(1), positions=("x", "y", "t")),
+    )
+    assert result.max_strategy == (
+        StationaryChoice(position="x", target="t"),
+        StationaryChoice(position="y", target="t"),
+    )
+
+
 def test_below_draw_reachability_and_at_draw_safety_choose_progress() -> None:
     game = DeterministicTerminalGame(
         positions=(

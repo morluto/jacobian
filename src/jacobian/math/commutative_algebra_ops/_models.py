@@ -333,7 +333,7 @@ class IdealSaturationResult(StrictModel):
         from jacobian.math.commutative_algebra_ops._operations import (
             _groebner_signature,
             rational_expressions_of_ideal,
-            replay_saturation,
+            replay_saturation_bounded,
         )
 
         if self.request is None or self.saturation is None:
@@ -345,7 +345,7 @@ class IdealSaturationResult(StrictModel):
             symbols_for_variables(self.saturation.variables),
             rational_expressions_of_ideal(self.saturation),
         )
-        expected = replay_saturation(self.request)
+        expected = replay_saturation_bounded(self.request)
         if claimed != expected:
             raise ValueError(
                 "saturation must be the exact saturation of the retained source request"

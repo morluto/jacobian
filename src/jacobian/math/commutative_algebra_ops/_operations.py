@@ -127,11 +127,7 @@ def replay_saturation(request: IdealSaturationRequest) -> tuple:
     # Absent any such element the intersection with QQ[vars] is the ZERO
     # ideal — e.g. (0) : <d>^infinity = (0) — not the whole ring; a whole-ring
     # saturation instead shows up as a constant basis element.
-    saturated = [
-        expr
-        for expr in elimination.exprs
-        if not expr.has(t) and expr != 0
-    ]
+    saturated = [expr for expr in elimination.exprs if not expr.has(t) and expr != 0]
     return _groebner_signature(variables, saturated)
 
 
@@ -171,3 +167,52 @@ def rational_expressions_of_ideal(ideal) -> list:
         rational_polynomial_to_sympy(generator).as_expr()
         for generator in ideal.generators
     ]
+
+
+def _saturation_replay_worker(payload: dict, queue) -> None:
+    """Child-process body of the bounded saturation replay."""
+    try:
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationRequest,
+        )
+
+        request = IdealSaturationRequest.model_validate(payload)
+        queue.put(("ok", replay_saturation(request)))
+    except Exception as exc:  # noqa: BLE001 - reported to the parent verbatim
+        queue.put(("error", f"{type(exc).__name__}: {exc}"))
+
+
+def replay_saturation_bounded(request) -> tuple:
+    """Run the elimination replay in a killable child process.
+
+    The host-side Groebner computation gets the same wall-clock bound the
+    Singular subprocess gets (resource_budget.wall_seconds): an expensive
+    replay is terminated and surfaces as a typed validation failure instead
+    of hanging result construction.
+    """
+    import multiprocessing as mp
+
+    ctx = mp.get_context("fork")
+    queue = ctx.Queue()
+    process = ctx.Process(
+        target=_saturation_replay_worker,
+        args=(request.model_dump(mode="json"), queue),
+    )
+    process.start()
+    process.join(timeout=float(request.resource_budget.wall_seconds))
+    if process.is_alive():
+        process.terminate()
+        process.join(5)
+        raise ValueError(
+            "saturation source replay exceeded its "
+            f"{request.resource_budget.wall_seconds}-second bounded budget"
+        )
+    if process.exitcode != 0:
+        raise ValueError("saturation source replay worker failed")
+    try:
+        kind, payload = queue.get(timeout=10)
+    except Exception as exc:
+        raise ValueError("saturation source replay produced no verdict") from exc
+    if kind != "ok":
+        raise ValueError(f"saturation source replay failed: {payload}")
+    return payload

@@ -354,10 +354,10 @@ def _facets_and_box(  # noqa: C901
         # even when its normals do not positively span the ambient space.
         if not bounded and (verts or _h_system_feasible(halfspaces)):
             raise ValueError(
-                    "the H-representation is unbounded whenever non-empty "
-                    "(its recession cone is nontrivial); lattice-point "
-                    "enumeration requires a bounded polytope"
-                )
+                "the H-representation is unbounded whenever non-empty "
+                "(its recession cone is nontrivial); lattice-point "
+                "enumeration requires a bounded polytope"
+            )
         if not verts:
             # Empty: its lattice-point set is empty, and the canonical
             # empty box scans no candidate at all.

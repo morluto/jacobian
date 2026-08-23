@@ -181,3 +181,24 @@ def test_oversized_simplicial_groups_stay_outside_the_canonical_domain() -> None
             prime=2,
             convention=HomologyConvention.UNREDUCED,
         )
+
+
+def test_aggregate_canonical_cell_bound_is_enforced() -> None:
+    """Ten disjoint tetrahedra pass every per-boundary product but sum to
+    5,200 boundary cells; admission must reject the aggregate so the
+    producer never dies inside canonical value construction."""
+    vertices = tuple(f"v{i}" for i in range(40))
+    facets = tuple(tuple(f"v{4 * k + j}" for j in range(4)) for k in range(10))
+    complex_ = (
+        _operation("topology.simplicial_complex.canonicalize")
+        .run(SimplicialComplexRequest(vertices=vertices, facets=facets))
+        .complex
+    )
+    assert complex_.f_vector == (40, 60, 40, 10)
+    with pytest.raises(ValueError, match="aggregate boundary cells"):
+        ChainComplexRequest(
+            complex=complex_,
+            coefficient_ring=ChainCoefficientRing.PRIME_FIELD,
+            prime=2,
+            convention=HomologyConvention.UNREDUCED,
+        )

@@ -317,7 +317,12 @@ def require_linear_algebra_bounds(complex_: FiniteSimplicialComplex) -> None:
 
 
 def _require_canonical_conversion_bounds(complex_: FiniteSimplicialComplex) -> None:
-    """Unreduced GF(p) chains must fit the canonical value's bounds."""
+    """Unreduced GF(p) chains must fit the canonical value's bounds.
+
+    ``ChainComplexValue`` caps the aggregate cells across every
+    differential, so admission must check the same sum rather than each
+    boundary product separately.
+    """
     from jacobian.math.chain_complexes.values import (
         MAX_BASIS_SIZE,
         MAX_MATRIX_CELLS,
@@ -330,10 +335,12 @@ def _require_canonical_conversion_bounds(complex_: FiniteSimplicialComplex) -> N
             f"{MAX_BASIS_SIZE} faces per chain group"
         )
     padded = (0, *sizes)
-    if any(rows * columns > MAX_MATRIX_CELLS for rows, columns in pairwise(padded)):
+    total_cells = sum(rows * columns for rows, columns in pairwise(padded))
+    if total_cells > MAX_MATRIX_CELLS:
         raise ValueError(
-            "unreduced prime-field chain complexes require every boundary "
-            f"matrix within {MAX_MATRIX_CELLS} cells"
+            "unreduced prime-field chain complexes require "
+            f"{total_cells} aggregate boundary cells within the canonical "
+            f"{MAX_MATRIX_CELLS}-cell bound"
         )
 
 

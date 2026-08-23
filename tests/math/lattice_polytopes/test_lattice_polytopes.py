@@ -726,3 +726,32 @@ class TestCountResultScanCap:
 
         result = count_lattice_points(LatticePolytopeRequest(vertices=UNIT_SQUARE_V))
         assert 0 <= result.point_count <= MAX_TOTAL_SCAN
+
+
+class TestTightBoundingBox:
+    def test_rational_extrema_use_integer_tight_bounds(self) -> None:
+        # The interval [1/2, 19999/2] contains exactly the 9,999 lattice
+        # points 1..9999. Rounding the box outwards would scan [0,10000]
+        # (10,001 points) and falsely fail the per-axis span admission.
+        result = count_lattice_points(
+            LatticePolytopeRequest(
+                vertices=(
+                    _v(("1", "2"),),
+                    _v(("19999", "2"),),
+                ),
+            )
+        )
+        assert result.point_count == 9_999
+
+    def test_polytope_without_lattice_points_counts_zero(self) -> None:
+        # [1/2, 3/4] contains no integer, so ceil(min) > floor(max): the
+        # tight box is empty and the exact count is zero.
+        result = count_lattice_points(
+            LatticePolytopeRequest(
+                vertices=(
+                    _v(("1", "2"),),
+                    _v(("3", "4"),),
+                ),
+            )
+        )
+        assert result.point_count == 0

@@ -237,9 +237,14 @@ def _ceil(value: Rational) -> int:
 
 
 def _bounding_box(verts: list[list[Rational]], d: int) -> tuple[list[int], list[int]]:
-    """Return the integer-inclusive per-axis min/max of the vertex bounding box."""
-    lo = [_floor(min(v[k] for v in verts)) for k in range(d)]
-    hi = [_ceil(max(v[k] for v in verts)) for k in range(d)]
+    """Return the tight integer per-axis bounds containing every lattice point.
+
+    Integer points of the polytope lie in ``[ceil(min), floor(max)]`` per
+    axis; rounding outwards would admit candidates that cannot lie in the
+    polytope and inflate the scanned span past admission budgets.
+    """
+    lo = [_ceil(min(v[k] for v in verts)) for k in range(d)]
+    hi = [_floor(max(v[k] for v in verts)) for k in range(d)]
     return lo, hi
 
 

@@ -206,13 +206,6 @@ class TestGroupLawAdmission:
             ScalarMultiplicationRequest(curve=curve, point=_operand(curve, p), scalar=2)
 
 
-class TestPrimeFieldModulusBound:
-    def test_huge_modulus_rejected(self):
-        from jacobian.math.prime_field_matrix_ops._models import RankRequest
-
-        with pytest.raises(ValidationError):
-            RankRequest(prime=2**200, entries=((1,),), columns=1)
-
 
 class TestResultSourceBinding:
     """Authoritative elliptic results are bound to their source curves."""

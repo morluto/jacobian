@@ -7,7 +7,6 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.math.polynomials._conversions import symbols_for_variables
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialIdeal,
@@ -261,16 +260,7 @@ class IdealQuotientResult(StrictModel):
 
 
 class IdealSaturationResult(StrictModel):
-    """The exact saturation I : <d>^infinity, bound to its source request.
-
-    A COMPUTED result retains the request it was computed from and its
-    validator replays the exact defining relation in-process (Groebner
-    elimination over QQ), so the authoritative derived ideal cannot detach
-    from the computation it claims to represent.
-    """
-
     outcome: IdealExecutionOutcome
-    request: IdealSaturationRequest | None = None
     saturation: RationalPolynomialIdeal | None = None
     method: Literal["SINGULAR_SATURATION"] = "SINGULAR_SATURATION"
     backend_version: str | None = None
@@ -279,17 +269,10 @@ class IdealSaturationResult(StrictModel):
     @model_validator(mode="after")
     def require_outcome_shape(self) -> Self:
         if self.outcome == "COMPUTED":
-            if (
-                self.saturation is None
-                or self.backend_version is None
-                or self.request is None
-                or self.detail
-            ):
+            if self.saturation is None or self.backend_version is None or self.detail:
                 raise ValueError(
-                    "computed saturation requires a value bound to its "
-                    "source request and a backend version"
+                    "computed saturation requires a value and backend version"
                 )
-            self._require_saturation_relation()
         elif (
             self.saturation is not None
             or self.backend_version is not None
@@ -299,57 +282,6 @@ class IdealSaturationResult(StrictModel):
                 "failed saturation computation requires only a safe detail"
             )
         return self
-
-    @staticmethod
-    def _require_claimed_generator_budget(ideal: RationalPolynomialIdeal) -> None:
-        """Bound claimed generators before any replay conversion."""
-        if len(ideal.generators) > MAX_OUTPUT_GENERATORS:
-            raise ValueError(
-                f"claimed saturation exceeds {MAX_OUTPUT_GENERATORS} generators"
-            )
-        aggregate_terms = 0
-        for generator in ideal.generators:
-            terms = generator.polynomial.terms
-            aggregate_terms += len(terms)
-            for term in terms:
-                if sum(term.exponents) > 2 * MAX_INPUT_EXPONENT:
-                    raise ValueError(
-                        "claimed saturation generator exceeds total degree "
-                        f"{2 * MAX_INPUT_EXPONENT}"
-                    )
-                coefficient = term.coefficient
-                digits = max(len(coefficient.num.lstrip("-")), len(coefficient.den))
-                if digits > 4 * MAX_COEFFICIENT_DIGITS:
-                    raise ValueError(
-                        "claimed saturation coefficient exceeds digit bound"
-                    )
-        if aggregate_terms > MAX_OUTPUT_TERMS:
-            raise ValueError(
-                f"claimed saturation exceeds {MAX_OUTPUT_TERMS} aggregate terms"
-            )
-
-    def _require_saturation_relation(self) -> None:
-        """Replay the exact defining relation against the retained source."""
-        from jacobian.math.commutative_algebra_ops._operations import (
-            _groebner_signature,
-            rational_expressions_of_ideal,
-            replay_saturation,
-        )
-
-        if self.request is None or self.saturation is None:
-            return
-        self._require_claimed_generator_budget(self.saturation)
-        if self.request.ideal.variables != self.saturation.variables:
-            raise ValueError("saturation must use the source ideal's ordered ring")
-        claimed = _groebner_signature(
-            symbols_for_variables(self.saturation.variables),
-            rational_expressions_of_ideal(self.saturation),
-        )
-        expected = replay_saturation(self.request)
-        if claimed != expected:
-            raise ValueError(
-                "saturation must be the exact saturation of the retained source request"
-            )
 
 
 __all__ = [

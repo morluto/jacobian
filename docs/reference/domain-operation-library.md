@@ -111,12 +111,15 @@ applicable` with a reason; it must not be omitted.
 
 ### Public operation contract
 
-- Mathematical input domain:
+- Semantic mathematical domain and postcondition:
 - Canonical public value type:
+- Admitted request envelope and its controlling quantities:
 - Producer/consumer closure, or why not applicable:
 - Degenerate inputs:
 - Parent/ring/field identity:
 - Deterministic work bound:
+- Maximum intermediate growth:
+- Exact result-size bound:
 - Backend and supported version:
 - Backend input domain:
 - Conversion/coercion behavior:
@@ -281,24 +284,59 @@ those semantic claims as source-text or private-helper lint rules.
 Jacobian's operations are reusable mathematical instruments for agents doing
 high-level mathematics and investigating conjectures. Treat boundedness as
 part of the mathematical contract, not as a property of the transport or a
-final serializer. For each operation, write down three
-different obligations:
+final serializer. Separate four obligations:
 
-1. **Input domain:** which mathematical objects and degenerate cases are
-   accepted, and which are excluded as inapplicable?
-2. **Computation:** what bounds the algorithm's work and intermediate values
+1. **Semantic domain:** what stable mathematical map, predicate, invariant, or
+   construction does the operation represent, independently of one release's
+   execution limits?
+2. **Admitted execution envelope:** which representations, mathematical
+   objects, and degenerate cases may one request contain, and which controlling
+   quantities bound that finite region?
+3. **Computation:** what bounds the algorithm's work and intermediate values
    before the backend expands, enumerates, or solves anything?
-3. **Output:** what bounds the exact returned value, witness, residual, or
-   certificate, and how is that bound related to the accepted input domain?
+4. **Output:** what bounds the exact returned value, witness, residual, or
+   certificate, and how is that bound related to the admitted request?
 
-The request contract must enforce the first obligation and the preconditions
-needed for the second and third. A backend or result conversion may still
-validate an invariant, but it must not be the first place an accepted request
-discovers that its exact answer is too large. If a bound is conservative, name
-the quantity it bounds, state why it is safe for the algorithm, and test both
-the rejected adversarial case and a useful case near the boundary. Do not use a
-post-hoc output-term cap, truncation, sentinel, or host exception as a hidden
-computational budget.
+The operation identifier and result semantics own the first obligation. The
+request contract enforces the second and the preconditions needed for the
+third and fourth. Tightening or widening a safe execution envelope must not
+silently change the mathematical meaning of the operation.
+
+A backend or result conversion may still validate an invariant, but it must
+not be the first place an accepted request discovers that its exact answer is
+too large. If a bound is conservative, name the quantity it bounds, state why
+it is safe for the algorithm, and test both the rejected adversarial case and a
+useful case near the boundary. Do not use a post-hoc output-term cap,
+truncation, sentinel, or host exception as a hidden computational budget.
+
+### Choose the controlling quantity
+
+Use the quantity that actually controls work or output. A fixed ceiling on a
+convenient field is appropriate only when its derivation conservatively bounds
+the relevant computation and result. Prefer result-sensitive or
+algorithm-sensitive admission when it preserves substantially more of the
+useful mathematical domain.
+
+For example, exact `binomial(n, k)` is output-sensitive: a middle binomial
+coefficient may have an enormous decimal expansion, while `binomial(n, 0)` and
+`binomial(n, 1)` remain compact for large `n`. A predicted result-digit bound
+is more faithful than a uniform small ceiling on `n` when the kernel can avoid
+constructing an over-budget result.
+
+By contrast, factorial or binomial valuations have logarithmic digitwise
+formulas and compact results even for very large arguments. Their useful
+envelope should be derived from canonical input digit length, division or
+base-digit steps, intermediate growth, and result digits—not inherited from
+the much smaller region where materializing the factorial or binomial is
+practical. If a desired value is a cheap composition of existing operations,
+prefer widening the controlling primitive over publishing a near-duplicate
+operation solely to escape an arbitrary cap.
+
+Use measurements on representative and adversarial boundary fixtures to
+choose the largest useful conservative envelope supported by the maintained
+kernel. Measurements show usefulness; the mathematical work and growth
+analysis remains the safety proof. Name each enforced budget in code and make
+rejections identify the controlling quantity that was exceeded.
 
 ### Finite enumeration budgets
 

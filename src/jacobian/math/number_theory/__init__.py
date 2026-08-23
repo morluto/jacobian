@@ -1,3 +1,5 @@
-"""Number-theory operation ownership."""
+"""Supported exact number-theory API."""
 
-__all__: list[str] = []
+from jacobian.math.number_theory.ramanujan_sums import ramanujan_sum
+
+__all__ = ["ramanujan_sum"]

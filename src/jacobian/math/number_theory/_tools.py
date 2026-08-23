@@ -9,6 +9,7 @@ from jacobian.math.number_theory._finite_abelian_groups import (
 from jacobian.math.number_theory._modular import MODULAR_OPERATIONS
 from jacobian.math.number_theory._modular_identity import MODULAR_IDENTITY_OPERATIONS
 from jacobian.math.number_theory._primes import PRIME_OPERATIONS
+from jacobian.math.number_theory._ramanujan_sum import RAMANUJAN_SUM_OPERATION
 
 __all__ = ["TOOLS"]
 
@@ -18,5 +19,6 @@ TOOLS: MathTools = (
     *MODULAR_OPERATIONS,
     *MODULAR_IDENTITY_OPERATIONS,
     *DERIVED_NUMBER_THEORY_OPERATIONS,
+    RAMANUJAN_SUM_OPERATION,
     FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION,
 )

@@ -230,6 +230,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
+    OperationAdmission(
+        "number_theory.ramanujan_sum.compute",
+        AdmissionDecision.KEEP,
+        "classical exact arithmetic function whose factorization-backed evaluation replaces a variable-length composition of divisor and Mobius calls",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

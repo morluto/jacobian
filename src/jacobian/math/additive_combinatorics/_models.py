@@ -197,6 +197,18 @@ BoundedCoordinate = Annotated[
     ),
 ]
 
+# The difference of two admitted 64-digit coordinates carries up to 65 digits
+# (e.g. [999...999] - [-999...999]), so derived difference classes use their
+# own one-digit-wider canonical bound instead of the input coordinate type.
+DerivedDifferenceCoordinate = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^(?:0|-?[1-9][0-9]{0,64})$",
+        max_length=66,
+        strict=True,
+    ),
+]
+
 
 class IntegerVector(StrictModel):
     """One integer vector of bounded canonical decimal coordinates."""
@@ -245,10 +257,25 @@ class OrderedDifferencePair(StrictModel):
     subtrahend_index: int = Field(ge=0)
 
 
+class DifferenceVector(StrictModel):
+    """One derived integer difference of bounded canonical coordinates."""
+
+    coordinates: tuple[DerivedDifferenceCoordinate, ...] = Field(
+        min_length=1,
+        max_length=MAX_VECTOR_DIMENSION,
+        description=(
+            "Canonical integer coordinates, at most 65 decimal digits each."
+        ),
+    )
+
+    def as_ints(self) -> tuple[int, ...]:
+        return tuple(parse_canonical_integer(value) for value in self.coordinates)
+
+
 class OrderedDifferenceClass(StrictModel):
     """One nonzero difference vector and its ordered source pairs."""
 
-    difference: IntegerVector
+    difference: DifferenceVector
     pairs: tuple[OrderedDifferencePair, ...] = Field(min_length=1)
 
 

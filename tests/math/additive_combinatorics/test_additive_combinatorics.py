@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.additive_combinatorics._models import (
     AdditiveEnergyRequest,
+    DifferenceVector,
     DirectSumPredicateRequest,
     FiniteIntegerSet,
     IntegerVector,
@@ -308,13 +309,13 @@ class TestOrderedDifferenceProfile:
                 set_size=2,
                 classes=(
                     OrderedDifferenceClass(
-                        difference=IntegerVector(coordinates=("-999",)),
+                        difference=DifferenceVector(coordinates=("-999",)),
                         pairs=(
                             OrderedDifferencePair(minuend_index=0, subtrahend_index=1),
                         ),
                     ),
                     OrderedDifferenceClass(
-                        difference=IntegerVector(coordinates=("999",)),
+                        difference=DifferenceVector(coordinates=("999",)),
                         pairs=(
                             OrderedDifferencePair(minuend_index=1, subtrahend_index=0),
                         ),
@@ -408,3 +409,22 @@ class TestOrderedDifferenceProfileTransportBound:
     def test_coordinate_bound_is_enforced(self):
         with pytest.raises(ValidationError):
             IntegerVector(coordinates=("1" * 65,))
+
+
+def test_extreme_difference_uses_derived_bound():
+    """Two admitted 64-digit extremes differ by a 65-digit derived value."""
+    hi = "9" * 64
+    lo = "-" + "9" * 64
+    request = OrderedDifferenceProfileRequest(
+        vectors=IntegerVectorSet(
+            vectors=(
+                IntegerVector(coordinates=(hi,)),
+                IntegerVector(coordinates=(lo,)),
+            )
+        )
+    )
+    result = compute_ordered_difference_profile(request)
+    differences = {cls.difference.coordinates[0] for cls in result.classes}
+    # 999..999 - (-999..999) = 2 * 10^64 - 2, a 65-digit derived value.
+    expected = "1" + "9" * 63 + "8"
+    assert expected in differences and ("-" + expected) in differences

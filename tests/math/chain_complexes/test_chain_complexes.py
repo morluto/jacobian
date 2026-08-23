@@ -191,3 +191,80 @@ class TestAdmissionRegressions:
         )
         cone = compute_mapping_cone(request)
         assert cone.cone.dimensions == (1, 1)
+
+
+class TestMappingConeValidationRegression:
+    """Regressions for shaped zero maps, boundary equations, and cone bounds."""
+
+    def test_zero_differential_identity_chain_map_accepted(self):
+        # Both complexes use the admitted differentials=() zero-map shape with
+        # an identity chain map: the commutator products are shaped zero
+        # matrices that must compare equal instead of [] vs [[]].
+        source = ChainComplex(
+            prime=2, min_degree=0, max_degree=1, dimensions=(1, 1), differentials=()
+        )
+        target = ChainComplex(
+            prime=2, min_degree=0, max_degree=1, dimensions=(1, 1), differentials=()
+        )
+        request = MappingConeRequest(
+            source=source,
+            target=target,
+            chain_map=(
+                (MatrixEntry(row=0, col=0, value="1"),),
+                (MatrixEntry(row=0, col=0, value="1"),),
+            ),
+        )
+        cone = compute_mapping_cone(request)
+        assert cone.cone.dimensions == (1, 2, 1)
+
+    def test_boundary_equation_crossing_target_top_degree_rejected(self):
+        # Source C_1 -> C_0 with identity differential, target concentrated in
+        # degree 0, nonzero f_0: the degree-1 equation is 0 = f_0 d^C_1 != 0,
+        # so the request must be rejected even though D_1 does not exist.
+        source = ChainComplex(
+            prime=2,
+            min_degree=0,
+            max_degree=1,
+            dimensions=(1, 1),
+            differentials=((MatrixEntry(row=0, col=0, value="1"),),),
+        )
+        target = ChainComplex(
+            prime=2, min_degree=0, max_degree=0, dimensions=(1,), differentials=()
+        )
+        with pytest.raises(ValidationError, match="commute"):
+            MappingConeRequest(
+                source=source,
+                target=target,
+                chain_map=(
+                    (MatrixEntry(row=0, col=0, value="1"),),
+                    (),
+                ),
+            )
+
+    def test_overlapping_cone_group_dimension_rejected(self):
+        # Two independently admissible 512-dimensional groups overlap in the
+        # cone: Cone_1 = C_0 + D_1 has dimension 1024 and cannot be built.
+        source = ChainComplex(
+            prime=2, min_degree=0, max_degree=0, dimensions=(512,), differentials=()
+        )
+        target = ChainComplex(
+            prime=2, min_degree=1, max_degree=1, dimensions=(512,), differentials=()
+        )
+        with pytest.raises(ValidationError, match="dense-work"):
+            MappingConeRequest(source=source, target=target, chain_map=((),))
+
+    def test_shifted_source_top_degree_without_cone_degree_rejected(self):
+        # A source concentrated at the top supported degree shifts the cone to
+        # degree 12, which no ChainComplex can represent.
+        source = ChainComplex(
+            prime=2, min_degree=11, max_degree=11, dimensions=(1,), differentials=()
+        )
+        target = ChainComplex(
+            prime=2, min_degree=11, max_degree=11, dimensions=(1,), differentials=()
+        )
+        with pytest.raises(ValidationError, match=r"\[-10, 11\]|degree"):
+            MappingConeRequest(
+                source=source,
+                target=target,
+                chain_map=((MatrixEntry(row=0, col=0, value="1"),),),
+            )

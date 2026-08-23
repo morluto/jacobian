@@ -9,10 +9,10 @@ from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.additive_combinatorics._models import (
     AdditiveEnergyRequest,
     AdditiveEnergyResult,
+    DifferenceVector,
     DirectSumPredicateRequest,
     DirectSumPredicateResult,
     FiniteIntegerSet,
-    IntegerVector,
     OrderedDifferenceClass,
     OrderedDifferencePair,
     OrderedDifferenceProfileRequest,
@@ -180,7 +180,7 @@ def compute_ordered_difference_profile(
         multiplicity = len(pairs)
         classes.append(
             OrderedDifferenceClass(
-                difference=IntegerVector(
+                difference=DifferenceVector(
                     coordinates=tuple(
                         format_canonical_integer(value) for value in diff
                     )

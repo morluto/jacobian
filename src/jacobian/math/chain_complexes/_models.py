@@ -8,7 +8,6 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 
-
 MAX_CHAIN_GROUP_DIMENSION = 512
 """Conservative per-group dimension bound derived from the dense work budget.
 
@@ -87,8 +86,6 @@ class ChainComplex(StrictModel):
                         raise ValueError("differential entry col exceeds source dimension")
             # Enforce d_{n-1} * d_n = 0 for all n (d^2 = 0)
             # Build dense matrices and check composition.
-            from fractions import Fraction
-
             def _build_dense(entries, rows, cols):
                 mat = [[0] * cols for _ in range(rows)]
                 for e in entries:
@@ -160,6 +157,117 @@ def _chain_map_target_dim(target: ChainComplex, degree: int) -> int:
     return 0
 
 
+def _chain_map_degree(
+    complex_: ChainComplex, deg: int
+) -> int:
+    if complex_.min_degree <= deg <= complex_.max_degree:
+        return complex_.dimensions[deg - complex_.min_degree]
+    return 0
+
+
+def _dense_matrix(
+    entries: tuple[MatrixEntry, ...], rows: int, cols: int, prime: int
+) -> list[list[int]]:
+    """A dense rows x cols matrix; zero-filled when no entries exist."""
+    mat = [[0] * cols for _ in range(rows)]
+    for ent in entries:
+        mat[ent.row][ent.col] = int(ent.value) % prime
+    return mat
+
+
+def _dense_product(
+    a: list[list[int]],
+    b: list[list[int]],
+    inner: int,
+    cols: int,
+    prime: int,
+) -> list[list[int]]:
+    """Dense product of an len(a) x inner by inner x cols matrix."""
+    res = [[0] * cols for _ in range(len(a))]
+    for r in range(len(a)):
+        for k in range(inner):
+            if a[r][k] == 0:
+                continue
+            for c in range(cols):
+                res[r][c] = (res[r][c] + a[r][k] * b[k][c]) % prime
+    return res
+
+
+def _require_chain_map_commutativity(
+    source: ChainComplex,
+    target: ChainComplex,
+    chain_map: tuple[tuple[MatrixEntry, ...], ...],
+) -> None:
+    """Verify d^D_n * f_n = f_{n-1} * d^C_n at every source degree.
+
+    Groups outside a complex's degree range are zero-dimensional, so the
+    equation is still checked where one side's differential or map is the
+    shaped zero matrix - in particular at the target's boundary degrees.
+    """
+    prime = source.prime
+    s_min = source.min_degree
+
+    def dim(complex_: ChainComplex, deg: int) -> int:
+        return _chain_map_degree(complex_, deg)
+
+    def diff(entries, rows, cols):
+        return _dense_matrix(entries, rows, cols, prime)
+
+    for n in range(s_min + 1, source.max_degree + 1):
+        i = n - s_min
+        # d^C_n: C_n -> C_{n-1}, always inside the source range.
+        d_c = diff(
+            (
+                source.differentials[i - 1]
+                if i - 1 < len(source.differentials)
+                else ()
+            ),
+            dim(source, n - 1),
+            dim(source, n),
+        )
+        # d^D_n: D_n -> D_{n-1}; zero-dimensional when n leaves the target.
+        d_d = diff(
+            (
+                target.differentials[n - target.min_degree - 1]
+                if target.min_degree < n <= target.max_degree
+                and n - target.min_degree - 1 < len(target.differentials)
+                else ()
+            ),
+            dim(target, n - 1),
+            dim(target, n),
+        )
+        f_n = diff(chain_map[i], dim(target, n), dim(source, n))
+        f_prev = diff(chain_map[i - 1], dim(target, n - 1), dim(source, n - 1))
+        left = _dense_product(d_d, f_n, dim(target, n), dim(source, n), prime)
+        right = _dense_product(f_prev, d_c, dim(source, n - 1), dim(source, n), prime)
+        if left != right:
+            raise ValueError(f"chain map does not commute at degree {n}")
+
+
+def _require_cone_within_domain(source: ChainComplex, target: ChainComplex) -> None:
+    """The derived cone must stay inside ChainComplex's representable domain."""
+    cone_min = min(source.min_degree + 1, target.min_degree)
+    cone_max = max(source.max_degree + 1, target.max_degree)
+
+    def group_dim(complex_: ChainComplex, deg: int) -> int:
+        return _chain_map_degree(complex_, deg)
+
+    if cone_min < -10 or cone_max > 11:
+        raise ValueError(
+            "mapping cone degrees must stay within the supported "
+            f"[-10, 11] range; this request derives [{cone_min}, "
+            f"{cone_max}] because the shifted source extends past it"
+        )
+    for deg in range(cone_min, cone_max + 1):
+        cone_group = group_dim(source, deg - 1) + group_dim(target, deg)
+        if cone_group > MAX_CHAIN_GROUP_DIMENSION:
+            raise ValueError(
+                "mapping cone group dimension exceeds the dense-work "
+                f"bound {MAX_CHAIN_GROUP_DIMENSION} at degree {deg}; "
+                "overlapping source and target groups sum beyond it"
+            )
+
+
 class MappingConeRequest(StrictModel):
     """Compute the mapping cone of a chain map f: C -> D."""
 
@@ -186,63 +294,12 @@ class MappingConeRequest(StrictModel):
                     raise ValueError("chain_map entry row exceeds target dimension")
                 if e.col >= s_dim:
                     raise ValueError("chain_map entry col exceeds source dimension")
-        # Verify chain-map commutes with differentials: d^D_{n} * f_n = f_{n-1} * d^C_n
-        prime = self.source.prime
-
-        def _build(entries, rows, cols):
-            mat = [[0] * cols for _ in range(rows)]
-            for ent in entries:
-                mat[ent.row][ent.col] = int(ent.value) % prime
-            return mat
-
-        def _mul(a, b):
-            if not a or not b or not a[0] or not b[0]:
-                return [[0] * (len(b[0]) if b and b[0] else 0) for _ in range(len(a))] if a else []
-            n_rows, n_cols, n_inner = len(a), len(b[0]), len(b)
-            res = [[0] * n_cols for _ in range(n_rows)]
-            for r in range(n_rows):
-                for k in range(n_inner):
-                    if a[r][k] == 0:
-                        continue
-                    for c in range(n_cols):
-                        res[r][c] = (res[r][c] + a[r][k] * b[k][c]) % prime
-            return res
-
-        for n in range(self.source.min_degree + 1, self.source.max_degree + 1):
-            i = n - self.source.min_degree
-            # need to handle different degree ranges for source/target; assume same min
-            if i <= 0 or i >= len(self.source.dimensions):
-                continue
-            # d^C_n: C_n -> C_{n-1}, matrix s_dims[i-1] x s_dims[i]
-            # f_n: C_n -> D_n
-            # f_{n-1}: C_{n-1} -> D_{n-1}
-            # d^D_n: D_n -> D_{n-1}
-            # Check if n is within target range
-            if n < self.target.min_degree or n > self.target.max_degree:
-                continue
-            # Build matrices
-            # d^C_n
-            s_idx = i  # because differentials[i-1] is d_n
-            t_idx = n - self.target.min_degree
-            # need to ensure indices are valid
-            if s_idx - 1 < 0 or s_idx - 1 >= len(self.source.differentials):
-                dC = []
-            else:
-                dC = _build(self.source.differentials[s_idx - 1], self.source.dimensions[i - 1], self.source.dimensions[i])
-            if t_idx - 1 < 0 or t_idx - 1 >= len(self.target.differentials):
-                dD = []
-            else:
-                # t_idx is index for D_n, so d^D_n is at t_idx-1
-                dD = _build(self.target.differentials[t_idx - 1], self.target.dimensions[t_idx - 1] if t_idx - 1 >= 0 else 0, self.target.dimensions[t_idx])
-            f_n = _build(self.chain_map[i], self.target.dimensions[t_idx] if t_idx < len(self.target.dimensions) else 0, self.source.dimensions[i])
-            f_n_minus_1 = _build(self.chain_map[i - 1], self.target.dimensions[t_idx - 1] if t_idx - 1 >= 0 and t_idx - 1 < len(self.target.dimensions) else 0, self.source.dimensions[i - 1] if i - 1 >= 0 else 0)
-            left = _mul(dD, f_n)
-            right = _mul(f_n_minus_1, dC)
-            # Compare left and right; they should be equal matrices
-            # Empty matrices compare equal elementwise, so only a
-            # non-empty disagreement breaks commutativity.
-            if left != right and (left or right):
-                raise ValueError(f"chain map does not commute at degree {n}")
+        _require_chain_map_commutativity(self.source, self.target, self.chain_map)
+        # The cone complex Cone(f)_n = C_{n-1} + D_n must itself stay inside
+        # the representable degree range and per-group dimension budget, so
+        # admission rejects here instead of the construction raising after
+        # validation on an accepted request.
+        _require_cone_within_domain(self.source, self.target)
         return self
 
 

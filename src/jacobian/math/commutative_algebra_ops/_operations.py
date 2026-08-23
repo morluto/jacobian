@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import json
 from typing import Any
 
 import sympy
@@ -24,6 +24,7 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealSaturationResult,
 )
 from jacobian.math.commutative_algebra_ops._singular import (
+    run_bounded_stdin_python_kernel,
     run_singular_ideal_operation,
 )
 from jacobian.math.polynomials._conversions import (
@@ -31,12 +32,6 @@ from jacobian.math.polynomials._conversions import (
     symbols_for_variables,
 )
 from jacobian.math.polynomials.values import RationalPolynomialIdeal
-from jacobian.process import (
-    ProcessPlatformTools,
-    ProcessResourceLimits,
-    run_bounded_process,
-    worker_environment,
-)
 
 
 class _GroebnerBudgetExceededError(TimeoutError):
@@ -232,46 +227,24 @@ _STDERR_LIMIT = 64 * 1024
 def _run_sympy_kernel(payload: dict[str, Any], wall_seconds: float) -> dict[str, Any]:
     """Run one exact Groebner-kernel computation in a killable worker.
 
-    The child process is terminated on wall-budget expiry, so an admitted
-    request cannot leave detached computations running inside the server.
+    The killable-process launch and executable discovery live in the
+    domain's external-tool owner (``_singular``); this wrapper maps the
+    bounded outcome onto the typed kernel exceptions.
     """
-    import json
-    import shutil
-    import sys
-    import tempfile
-
-    # Deliberately not resolved: following the interpreter symlink would
-    # reparent the worker onto the base prefix without the environment's
-    # site-packages.
-    resolved = shutil.which(sys.executable) or sys.executable
-    prlimit = shutil.which("prlimit")
-    if prlimit is not None:
-        prlimit = str(Path(prlimit).resolve())
     try:
-        with tempfile.TemporaryDirectory(prefix="jacobian-sympy-") as directory:
-            completed = run_bounded_process(
-                [resolved, "-I", "-c", _SYMPY_WORKER_SCRIPT],
-                input_bytes=json.dumps(payload).encode("ascii"),
-                timeout_seconds=float(wall_seconds),
-                environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=_STDOUT_LIMIT,
-                stderr_limit=_STDERR_LIMIT,
-                resource_limits=ProcessResourceLimits(
-                    cpu_seconds=int(wall_seconds),
-                    address_space_bytes=2 * 1024 * 1024 * 1024,
-                    file_size_bytes=1024 * 1024,
-                ),
-                platform_tools=ProcessPlatformTools(prlimit_executable=prlimit),
-                cwd=directory,
-            )
+        timed_out, stdout = run_bounded_stdin_python_kernel(
+            _SYMPY_WORKER_SCRIPT,
+            json.dumps(payload),
+            wall_seconds=wall_seconds,
+            stdout_limit=_STDOUT_LIMIT,
+            stderr_limit=_STDERR_LIMIT,
+        )
     except OSError as error:
         raise _SympyKernelError(str(error)) from None
-    if completed.timed_out:
+    if timed_out:
         raise _SympyKernelTimeoutError()
-    if completed.cancelled:
-        raise _SympyKernelError("kernel execution was cancelled")
     try:
-        result = json.loads(completed.stdout.decode("ascii"))
+        result = json.loads(stdout)
     except (UnicodeDecodeError, ValueError) as error:
         raise _SympyKernelError(str(error)) from None
     if result.get("status") == "limit":

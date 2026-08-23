@@ -495,3 +495,56 @@ __all__ = [
     "run_singular_ideal_operation",
     "run_singular_saturation_verification",
 ]
+
+
+def run_bounded_stdin_python_kernel(
+    script: str,
+    payload_json: str,
+    *,
+    wall_seconds: float,
+    stdout_limit: int,
+    stderr_limit: int,
+) -> tuple[bool, str]:
+    """Run one bounded Python-kernel worker and return (timed_out, stdout).
+
+    The child process is terminated on wall-budget expiry, so an admitted
+    request cannot leave detached computations running inside the server.
+    This owner owns every external-executable lookup and the killable
+    process launch for the domain's exact kernels.
+    """
+    import sys
+    import tempfile
+
+    from jacobian.process import (
+        ProcessPlatformTools,
+        ProcessResourceLimits,
+        run_bounded_process,
+        worker_environment,
+    )
+
+    # Deliberately not resolved: following the interpreter symlink would
+    # reparent the worker onto the base prefix without the environment's
+    # site-packages.
+    resolved = shutil.which(sys.executable) or sys.executable
+    prlimit = shutil.which("prlimit")
+    if prlimit is not None:
+        prlimit = str(Path(prlimit).resolve())
+    with tempfile.TemporaryDirectory(prefix="jacobian-sympy-") as directory:
+        completed = run_bounded_process(
+            [resolved, "-I", "-c", script],
+            input_bytes=payload_json.encode("ascii"),
+            timeout_seconds=float(wall_seconds),
+            environment=worker_environment(locale="C.UTF-8"),
+            stdout_limit=stdout_limit,
+            stderr_limit=stderr_limit,
+            resource_limits=ProcessResourceLimits(
+                cpu_seconds=int(wall_seconds),
+                address_space_bytes=2 * 1024 * 1024 * 1024,
+                file_size_bytes=1024 * 1024,
+            ),
+            platform_tools=ProcessPlatformTools(prlimit_executable=prlimit),
+            cwd=directory,
+        )
+    if completed.timed_out:
+        return True, ""
+    return False, completed.stdout.decode("ascii")

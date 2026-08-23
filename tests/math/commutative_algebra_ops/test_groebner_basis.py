@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.commutative_algebra_ops import _operations
+from jacobian.math.commutative_algebra_ops import _operations, _singular
 from jacobian.math.commutative_algebra_ops._models import (
     EliminationIdealRequest,
     GroebnerBasisRequest,
@@ -298,14 +298,20 @@ class TestKillableWorkerContract:
         ``run_bounded_process`` with the declared wall budget.
         """
         observed: dict[str, object] = {}
-        real_runner = _operations.run_bounded_process
+        real_runner = _operations.run_bounded_stdin_python_kernel
 
-        def spy(*args, **kwargs):
-            observed["timeout"] = kwargs.get("timeout_seconds")
+        def spy(script, payload_json, *, wall_seconds, **kwargs):
+            observed["timeout"] = wall_seconds
             observed["child_is_process"] = True
-            return real_runner(*args, **kwargs)
+            return real_runner(
+                script,
+                payload_json,
+                wall_seconds=wall_seconds,
+                stdout_limit=kwargs["stdout_limit"],
+                stderr_limit=kwargs["stderr_limit"],
+            )
 
-        monkeypatch.setattr(_operations, "run_bounded_process", spy)
+        monkeypatch.setattr(_operations, "run_bounded_stdin_python_kernel", spy)
         g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
         g2 = _poly(("x", "y"), (1, 1, (1, 1)), (-1, 1, (0, 0)))
         result = compute_groebner_basis(

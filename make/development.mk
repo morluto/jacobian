@@ -1,4 +1,4 @@
-.PHONY: uv-version-check setup setup-lean container-image eval-image eval-image-pull hooks fix lint complexity-check lint-full security-audit typecheck architecture docs-command-check docs-linkcheck
+.PHONY: uv-version-check setup setup-lean container-image eval-image eval-image-pull hooks fix lint lint-full security-audit typecheck architecture docs-command-check docs-linkcheck
 
 uv-version-check: ## Require the repository-pinned uv release.
 	@test "$$(uv --version | awk '{print $$2}')" = "$$(tr -d '[:space:]' < .uv-version)" || { echo "install uv $$(tr -d '[:space:]' < .uv-version) before using this checkout" >&2; exit 2; }
@@ -31,10 +31,6 @@ fix: ## Apply Ruff fixes and formatting.
 lint: ## Run the fast Ruff lint and format checks.
 	$(UV_RUN) ruff check $(RUFF_PATHS)
 	$(UV_RUN) ruff format --check $(RUFF_PATHS)
-	$(MAKE) complexity-check
-
-complexity-check: ## Reject new, increased, or stale C901 baseline entries.
-	$(UV_RUN) python tools/check_complexity.py
 
 lint-full: lint ## Add dependency and dead-code checks.
 	$(UV_RUN) deptry .

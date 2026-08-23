@@ -231,6 +231,68 @@ class FixedLengthCycleRequest(StrictModel):
         return self
 
 
+def _cycle_source_edges(
+    graph: SimpleUndirectedGraph,
+) -> tuple[set[str], set[tuple[str, str]]]:
+    n = len(graph.vertices)
+    if n > 256 or len(graph.edges) > 32640:
+        raise ValueError("source graph exceeds the canonical bounds")
+    vertex_set = set(graph.vertices)
+    edge_set: set[tuple[str, str]] = set()
+    for u, v in graph.edges:
+        if u not in vertex_set or v not in vertex_set:
+            raise ValueError("edge vertices must be declared")
+        edge_set.add((u, v) if u < v else (v, u))
+    return vertex_set, edge_set
+
+
+def _validate_cycle_witness(
+    cycle: tuple[str, ...],
+    length: int,
+    vertex_set: set[str],
+    edge_set: set[tuple[str, str]],
+) -> None:
+    if len(cycle) != length:
+        raise ValueError("an EXISTS witness must list exactly length vertices")
+    if len(set(cycle)) != length:
+        raise ValueError("a simple cycle witness must have distinct vertices")
+    if any(label not in vertex_set for label in cycle):
+        raise ValueError("cycle vertex not in source graph")
+    for index in range(length):
+        u = cycle[index]
+        v = cycle[(index + 1) % length]
+        key = (u, v) if u < v else (v, u)
+        if key not in edge_set:
+            raise ValueError("a cycle witness must follow graph edges")
+
+
+def _validate_negative_cycle(graph: SimpleUndirectedGraph, length: int) -> None:
+    n = len(graph.vertices)
+    if length > n:
+        raise ValueError("cycle length must not exceed the vertex count")
+    if length > MORPHISM_MAX_VERTICES or n > MORPHISM_MAX_VERTICES:
+        raise ValueError(
+            "a DOES_NOT_EXIST decision requires the retained source "
+            f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
+            f"{MAX_CYCLE_SEARCH_PATHS}-path request budget"
+        )
+    d_max = _canonical_max_degree(graph)
+    work = n * (d_max ** (length - 1))
+    if work > _MAX_SEARCH_PATHS_PER_PASS:
+        raise ValueError(
+            "a DOES_NOT_EXIST decision requires the retained source "
+            f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
+            f"{_MAX_SEARCH_PATHS_PER_PASS}-path request budget"
+        )
+    from jacobian.math.graphs.morphisms._operations import find_cycle_of_length
+
+    if find_cycle_of_length(graph.vertices, graph.edges, length) is not None:
+        raise ValueError(
+            "a DOES_NOT_EXIST decision contradicts the retained "
+            f"graph, which contains a cycle of length {length}"
+        )
+
+
 class FixedLengthCycleResult(StrictModel):
     """Whether a simple ``k``-cycle exists, with one ordered witness.
 
@@ -258,67 +320,14 @@ class FixedLengthCycleResult(StrictModel):
     cycle: tuple[str, ...] = Field(default=())
 
     @model_validator(mode="after")
-    def require_consistent_witness(self) -> Self:  # noqa: C901
-        n = len(self.graph.vertices)
-        if n > 256 or len(self.graph.edges) > 32640:
-            raise ValueError("source graph exceeds the canonical bounds")
-        vertex_set = set(self.graph.vertices)
-        # Normalise edges to unordered canonical pairs of labels.
-        edge_set = set()
-        for u, v in self.graph.edges:
-            # SimpleUndirectedGraph already guarantees u < v and membership,
-            # but re-validate for forged results.
-            if u not in vertex_set or v not in vertex_set:
-                raise ValueError("edge vertices must be declared")
-            edge_set.add((u, v) if u < v else (v, u))
+    def require_consistent_witness(self) -> Self:
+        vertex_set, edge_set = _cycle_source_edges(self.graph)
         if self.decision == "EXISTS":
-            if len(self.cycle) != self.length:
-                raise ValueError("an EXISTS witness must list exactly length vertices")
-            if len(set(self.cycle)) != self.length:
-                raise ValueError("a simple cycle witness must have distinct vertices")
-            for label in self.cycle:
-                if label not in vertex_set:
-                    raise ValueError("cycle vertex not in source graph")
-            for index in range(self.length):
-                u = self.cycle[index]
-                v = self.cycle[(index + 1) % self.length]
-                key = (u, v) if u < v else (v, u)
-                if key not in edge_set:
-                    raise ValueError("a cycle witness must follow graph edges")
+            _validate_cycle_witness(self.cycle, self.length, vertex_set, edge_set)
         else:
             if self.cycle:
                 raise ValueError("a DOES_NOT_EXIST result must not carry a witness")
-            # A negative conclusion is exact only inside the bounded request
-            # domain; reject out-of-domain lengths BEFORE any work bound is
-            # exponentiated, then mirror the admission and replay the
-            # exhaustive decision against the retained graph.
-            n = len(self.graph.vertices)
-            if self.length > n:
-                raise ValueError("cycle length must not exceed the vertex count")
-            if self.length > MORPHISM_MAX_VERTICES or n > MORPHISM_MAX_VERTICES:
-                raise ValueError(
-                    "a DOES_NOT_EXIST decision requires the retained source "
-                    f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
-                    f"{MAX_CYCLE_SEARCH_PATHS}-path request budget"
-                )
-            d_max = _canonical_max_degree(self.graph)
-            work = n * (d_max ** (self.length - 1))
-            if work > _MAX_SEARCH_PATHS_PER_PASS:
-                raise ValueError(
-                    "a DOES_NOT_EXIST decision requires the retained source "
-                    f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
-                    f"{_MAX_SEARCH_PATHS_PER_PASS}-path request budget"
-                )
-            from jacobian.math.graphs.morphisms._operations import find_cycle_of_length
-
-            if (
-                find_cycle_of_length(self.graph.vertices, self.graph.edges, self.length)
-                is not None
-            ):
-                raise ValueError(
-                    "a DOES_NOT_EXIST decision contradicts the retained "
-                    f"graph, which contains a cycle of length {self.length}"
-                )
+            _validate_negative_cycle(self.graph, self.length)
         return self
 
 
@@ -413,6 +422,60 @@ def _replay_subgraph_embedding(
         ) from exc
 
 
+def _validate_embedding_witness(
+    pattern: SimpleUndirectedGraph,
+    host: SimpleUndirectedGraph,
+    vertex_map: tuple[str, ...],
+) -> None:
+    if len(vertex_map) != len(pattern.vertices):
+        raise ValueError("an EXISTS result must map every pattern vertex exactly once")
+    if len(set(vertex_map)) != len(vertex_map):
+        raise ValueError("a subgraph embedding must be injective")
+    host_set = set(host.vertices)
+    if any(v not in host_set for v in vertex_map):
+        raise ValueError("vertex_map entries must be valid host vertices")
+    host_edges = {(u, v) if u < v else (v, u) for u, v in host.edges}
+    for u_label, v_label in pattern.edges:
+        try:
+            u_idx = pattern.vertices.index(u_label)
+            v_idx = pattern.vertices.index(v_label)
+        except ValueError:
+            raise ValueError("pattern edge vertices must be declared") from None
+        mapped_u = vertex_map[u_idx]
+        mapped_v = vertex_map[v_idx]
+        key = (mapped_u, mapped_v) if mapped_u < mapped_v else (mapped_v, mapped_u)
+        if key not in host_edges:
+            raise ValueError("an embedding must preserve every pattern edge")
+
+
+def _validate_negative_embedding(
+    pattern: SimpleUndirectedGraph,
+    host: SimpleUndirectedGraph,
+) -> None:
+    p_n = len(pattern.vertices)
+    h_n = len(host.vertices)
+    assignments = 1
+    for step in range(p_n):
+        assignments *= h_n - step
+        if assignments > _MAX_SEARCH_PATHS_PER_PASS:
+            break
+    if (
+        p_n > MORPHISM_MAX_VERTICES
+        or p_n > h_n
+        or assignments > _MAX_SEARCH_PATHS_PER_PASS
+    ):
+        raise ValueError(
+            "a DOES_NOT_EXIST decision requires the retained sources "
+            f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
+            f"{_MAX_SEARCH_PATHS_PER_PASS}-assignment request budget"
+        )
+    if _replay_subgraph_embedding(pattern, host) is not None:
+        raise ValueError(
+            "a DOES_NOT_EXIST decision contradicts the retained "
+            "graphs, which admit an embedding"
+        )
+
+
 class SubgraphPatternFindResult(StrictModel):
     """Whether a non-induced subgraph embedding exists, with one witness map.
 
@@ -441,38 +504,9 @@ class SubgraphPatternFindResult(StrictModel):
     vertex_map: tuple[str, ...] = Field(default=())
 
     @model_validator(mode="after")
-    def require_consistent_pattern_witness(self) -> Self:  # noqa: C901
+    def require_consistent_pattern_witness(self) -> Self:
         if self.decision == "EXISTS":
-            if len(self.vertex_map) != len(self.pattern.vertices):
-                raise ValueError(
-                    "an EXISTS result must map every pattern vertex exactly once"
-                )
-            if len(set(self.vertex_map)) != len(self.vertex_map):
-                raise ValueError("a subgraph embedding must be injective")
-            host_set = set(self.host.vertices)
-            if any(v not in host_set for v in self.vertex_map):
-                raise ValueError("vertex_map entries must be valid host vertices")
-            # Host edges as unordered label pairs.
-            host_edges = set()
-            for u, v in self.host.edges:
-                host_edges.add((u, v) if u < v else (v, u))
-            # Pattern edges need mapping: pattern vertex order -> host label.
-            # Build index map from pattern label -> position, then vertex_map gives host label per position.
-            for u_label, v_label in self.pattern.edges:
-                try:
-                    u_idx = self.pattern.vertices.index(u_label)
-                    v_idx = self.pattern.vertices.index(v_label)
-                except ValueError:
-                    raise ValueError("pattern edge vertices must be declared") from None
-                mapped_u = self.vertex_map[u_idx]
-                mapped_v = self.vertex_map[v_idx]
-                key = (
-                    (mapped_u, mapped_v)
-                    if mapped_u < mapped_v
-                    else (mapped_v, mapped_u)
-                )
-                if key not in host_edges:
-                    raise ValueError("an embedding must preserve every pattern edge")
+            _validate_embedding_witness(self.pattern, self.host, self.vertex_map)
         elif self.decision == "BUDGET_EXCEEDED":
             # A budget-exhausted attempt makes no mathematical claim: it
             # must carry neither a witness nor an implicit negative.
@@ -481,30 +515,5 @@ class SubgraphPatternFindResult(StrictModel):
         else:
             if self.vertex_map:
                 raise ValueError("a DOES_NOT_EXIST result must not carry a vertex map")
-            # A negative conclusion is exact only inside the bounded request
-            # domain; mirror that admission, then replay the exhaustive
-            # containment decision against the retained graphs.
-            p_n = len(self.pattern.vertices)
-            h_n = len(self.host.vertices)
-            assignments = 1
-            for step in range(p_n):
-                assignments *= h_n - step
-                if assignments > _MAX_SEARCH_PATHS_PER_PASS:
-                    break
-            if (
-                p_n > MORPHISM_MAX_VERTICES
-                or p_n > h_n
-                or assignments > _MAX_SEARCH_PATHS_PER_PASS
-            ):
-                raise ValueError(
-                    "a DOES_NOT_EXIST decision requires the retained sources "
-                    f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
-                    f"{_MAX_SEARCH_PATHS_PER_PASS}-assignment request budget"
-                )
-            found = _replay_subgraph_embedding(self.pattern, self.host)
-            if found is not None:
-                raise ValueError(
-                    "a DOES_NOT_EXIST decision contradicts the retained "
-                    "graphs, which admit an embedding"
-                )
+            _validate_negative_embedding(self.pattern, self.host)
         return self

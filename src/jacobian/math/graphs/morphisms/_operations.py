@@ -270,7 +270,68 @@ class SearchBudgetExceededError(RuntimeError):
     """
 
 
-def find_subgraph_embedding(  # noqa: C901
+def _candidate_preserves_pattern_edges(
+    candidate_idx: int,
+    pattern_idx: int,
+    pattern_adj: list[list[int]],
+    vertex_map_idx: list[int],
+    host_adj: list[set[int]],
+) -> bool:
+    for neighbor_idx in pattern_adj[pattern_idx]:
+        mapped_idx = vertex_map_idx[neighbor_idx]
+        if mapped_idx != -1 and mapped_idx not in host_adj[candidate_idx]:
+            return False
+    return True
+
+
+def _backtrack_subgraph_embedding(
+    position: int,
+    pattern_order: list[int],
+    pattern_adj: list[list[int]],
+    host_adj: list[set[int]],
+    host_count: int,
+    vertex_map_idx: list[int],
+    used_host_idx: set[int],
+    budget: int | None,
+    candidate_checks: list[int],
+) -> bool:
+    if position == len(pattern_order):
+        return True
+    pattern_idx = pattern_order[position]
+    for host_idx in range(host_count):
+        if budget is not None:
+            candidate_checks[0] += 1
+            if candidate_checks[0] > budget:
+                raise SearchBudgetExceededError(
+                    f"subgraph-pattern search exceeded its "
+                    f"{budget}-candidate-check per-pass budget"
+                )
+        if host_idx in used_host_idx:
+            continue
+        if not _candidate_preserves_pattern_edges(
+            host_idx, pattern_idx, pattern_adj, vertex_map_idx, host_adj
+        ):
+            continue
+        vertex_map_idx[pattern_idx] = host_idx
+        used_host_idx.add(host_idx)
+        if _backtrack_subgraph_embedding(
+            position + 1,
+            pattern_order,
+            pattern_adj,
+            host_adj,
+            host_count,
+            vertex_map_idx,
+            used_host_idx,
+            budget,
+            candidate_checks,
+        ):
+            return True
+        used_host_idx.discard(host_idx)
+        vertex_map_idx[pattern_idx] = -1
+    return False
+
+
+def find_subgraph_embedding(
     pattern_vertices: tuple[str, ...],
     pattern_edges: tuple[tuple[str, str], ...],
     host_vertices: tuple[str, ...],
@@ -307,7 +368,7 @@ def find_subgraph_embedding(  # noqa: C901
     pattern_edge_idx = tuple(
         (pattern_index[u], pattern_index[v]) for u, v in pattern_edges
     )
-    candidate_checks = 0
+    candidate_checks = [0]
     # Every admitted request declares this bound; the sentinel keeps direct
     # kernel callers (result replay) on the same charged accounting.
     budget = max_candidate_checks if max_candidate_checks is not None else None
@@ -320,41 +381,17 @@ def find_subgraph_embedding(  # noqa: C901
         pattern_adj[u_idx].append(v_idx)
         pattern_adj[v_idx].append(u_idx)
 
-    def _edge_ok(candidate_idx: int, p_idx: int) -> bool:
-        for nbr in pattern_adj[p_idx]:
-            mapped = vertex_map_idx[nbr]
-            if mapped == -1:
-                continue
-            if mapped not in host_adj[candidate_idx]:
-                return False
-        return True
-
-    def backtrack(pos: int) -> bool:
-        nonlocal candidate_checks
-        if pos == p_n:
-            return True
-        p_idx = pattern_order[pos]
-        for h_idx in range(h_n):
-            if budget is not None:
-                candidate_checks += 1
-                if candidate_checks > budget:
-                    raise SearchBudgetExceededError(
-                        f"subgraph-pattern search exceeded its "
-                        f"{budget}-candidate-check per-pass budget"
-                    )
-            if h_idx in used_host_idx:
-                continue
-            if not _edge_ok(h_idx, p_idx):
-                continue
-            vertex_map_idx[p_idx] = h_idx
-            used_host_idx.add(h_idx)
-            if backtrack(pos + 1):
-                return True
-            used_host_idx.discard(h_idx)
-            vertex_map_idx[p_idx] = -1
-        return False
-
-    if backtrack(0):
+    if _backtrack_subgraph_embedding(
+        0,
+        pattern_order,
+        pattern_adj,
+        host_adj,
+        h_n,
+        vertex_map_idx,
+        used_host_idx,
+        budget,
+        candidate_checks,
+    ):
         return tuple(vertex_map_idx[i] for i in range(p_n))
     return None
 

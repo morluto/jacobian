@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -83,3 +83,135 @@ class ClosedFormResult(StrictModel):
 
     expression: str
     method: Literal["SYMPY_RSOLVE"] = "SYMPY_RSOLVE"
+
+
+# ---------------------------------------------------------------------------
+# Berlekamp-Massey over an explicit prime field
+# ---------------------------------------------------------------------------
+
+_MAX_FIELD_SEQUENCE_LENGTH = 256
+_MAX_FIELD_PRIME = 10_000
+
+
+def _require_bounded_prime(prime: int) -> None:
+    if not 2 <= prime <= _MAX_FIELD_PRIME:
+        raise ValueError(
+            f"prime must be a prime number between 2 and {_MAX_FIELD_PRIME}"
+        )
+    from sympy import isprime
+
+    if not isprime(prime):
+        raise ValueError("prime must be a prime integer")
+
+
+def _require_canonical_residues(
+    values: tuple[int, ...], prime: int, label: str
+) -> None:
+    for value in values:
+        if type(value) is not int or not 0 <= value < prime:
+            raise ValueError(f"{label} must be canonical residues modulo the prime")
+
+
+class PrimeFieldRecurrence(StrictModel):
+    """Minimal linear recurrence over an explicit prime field ``GF(p)``.
+
+    The domain-owned canonical recurrence value: native producers return it
+    and MCP results embed it unchanged, so native and wire consumers share
+    one type.  The recurrence is established only on the observed prefix
+    ``L <= n < len(sequence)``; it carries no claim about unobserved terms.
+    Every admitted finite sequence admits a recurrence of order at most its
+    own length (order ``len(sequence)`` fits vacuously), so the outcome is
+    always a fitted recurrence and no missing-recurrence state exists.
+    """
+
+    prime: StrictInt = Field(ge=2, le=_MAX_FIELD_PRIME)
+    coefficients: tuple[StrictInt, ...] = Field(
+        max_length=_MAX_FIELD_SEQUENCE_LENGTH,
+        description=(
+            "Recurrence coefficients (c_1, ..., c_L) as canonical residues "
+            "modulo the prime: each value satisfies 0 <= value < prime."
+        ),
+    )
+    order: StrictInt = Field(ge=0, le=_MAX_FIELD_SEQUENCE_LENGTH)
+    status: Literal["FOUND"] = Field(
+        description="Always FOUND: every admitted finite sequence fits a recurrence."
+    )
+
+    @model_validator(mode="after")
+    def require_canonical(self) -> Self:
+        _require_bounded_prime(self.prime)
+        _require_canonical_residues(self.coefficients, self.prime, "coefficients")
+        if self.order != len(self.coefficients):
+            raise ValueError("order must equal the number of coefficients")
+        return self
+
+
+class PrimeFieldRecurrenceFindRequest(StrictModel):
+    """Find the minimal linear recurrence of a sequence over ``GF(p)``."""
+
+    prime: StrictInt = Field(
+        ge=2,
+        le=_MAX_FIELD_PRIME,
+        description=f"Prime modulus p of the field GF(p), between 2 and {_MAX_FIELD_PRIME}.",
+    )
+    sequence: tuple[StrictInt, ...] = Field(
+        min_length=2,
+        max_length=_MAX_FIELD_SEQUENCE_LENGTH,
+        description=(
+            "Finite sequence of canonical residues modulo the supplied prime: "
+            "each value must be an integer with 0 <= value < prime; negative "
+            "or oversized representatives are rejected."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_valid_field_sequence(self) -> Self:
+        _require_bounded_prime(self.prime)
+        _require_canonical_residues(self.sequence, self.prime, "sequence values")
+        return self
+
+
+class PrimeFieldRecurrenceFindResult(StrictModel):
+    """The minimal LFSR over ``GF(p)`` found by Berlekamp-Massey.
+
+    Embeds the canonical :class:`PrimeFieldRecurrence` value rather than
+    re-flattening its fields, so native and MCP producers expose one
+    compatible public type.
+    """
+
+    sequence: tuple[StrictInt, ...] = Field(
+        min_length=2,
+        max_length=_MAX_FIELD_SEQUENCE_LENGTH,
+        description=(
+            "The supplied sequence of canonical residues modulo the prime: "
+            "each value satisfies 0 <= value < prime."
+        ),
+    )
+    recurrence: PrimeFieldRecurrence
+    method: Literal["BERLEKAMP_MASSEY"] = "BERLEKAMP_MASSEY"
+
+    @model_validator(mode="after")
+    def require_status_consistent_coefficients(self) -> Self:
+        _require_bounded_prime(self.recurrence.prime)
+        _require_canonical_residues(
+            self.sequence, self.recurrence.prime, "sequence values"
+        )
+        from jacobian.math.recurrence_solving.operations import berlekamp_massey
+
+        expected = berlekamp_massey(list(self.sequence), self.recurrence.prime)
+        if self.recurrence != expected:
+            raise ValueError(
+                "result must match the exact bounded Berlekamp-Massey recurrence"
+            )
+        return self
+
+
+__all__ = [
+    "ClosedFormRequest",
+    "ClosedFormResult",
+    "PrimeFieldRecurrence",
+    "PrimeFieldRecurrenceFindRequest",
+    "PrimeFieldRecurrenceFindResult",
+    "RecurrenceFindRequest",
+    "RecurrenceFindResult",
+]

@@ -7,13 +7,13 @@ from jacobian.catalog.admission import (
     OperationAdmission,
     OperationRegistration,
 )
-from jacobian.math.geometry.inversion._tools import TOOLS
+from jacobian.math.symmetric_functions._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
-        "geometry.inversion.circle_inversion.compute",
+        "symmetric_function.schur.evaluate.compute",
         AdmissionDecision.KEEP,
-        "exact rational circle inversion with typed power semantics and center rejection",
+        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
 )
 

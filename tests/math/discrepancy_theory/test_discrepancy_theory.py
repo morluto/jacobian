@@ -356,7 +356,11 @@ class TestHardConstraintRounding:
 
         with pytest.raises(ValidationError, match="incidences exceed"):
             _rounding_request(
-                values=(Fraction(1, denominator),) * coordinate_count,
+                values=(
+                    Fraction(1, denominator),
+                    Fraction(denominator - 1, denominator),
+                )
+                * (coordinate_count // 2),
                 rows=({"label": "all", "coordinates": support},),
                 columns=columns,
             )

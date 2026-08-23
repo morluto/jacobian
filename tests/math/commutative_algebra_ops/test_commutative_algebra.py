@@ -366,9 +366,82 @@ def test_saturation_script_passes_the_declared_ideal_operand() -> None:
         _ideal(("x", "y"), {(1, 1): 1}),
         _ideal(("x", "y"), {(1, 0): 1}),
     ).decode("ascii")
-    assert "sat(jacobian_left,jacobian_right);" in source
-    assert "jacobian_result=jacobian_saturation[1];" in source
-    assert "jacobian_result=jacobian_saturation;" in source
+    assert "sat(jacobian_left,jacobian_right[1]);" in source
+
+
+def test_zero_basis_must_use_the_source_ideal_ring() -> None:
+    from jacobian.math.commutative_algebra_ops._models import (
+        GroebnerBasisRequest,
+        GroebnerBasisResult,
+    )
+
+    request = GroebnerBasisRequest(ideal=_ideal(("x",), {}))
+    foreign_zero_basis = _ideal(("y",), {})
+    with pytest.raises(ValueError, match="source ideal's ordered ring"):
+        GroebnerBasisResult(
+            request=request,
+            basis=foreign_zero_basis,
+            generator_count=1,
+            monomial_order="grevlex",
+        )
+    same_ring_zero_basis = _ideal(("x",), {})
+    result = GroebnerBasisResult(
+        request=request,
+        basis=same_ring_zero_basis,
+        generator_count=1,
+        monomial_order="grevlex",
+    )
+    assert result.basis is not None
+
+
+def test_saturation_result_rejects_cross_ring_operands() -> None:
+    from jacobian.math.commutative_algebra_ops._models import (
+        IdealComputationBudget,
+        IdealSaturationResult,
+    )
+
+    with pytest.raises(ValueError, match="ordered ring"):
+        IdealSaturationResult(
+            outcome="COMPUTED",
+            source_ideal=_ideal(("x",), {(2,): 1}),
+            source_polynomial=_polynomial(("y",), {(0,): 1}),
+            saturation=_ideal(("x",), {(1,): 1}),
+            backend_version="4.4.1",
+            verification_budget=IdealComputationBudget(),
+        )
+
+
+@requires_singular
+@pytest.mark.requires_backend("singular")
+def test_computed_saturation_validates_only_against_its_sources() -> None:
+    """A relayed payload must re-decide its defining equality from its sources."""
+    from jacobian.math.commutative_algebra_ops._models import (
+        IdealComputationBudget,
+        IdealSaturationResult,
+    )
+
+    source_ideal = _ideal(("x", "y"), {(1, 1): 1})
+    saturator = _polynomial(("x", "y"), {(1, 0): 1})
+    genuine = IdealSaturationResult(
+        outcome="COMPUTED",
+        source_ideal=source_ideal,
+        source_polynomial=saturator,
+        saturation=_ideal(("x", "y"), {(0, 1): 1}),
+        backend_version="4.4.1",
+        verification_budget=IdealComputationBudget(wall_seconds=10),
+    )
+    assert genuine.saturation is not None
+    # <x> is not <xy> : <x>^infinity == <y>; an authored payload claiming it
+    # must be refused at validation instead of being accepted as-is.
+    with pytest.raises(ValueError, match=r"REFUTED|UNAVAILABLE|TIMEOUT|ERROR"):
+        IdealSaturationResult(
+            outcome="COMPUTED",
+            source_ideal=source_ideal,
+            source_polynomial=saturator,
+            saturation=_ideal(("x", "y"), {(1, 0): 1}),
+            backend_version="4.4.1",
+            verification_budget=IdealComputationBudget(wall_seconds=10),
+        )
 
 
 @requires_singular

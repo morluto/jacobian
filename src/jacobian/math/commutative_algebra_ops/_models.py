@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -214,6 +214,26 @@ class IdealQuotientResult(StrictModel):
         return self
 
 
+def _require_saturation_result_budget(
+    saturation: RationalPolynomialIdeal,
+    budget: IdealComputationBudget,
+) -> None:
+    """Hold a claimed computed saturation to the backend's output limits."""
+    if len(saturation.generators) > budget.maximum_output_generators:
+        raise ValueError(
+            "computed saturation exceeds the declared "
+            f"{budget.maximum_output_generators}-generator exact-result limit"
+        )
+    if (
+        sum(len(generator.polynomial.terms) for generator in saturation.generators)
+        > budget.maximum_output_terms
+    ):
+        raise ValueError(
+            "computed saturation exceeds the declared "
+            f"{budget.maximum_output_terms}-term exact-result limit"
+        )
+
+
 class IdealSaturationRequest(StrictModel):
     """Compute 'I : <d>^infinity' for a bounded ideal and a polynomial."""
 
@@ -245,8 +265,6 @@ class IdealSaturationRequest(StrictModel):
             maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
             label="saturation polynomial",
         )
-        if self.saturation_polynomial.variables != self.ideal.variables:
-            raise ValueError("saturation polynomial must use the ideal's ordered ring")
         if any(
             sum(term.exponents) > MAX_INPUT_EXPONENT
             for term in self.saturation_polynomial.polynomial.terms
@@ -254,15 +272,30 @@ class IdealSaturationRequest(StrictModel):
             raise ValueError(
                 f"saturation polynomial exceeds total degree {MAX_INPUT_EXPONENT}"
             )
+        if self.saturation_polynomial.variables != self.ideal.variables:
+            raise ValueError("saturation polynomial must use the ideal's ordered ring")
         return self
 
 
 class IdealSaturationResult(StrictModel):
+    """The saturation I : <d>^infinity bound to its source operands."""
+
     outcome: IdealExecutionOutcome
+    source_ideal: RationalPolynomialIdeal
+    source_polynomial: RationalPolynomial
     saturation: RationalPolynomialIdeal | None = None
     method: Literal["SINGULAR_SATURATION"] = "SINGULAR_SATURATION"
     backend_version: str | None = None
     detail: str | None = None
+    verification_budget: IdealComputationBudget | None = Field(
+        default=None,
+        description=(
+            "For a computed saturation, the bounded budget that was left "
+            "of the request's declared wall time when its defining-equality "
+            "verification ran; deserialization replays the decision under "
+            "this same bound."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_outcome_shape(self) -> Self:
@@ -271,14 +304,76 @@ class IdealSaturationResult(StrictModel):
                 raise ValueError(
                     "computed saturation requires a value and backend version"
                 )
+            if self.verification_budget is None:
+                raise ValueError(
+                    "computed saturation requires the verification budget "
+                    "it was decided under"
+                )
         elif (
             self.saturation is not None
             or self.backend_version is not None
+            or self.verification_budget is not None
             or not self.detail
         ):
             raise ValueError(
                 "failed saturation computation requires only a safe detail"
             )
+        # Source binding: every retained ring must be the source ideal's
+        # ordered ring, so a payload cannot revalidate as the saturation of
+        # an unrelated input or of another ring.
+        if self.source_polynomial.variables != self.source_ideal.variables or (
+            self.saturation is not None
+            and self.saturation.variables != self.source_ideal.variables
+        ):
+            raise ValueError(
+                "saturation operands and result must share the source "
+                "ideal's ordered ring"
+            )
+        # Anti-forgery replay: a COMPUTED conclusion must be re-decidable
+        # from the retained sources alone. The retained operands are first
+        # re-admitted through the request contract, so an independently
+        # authored payload cannot smuggle generators beyond the operation's
+        # bounded domain into the replay; the defining equality is then
+        # decided inside the same bounded Singular subprocess flow as the
+        # operation, under the budget retained from the original request.
+        if self.outcome == "COMPUTED":
+            from jacobian.math.commutative_algebra_ops._singular import (
+                run_singular_saturation_verification,
+            )
+
+            saturation = self.saturation
+            verification_budget = self.verification_budget
+            if saturation is None or verification_budget is None:
+                raise ValueError(
+                    "computed saturation requires a value and backend version"
+                )
+            # The claimed exact result must stay inside the declared
+            # backend output domain before any replay formats it into a
+            # script, so an independently authored payload cannot validate
+            # a shape the bounded backend could never produce.
+            _require_saturation_result_budget(saturation, verification_budget)
+            IdealSaturationRequest(
+                ideal=self.source_ideal,
+                saturation_polynomial=self.source_polynomial,
+                resource_budget=verification_budget,
+            )
+            saturator = RationalPolynomialIdeal(
+                variables=self.source_ideal.variables,
+                generators=(self.source_polynomial,),
+            )
+            verdict = run_singular_saturation_verification(
+                self.source_ideal,
+                saturator,
+                saturation,
+                verification_budget,
+            )
+            if verdict != "VERIFIED":
+                raise ValueError(
+                    "the computed saturation differs from the exact "
+                    "saturation of its retained sources; refusing to "
+                    f"report it (verification outcome: {verdict})"
+                )
+
         return self
 
 
@@ -364,10 +459,10 @@ class GroebnerBasisResult(StrictModel):
         return self
 
 
-def _sympy_monomial(symbols, exponents):
+def _sympy_monomial(symbols: tuple[Any, ...], exponents: tuple[int, ...]) -> Any:
     import sympy
 
-    monomial = sympy.Integer(1)
+    monomial: Any = sympy.Integer(1)
     for symbol, exponent in zip(symbols, exponents, strict=True):
         if exponent:
             monomial *= symbol**exponent
@@ -387,9 +482,11 @@ def _require_source_bound_basis(
         symbols_for_variables,
     )
 
-    def to_expr(generator):
+    def to_expr(generator: RationalPolynomial) -> Any:
         return rational_polynomial_to_sympy(generator).as_expr()
 
+    if basis.variables != source.variables:
+        raise ValueError("basis must use the source ideal's ordered ring")
     symbols = symbols_for_variables(basis.variables)
     basis_exprs = [to_expr(generator) for generator in basis.generators]
     source_exprs = [to_expr(generator) for generator in source.generators]
@@ -430,10 +527,10 @@ def _require_source_bound_basis(
 
 
 def _require_buchberger_criterion(
-    nonzero,
-    leading_terms,
-    leading_exps,
-    symbols,
+    nonzero: list[Any],
+    leading_terms: list[Any],
+    leading_exps: list[tuple[int, ...]],
+    symbols: tuple[Any, ...],
     monomial_order: str,
 ) -> None:
     """Every S-polynomial must reduce to zero over the claimed basis."""
@@ -464,10 +561,10 @@ def _require_buchberger_criterion(
 
 
 def _require_basis_ideal_equality(
-    nonzero,
-    source_exprs,
+    nonzero: list[Any],
+    source_exprs: list[Any],
     source: RationalPolynomialIdeal,
-    symbols,
+    symbols: tuple[Any, ...],
     monomial_order: str,
 ) -> None:
     """Membership against a verified basis is decided by reduction to zero."""

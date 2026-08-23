@@ -32,7 +32,7 @@ class PinnedDistanceRequest(StrictModel):
     points: tuple[RationalPoint2D, ...] = Field(min_length=2, max_length=128)
 
     @model_validator(mode="after")
-    def require_unique_points(self):
+    def require_unique_points(self) -> Self:
         keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("point-set coordinates must be unique")

@@ -12,21 +12,24 @@ from jacobian.math.geometry.inversion._models import (
 def compute_circle_inversion(request: CircleInversionRequest) -> CircleInversionResult:
     """Compute exact circle inversion of a rational planar point."""
 
-    cx = request.center_x.as_fraction()
-    cy = request.center_y.as_fraction()
+    cx = request.center.x.as_fraction()
+    cy = request.center.y.as_fraction()
     s = request.power.as_fraction()
-    px = request.point_x.as_fraction()
-    py = request.point_y.as_fraction()
+    px = request.point.x.as_fraction()
+    py = request.point.y.as_fraction()
 
     result = invert_point(cx, cy, s, px, py)
+    from jacobian.math.geometry._models import RationalPoint2D
+
+    inverted = RationalPoint2D(
+        x=CanonicalRational.from_fraction(result[0]),
+        y=CanonicalRational.from_fraction(result[1]),
+    )
     return CircleInversionResult(
-        center_x=request.center_x,
-        center_y=request.center_y,
+        center=request.center,
         power=request.power,
-        point_x=request.point_x,
-        point_y=request.point_y,
-        inverted_x=CanonicalRational.from_fraction(result[0]),
-        inverted_y=CanonicalRational.from_fraction(result[1]),
+        point=request.point,
+        inverted_point=inverted,
     )
 
 

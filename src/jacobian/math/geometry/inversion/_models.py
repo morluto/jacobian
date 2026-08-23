@@ -6,55 +6,16 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
-from jacobian.math._rational_height import RationalHeight, sum_heights
+from jacobian.canonical import format_canonical_integer
+from jacobian.math.geometry._models import RationalPoint2D
 
-
-class RationalPoint2D(StrictModel):
-    x: CanonicalRational
-    y: CanonicalRational
-
-
-def _displacement_height(
-    left: CanonicalRational, right: CanonicalRational
-) -> RationalHeight:
-    return sum_heights(
-        (RationalHeight.from_canonical(left), RationalHeight.from_canonical(right))
-    )
-
-
-def _inversion_result_heights(
-    center_x: CanonicalRational,
-    center_y: CanonicalRational,
-    power: CanonicalRational,
-    point_x: CanonicalRational,
-    point_y: CanonicalRational,
-) -> tuple[RationalHeight, RationalHeight]:
-    """Conservative height of I(p) = c + s(p - c)/||p - c||^2 before reduction.
-
-    The admitted domain must be symmetric under unit inversion so every
-    accepted result can be consumed unchanged.  For the origin-centered unit
-    inversion, I(I(p)) == p exactly, and each application squares
-    numerator/denominator digit counts; bounding the input height by half the
-    canonical limit makes two successive accepted invocations stay within one
-    canonical limit, which the squaring growth dominates.
-    """
-
-    dx = _displacement_height(point_x, center_x)
-    dy = _displacement_height(point_y, center_y)
-    norm_squared = sum_heights((dx.product(dx), dy.product(dy)))
-    scale = RationalHeight.from_canonical(power).quotient(norm_squared)
-    inverted_x = sum_heights(
-        (RationalHeight.from_canonical(center_x), scale.product(dx))
-    )
-    inverted_y = sum_heights(
-        (RationalHeight.from_canonical(center_y), scale.product(dy))
-    )
-    return inverted_x, inverted_y
-
-
-_HALF_CANONICAL_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS // 2
+_MAX_INVERSION_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS // 2
 
 
 class CircleInversionRequest(StrictModel):
@@ -62,23 +23,17 @@ class CircleInversionRequest(StrictModel):
 
     Given center c, positive rational inversion power s (squared inversion
     radius), and point p ≠ c, returns q = c + (s / ||p - c||²) * (p - c).
+
+    The request uses the geometry-owned ``RationalPoint2D`` so that points
+    produced by any planar-geometry operation can enter inversion unchanged
+    and vice versa.
     """
 
-    center_x: CanonicalRational = Field(
-        description="x-coordinate of the inversion center"
-    )
-    center_y: CanonicalRational = Field(
-        description="y-coordinate of the inversion center"
-    )
+    center: RationalPoint2D = Field(description="Inversion center c")
     power: CanonicalRational = Field(
         description="Positive rational inversion power (squared radius)"
     )
-    point_x: CanonicalRational = Field(
-        description="x-coordinate of the point to invert"
-    )
-    point_y: CanonicalRational = Field(
-        description="y-coordinate of the point to invert"
-    )
+    point: RationalPoint2D = Field(description="Point p != c to invert")
 
     @model_validator(mode="after")
     def require_admissible_request(self) -> Self:
@@ -86,48 +41,47 @@ class CircleInversionRequest(StrictModel):
             raise ValueError("inversion power must be positive")
         if self.power.num.startswith("-"):
             raise ValueError("inversion power must be positive")
-        # The contract requires p != c; inverting the center would divide by
-        # the zero displacement, so reject it at this typed boundary.
-        if (
-            self.point_x.as_fraction() == self.center_x.as_fraction()
-            and self.point_y.as_fraction() == self.center_y.as_fraction()
-        ):
+        if self.point == self.center:
             raise ValueError("the inversion center cannot be inverted")
-
-        # Admit only inputs whose own height is at most half the canonical
-        # limit.  Unit inversion squares digit counts, so I(I(p)) for an
-        # admitted p is again admitted: the domain is symmetric under the
-        # advertised involution and every accepted result can be fed back.
-        for rational in (
-            self.center_x,
-            self.center_y,
-            self.point_x,
-            self.point_y,
-            self.power,
+        for value, label in (
+            (self.center.x, "center.x"),
+            (self.center.y, "center.y"),
+            (self.power, "power"),
+            (self.point.x, "point.x"),
+            (self.point.y, "point.y"),
         ):
-            height = RationalHeight.from_canonical(rational)
-            if height.exceeds(_HALF_CANONICAL_DIGITS):
-                raise ValueError(
-                    "circle inversion inputs must stay within the "
-                    f"{_HALF_CANONICAL_DIGITS}-digit symmetric admission bound"
-                )
-
-        inverted_x, inverted_y = _inversion_result_heights(
-            self.center_x, self.center_y, self.power, self.point_x, self.point_y
-        )
-        if inverted_x.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) or inverted_y.exceeds(
-            MAX_CANONICAL_RATIONAL_DIGITS
-        ):
-            raise ValueError(
-                "circle inversion rational height exceeds the "
-                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound"
+            require_bounded_rational(
+                value, max_digits=_MAX_INVERSION_DIGITS, label=label
             )
+        # Keep the domain closed under the advertised involution: every
+        # accepted result must itself be admissible, so compute the exact
+        # inversion and reject if the derived coordinates would exceed the
+        # same admission bound.
+
+        cx, cy = self.center.x.as_fraction(), self.center.y.as_fraction()
+        s = self.power.as_fraction()
+        px, py = self.point.x.as_fraction(), self.point.y.as_fraction()
+        dx = px - cx
+        dy = py - cy
+        norm_sq = dx * dx + dy * dy
+        qx = cx + s * dx / norm_sq
+        qy = cy + s * dy / norm_sq
+        for frac, name in ((qx, "inverted point x"), (qy, "inverted point y")):
+            num_digits = len(format_canonical_integer(frac.numerator))
+            den_digits = len(format_canonical_integer(frac.denominator))
+            if max(num_digits, den_digits) > _MAX_INVERSION_DIGITS:
+                raise ValueError(
+                    f"derived {name} exceeds the {_MAX_INVERSION_DIGITS}-digit "
+                    "symmetric admission bound; the input is outside the "
+                    "closed inversion domain"
+                )
         return self
 
 
 class CircleInversionResult(CircleInversionRequest):
-    inverted_x: CanonicalRational
-    inverted_y: CanonicalRational
+    """The exact inverted point as the domain-canonical geometry point value."""
+
+    inverted_point: RationalPoint2D
     complete: Literal[True] = True
     method: Literal["EXACT_RATIONAL_INVERSION"] = "EXACT_RATIONAL_INVERSION"
 
@@ -135,22 +89,21 @@ class CircleInversionResult(CircleInversionRequest):
     def bind_inversion(self) -> Self:
         from jacobian.math.geometry.inversion._operations import invert_point
 
-        cx, cy = self.center_x.as_fraction(), self.center_y.as_fraction()
+        cx, cy = self.center.x.as_fraction(), self.center.y.as_fraction()
         s = self.power.as_fraction()
-        px, py = self.point_x.as_fraction(), self.point_y.as_fraction()
+        px, py = self.point.x.as_fraction(), self.point.y.as_fraction()
 
         result = invert_point(cx, cy, s, px, py)
-        expected_x = CanonicalRational.from_fraction(result[0])
-        expected_y = CanonicalRational.from_fraction(result[1])
-        if self.inverted_x != expected_x:
-            raise ValueError("inverted_x must be the exact inversion result")
-        if self.inverted_y != expected_y:
-            raise ValueError("inverted_y must be the exact inversion result")
+        expected = RationalPoint2D(
+            x=CanonicalRational.from_fraction(result[0]),
+            y=CanonicalRational.from_fraction(result[1]),
+        )
+        if self.inverted_point != expected:
+            raise ValueError("inverted_point must be the exact inversion result")
         return self
 
 
 __all__ = [
     "CircleInversionRequest",
     "CircleInversionResult",
-    "RationalPoint2D",
 ]

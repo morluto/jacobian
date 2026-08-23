@@ -5,6 +5,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian.math.geometry._models import RationalPoint2D
 from jacobian.math.geometry.inversion._models import (
     CircleInversionRequest,
     CircleInversionResult,
@@ -14,6 +15,14 @@ from jacobian.math.geometry.inversion._operations import (
     invert_point,
 )
 from jacobian.math.geometry.inversion._tools import TOOLS
+
+
+def _point(x: str, y: str) -> dict:
+    return {"x": {"num": x, "den": "1"}, "y": {"num": y, "den": "1"}}
+
+
+def _rational(num: str, den: str = "1") -> dict:
+    return {"num": num, "den": den}
 
 
 class TestKnownAnswers:
@@ -85,39 +94,92 @@ class TestRejection:
     def test_zero_power_rejected(self) -> None:
         with pytest.raises(ValidationError):
             CircleInversionRequest(
-                center_x={"num": "0", "den": "1"},
-                center_y={"num": "0", "den": "1"},
-                power={"num": "0", "den": "1"},
-                point_x={"num": "1", "den": "1"},
-                point_y={"num": "0", "den": "1"},
+                center=_point("0", "0"),
+                power=_rational("0"),
+                point=_point("1", "0"),
             )
+
+    def test_inverting_the_center_is_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="center cannot be inverted"):
+            CircleInversionRequest(
+                center=_point("3", "-2"),
+                power=_rational("1"),
+                point=_point("3", "-2"),
+            )
+
+
+class TestClosedDomain:
+    """Every accepted request must admit its own exact inverted point back."""
+
+    def test_near_origin_point_whose_inverse_leaves_the_domain_is_rejected(
+        self,
+    ) -> None:
+        # p = (1/10^6000, 1/(10^6000+1)) is itself inside the admission
+        # bound, but its exact inverse has an ~18001-digit numerator, so the
+        # advertised involution must refuse the request at admission instead
+        # of returning a value that cannot re-enter the operation.
+        with pytest.raises(ValidationError, match="closed inversion domain"):
+            CircleInversionRequest(
+                center=_point("0", "0"),
+                power=_rational("1"),
+                point={
+                    "x": {"num": "1", "den": "1" + "0" * 6000},
+                    "y": {"num": "1", "den": "9" * 6000 + "1"},
+                },
+            )
+
+    def test_accepted_results_feed_back_unchanged(self) -> None:
+        request = CircleInversionRequest(
+            center=_point("3", "2"),
+            power=_rational("5"),
+            point=_point("1", "7"),
+        )
+        result = compute_circle_inversion(request)
+        replay = CircleInversionRequest(
+            center=result.center, power=result.power, point=result.inverted_point
+        )
+        round_trip = compute_circle_inversion(replay)
+        assert round_trip.inverted_point == request.point
 
 
 class TestWireAdapter:
     def test_compute_circle_inversion(self) -> None:
         request = CircleInversionRequest(
-            center_x={"num": "0", "den": "1"},
-            center_y={"num": "0", "den": "1"},
-            power={"num": "1", "den": "1"},
-            point_x={"num": "4", "den": "1"},
-            point_y={"num": "0", "den": "1"},
+            center=_point("0", "0"),
+            power=_rational("1"),
+            point=_point("4", "0"),
         )
         result = compute_circle_inversion(request)
-        assert result.inverted_x.num == "1"
-        assert result.inverted_x.den == "4"
-        assert result.inverted_y.num == "0"
-        assert result.inverted_y.den == "1"
+        assert isinstance(result.inverted_point, RationalPoint2D)
+        assert result.inverted_point.x.num == "1"
+        assert result.inverted_point.x.den == "4"
+        assert result.inverted_point.y.num == "0"
+        assert result.inverted_point.y.den == "1"
 
     def test_non_origin_center(self) -> None:
         request = CircleInversionRequest(
-            center_x={"num": "3", "den": "1"},
-            center_y={"num": "2", "den": "1"},
-            power={"num": "5", "den": "1"},
-            point_x={"num": "1", "den": "1"},
-            point_y={"num": "7", "den": "1"},
+            center=_point("3", "2"),
+            power=_rational("5"),
+            point=_point("1", "7"),
         )
         result = compute_circle_inversion(request)
         assert isinstance(result, CircleInversionResult)
+        # q = c + s(p-c)/||p-c||^2 = (3,2) + (5/29)(-2,5) = (77/29, 83/29).
+        assert result.inverted_point == RationalPoint2D(
+            x={"num": "77", "den": "29"}, y={"num": "83", "den": "29"}
+        )
+
+    def test_result_binds_the_exact_inversion(self) -> None:
+        request = CircleInversionRequest(
+            center=_point("3", "2"),
+            power=_rational("5"),
+            point=_point("1", "7"),
+        )
+        result = compute_circle_inversion(request)
+        payload = result.model_dump()
+        payload["inverted_point"]["x"]["num"] = "2"
+        with pytest.raises(ValidationError, match="exact inversion result"):
+            CircleInversionResult.model_validate(payload)
 
 
 class TestToolsAndExamples:
@@ -134,3 +196,9 @@ class TestToolsAndExamples:
             request = tool.request_type.model_validate(ex.input)
             result = tool.run(request)
             assert result is not None
+
+    def test_schema_uses_the_geometry_canonical_point_value(self) -> None:
+        schema = CircleInversionRequest.model_json_schema()
+        definitions = schema.get("$defs", {})
+        assert "RationalPoint2D" in definitions
+        assert set(schema["properties"]) == {"center", "power", "point"}

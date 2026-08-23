@@ -4,53 +4,118 @@ from __future__ import annotations
 
 import math
 
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory._models import (
     ArithmeticFunctionRequest,
     BooleanResult,
-    BudgetedFactorizationRequest,
-    BudgetedFactorizationResult,
-    CertifiedFactorComponent,
+    CertifiedFactor,
+    CertifiedFactorizationRequest,
+    CertifiedFactorizationResult,
     DivisorListResult,
     FactorizationRequest,
     IntegerValueResult,
     PowerfulNumberRequest,
     PowerfulNumberResult,
+    PrattCertificateNode,
+    PrimalityCertificateRequest,
+    PrimalityCertificateResult,
     PrimeFactorizationResult,
     PrimePower,
 )
 
+# ---------------------------------------------------------------------------
+# Pratt certificate construction and verification
+# ---------------------------------------------------------------------------
 
-def factorize_with_budget(
-    request: BudgetedFactorizationRequest,
-) -> BudgetedFactorizationResult:
-    """Factor a small integer and classify each bounded component exactly."""
-    from flint import fmpz
-    from sympy import factorint
+_PRATT_BASE_PRIME = 2
 
-    from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+
+def _build_pratt_certificate(prime: int) -> PrattCertificateNode:
+    """Construct a Pratt certificate for one known prime.
+
+    The base case is ``prime == 2``.  For ``prime > 2`` we search for a witness
+    ``a`` such that ``a^(prime-1) ≡ 1 (mod prime)`` and ``a^((prime-1)/q) ≢ 1
+    (mod prime)`` for every prime factor ``q`` of ``prime - 1``.  Each such
+    ``q`` is then recursively certified.
+    """
+    if prime == _PRATT_BASE_PRIME:
+        return PrattCertificateNode(prime="2")
+
+    from sympy import factorint, primitive_root
+
+    prime_minus_one = prime - 1
+    factors_of_pmo = sorted(factorint(prime_minus_one).items())
+
+    # A primitive root modulo ``prime`` is guaranteed to satisfy the Pratt
+    # witness condition: its multiplicative order is exactly ``prime - 1``,
+    # so ``a^((prime-1)/q) ≢ 1 (mod prime)`` for every prime ``q | prime-1``.
+    witness = int(primitive_root(prime))
+
+    sub_certificates = tuple(
+        _build_pratt_certificate(int(q)) for q, _ in factors_of_pmo
+    )
+    return PrattCertificateNode(
+        prime=format_canonical_integer(prime),
+        witness=format_canonical_integer(witness),
+        sub_certificates=sub_certificates,
+    )
+
+
+def compute_pratt_certificate(
+    request: PrimalityCertificateRequest,
+) -> PrimalityCertificateResult:
+    """Produce a Pratt primality certificate for one declared candidate.
+
+    Returns ``COMPOSITE`` (no certificate) when the candidate is not prime.
+    """
+    from sympy import isprime
 
     value = parse_canonical_integer(request.value)
-    decomposition = sorted(factorint(value, limit=request.factor_limit).items())
-    factors = tuple(
-        CertifiedFactorComponent(
-            value=format_canonical_integer(int(factor)),
-            exponent=int(exponent),
-            status=(
-                "CERTIFIED_PRIME"
-                if fmpz(int(factor)).is_prime()
-                else "UNFACTORED_COMPOSITE"
-            ),
-        )
-        for factor, exponent in decomposition
-    )
-    return BudgetedFactorizationResult(
-        status="COMPLETE"
-        if all(item.status == "CERTIFIED_PRIME" for item in factors)
-        else "INCOMPLETE",
+    if not isprime(value):
+        return PrimalityCertificateResult(status="COMPOSITE", value=request.value)
+    return PrimalityCertificateResult(
+        status="CERTIFIED",
         value=request.value,
-        factor_limit=request.factor_limit,
+        certificate=_build_pratt_certificate(value),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Subexponential certified factorization
+# ---------------------------------------------------------------------------
+
+
+def factorize_certified(
+    request: CertifiedFactorizationRequest,
+) -> CertifiedFactorizationResult:
+    """Factor one bounded integer using subexponential methods.
+
+    Backed by ``sympy.ntheory.factorint`` without a trial-division limit, so
+    Pollard rho, Pollard p-1, and ECM are all available.  Each prime factor
+    carries an independent Pratt primality certificate.
+    """
+    from sympy import factorint
+
+    value = parse_canonical_integer(request.value)
+    decomposition = sorted(factorint(value).items())
+    factors = tuple(
+        CertifiedFactor(
+            prime=format_canonical_integer(int(prime)),
+            exponent=int(exponent),
+            certificate=_build_pratt_certificate(int(prime)),
+        )
+        for prime, exponent in decomposition
+    )
+    return CertifiedFactorizationResult(
+        status="COMPLETE",
+        value=request.value,
         factors=factors,
     )
+
+
+# ---------------------------------------------------------------------------
+# Divisor and factorization-derived operations
+# ---------------------------------------------------------------------------
 
 
 def enumerate_divisors(request: FactorizationRequest) -> DivisorListResult:

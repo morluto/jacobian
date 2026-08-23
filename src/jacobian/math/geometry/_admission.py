@@ -36,11 +36,6 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
     OperationAdmission(
-        "geometry.points.compute.pinned_distances",
-        AdmissionDecision.KEEP,
-        "complete exact pinned-distance profile with source-bound line ledger for bounded point configurations",
-    ),
-    OperationAdmission(
         "geometry.points.compute.squared_distance",
         AdmissionDecision.DROP,
         "elementary exact formula without material leverage over direct Python",
@@ -101,14 +96,14 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "elementary exact formula without material leverage over direct Python",
     ),
     OperationAdmission(
-        "geometry.circumradius.profile.compute",
+        "geometry.points.general_position.search",
         AdmissionDecision.KEEP,
-        "complete exact circumradius profile with source-bound triple identity for bounded point configurations",
+        "distinct exact or explicitly bounded search outcome with material computational leverage",
     ),
     OperationAdmission(
-        "geometry.configuration.forbidden_patterns.check",
+        "geometry.points.circumradius_profile.compute",
         AdmissionDecision.KEEP,
-        "exact exhaustive search for collinear triples and concyclic quadruples with typed witnesses",
+        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
 )
 

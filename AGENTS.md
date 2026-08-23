@@ -145,6 +145,24 @@ coarse aggregate input-size proxies. Limits may be generous when their safety
 and usefulness are established; wall time remains an execution safety net, not
 the mathematical work bound.
 
+Keep the mathematical postcondition separate from one call's admitted
+execution envelope. Do not impose a convenient ceiling on a coarse input such
+as `n` when an output-size, digit-length, or algorithm-specific budget safely
+admits materially larger useful cases. If an existing operation has the right
+postcondition but an unnecessarily narrow envelope, treat that as a
+scale/backend gap rather than adding a near-duplicate operation. Follow the
+[boundedness proof](docs/reference/domain-operation-library.md#boundedness-proof)
+when choosing or reviewing limits.
+
+Keep the semantic mathematical domain broad and accelerate before imposing a
+small fixed cap. Prefer result-sensitive admission, compact exact
+representations, maintained specialist backends, and algorithms selected for
+the admitted input regime. A backend limitation must not masquerade as a
+mathematical domain restriction: accept large inputs when predicted work,
+intermediate growth, and exact output remain within budget. Use a fixed cap
+only as a documented conservative fallback when a sharper safe envelope has
+not yet been established.
+
 Distinguish decision or first-witness operations from complete profiles and
 all-witness operations: they may inspect the same candidate family but have
 different output obligations. When a useful finite search exceeds one call's

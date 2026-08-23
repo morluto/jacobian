@@ -530,7 +530,10 @@ class PinnedLineDistanceResult(StrictModel):
         A valid profile contains only ``MAX_PAIRS`` source pairs in total,
         so the raw aggregate count is checked here — before Pydantic
         constructs every nested entry — to keep accepted-parse memory tied
-        to the mathematical bound.
+        to the mathematical bound. Already-parsed ``PinnedLineEntry``
+        instances are counted as well so native callers cannot bypass the
+        declared aggregate work and intermediate-memory bound through the
+        typed Python boundary.
         """
 
         if not isinstance(data, dict):
@@ -540,16 +543,17 @@ class PinnedLineDistanceResult(StrictModel):
             return data
         total = 0
         for line in lines:
-            if not isinstance(line, dict):
-                continue
-            pairs = line.get("pairs")
-            if isinstance(pairs, (list, tuple)):
-                total += len(pairs)
-                if total > MAX_PAIRS:
-                    raise ValueError(
-                        "the aggregate source-pair ledger exceeds the "
-                        f"{MAX_PAIRS}-pair profile bound"
-                    )
+            if isinstance(line, PinnedLineEntry):
+                total += len(line.pairs)
+            elif isinstance(line, dict):
+                pairs = line.get("pairs")
+                if isinstance(pairs, (list, tuple)):
+                    total += len(pairs)
+            if total > MAX_PAIRS:
+                raise ValueError(
+                    "the aggregate source-pair ledger exceeds the "
+                    f"{MAX_PAIRS}-pair profile bound"
+                )
         return data
 
     @model_validator(mode="after")

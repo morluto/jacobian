@@ -429,7 +429,10 @@ class TestPinnedLineDistance:
             squared_distance=_cr(0),
             pairs=((0, 1),),
         )
-        with pytest.raises(ValidationError, match="at most 2016 items"):
+        # Each entry carries a source pair, so an oversized ledger now trips
+        # the earlier aggregate pair-ledger cap before the schema maxItems
+        # bound is reached during field validation.
+        with pytest.raises(ValidationError, match="aggregate source-pair ledger"):
             PinnedLineDistanceResult(
                 configuration=cfg,
                 anchor=self._anchor(0, 0),
@@ -577,6 +580,107 @@ class TestAggregatePairLedgerBound:
         }
         with pytest.raises(ValidationError, match="aggregate source-pair ledger"):
             PinnedLineDistanceResult.model_validate(payload)
+
+    def test_prevalidated_entries_counted_in_aggregate_cap(self):
+        """Pre-validated ``PinnedLineEntry`` instances bypass dict-only
+        counting, so a native caller could supply individually valid entries
+        whose aggregate pair total far exceeds MAX_PAIRS; the cap must count
+        already-parsed entries too before any replay work runs."""
+        from fractions import Fraction
+        from itertools import combinations
+
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            MAX_PAIRS,
+            PinnedLineConfiguration,
+            PinnedLineDistanceResult,
+            PinnedLineEntry,
+            PinnedLinePoint,
+        )
+
+        def _cr(value):
+            return CanonicalRational.from_fraction(Fraction(value))
+
+        cfg = PinnedLineConfiguration(
+            points=tuple(
+                PinnedLinePoint(label=f"p{i}", coordinates=(_cr(i), _cr(i * i)))
+                for i in range(64)
+            )
+        )
+        full_ledger = tuple((i, j) for i, j in combinations(range(64), 2))
+        assert len(full_ledger) == MAX_PAIRS
+        entries = tuple(
+            PinnedLineEntry(
+                line_coefficients=(_cr(0), _cr(1), _cr(-k)),
+                squared_distance=_cr(1),
+                pairs=full_ledger,
+            )
+            for k in range(2)
+        )
+        assert sum(len(entry.pairs) for entry in entries) > MAX_PAIRS
+        with pytest.raises(ValidationError, match="aggregate source-pair ledger"):
+            PinnedLineDistanceResult(
+                configuration=cfg,
+                anchor=(_cr(0), _cr(0)),
+                dimension=2,
+                point_count=64,
+                lines=entries,
+                distance_multiplicities=(),
+            )
+
+    def test_mixed_dict_and_instance_entries_counted_in_aggregate_cap(self):
+        from fractions import Fraction
+        from itertools import combinations
+
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            MAX_PAIRS,
+            PinnedLineConfiguration,
+            PinnedLineDistanceResult,
+            PinnedLineEntry,
+            PinnedLinePoint,
+        )
+
+        def _cr(value):
+            return CanonicalRational.from_fraction(Fraction(value))
+
+        cfg = PinnedLineConfiguration(
+            points=tuple(
+                PinnedLinePoint(label=f"p{i}", coordinates=(_cr(i), _cr(i * i)))
+                for i in range(64)
+            )
+        )
+        full_ledger = tuple((i, j) for i, j in combinations(range(64), 2))
+        assert len(full_ledger) == MAX_PAIRS
+        half = full_ledger[: MAX_PAIRS // 2]
+        instance_entry = PinnedLineEntry(
+            line_coefficients=(_cr(0), _cr(1), _cr(-1)),
+            squared_distance=_cr(1),
+            pairs=full_ledger,
+        )
+        dict_entry = {
+            "line_coefficients": [
+                {"num": "0", "den": "1"},
+                {"num": "1", "den": "1"},
+                {"num": "-2", "den": "1"},
+            ],
+            "squared_distance": {"num": "1", "den": "1"},
+            "pairs": [list(pair) for pair in half],
+        }
+        assert len(instance_entry.pairs) + len(dict_entry["pairs"]) > MAX_PAIRS
+        with pytest.raises(ValidationError, match="aggregate source-pair ledger"):
+            PinnedLineDistanceResult(
+                configuration=cfg,
+                anchor=(_cr(0), _cr(0)),
+                dimension=2,
+                point_count=64,
+                lines=(instance_entry, dict_entry),
+                distance_multiplicities=(),
+            )
 
     def test_valid_profile_ledger_roundtrips(self):
         from jacobian.math.geometry.exact._models import (

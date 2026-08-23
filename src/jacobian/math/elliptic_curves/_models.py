@@ -370,32 +370,16 @@ class ScalarMultiplicationRequest(StrictModel):
         return self
 
 
-class ScalarMultiplicationResult(StrictModel):
-    """The result of scalar multiplication n*P on its retained parent curve."""
+class ScalarMultiplicationResult(EllipticCurvePointResult):
+    """The result of scalar multiplication n*P on its retained parent curve.
 
-    curve: ShortWeierstrassCurve
-    point: RationalAffinePoint | None = None
-    at_infinity: bool = False
+    The shared parent-bearing curve-point value: a scalar-multiplication
+    result passes unchanged as the operand of any later group-law request.
+    """
 
-    @model_validator(mode="after")
-    def require_consistent_result(self) -> Self:
-        if self.point is not None and self.at_infinity:
-            raise ValueError("a finite point and infinity are mutually exclusive")
-        if self.point is None and not self.at_infinity:
-            raise ValueError("must carry a finite point or indicate infinity")
-        # The curve parent defines the group the result lives in: without it,
-        # identical coordinate pairs on different curves serialize to the
-        # same value and callers cannot feed the point back into another
-        # group-law request.  Replay membership so the retained point cannot
-        # detach from its claimed parent.
-        if self.point is not None:
-            x = self.point.x.as_fraction()
-            y = self.point.y.as_fraction()
-            a = self.curve.coefficient_a.as_fraction()
-            b = self.curve.coefficient_b.as_fraction()
-            if y * y != x**3 + a * x + b:
-                raise ValueError("result point must lie on the retained curve")
-        return self
+
+# Membership replay is inherited from EllipticCurvePointResult's validator.
+ScalarMultiplicationResult.model_rebuild()
 
 
 __all__ = [

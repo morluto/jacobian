@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.additive_combinatorics._models import (
     AdditiveEnergyRequest,
+    DifferenceVector,
     DirectSumPredicateRequest,
     FiniteIntegerSet,
     IntegerVector,
@@ -308,13 +309,13 @@ class TestOrderedDifferenceProfile:
                 set_size=2,
                 classes=(
                     OrderedDifferenceClass(
-                        difference=IntegerVector(coordinates=("-999",)),
+                        difference=DifferenceVector(coordinates=("-999",)),
                         pairs=(
                             OrderedDifferencePair(minuend_index=0, subtrahend_index=1),
                         ),
                     ),
                     OrderedDifferenceClass(
-                        difference=IntegerVector(coordinates=("999",)),
+                        difference=DifferenceVector(coordinates=("999",)),
                         pairs=(
                             OrderedDifferencePair(minuend_index=1, subtrahend_index=0),
                         ),
@@ -408,3 +409,44 @@ class TestOrderedDifferenceProfileTransportBound:
     def test_coordinate_bound_is_enforced(self):
         with pytest.raises(ValidationError):
             IntegerVector(coordinates=("1" * 65,))
+
+    def test_singleton_set_returns_empty_profile(self):
+        result = compute_ordered_difference_profile(
+            OrderedDifferenceProfileRequest(
+                vectors=IntegerVectorSet(
+                    vectors=(IntegerVector(coordinates=("7", "-3")),),
+                ),
+            )
+        )
+        assert result.set_size == 1
+        assert result.ordered_pair_count == 0
+        assert result.support_size == 0
+        assert result.max_multiplicity == 0
+        assert not result.has_repeated_difference
+        assert result.first_repeated_difference is None
+        assert result.classes == ()
+        OrderedDifferenceProfileResult.model_validate(result.model_dump(mode="json"))
+
+    def test_difference_of_boundary_coordinates_admits_the_derived_digit(self):
+        """Two 64-digit coordinates may differ by exactly one derived digit."""
+        high = "9" * 64
+        result = compute_ordered_difference_profile(
+            OrderedDifferenceProfileRequest(
+                vectors=IntegerVectorSet(
+                    vectors=(
+                        IntegerVector(coordinates=(high,)),
+                        IntegerVector(coordinates=("-" + high,)),
+                    ),
+                ),
+            )
+        )
+        encoded = {
+            coordinate
+            for cls in result.classes
+            for coordinate in cls.difference.coordinates
+        }
+        assert ("1" + "9" * 63 + "8") in encoded
+        assert len(encoded) == 2
+        for coordinate in encoded:
+            assert len(coordinate.lstrip("-")) == 65
+        OrderedDifferenceProfileResult.model_validate(result.model_dump(mode="json"))

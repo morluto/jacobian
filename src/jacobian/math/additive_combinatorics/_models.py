@@ -184,7 +184,8 @@ class DirectSumPredicateResult(StrictModel):
 MAX_VECTOR_SET_SIZE = 128
 MAX_VECTOR_DIMENSION = 8
 # Bounded integer work: each admitted coordinate carries at most 64 decimal
-# digits, so every profile arithmetic step and its canonical difference
+# digits and each difference of two admitted coordinates is proven to carry at
+# most one more, so every profile arithmetic step and its canonical difference
 # encoding stay inside a fixed, published budget. Differences are carried as
 # canonical integer strings, so no derived value depends on raw JSON-number
 # interoperability ranges.
@@ -193,6 +194,14 @@ BoundedCoordinate = Annotated[
     StringConstraints(
         pattern=r"^(?:0|-?[1-9][0-9]{0,63})$",
         max_length=65,
+        strict=True,
+    ),
+]
+ResultCoordinate = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^(?:0|-?[1-9][0-9]{0,64})$",
+        max_length=66,
         strict=True,
     ),
 ]
@@ -205,6 +214,22 @@ class IntegerVector(StrictModel):
         min_length=1,
         max_length=MAX_VECTOR_DIMENSION,
         description="Canonical integer coordinates, at most 64 decimal digits each.",
+    )
+
+    def as_ints(self) -> tuple[int, ...]:
+        return tuple(parse_canonical_integer(value) for value in self.coordinates)
+
+
+class DifferenceVector(StrictModel):
+    """One exact difference vector of bounded canonical decimal coordinates."""
+
+    coordinates: tuple[ResultCoordinate, ...] = Field(
+        min_length=1,
+        max_length=MAX_VECTOR_DIMENSION,
+        description=(
+            "Canonical integer coordinates of an exact difference of two "
+            "admitted vectors, at most 65 decimal digits each."
+        ),
     )
 
     def as_ints(self) -> tuple[int, ...]:
@@ -248,7 +273,7 @@ class OrderedDifferencePair(StrictModel):
 class OrderedDifferenceClass(StrictModel):
     """One nonzero difference vector and its ordered source pairs."""
 
-    difference: IntegerVector
+    difference: DifferenceVector
     pairs: tuple[OrderedDifferencePair, ...] = Field(min_length=1)
 
 
@@ -268,7 +293,7 @@ def _require_pair_replay(
     class_total = sum(len(cls.pairs) for cls in result.classes)
     if class_total != expected_total:
         raise ValueError("pair counts must sum to ordered_pair_count")
-    computed_max = max(len(cls.pairs) for cls in result.classes)
+    computed_max = max((len(cls.pairs) for cls in result.classes), default=0)
     if result.max_multiplicity != computed_max:
         raise ValueError("max_multiplicity must be the maximum class multiplicity")
     if result.has_repeated_difference != (result.max_multiplicity > 1):
@@ -328,9 +353,9 @@ def _require_class_coverage(
 
 def _exact_difference_counts(
     vectors: tuple[tuple[int, ...], ...],
-) -> Counter:
+) -> Counter[tuple[int, ...]]:
     """Exact multiset of ordered differences of a finite integer-vector set."""
-    counts: Counter = Counter()
+    counts: Counter[tuple[int, ...]] = Counter()
     for i, vi in enumerate(vectors):
         for j, vj in enumerate(vectors):
             if i == j:
@@ -392,6 +417,7 @@ class OrderedDifferenceProfileResult(StrictModel):
 __all__ = [
     "AdditiveEnergyRequest",
     "AdditiveEnergyResult",
+    "DifferenceVector",
     "DirectSumPredicateRequest",
     "DirectSumPredicateResult",
     "FiniteCyclicGroup",

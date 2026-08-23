@@ -7,30 +7,26 @@ from dataclasses import dataclass
 from typing import Literal
 
 from jacobian.canonical import (
-    CanonicalLimits,
     encode_strict_json,
     format_canonical_integer,
     parse_canonical_integer,
 )
 from jacobian.math.number_theory._periodic_models import (
+    MAX_INTERSECTION_MERGES,
+    MAX_INTERSECTION_STATES,
     MAX_MATERIALIZED_RESIDUES,
+    MAX_PERIOD_LIFT_WORK,
+    MAX_PERIOD_SCAN,
     MAX_PERIODIC_INTEGER_DIGITS,
+    MAX_PERIODIC_RESULT_BYTES,
+    MAX_SPARSE_LIFTED_ROWS,
+    PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES,
     PeriodicCongruenceUnionSource,
 )
 
-MAX_PERIOD_SCAN = 1_000_000
-MAX_PERIOD_LIFT_WORK = 2_000_000
-# Sparse lifting performs one bounded integer-set insertion per lifted source
-# row and retains no more states than rows visited.  This conservative cap is
-# independent of the common-period size and keeps both quantities bounded.
-MAX_SPARSE_LIFTED_ROWS = 65_536
 # Operations perform one kernel pass and their authoritative result validators
-# replay the same bounded invariant once.  These are per-pass caps, so a full
+# replay that operation's defining invariant once. These are per-pass caps, so a full
 # accepted call performs at most twice the admitted scan/lift or merge work.
-MAX_INTERSECTION_STATES = 65_535
-MAX_INTERSECTION_MERGES = 100_000
-MAX_PERIODIC_RESULT_BYTES = CanonicalLimits().max_output_bytes
-_PROFILE_RESULT_ENVELOPE_BYTES = 4_096
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,7 +170,7 @@ def require_materializable_periodic_source(
     estimated_result_bytes = (
         source_bytes
         + result_rows * (period_digits + 3)
-        + _PROFILE_RESULT_ENVELOPE_BYTES
+        + PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES
     )
     if estimated_result_bytes > MAX_PERIODIC_RESULT_BYTES:
         raise ValueError(

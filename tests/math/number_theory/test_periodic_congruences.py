@@ -10,15 +10,18 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.number_theory._periodic_kernel import (
-    MAX_INTERSECTION_STATES,
-    MAX_SPARSE_LIFTED_ROWS,
-)
 from jacobian.math.number_theory._periodic_models import (
+    MAX_INTERSECTION_MERGES,
+    MAX_INTERSECTION_STATES,
     MAX_MATERIALIZED_RESIDUES,
+    MAX_PERIOD_LIFT_WORK,
+    MAX_PERIOD_SCAN,
     MAX_PERIODIC_FAMILY_SIZE,
     MAX_PERIODIC_INTEGER_DIGITS,
+    MAX_PERIODIC_RESULT_BYTES,
     MAX_PERIODIC_SOURCE_ROWS,
+    MAX_SPARSE_LIFTED_ROWS,
+    PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES,
     PeriodicCongruenceUnionMeasureResult,
     PeriodicCongruenceUnionProfileRequest,
     PeriodicCongruenceUnionProfileResult,
@@ -401,6 +404,92 @@ def test_profile_result_rejects_omitted_or_forged_residues() -> None:
         forged["occupied_residues"] = residues
         with pytest.raises(ValidationError, match="every satisfying residue"):
             PeriodicCongruenceUnionProfileResult.model_validate(forged)
+
+
+def test_profile_result_rejects_independent_source_and_measure_mutations() -> None:
+    result = _profile(
+        {
+            "subsets": [{"modulus": "5", "residues": ["0", "2"]}],
+            "complement": False,
+        }
+    )
+    serialized = result.model_dump(mode="json")
+
+    bad_source = copy.deepcopy(serialized)
+    bad_source["source"]["subsets"][0]["residues"] = ["1", "3"]
+    with pytest.raises(ValidationError, match="every satisfying residue"):
+        PeriodicCongruenceUnionProfileResult.model_validate(bad_source)
+
+    bad_period = copy.deepcopy(serialized)
+    bad_period["common_period"] = "6"
+    with pytest.raises(ValidationError, match="common period"):
+        PeriodicCongruenceUnionProfileResult.model_validate(bad_period)
+
+    bad_count = copy.deepcopy(serialized)
+    bad_count["occupied_count"] = "3"
+    with pytest.raises(ValidationError, match="occupied count"):
+        PeriodicCongruenceUnionProfileResult.model_validate(bad_count)
+
+    bad_density = copy.deepcopy(serialized)
+    bad_density["density"] = {"num": "1", "den": "5"}
+    with pytest.raises(ValidationError, match="density"):
+        PeriodicCongruenceUnionProfileResult.model_validate(bad_density)
+
+
+def test_request_schemas_publish_aggregate_execution_and_profile_bounds() -> None:
+    measure_schema = PeriodicCongruenceUnionRequest.model_json_schema()
+    profile_schema = PeriodicCongruenceUnionProfileRequest.model_json_schema()
+
+    for schema in (measure_schema, profile_schema):
+        description = schema["description"]
+        subsets_description = schema["properties"]["subsets"]["description"]
+        assert "4,096 raw" in description
+        assert "4,096 normalized" in description
+        assert "256 decimal digits" in description
+        assert "4,096 raw" in subsets_description
+        assert "4,096 normalized" in subsets_description
+        assert schema["aggregate_raw_residue_row_limit"] == MAX_PERIODIC_SOURCE_ROWS
+        assert (
+            schema["aggregate_normalized_residue_row_limit"] == MAX_PERIODIC_SOURCE_ROWS
+        )
+        assert schema["common_period_digit_limit"] == MAX_PERIODIC_INTEGER_DIGITS
+        assert schema["execution_regime_limits"] == {
+            "period_lift": {
+                "max_common_period": MAX_PERIOD_SCAN,
+                "max_period_plus_lifted_rows": MAX_PERIOD_LIFT_WORK,
+            },
+            "sparse_lift": {
+                "max_lifted_rows": MAX_SPARSE_LIFTED_ROWS,
+                "max_retained_states": MAX_SPARSE_LIFTED_ROWS,
+            },
+            "inclusion_exclusion": {
+                "max_retained_states": MAX_INTERSECTION_STATES,
+                "max_merges": MAX_INTERSECTION_MERGES,
+            },
+        }
+
+    assert (
+        profile_schema["profile_materialized_residue_limit"]
+        == MAX_MATERIALIZED_RESIDUES
+    )
+    assert (
+        profile_schema["profile_full_union_period_limit"] == MAX_MATERIALIZED_RESIDUES
+    )
+    assert (
+        profile_schema["profile_general_noncomplement_lifted_row_limit"]
+        == MAX_MATERIALIZED_RESIDUES
+    )
+    assert (
+        profile_schema["profile_nontrivial_complement_period_limit"]
+        == MAX_MATERIALIZED_RESIDUES
+    )
+    assert profile_schema["profile_materialization_work_limit"] == (
+        MAX_PERIOD_LIFT_WORK
+    )
+    assert profile_schema["profile_result_envelope_bytes"] == (
+        PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES
+    )
+    assert profile_schema["profile_result_byte_limit"] == MAX_PERIODIC_RESULT_BYTES
 
 
 def test_measure_accepts_exact_integer_digit_boundary() -> None:

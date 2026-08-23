@@ -9,12 +9,95 @@ from pydantic import ConfigDict, Field, StrictBool, StringConstraints, model_val
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import (
+    CanonicalLimits,
+    format_canonical_integer,
+    parse_canonical_integer,
+)
 
 MAX_PERIODIC_FAMILY_SIZE = 64
 MAX_PERIODIC_SOURCE_ROWS = 4_096
 MAX_PERIODIC_INTEGER_DIGITS = 256
 MAX_MATERIALIZED_RESIDUES = 65_536
+MAX_PERIOD_SCAN = 1_000_000
+MAX_PERIOD_LIFT_WORK = 2_000_000
+# Sparse lifting performs one bounded integer-set insertion per lifted source
+# row and retains no more states than rows visited. This conservative cap is
+# independent of the common-period size and keeps both quantities bounded.
+MAX_SPARSE_LIFTED_ROWS = 65_536
+MAX_INTERSECTION_STATES = 65_535
+MAX_INTERSECTION_MERGES = 100_000
+MAX_PERIODIC_RESULT_BYTES = CanonicalLimits().max_output_bytes
+PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES = 4_096
+
+_PERIODIC_REQUEST_EXAMPLE = {
+    "subsets": [
+        {"modulus": "4", "residues": ["0", "1"]},
+        {"modulus": "6", "residues": ["-1", "1"]},
+    ],
+    "complement": False,
+}
+_PERIODIC_REQUEST_DESCRIPTION = (
+    "Normalize and merge at most 64 residue subsets with at most 4,096 raw "
+    "and 4,096 normalized residue rows. Each modulus and their lcm L have at "
+    "most 256 decimal digits. With W = sum(|R_i| * L/m_i), exact execution "
+    "uses a full-subset shortcut; a period lift when L <= 1,000,000 and "
+    "L + W <= 2,000,000; a sparse lift when W <= 65,536; or generalized-CRT "
+    "inclusion-exclusion with at most 65,535 retained states and 100,000 merges."
+)
+
+
+def _periodic_request_schema_extra(*, profile: bool) -> dict[str, object]:
+    description = _PERIODIC_REQUEST_DESCRIPTION
+    extra: dict[str, object] = {
+        "description": description,
+        "examples": [_PERIODIC_REQUEST_EXAMPLE],
+        "aggregate_raw_residue_row_limit": MAX_PERIODIC_SOURCE_ROWS,
+        "aggregate_normalized_residue_row_limit": MAX_PERIODIC_SOURCE_ROWS,
+        "common_period_digit_limit": MAX_PERIODIC_INTEGER_DIGITS,
+        "execution_regime_limits": {
+            "period_lift": {
+                "max_common_period": MAX_PERIOD_SCAN,
+                "max_period_plus_lifted_rows": MAX_PERIOD_LIFT_WORK,
+            },
+            "sparse_lift": {
+                "max_lifted_rows": MAX_SPARSE_LIFTED_ROWS,
+                "max_retained_states": MAX_SPARSE_LIFTED_ROWS,
+            },
+            "inclusion_exclusion": {
+                "max_retained_states": MAX_INTERSECTION_STATES,
+                "max_merges": MAX_INTERSECTION_MERGES,
+            },
+        },
+    }
+    if profile:
+        extra.update(
+            {
+                "description": (
+                    description
+                    + " A materialized profile returns at most 65,536 residues. "
+                    "A full-subset shortcut returns L union rows (so L <= 65,536) "
+                    "or an empty complement. Otherwise, non-complements require "
+                    "W <= 65,536; complements require L <= 65,536 and "
+                    "L + W <= 2,000,000. The retained source, residue list, and "
+                    "4,096-byte result envelope must fit the 10,485,760-byte "
+                    "canonical output limit."
+                ),
+                "profile_materialized_residue_limit": MAX_MATERIALIZED_RESIDUES,
+                "profile_full_union_period_limit": MAX_MATERIALIZED_RESIDUES,
+                "profile_general_noncomplement_lifted_row_limit": (
+                    MAX_MATERIALIZED_RESIDUES
+                ),
+                "profile_nontrivial_complement_period_limit": (
+                    MAX_MATERIALIZED_RESIDUES
+                ),
+                "profile_materialization_work_limit": MAX_PERIOD_LIFT_WORK,
+                "profile_result_envelope_bytes": PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES,
+                "profile_result_byte_limit": MAX_PERIODIC_RESULT_BYTES,
+            }
+        )
+    return extra
+
 
 PeriodicSignedInteger = Annotated[
     str,
@@ -124,24 +207,15 @@ class PeriodicCongruenceUnionRequest(StrictModel):
     """
 
     model_config = ConfigDict(
-        json_schema_extra={
-            "examples": [
-                {
-                    "subsets": [
-                        {"modulus": "4", "residues": ["0", "1"]},
-                        {"modulus": "6", "residues": ["-1", "1"]},
-                    ],
-                    "complement": False,
-                }
-            ]
-        }
+        json_schema_extra=_periodic_request_schema_extra(profile=False)
     )
 
     subsets: tuple[PeriodicCongruenceSubsetInput, ...] = Field(
         max_length=MAX_PERIODIC_FAMILY_SIZE,
         description=(
-            "At most 64 finite residue subsets. Equal moduli are merged; the empty "
-            "family has common period 1 and denotes the empty union."
+            "At most 64 finite residue subsets and 4,096 raw residue rows in "
+            "aggregate. Equal moduli are merged, with at most 4,096 normalized "
+            "rows; the empty family has common period 1 and denotes the empty union."
         ),
     )
     complement: StrictBool = Field(
@@ -196,6 +270,10 @@ class PeriodicCongruenceUnionRequest(StrictModel):
 class PeriodicCongruenceUnionProfileRequest(PeriodicCongruenceUnionRequest):
     """A periodic-congruence union whose complete common-period set fits output."""
 
+    model_config = ConfigDict(
+        json_schema_extra=_periodic_request_schema_extra(profile=True)
+    )
+
     @model_validator(mode="after")
     def require_materializable_profile(self) -> Self:
         from jacobian.math.number_theory._periodic_kernel import (
@@ -204,6 +282,23 @@ class PeriodicCongruenceUnionProfileRequest(PeriodicCongruenceUnionRequest):
 
         require_materializable_periodic_source(self.normalized_source())
         return self
+
+
+def _require_measure_binding(
+    common_period: str,
+    occupied_count_text: str,
+    density: CanonicalRational,
+    *,
+    period: int,
+    occupied_count: int,
+) -> None:
+    if common_period != format_canonical_integer(period):
+        raise ValueError("common period must be the lcm of the source moduli")
+    if occupied_count_text != format_canonical_integer(occupied_count):
+        raise ValueError("occupied count does not match the normalized source")
+    expected_density = CanonicalRational.from_fraction(Fraction(occupied_count, period))
+    if density != expected_density:
+        raise ValueError("density must equal occupied_count/common_period")
 
 
 class PeriodicCongruenceUnionMeasureResult(StrictModel):
@@ -230,15 +325,13 @@ class PeriodicCongruenceUnionMeasureResult(StrictModel):
 
         period = common_period(self.source)
         occupied_count = measure_periodic_union(self.source)
-        if self.common_period != format_canonical_integer(period):
-            raise ValueError("common period must be the lcm of the source moduli")
-        if self.occupied_count != format_canonical_integer(occupied_count):
-            raise ValueError("occupied count does not match the normalized source")
-        expected_density = CanonicalRational.from_fraction(
-            Fraction(occupied_count, period)
+        _require_measure_binding(
+            self.common_period,
+            self.occupied_count,
+            self.density,
+            period=period,
+            occupied_count=occupied_count,
         )
-        if self.density != expected_density:
-            raise ValueError("density must equal occupied_count/common_period")
         return self
 
 
@@ -253,13 +346,24 @@ class PeriodicCongruenceUnionProfileResult(PeriodicCongruenceUnionMeasureResult)
     )
 
     @model_validator(mode="after")
-    def bind_profile_to_source(self) -> Self:
+    def bind_measure_to_source(self) -> Self:
+        """Override measure replay with one complete profile replay."""
+
         from jacobian.math.number_theory._periodic_kernel import (
+            common_period,
             materialize_periodic_union,
         )
 
+        period = common_period(self.source)
         expected = materialize_periodic_union(self.source)
         actual = tuple(map(parse_canonical_integer, self.occupied_residues))
+        _require_measure_binding(
+            self.common_period,
+            self.occupied_count,
+            self.density,
+            period=period,
+            occupied_count=len(expected),
+        )
         if actual != expected:
             raise ValueError(
                 "occupied residues must be every satisfying residue in canonical order"
@@ -268,10 +372,17 @@ class PeriodicCongruenceUnionProfileResult(PeriodicCongruenceUnionMeasureResult)
 
 
 __all__ = [
+    "MAX_INTERSECTION_MERGES",
+    "MAX_INTERSECTION_STATES",
     "MAX_MATERIALIZED_RESIDUES",
     "MAX_PERIODIC_FAMILY_SIZE",
     "MAX_PERIODIC_INTEGER_DIGITS",
+    "MAX_PERIODIC_RESULT_BYTES",
     "MAX_PERIODIC_SOURCE_ROWS",
+    "MAX_PERIOD_LIFT_WORK",
+    "MAX_PERIOD_SCAN",
+    "MAX_SPARSE_LIFTED_ROWS",
+    "PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES",
     "PeriodicCongruenceSubset",
     "PeriodicCongruenceSubsetInput",
     "PeriodicCongruenceUnionMeasureResult",

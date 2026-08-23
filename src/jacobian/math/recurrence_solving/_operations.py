@@ -37,12 +37,13 @@ def compute_closed_form(request: ClosedFormRequest) -> ClosedFormResult:
 def compute_prime_field_find_recurrence(
     request: PrimeFieldRecurrenceFindRequest,
 ) -> PrimeFieldRecurrenceFindResult:
-    """Find the minimal LFSR over ``GF(p)`` via Berlekamp-Massey."""
+    """Find the minimal LFSR over ``GF(p)`` via Berlekamp-Massey.
+
+    The recurrence is established only on the supplied prefix
+    ``L <= n < len(sequence)``.
+    """
     rec = berlekamp_massey(list(request.sequence), request.prime)
     return PrimeFieldRecurrenceFindResult(
-        prime=rec.prime,
         sequence=request.sequence,
-        coefficients=rec.coefficients,
-        order=rec.order,
-        status=rec.status,
+        recurrence=rec,
     )

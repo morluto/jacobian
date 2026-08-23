@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.recurrence_solving._models import PrimeFieldRecurrence
 
 __all__ = [
     "ClosedForm",
@@ -27,15 +28,6 @@ class Recurrence:
 _MAX_FIELD_PRIME = 10_000
 _MAX_FIELD_SEQUENCE_LENGTH = 256
 
-
-@dataclass(frozen=True, slots=True)
-class PrimeFieldRecurrence:
-    """Minimal linear recurrence over an explicit prime field ``GF(p)``."""
-
-    prime: int
-    coefficients: tuple[int, ...]
-    order: int
-    status: Literal["FOUND", "NO_FITTING_RECURRENCE"]
 
 
 def _validate_berlekamp_inputs(sequence: list[int], prime: int) -> None:
@@ -158,10 +150,13 @@ def berlekamp_massey(sequence: list[int], prime: int) -> PrimeFieldRecurrence:
     """Return the minimal LFSR over ``GF(p)`` via Berlekamp-Massey.
 
     Returns a :class:`PrimeFieldRecurrence` containing the field ``prime``
-    and the coefficient tuple ``(c_1, ..., c_L)`` such that for every
-    ``n >= L``, ``s_n = c_1 s_{n-1} + ... + c_L s_{n-L}`` (mod p) with ``L``
-    minimal. The returned value retains its field; ``[1, 1]`` over ``GF(2)``
-    and ``GF(7)`` are distinct values. An order-zero ``FOUND`` result
+    and the coefficient tuple ``(c_1, ..., c_L)`` such that the equation
+    ``s_n = c_1 s_{n-1} + ... + c_L s_{n-L}`` (mod p) holds for every index
+    of the supplied prefix with ``L <= n < len(sequence)``, with ``L``
+    minimal. The algorithm observes only this finite prefix, so the value
+    establishes nothing about terms at or beyond ``len(sequence)``. The
+    returned value retains its field; ``[1, 1]`` over ``GF(2)`` and
+    ``GF(7)`` are distinct values. An order-zero ``FOUND`` result
     represents the all-zero sequence.
     """
     _validate_berlekamp_inputs(sequence, prime)

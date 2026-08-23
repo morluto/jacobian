@@ -39,6 +39,7 @@ from jacobian.math.polynomials._models import (
 from jacobian.math.polynomials._replay import (
     _ring_element,
     _sparse_ring,
+    ReductionWorkLimitExceeded,
     budgeted_reduce,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
@@ -289,7 +290,14 @@ def polynomial_ideal_normal_form(
     ring_context = _sparse_ring(variables, request.monomial_order)
     divisors = [_ring_element(ring_context, element) for element in wire_basis]
     dividend = _ring_element(ring_context, request.polynomial)
-    replayed = budgeted_reduce(ring_context, dividend, divisors)
+    try:
+        replayed = budgeted_reduce(ring_context, dividend, divisors)
+    except ReductionWorkLimitExceeded:
+        # Work exhaustion without an overflowing artifact is a
+        # non-conclusion, not evidenced overflow: the exact remainder may
+        # sit well inside the output boundary while the naive reduction
+        # order temporarily expands a larger intermediate.
+        return _incomplete_normal_form(request, "UNKNOWN", None)
     if replayed is None:
         return _incomplete_normal_form(request, "BUDGET_EXCEEDED", wire_basis)
     try:

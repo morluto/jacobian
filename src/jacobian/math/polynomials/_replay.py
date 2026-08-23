@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     )
 
 __all__ = [
+    "ReductionWorkLimitExceeded",
     "generators_reduce_to_zero",
     "remainder_matches_claim",
     "retained_basis_is_groebner",
@@ -31,6 +32,19 @@ __all__ = [
 _MAX_OUTPUT_TERMS = 1_024
 _MAX_INTERMEDIATE_TERMS = 4_096
 _MAX_REDUCTION_STEPS = 200_000
+
+
+class ReductionWorkLimitExceeded(RuntimeError):
+    """Bounded division ran out of algorithmic work without any exact
+    artifact leaving its boundary.
+
+    This is a work bound, never a mathematical conclusion: the retained
+    basis, the dividend, and the true remainder may all sit inside their
+    budgets while the naive reduction order temporarily expands a larger
+    intermediate.  Callers must map it to the typed non-conclusion
+    outcome (``UNKNOWN``), not to ``BUDGET_EXCEEDED``, which asserts that
+    an exact artifact left its own boundary.
+    """
 
 
 def _component_exceeds_limit(numerator: int, denominator: int) -> bool:
@@ -106,9 +120,13 @@ def budgeted_reduce(
     cancels the current leading monomial against the one basis element
     whose leading monomial divides it (introducing only strictly smaller
     monomials, so the loop terminates), or moves the leading term into
-    the remainder. Returns ``None`` when the work or output budget is
-    exceeded; the caller then reports a typed budget outcome instead of
-    materializing an unbounded intermediate polynomial.
+    the remainder. Returns ``None`` only when the exact remainder itself
+    leaves the 1,024-term output boundary; raises
+    :class:`ReductionWorkLimitExceeded` when the reduction's algorithmic
+    work (division steps or a temporarily expanded intermediate) exhausts
+    its cap without any artifact overflowing, so callers can report the
+    typed non-conclusion outcome instead of an unsubstantiated budget
+    claim.
     """
 
     remainder = ring_context.zero
@@ -117,7 +135,9 @@ def budgeted_reduce(
     while work:
         steps += 1
         if steps > _MAX_REDUCTION_STEPS:
-            return None
+            raise ReductionWorkLimitExceeded(
+                "bounded reduction exceeded the division-step work cap"
+            )
         lead_monom = work.leading_expv()
         reducer = None
         for divisor in divisors:
@@ -131,7 +151,9 @@ def budgeted_reduce(
             scale = ring_context.term_new(diff, work[lead_monom] / reducer[lm])
             work = work - scale * reducer
             if len(work.monoms()) > _MAX_INTERMEDIATE_TERMS:
-                return None
+                raise ReductionWorkLimitExceeded(
+                    "bounded reduction exceeded the intermediate work cap"
+                )
         else:
             lead_term = ring_context.term_new(lead_monom, work[lead_monom])
             remainder = remainder + lead_term
@@ -192,12 +214,15 @@ def remainder_matches_claim(
 ) -> bool:
     """Check that the claimed wire remainder equals the replayed reduction.
 
-    A replay whose bounded reduction overflows cannot corroborate a
-    ``COMPUTED`` claim, so it reports a mismatch.
+    A replay whose bounded reduction overflows or runs out of work cannot
+    corroborate a ``COMPUTED`` claim, so it reports a mismatch.
     """
 
     ring_context = _sparse_ring(ideal.variables, monomial_order)
-    replayed = _replay_division(ideal, groebner_basis, polynomial, monomial_order)
+    try:
+        replayed = _replay_division(ideal, groebner_basis, polynomial, monomial_order)
+    except ReductionWorkLimitExceeded:
+        return False
     if replayed is None:
         return False
     claimed = _ring_element(ring_context, claimed_remainder)
@@ -214,7 +239,12 @@ def generators_reduce_to_zero(
     ring_context = _sparse_ring(ideal.variables, monomial_order)
     zero = ring_context.zero
     for generator in ideal.generators:
-        replayed = _replay_division(ideal, groebner_basis, generator, monomial_order)
+        try:
+            replayed = _replay_division(
+                ideal, groebner_basis, generator, monomial_order
+            )
+        except ReductionWorkLimitExceeded:
+            return False
         # An overflowing reduction cannot be corroborated, so fail closed.
         if replayed is None or replayed != zero:
             return False
@@ -231,10 +261,16 @@ def replayed_remainder_exceeds_budget(
 
     from jacobian.math.polynomials.values import MAX_POLYNOMIAL_EXPONENT
 
-    remainder = _replay_division(ideal, groebner_basis, polynomial, monomial_order)
+    try:
+        remainder = _replay_division(ideal, groebner_basis, polynomial, monomial_order)
+    except ReductionWorkLimitExceeded:
+        # Work exhaustion without an overflowing artifact is not evidence
+        # that the remainder leaves its boundary, so it cannot
+        # substantiate a BUDGET_EXCEEDED claim.
+        return False
     if remainder is None:
-        # The bounded reduction itself overflowed: the remainder is
-        # certainly outside the output budget.
+        # The bounded reduction overflowed on the remainder artifact
+        # itself: the remainder is certainly outside the output budget.
         return True
     try:
         for monom in remainder.monoms():

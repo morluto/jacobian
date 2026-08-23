@@ -336,10 +336,12 @@ def test_computed_result_without_source_context_rejected() -> None:
         )
 
 
-def test_expansion_beyond_intermediate_budget_reports_typed_outcome_quickly() -> None:
+def test_expansion_beyond_work_caps_reports_non_conclusion_quickly() -> None:
     # <x - (1+y1+y2+y3+y4+y5)^5> with polynomial x^12: the exact remainder
-    # would expand to millions of monomials.  The bounded reduction must
-    # report the typed budget outcome instead of materializing it.
+    # would expand to millions of monomials.  Work exhaustion inside the
+    # bounded reduction carries no evidence about the true remainder size,
+    # so the kernel must report the typed non-conclusion quickly instead of
+    # materializing the expansion or claiming an unsubstantiated overflow.
     variables = ("x", "y1", "y2", "y3", "y4", "y5")
 
     def term(exponents: tuple[int, ...]) -> RationalPolynomialTerm:
@@ -379,9 +381,11 @@ def test_expansion_beyond_intermediate_budget_reports_typed_outcome_quickly() ->
         monomial_order="lex",
     )
     result = polynomial_ideal_normal_form(request)
-    assert result.status == "BUDGET_EXCEEDED"
+    assert result.status == "UNKNOWN"
+    assert result.groebner_basis is None and result.remainder is None
     membership = polynomial_ideal_membership(request)
-    assert membership.status == "BUDGET_EXCEEDED"
+    assert membership.status == "UNKNOWN"
+    assert membership.groebner_basis is None and membership.normal_form is None
 
 
 def test_unsubstantiated_budget_outcome_without_basis_rejected() -> None:
@@ -792,3 +796,77 @@ def test_prefix_cap_does_not_decide_outcome_for_late_collapse() -> None:
     assert result.status == "COMPUTED"
     assert result.remainder is not None
     assert len(result.remainder.polynomial.terms) == 0
+
+
+def _work_limited_request() -> IdealMembershipRequest:
+    """Ideal <x - prod(1+y_i), y_i^2>, query x^12 under lex order.
+
+    The exact normal form is prod(1+12*y_i) with 128 terms, well inside
+    the 1,024-term boundary, but reducing the x powers first temporarily
+    expands prod(1+y_i)^12 toward its full 13^7-monomial box before any
+    y_i^2 reducer fires, exhausting the 4,096-term intermediate work cap
+    (review counterexample).
+    """
+    from itertools import product
+
+    variables = ("x",) + tuple(f"y{i}" for i in range(1, 8))
+    f_terms = {
+        (0,) + exponents: 1 for exponents in product((0, 1), repeat=7)
+    }
+    assert len(f_terms) == 128
+    generators = (
+        _poly(variables, {(1,) + (0,) * 7: 1, **f_terms}),
+        *(
+            _poly(variables, {(0,) * (1 + i) + (2,) + (0,) * (6 - i): 1})
+            for i in range(7)
+        ),
+    )
+    ideal = RationalPolynomialIdeal(
+        variables=variables,
+        generators=generators,
+    )
+    return IdealMembershipRequest(
+        ideal=ideal,
+        polynomial=_poly(variables, {(12,) + (0,) * 7: 1}),
+        monomial_order="lex",
+    )
+
+
+def test_work_cap_without_artifact_overflow_reports_unknown() -> None:
+    """Work exhaustion is a non-conclusion, not evidenced overflow.
+
+    The exact remainder prod(1+12*y_i) has 128 terms and respects every
+    artifact boundary; only the naive reduction order exceeds the work
+    caps, so the typed outcome must be UNKNOWN and must carry no partial
+    artifact instead of a BUDGET_EXCEEDED claim no replay can substantiate.
+    """
+    request = _work_limited_request()
+    result = polynomial_ideal_normal_form(request)
+    assert result.status == "UNKNOWN"
+    assert result.groebner_basis is None and result.remainder is None
+    IdealNormalFormResult.model_validate(result.model_dump())
+    membership = polynomial_ideal_membership(request)
+    assert membership.status == "UNKNOWN"
+    assert membership.groebner_basis is None and membership.normal_form is None
+
+
+def test_forged_budget_exceeded_for_work_limited_reduction_rejected() -> None:
+    """A serialized BUDGET_EXCEEDED whose replay only exhausts work, with no
+    artifact leaving its boundary, must fail validation."""
+    request = _work_limited_request()
+    from jacobian.math.polynomials._operations import _compute_membership_context
+
+    basis, exceeded = _compute_membership_context(request)
+    assert basis is not None and not exceeded
+    with pytest.raises(ValidationError, match="contradicts"):
+        IdealNormalFormResult.model_validate(
+            {
+                "ideal": request.ideal,
+                "polynomial": request.polynomial,
+                "monomial_order": request.monomial_order,
+                "status": "BUDGET_EXCEEDED",
+                "groebner_basis": basis,
+                "remainder": None,
+            }
+        )
+

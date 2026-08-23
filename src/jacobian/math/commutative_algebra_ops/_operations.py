@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from math import ceil
+
 import sympy
 
 from jacobian.math.commutative_algebra_ops._models import (
@@ -107,7 +109,10 @@ def compute_ideal_saturation(request: IdealSaturationRequest) -> IdealSaturation
         # budget covers the complete operation: verification receives only
         # the time the first computation left unspent.
         elapsed = time.monotonic() - started
-        remaining = request.resource_budget.wall_seconds - int(elapsed + 0.5)
+        # Charge elapsed time conservatively (rounded up) so the declared
+        # wall budget covers the complete operation: verification receives
+        # only whole seconds the first computation provably left unspent.
+        remaining = request.resource_budget.wall_seconds - ceil(elapsed)
         if remaining < 1:
             return IdealSaturationResult(
                 outcome="TIMEOUT",

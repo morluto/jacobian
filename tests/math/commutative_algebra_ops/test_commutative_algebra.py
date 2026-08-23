@@ -587,6 +587,35 @@ class TestSaturationContainment:
         assert result.saturation == source
         assert result.backend_version == "4.4"
 
+    def test_elapsed_time_is_charged_upward(self, monkeypatch) -> None:
+        """A first call finishing at 9.4s of a 10s budget grants verification
+        no whole second: elapsed time rounds up, never down."""
+        import time
+
+        from jacobian.math.commutative_algebra_ops import _operations as ops
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationRequest,
+        )
+
+        source = _ideal(("x", "y"), {(1, 0): 1})  # (x)
+        self._computed_backend(monkeypatch, source)
+        seen = {}
+        monkeypatch.setattr(
+            ops,
+            "run_singular_saturation_verification",
+            lambda *args, **kwargs: seen.setdefault("called", True) or "VERIFIED",
+        )
+        clock = iter((100.0, 109.4))
+        monkeypatch.setattr(time, "monotonic", lambda: next(clock))
+        request = IdealSaturationRequest(
+            ideal=source,
+            saturation_polynomial=_polynomial(("x", "y"), {(3, 4): 1}),
+            resource_budget=IdealComputationBudget(wall_seconds=10),
+        )
+        result = ops.compute_ideal_saturation(request)
+        assert result.outcome == "TIMEOUT"
+        assert "called" not in seen
+
     def test_unverifiable_computation_is_fail_closed(self, monkeypatch) -> None:
         """When the bounded backend cannot decide the defining equality
         (e.g. no Singular install), the operation must not report COMPUTED."""

@@ -68,6 +68,27 @@ independent bounded oracle. A factorization needs reconstruction, retained
 unit, and positive-multiplicity properties. Known answers remain useful
 regressions, but they do not replace these defining properties.
 
+### Evidence plans for exact operations
+
+Before implementing an exact decomposition, certificate, or authoritative
+derived value, state its defining invariant: the reconstruction equation,
+preservation law, or independently checkable property that makes a returned
+value mathematically valid. Then name the smallest set of tests that establishes
+that invariant and rejects plausible results that satisfy only a weaker
+mathematical claim.
+
+Use a source-backed reference fixture when a standard example helps fix
+terminology, normalization, or another convention-sensitive output. Cite the
+specific theorem or example and record the convention the fixture depends on.
+Pair that fixture with the relevant boundary and adversarial cases and with a
+reconstruction, defining-identity, bounded exhaustive, or independent-oracle
+test. A reference fixture is an anchor, not the correctness argument.
+
+When a valid result is not unique, compare its mathematical equivalence class
+or validate its reconstruction. Do not require incidental backend ordering,
+temporary identifiers, tree roots, or one particular witness unless the public
+contract makes that choice canonical.
+
 `lean.check` is the retained external process boundary. Its tests cover request
 bounds, process cleanup, timeout/error projection, and typed diagnostics.
 

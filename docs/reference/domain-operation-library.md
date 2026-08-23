@@ -67,6 +67,34 @@ directly. `smt.solve` accepts one bounded QF SMT-LIB query. `lean.check` accepts
 one bounded source snippet and returns elaboration diagnostics after a one-shot
 process invocation.
 
+## Implementation selection
+
+Choose the smallest operational surface that can establish the admitted
+mathematical postcondition within its public bounds. Assess implementation
+options in this order:
+
+1. Use a maintained in-process Python backend when it supports the complete
+   bounded claim.
+2. Use a thin native binding when its build, packaging, platform, and runtime
+   costs are proportionate to the admitted domain.
+3. Use a Jacobian-owned bounded implementation when no lightweight maintained
+   backend fits, the admitted bounds make a simpler published algorithm
+   practical, the result has a complete reconstruction or defining invariant,
+   and ordinary repository tests can establish correctness independently. A
+   mature external implementation may provide additional differential evidence.
+4. Use a child process only for a concrete isolation, killability, or fixed
+   toolchain reason, with the complete process-boundary obligations described in
+   the [mathematical backend contract](mathematical-backends.md).
+5. Narrow or reject the operation when none of these options can support its
+   public claim and work bounds.
+
+Preferring maintained backends does not require importing an entire
+cross-language ecosystem when its build, ABI, installation, runtime, or failure
+surface is disproportionate to the bounded mathematical kernel Jacobian needs.
+The issue or pull request must record why the selected implementation class is
+proportionate; backend convenience alone does not justify a broader public
+contract.
+
 ## Operation preflight
 
 First diagnose the gap: a missing operation is only one of several possible
@@ -271,6 +299,51 @@ the quantity it bounds, state why it is safe for the algorithm, and test both
 the rejected adversarial case and a useful case near the boundary. Do not use a
 post-hoc output-term cap, truncation, sentinel, or host exception as a hidden
 computational budget.
+
+### Finite enumeration budgets
+
+Large finite enumeration is compatible with a bounded exact operation. Admit it
+using the mathematical quantities that actually control the computation rather
+than treating small inputs as a goal in themselves. Record independent bounds
+for:
+
+- the number of candidate objects inspected in the worst case;
+- the maximum intermediate height, degree, term count, or other value growth
+  within one candidate computation; and
+- the maximum number and canonical serialized size of returned values or
+  witnesses.
+
+Do not compress these into a convenient input product unless a documented
+derivation proves that the product conservatively bounds every relevant
+quantity. For example, a planar search over triples and quadruples has
+
+```text
+candidate_count = C(n, 3) + C(n, 4)
+```
+
+while coordinate height controls determinant intermediates and the result
+shape controls witness serialization. `n * coordinate_digits` does not by
+itself state any of those obligations.
+
+A decision or first-witness operation must admit the full negative-case work,
+but may have constant-size output. An all-witness operation or complete profile
+must additionally admit its worst-case witness count and serialized result.
+Prefer retaining the source value once and referring to indexed components over
+repeating labels, parents, or other source context in every output entry.
+
+Use measurements on representative and adversarial boundary fixtures to choose
+useful conservative ceilings, but do not present timing measurements as the
+boundedness proof. The proof is the finite candidate count and intermediate and
+output growth; measurements establish whether the admitted region is useful on
+the supported implementation.
+
+When the complete search exceeds a single-call ceiling, deterministic
+partitioning is acceptable only when the partition is a stable mathematical
+subdomain and the result identifies exactly what was searched. The caller may
+compose disjoint partitions, but no partition may claim global absence or
+completeness. A timeout, node limit, or truncated witness list is not such a
+claim. Keep the transport envelope separate from the mathematical output bound:
+the latter must imply that the canonical serialized result fits the former.
 
 When an operation has a genuine incomplete or unknown outcome, expose that
 state in its domain result with the evidence and bounds needed to interpret it.

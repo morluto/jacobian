@@ -161,25 +161,29 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     _op(
         "polynomial.ideal.saturation.compute",
-        "Compute the ideal saturation I : <d>^infinity",
-        "Compute the exact saturation (I : <d>^infinity) = union_k(I : <d>^k) "
-        "over QQ using the private Singular backend.",
+        "Compute ideal saturation I : <d>^infinity",
+        "Compute the exact saturation I : <d>^infinity of a bounded "
+        "polynomial ideal I by a single nonzero polynomial d over QQ using "
+        "the private Singular backend. The result is the saturated ideal "
+        "with all components supported on the zero locus of d removed.",
         IdealSaturationRequest,
         IdealSaturationResult,
         compute_ideal_saturation,
         "commutative-algebra",
-        "ideal-saturation",
+        "saturation",
         "exact",
         examples=(
             example(
                 "saturation_xy",
-                "Compute (<xy> : <x>^infinity) in Q[x,y]; the result should be <y>.",
+                "Compute <xy> : <x>^infinity in Q[x,y]; this equals <y>. The "
+                "denominator is one nonzero polynomial in the same canonical "
+                "ordered QQ polynomial ring as the ideal.",
                 {
                     "ideal": _ideal(
                         ("x", "y"),
                         ((1, 1, (1, 1)),),
                     ),
-                    "saturation_polynomial": _polynomial(
+                    "denominator": _polynomial(
                         ("x", "y"),
                         ((1, 1, (1, 0)),),
                     ),

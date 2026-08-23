@@ -344,26 +344,6 @@ class IdealSaturationResult(StrictModel):
                 raise ValueError(
                     "computed saturation requires a value and backend version"
                 )
-            # Replay the bounded backend call against the retained sources:
-            # an authored payload cannot claim an arbitrary canonical ideal
-            # as the saturation.
-            from jacobian.math.commutative_algebra_ops._singular import (
-                run_singular_ideal_operation,
-            )
-            from jacobian.math.polynomials.values import (
-                RationalPolynomialIdeal,
-            )
-
-            divisor = RationalPolynomialIdeal(
-                variables=self.ideal.variables,
-                generators=(self.saturation_polynomial,),
-            )
-            replay = run_singular_ideal_operation(
-                "saturation",
-                self.ideal,
-                divisor,
-                self.resource_budget,
-            )
             # Replay against the retained sources with an amplified wall
             # budget so a computation near the configured boundary is not
             # misjudged by second-process jitter; exact equality is required
@@ -398,9 +378,10 @@ class IdealSaturationResult(StrictModel):
                     "retained ideal and saturation polynomial"
                 )
         elif (
-            self.radical is not None
+            self.saturation is not None
             or self.backend_version is not None
             or not self.detail
         ):
-            raise ValueError("failed radical computation requires only a safe detail")
+            raise ValueError("failed saturation computation requires only a safe detail")
         return self
+

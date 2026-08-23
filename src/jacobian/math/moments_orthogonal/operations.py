@@ -105,10 +105,9 @@ def _monic_orthogonal_recurrence(
         x_p = _shift_up(p_curr)
         p_next = _subtract(_subtract(x_p, _scale(alpha_k, p_curr)),
                            _scale(beta_k, p_prev))
-        if k == max_order - 1:
-            # The final coefficient pair is fully determined; the next norm
-            # would require mu_{2*max_order}, which an even-length moment
-            # sequence does not carry.
+        if 2 * (k + 1) > len(moments) - 1:
+            # The next norm would require mu_{2*(k+1)}, which the retained
+            # moments do not carry (even-length final step).
             break
         h_new = _inner_product(moments, p_next, p_next)
         if h_new <= 0:

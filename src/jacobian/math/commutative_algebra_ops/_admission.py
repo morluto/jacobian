@@ -28,7 +28,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "polynomial.ideal.saturation.compute",
         AdmissionDecision.KEEP,
-        "exact ideal saturation I : <d>^infinity via the Singular backend",
+        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
 )
 

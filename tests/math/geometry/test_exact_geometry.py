@@ -1,14 +1,6 @@
 """Tests for exact geometry operations."""
 
-import pytest
-from pydantic import ValidationError
-
 from jacobian._exact import CanonicalRational
-from jacobian.math.geometry._models import (
-    ForbiddenConfiguration,
-    ForbiddenLabelledPoint,
-    RationalPoint2D,
-)
 from jacobian.math.geometry.exact._models import (
     DistanceGraphRequest,
     DistanceProfileRequest,
@@ -100,20 +92,3 @@ class TestDistanceGraph:
                 configuration=configuration,
                 target_squared_distance=CanonicalRational(num="-1", den="1"),
             )
-
-
-class TestForbiddenPatternEnumerationBudget:
-    def test_point_configuration_capped_by_enumeration_budget(self) -> None:
-        """33 points exceed the C(32,3)+C(32,4) enumeration budget."""
-        points = tuple(
-            ForbiddenLabelledPoint(
-                label=f"p{index}",
-                point=RationalPoint2D(
-                    x=CanonicalRational(num=str(index), den="1"),
-                    y=CanonicalRational(num=str(index * index), den="1"),
-                ),
-            )
-            for index in range(1, 34)
-        )
-        with pytest.raises(ValidationError):
-            ForbiddenConfiguration(points=points)

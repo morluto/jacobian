@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -14,22 +14,56 @@ from jacobian.math.prime_field_linear_algebra import (
 )
 
 MAX_DIMENSION = 256
+# Primality testing inside the canonical value's construction is exponential
+# in the digit count of the modulus; every public boundary bounds it before
+# that work starts.
+MAX_PRIME = 2_147_483_647
+
+_PRIME_BOUND_NOTE = (
+    "The modulus must be a prime integer in [2, 2147483647]."
+)
 
 
-class RankRequest(StrictModel):
+def _require_bounded_declared_prime(data: Any) -> Any:
+    """Reject oversized moduli before nested value construction runs."""
+    if isinstance(data, dict):
+        for key in ("matrix", "rref"):
+            value = data.get(key)
+            if isinstance(value, dict):
+                prime = value.get("prime")
+                if (
+                    type(prime) is int
+                    and prime > MAX_PRIME
+                ):
+                    raise ValueError(
+                        f"prime exceeds the bounded modulus {MAX_PRIME}"
+                    )
+    return data
+
+
+class _BoundedPrimeModel(StrictModel):
+    """Shared pre-validation so no admitted integer reaches isprime unbounded."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_bounded_prime(cls, data: Any) -> Any:
+        return _require_bounded_declared_prime(data)
+
+
+class RankRequest(_BoundedPrimeModel):
     """Rank of one bounded matrix over an explicit prime field.
 
     The matrix is the domain-owned canonical ``PrimeFieldMatrix`` value, so a
     matrix produced by any prime-field operation enters unchanged.
     """
 
-    matrix: PrimeFieldMatrix
+    matrix: PrimeFieldMatrix = Field(description=_PRIME_BOUND_NOTE)
 
 
-class RankResult(StrictModel):
+class RankResult(_BoundedPrimeModel):
     """The exact rank bound to the retained source matrix."""
 
-    matrix: PrimeFieldMatrix
+    matrix: PrimeFieldMatrix = Field(description=_PRIME_BOUND_NOTE)
     rank: int = Field(ge=0)
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_RANK"] = "EXACT_DOMAIN_MATRIX_RANK"
@@ -51,17 +85,17 @@ class RankResult(StrictModel):
         return self
 
 
-class RrefRequest(StrictModel):
+class RrefRequest(_BoundedPrimeModel):
     """Reduced row-echelon form of one bounded matrix over a prime field.
 
     Accepts the domain-owned canonical ``PrimeFieldMatrix`` value so the
     transformed matrix returned by ``RrefResult`` re-enters unchanged.
     """
 
-    matrix: PrimeFieldMatrix
+    matrix: PrimeFieldMatrix = Field(description=_PRIME_BOUND_NOTE)
 
 
-class RrefResult(StrictModel):
+class RrefResult(_BoundedPrimeModel):
     """The exact RREF as a canonical prime-field matrix value.
 
     ``rref`` is the domain-owned matrix value, so downstream rank and
@@ -69,8 +103,8 @@ class RrefResult(StrictModel):
     into flat request fields.
     """
 
-    matrix: PrimeFieldMatrix
-    rref: PrimeFieldMatrix
+    matrix: PrimeFieldMatrix = Field(description=_PRIME_BOUND_NOTE)
+    rref: PrimeFieldMatrix = Field(description=_PRIME_BOUND_NOTE)
     pivot_columns: tuple[int, ...]
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_RREF"] = "EXACT_DOMAIN_MATRIX_RREF"
@@ -92,20 +126,20 @@ class RrefResult(StrictModel):
         return self
 
 
-class NullspaceRequest(StrictModel):
+class NullspaceRequest(_BoundedPrimeModel):
     """Right nullspace basis of one bounded matrix over a prime field.
 
     Accepts the domain-owned canonical ``PrimeFieldMatrix`` value, including
     the transformed matrix carried by an ``RrefResult``.
     """
 
-    matrix: PrimeFieldMatrix
+    matrix: PrimeFieldMatrix = Field(description=_PRIME_BOUND_NOTE)
 
 
-class NullspaceResult(StrictModel):
+class NullspaceResult(_BoundedPrimeModel):
     """The deterministic nullspace basis bound to the retained source matrix."""
 
-    matrix: PrimeFieldMatrix
+    matrix: PrimeFieldMatrix = Field(description=_PRIME_BOUND_NOTE)
     nullspace_rows: tuple[tuple[int, ...], ...]
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_NULLSPACE"] = "EXACT_DOMAIN_MATRIX_NULLSPACE"

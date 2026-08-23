@@ -115,12 +115,31 @@ class TestRecurrenceCoefficients:
         with pytest.raises(ValueError, match="nonzero"):
             recurrence_coefficients(moments)
 
-    def test_insufficient_moments_for_recurrence(self) -> None:
-        """With only 2 moments we can't produce any recurrence coefficient."""
+    def test_two_moments_determine_the_first_shift(self) -> None:
+        """mu_0, mu_1 already determine alpha_0 = mu_1/mu_0; beta_1 needs
+        mu_2 and stops there."""
         moments = (_frac(1, 1), _frac(1, 2))
         result = recurrence_coefficients(moments)
-        assert result.alpha == ()
+        assert result.alpha == (_frac(1, 2),)
         assert result.beta == (_frac(1, 1),)
+
+    def test_four_moments_determine_two_coefficients(self) -> None:
+        """An even-length sequence returns every coefficient it determines:
+        alpha_0, beta_1 from mu_2, and alpha_1 from mu_3; beta_2 needs the
+        absent mu_4."""
+        moments = (
+            _frac(1, 1),
+            _frac(1, 2),
+            _frac(1, 3),
+            _frac(1, 4),
+        )
+        result = recurrence_coefficients(moments)
+        assert len(result.alpha) == 2
+        assert len(result.beta) == 2
+        # Odd sequences still carry their complete final norm ratio.
+        odd = recurrence_coefficients((*moments, _frac(1, 5)))
+        assert len(odd.alpha) == 2
+        assert len(odd.beta) == 3
 
 
 # ---------------------------------------------------------------------------

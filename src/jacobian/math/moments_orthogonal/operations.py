@@ -85,8 +85,10 @@ def _monic_orthogonal_recurrence(
     ``p_{k+1}(x) = (x - alpha_k) p_k(x) - beta_k p_{k-1}(x)``
     with ``p_{-1} = 0``, ``p_0 = 1``, ``beta_0 = mu_0``.
 
-    ``max_order`` recurrence coefficients ``alpha`` are produced, requiring
-    at least ``2 * max_order + 1`` moments.
+    ``max_order`` recurrence coefficients ``alpha`` are attempted. The norm
+    ``h_{k+1}`` needed for ``beta_{k+1}`` requires the moment ``mu_{2k+2}``;
+    when that moment is not part of the sequence, the remaining coefficients
+    stop there instead of consuming data the sequence does not carry.
     """
     alpha: list[Fraction] = []
     beta: list[Fraction] = [moments[0]]
@@ -104,20 +106,19 @@ def _monic_orthogonal_recurrence(
         p_next = _subtract(
             _subtract(x_p, _scale(alpha_k, p_curr)), _scale(beta_k, p_prev)
         )
+        # Advancing to h_{k+1} consumes mu_{2(k+1)}; without it neither the
+        # next norm nor any further coefficient is determined by the input.
+        if 2 * (k + 1) > len(moments) - 1:
+            break
         h_prev = h_curr
         p_prev = p_curr
         p_curr = p_next
         h_curr = _inner_product(moments, p_curr, p_curr)
         if h_curr <= 0:
-            if h_curr == 0:
-                raise ValueError(
-                    "moment sequence does not define a positive-definite measure"
-                )
             raise ValueError(
                 "moment sequence does not define a positive-definite measure"
             )
-        if k < max_order - 1:
-            beta.append(h_curr / h_prev)
+        beta.append(h_curr / h_prev)
     return alpha, beta
 
 
@@ -143,7 +144,10 @@ def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficien
         raise TypeError("moments must use exact Fractions")
     if moments[0] <= 0:
         raise ValueError("the zeroth moment must be nonzero")
-    max_order = min(MAX_RECURRENCE_ORDER, (m - 1) // 2)
+    # alpha_k is determined by mu_{2k+1}, so an m-moment sequence determines
+    # exactly m // 2 shift coefficients; the matching norms follow when their
+    # moments are part of the sequence.
+    max_order = min(MAX_RECURRENCE_ORDER, m // 2)
     if max_order < 1:
         return RecurrenceCoefficients(alpha=(), beta=(moments[0],))
     alpha, beta = _monic_orthogonal_recurrence(moments, max_order)
@@ -171,6 +175,14 @@ def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> Jacobi
         raise TypeError("beta must use exact Fractions")
     if beta[0] <= 0:
         raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    # Native callers bypass the wire validator: every consumed subdiagonal
+    # entry is a squared norm ratio and must be positive, since the real
+    # Jacobi matrix would otherwise require sqrt of a negative value.
+    for index in range(1, min(len(alpha), len(beta))):
+        if beta[index] <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
     return JacobiMatrix(
         diagonal=tuple(alpha),
         # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is

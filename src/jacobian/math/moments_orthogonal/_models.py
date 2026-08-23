@@ -111,6 +111,16 @@ class RecurrenceCoefficientsRequest(StrictModel):
     @model_validator(mode="after")
     def require_valid_moments(self) -> Self:
         _validate_moments(self.moments)
+        # The kernel computes at most MAX_RECURRENCE_ORDER recurrence levels,
+        # consuming only the first 2 * MAX_RECURRENCE_ORDER + 1 moments; a
+        # longer retained sequence would carry trailing entries the computed
+        # order never verifies while the result still claims completeness.
+        if len(self.moments) > 2 * MAX_RECURRENCE_ORDER + 1:
+            raise ValueError(
+                f"moment sequence length {len(self.moments)} exceeds the "
+                f"{2 * MAX_RECURRENCE_ORDER + 1} moments consumed by the "
+                "maximum supported recurrence order"
+            )
         # The Gram-Schmidt kernel requires a positive-definite moment
         # functional; admit exactly the sequences it accepts so an accepted
         # request cannot fail inside execution.

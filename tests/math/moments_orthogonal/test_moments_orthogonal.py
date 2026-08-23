@@ -400,3 +400,28 @@ class TestChristoffelDarbouxDerivedBudget:
         result = compute_christoffel_darboux(request)
         assert result.kernel.num.startswith("-") is False
         assert len(result.polynomials_evaluated) == 9
+
+
+class TestRecurrenceOrderAdmissionBound:
+    def test_sequence_beyond_the_computed_recurrence_order_is_rejected(self) -> None:
+        """35 harmonic moments determine order 17 but the cap computes 16.
+
+        Admission must reject sequences longer than the 2 * MAX + 1 moments
+        the maximum supported recurrence order consumes instead of returning
+        complete=True while silently ignoring trailing moments.
+        """
+        request = {
+            "moments": [
+                CanonicalRational.from_fraction(Fraction(1, k + 1)).model_dump()
+                for k in range(35)
+            ]
+        }
+        with pytest.raises(ValidationError, match="maximum supported recurrence order"):
+            RecurrenceCoefficientsRequest.model_validate(request)
+
+    def test_boundary_sequence_of_thirty_three_moments_is_admitted(self) -> None:
+        request = RecurrenceCoefficientsRequest(
+            moments=tuple(_cr(1, k + 1) for k in range(33))
+        )
+        result = compute_recurrence_coefficients(request)
+        assert len(result.alpha) == 16  # MAX_RECURRENCE_ORDER levels from 33 moments

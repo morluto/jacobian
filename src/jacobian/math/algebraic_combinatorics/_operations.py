@@ -25,6 +25,7 @@ from jacobian.math.algebraic_combinatorics._models import (
 )
 from jacobian.math.algebraic_combinatorics._rsk import _row_insert
 from jacobian.math.algebraic_combinatorics.values import RSKTableauPair
+from jacobian.math.symmetric_functions.values import IntegerPartition
 
 
 def compute_hook_lengths(request: HookLengthRequest) -> HookLengthResult:
@@ -54,7 +55,7 @@ def compute_conjugate_partition(
 ) -> ConjugatePartitionResult:
     parts = list(request.partition.parts)
     result = conjugate_partition(parts)
-    return ConjugatePartitionResult(conjugate=tuple(result))
+    return ConjugatePartitionResult(conjugate=IntegerPartition(parts=tuple(result)))
 
 
 def compute_rsk_permutation(request: RSKPermutationRequest) -> RSKResult:

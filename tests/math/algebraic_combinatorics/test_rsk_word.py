@@ -15,11 +15,13 @@ from jacobian.math.algebraic_combinatorics import (
 )
 from jacobian.math.algebraic_combinatorics._admission import ADMISSIONS
 from jacobian.math.algebraic_combinatorics._models import (
+    HookLengthRequest,
     RSKInverseWordRequest,
     RSKPermutationRequest,
     RSKWordRequest,
 )
 from jacobian.math.algebraic_combinatorics._operations import (
+    compute_hook_lengths,
     compute_inverse_rsk_word,
     compute_rsk_permutation,
     compute_rsk_word,
@@ -138,6 +140,12 @@ def test_forward_output_feeds_inverse_without_representation_repair() -> None:
         {"partition": produced.shape.model_dump()}
     )
     assert partition_request.partition == produced.shape
+    assert HookLengthRequest(partition=produced.shape).partition is produced.shape
+    assert compute_hook_lengths(HookLengthRequest(partition=produced.shape)).hooks == (
+        (5, 2, 1),
+        (2,),
+        (1,),
+    )
 
 
 def test_all_short_ternary_words_round_trip_both_directions() -> None:
@@ -274,6 +282,9 @@ def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
     assert "at most 50 letters" in description
     assert "25600 UTF-8 bytes" in description
     assert "2N" in schema["description"]
+    assert "1225" in schema["description"]
+    assert "six integer" in schema["description"]
+    assert "comparisons per search" in schema["description"]
 
     inverse_schema = RSKInverseWordRequest.model_json_schema()
     pair_schema = inverse_schema["$defs"]["RSKTableauPair"]

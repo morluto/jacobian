@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -15,50 +15,37 @@ from jacobian.math.algebraic_combinatorics.values import (
     RSKConvention,
     RSKTableauPair,
 )
+from jacobian.math.symmetric_functions.values import (
+    MAX_PARTITION_SIZE as MAX_CANONICAL_PARTITION_SIZE,
+)
+from jacobian.math.symmetric_functions.values import IntegerPartition
 from jacobian.math.words.values import FiniteWord
 
-MAX_PARTITION_SIZE = 50
-MAX_PARTS = 50
-
-
-class Partition(StrictModel):
-    """One decreasing sequence of positive integers (a Young diagram shape)."""
-
-    parts: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_PARTS)
-
-    @model_validator(mode="after")
-    def require_decreasing_positive(self) -> Self:
-        if any(part <= 0 for part in self.parts):
-            raise ValueError("partition parts must be positive")
-        if any(self.parts[i] < self.parts[i + 1] for i in range(len(self.parts) - 1)):
-            raise ValueError("partition parts must be non-increasing")
-        if sum(self.parts) > MAX_PARTITION_SIZE:
-            raise ValueError(f"partition size must not exceed {MAX_PARTITION_SIZE}")
-        return self
+MAX_RSK_PERMUTATION_LENGTH = 50
 
 
 class HookLengthRequest(StrictModel):
     """Compute the hook lengths of a partition."""
 
-    partition: Partition
+    partition: IntegerPartition
 
 
 class StandardYoungTableauCountRequest(StrictModel):
     """Count standard Young tableaux of a given shape."""
 
-    partition: Partition
+    partition: IntegerPartition
 
 
 class ConjugatePartitionRequest(StrictModel):
     """Compute the conjugate (transpose) partition."""
 
-    partition: Partition
+    partition: IntegerPartition
 
 
 class HookLengthResult(StrictModel):
     """Hook lengths as a flat list of row-indexed values."""
 
-    hooks: tuple[tuple[int, ...], ...] = Field(min_length=1)
+    hooks: tuple[tuple[int, ...], ...]
     total_product: CanonicalInteger = Field(description="Product of all hook lengths.")
     method: Literal["HOOK_FORMULA"] = "HOOK_FORMULA"
 
@@ -67,26 +54,15 @@ class StandardYoungTableauCountResult(StrictModel):
     """The number of standard Young tableaux of a given shape."""
 
     count: CanonicalInteger = Field(description="Number of standard Young tableaux.")
-    n: int = Field(ge=1, le=MAX_PARTITION_SIZE)
+    n: int = Field(ge=0, le=MAX_CANONICAL_PARTITION_SIZE)
     method: Literal["HOOK_LENGTH_FORMULA"] = "HOOK_LENGTH_FORMULA"
 
 
 class ConjugatePartitionResult(StrictModel):
     """The conjugate (transpose) partition."""
 
-    conjugate: tuple[int, ...] = Field(min_length=1)
+    conjugate: IntegerPartition
     method: Literal["FERRERS_TRANSPOSE"] = "FERRERS_TRANSPOSE"
-
-
-__all__ = [
-    "ConjugatePartitionRequest",
-    "ConjugatePartitionResult",
-    "HookLengthRequest",
-    "HookLengthResult",
-    "Partition",
-    "StandardYoungTableauCountRequest",
-    "StandardYoungTableauCountResult",
-]
 
 
 # ---------------------------------------------------------------------------
@@ -97,15 +73,19 @@ __all__ = [
 class RSKPermutationRequest(StrictModel):
     """One permutation for the RSK correspondence."""
 
-    permutation: tuple[int, ...] = Field(min_length=0, max_length=MAX_PARTITION_SIZE)
+    permutation: tuple[int, ...] = Field(
+        min_length=0, max_length=MAX_RSK_PERMUTATION_LENGTH
+    )
 
     @model_validator(mode="after")
     def require_valid_permutation(self) -> Self:
         if not self.permutation:
             return self
         n = len(self.permutation)
-        if n > MAX_PARTITION_SIZE:
-            raise ValueError(f"permutation length must not exceed {MAX_PARTITION_SIZE}")
+        if n > MAX_RSK_PERMUTATION_LENGTH:
+            raise ValueError(
+                f"permutation length must not exceed {MAX_RSK_PERMUTATION_LENGTH}"
+            )
         if sorted(self.permutation) != list(range(1, n + 1)):
             raise ValueError("permutation must be a permutation of 1..n")
         return self
@@ -125,8 +105,9 @@ class RSKResult(StrictModel):
 class RSKWordRequest(StrictModel):
     """One bounded word under the ordinary row-insertion convention.
 
-    Forward and replayed reverse insertion each inspect at most
-    ``N(N-1)/2`` row entries for ``N <= 50``.  The compact result contains
+    Forward and replayed reverse insertion each perform at most
+    ``N(N-1)/2 <= 1225`` binary row searches, with at most six integer
+    comparisons per search for ``N <= 50``.  The compact result contains
     exactly ``2N`` tableau cells; no insertion ledger is materialized.
     """
 
@@ -150,8 +131,9 @@ class RSKWordRequest(StrictModel):
 class RSKInverseWordRequest(StrictModel):
     """One compatible compact word-RSK pair of at most 50 cells to invert.
 
-    Reverse insertion and its forward replay each inspect at most
-    ``N(N-1)/2`` row entries.
+    Reverse insertion and its forward replay each perform at most
+    ``N(N-1)/2 <= 1225`` binary row searches, with at most six integer
+    comparisons per search.
     """
 
     pair: RSKTableauPair
@@ -170,7 +152,6 @@ __all__ = [
     "ConjugatePartitionResult",
     "HookLengthRequest",
     "HookLengthResult",
-    "Partition",
     "RSKInverseWordRequest",
     "RSKInverseWordResult",
     "RSKPermutationRequest",

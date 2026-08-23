@@ -9,6 +9,12 @@ from jacobian.math.hypergraphs._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "hypergraph.independence_number.compute",
+        AdmissionDecision.KEEP,
+        "distinct source-bound exact-or-unknown maximum subset invariant that "
+        "cannot be recovered from clique or incidence graph transforms",
+    ),
+    OperationAdmission(
         "hypergraph.parameters.compute",
         AdmissionDecision.KEEP,
         "exact vertex count, edge count, rank, corank, uniform size, and "

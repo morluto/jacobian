@@ -2,15 +2,28 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictBool, StrictInt, model_validator
 
+from jacobian._digest import Sha256Digest
 from jacobian._models import StrictModel
+from jacobian.canonical import encode_strict_json, sha256_digest
 
 MAX_VERTICES = 100
 MAX_EDGES = 100
 MAX_LABEL_LENGTH = 64
+MAX_SOLVER_CALLS = MAX_VERTICES
+
+HypergraphIndependenceStatus = Literal["EXACT", "UNKNOWN"]
+HypergraphIndependenceTermination = Literal[
+    "OPTIMUM_ESTABLISHED",
+    "WALL_TIME",
+    "SOLVER_CALL_LIMIT",
+    "SOLVER_ERROR",
+    "SOLVER_UNKNOWN",
+    "SPECIAL_CASE",
+]
 
 
 class FiniteHypergraph(StrictModel):
@@ -51,6 +64,215 @@ class FiniteHypergraph(StrictModel):
                 raise ValueError("every edge member must be a declared vertex")
             canonical_edges.append((edge_id, tuple(sorted(members))))
         object.__setattr__(self, "edges", tuple(canonical_edges))
+        return self
+
+
+def _hypergraph_digest(hypergraph: FiniteHypergraph) -> str:
+    payload = {
+        "format": "jacobian.finite-hypergraph/v1",
+        "vertices": list(hypergraph.vertices),
+        "edges": [[edge_id, list(members)] for edge_id, members in hypergraph.edges],
+    }
+    return sha256_digest(encode_strict_json(payload))
+
+
+def _greedy_independent_vertices(
+    hypergraph: FiniteHypergraph,
+) -> tuple[str, ...]:
+    """Return one deterministic feasible incumbent in declared vertex order."""
+
+    edge_sets = tuple(frozenset(members) for _, members in hypergraph.edges)
+    selected: set[str] = set()
+    for vertex in hypergraph.vertices:
+        candidate = selected | {vertex}
+        if not any(edge <= candidate for edge in edge_sets):
+            selected.add(vertex)
+    return tuple(vertex for vertex in hypergraph.vertices if vertex in selected)
+
+
+def _independence_upper_bound(hypergraph: FiniteHypergraph) -> int:
+    forbidden_vertices = {
+        members[0] for _, members in hypergraph.edges if len(members) == 1
+    }
+    return len(hypergraph.vertices) - len(forbidden_vertices)
+
+
+class HypergraphIndependenceBudget(StrictModel):
+    """Explicit wall-time and solver-call bounds for one exact search."""
+
+    wall_seconds: StrictInt = Field(default=5, ge=1, le=120)
+    max_solver_calls: StrictInt = Field(
+        default=MAX_SOLVER_CALLS,
+        ge=1,
+        le=MAX_SOLVER_CALLS,
+        description=(
+            "Maximum monotone cardinality thresholds submitted during search. "
+            "Independent validation of an externally supplied result may replay "
+            "one additional upper-bound threshold."
+        ),
+    )
+
+
+class HypergraphIndependenceRequest(StrictModel):
+    """One finite hypergraph and its operation-owned exact-search budget.
+
+    Hyperedges must be nonempty. The inherited finite-hypergraph contract admits
+    at most 100 vertices, 100 indexed edges, width 100, and 10,000 total
+    incidences, which bounds the Boolean encoding before the private backend is
+    invoked.
+    """
+
+    hypergraph: FiniteHypergraph
+    resource_budget: HypergraphIndependenceBudget = Field(
+        default_factory=HypergraphIndependenceBudget
+    )
+
+    @model_validator(mode="after")
+    def require_supported_encoding(self) -> Self:
+        if any(not members for _, members in self.hypergraph.edges):
+            raise ValueError("independence-number search does not admit empty edges")
+        return self
+
+
+class HypergraphIndependenceResult(StrictModel):
+    """Exact optimum or sound incumbent and bounds for one source hypergraph."""
+
+    result_schema_version: Literal["1"] = "1"
+    hypergraph: FiniteHypergraph
+    hypergraph_digest: Sha256Digest
+    resource_budget: HypergraphIndependenceBudget
+    status: HypergraphIndependenceStatus
+    independence_number: StrictInt | None = Field(default=None, ge=0, le=MAX_VERTICES)
+    incumbent_vertices: tuple[str, ...] = Field(max_length=MAX_VERTICES)
+    lower_bound: StrictInt = Field(ge=0, le=MAX_VERTICES)
+    upper_bound: StrictInt = Field(ge=0, le=MAX_VERTICES)
+    solver_calls: StrictInt = Field(ge=0, le=MAX_SOLVER_CALLS)
+    wall_budget_exhausted: StrictBool
+    termination_reason: HypergraphIndependenceTermination
+    detail: str = Field(min_length=1, max_length=1024)
+    convention: Literal["MAXIMUM_NO_COMPLETE_HYPEREDGE_VERTEX_SUBSET"] = (
+        "MAXIMUM_NO_COMPLETE_HYPEREDGE_VERTEX_SUBSET"
+    )
+
+    @model_validator(mode="after")
+    def bind_source_and_witness(self) -> Self:
+        if any(not members for _, members in self.hypergraph.edges):
+            raise ValueError("result source must not contain an empty hyperedge")
+        if self.hypergraph_digest != _hypergraph_digest(self.hypergraph):
+            raise ValueError("hypergraph_digest must bind the exact source hypergraph")
+
+        witness_set = set(self.incumbent_vertices)
+        expected_order = tuple(
+            vertex for vertex in self.hypergraph.vertices if vertex in witness_set
+        )
+        if self.incumbent_vertices != expected_order or len(witness_set) != len(
+            self.incumbent_vertices
+        ):
+            raise ValueError(
+                "incumbent vertices must be unique and in declared vertex order"
+            )
+        if any(set(members) <= witness_set for _, members in self.hypergraph.edges):
+            raise ValueError("incumbent witness must contain no complete hyperedge")
+        if self.lower_bound != len(self.incumbent_vertices):
+            raise ValueError("the feasible incumbent must be the lower bound")
+        return self
+
+    @model_validator(mode="after")
+    def bind_bounds_to_source(self) -> Self:
+        initial_upper = _independence_upper_bound(self.hypergraph)
+        if self.solver_calls > self.resource_budget.max_solver_calls:
+            raise ValueError("solver calls must fit the submitted call budget")
+        if not self.lower_bound <= self.upper_bound <= initial_upper:
+            raise ValueError("independence-number bounds must lie in the source range")
+        if self.upper_bound < initial_upper:
+            from jacobian.math.hypergraphs import _independence_z3
+
+            if not _independence_z3.verify_upper_bound(
+                self.hypergraph,
+                self.upper_bound,
+                self.resource_budget.wall_seconds,
+            ):
+                raise ValueError("upper bound failed its bounded source replay")
+        return self
+
+    @model_validator(mode="after")
+    def bind_exact_completion(self) -> Self:
+        if self.status != "EXACT":
+            return self
+        initial_incumbent = _greedy_independent_vertices(self.hypergraph)
+        initial_upper = _independence_upper_bound(self.hypergraph)
+        if (
+            self.independence_number is None
+            or self.independence_number != self.lower_bound
+            or self.independence_number != self.upper_bound
+        ):
+            raise ValueError("exact result must bind one coincident optimum")
+        if self.wall_budget_exhausted:
+            raise ValueError("an exact result cannot exhaust its wall budget")
+        if self.termination_reason == "OPTIMUM_ESTABLISHED":
+            if len(initial_incumbent) == initial_upper:
+                raise ValueError("a source-trivial optimum must use SPECIAL_CASE")
+            if self.independence_number < len(initial_incumbent):
+                raise ValueError("an exact optimum cannot be below a feasible witness")
+            expected_calls = initial_upper - self.independence_number
+            if self.independence_number > len(initial_incumbent):
+                expected_calls += 1
+            if self.solver_calls != expected_calls:
+                raise ValueError(
+                    "exact solver-call count must match the descending thresholds"
+                )
+        elif self.termination_reason == "SPECIAL_CASE":
+            if self.solver_calls != 0 or len(initial_incumbent) != initial_upper:
+                raise ValueError(
+                    "special-case exactness requires coincident initial bounds"
+                )
+        else:
+            raise ValueError("exact result has an incomplete termination reason")
+        return self
+
+    @model_validator(mode="after")
+    def bind_unknown_completion(self) -> Self:
+        if self.status != "UNKNOWN":
+            return self
+        if self.independence_number is not None:
+            raise ValueError("incomplete search cannot claim an independence number")
+        if self.lower_bound >= self.upper_bound:
+            raise ValueError("unknown result must retain a nontrivial bound gap")
+        initial_upper = _independence_upper_bound(self.hypergraph)
+        proved_thresholds = initial_upper - self.upper_bound
+        if self.termination_reason == "SOLVER_CALL_LIMIT":
+            if (
+                self.wall_budget_exhausted
+                or self.solver_calls != self.resource_budget.max_solver_calls
+                or proved_thresholds != self.solver_calls
+            ):
+                raise ValueError(
+                    "solver-call termination must exhaust exactly its query budget"
+                )
+        elif self.termination_reason == "WALL_TIME":
+            if not self.wall_budget_exhausted or proved_thresholds not in {
+                self.solver_calls,
+                max(0, self.solver_calls - 1),
+            }:
+                raise ValueError(
+                    "wall-time termination must bind the completed thresholds"
+                )
+        elif self.termination_reason == "SOLVER_UNKNOWN":
+            if (
+                self.wall_budget_exhausted
+                or self.solver_calls == 0
+                or proved_thresholds != self.solver_calls - 1
+            ):
+                raise ValueError(
+                    "solver-unknown termination must bind its inconclusive query"
+                )
+        elif self.termination_reason == "SOLVER_ERROR":
+            if self.wall_budget_exhausted or self.upper_bound != initial_upper:
+                raise ValueError(
+                    "solver-error termination must retain the source bound"
+                )
+        else:
+            raise ValueError("unknown result has an exact termination reason")
         return self
 
 

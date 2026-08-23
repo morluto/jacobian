@@ -7,7 +7,7 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math._rational_height import RationalHeight
 
@@ -582,6 +582,9 @@ class CircumradiusProfileResult(StrictModel):
         return self
 
 
+_MAX_FORBIDDEN_COORDINATE_DIGITS = 2_048
+
+
 class ForbiddenLabelledPoint(StrictModel):
     """A labelled rational point in the affine plane."""
 
@@ -590,9 +593,15 @@ class ForbiddenLabelledPoint(StrictModel):
 
 
 class ForbiddenConfiguration(StrictModel):
-    """A finite set of labelled rational planar points."""
+    """A finite set of labelled rational planar points.
 
-    points: tuple[ForbiddenLabelledPoint, ...] = Field(min_length=1, max_length=128)
+    The 24-point cap and 2048-digit coordinate height bound the exhaustive
+    quadruple enumeration (at most C(24, 4) = 10,626 exact determinants in
+    execution and again in validation) instead of admitting configurations
+    whose input-multiplicative arithmetic is impractical.
+    """
+
+    points: tuple[ForbiddenLabelledPoint, ...] = Field(min_length=1, max_length=24)
 
     @model_validator(mode="after")
     def require_unique_labels_and_coords(self) -> Self:
@@ -602,6 +611,17 @@ class ForbiddenConfiguration(StrictModel):
         keys = tuple(_point_key(item.point) for item in self.points)
         if len(keys) != len(set(keys)):
             raise ValueError("configuration point coordinates must be unique")
+        for item in self.points:
+            require_bounded_rational(
+                item.point.x,
+                max_digits=_MAX_FORBIDDEN_COORDINATE_DIGITS,
+                label="coordinate",
+            )
+            require_bounded_rational(
+                item.point.y,
+                max_digits=_MAX_FORBIDDEN_COORDINATE_DIGITS,
+                label="coordinate",
+            )
         return self
 
 
@@ -614,9 +634,9 @@ class ForbiddenPatternsRequest(StrictModel):
 class CollinearTriple(StrictModel):
     """A triple of configuration point indices lying on one line."""
 
-    first: StrictInt = Field(ge=0, le=127)
-    second: StrictInt = Field(ge=0, le=127)
-    third: StrictInt = Field(ge=0, le=127)
+    first: StrictInt = Field(ge=0, le=23)
+    second: StrictInt = Field(ge=0, le=23)
+    third: StrictInt = Field(ge=0, le=23)
 
     @model_validator(mode="after")
     def require_strictly_ascending(self) -> Self:
@@ -628,10 +648,10 @@ class CollinearTriple(StrictModel):
 class ConcyclicQuadruple(StrictModel):
     """A quadruple of configuration point indices lying on one circle."""
 
-    first: StrictInt = Field(ge=0, le=127)
-    second: StrictInt = Field(ge=0, le=127)
-    third: StrictInt = Field(ge=0, le=127)
-    fourth: StrictInt = Field(ge=0, le=127)
+    first: StrictInt = Field(ge=0, le=23)
+    second: StrictInt = Field(ge=0, le=23)
+    third: StrictInt = Field(ge=0, le=23)
+    fourth: StrictInt = Field(ge=0, le=23)
 
     @model_validator(mode="after")
     def require_strictly_ascending(self) -> Self:
@@ -648,7 +668,7 @@ class ForbiddenPatternsResult(StrictModel):
     """
 
     configuration: ForbiddenConfiguration
-    point_count: StrictInt = Field(ge=1, le=128)
+    point_count: StrictInt = Field(ge=1, le=24)
     has_collinear_triple: bool
     has_concyclic_quadruple: bool
     collinear_triple: CollinearTriple | None = None

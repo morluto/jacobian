@@ -96,3 +96,14 @@ class TestPinnedDistanceAdmissionAndBinding:
                 anchor=_point("0", "0"),
                 points=(_point("1", "0"), _point("1", "0")),
             )
+
+    def test_forged_minimum_entry_pairs_are_rejected(self) -> None:
+        request = PinnedDistanceRequest(
+            anchor=_point("0", "0"),
+            points=(_point("1", "0"), _point("0", "1"), _point("2", "3")),
+        )
+        result = compute_pinned_distances(request)
+        payload = result.model_dump()
+        payload["min_squared_distance"]["source_pairs"] = ((0, 1), (5, 9))
+        with pytest.raises(ValidationError, match="minimum line"):
+            PinnedDistanceResult.model_validate(payload)

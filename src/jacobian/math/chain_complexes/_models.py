@@ -136,8 +136,14 @@ class HomologyGroup(StrictModel):
 
 
 class HomologyResult(StrictModel):
-    """Homology groups of a chain complex."""
+    """Homology groups of a chain complex.
 
+    Retains its source complex so every group's degree, dimension, ranks, and
+    Betti number replay against the exact kernel instead of trusting an
+    independently authored table.
+    """
+
+    complex: ChainComplex
     groups: tuple[HomologyGroup, ...] = Field(min_length=1)
     prime: int = Field(ge=2, le=10_000)
     min_degree: int = Field(ge=-10, le=11)
@@ -147,6 +153,22 @@ class HomologyResult(StrictModel):
     def require_consistent_groups(self) -> Self:
         if len(self.groups) != self.max_degree - self.min_degree + 1:
             raise ValueError("homology groups must cover the degree range")
+        from jacobian.math.chain_complexes._operations import _homology_groups
+
+        if (
+            self.prime != self.complex.prime
+            or self.min_degree != self.complex.min_degree
+            or self.max_degree != self.complex.max_degree
+        ):
+            raise ValueError(
+                "homology result fields must match the retained complex"
+            )
+        expected = _homology_groups(self.complex)
+        if self.groups != expected:
+            raise ValueError(
+                "homology groups must be the exact homology of the retained "
+                "complex"
+            )
         return self
 
 
@@ -212,6 +234,24 @@ def _require_chain_map_commutativity(
 
     def diff(entries, rows, cols):
         return _dense_matrix(entries, rows, cols, prime)
+
+    # At the source's bottom degree the source differential leaves the
+    # retained range, so commutativity requires d^D_{s_min} * f_{s_min} = 0
+    # exactly; skipping it would accept maps that already fail at s_min.
+    bottom = diff(
+        (
+            target.differentials[s_min - target.min_degree - 1]
+            if target.min_degree < s_min <= target.max_degree
+            and s_min - target.min_degree - 1 < len(target.differentials)
+            else ()
+        ),
+        dim(target, s_min - 1),
+        dim(target, s_min),
+    )
+    f_bottom = diff(chain_map[0], dim(target, s_min), dim(source, s_min))
+    left = _dense_product(bottom, f_bottom, dim(target, s_min), dim(source, s_min), prime)
+    if any(any(v % prime != 0 for v in row) for row in left):
+        raise ValueError(f"chain map does not commute at degree {s_min}")
 
     for n in range(s_min + 1, source.max_degree + 1):
         i = n - s_min

@@ -176,6 +176,12 @@ class PinnedDistanceResult(StrictModel):
                 or self.min_squared_distance.squared_distance_denominator != min_entry.squared_distance_denominator
             ):
                 raise ValueError("min_squared_distance must be the minimum entry")
+            if set(min_entry.source_pairs) != set(self.min_squared_distance.source_pairs):
+                raise ValueError(
+                    "min_squared_distance source_pairs must cover the exact minimum line"
+                )
+            if tuple(sorted(self.min_squared_distance.source_pairs)) != self.min_squared_distance.source_pairs:
+                raise ValueError("min_squared_distance source_pairs must be sorted")
         else:
             if self.min_squared_distance is not None:
                 raise ValueError("empty line set cannot carry a minimum distance")

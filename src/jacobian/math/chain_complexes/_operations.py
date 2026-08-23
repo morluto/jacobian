@@ -70,15 +70,17 @@ def _gaussian_rank(matrix: list[list[int]], prime: int) -> int:
     return rank
 
 
-def compute_homology(request: HomologyRequest) -> HomologyResult:
-    """Compute the homology of a chain complex over GF(prime).
+def _homology_groups(cx: ChainComplex) -> tuple[HomologyGroup, ...]:
+    """Exact homology groups of one chain complex over its prime field.
 
     H_n = ker(d_n) / im(d_{n+1})
     Betti_n = dim(C_n) - rank(d_n) - rank(d_{n+1})
     where d_n: C_n -> C_{n-1} has matrix dims[n-1] x dims[n] (target x source)
     and differentials[i] is d_{min+i+1} with source dims[i+1] and target dims[i].
+
+    Shared by the operation and the result validator so an authored result
+    replays against the identical kernel.
     """
-    cx = request.complex
     prime = cx.prime
     n_min = cx.min_degree
     n_max = cx.max_degree
@@ -120,11 +122,19 @@ def compute_homology(request: HomologyRequest) -> HomologyResult:
             )
         )
 
+    return tuple(groups)
+
+
+def compute_homology(request: HomologyRequest) -> HomologyResult:
+    """Compute the homology of a chain complex over GF(prime)."""
+    cx = request.complex
+    groups = _homology_groups(cx)
     return HomologyResult(
-        groups=tuple(groups),
-        prime=prime,
-        min_degree=n_min,
-        max_degree=n_max,
+        complex=cx,
+        groups=groups,
+        prime=cx.prime,
+        min_degree=cx.min_degree,
+        max_degree=cx.max_degree,
     )
 
 

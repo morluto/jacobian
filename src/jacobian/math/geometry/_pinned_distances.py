@@ -22,6 +22,40 @@ from jacobian.math.geometry._support import geometry_operation
 MAX_PINNED_COORDINATE_DIGITS = 256
 
 
+def _require_bounded_unique_points(
+    anchor: RationalPoint2D,
+    points: tuple[RationalPoint2D, ...],
+) -> None:
+    """The pinned-distance admission bound shared by request and result.
+
+    Canonical line keys are integer triples obtained by scaling with the
+    LCM of up to three coordinate denominators; see the module constant
+    above for the height derivation. Capping points at 32 keeps the
+    aggregate quadratic ledger inside the canonical output ceiling: at most
+    C(32,2)=496 entries of ~3000-digit distances.
+    """
+    from jacobian.math._rational_height import RationalHeight
+
+    for value in (anchor.x, anchor.y):
+        if RationalHeight.from_canonical(value).exceeds(MAX_PINNED_COORDINATE_DIGITS):
+            raise ValueError(
+                "anchor coordinates exceed the conservative "
+                f"{MAX_PINNED_COORDINATE_DIGITS}-digit pinned-distance bound"
+            )
+    keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in points)
+    if len(keys) != len(set(keys)):
+        raise ValueError("point-set coordinates must be unique")
+    for point in points:
+        for value in (point.x, point.y):
+            if RationalHeight.from_canonical(value).exceeds(
+                MAX_PINNED_COORDINATE_DIGITS
+            ):
+                raise ValueError(
+                    "point coordinates exceed the conservative "
+                    f"{MAX_PINNED_COORDINATE_DIGITS}-digit pinned-distance bound"
+                )
+
+
 class PinnedDistanceRequest(StrictModel):
     """Compute the complete pinned-distance profile from an anchor to all pair-spanned lines."""
 
@@ -30,33 +64,7 @@ class PinnedDistanceRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_unique_bounded_points(self):
-        keys = tuple((p.x.num, p.x.den, p.y.num, p.y.den) for p in self.points)
-        if len(keys) != len(set(keys)):
-            raise ValueError("point-set coordinates must be unique")
-        # Canonical line keys are integer triples obtained by scaling with
-        # the LCM of up to three coordinate denominators; see the module
-        # constant above for the height derivation. Capping points at 32
-        # keeps the aggregate ledger inside the canonical output ceiling:
-        # at most C(32,2)=496 entries of ~3000-digit distances.
-        from jacobian.math._rational_height import RationalHeight
-
-        for value in (self.anchor.x, self.anchor.y):
-            if RationalHeight.from_canonical(value).exceeds(
-                MAX_PINNED_COORDINATE_DIGITS
-            ):
-                raise ValueError(
-                    "anchor coordinates exceed the conservative "
-                    f"{MAX_PINNED_COORDINATE_DIGITS}-digit pinned-distance bound"
-                )
-        for point in self.points:
-            for value in (point.x, point.y):
-                if RationalHeight.from_canonical(value).exceeds(
-                    MAX_PINNED_COORDINATE_DIGITS
-                ):
-                    raise ValueError(
-                        "point coordinates exceed the conservative "
-                        f"{MAX_PINNED_COORDINATE_DIGITS}-digit pinned-distance bound"
-                    )
+        _require_bounded_unique_points(self.anchor, self.points)
         return self
 
 
@@ -147,7 +155,7 @@ class PinnedDistanceResult(StrictModel):
     """The complete pinned-distance profile."""
 
     anchor: RationalPoint2D
-    points: tuple[RationalPoint2D, ...]
+    points: tuple[RationalPoint2D, ...] = Field(min_length=2, max_length=32)
     lines: tuple[LineDistanceEntry, ...]
     distinct_line_count: int = Field(ge=0)
     min_squared_distance: LineDistanceEntry | None = None
@@ -158,6 +166,10 @@ class PinnedDistanceResult(StrictModel):
     def require_invariants(self):
         if self.distinct_line_count != len(self.lines):
             raise ValueError("distinct_line_count must match the line count")
+        # Retained sources satisfy the same admission bound as a request, so
+        # an independently decoded profile can neither carry impossible point
+        # sets nor replay the quadratic ledger outside the operation's bound.
+        _require_bounded_unique_points(self.anchor, self.points)
         # Source-bound replay: recompute the canonical line ledger from the
         # retained anchor and points and compare every entry, so a relayed
         # or truncated profile (e.g. missing lines for retained points)

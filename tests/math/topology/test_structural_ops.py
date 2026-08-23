@@ -593,7 +593,7 @@ class TestJoinBounds:
             "vertices": ["b0", "b1", "b2", "b3", "b4"],
             "facets": [["b0", "b1", "b2", "b3", "b4"]],
         }
-        with pytest.raises(ValidationError, match="between 1 and 8"):
+        with pytest.raises(ValidationError, match=r"10-vertex facet bound|span 10"):
             JoinRequest(complex_a=complex_a, complex_b=complex_b)
 
     def test_join_exceeding_face_closure_rejected(self) -> None:
@@ -608,6 +608,35 @@ class TestJoinBounds:
         }
         with pytest.raises(ValidationError):
             JoinRequest(complex_a=complex_a, complex_b=complex_b)
+
+    def test_join_facet_product_rejected_before_expansion(self) -> None:
+        """128 maximal edges per side pair into 16384 distinct maximal
+        unions; admission rejects the product without expanding it."""
+
+        def edge_complex(prefix: str) -> dict[str, object]:
+            vertices = [f"{prefix}{i}" for i in range(32)]
+            facets = [
+                [f"{prefix}{i}", f"{prefix}{(i + step) % 32}"]
+                for step in range(1, 5)
+                for i in range(32)
+            ]
+            return {"vertices": vertices, "facets": facets}
+
+        with pytest.raises(ValidationError, match="16384 maximal facets"):
+            JoinRequest(complex_a=edge_complex("a"), complex_b=edge_complex("b"))
+
+    def test_join_vertex_bound_rejected(self) -> None:
+        """A join spanning more than 64 vertices is rejected up front."""
+
+        def star_complex(prefix: str) -> dict[str, object]:
+            vertices = [f"{prefix}{i}" for i in range(40)]
+            return {
+                "vertices": vertices,
+                "facets": [[f"{prefix}0", v] for v in vertices[1:]],
+            }
+
+        with pytest.raises(ValidationError, match="80 vertices"):
+            JoinRequest(complex_a=star_complex("a"), complex_b=star_complex("b"))
 
 
 class TestSkeletonBounds:
@@ -839,4 +868,6 @@ class TestResultDomainMirrorsRequest:
         result = compute_barycentric_subdivision(
             BarycentricSubdivisionRequest(complex=CIRCLE)
         )
-        assert BarycentricSubdivisionResult.model_validate(result.model_dump()) == result
+        assert (
+            BarycentricSubdivisionResult.model_validate(result.model_dump()) == result
+        )

@@ -481,8 +481,7 @@ class SimplicialComplexRequest(StrictModel):
         facets = normalized.get("facets")
         if isinstance(facets, list):
             normalized["facets"] = tuple(
-                tuple(facet) if isinstance(facet, list) else facet
-                for facet in facets
+                tuple(facet) if isinstance(facet, list) else facet for facet in facets
             )
         data = normalized
         if "facets" in data and "maximal_simplices" in data:
@@ -507,9 +506,7 @@ class SimplicialComplexRequest(StrictModel):
             ) from error
         return {
             "vertices": tuple(canonical.vertices),
-            "facets": tuple(
-                tuple(facet) for facet in canonical.maximal_simplices
-            ),
+            "facets": tuple(tuple(facet) for facet in canonical.maximal_simplices),
         }
 
     @model_validator(mode="after")
@@ -1368,9 +1365,7 @@ class VertexDeletionResult(TopologyExactResult):
                 "retained source complex"
             )
         if tuple(self.remaining_vertices) != expected_vertices:
-            raise ValueError(
-                "remaining_vertices must match the source-complex replay"
-            )
+            raise ValueError("remaining_vertices must match the source-complex replay")
         if tuple(sorted(self.remaining_complex.maximal_simplices)) != tuple(
             sorted(tuple(sorted(f)) for f in self.remaining_facets)
         ):
@@ -1463,9 +1458,30 @@ class JoinRequest(StrictModel):
             raise ValueError(
                 "join requires disjoint vertex sets; rename vertices first"
             )
-        # Admit the join only when its exact result complex satisfies every
-        # canonical bound (vertices, facet sizes, facet count, face closure).
+        # Disjoint maximal operand facets pair into pairwise-distinct
+        # maximal unions, so the exact join facet count is the product
+        # below. Check every derived bound BEFORE expanding that product
+        # so an oversized join is rejected without quadratic work.
         combined_vertices = tuple(sorted(va | vb))
+        if len(combined_vertices) > MAX_TOPOLOGY_VERTICES:
+            raise ValueError(
+                f"join would span {len(combined_vertices)} vertices, above "
+                f"the {MAX_TOPOLOGY_VERTICES}-vertex canonical bound"
+            )
+        widest_join_facet = max(len(facet) for facet in self.complex_a.facets) + max(
+            len(facet) for facet in self.complex_b.facets
+        )
+        if widest_join_facet > MAX_TOPOLOGY_DIMENSION + 1:
+            raise ValueError(
+                f"join facets would span {widest_join_facet} vertices, "
+                f"above the {MAX_TOPOLOGY_DIMENSION + 1}-vertex facet bound"
+            )
+        join_facet_count = len(self.complex_a.facets) * len(self.complex_b.facets)
+        if join_facet_count > MAX_TOPOLOGY_FACETS:
+            raise ValueError(
+                f"join would carry {join_facet_count} maximal facets, above "
+                f"the {MAX_TOPOLOGY_FACETS}-facet result contract"
+            )
         join_facets = _join_maximal_facets(self.complex_a.facets, self.complex_b.facets)
         SimplicialComplexRequest(vertices=combined_vertices, facets=join_facets)
         return self
@@ -1525,9 +1541,7 @@ class JoinResult(TopologyExactResult):
         if tuple(self.join_vertices) != expected_vertices:
             raise ValueError("join_vertices must match the operand vertex sets")
         expected_dimension = (
-            max(len(facet) - 1 for facet in expected_facets)
-            if expected_facets
-            else 0
+            max(len(facet) - 1 for facet in expected_facets) if expected_facets else 0
         )
         if self.join_dimension != expected_dimension:
             raise ValueError("join_dimension must match the replayed facet union")

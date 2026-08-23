@@ -22,6 +22,52 @@ itself evidence for a new public operation. See
 [Executable mathematical vocabulary](../explanation/executable-mathematical-vocabulary.md)
 for the semantic-atomicity test and gap-diagnosis methodology.
 
+Do not confuse a stable mathematical postcondition with one release's admitted
+execution envelope. If an existing operation has the right semantics but uses
+an unnecessarily coarse or narrow limit, classify the problem as a
+scale/backend gap and widen that contract when its work, intermediate growth,
+and result remain bounded. A new operation must not exist solely to bypass an
+arbitrary cap on a composable primitive. Follow the
+[boundedness proof](domain-operation-library.md#boundedness-proof) and prefer
+the quantities that actually control the kernel or exact output.
+
+## Execution-envelope review
+
+Keep the public mathematical postcondition as broad as its semantics permit.
+An implementation or backend limit describes the current admitted execution
+envelope; it does not redefine the mathematical objects to which the operation
+applies. Before adopting a small fixed input cap, complete this review:
+
+1. Identify the quantities that control work, intermediate growth, and exact
+   output. Use quantities such as operand digits, coefficient height, degree,
+   terms, matrix dimensions, candidate count, witness count, or predicted
+   serialized size rather than a convenient coarse input field.
+2. Compare exact algorithm and representation regimes. Consider sparse,
+   factored, modular, symbolic, or implicit values before requiring an expanded
+   result, and separate decision, first-witness, and complete-profile contracts
+   when their output obligations differ.
+3. Research a maintained specialist backend before writing a custom kernel or
+   retaining a restrictive pure-Python path. FLINT, GMP, and Arb are relevant
+   examples for exact integer, polynomial, matrix, and rigorous ball
+   computation; they are not mandatory when another maintained backend better
+   fits the operation.
+4. Define preflight admission from the selected algorithm's work,
+   intermediate, memory, and result bounds. Large scalar inputs should remain
+   admissible when those derived quantities and the returned value are small.
+5. Document any remaining fixed ceiling as a conservative fallback. State
+   whether it is a mathematical, representation, backend, or currently
+   uninvestigated limit, and identify the evidence needed to raise it.
+6. Test accepted and rejected boundaries, algorithm or representation
+   crossover points, and realistic source-backed cases. Use defining
+   invariants or an independent oracle to show that every selected regime has
+   the same public semantics.
+
+A timeout, cancellation, resource exhaustion, or backend `UNKNOWN` result is
+an execution outcome, never a negative mathematical conclusion. If the public
+result has no typed incomplete or unknown state, admission must reject the
+request before execution whenever completion cannot be bounded. Wall time
+remains a safety net rather than the definition of the mathematical domain.
+
 ## Admission gates
 
 A public operation must satisfy every gate:
@@ -80,14 +126,18 @@ For a catalog-changing pull request:
 
 1. Compare the candidate against nearby IDs, native symbols, input and output
    types, and discovery wording.
-2. Record one decision and a concrete mathematical rationale in the owning
+2. Complete the execution-envelope review above. Verify that each request
+   limit follows from a named representation, work, intermediate-growth, or
+   result-size budget; record the algorithm/backend regime and whether a
+   sharper bound safely admits materially larger source-backed cases.
+3. Record one decision and a concrete mathematical rationale in the owning
    domain's `_admission.py` module.
-3. For `NATIVE_ONLY`, name an importable callable whose containing public
+4. For `NATIVE_ONLY`, name an importable callable whose containing public
    module includes it in `__all__`.
-4. For bounded search, test both a complete result and the applicable
+5. For bounded search, test both a complete result and the applicable
    incomplete or truncated path. Missing witnesses and exhausted budgets are
    never negative mathematical conclusions.
-5. Regenerate the schema snapshot and run the catalog, native-API, and owning
+6. Regenerate the schema snapshot and run the catalog, native-API, and owning
    mathematical tests.
 
 The owner-local decision ledger is source review data for constructing the

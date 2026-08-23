@@ -24,6 +24,19 @@ assignees: []
 - [ ] operation
 - [ ] reasoning
 
+## Domain, bounds, and acceleration evidence
+<!--
+If a current operation has the right postcondition, separate its semantic
+mathematical domain from the admitted execution envelope. Which limit is
+mathematical, representation-specific, backend-specific, or merely
+uninvestigated? Name the quantities that actually control work, intermediate
+growth, memory, and output. Record any result-sensitive admission, compact
+exact representation, maintained backend, algorithm-regime switch, batching,
+or deterministic partitioning considered before proposing a smaller domain or
+a new operation. A timeout or UNKNOWN result is not evidence of mathematical
+nonexistence.
+-->
+
 ## Admission posture (operation gaps only)
 <!-- State whether the evidence supports public-catalog consideration, suggests native-only support, or leaves disposition unresolved. Public admission is a later decision. -->
 
@@ -37,4 +50,8 @@ assignees: []
 <!-- The indispensable mathematical postcondition not already available. -->
 
 ## Evidence and downstream uses
-<!-- Traces, benchmarks, or unrelated tasks needing the same result. -->
+<!--
+Traces, benchmarks, or unrelated tasks needing the same result. Include
+realistic source-backed cases and relevant algorithm or representation
+crossover points when scale is part of the gap.
+-->

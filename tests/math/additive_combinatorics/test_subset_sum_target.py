@@ -64,17 +64,14 @@ def _brute_force(
 
 def test_request_and_result_compose_through_strict_json_parsing() -> None:
     request = SubsetSumTargetRequest.model_validate_json(
-        '{"source":{"values":["2","3"]},'
-        '"target":"5","allow_empty_subset":false}',
+        '{"source":{"values":["2","3"]},"target":"5","allow_empty_subset":false}',
         strict=True,
     )
 
     assert request.source == IndexedIntegerSequence(values=("2", "3"))
     result = _operation().run(request)
     assert (
-        SubsetSumTargetResult.model_validate_json(
-            result.model_dump_json(), strict=True
-        )
+        SubsetSumTargetResult.model_validate_json(result.model_dump_json(), strict=True)
         == result
     )
 

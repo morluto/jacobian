@@ -280,6 +280,15 @@ class TestRequestValidation:
         with pytest.raises(ValidationError):
             pfm(prime=2, entries=((2, 0), (0, 1)))
 
+    def test_canonical_object_composition_cannot_bypass_prime_bound(self):
+        """Python-mode composition must not smuggle an out-of-domain field
+        past the request bound: the request model owns the MAX_PRIME bound."""
+        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+
+        canonical = PrimeFieldMatrix(prime=2**127 - 1, entries=((1,),), columns=1)
+        with pytest.raises(ValidationError):
+            PrimeFieldMatrixRequest(matrix=canonical)
+
 
 class TestResultReplay:
     """Serialized results must revalidate only when they match the source."""

@@ -26,6 +26,15 @@ from jacobian.math.additive_combinatorics._operations import (
     compute_sumset_cardinality,
     decide_direct_sum_predicate,
 )
+from jacobian.math.additive_combinatorics._subset_sum_residue import (
+    MAX_RESIDUE_PROFILE_DP_CELLS,
+    MAX_RESIDUE_PROFILE_MODULUS,
+    MAX_RESIDUE_PROFILE_TOTAL_DP_CELLS,
+    MAX_RESIDUE_PROFILE_WITNESS_INDEX_SLOTS,
+    SubsetSumResidueProfileRequest,
+    SubsetSumResidueProfileResult,
+    compute_subset_sum_residue_profile,
+)
 
 
 def additive_combinatorics_operation[
@@ -216,6 +225,47 @@ ADDITIVE_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                             {"coordinates": ["0", "1"]},
                         ]
                     }
+                },
+            ),
+        ),
+    ),
+    additive_combinatorics_operation(
+        "additive.subset_sum.residue_profile.compute",
+        "Compute an exact modular subset-sum profile",
+        (
+            "Given a materialized indexed integer tuple and a positive modulus m, "
+            "return the exact number of permitted index subsets in every residue "
+            "class of Z/mZ. Repeated values and zeros remain distinct positions; "
+            "the empty-subset convention is explicit. Optional witnesses are "
+            "canonical by minimizing sum(2**i for i in I). Computation and "
+            "source-binding replay visit at most "
+            f"{MAX_RESIDUE_PROFILE_TOTAL_DP_CELLS:,} item-residue cells "
+            f"({MAX_RESIDUE_PROFILE_DP_CELLS:,} per pass), with modulus at most "
+            f"{MAX_RESIDUE_PROFILE_MODULUS:,} and at most "
+            f"{MAX_RESIDUE_PROFILE_WITNESS_INDEX_SLOTS:,} witness index slots."
+        ),
+        SubsetSumResidueProfileRequest,
+        SubsetSumResidueProfileResult,
+        compute_subset_sum_residue_profile,
+        "additive-combinatorics",
+        "subset-sum",
+        "modular-arithmetic",
+        "multiplicity-profile",
+        "exact",
+        examples=(
+            example(
+                "nonempty_subsets_modulo_five",
+                (
+                    "Count all nonempty index subsets of (2,3) in every residue "
+                    "class modulo 5 and return canonical witnesses; the modulus "
+                    "must be positive and the derived DP, bigint, witness, input, "
+                    "and exact-result bounds must be admitted before execution."
+                ),
+                {
+                    "source": {"values": ["2", "3"]},
+                    "modulus": 5,
+                    "include_empty_subset": False,
+                    "include_witnesses": True,
                 },
             ),
         ),

@@ -49,6 +49,24 @@ def test_each_tool_contract_and_function_have_one_math_owner() -> None:
         )
 
 
+def test_prime_field_matrix_computations_have_one_operation_family() -> None:
+    """Rank, RREF, and nullspace over GF(p) are owned by ``prime_field.matrix``.
+
+    A second family exposing the same kernels under different IDs made
+    agents discover six competing operations for three computations.
+    """
+    matrix_ids = sorted(
+        tool.operation_id
+        for tool in BUILTIN_TOOLS
+        if tool.operation_id.startswith("prime_field")
+    )
+    assert matrix_ids == [
+        "prime_field.matrix.nullspace.compute",
+        "prime_field.matrix.rank.compute",
+        "prime_field.matrix.rref.compute",
+    ]
+
+
 def test_search_browse_and_inspect_results_stay_within_the_public_catalog() -> None:
     catalog = Catalog.open()
     public_ids = {

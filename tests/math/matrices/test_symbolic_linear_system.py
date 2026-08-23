@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian.math.matrices.symbolic._models import (
     SymbolicLinearSystemRequest,
     SymbolicMatrix,
@@ -417,6 +420,9 @@ class TestSourceBoundResult:
             "matrix": {"variables": [], "entries": ((three,),)},
             "rhs": (_rf(vars_, (7, ())),),
         }
+        # Same shape as the foreign 1x1 system so the source-bound replay
+        # is what rejects the payload, not a payload-shape bound.
+        payload["solution"] = (three,)
         with pytest.raises(ValidationError, match="exact solve"):
             SymbolicLinearSystemResult.model_validate(payload)
 
@@ -437,35 +443,171 @@ class TestSourceBoundResult:
 
 
 class TestNativeSystemAdmission:
-    def test_native_solve_rejects_short_rhs(self):
-        import pytest
+    """The native solve validates the complete request before SymPy runs."""
 
+    @staticmethod
+    def _solve(entries, rhs, variables=()):
         from jacobian.math.matrices.symbolic.operations import (
             symbolic_linear_system_solve,
         )
 
-        entries = ((_rf(("t",), (1, (0,))),),)
+        return symbolic_linear_system_solve(entries, rhs, variables)
+
+    def test_short_rhs_rejected_before_sympy(self):
+        vars_: tuple[str, ...] = ()
+        one = _rf(vars_, (1, ()))
         with pytest.raises(ValueError, match="right-hand side length"):
-            symbolic_linear_system_solve(entries, (), ())
+            self._solve(((one,), (one,)), (one,), vars_)
 
-    def test_native_solve_rejects_mismatched_variable_axis(self):
-        import pytest
+    def test_field_mismatch_rejected(self):
+        entry = _rf(("t",), (1, (0,)))
+        with pytest.raises(ValueError, match="declared ordered field"):
+            self._solve(((entry,),), (entry,), ())
 
-        from jacobian.math.matrices.symbolic.operations import (
-            symbolic_linear_system_solve,
+    def test_growth_budget_applied_to_native_callers(self):
+        """[[1/t^64]] x = [t^64] would solve to t^128: rejected natively."""
+        inv = RationalFunction.model_validate(
+            {
+                "variables": ["t"],
+                "numerator": {
+                    "terms": [
+                        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
+                    ]
+                },
+                "denominator": {
+                    "terms": [
+                        {"coefficient": {"num": "1", "den": "1"}, "exponents": [64]}
+                    ]
+                },
+            }
+        )
+        rhs = (_rf(("t",), (1, (64,))),)
+        with pytest.raises(ValueError, match="budget"):
+            self._solve(((inv,),), rhs, ("t",))
+
+
+class TestNonUniqueWitnessEquivalence:
+    """NON_UNIQUE witnesses validate by their defining equations."""
+
+    @staticmethod
+    def _non_unique_result():
+        def rf(num: int, den: int) -> RationalFunction:
+            terms = (
+                [{"coefficient": {"num": str(num), "den": str(den)}, "exponents": [0]}]
+                if num != 0
+                else []
+            )
+            return RationalFunction.model_validate(
+                {
+                    "rational_function_schema_version": "1",
+                    "domain": "QQ",
+                    "variables": ["t"],
+                    "numerator": {"terms": terms},
+                    "denominator": {
+                        "terms": [
+                            {
+                                "coefficient": {"num": "1", "den": "1"},
+                                "exponents": [0],
+                            }
+                        ]
+                    },
+                }
+            )
+
+        matrix = _matrix(("t",), ((rf(1, 3), rf(0, 1)), (rf(0, 1), rf(0, 1))))
+        rhs = (rf(3, 1), rf(0, 1))
+        return compute_symbolic_linear_system(
+            SymbolicLinearSystemRequest(matrix=matrix, rhs=rhs)
         )
 
-        entries = ((_rf(("t",), (1, (0,))),),)
-        with pytest.raises(ValueError, match="declared ordered field"):
-            symbolic_linear_system_solve(entries, (_rf(("s",), (1, (0,))),), ("t",))
-        with pytest.raises(ValueError, match="declared ordered field"):
-            symbolic_linear_system_solve(
-                (
-                    (
-                        _rf(("t",), (1, (0,))),
-                        _rf(("t", "s"), (1, (0, 1))),
-                    ),
-                ),
-                (_rf(("t",), (1, (0,))),),
-                ("t",),
-            )
+    def test_alternative_valid_witnesses_revalidate(self):
+        from jacobian.math.matrices.symbolic._models import (
+            SymbolicLinearSystemResult,
+        )
+
+        def rf(num: int) -> RationalFunction:
+            return _rf(("t",), (num, (0,)))
+
+        payload = self._non_unique_result().model_dump()
+        # (9, 4) solves the system exactly and (0, 5) spans the same kernel
+        # line as the replayed witness; neither matches backend identity.
+        payload["particular_solution"] = [rf(9).model_dump(), rf(4).model_dump()]
+        basis_vector = [_rf(("t",)).model_dump(), rf(5).model_dump()]
+        payload["nullspace_basis"] = [basis_vector]
+        revalidated = SymbolicLinearSystemResult.model_validate(payload)
+        assert revalidated.classification == "NON_UNIQUE"
+
+    def test_wrong_particular_solution_rejected(self):
+        from jacobian.math.matrices.symbolic._models import (
+            SymbolicLinearSystemResult,
+        )
+
+        zero = _rf(("t",))
+        wrong = _rf(("t",), (8, (0,)))
+        payload = self._non_unique_result().model_dump()
+        payload["particular_solution"] = [wrong.model_dump(), zero.model_dump()]
+        with pytest.raises(ValidationError, match="particular_solution must satisfy"):
+            SymbolicLinearSystemResult.model_validate(payload)
+
+    def test_non_kernel_basis_vector_rejected(self):
+        from jacobian.math.matrices.symbolic._models import (
+            SymbolicLinearSystemResult,
+        )
+
+        one_one = _rf(("t",), (1, (1,)), (1, (0,)))
+        zero = _rf(("t",))
+        payload = self._non_unique_result().model_dump()
+        payload["nullspace_basis"] = [[one_one.model_dump(), zero.model_dump()]]
+        with pytest.raises(ValidationError, match="A v = 0"):
+            SymbolicLinearSystemResult.model_validate(payload)
+
+    def test_incomplete_or_degenerate_basis_rejected(self):
+        """Duplicated vectors cannot pass for a complete independent basis."""
+        from jacobian.math.matrices.symbolic._models import (
+            SymbolicLinearSystemResult,
+        )
+
+        zero = _rf(("t",))
+        one = _rf(("t",), (1, (0,)))
+        two = _rf(("t",), (2, (0,)))
+        payload = self._non_unique_result().model_dump()
+        # Both vectors lie in the kernel line but are dependent and exceed
+        # the kernel dimension.
+        payload["nullspace_basis"] = [
+            [zero.model_dump(), one.model_dump()],
+            [zero.model_dump(), two.model_dump()],
+        ]
+        with pytest.raises(ValidationError, match=r"n - rank|independent"):
+            SymbolicLinearSystemResult.model_validate(payload)
+
+
+class TestRelayedPayloadShapeCaps:
+    """Solution payloads are capped before nested rational functions parse."""
+
+    def test_oversized_solution_tuple_rejected_pre_parsing(self):
+        from jacobian.math.matrices.symbolic._models import (
+            SymbolicLinearSystemResult,
+        )
+
+        payload = self._non_unique_payload()
+        filler = _rf(("t",)).model_dump()
+        payload["solution"] = None
+        payload["particular_solution"] = [filler] * 50
+        with pytest.raises(ValidationError, match="column count"):
+            SymbolicLinearSystemResult.model_validate(payload)
+
+    def test_oversized_nullspace_vector_rejected_pre_parsing(self):
+        from jacobian.math.matrices.symbolic._models import (
+            SymbolicLinearSystemResult,
+        )
+
+        payload = self._non_unique_payload()
+        long_vector = [_rf(("t",)).model_dump() for _ in range(7)]
+        payload["nullspace_basis"] = [long_vector]
+        with pytest.raises(ValidationError, match="column count"):
+            SymbolicLinearSystemResult.model_validate(payload)
+
+    @staticmethod
+    def _non_unique_payload():
+        result = TestNonUniqueWitnessEquivalence._non_unique_result()
+        return result.model_dump()

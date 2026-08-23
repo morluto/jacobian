@@ -99,23 +99,34 @@ def symbolic_eigenvalues(
     return [(sstr(value), int(mult)) for value, mult in eigenvalues.items()]
 
 
-def _require_native_system_admission(
+def _require_native_system_request(
     entries: tuple[tuple[RationalFunction, ...], ...],
     rhs: tuple[RationalFunction, ...],
     variables: tuple[str, ...],
 ) -> None:
-    """Shape and field-consistency admission shared with the wire request."""
+    """Validate the complete mathematical request for direct native callers.
+
+    Applies the same shape, ordered-field consistency, and derived-solution
+    budget checks as the wire request model before SymPy is invoked.
+    """
+    from jacobian.math.matrices.symbolic._models import (
+        _require_linear_system_growth_admission,
+    )
+
+    if not entries:
+        raise ValueError("symbolic matrix must be nonempty")
     if len(rhs) != len(entries):
         raise ValueError(
             "the right-hand side length must equal the coefficient row count"
         )
+    for row in entries:
+        for value in row:
+            if value.variables != variables:
+                raise ValueError("matrix entries must use the declared ordered field")
     for value in rhs:
         if value.variables != variables:
             raise ValueError("the right-hand side must use the declared ordered field")
-    for row in entries:
-        for entry in row:
-            if entry.variables != variables:
-                raise ValueError("matrix entries must use the declared ordered field")
+    _require_linear_system_growth_admission(entries, rhs)
 
 
 def symbolic_linear_system_solve(
@@ -132,9 +143,11 @@ def symbolic_linear_system_solve(
 
     Returns ``(classification, solution, particular_solution, nullspace_basis)``.
     """
-    _require_native_system_admission(entries, rhs, variables)
-
     import sympy
+
+    # Native callers bypass the wire envelope, so the complete mathematical
+    # request is validated here before the backend runs.
+    _require_native_system_request(entries, rhs, variables)
 
     matrix = _matrix_from_values(entries)
     rhs_vec = sympy.Matrix([[rational_function_to_sympy(v) for v in rhs]]).T

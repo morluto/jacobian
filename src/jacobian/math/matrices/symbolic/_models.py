@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from itertools import combinations, permutations
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -518,7 +518,19 @@ def _require_linear_system_solution_budget(
     backend conversion with a host exception instead of returning its
     declared typed result.
     """
-    growth = _solution_component_growth_bound(request.matrix.entries, request.rhs)
+    _require_linear_system_growth_admission(request.matrix.entries, request.rhs)
+
+
+def _require_linear_system_growth_admission(
+    entries: tuple[tuple[RationalFunction, ...], ...],
+    rhs: tuple[RationalFunction, ...],
+) -> None:
+    """Admit only systems whose derived solutions fit the result type.
+
+    Shared by the wire request validator and the native solve entry point so
+    direct callers cannot bypass the derived-solution bounds.
+    """
+    growth = _solution_component_growth_bound(entries, rhs)
     if growth[0] > MAX_SYMBOLIC_RESULT_TERMS:
         raise ValueError(
             "linear-system solution exceeds the derived result term budget; "
@@ -570,6 +582,21 @@ class SymbolicLinearSystemRequest(StrictModel):
         return self
 
 
+def _raw_system_column_bound(system: Any) -> int:
+    """Best-effort column count of a not-yet-validated raw system payload."""
+    if isinstance(system, dict):
+        matrix = system.get("matrix")
+        if isinstance(matrix, dict):
+            entries = matrix.get("entries")
+            if (
+                isinstance(entries, (list, tuple))
+                and entries
+                and isinstance(entries[0], (list, tuple))
+            ):
+                return len(entries[0])
+    return MAX_SYMBOLIC_MATRIX_DIMENSION
+
+
 class SymbolicLinearSystemResult(StrictModel):
     """Classification and solution data for one symbolic linear system.
 
@@ -596,13 +623,88 @@ class SymbolicLinearSystemResult(StrictModel):
             self.system.matrix.variables,
         )
 
-    @model_validator(mode="after")
-    def require_consistent_result(self) -> Self:
-        # Solution growth is bounded at request admission
-        # (_require_linear_system_solution_budget), before the backend runs:
-        # a parsed canonical RationalFunction already caps each side at
-        # MAX_SYMBOLIC_RESULT_TERMS, so per-component term checks here would
-        # be ineffective anyway.
+    @model_validator(mode="before")
+    @classmethod
+    def require_bounded_payload_shapes(cls, data: Any) -> Any:
+        # Cap relayed solution payloads against the retained source's column
+        # count BEFORE nested RationalFunction parsing; an unbounded tuple of
+        # individually valid values would otherwise be fully parsed before
+        # any later check rejects it.
+        if not isinstance(data, dict):
+            return data
+        limit = _raw_system_column_bound(data.get("system"))
+        for key in ("solution", "particular_solution"):
+            value = data.get(key)
+            if isinstance(value, (list, tuple)) and len(value) > limit:
+                raise ValueError(
+                    f"{key} length {len(value)} exceeds the retained system's "
+                    f"column count {limit}"
+                )
+        basis = data.get("nullspace_basis")
+        if isinstance(basis, (list, tuple)):
+            if len(basis) > limit:
+                raise ValueError(
+                    f"nullspace_basis length {len(basis)} exceeds the "
+                    f"retained system's column count {limit}"
+                )
+            for vector in basis:
+                if isinstance(vector, (list, tuple)) and len(vector) > limit:
+                    raise ValueError(
+                        "a nullspace basis vector exceeds the retained "
+                        f"system's column count {limit}"
+                    )
+        return data
+
+    def _require_mathematical_witnesses(self) -> None:
+        """Verify NON_UNIQUE witnesses by their defining equations.
+
+        A particular solution is valid iff ``A p = b`` exactly, and a basis
+        list is complete iff its vectors lie in the kernel, are linearly
+        independent, and number ``n - rank(A)``. The public contract fixes no
+        canonical free-variable normalization, so backend-identity comparison
+        would reject mathematically equivalent witnesses.
+        """
+        import sympy
+
+        from jacobian.math.polynomials._conversions import (
+            rational_function_to_sympy,
+        )
+
+        entries = self.system.matrix.entries
+        n_cols = len(entries[0])
+        particular = self.particular_solution
+        assert particular is not None
+        coefficient = sympy.Matrix(
+            [[rational_function_to_sympy(e) for e in row] for row in entries]
+        )
+        rhs_vec = sympy.Matrix(
+            [[rational_function_to_sympy(v)] for v in self.system.rhs]
+        )
+        p_vec = sympy.Matrix([[rational_function_to_sympy(v)] for v in particular])
+        residual = coefficient * p_vec - rhs_vec
+        if any(sympy.cancel(entry) != 0 for entry in residual):
+            raise ValueError(
+                "particular_solution must satisfy the retained system exactly"
+            )
+        basis = self.nullspace_basis or ()
+        kernel_columns = []
+        for vector in basis:
+            v_vec = sympy.Matrix([[rational_function_to_sympy(v)] for v in vector])
+            image = coefficient * v_vec
+            if any(sympy.cancel(entry) != 0 for entry in image):
+                raise ValueError("every nullspace basis vector must satisfy A v = 0")
+            kernel_columns.append(v_vec)
+        rank_coefficient = coefficient.rank()
+        nullity = n_cols - rank_coefficient
+        if len(kernel_columns) != nullity:
+            raise ValueError(
+                "nullspace_basis must carry exactly n - rank(A) independent "
+                "vectors to span the kernel completely"
+            )
+        if nullity and (sympy.Matrix.hstack(*kernel_columns).rank() != nullity):
+            raise ValueError("nullspace basis vectors must be linearly independent")
+
+    def _require_classification_payload_shape(self) -> None:
         if self.classification == "UNIQUE":
             if self.solution is None:
                 raise ValueError("UNIQUE must carry a solution vector")
@@ -615,31 +717,40 @@ class SymbolicLinearSystemResult(StrictModel):
                 raise ValueError("NON_UNIQUE must carry a particular_solution")
             if self.solution is not None:
                 raise ValueError("NON_UNIQUE must not populate the unique solution")
-        elif self.classification == "INCONSISTENT":
-            if (
-                self.solution is not None
-                or self.particular_solution is not None
-                or self.nullspace_basis is not None
-            ):
-                raise ValueError("INCONSISTENT must not carry solution data")
-        # Source-bound replay: the retained decision must be the exact
+        elif self.solution is not None or self.particular_solution is not None:
+            raise ValueError("INCONSISTENT must not carry solution data")
+
+    @model_validator(mode="after")
+    def require_consistent_result(self) -> Self:
+        # Solution growth is bounded at request admission
+        # (_require_linear_system_solution_budget), before the backend runs:
+        # a parsed canonical RationalFunction already caps each side at
+        # MAX_SYMBOLIC_RESULT_TERMS, so per-component term checks here would
+        # be ineffective anyway.
+        self._require_classification_payload_shape()
+        # Source-bound replay: the retained classification must be the exact
         # solve of this result's own coefficient matrix and right-hand side,
         # so a relayed or forged payload cannot validate as a solution of an
-        # unrelated system.
+        # unrelated system. The unique solution is compared by identity (it
+        # is mathematically unique); NON_UNIQUE witnesses are validated by
+        # their defining equations instead of backend identity, since the
+        # contract fixes no canonical free-variable normalization.
         (
             expected_classification,
             expected_solution,
-            expected_particular,
-            expected_nullspace,
+            _expected_particular,
+            _expected_nullspace,
         ) = self._replayed_solution()
-        if (
-            self.classification != expected_classification
-            or self.solution != expected_solution
-            or self.particular_solution != expected_particular
-            or self.nullspace_basis != expected_nullspace
-        ):
+        if self.classification != expected_classification:
             raise ValueError(
                 "linear-system conclusion must be the exact solve of the "
                 "retained source system"
             )
+        if self.classification == "UNIQUE" and self.solution != expected_solution:
+            raise ValueError(
+                "the unique solution must be the exact solve of the "
+                "retained source system"
+            )
+        if self.classification == "NON_UNIQUE":
+            self._require_mathematical_witnesses()
         return self

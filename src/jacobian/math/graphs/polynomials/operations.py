@@ -14,24 +14,23 @@ from jacobian.math.polynomials.values import (
 )
 
 MAX_INDEPENDENCE_POLYNOMIAL_VERTICES = 256
-MAX_INDEPENDENCE_POLYNOMIAL_DEGREE = 127
-MAX_INDEPENDENCE_POLYNOMIAL_TERMS = MAX_INDEPENDENCE_POLYNOMIAL_DEGREE + 1
-# Every tree is bipartite, so one color class witnesses
-# alpha(T) >= ceil(|V(T)| / 2).  The degree limit therefore implies this
-# sharper bound for every admitted result, even though the canonical graph
-# representation itself accepts 256 vertices.
-MAX_INDEPENDENCE_POLYNOMIAL_ADMITTED_VERTICES = 2 * MAX_INDEPENDENCE_POLYNOMIAL_DEGREE
+# The canonical graph representation accepts at most 256 vertices, and every
+# budget below derives from that input envelope rather than from any other
+# operation's consumer limit:
+#   - a tree on n vertices has independence number at most n - 1, so its
+#     dense coefficient profile carries at most n terms;
+#   - each coefficient counts independent k-element vertex sets, hence is at
+#     most 2^n, and the total independent-set count sums those coefficients;
+#   - the kernel performs exactly two dense convolutions per rooted edge and
+#     each factor carries at most one coefficient per term.
+MAX_INDEPENDENCE_POLYNOMIAL_TERMS = MAX_INDEPENDENCE_POLYNOMIAL_VERTICES
+MAX_INDEPENDENCE_POLYNOMIAL_EXPONENT = MAX_INDEPENDENCE_POLYNOMIAL_TERMS - 1
 MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS = len(
-    format_canonical_integer(1 << MAX_INDEPENDENCE_POLYNOMIAL_ADMITTED_VERTICES)
+    format_canonical_integer(1 << MAX_INDEPENDENCE_POLYNOMIAL_VERTICES)
 )
-
-# Each of the n - 1 rooted edges causes two dense convolutions.  Every factor
-# has at most degree + 1 coefficients, so this bounds one complete kernel pass
-# before any coefficient expansion.  The public result validator performs one
-# additional bounded replay against the retained source tree.
 MAX_INDEPENDENCE_CONVOLUTION_PRODUCTS_PER_PASS = (
     2
-    * (MAX_INDEPENDENCE_POLYNOMIAL_ADMITTED_VERTICES - 1)
+    * (MAX_INDEPENDENCE_POLYNOMIAL_VERTICES - 1)
     * MAX_INDEPENDENCE_POLYNOMIAL_TERMS**2
 )
 
@@ -94,11 +93,6 @@ def _admitted_tree_profile(graph: SimpleUndirectedGraph) -> _TreeProfile:
         included_degree[vertex] = included
 
     independence_degree = max(excluded_degree[root], included_degree[root])
-    if independence_degree > MAX_INDEPENDENCE_POLYNOMIAL_DEGREE:
-        raise ValueError(
-            "tree independence polynomial must have degree at most "
-            f"{MAX_INDEPENDENCE_POLYNOMIAL_DEGREE}"
-        )
     if convolution_products > MAX_INDEPENDENCE_CONVOLUTION_PRODUCTS_PER_PASS:
         raise ValueError(
             "tree independence polynomial exceeds the "

@@ -14,7 +14,7 @@ from jacobian.canonical import (
 )
 from jacobian.math.graphs.polynomials.operations import (
     MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS,
-    MAX_INDEPENDENCE_POLYNOMIAL_DEGREE,
+    MAX_INDEPENDENCE_POLYNOMIAL_EXPONENT,
     MAX_INDEPENDENCE_POLYNOMIAL_TERMS,
     MAX_INDEPENDENCE_POLYNOMIAL_VERTICES,
     _admitted_tree_profile,
@@ -149,9 +149,11 @@ class TreeIndependencePolynomialRequest(StrictModel):
     """Request the exact independence polynomial of one admitted tree.
 
     The materialized canonical graph must be nonempty, connected, and acyclic.
-    A scalar tree dynamic program admits only results of degree at most 127
-    before the coefficient recurrence expands; this keeps the returned value
-    inside the current exact univariate-polynomial consumer envelope.
+    Admission derives every budget from this operation's own work and result
+    envelope: at most 256 vertices, a scalar preflight whose exact
+    coefficient-convolution count stays inside the kernel pass budget, and a
+    serialized-result reservation that keeps the echoed source plus dense
+    coefficients inside the canonical output limit.
     """
 
     model_config = ConfigDict(
@@ -159,9 +161,9 @@ class TreeIndependencePolynomialRequest(StrictModel):
             "description": (
                 "Compute the exact independence polynomial of one materialized "
                 "canonical tree. The graph must be nonempty, connected, and "
-                "acyclic; its independence number, hence polynomial degree, "
-                "must be at most 127. Admission bounds rooted convolution work "
-                "and reserves canonical-output space for the echoed source."
+                "acyclic. Admission bounds rooted convolution work by an exact "
+                "scalar preflight and reserves canonical-output space for the "
+                "echoed source and dense coefficients."
             )
         }
     )
@@ -170,8 +172,8 @@ class TreeIndependencePolynomialRequest(StrictModel):
         description=(
             "Canonical finite simple undirected graph. It may contain at most "
             f"{MAX_INDEPENDENCE_POLYNOMIAL_VERTICES} vertices and must be a "
-            "nonempty tree whose independence polynomial has degree at most "
-            f"{MAX_INDEPENDENCE_POLYNOMIAL_DEGREE}."
+            "nonempty tree whose independence polynomial fits this "
+            "operation's convolution-work and serialized-output budgets."
         )
     )
 
@@ -209,7 +211,7 @@ class TreeIndependencePolynomialResult(StrictModel):
     polynomial: RationalPolynomial
     independence_number: StrictInt = Field(
         ge=1,
-        le=MAX_INDEPENDENCE_POLYNOMIAL_DEGREE,
+        le=MAX_INDEPENDENCE_POLYNOMIAL_EXPONENT,
         description="The tree independence number alpha(T).",
     )
     independent_set_count: _NonnegativeCanonicalInteger = Field(
@@ -223,7 +225,7 @@ class TreeIndependencePolynomialResult(StrictModel):
         require_polynomial_budget(
             self.polynomial,
             maximum_terms=MAX_INDEPENDENCE_POLYNOMIAL_TERMS,
-            maximum_exponent=MAX_INDEPENDENCE_POLYNOMIAL_DEGREE,
+            maximum_exponent=MAX_INDEPENDENCE_POLYNOMIAL_EXPONENT,
             maximum_coefficient_digits=MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS,
             label="independence polynomial",
         )

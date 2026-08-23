@@ -150,8 +150,8 @@ GRAPH_POLYNOMIAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "counts independent vertex sets of cardinality k in one nonempty "
         "finite tree. Return its source-bound dense coefficients, independence "
         "number, total independent-set count, and canonical sparse "
-        "RationalPolynomial in QQ[x] after a scalar preflight bounds degree "
-        "and convolution work.",
+        "RationalPolynomial in QQ[x] after a scalar preflight bounds "
+        "convolution work and serialized-result size.",
         TreeIndependencePolynomialRequest,
         TreeIndependencePolynomialResult,
         compute_independence_polynomial,
@@ -167,8 +167,8 @@ GRAPH_POLYNOMIAL_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "path_tree_p4",
                 (
                     "Compute the exact independence polynomial of P4; the graph "
-                    "must be a nonempty tree whose independence number is at "
-                    "most 127."
+                    "must be a nonempty tree within this operation's bounded "
+                    "convolution-work and serialized-output envelope."
                 ),
                 _PATH_TREE_EXAMPLE,
             ),

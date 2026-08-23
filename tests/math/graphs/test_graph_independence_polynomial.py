@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import cast
 
 import networkx as nx
@@ -195,21 +196,38 @@ def test_request_rejects_empty_disconnected_and_cyclic_graphs(
         TreeIndependencePolynomialRequest(graph=graph)
 
 
-def test_result_sensitive_degree_boundary_accepts_p254_and_rejects_p255() -> None:
-    accepted = _path(254)
-    request = TreeIndependencePolynomialRequest(graph=accepted)
+def test_star_beyond_the_old_consumer_degree_cap_is_admitted_exactly() -> None:
+    leaves = 128
+    star = _star(leaves)
+    binomials = tuple(math.comb(leaves, k) for k in range(leaves + 1))
+    expected = (binomials[0], binomials[1] + 1, *binomials[2:])
+
+    request = TreeIndependencePolynomialRequest(graph=star)
+    result = compute_independence_polynomial(request)
+
+    assert result.coefficients == tuple(
+        format_canonical_integer(coefficient) for coefficient in expected
+    )
+    assert result.independence_number == leaves
+    assert result.independent_set_count == format_canonical_integer(sum(expected))
+    assert result.independent_set_count == format_canonical_integer((1 << leaves) + 1)
+    assert len(result.polynomial.polynomial.terms) == leaves + 1
+    assert _dense_coefficients(independence_polynomial(star)) == expected
+
+
+def test_full_vertex_envelope_path_is_admitted_and_over_envelope_is_rejected() -> None:
+    admitted = _path(256)
+    request = TreeIndependencePolynomialRequest(graph=admitted)
 
     result = compute_independence_polynomial(request)
 
-    assert len(result.coefficients) == 128
-    assert result.independence_number == 127
-    assert result.independent_set_count == format_canonical_integer(
-        sum(independence_polynomial_coefficients(accepted))
+    assert result.independence_number == 128
+    assert len(result.coefficients) == 129
+    assert result.coefficients[-1] == format_canonical_integer(
+        math.comb(256 - 128 + 1, 128)
     )
-    assert len(result.polynomial.polynomial.terms) == 128
-    assert result.polynomial.polynomial.terms[0].exponents == (127,)
-    with pytest.raises(ValidationError, match="degree at most 127"):
-        TreeIndependencePolynomialRequest(graph=_path(255))
+    with pytest.raises(ValidationError, match="at most 256"):
+        TreeIndependencePolynomialRequest(graph=_path(257))
 
 
 def test_request_reserves_output_headroom_for_the_retained_source() -> None:
@@ -222,12 +240,12 @@ def test_request_reserves_output_headroom_for_the_retained_source() -> None:
         TreeIndependencePolynomialRequest(graph=graph)
 
 
-def test_request_schema_exposes_tree_and_degree_preconditions() -> None:
+def test_request_schema_exposes_tree_and_work_preconditions() -> None:
     schema = TreeIndependencePolynomialRequest.model_json_schema()
 
     assert "nonempty" in schema["description"]
-    assert "degree" in schema["description"]
-    assert "at most 127" in schema["properties"]["graph"]["description"]
+    assert "acyclic" in schema["description"]
+    assert "convolution-work" in schema["properties"]["graph"]["description"]
     graph_schema = schema["$defs"]["SimpleUndirectedGraph"]
     assert graph_schema["properties"]["vertices"]["maxItems"] == 256
 
@@ -302,7 +320,10 @@ def test_result_rejects_overbudget_coefficients_before_replay(
     valid = compute_independence_polynomial(
         TreeIndependencePolynomialRequest(graph=_path(4))
     ).model_dump(mode="json")
-    valid["polynomial"]["polynomial"]["terms"][0]["coefficient"]["num"] = "9" * 78
+    digits = polynomial_operations.MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS
+    valid["polynomial"]["polynomial"]["terms"][0]["coefficient"]["num"] = "9" * (
+        digits + 1
+    )
 
     def fail_replay(_graph: SimpleUndirectedGraph) -> tuple[int, ...]:
         raise AssertionError("overbudget polynomial must fail before replay")
@@ -313,15 +334,20 @@ def test_result_rejects_overbudget_coefficients_before_replay(
         fail_replay,
     )
 
-    with pytest.raises(ValidationError, match="77-digit bound"):
+    with pytest.raises(ValidationError, match=f"{digits}-digit bound"):
         TreeIndependencePolynomialResult.model_validate(valid)
+
+
+_OVERBUDGET_DIGITS = (
+    polynomial_operations.MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS + 1
+)
 
 
 @pytest.mark.parametrize(
     ("field", "replacement"),
     [
-        ("coefficients", ["9" * 78, "1", "3"]),
-        ("independent_set_count", "9" * 78),
+        ("coefficients", ["9" * _OVERBUDGET_DIGITS, "1", "3"]),
+        ("independent_set_count", "9" * _OVERBUDGET_DIGITS),
     ],
 )
 def test_result_rejects_overbudget_derived_values_before_replay(
@@ -343,7 +369,7 @@ def test_result_rejects_overbudget_derived_values_before_replay(
         fail_replay,
     )
 
-    with pytest.raises(ValidationError, match="77-digit bound"):
+    with pytest.raises(ValidationError, match=f"{_OVERBUDGET_DIGITS - 1}-digit bound"):
         TreeIndependencePolynomialResult.model_validate(valid)
 
 

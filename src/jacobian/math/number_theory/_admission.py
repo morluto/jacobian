@@ -11,6 +11,16 @@ from jacobian.math.number_theory._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
+        "congruence.periodic_union.measure.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact source-bound union count and density with a compressed generalized-CRT regime that avoids materializing a large common period",
+    ),
+    OperationAdmission(
+        "congruence.periodic_union.profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct complete canonical common-period residue set with exact reconstruction and a separately bounded output obligation",
+    ),
+    OperationAdmission(
         "integer.factor.certified_compute",
         AdmissionDecision.KEEP,
         "distinct bounded subexponential factorization with per-factor Pratt primality certificates",

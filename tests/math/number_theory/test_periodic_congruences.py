@@ -1,0 +1,516 @@
+"""Contract tests for exact finite periodic congruence unions."""
+
+from __future__ import annotations
+
+import copy
+import itertools
+import math
+from fractions import Fraction
+
+import pytest
+from pydantic import ValidationError
+
+from jacobian.math.number_theory._periodic_kernel import (
+    MAX_INTERSECTION_STATES,
+)
+from jacobian.math.number_theory._periodic_models import (
+    MAX_MATERIALIZED_RESIDUES,
+    MAX_PERIODIC_FAMILY_SIZE,
+    MAX_PERIODIC_INTEGER_DIGITS,
+    MAX_PERIODIC_SOURCE_ROWS,
+    PeriodicCongruenceUnionMeasureResult,
+    PeriodicCongruenceUnionProfileRequest,
+    PeriodicCongruenceUnionProfileResult,
+    PeriodicCongruenceUnionRequest,
+)
+from jacobian.math.number_theory._periodic_operations import (
+    compute_periodic_congruence_union_measure,
+    compute_periodic_congruence_union_profile,
+)
+
+
+def _measure(payload: dict[str, object]) -> PeriodicCongruenceUnionMeasureResult:
+    request = PeriodicCongruenceUnionRequest.model_validate(payload)
+    return compute_periodic_congruence_union_measure(request)
+
+
+def _profile(payload: dict[str, object]) -> PeriodicCongruenceUnionProfileResult:
+    request = PeriodicCongruenceUnionProfileRequest.model_validate(payload)
+    return compute_periodic_congruence_union_profile(request)
+
+
+def _powerset(values: range) -> tuple[tuple[int, ...], ...]:
+    return tuple(
+        combination
+        for size in range(len(values) + 1)
+        for combination in itertools.combinations(values, size)
+    )
+
+
+def _brute_residues(payload: dict[str, object]) -> tuple[int, ...]:
+    request = PeriodicCongruenceUnionRequest.model_validate(payload)
+    source = request.normalized_source()
+    moduli = tuple(int(subset.modulus) for subset in source.subsets)
+    period = math.lcm(*moduli) if moduli else 1
+    subsets = tuple(
+        (int(subset.modulus), {int(residue) for residue in subset.residues})
+        for subset in source.subsets
+    )
+    return tuple(
+        residue
+        for residue in range(period)
+        if (
+            any(residue % modulus in residues for modulus, residues in subsets)
+            != source.complement
+        )
+    )
+
+
+def test_normalizes_representatives_and_merges_repeated_moduli() -> None:
+    result = _measure(
+        {
+            "subsets": [
+                {"modulus": "6", "residues": ["-1", "7", "1", "-1"]},
+                {"modulus": "4", "residues": []},
+                {"modulus": "6", "residues": ["13", "0"]},
+            ],
+            "complement": False,
+        }
+    )
+
+    assert result.source.model_dump(mode="json") == {
+        "subsets": [
+            {"modulus": "4", "residues": []},
+            {"modulus": "6", "residues": ["0", "1", "5"]},
+        ],
+        "complement": False,
+    }
+    assert result.common_period == "12"
+    assert result.occupied_count == "6"
+    assert result.density.as_fraction() == Fraction(1, 2)
+
+
+def test_common_period_pullback_fixture_preserves_overlap_exactly() -> None:
+    # This is the small finite analogue of Erdos486's
+    # finiteBiasedCoveredResidues: lift each footprint to one common period,
+    # take the union, and count the actual union rather than summing sizes.
+    result = _profile(
+        {
+            "subsets": [
+                {"modulus": "4", "residues": ["1"]},
+                {"modulus": "6", "residues": ["1"]},
+            ],
+            "complement": False,
+        }
+    )
+
+    assert result.common_period == "12"
+    assert result.occupied_residues == ("1", "5", "7", "9")
+    assert result.occupied_count == "4"
+    assert result.density.as_fraction() == Fraction(1, 3)
+
+
+@pytest.mark.parametrize(
+    ("payload", "period", "residues"),
+    [
+        ({"subsets": [], "complement": False}, "1", ()),
+        ({"subsets": [], "complement": True}, "1", ("0",)),
+        (
+            {"subsets": [{"modulus": "7", "residues": []}], "complement": False},
+            "7",
+            (),
+        ),
+        (
+            {"subsets": [{"modulus": "7", "residues": []}], "complement": True},
+            "7",
+            tuple(str(value) for value in range(7)),
+        ),
+    ],
+)
+def test_empty_and_complement_degeneracies(
+    payload: dict[str, object], period: str, residues: tuple[str, ...]
+) -> None:
+    result = _profile(payload)
+
+    assert result.common_period == period
+    assert result.occupied_residues == residues
+    assert int(result.occupied_count) == len(residues)
+    assert result.density.as_fraction() == Fraction(len(residues), int(period))
+
+
+def test_noncoprime_overlap_is_not_double_counted() -> None:
+    result = _profile(
+        {
+            "subsets": [
+                {"modulus": "4", "residues": ["0"]},
+                {"modulus": "6", "residues": ["2"]},
+            ],
+            "complement": False,
+        }
+    )
+
+    assert result.occupied_residues == ("0", "2", "4", "8")
+    assert result.occupied_count == "4"
+    assert result.density.as_fraction() == Fraction(1, 3)
+
+
+def test_measure_source_serializes_unchanged_into_profile_consumer() -> None:
+    raw_payload = {
+        "subsets": [
+            {"modulus": "6", "residues": ["7", "-1"]},
+            {"modulus": "4", "residues": ["1"]},
+        ],
+        "complement": False,
+    }
+    measure = _measure(raw_payload)
+
+    consumer_payload = measure.source.model_dump(mode="json")
+    profile = compute_periodic_congruence_union_profile(
+        PeriodicCongruenceUnionProfileRequest.model_validate(consumer_payload)
+    )
+
+    assert profile.source.model_dump(mode="json") == consumer_payload
+    assert profile.common_period == measure.common_period
+    assert profile.occupied_count == measure.occupied_count
+    assert profile.density == measure.density
+
+
+def test_merged_source_with_many_residues_remains_an_unchanged_consumer_value() -> None:
+    raw_payload = {
+        "subsets": [
+            {
+                "modulus": "307",
+                "residues": [str(value) for value in range(200)],
+            },
+            {
+                "modulus": "307",
+                "residues": [str(value) for value in range(200, 300)],
+            },
+        ],
+        "complement": False,
+    }
+    measure = _measure(raw_payload)
+    consumer_payload = measure.source.model_dump(mode="json")
+
+    assert len(consumer_payload["subsets"][0]["residues"]) == 300
+    profile = compute_periodic_congruence_union_profile(
+        PeriodicCongruenceUnionProfileRequest.model_validate(consumer_payload)
+    )
+    assert profile.source.model_dump(mode="json") == consumer_payload
+    assert profile.occupied_count == measure.occupied_count == "300"
+
+
+def test_union_and_complement_partition_the_common_period() -> None:
+    payload = {
+        "subsets": [
+            {"modulus": "4", "residues": ["0", "1"]},
+            {"modulus": "6", "residues": ["1", "5"]},
+        ],
+        "complement": False,
+    }
+    union = _profile(payload)
+    complement_payload = copy.deepcopy(payload)
+    complement_payload["complement"] = True
+    complement = _profile(complement_payload)
+
+    assert set(union.occupied_residues).isdisjoint(complement.occupied_residues)
+    assert len(union.occupied_residues) + len(complement.occupied_residues) == 12
+    assert union.density.as_fraction() + complement.density.as_fraction() == 1
+
+
+def test_compressed_generalized_crt_measure_avoids_period_materialization() -> None:
+    result = _measure(
+        {
+            "subsets": [
+                {"modulus": "1000003", "residues": ["0", "1"]},
+                {"modulus": "1000033", "residues": ["0"]},
+            ],
+            "complement": False,
+        }
+    )
+
+    assert result.common_period == "1000036000099"
+    assert result.occupied_count == "3000067"
+    assert result.density.as_fraction() == Fraction(3_000_067, 1_000_036_000_099)
+
+
+def test_compressed_measure_and_sparse_materialization_agree() -> None:
+    scale = 1_000_003
+    payload = {
+        "subsets": [
+            {"modulus": str(2 * scale), "residues": ["0"]},
+            {"modulus": str(3 * scale), "residues": ["0", "1"]},
+        ],
+        "complement": False,
+    }
+
+    measure = _measure(payload)
+    profile = _profile(payload)
+
+    assert profile.common_period == str(6 * scale)
+    assert profile.occupied_residues == (
+        "0",
+        "1",
+        str(2 * scale),
+        str(3 * scale),
+        str(3 * scale + 1),
+        str(4 * scale),
+    )
+    assert measure.occupied_count == profile.occupied_count == "6"
+    assert measure.density == profile.density
+
+
+def test_small_profiles_match_exhaustive_membership_replay() -> None:
+    for residues_mod_2 in _powerset(range(2)):
+        for residues_mod_3 in _powerset(range(3)):
+            for complement in (False, True):
+                payload: dict[str, object] = {
+                    "subsets": [
+                        {
+                            "modulus": "2",
+                            "residues": [str(value) for value in residues_mod_2],
+                        },
+                        {
+                            "modulus": "3",
+                            "residues": [str(value) for value in residues_mod_3],
+                        },
+                    ],
+                    "complement": complement,
+                }
+                result = _profile(payload)
+                expected = _brute_residues(payload)
+
+                assert tuple(map(int, result.occupied_residues)) == expected
+                assert int(result.occupied_count) == len(expected)
+                assert result.density.as_fraction() == Fraction(len(expected), 6)
+
+
+def test_measure_result_rejects_independent_source_and_conclusion_mutations() -> None:
+    result = _measure(
+        {
+            "subsets": [{"modulus": "5", "residues": ["0", "2"]}],
+            "complement": False,
+        }
+    )
+    serialized = result.model_dump(mode="json")
+
+    bad_count = copy.deepcopy(serialized)
+    bad_count["occupied_count"] = "3"
+    with pytest.raises(ValidationError, match="occupied count"):
+        PeriodicCongruenceUnionMeasureResult.model_validate(bad_count)
+
+    bad_density = copy.deepcopy(serialized)
+    bad_density["density"] = {"num": "1", "den": "5"}
+    with pytest.raises(ValidationError, match="density"):
+        PeriodicCongruenceUnionMeasureResult.model_validate(bad_density)
+
+    bad_source = copy.deepcopy(serialized)
+    bad_source["source"]["complement"] = True
+    with pytest.raises(ValidationError, match="occupied count"):
+        PeriodicCongruenceUnionMeasureResult.model_validate(bad_source)
+
+
+def test_profile_result_rejects_omitted_or_forged_residues() -> None:
+    result = _profile(
+        {
+            "subsets": [{"modulus": "5", "residues": ["0", "2"]}],
+            "complement": False,
+        }
+    )
+    serialized = result.model_dump(mode="json")
+
+    for residues in (["0"], ["0", "1", "2"]):
+        forged = copy.deepcopy(serialized)
+        forged["occupied_residues"] = residues
+        with pytest.raises(ValidationError, match="every satisfying residue"):
+            PeriodicCongruenceUnionProfileResult.model_validate(forged)
+
+
+def test_measure_accepts_exact_integer_digit_boundary() -> None:
+    modulus = "9" * MAX_PERIODIC_INTEGER_DIGITS
+    result = _measure(
+        {
+            "subsets": [{"modulus": modulus, "residues": ["0"]}],
+            "complement": False,
+        }
+    )
+
+    assert result.common_period == modulus
+    assert result.occupied_count == "1"
+    assert result.density.as_fraction() == Fraction(1, int(modulus))
+
+
+def test_rejects_integer_and_lcm_above_exact_result_digit_bound() -> None:
+    with pytest.raises(ValidationError, match="at most 256"):
+        PeriodicCongruenceUnionRequest.model_validate(
+            {
+                "subsets": [
+                    {"modulus": "9" * (MAX_PERIODIC_INTEGER_DIGITS + 1), "residues": []}
+                ]
+            }
+        )
+
+    with pytest.raises(ValidationError, match="common period"):
+        PeriodicCongruenceUnionRequest.model_validate(
+            {
+                "subsets": [
+                    {"modulus": "1" + "0" * 199, "residues": []},
+                    {"modulus": "3" * 200, "residues": []},
+                ]
+            }
+        )
+
+
+def test_source_row_and_family_boundaries_are_exact() -> None:
+    full_residue_set = [str(value) for value in range(MAX_PERIODIC_SOURCE_ROWS)]
+    boundary = _measure(
+        {
+            "subsets": [
+                {
+                    "modulus": str(MAX_PERIODIC_SOURCE_ROWS),
+                    "residues": full_residue_set,
+                }
+            ]
+        }
+    )
+    assert boundary.occupied_count == str(MAX_PERIODIC_SOURCE_ROWS)
+
+    with pytest.raises(ValidationError, match="4096"):
+        PeriodicCongruenceUnionRequest.model_validate(
+            {
+                "subsets": [
+                    {
+                        "modulus": str(MAX_PERIODIC_SOURCE_ROWS),
+                        "residues": full_residue_set,
+                    },
+                    {"modulus": "1", "residues": ["0"]},
+                ]
+            }
+        )
+
+    family_boundary = [
+        {"modulus": "1", "residues": []} for _ in range(MAX_PERIODIC_FAMILY_SIZE)
+    ]
+    PeriodicCongruenceUnionRequest.model_validate({"subsets": family_boundary})
+    with pytest.raises(ValidationError, match="64"):
+        PeriodicCongruenceUnionRequest.model_validate(
+            {"subsets": [*family_boundary, {"modulus": "1", "residues": []}]}
+        )
+
+
+def test_materialized_period_boundary_is_separate_from_measure() -> None:
+    large_sparse = {
+        "subsets": [
+            {
+                "modulus": "9" * MAX_PERIODIC_INTEGER_DIGITS,
+                "residues": ["0"],
+            }
+        ],
+        "complement": False,
+    }
+    result = _profile(large_sparse)
+    assert result.occupied_residues == ("0",)
+
+    complemented_boundary = {
+        "subsets": [{"modulus": str(MAX_MATERIALIZED_RESIDUES), "residues": []}],
+        "complement": True,
+    }
+    boundary_profile = _profile(complemented_boundary)
+    assert len(boundary_profile.occupied_residues) == MAX_MATERIALIZED_RESIDUES
+    assert boundary_profile.occupied_residues[-1] == str(MAX_MATERIALIZED_RESIDUES - 1)
+
+    measure_only = {
+        "subsets": [
+            {
+                "modulus": str(MAX_MATERIALIZED_RESIDUES + 1),
+                "residues": [],
+            }
+        ],
+        "complement": True,
+    }
+    assert _measure(measure_only).occupied_count == str(MAX_MATERIALIZED_RESIDUES + 1)
+    with pytest.raises(ValidationError, match="complemented profile common period"):
+        PeriodicCongruenceUnionProfileRequest.model_validate(measure_only)
+
+
+def test_full_subset_shortcuts_count_and_complement_materialization() -> None:
+    huge_period = "9" * MAX_PERIODIC_INTEGER_DIGITS
+    source = [
+        {"modulus": "1", "residues": ["0"]},
+        {"modulus": huge_period, "residues": []},
+    ]
+
+    full_measure = _measure({"subsets": source, "complement": False})
+    empty_complement = _profile({"subsets": source, "complement": True})
+
+    assert full_measure.common_period == huge_period
+    assert full_measure.occupied_count == huge_period
+    assert full_measure.density.as_fraction() == 1
+    assert empty_complement.occupied_residues == ()
+    assert empty_complement.occupied_count == "0"
+    assert empty_complement.density.as_fraction() == 0
+
+    with pytest.raises(ValidationError, match="materialized full union"):
+        PeriodicCongruenceUnionProfileRequest.model_validate(
+            {"subsets": source, "complement": False}
+        )
+
+
+def test_materialized_union_row_bound_is_checked_before_lifting() -> None:
+    boundary_payload = {
+        "subsets": [
+            {"modulus": "2", "residues": ["0"]},
+            {"modulus": str(2 * MAX_MATERIALIZED_RESIDUES), "residues": []},
+        ],
+        "complement": False,
+    }
+    boundary_profile = _profile(boundary_payload)
+    assert int(boundary_profile.occupied_count) == MAX_MATERIALIZED_RESIDUES
+
+    rejected_payload = {
+        "subsets": [
+            {"modulus": "2", "residues": ["0"]},
+            {
+                "modulus": str(2 * (MAX_MATERIALIZED_RESIDUES + 1)),
+                "residues": [],
+            },
+        ],
+        "complement": False,
+    }
+    with pytest.raises(ValidationError, match="materialized union"):
+        PeriodicCongruenceUnionProfileRequest.model_validate(rejected_payload)
+
+
+def test_profile_accounts_for_retained_source_and_wide_residue_output_bytes() -> None:
+    base_modulus = 10**250
+    output_rows = 50_000
+    payload = {
+        "subsets": [
+            {"modulus": str(base_modulus), "residues": ["0"]},
+            {"modulus": str(base_modulus * output_rows), "residues": []},
+        ],
+        "complement": False,
+    }
+
+    assert _measure(payload).occupied_count == str(output_rows)
+    with pytest.raises(ValidationError, match="canonical output budget"):
+        PeriodicCongruenceUnionProfileRequest.model_validate(payload)
+
+
+def test_compressed_intersection_work_boundary_rejects_before_backend() -> None:
+    primes = (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59)
+    boundary_payload = {
+        "subsets": [{"modulus": str(prime), "residues": ["0"]} for prime in primes[:-1]]
+    }
+    request = PeriodicCongruenceUnionRequest.model_validate(boundary_payload)
+    assert (1 << len(request.subsets)) - 1 == MAX_INTERSECTION_STATES
+    result = compute_periodic_congruence_union_measure(request)
+    period = math.prod(primes[:-1])
+    assert int(result.occupied_count) == period - math.prod(
+        prime - 1 for prime in primes[:-1]
+    )
+
+    rejected_payload = copy.deepcopy(boundary_payload)
+    rejected_payload["subsets"].append({"modulus": str(primes[-1]), "residues": ["0"]})
+    with pytest.raises(ValidationError, match="both exact execution regimes"):
+        PeriodicCongruenceUnionRequest.model_validate(rejected_payload)

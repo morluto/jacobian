@@ -66,7 +66,19 @@ def compute_group_stabilizer(request: GroupStabilizerRequest) -> GroupStabilizer
 def compute_subgroup_lattice(
     request: GroupSubgroupLatticeRequest,
 ) -> GroupSubgroupLatticeResult:
-    subgroups = subgroup_lattice(request.degree, [list(g) for g in request.generators])
+    from jacobian.math.group.operations import SubgroupLatticeBudgetExceededError
+
+    try:
+        subgroups = subgroup_lattice(
+            request.degree, [list(g) for g in request.generators]
+        )
+    except SubgroupLatticeBudgetExceededError as error:
+        return GroupSubgroupLatticeResult(
+            outcome="LIMIT_EXCEEDED",
+            degree=request.degree,
+            generators=request.generators,
+            detail=str(error),
+        )
     entries = tuple(
         SubgroupEntry(
             generators=tuple(tuple(g) for g in sg[0]),

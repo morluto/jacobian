@@ -128,3 +128,86 @@ class TestLatticeResultBoundToSourceGroup:
         s3_payload["generators"] = [[1, 2, 3, 0]]
         with pytest.raises(ValidationError, match="complete subgroup lattice"):
             GroupSubgroupLatticeResult.model_validate(s3_payload)
+
+
+class TestLatticeWorkBound:
+    """Traversal work is bounded by search-node count, not only group order."""
+
+    @staticmethod
+    def _c2_power_six() -> GroupSubgroupLatticeRequest:
+        # Six disjoint transpositions: the elementary abelian group C2^6 of
+        # order 64, whose lattice is the extremal admitted one.
+        generators = []
+        for pair in range(6):
+            form = list(range(12))
+            form[2 * pair], form[2 * pair + 1] = form[2 * pair + 1], form[2 * pair]
+            generators.append(tuple(form))
+        return GroupSubgroupLatticeRequest(degree=12, generators=tuple(generators))
+
+    def test_extremal_abelian_lattice_completes(self):
+        """C2^6 has exactly 2825 subgroups (subspaces of F_2^6)."""
+        result = compute_subgroup_lattice(self._c2_power_six())
+        assert result.outcome == "COMPUTED"
+        assert result.subgroup_count == 2825
+        orders = sorted(entry.order for entry in result.subgroups)
+        assert orders[0] == 1 and orders[-1] == 64
+        # Every entry's generator chain stays within log2(order) <= 6 links.
+        assert max(len(entry.generators) for entry in result.subgroups) <= 6
+
+    def test_budget_exhaustion_returns_typed_outcome(self, monkeypatch):
+        """An exhausted closure budget yields LIMIT_EXCEEDED, not an error."""
+        import jacobian.math.group.operations as operations
+
+        monkeypatch.setattr(operations, "MAX_SUBGROUP_LATTICE_CLOSURES", 3)
+        result = compute_subgroup_lattice(
+            GroupSubgroupLatticeRequest(degree=4, generators=((1, 2, 3, 0),))
+        )
+        assert result.outcome == "LIMIT_EXCEEDED"
+        assert result.subgroups is None
+        assert result.detail is not None and "closure constructions" in result.detail
+
+    def test_exceeded_outcome_rejects_entries_and_missing_detail(self):
+        from jacobian.math.group._models import GroupSubgroupLatticeResult
+
+        with pytest.raises(ValidationError, match="only a safe detail"):
+            GroupSubgroupLatticeResult(
+                outcome="LIMIT_EXCEEDED",
+                degree=4,
+                generators=((1, 2, 3, 0),),
+                detail=None,
+            )
+        with pytest.raises(ValidationError, match="only a safe detail"):
+            GroupSubgroupLatticeResult(
+                outcome="LIMIT_EXCEEDED",
+                degree=4,
+                generators=((1, 2, 3, 0),),
+                subgroups=(),
+                detail="exceeded",
+            )
+
+
+class TestRelayedPayloadBounds:
+    """Forged relayed payloads are capped before nested backend work."""
+
+    def test_entry_count_cap_before_nested_validation(self):
+        """More than the extremal subgroup count is rejected pre-nesting."""
+        from jacobian.math.group._models import (
+            MAX_SUBGROUP_LATTICE_ENTRIES,
+            GroupSubgroupLatticeResult,
+        )
+
+        payload = compute_subgroup_lattice(
+            GroupSubgroupLatticeRequest(degree=4, generators=((1, 2, 3, 0),))
+        ).model_dump(mode="json")
+        valid_entry = payload["subgroups"][0]
+        payload["subgroups"] = [valid_entry] * (MAX_SUBGROUP_LATTICE_ENTRIES + 1)
+        payload["subgroup_count"] = len(payload["subgroups"])
+        with pytest.raises(ValidationError, match="admitted lattice bound"):
+            GroupSubgroupLatticeResult.model_validate(payload)
+
+    def test_generator_count_cap_restored(self):
+        """Subgroup entries declare a schema-visible generator-count cap."""
+        from jacobian.math.group._models import SubgroupEntry
+
+        with pytest.raises(ValidationError, match="at most 64"):
+            SubgroupEntry(generators=tuple([(0, 1)] * 65), order=2)

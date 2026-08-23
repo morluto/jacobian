@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -20,6 +20,13 @@ MAX_CONJUGACY_CLASSES_GROUP_ORDER = 5000
 # The subgroup-lattice traversal is exponential in the generated group's
 # order and therefore carries a much tighter enumerated-order cap.
 MAX_SUBGROUP_LATTICE_GROUP_ORDER = 64
+# The complete lattice of an admitted source has at most as many entries as
+# the extremal admitted group: the elementary abelian group C2^6, whose
+# subgroups are exactly the subspaces of F_2^6 (a Gaussian-binomial sum
+# 1 + 63 + 651 + 1395 + 651 + 63 + 1). Capping the relayed payload at this
+# operation-derived count keeps result parsing bounded before any nested
+# entry constructs a backend permutation group.
+MAX_SUBGROUP_LATTICE_ENTRIES = 2825
 
 
 def _require_bounded_group_order(
@@ -478,7 +485,12 @@ class GroupSubgroupLatticeRequest(StrictModel):
 class SubgroupEntry(StrictModel):
     """One subgroup with its generators and order."""
 
-    generators: tuple[tuple[int, ...], ...] = Field(min_length=1)
+    # A group of admitted order <= 64 never needs more than 6 generators
+    # (each accepted generator at least doubles the generated subgroup, so a
+    # chain has length <= log2(64)); the cap keeps a relayed payload from
+    # driving unbounded backend construction before the source-bound
+    # comparison runs.
+    generators: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=64)
     order: int = Field(ge=1, le=64)
 
     @model_validator(mode="after")
@@ -506,25 +518,57 @@ class SubgroupEntry(StrictModel):
         return self
 
 
+GroupSubgroupLatticeOutcome = Literal["COMPUTED", "LIMIT_EXCEEDED"]
+
+
 class GroupSubgroupLatticeResult(StrictModel):
     """All subgroups of a bounded permutation group, bound to its source."""
 
+    outcome: GroupSubgroupLatticeOutcome = "COMPUTED"
     degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
     generators: tuple[tuple[int, ...], ...] = Field(
         min_length=1, max_length=MAX_GROUP_DEGREE
     )
-    subgroups: tuple[SubgroupEntry, ...] = Field(min_length=1)
-    subgroup_count: int = Field(ge=1)
+    subgroups: tuple[SubgroupEntry, ...] | None = None
+    subgroup_count: int = Field(default=0, ge=0)
     method: Literal["SYMPY_SUBGROUPS"] = "SYMPY_SUBGROUPS"
+    detail: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_bounded_subgroup_entries(cls, data: Any) -> Any:
+        # Cap the entry count BEFORE nested SubgroupEntry construction: each
+        # nested entry builds a backend permutation group, so a forged relayed
+        # payload must not drive that work past the operation-derived bound.
+        if isinstance(data, dict):
+            entries = data.get("subgroups")
+            if isinstance(entries, (list, tuple)) and len(entries) > (
+                MAX_SUBGROUP_LATTICE_ENTRIES
+            ):
+                raise ValueError(
+                    "subgroups exceed the admitted lattice bound of "
+                    f"{MAX_SUBGROUP_LATTICE_ENTRIES} entries (the extremal "
+                    "subgroup count among groups of order at most 64)"
+                )
+        return data
 
     @model_validator(mode="after")
-    def require_consistent_count(self) -> Self:
-        if len(self.subgroups) != self.subgroup_count:
-            raise ValueError("subgroup_count must match the number of subgroups")
+    def require_outcome_shape(self) -> Self:
+        if self.outcome == "COMPUTED":
+            if self.subgroups is None or self.detail is not None:
+                raise ValueError(
+                    "computed lattice requires subgroup entries and no detail"
+                )
+            if self.subgroup_count != len(self.subgroups) or self.subgroup_count < 1:
+                raise ValueError("subgroup_count must match the number of subgroups")
+        elif self.subgroups is not None or self.detail is None:
+            raise ValueError("an exceeded traversal carries only a safe detail")
         return self
 
     @model_validator(mode="after")
     def bind_lattice_to_source_group(self) -> Self:
+        if self.outcome != "COMPUTED" or self.subgroups is None:
+            return self
         # Replaying through the request model revalidates generator shape and
         # the bounded group order before the lattice is recomputed.
         GroupSubgroupLatticeRequest(degree=self.degree, generators=self.generators)

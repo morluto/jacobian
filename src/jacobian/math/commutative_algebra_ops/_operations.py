@@ -73,7 +73,24 @@ def main() -> None:
             rational_polynomial_to_sympy,
             symbols_for_variables,
         )
-        from jacobian.math.polynomials.values import RationalPolynomial
+        from jacobian.math.polynomials.values import (
+            MAX_POLYNOMIAL_EXPONENT,
+            RationalPolynomial,
+        )
+
+        def require_admissible_exponents(poly: object) -> None:
+            # Classify oversized output exponents as a result limit BEFORE
+            # canonical conversion, so the parent reports LIMIT_EXCEEDED
+            # instead of a post-hoc conversion failure.
+            largest = max(
+                (max(monom) if monom else 0 for monom in poly.monoms()),
+                default=0,
+            )
+            if largest > MAX_POLYNOMIAL_EXPONENT:
+                raise ValueError(
+                    f"polynomial result exceeds the "
+                    f"{MAX_POLYNOMIAL_EXPONENT}-exponent operation budget"
+                )
 
         mode = payload["mode"]
         variables = tuple(payload["variables"])
@@ -88,6 +105,7 @@ def main() -> None:
             poly = sympy.Poly(
                 expr, *symbols_for_variables(terms_variable), domain=sympy.QQ
             )
+            require_admissible_exponents(poly)
             converted = rational_polynomial_from_sympy(
                 poly, terms_variable, maximum_terms=maximum_terms
             )
@@ -171,6 +189,99 @@ def main() -> None:
                     })
                     return
             _emit({"status": "ok", "equal": True})
+        elif mode == "verify_groebner_basis":
+            # One bounded worker pass replays every defining invariant of a
+            # claimed reduced Groebner basis: unit leading coefficients, no
+            # generator divisible by another's leading monomial, Buchberger
+            # S-polynomial reduction, and both ideal inclusions.
+            order = payload.get("order", "grevlex")
+            claimed = [
+                RationalPolynomial.model_validate(item)
+                for item in payload["basis"]
+            ]
+            claimed_exprs = [
+                rational_polynomial_to_sympy(g).as_expr() for g in claimed
+            ]
+            nonzero = [expr for expr in claimed_exprs if not expr.is_zero]
+
+            def fail(detail: str) -> None:
+                _emit({"status": "ok", "equal": False, "detail": detail})
+
+            leading_terms = [sympy.LT(e, *symbols, order=order) for e in nonzero]
+            for index, expr in enumerate(nonzero):
+                if sympy.LC(expr, *symbols, order=order) != 1:
+                    fail("a reduced Groebner basis has unit leading coefficients")
+                    return
+                others = [lt for j, lt in enumerate(leading_terms) if j != index]
+                if others:
+                    _, remainder = sympy.reduced(
+                        expr, others, *symbols, order=order, domain=sympy.QQ
+                    )
+                    if remainder != expr:
+                        fail(
+                            "reduced Groebner basis generators must contain no "
+                            "other leading monomial"
+                        )
+                        return
+            polys = [sympy.Poly(e, *symbols, domain=sympy.QQ) for e in nonzero]
+            lead_exps = [poly.monoms()[0] for poly in polys]
+
+            def monomial(exps: tuple) -> object:
+                product = sympy.Integer(1)
+                for sym, exponent in zip(symbols, exps):
+                    if exponent:
+                        product *= sym**exponent
+                return product
+
+            count = len(nonzero)
+            for first in range(count):
+                for second in range(first + 1, count):
+                    lcm_exp = tuple(
+                        max(x, y)
+                        for x, y in zip(lead_exps[first], lead_exps[second])
+                    )
+                    s_poly = nonzero[first] * monomial(
+                        tuple(x - y for x, y in zip(lcm_exp, lead_exps[first]))
+                    ) - nonzero[second] * monomial(
+                        tuple(x - y for x, y in zip(lcm_exp, lead_exps[second]))
+                    )
+                    _, remainder = sympy.reduced(
+                        s_poly, nonzero, *symbols, order=order, domain=sympy.QQ
+                    )
+                    if remainder != 0:
+                        fail(
+                            "basis S-polynomials must reduce to zero; the list "
+                            "is not a Groebner basis of the retained ideal"
+                        )
+                        return
+            source_basis = sympy.groebner(exprs, *symbols, order=order, domain=sympy.QQ)
+            for generator in nonzero:
+                _, rem = sympy.reduced(
+                    generator,
+                    list(source_basis.exprs),
+                    *symbols,
+                    order=order,
+                    domain=sympy.QQ,
+                )
+                if rem != 0:
+                    fail(
+                        "a basis generator leaves a nonzero remainder "
+                        "modulo the source ideal"
+                    )
+                    return
+            for expr in exprs:
+                if expr.is_zero:
+                    continue
+                _, rem = sympy.reduced(
+                    expr, claimed_exprs, *symbols, order=order, domain=sympy.QQ
+                )
+                if rem != 0:
+                    fail(
+                        "a source generator is not contained in "
+                        "the claimed basis ideal"
+                    )
+                    return
+            _emit({"status": "ok", "equal": True})
         elif mode == "elimination":
             eliminated = set(payload["eliminated"])
             remaining = [v for v in variables if v not in eliminated]
@@ -191,8 +302,12 @@ def main() -> None:
                     unit_ideal = True
                     break
                 if involved.issubset(set(remaining)):
+                    converted_poly = sympy.Poly(
+                        expr, *remaining_symbols, domain=sympy.QQ
+                    )
+                    require_admissible_exponents(converted_poly)
                     converted = rational_polynomial_from_sympy(
-                        sympy.Poly(expr, *remaining_symbols, domain=sympy.QQ),
+                        converted_poly,
                         tuple(remaining),
                     )
                     generators.append(converted.model_dump(mode="json"))
@@ -232,7 +347,7 @@ def _run_sympy_kernel(payload: dict[str, Any], wall_seconds: float) -> dict[str,
     bounded outcome onto the typed kernel exceptions.
     """
     try:
-        timed_out, stdout = run_bounded_stdin_python_kernel(
+        timed_out, stdout, limit_exceeded = run_bounded_stdin_python_kernel(
             _SYMPY_WORKER_SCRIPT,
             json.dumps(payload),
             wall_seconds=wall_seconds,
@@ -243,6 +358,13 @@ def _run_sympy_kernel(payload: dict[str, Any], wall_seconds: float) -> dict[str,
         raise _SympyKernelError(str(error)) from None
     if timed_out:
         raise _SympyKernelTimeoutError()
+    if limit_exceeded:
+        # A killed worker leaves truncated output: the exact result exceeded
+        # the transport cap, which is the declared LIMIT_EXCEEDED outcome,
+        # not an ordinary JSON failure to be misclassified as ERROR.
+        raise _ResultLimitExceededError(
+            "the exact kernel result exceeded the declared transport bound"
+        )
     try:
         result = json.loads(stdout)
     except (UnicodeDecodeError, ValueError) as error:

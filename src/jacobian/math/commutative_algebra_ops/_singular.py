@@ -504,8 +504,9 @@ def run_bounded_stdin_python_kernel(
     wall_seconds: float,
     stdout_limit: int,
     stderr_limit: int,
-) -> tuple[bool, str]:
-    """Run one bounded Python-kernel worker and return (timed_out, stdout).
+) -> tuple[bool, str, bool]:
+    """Run one bounded Python-kernel worker and return (timed_out, stdout,
+    output_limit_exceeded).
 
     The child process is terminated on wall-budget expiry, so an admitted
     request cannot leave detached computations running inside the server.
@@ -546,5 +547,6 @@ def run_bounded_stdin_python_kernel(
             cwd=directory,
         )
     if completed.timed_out:
-        return True, ""
-    return False, completed.stdout.decode("ascii")
+        return True, "", False
+    exceeded = completed.stdout_exceeded or completed.stderr_exceeded
+    return False, completed.stdout.decode("ascii", errors="replace"), exceeded

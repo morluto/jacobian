@@ -20,6 +20,7 @@ MAX_INPUT_EXPONENT = 12
 MAX_COEFFICIENT_DIGITS = 128
 MAX_OUTPUT_GENERATORS = 64
 MAX_OUTPUT_TERMS = 1024
+DEFAULT_WALL_SECONDS = 10.0
 
 
 class IdealComputationBudget(StrictModel):
@@ -360,26 +361,11 @@ class GroebnerBasisResult(StrictModel):
                 self.basis,
                 self.request.ideal,
                 self.request.monomial_order,
-            )
-            _require_basis_ideal_equality(
-                self.basis,
-                self.request.ideal,
-                self.request.monomial_order,
                 float(self.request.resource_budget.wall_seconds),
             )
         elif self.basis is not None or self.detail is None:
             raise ValueError("timed-out computation carries only a safe detail")
         return self
-
-
-def _sympy_monomial(symbols: tuple[Any, ...], exponents: tuple[int, ...]) -> Any:
-    import sympy
-
-    monomial: Any = sympy.Integer(1)
-    for symbol, exponent in zip(symbols, exponents, strict=True):
-        if exponent:
-            monomial *= symbol**exponent
-    return monomial
 
 
 def _require_zero_free_basis(
@@ -410,104 +396,34 @@ def _require_source_bound_basis(
     basis: RationalPolynomialIdeal,
     source: RationalPolynomialIdeal,
     monomial_order: str,
+    wall_seconds: float,
 ) -> None:
-    """Replay the declared reduced Gröbner-basis conditions against the source."""
-    import sympy
+    """Gate cheap structural invariants, then replay the exact ones.
 
+    Reducedness, the Buchberger criterion, and both ideal inclusions are
+    exact work with unbounded intermediate growth, so they run as ONE
+    bounded killable-worker pass under the declared budget instead of
+    unbounded parent-process SymPy calls.
+    """
     from jacobian.math.polynomials._conversions import (
         rational_polynomial_to_sympy,
-        symbols_for_variables,
     )
-
-    def to_expr(generator: RationalPolynomial) -> Any:
-        return rational_polynomial_to_sympy(generator).as_expr()
 
     if basis.variables != source.variables:
         raise ValueError("basis must use the source ideal's ordered ring")
-    symbols = symbols_for_variables(basis.variables)
-    basis_exprs = [to_expr(generator) for generator in basis.generators]
-    source_exprs = [to_expr(generator) for generator in source.generators]
+    basis_exprs = [rational_polynomial_to_sympy(g).as_expr() for g in basis.generators]
+    source_exprs = [
+        rational_polynomial_to_sympy(g).as_expr() for g in source.generators
+    ]
     nonzero = _require_zero_free_basis(basis_exprs, source_exprs)
     if nonzero is None:
         return
-    leading_terms = [sympy.LT(expr, *symbols, order=monomial_order) for expr in nonzero]
-    leading_exps = [
-        sympy.Poly(lt, *symbols, domain=sympy.QQ).monoms()[0] for lt in leading_terms
-    ]
-    # Reduced: unit leading coefficients and no generator term divisible by
-    # another generator's leading monomial.
-    for index, (expr, lt) in enumerate(zip(nonzero, leading_terms, strict=True)):
-        if sympy.LC(expr, *symbols, order=monomial_order) != 1:
-            raise ValueError("a reduced Gröbner basis has unit leading coefficients")
-        others = [
-            lt for other_index, lt in enumerate(leading_terms) if other_index != index
-        ]
-        if others:
-            _, remainder = sympy.reduced(
-                expr, others, *symbols, order=monomial_order, domain=sympy.QQ
-            )
-            if remainder != expr:
-                raise ValueError(
-                    "reduced Gröbner basis generators must contain no other "
-                    "leading monomial"
-                )
-    _require_buchberger_criterion(
-        nonzero, leading_terms, leading_exps, symbols, monomial_order
+    from jacobian.math.commutative_algebra_ops._operations import (
+        _run_sympy_kernel,
     )
 
-
-def _require_buchberger_criterion(
-    nonzero: list[Any],
-    leading_terms: list[Any],
-    leading_exps: list[tuple[int, ...]],
-    symbols: tuple[Any, ...],
-    monomial_order: str,
-) -> None:
-    """Every S-polynomial must reduce to zero over the claimed basis."""
-    from itertools import combinations
-
-    import sympy
-
-    for first, second in combinations(range(len(nonzero)), 2):
-        lcm_exp = tuple(
-            max(a, b)
-            for a, b in zip(leading_exps[first], leading_exps[second], strict=True)
-        )
-        s_poly = nonzero[first] * _sympy_monomial(
-            symbols,
-            tuple(a - b for a, b in zip(lcm_exp, leading_exps[first], strict=True)),
-        ) - nonzero[second] * _sympy_monomial(
-            symbols,
-            tuple(a - b for a, b in zip(lcm_exp, leading_exps[second], strict=True)),
-        )
-        _, remainder = sympy.reduced(
-            s_poly, nonzero, *symbols, order=monomial_order, domain=sympy.QQ
-        )
-        if remainder != 0:
-            raise ValueError(
-                "basis S-polynomials must reduce to zero; the list is not a "
-                "Gröbner basis of the retained ideal"
-            )
-
-
-def _require_basis_ideal_equality(
-    basis: RationalPolynomialIdeal,
-    source: RationalPolynomialIdeal,
-    monomial_order: str,
-    wall_seconds: float,
-) -> None:
-    """Verify both ideal inclusions inside the killable worker process.
-
-    The source-side Gröbner computation is unbounded work, so it runs under
-    the declared killable budget exactly like the producing computation; a
-    parent-process recomputation would repeat the expensive search with no
-    wall-time bound. A verification that cannot conclude within the budget
-    fails closed.
-    """
-    from jacobian.math.commutative_algebra_ops._operations import _run_sympy_kernel
-
     payload = {
-        "mode": "verify_ideal_equality",
+        "mode": "verify_groebner_basis",
         "variables": list(source.variables),
         "order": monomial_order,
         "generators": [
@@ -613,39 +529,33 @@ def _require_source_bound_remainder(
     request: IdealNormalFormRequest,
     remainder: RationalPolynomial,
 ) -> None:
-    """Replay the defining Gröbner reduction of the retained operands."""
-    import sympy
+    """Replay the defining Gröbner reduction inside the bounded kernel.
 
-    from jacobian.math.polynomials._conversions import (
-        rational_polynomial_from_sympy,
-        rational_polynomial_to_sympy,
-        symbols_for_variables,
+    The exact reduction has unbounded intermediate work, so it reuses the
+    producer's killable-worker mode under the declared wall budget instead
+    of an unbounded parent-process SymPy call.
+    """
+    from jacobian.math.commutative_algebra_ops._operations import (
+        _run_sympy_kernel,
     )
 
-    variables = request.ideal.variables
-    symbols = symbols_for_variables(variables)
-    ideal_generators = [
-        rational_polynomial_to_sympy(generator).as_expr()
-        for generator in request.ideal.generators
-    ]
-    polynomial_expr = rational_polynomial_to_sympy(request.polynomial).as_expr()
-    basis = sympy.groebner(
-        ideal_generators,
-        *symbols,
-        order=request.monomial_order,
-        domain=sympy.QQ,
-    )
-    _, replayed = sympy.reduced(
-        polynomial_expr,
-        list(basis.exprs),
-        *symbols,
-        order=request.monomial_order,
-        domain=sympy.QQ,
-    )
-    expected = rational_polynomial_from_sympy(
-        sympy.Poly(replayed, *symbols, domain=sympy.QQ),
-        variables,
-    )
+    payload = {
+        "mode": "normal_form",
+        "variables": list(request.ideal.variables),
+        "order": request.monomial_order,
+        "generators": [
+            generator.model_dump(mode="json") for generator in request.ideal.generators
+        ],
+        "polynomial": request.polynomial.model_dump(mode="json"),
+    }
+    try:
+        result_payload = _run_sympy_kernel(payload, DEFAULT_WALL_SECONDS)
+    except Exception as error:
+        raise ValueError(
+            "the remainder could not be re-verified within the enforced "
+            f"wall-time budget: {error}"
+        ) from None
+    expected = RationalPolynomial.model_validate(result_payload["remainder"])
     if remainder != expected:
         raise ValueError(
             "remainder must be the defining reduction of the retained "
@@ -721,77 +631,72 @@ def _require_source_bound_elimination(
     request: EliminationIdealRequest,
     elimination_ideal: RationalPolynomialIdeal,
 ) -> None:
-    """Replay the exact intersection I ∩ QQ[remaining] from the retained ideal."""
-    import sympy
+    """Replay the exact intersection in the bounded kernel.
 
-    from jacobian.math.polynomials._conversions import (
-        rational_polynomial_from_sympy,
-        rational_polynomial_to_sympy,
-        symbols_for_variables,
+    The lex Groebner intersection is unbounded exact work, so it reuses the
+    producer's killable-worker elimination mode under the declared wall
+    budget instead of an unbounded parent-process SymPy call.
+    """
+    from jacobian.math.commutative_algebra_ops._operations import (
+        _run_sympy_kernel,
     )
     from jacobian.math.polynomials.values import SparseRationalPolynomial
 
-    variables = list(request.ideal.variables)
-    eliminated_set = set(request.eliminated_variables)
-    remaining = [v for v in variables if v not in eliminated_set]
-    ordered_variables = tuple(v for v in variables if v in eliminated_set) + tuple(
-        remaining
+    payload = {
+        "mode": "elimination",
+        "variables": list(request.ideal.variables),
+        "eliminated": list(request.eliminated_variables),
+        "generators": [
+            generator.model_dump(mode="json") for generator in request.ideal.generators
+        ],
+    }
+    try:
+        result_payload = _run_sympy_kernel(
+            payload, float(request.resource_budget.wall_seconds)
+        )
+    except Exception as error:
+        raise ValueError(
+            "the elimination ideal could not be re-verified within the "
+            f"enforced wall-time budget: {error}"
+        ) from None
+    remaining = tuple(
+        v for v in request.ideal.variables if v not in set(request.eliminated_variables)
     )
-    ordered_symbols = symbols_for_variables(ordered_variables)
-    ideal_generators = [
-        rational_polynomial_to_sympy(generator).as_expr()
-        for generator in request.ideal.generators
-    ]
-    basis = sympy.groebner(
-        ideal_generators,
-        *ordered_symbols,
-        order="lex",
-        domain=sympy.QQ,
-    )
-    remaining_symbols = symbols_for_variables(tuple(remaining))
-    replayed_generators: list[RationalPolynomial] = []
-    unit_ideal = False
-    for expr in basis:
-        poly = sympy.Poly(expr, *ordered_symbols, domain=sympy.QQ)
-        involved = {str(s) for s in poly.free_symbols}
-        if not involved:
-            unit_ideal = True
-            break
-        if involved.issubset(set(remaining)):
-            replayed_generators.append(
-                rational_polynomial_from_sympy(
-                    sympy.Poly(expr, *remaining_symbols, domain=sympy.QQ),
-                    tuple(remaining),
-                )
-            )
-    if unit_ideal:
+    if result_payload.get("unit_ideal"):
         from jacobian._exact import CanonicalRational
         from jacobian.math.polynomials.values import RationalPolynomialTerm
 
-        one = RationalPolynomial(
-            variables=tuple(remaining),
-            polynomial=SparseRationalPolynomial(
-                terms=(
-                    RationalPolynomialTerm(
-                        coefficient=CanonicalRational(num="1", den="1"),
-                        exponents=(0,) * len(remaining),
-                    ),
-                )
-            ),
-        )
-        replayed_generators = [one]
-    elif not replayed_generators:
-        zero = RationalPolynomial(
-            variables=tuple(remaining),
-            polynomial=SparseRationalPolynomial(terms=()),
-        )
-        replayed_generators = [zero]
+        replayed_generators = [
+            RationalPolynomial(
+                variables=remaining,
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num="1", den="1"),
+                            exponents=(0,) * len(remaining),
+                        ),
+                    )
+                ),
+            )
+        ]
+    elif result_payload.get("generators"):
+        replayed_generators = [
+            RationalPolynomial.model_validate(item)
+            for item in result_payload["generators"]
+        ]
+    else:
+        replayed_generators = [
+            RationalPolynomial(
+                variables=remaining,
+                polynomial=SparseRationalPolynomial(terms=()),
+            )
+        ]
     replayed = RationalPolynomialIdeal(
-        variables=tuple(remaining),
+        variables=remaining,
         generators=tuple(replayed_generators),
     )
     if elimination_ideal != replayed:
         raise ValueError(
             "elimination ideal must equal the exact intersection "
-            "I ∩ QQ[remaining variables] of the retained source ideal"
+            "I \u2229 QQ[remaining variables] of the retained source ideal"
         )

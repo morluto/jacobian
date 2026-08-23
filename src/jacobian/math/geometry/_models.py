@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import lcm
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -642,7 +643,7 @@ class ForbiddenLabelledPoint(StrictModel):
 class ForbiddenConfiguration(StrictModel):
     """A finite set of labelled rational planar points."""
 
-    points: tuple[ForbiddenLabelledPoint, ...] = Field(min_length=1, max_length=128)
+    points: tuple[ForbiddenLabelledPoint, ...] = Field(min_length=1, max_length=40)
 
     @model_validator(mode="after")
     def require_unique_labels_and_coords(self) -> Self:
@@ -664,9 +665,9 @@ class ForbiddenPatternsRequest(StrictModel):
 class CollinearTriple(StrictModel):
     """A triple of configuration point indices lying on one line."""
 
-    first: StrictInt = Field(ge=0, le=127)
-    second: StrictInt = Field(ge=0, le=127)
-    third: StrictInt = Field(ge=0, le=127)
+    first: StrictInt = Field(ge=0, le=39)
+    second: StrictInt = Field(ge=0, le=39)
+    third: StrictInt = Field(ge=0, le=39)
 
     @model_validator(mode="after")
     def require_strictly_ascending(self) -> Self:
@@ -678,10 +679,10 @@ class CollinearTriple(StrictModel):
 class ConcyclicQuadruple(StrictModel):
     """A quadruple of configuration point indices lying on one circle."""
 
-    first: StrictInt = Field(ge=0, le=127)
-    second: StrictInt = Field(ge=0, le=127)
-    third: StrictInt = Field(ge=0, le=127)
-    fourth: StrictInt = Field(ge=0, le=127)
+    first: StrictInt = Field(ge=0, le=39)
+    second: StrictInt = Field(ge=0, le=39)
+    third: StrictInt = Field(ge=0, le=39)
+    fourth: StrictInt = Field(ge=0, le=39)
 
     @model_validator(mode="after")
     def require_strictly_ascending(self) -> Self:
@@ -690,10 +691,87 @@ class ConcyclicQuadruple(StrictModel):
         return self
 
 
+def _cleared_configuration_points(
+    points: tuple[ForbiddenLabelledPoint, ...],
+) -> tuple[tuple[int, int, int], ...]:
+    """Clear denominators: exact zero tests are unchanged by row scaling."""
+    cleared = []
+    for item in points:
+        fx = item.point.x.as_fraction()
+        fy = item.point.y.as_fraction()
+        scale = lcm(fx.denominator, fy.denominator)
+        cleared.append(
+            (
+                fx.numerator * (scale // fx.denominator),
+                fy.numerator * (scale // fy.denominator),
+                scale,
+            )
+        )
+    return tuple(cleared)
+
+
+def _int_collinear(a: tuple[int, int], b: tuple[int, int], c: tuple[int, int]) -> bool:
+    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) == 0
+
+
+def _int_det3(m: list[list[int]]) -> int:
+    return (
+        m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+    )
+
+
+def _int_det4(m: list[list[int]]) -> int:
+    return sum(
+        (-1) ** column
+        * m[0][column]
+        * _int_det3([row[:column] + row[column + 1 :] for row in m[1:]])
+        for column in range(4)
+    )
+
+
+def _scan_collinear_triple(
+    xy: list[tuple[int, int]],
+) -> tuple[CollinearTriple | None, int]:
+    """Mirror the operation's ascending triple scan; report work performed."""
+    from itertools import combinations
+
+    examined = 0
+    for i, j, k in combinations(range(len(xy)), 3):
+        examined += 1
+        if _int_collinear(xy[i], xy[j], xy[k]):
+            return CollinearTriple(first=i, second=j, third=k), examined
+    return None, examined
+
+
+def _scan_concyclic_quadruple(
+    cleared: tuple[tuple[int, int, int], ...],
+    xy: list[tuple[int, int]],
+) -> tuple[ConcyclicQuadruple | None, int]:
+    """Mirror the operation's ascending quadruple scan of nondegenerate circles."""
+    from itertools import combinations
+
+    examined = 0
+    for i, j, k, ell in combinations(range(len(xy)), 4):
+        examined += 1
+        rows = [
+            [x * x + y * y, x * d, y * d, d * d]
+            for x, y, d in (cleared[index] for index in (i, j, k, ell))
+        ]
+        if _int_det4(rows) == 0 and not any(
+            _int_collinear(xy[a], xy[b], xy[c])
+            for a, b, c in combinations((i, j, k, ell), 3)
+        ):
+            return ConcyclicQuadruple(first=i, second=j, third=k, fourth=ell), examined
+    return None, examined
+
+
 class ForbiddenPatternsResult(StrictModel):
     """Result of screening a configuration for forbidden patterns."""
 
-    point_count: StrictInt = Field(ge=1, le=128)
+    configuration: ForbiddenConfiguration
+    point_count: StrictInt = Field(ge=1, le=40)
     has_collinear_triple: bool
     has_concyclic_quadruple: bool
     collinear_triple: CollinearTriple | None = None
@@ -717,4 +795,48 @@ class ForbiddenPatternsResult(StrictModel):
             and self.concyclic_quadruple.fourth >= self.point_count
         ):
             raise ValueError("concyclic quadruple index exceeds configuration")
+        return self
+
+    @model_validator(mode="after")
+    def require_source_bound_decision(self) -> Self:
+
+        points = self.configuration.points
+        n = len(points)
+        if self.point_count != n:
+            raise ValueError("point_count must match the retained configuration size")
+        # Replay the complete enumeration against the retained configuration:
+        # every negative conclusion must follow from examining every triple
+        # and quadruple, each witness must be geometrically true, and the
+        # checked counts must match the exact scan prefix that produced them.
+        cleared = _cleared_configuration_points(points)
+        xy = [(x, y) for x, y, _ in cleared]
+        first_collinear, examined_triples = _scan_collinear_triple(xy)
+        if self.has_collinear_triple != (first_collinear is not None):
+            raise ValueError(
+                "collinear decision does not match the retained configuration"
+            )
+        if self.checked_triples != examined_triples:
+            raise ValueError(
+                "checked_triples must equal the number of triples the "
+                "enumeration examined"
+            )
+        if first_collinear is not None and self.collinear_triple != first_collinear:
+            raise ValueError(
+                "collinear witness must be the first collinear triple in enumeration order"
+            )
+        first_concyclic, examined_quadruples = _scan_concyclic_quadruple(cleared, xy)
+        if self.has_concyclic_quadruple != (first_concyclic is not None):
+            raise ValueError(
+                "concyclic decision does not match the retained configuration"
+            )
+        if self.checked_quadruples != examined_quadruples:
+            raise ValueError(
+                "checked_quadruples must equal the number of quadruples the "
+                "enumeration examined"
+            )
+        if first_concyclic is not None and self.concyclic_quadruple != first_concyclic:
+            raise ValueError(
+                "concyclic witness must be the first nondegenerate quadruple "
+                "in enumeration order"
+            )
         return self

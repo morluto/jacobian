@@ -153,6 +153,7 @@ def find_padic_roots(request: PAdicRootsRequest) -> PAdicRootsResult:
         lifted_roots.append(PAdicRootEntry(root=lifted, root_type="SIMPLE"))
 
     return PAdicRootsResult(
+        polynomial=request.polynomial,
         roots=tuple(lifted_roots),
         prime=p,
         precision=k,

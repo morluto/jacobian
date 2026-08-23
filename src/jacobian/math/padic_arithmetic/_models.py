@@ -149,6 +149,22 @@ class PAdicRootEntry(StrictModel):
     root_type: Literal["SIMPLE"] = "SIMPLE"
 
 
+def _eval_poly_mod(coefficients: tuple[int, ...], x: int, modulus: int) -> int:
+    result = 0
+    for coefficient in reversed(coefficients):
+        result = (result * x + coefficient) % modulus
+    return result
+
+
+def _eval_poly_deriv_mod(
+    coefficients: tuple[int, ...], x: int, modulus: int
+) -> int:
+    result = 0
+    for index in range(len(coefficients) - 1, 0, -1):
+        result = (result * x + index * coefficients[index]) % modulus
+    return result
+
+
 class PAdicRootsResult(StrictModel):
     """Every simple root of f(x) mod p^k plus unlifted multiple residues.
 
@@ -158,6 +174,7 @@ class PAdicRootsResult(StrictModel):
     enumerated because the mod-p^k solution set can grow unboundedly.
     """
 
+    polynomial: IntegerPolynomial
     roots: tuple[PAdicRootEntry, ...]
     prime: int = Field(ge=2, le=10_000)
     precision: int = Field(ge=1, le=64)
@@ -172,6 +189,51 @@ class PAdicRootsResult(StrictModel):
             raise ValueError("multiple residues must be distinct")
         if any(r >= self.prime for r in self.multiple_residues):
             raise ValueError("multiple residues must lie in 0..p-1")
+        return self
+
+    @model_validator(mode="after")
+    def require_source_bound_roots(self) -> Self:
+        p = self.prime
+        k = self.precision
+        modulus = p**k
+        coefficients = self.polynomial.coefficients
+        roots = tuple(entry.root for entry in self.roots)
+        if any(root >= modulus for root in roots):
+            raise ValueError("roots must lie in 0..p^k - 1")
+        if len(set(roots)) != len(roots):
+            raise ValueError("roots must be distinct modulo p^k")
+        # Replay every classification against the retained polynomial: each
+        # listed root must be an exact vanishing simple root, and the simple
+        # versus multiple split must be complete over all residues mod p.
+        for root in roots:
+            if _eval_poly_mod(coefficients, root, modulus) != 0:
+                raise ValueError(
+                    "each root must satisfy f(root) = 0 modulo p^precision"
+                )
+            if _eval_poly_deriv_mod(coefficients, root, p) == 0:
+                raise ValueError("each lifted root must be simple modulo p")
+        simple_residues = [
+            residue
+            for residue in range(p)
+            if _eval_poly_mod(coefficients, residue, p) == 0
+            and _eval_poly_deriv_mod(coefficients, residue, p) != 0
+        ]
+        multiple = [
+            residue
+            for residue in range(p)
+            if _eval_poly_mod(coefficients, residue, p) == 0
+            and _eval_poly_deriv_mod(coefficients, residue, p) == 0
+        ]
+        if sorted({root % p for root in roots}) != simple_residues:
+            raise ValueError(
+                "roots must cover exactly the simple residues of f modulo p"
+            )
+        if len(roots) != len(simple_residues):
+            raise ValueError("each simple residue lifts to exactly one root")
+        if sorted(self.multiple_residues) != multiple:
+            raise ValueError(
+                "multiple_residues must list every repeated-factor residue of f mod p"
+            )
         return self
 
 

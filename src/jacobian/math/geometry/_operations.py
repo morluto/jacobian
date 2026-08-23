@@ -574,6 +574,7 @@ def forbidden_patterns(request: ForbiddenPatternsRequest) -> ForbiddenPatternsRe
             break
 
     return ForbiddenPatternsResult(
+        configuration=request.configuration,
         point_count=n,
         has_collinear_triple=has_collinear,
         has_concyclic_quadruple=has_concyclic,

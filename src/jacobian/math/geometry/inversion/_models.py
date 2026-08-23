@@ -105,12 +105,18 @@ class CircleInversionRequest(StrictModel):
         inverted_x, inverted_y = _inversion_result_heights(
             self.center_x, self.center_y, self.power, self.point_x, self.point_y
         )
-        if inverted_x.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) or inverted_y.exceeds(
-            MAX_CANONICAL_RATIONAL_DIGITS
+        # Outputs are checked against the same reusable admission bound as
+        # inputs, not the full canonical limit: every coordinate supplied to
+        # a subsequent inversion is rejected above half that limit, so a
+        # result admitted here must be feedable back into the advertised
+        # involution unchanged.
+        if inverted_x.exceeds(_HALF_CANONICAL_DIGITS) or inverted_y.exceeds(
+            _HALF_CANONICAL_DIGITS
         ):
             raise ValueError(
-                "circle inversion rational height exceeds the "
-                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound"
+                "circle inversion result exceeds the "
+                f"{_HALF_CANONICAL_DIGITS}-digit reusable admission bound; "
+                "the exact output would be rejected as input to the next inversion"
             )
         return self
 

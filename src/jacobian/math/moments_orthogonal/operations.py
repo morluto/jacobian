@@ -245,6 +245,62 @@ def christoffel_darboux(
     )
 
 
+def _require_quadrature_coefficients(
+    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+) -> None:
+    """Reject coefficients that cannot convert to finite IEEE doubles."""
+    from jacobian.math.moments_orthogonal._models import (
+        MAX_QUADRATURE_MAGNITUDE,
+        MAX_RATIONAL_DIGITS,
+    )
+
+    for value in (*alpha, *beta):
+        if type(value) is not Fraction:
+            raise TypeError("coefficients must use exact Fractions")
+        if (
+            len(str(abs(value.numerator))) > MAX_RATIONAL_DIGITS
+            or len(str(value.denominator)) > MAX_RATIONAL_DIGITS
+        ):
+            raise ValueError(f"coefficient exceeds the {MAX_RATIONAL_DIGITS}-digit bound")
+        if abs(value) > MAX_QUADRATURE_MAGNITUDE:
+            raise ValueError(
+                "quadrature coefficients exceed the finite-float magnitude bound"
+            )
+
+
+def _require_quadrature_admission(
+    alpha: Sequence[Fraction], beta: Sequence[Fraction]
+) -> None:
+    """Enforce the same admission domain as GaussianQuadratureRequest.
+
+    The native kernel is exported independently of the wire model, so it
+    carries the bounded domain itself: subdiagonal entries feed math.sqrt
+    after float conversion and every coefficient must convert without
+    overflow.
+    """
+    from jacobian.math.moments_orthogonal._models import (
+        MIN_QUADRATURE_SUBDIAGONAL,
+    )
+
+    if not 1 <= len(alpha) <= MAX_QUADRATURE_POINTS:
+        raise ValueError("alpha must contain between 1 and 16 entries")
+    if len(beta) not in (len(alpha), len(alpha) + 1):
+        raise ValueError("beta must have length len(alpha) or len(alpha)+1")
+    if beta[0] <= 0:
+        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    for index in range(1, min(len(alpha), len(beta))):
+        sub = beta[index]
+        if type(sub) is not Fraction or sub <= 0:
+            raise ValueError(
+                "subdiagonal beta entries must be positive squared-norm ratios"
+            )
+        if sub < MIN_QUADRATURE_SUBDIAGONAL:
+            raise ValueError(
+                "subdiagonal beta entries fall below the quadrature underflow bound"
+            )
+    _require_quadrature_coefficients(alpha, beta)
+
+
 def gaussian_quadrature(
     alpha: Sequence[Fraction], beta: Sequence[Fraction]
 ) -> GaussianQuadrature:
@@ -260,13 +316,9 @@ def gaussian_quadrature(
 
     import numpy as np
 
+    _require_quadrature_admission(alpha, beta)
     n = len(alpha)
-    if not 1 <= n <= MAX_QUADRATURE_POINTS:
-        raise ValueError("alpha must contain between 1 and 16 entries")
-    if len(beta) != n and len(beta) != n + 1:
-        raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-    if beta[0] <= 0:
-        raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+
     diagonal = np.array([float(a) for a in alpha], dtype=float)
     off: list[float] = []
     for k in range(n - 1):

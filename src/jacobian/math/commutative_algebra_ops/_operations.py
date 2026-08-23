@@ -7,6 +7,12 @@ from typing import Any
 
 import sympy
 
+from jacobian.process import (
+    ProcessPlatformTools,
+    ProcessResourceLimits,
+    run_bounded_process,
+    worker_environment,
+)
 from jacobian.math.commutative_algebra_ops._models import (
     EliminationIdealRequest,
     EliminationIdealResult,
@@ -57,7 +63,7 @@ class _SympyKernelError(RuntimeError):
     """The bounded SymPy worker failed without producing an exact result."""
 
 
-_SYMPY_WORKER_SCRIPT = r'''
+_SYMPY_WORKER_SCRIPT = r"""
 import json
 import sys
 
@@ -168,7 +174,7 @@ def _emit(result: dict) -> None:
 
 
 main()
-'''
+"""
 
 _STDOUT_LIMIT = 8 * 1024 * 1024
 _STDERR_LIMIT = 64 * 1024
@@ -184,13 +190,6 @@ def _run_sympy_kernel(payload: dict[str, Any], wall_seconds: float) -> dict[str,
     import shutil
     import sys
     import tempfile
-
-    from jacobian.process import (
-        ProcessPlatformTools,
-        ProcessResourceLimits,
-        run_bounded_process,
-        worker_environment,
-    )
 
     # Deliberately not resolved: following the interpreter symlink would
     # reparent the worker onto the base prefix without the environment's
@@ -339,8 +338,7 @@ def compute_groebner_basis(request: GroebnerBasisRequest) -> GroebnerBasisResult
         "order": order,
         "maximum_terms": MAX_OUTPUT_TERMS,
         "generators": [
-            generator.model_dump(mode="json")
-            for generator in request.ideal.generators
+            generator.model_dump(mode="json") for generator in request.ideal.generators
         ],
     }
 
@@ -383,8 +381,7 @@ def compute_groebner_basis(request: GroebnerBasisRequest) -> GroebnerBasisResult
         )
 
     basis_generators = [
-        RationalPolynomial.model_validate(item)
-        for item in result_payload["generators"]
+        RationalPolynomial.model_validate(item) for item in result_payload["generators"]
     ]
     if not basis_generators:
         from jacobian.math.polynomials.values import SparseRationalPolynomial
@@ -417,8 +414,7 @@ def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFor
         "mode": "normal_form",
         "variables": list(request.ideal.variables),
         "generators": [
-            generator.model_dump(mode="json")
-            for generator in request.ideal.generators
+            generator.model_dump(mode="json") for generator in request.ideal.generators
         ],
         "polynomial": request.polynomial.model_dump(mode="json"),
     }
@@ -432,10 +428,7 @@ def compute_ideal_normal_form(request: IdealNormalFormRequest) -> IdealNormalFor
         return IdealNormalFormResult(
             request=request,
             outcome="TIMEOUT",
-            detail=(
-                "the Gröbner reduction exceeded the enforced 10s wall-time "
-                "bound"
-            ),
+            detail=("the Gröbner reduction exceeded the enforced 10s wall-time bound"),
         )
     except _ResultLimitExceededError as error:
         return IdealNormalFormResult(
@@ -484,8 +477,7 @@ def compute_elimination_ideal(
         "variables": variables,
         "eliminated": list(request.eliminated_variables),
         "generators": [
-            generator.model_dump(mode="json")
-            for generator in request.ideal.generators
+            generator.model_dump(mode="json") for generator in request.ideal.generators
         ],
     }
 
@@ -563,6 +555,3 @@ def compute_elimination_ideal(
         elimination_ideal=ideal,
         eliminated_variables=tuple(request.eliminated_variables),
     )
-
-
-

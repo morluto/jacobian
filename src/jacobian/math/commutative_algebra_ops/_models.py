@@ -328,9 +328,7 @@ class GroebnerBasisRequest(StrictModel):
         return self
 
 
-GroebnerExecutionOutcome = Literal[
-    "COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT"
-]
+GroebnerExecutionOutcome = Literal["COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT"]
 
 
 class GroebnerBasisResult(StrictModel):
@@ -534,9 +532,7 @@ class IdealNormalFormRequest(StrictModel):
         return self
 
 
-NormalFormExecutionOutcome = Literal[
-    "COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT"
-]
+NormalFormExecutionOutcome = Literal["COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT"]
 
 
 class IdealNormalFormResult(StrictModel):
@@ -552,8 +548,7 @@ class IdealNormalFormResult(StrictModel):
     def require_consistent_membership(self) -> Self:
         if self.outcome != "COMPUTED" and self.in_ideal is not None:
             raise ValueError(
-                "an incomplete normal-form outcome states no membership "
-                "conclusion"
+                "an incomplete normal-form outcome states no membership conclusion"
             )
         if self.outcome == "COMPUTED":
             if self.remainder is None or self.detail is not None:
@@ -647,9 +642,7 @@ class EliminationIdealRequest(StrictModel):
         return self
 
 
-EliminationExecutionOutcome = Literal[
-    "COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT"
-]
+EliminationExecutionOutcome = Literal["COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT"]
 
 
 class EliminationIdealResult(StrictModel):

@@ -220,7 +220,6 @@ class TestTypedKernelOutcomes:
         assert "worker crashed" in (result.detail or "")
 
 
-
 class TestKillableWorkerContract:
     def test_budget_delegates_to_the_bounded_process_runner(self, monkeypatch):
         """Wall budgets must run through the killable process engine.
@@ -230,17 +229,15 @@ class TestKillableWorkerContract:
         TIMEOUT. The operation therefore delegates every kernel call to
         ``run_bounded_process`` with the declared wall budget.
         """
-        import jacobian.process as process_module
-
         observed: dict[str, object] = {}
-        real_runner = process_module.run_bounded_process
+        real_runner = _operations.run_bounded_process
 
         def spy(*args, **kwargs):
             observed["timeout"] = kwargs.get("timeout_seconds")
             observed["child_is_process"] = True
             return real_runner(*args, **kwargs)
 
-        monkeypatch.setattr(process_module, "run_bounded_process", spy)
+        monkeypatch.setattr(_operations, "run_bounded_process", spy)
         g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
         g2 = _poly(("x", "y"), (1, 1, (1, 1)), (-1, 1, (0, 0)))
         result = compute_groebner_basis(

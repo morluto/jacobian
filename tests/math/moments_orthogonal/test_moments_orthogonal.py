@@ -375,9 +375,7 @@ class TestWireAdapters:
         jacobi = compute_jacobi_matrix(JacobiMatrixRequest(coefficients=value))
         assert jacobi.coefficients == value
         kernel = compute_christoffel_darboux(
-            ChristoffelDarbouxRequest(
-                coefficients=value, x=_cr(1, 1), y=_cr(1, 2)
-            )
+            ChristoffelDarbouxRequest(coefficients=value, x=_cr(1, 1), y=_cr(1, 2))
         )
         assert kernel.coefficients == value
         quadrature = compute_gaussian_quadrature(

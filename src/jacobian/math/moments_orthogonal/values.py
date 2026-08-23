@@ -55,6 +55,7 @@ class GaussianQuadrature:
     returned value is the exact dyadic rational image of one computed double,
     so results stay canonical and reconstructible without JSON floats.
     """
+
     nodes: tuple[Fraction, ...]
     weights: tuple[Fraction, ...]
 

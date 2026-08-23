@@ -81,7 +81,4 @@ def compute_distance_graph(
     )
 
 
-__all__ = [
-    "compute_distance_graph",
-    "compute_distance_profile",
-]
+__all__ = ["compute_distance_graph", "compute_distance_profile"]

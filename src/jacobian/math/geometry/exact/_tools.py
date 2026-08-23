@@ -6,13 +6,6 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.geometry._models import (
-    CIRCUMRADIUS_INPUT_HEIGHT,
-    MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES,
-    CircumradiusProfileRequest,
-    CircumradiusProfileResult,
-)
-from jacobian.math.geometry._operations import circumradius_profile
 from jacobian.math.geometry.exact._models import (
     DistanceGraphRequest,
     DistanceGraphResult,
@@ -76,33 +69,6 @@ UNIT_SQUARE = {
 }
 
 
-PARABOLA_COLLISION = {
-    "configuration": {
-        "points": [
-            {
-                "label": "t1",
-                "coordinates": [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}],
-            },
-            {
-                "label": "t2",
-                "coordinates": [{"num": "2", "den": "1"}, {"num": "4", "den": "1"}],
-            },
-            {
-                "label": "t4",
-                "coordinates": [{"num": "4", "den": "1"}, {"num": "16", "den": "1"}],
-            },
-            {
-                "label": "t19",
-                "coordinates": [{"num": "19", "den": "1"}, {"num": "361", "den": "1"}],
-            },
-            {
-                "label": "t29",
-                "coordinates": [{"num": "29", "den": "1"}, {"num": "841", "den": "1"}],
-            },
-        ]
-    }
-}
-
 EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     _op(
         "geometry.points.distance_profile.compute",
@@ -140,36 +106,6 @@ EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 "unit_square_distance_1",
                 "Graph of unit-distance pairs in the unit square.",
                 {**UNIT_SQUARE, "target_squared_distance": {"num": "1", "den": "1"}},
-            ),
-        ),
-    ),
-    _op(
-        "geometry.points.circumradius_profile.compute",
-        "Compute circumradius profile of a point configuration",
-        "Given a bounded labelled rational planar point configuration with "
-        "at least three points, unique labels, unique coordinates with at "
-        f"most {CIRCUMRADIUS_INPUT_HEIGHT} canonical decimal digits per "
-        "coordinate component, and an aggregate profile within the "
-        f"{MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES}-byte result budget, "
-        "compute the exact squared circumradius of every unordered triple "
-        "with an explicit collinear or nondegenerate disposition, each "
-        "entry replayed against the retained source configuration.",
-        CircumradiusProfileRequest,
-        CircumradiusProfileResult,
-        circumradius_profile,
-        "geometry",
-        "circumradius",
-        "exact",
-        examples=(
-            example(
-                "parabola_circumradius_collision",
-                (
-                    "Circumradius profile of parabola points P(t)=(t,t^2) for "
-                    "t in {1,2,4,19,29}; triangles (1,2,29) and (2,4,19) share "
-                    "the same squared circumradius. The configuration must be "
-                    "planar with at least three points."
-                ),
-                PARABOLA_COLLISION,
             ),
         ),
     ),

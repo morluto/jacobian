@@ -29,16 +29,22 @@ def test_each_tool_contract_and_function_have_one_math_owner() -> None:
         non_math_modules = {
             module for module in modules if not module.startswith("jacobian.math.")
         }
-        owners = {
-            module.removeprefix("jacobian.math.").split(".", 1)[0]
-            for module in modules
-            if module.startswith("jacobian.math.")
-        }
-
         assert not non_math_modules, (
             f"{operation.operation_id} has non-math owners: {sorted(non_math_modules)}"
         )
-        assert len(owners) == 1, (
+        # The operation's home domain owns its request contract and run
+        # function.  A result may be another math domain's canonical value:
+        # producers return the domain-owned canonical type unchanged
+        # (AGENTS.md) instead of recreating it per operation.
+        home_modules = {
+            operation.request_type.__module__,
+            operation.run.__module__,
+        }
+        home_owners = {
+            module.removeprefix("jacobian.math.").split(".", 1)[0]
+            for module in home_modules
+        }
+        assert len(home_owners) == 1, (
             f"{operation.operation_id} spans mathematical owners: {sorted(modules)}"
         )
 

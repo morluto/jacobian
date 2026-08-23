@@ -14,6 +14,10 @@ from jacobian.math.geometry._models import (
     CircumradiusProfileResult,
     CircumradiusTripleEntry,
     ClosedSegment2D,
+    CollinearTripleWitness,
+    ConcyclicQuadrupleWitness,
+    GeneralPositionRequest,
+    GeneralPositionResult,
     GeometryBooleanResult,
     GeometryCircleResult,
     GeometryConvexHullResult,
@@ -322,6 +326,7 @@ def circumcircle(request: CircumcircleRequest) -> GeometryCircleResult:
 
 
 def signed_area(request: PolygonRequest) -> GeometryRationalResult:
+    from fractions import Fraction
 
     polygon = request
     points = [_point(point) for point in polygon.points]
@@ -423,66 +428,132 @@ def convex_hull_points(request: PointSetRequest) -> GeometryConvexHullResult:
     return GeometryConvexHullResult(points=_canonical_points(points))
 
 
+# ---------------------------------------------------------------------------
+# Configuration-level operations (issues #2107, #2106)
+# ---------------------------------------------------------------------------
+
+
+def _points_to_fractions(
+    points: tuple[RationalPoint2D, ...],
+) -> list[tuple[Fraction, Fraction]]:
+    return [(p.x.as_fraction(), p.y.as_fraction()) for p in points]
+
+
+def _det3_frac(m: tuple[tuple[Fraction, ...], ...]) -> Fraction:
+    return (
+        m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+    )
+
+
+def _det4_frac(m: tuple[tuple[Fraction, ...], ...]) -> Fraction:
+    result = Fraction(0)
+    for col in range(4):
+        sub = tuple(
+            tuple(row[col2] for col2 in range(4) if col2 != col) for row in m[1:]
+        )
+        cofactor = _det3_frac(sub)
+        sign = 1 if col % 2 == 0 else -1
+        result += sign * m[0][col] * cofactor
+    return result
+
+
+def _is_collinear_pts(
+    a: tuple[Fraction, Fraction],
+    b: tuple[Fraction, Fraction],
+    c: tuple[Fraction, Fraction],
+) -> bool:
+    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) == 0
+
+
+def general_position_search(request: GeneralPositionRequest) -> GeneralPositionResult:
+    """Find all collinear triples and concyclic quadruples in a point configuration."""
+    from itertools import combinations
+
+    pts = _points_to_fractions(request.points)
+    n = len(pts)
+
+    collinear_triples: list[CollinearTripleWitness] = []
+    collinear_set: set[tuple[int, int, int]] = set()
+    for i, j, k in combinations(range(n), 3):
+        if _is_collinear_pts(pts[i], pts[j], pts[k]):
+            collinear_triples.append(CollinearTripleWitness(indices=(i, j, k)))
+            collinear_set.add((i, j, k))
+
+    concyclic_quadruples: list[ConcyclicQuadrupleWitness] = []
+    for i, j, k, m in combinations(range(n), 4):
+        # Exclude collinear quadruples: any 3 collinear points are degenerate
+        # (collinear points lie on a line, not a finite circle). The
+        # determinant criterion |x^2+y^2, x, y, 1| is zero for four collinear
+        # points, but no Euclidean circle contains three distinct collinear
+        # points, so such quadruples must not be reported as concyclic.
+        if (
+            (i, j, k) in collinear_set
+            or (i, j, m) in collinear_set
+            or (i, k, m) in collinear_set
+            or (j, k, m) in collinear_set
+        ):
+            continue
+        a, b, c, d = pts[i], pts[j], pts[k], pts[m]
+        rows: list[tuple[Fraction, Fraction, Fraction, Fraction]] = []
+        for px, py in (a, b, c, d):
+            rows.append((px * px + py * py, px, py, Fraction(1)))
+        determinant = _det4_frac(tuple(rows))
+        if determinant == 0:
+            concyclic_quadruples.append(ConcyclicQuadrupleWitness(indices=(i, j, k, m)))
+
+    return GeneralPositionResult(
+        points=request.points,
+        num_points=n,
+        has_collinear_triple=bool(collinear_triples),
+        has_concyclic_quadruple=bool(concyclic_quadruples),
+        collinear_triples=tuple(collinear_triples),
+        concyclic_quadruples=tuple(concyclic_quadruples),
+    )
+
+
 def circumradius_profile(
     request: CircumradiusProfileRequest,
 ) -> CircumradiusProfileResult:
-    """Compute exact circumradius data for every unordered triple of a planar configuration.
-
-    Each triple is either nondegenerate (exact squared circumradius) or
-    degenerate (collinear, no circumcircle).
-    """
+    """Compute circumradius squared for every unordered triple in a configuration."""
+    from fractions import Fraction
     from itertools import combinations
 
-    points = request.configuration.points
-    n = len(points)
-    coords: list[tuple[Fraction, Fraction]] = [
-        (item.coordinates[0].as_fraction(), item.coordinates[1].as_fraction())
-        for item in points
-    ]
+    pts = _points_to_fractions(request.points)
+    n = len(pts)
+
     entries: list[CircumradiusTripleEntry] = []
-    radii: list[Fraction] = []
     for i, j, k in combinations(range(n), 3):
-        (ax, ay), (bx, by), (cx, cy) = coords[i], coords[j], coords[k]
-        # Squared side lengths of the triangle.
-        dab = (ax - bx) ** 2 + (ay - by) ** 2
-        dbc = (bx - cx) ** 2 + (by - cy) ** 2
-        dac = (ax - cx) ** 2 + (ay - cy) ** 2
-        # Twice the signed area (cross product) of the triangle.
+        ax, ay = pts[i]
+        bx, by = pts[j]
+        cx, cy = pts[k]
         cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+
         if cross == 0:
             entries.append(
                 CircumradiusTripleEntry(
-                    labels=(points[i].label, points[j].label, points[k].label),
                     indices=(i, j, k),
-                    collinear=True,
+                    is_degenerate=True,
                 )
             )
-            continue
-        # R^2 = (|a-b|^2 |b-c|^2 |c-a|^2) / (4 * (2*area)^2)
-        squared_circumradius = (dab * dbc * dac) / (4 * cross * cross)
-        radii.append(squared_circumradius)
-        entries.append(
-            CircumradiusTripleEntry(
-                labels=(points[i].label, points[j].label, points[k].label),
-                indices=(i, j, k),
-                collinear=False,
-                squared_circumradius=CanonicalRational.from_fraction(
-                    squared_circumradius
-                ),
+        else:
+            ab_sq = (bx - ax) ** 2 + (by - ay) ** 2
+            bc_sq = (cx - bx) ** 2 + (cy - by) ** 2
+            ca_sq = (ax - cx) ** 2 + (ay - cy) ** 2
+            r_sq = Fraction(ab_sq * bc_sq * ca_sq) / Fraction(4 * cross * cross)
+            entries.append(
+                CircumradiusTripleEntry(
+                    indices=(i, j, k),
+                    is_degenerate=False,
+                    radius_squared=_wire_rational(r_sq),
+                )
             )
-        )
-    histogram: dict[Fraction, int] = {}
-    for radius in radii:
-        histogram[radius] = histogram.get(radius, 0) + 1
+
+    # Ensure deterministic lexicographic order (combinations already yields sorted).
+    entries.sort(key=lambda e: e.indices)
     return CircumradiusProfileResult(
-        configuration=request.configuration,
-        point_count=n,
-        triple_count=len(entries),
+        points=request.points,
+        num_points=n,
         entries=tuple(entries),
-        radius_multiplicities=tuple(
-            (CanonicalRational.from_fraction(radius), count)
-            for radius, count in sorted(histogram.items())
-        ),
-        degenerate_triple_count=len(entries) - len(radii),
-        nondegenerate_triple_count=len(radii),
     )

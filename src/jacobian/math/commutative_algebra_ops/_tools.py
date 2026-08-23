@@ -13,11 +13,14 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealRadicalMembershipResult,
     IdealRadicalRequest,
     IdealRadicalResult,
+    IdealSaturationRequest,
+    IdealSaturationResult,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
     compute_ideal_radical,
     compute_ideal_radical_membership,
+    compute_ideal_saturation,
 )
 
 
@@ -149,6 +152,38 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         ((1, 1, (1, 1)),),
                     ),
                     "divisor": _ideal(
+                        ("x", "y"),
+                        ((1, 1, (1, 0)),),
+                    ),
+                },
+            ),
+        ),
+    ),
+    _op(
+        "polynomial.ideal.saturation.compute",
+        "Compute ideal saturation I : <d>^infinity",
+        "Compute the exact saturation I : <d>^infinity of a bounded "
+        "polynomial ideal I by a single nonzero polynomial d over QQ using "
+        "the private Singular backend. The result is the saturated ideal "
+        "with all components supported on the zero locus of d removed.",
+        IdealSaturationRequest,
+        IdealSaturationResult,
+        compute_ideal_saturation,
+        "commutative-algebra",
+        "saturation",
+        "exact",
+        examples=(
+            example(
+                "saturation_xy",
+                "Compute <xy> : <x>^infinity in Q[x,y]; this equals <y>. The "
+                "denominator is one nonzero polynomial in the same canonical "
+                "ordered QQ polynomial ring as the ideal.",
+                {
+                    "ideal": _ideal(
+                        ("x", "y"),
+                        ((1, 1, (1, 1)),),
+                    ),
+                    "denominator": _polynomial(
                         ("x", "y"),
                         ((1, 1, (1, 0)),),
                     ),

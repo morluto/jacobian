@@ -225,11 +225,27 @@ class SubsetSumResidueProfileRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_source(cls, value: object) -> object:
-        """Reject impossible source containers before nested scalar parsing."""
+        """Reject impossible source containers before nested scalar parsing.
 
-        if isinstance(value, Mapping):
-            _raw_source_shape(value.get("source"))
-        return value
+        Running a before validator moves field validation into Python
+        mode, where decoded JSON arrays no longer coerce to the declared
+        tuple shapes; normalize the source value list to a tuple on a
+        copied path so JSON invocation keeps working while the stored
+        sequence stays canonical.
+        """
+
+        if not isinstance(value, Mapping):
+            return value
+        prepared: dict[str, object] = dict(value)
+        raw_source = prepared.get("source")
+        if isinstance(raw_source, Mapping):
+            source = dict(raw_source)
+            values = source.get("values")
+            if isinstance(values, list):
+                source["values"] = tuple(values)
+            prepared["source"] = source
+        _raw_source_shape(prepared.get("source"))
+        return prepared
 
     @model_validator(mode="after")
     def require_bounded_complete_profile(self) -> Self:

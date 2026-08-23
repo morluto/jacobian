@@ -45,6 +45,29 @@ class TestAdmissionBounds:
         with pytest.raises(ValidationError):
             CircumradiusProfileRequest(points=points)
 
+    def test_aggregate_output_budget_rejects_large_configurations(self) -> None:
+        """A 24-point configuration of ~50-digit coordinates passes the
+        per-point height cap but its complete reduced profile can exceed
+        the canonical output limit, so admission rejects it up front."""
+        from fractions import Fraction
+
+        def labelled(index: int) -> LabelledPoint2D:
+            x = Fraction(10**49 + index + 7, 10**51 + 2 * index + 1)
+            y = Fraction(10**50 + index + 3, 10**52 - index - 1)
+            return LabelledPoint2D(
+                label=f"P{index}",
+                point=RationalPoint2D(
+                    x={"num": str(x.numerator), "den": str(x.denominator)},
+                    y={"num": str(y.numerator), "den": str(y.denominator)},
+                ),
+            )
+
+        large = [labelled(i) for i in range(24)]
+        with pytest.raises(ValidationError, match="aggregate circumradius output"):
+            CircumradiusProfileRequest(points=large)
+        # A small configuration of the same coordinate height stays admitted.
+        assert CircumradiusProfileRequest(points=large[:6])
+
 
 class TestSourceBoundResult:
     def test_result_retains_and_replays_configuration(self) -> None:

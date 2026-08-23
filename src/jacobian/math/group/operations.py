@@ -83,8 +83,10 @@ def conjugacy_classes(
     classes = group.conjugacy_classes()
     result = []
     for cls in classes:
-        elements = [list(p.array_form) for p in cls]
+        elements = sorted(list(p.array_form) for p in cls)
         result.append((elements, len(cls)))
+    # Canonical class order keeps serialized profiles hash-seed independent.
+    result.sort(key=lambda entry: entry[0])
     return result
 
 
@@ -136,4 +138,6 @@ def subgroup_lattice(
                     )
                 )
                 frontier.append(key)
+    # Canonical entry order keeps serialized lattices hash-seed independent.
+    result.sort(key=lambda entry: (entry[1], entry[0]))
     return result

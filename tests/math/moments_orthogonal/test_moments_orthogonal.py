@@ -284,6 +284,23 @@ class TestGaussianQuadrature:
 
 
 class TestWireAdapters:
+    def test_recurrence_trailing_beta_must_be_positive(self) -> None:
+        """A partial recurrence (len(alpha) == len(beta) - 1) still validates
+        every subdiagonal entry, including the trailing beta."""
+        from jacobian.math.moments_orthogonal._models import RecurrenceCoefficients
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="squared-norm"):
+            RecurrenceCoefficients(alpha=(_cr(0, 1),), beta=(_cr(1, 1), _cr(-1, 1)))
+        with pytest.raises(ValidationError, match="squared-norm"):
+            RecurrenceCoefficients(
+                alpha=(_cr(0, 1), _cr(0, 1)), beta=(_cr(1, 1), _cr(-1, 1))
+            )
+        accepted = RecurrenceCoefficients(
+            alpha=(_cr(0, 1),), beta=(_cr(1, 1), _cr(1, 2))
+        )
+        assert accepted.beta[-1] == _cr(1, 2)
+
     def test_hankel_wire(self) -> None:
         request = HankelMatrixRequest(moments=tuple(_cr(1, k) for k in range(1, 8)))
         result = compute_hankel_matrix(request)

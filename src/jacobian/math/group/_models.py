@@ -166,19 +166,19 @@ class GroupConjugacyClassesResult(StrictModel):
         GroupConjugacyClassesRequest(degree=self.degree, generators=self.generators)
         from jacobian.math.group.operations import conjugacy_classes
 
-        expected = {
-            frozenset(tuple(element) for element in class_elements)
-            for class_elements, _ in conjugacy_classes(
+        expected = tuple(
+            (tuple(sorted(tuple(element) for element in class_elements)), size)
+            for class_elements, size in conjugacy_classes(
                 self.degree, [list(generator) for generator in self.generators]
             )
-        }
-        actual = {frozenset(bound_class.elements) for bound_class in self.classes}
-        if len(actual) != len(self.classes):
-            raise ValueError("conjugacy classes must be distinct")
+        )
+        actual = tuple(
+            (bound_class.elements, bound_class.size) for bound_class in self.classes
+        )
         if actual != expected or self.class_count != len(expected):
             raise ValueError(
-                "classes must form the exact conjugacy partition of the "
-                "retained source group"
+                "classes must be the exact conjugacy partition of the "
+                "retained source group in canonical element and class order"
             )
         return self
 
@@ -255,30 +255,24 @@ class GroupSubgroupLatticeResult(StrictModel):
         # Replaying through the request model revalidates generator shape and
         # the bounded group order before the lattice is recomputed.
         GroupSubgroupLatticeRequest(degree=self.degree, generators=self.generators)
-        from sympy.combinatorics import Permutation, PermutationGroup
-
         from jacobian.math.group.operations import subgroup_lattice
 
-        def closure_key(
-            entry_generators: tuple[tuple[int, ...], ...],
-        ) -> frozenset[tuple[int, ...]]:
-            subgroup = PermutationGroup(
-                *(Permutation(list(generator)) for generator in entry_generators)
-            )
-            return frozenset(tuple(p.array_form) for p in subgroup.elements)
-
-        expected = {
-            closure_key(tuple(tuple(g) for g in subgroup_generators))
-            for subgroup_generators, _ in subgroup_lattice(
+        expected_lattice = tuple(
+            (tuple(tuple(g) for g in sorted(subgroup_generators)), order)
+            for subgroup_generators, order in subgroup_lattice(
                 self.degree, [list(generator) for generator in self.generators]
             )
-        }
-        actual = {closure_key(entry.generators) for entry in self.subgroups}
-        if len(actual) != len(self.subgroups):
+        )
+        actual_lattice = tuple(
+            (entry.generators, entry.order) for entry in self.subgroups
+        )
+        if len(set(expected_lattice)) != len(expected_lattice):
             raise ValueError("subgroups must be distinct")
-        if actual != expected or self.subgroup_count != len(expected):
+        if actual_lattice != expected_lattice or self.subgroup_count != len(
+            expected_lattice
+        ):
             raise ValueError(
                 "subgroups must be the exact complete subgroup lattice of "
-                "the retained source group"
+                "the retained source group in canonical element and entry order"
             )
         return self

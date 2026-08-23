@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from fractions import Fraction
 from typing import Literal, Self
 
@@ -447,6 +448,21 @@ class LabelledPoint2D(StrictModel):
     point: RationalPoint2D
 
 
+def _circumradius_coordinate_height(point: RationalPoint2D) -> int:
+    height = 0
+    for v in (point.x, point.y):
+        rational_height = RationalHeight.from_canonical(v)
+        height = max(
+            height, rational_height.numerator_digits, rational_height.denominator_digits
+        )
+    return height
+
+
+# Aggregate serialized numeric payload budget for the complete profile,
+# conservative against the 10 MiB canonical output limit.
+_MAX_CIRCUMRADIUS_AGGREGATE_DIGITS = 4_000_000
+
+
 def _circumradius_input_height_ok(point: RationalPoint2D) -> bool:
     # Conservative worst-case propagation for
     # R^2 = (|a-b|^2 |b-c|^2 |c-a|^2) / (4 * cross^2).
@@ -456,11 +472,7 @@ def _circumradius_input_height_ok(point: RationalPoint2D) -> bool:
     # stays within roughly (12H+9) + (8H+10) + small slack = 20H + 25
     # digits. Requiring 20*1024 + 25 <= 32768 admits H = 1024; independent
     # denominators cannot exceed the canonical limit at execution.
-    max_input = 1024
-    for v in (point.x, point.y):
-        if RationalHeight.from_canonical(v).exceeds(max_input):
-            return False
-    return True
+    return _circumradius_coordinate_height(point) <= 1024
 
 
 class CircumradiusProfileRequest(StrictModel):
@@ -484,11 +496,27 @@ class CircumradiusProfileRequest(StrictModel):
         )
         if len(keys) != len(set(keys)):
             raise ValueError("point coordinates must be unique")
+        height = 0
         for item in self.points:
             if not _circumradius_input_height_ok(item.point):
                 raise ValueError(
                     "circumradius coordinates exceed the conservative 1024-digit input bound for exact output"
                 )
+            height = max(height, _circumradius_coordinate_height(item.point))
+        # Joint point-count/coordinate-height bound: the complete profile
+        # holds C(n,3) reduced squared circumradii whose components can each
+        # reach ~20H+30 digits, and every accepted request must serialize as
+        # a typed result under the 10 MiB canonical output limit. Budgeting
+        # 4 MiB of numeric payload plus per-entry JSON overhead keeps the
+        # aggregate safely inside that limit.
+        triple_count = math.comb(len(self.points), 3)
+        per_entry_digits = 2 * (20 * height + 30) + 320
+        if triple_count * per_entry_digits > _MAX_CIRCUMRADIUS_AGGREGATE_DIGITS:
+            raise ValueError(
+                "the point count times coordinate height exceeds the "
+                "aggregate circumradius output budget; reduce the "
+                "configuration size or coordinate height"
+            )
         return self
 
 

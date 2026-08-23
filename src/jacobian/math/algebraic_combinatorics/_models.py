@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -18,10 +18,20 @@ from jacobian.math.algebraic_combinatorics.values import (
 from jacobian.math.symmetric_functions.values import (
     MAX_PARTITION_SIZE as MAX_CANONICAL_PARTITION_SIZE,
 )
-from jacobian.math.symmetric_functions.values import IntegerPartition
+from jacobian.math.symmetric_functions.values import (
+    IntegerPartition,
+    StandardYoungTableau,
+)
 from jacobian.math.words.values import FiniteWord
 
 MAX_RSK_PERMUTATION_LENGTH = 50
+
+
+def _require_permutation(permutation: tuple[int, ...]) -> None:
+    if not permutation:
+        return
+    if sorted(permutation) != list(range(1, len(permutation) + 1)):
+        raise ValueError("permutation must be a permutation of 1..n")
 
 
 class HookLengthRequest(StrictModel):
@@ -71,35 +81,55 @@ class ConjugatePartitionResult(StrictModel):
 
 
 class RSKPermutationRequest(StrictModel):
-    """One permutation for the RSK correspondence."""
+    """One strict bounded permutation for ordinary row-insertion RSK."""
 
-    permutation: tuple[int, ...] = Field(
+    permutation: tuple[StrictInt, ...] = Field(
         min_length=0, max_length=MAX_RSK_PERMUTATION_LENGTH
     )
 
     @model_validator(mode="after")
     def require_valid_permutation(self) -> Self:
-        if not self.permutation:
-            return self
-        n = len(self.permutation)
-        if n > MAX_RSK_PERMUTATION_LENGTH:
-            raise ValueError(
-                f"permutation length must not exceed {MAX_RSK_PERMUTATION_LENGTH}"
-            )
-        if sorted(self.permutation) != list(range(1, n + 1)):
-            raise ValueError("permutation must be a permutation of 1..n")
+        _require_permutation(self.permutation)
         return self
 
 
 class RSKResult(StrictModel):
-    """The P (insertion) and Q (recording) tableaux from RSK."""
+    """Source-bound canonical tableaux from permutation RSK.
 
-    p_tableau: tuple[tuple[int, ...], ...]
-    q_tableau: tuple[tuple[int, ...], ...]
-    shape: tuple[int, ...]
-    lis_length: int = Field(ge=0)
-    lds_length: int = Field(ge=0)
-    method: Literal["ROW_INSERTION"] = "ROW_INSERTION"
+    Construction and result replay each perform at most 1,225 binary row
+    searches, with at most six integer comparisons per search.
+    """
+
+    permutation: tuple[StrictInt, ...] = Field(
+        min_length=0,
+        max_length=MAX_RSK_PERMUTATION_LENGTH,
+        description="The exact source permutation of 1 through n.",
+    )
+    p_tableau: StandardYoungTableau
+    q_tableau: StandardYoungTableau
+    shape: IntegerPartition
+    lis_length: StrictInt = Field(ge=0, le=MAX_RSK_PERMUTATION_LENGTH)
+    lds_length: StrictInt = Field(ge=0, le=MAX_RSK_PERMUTATION_LENGTH)
+    method: Literal["ROW_INSERTION_RSK_V1"] = "ROW_INSERTION_RSK_V1"
+
+    @model_validator(mode="after")
+    def replay_permutation_rsk(self) -> Self:
+        from jacobian.math.algebraic_combinatorics._rsk import _row_insert
+
+        _require_permutation(self.permutation)
+        insertion_rows, recording_rows = _row_insert(self.permutation)
+        expected_p = StandardYoungTableau(rows=insertion_rows)
+        expected_q = StandardYoungTableau(rows=recording_rows)
+        expected_shape = expected_p.shape
+        expected_lis = len(insertion_rows[0]) if insertion_rows else 0
+        expected_lds = len(insertion_rows)
+        if self.p_tableau != expected_p or self.q_tableau != expected_q:
+            raise ValueError("permutation tableaux do not match exact row insertion")
+        if self.shape != expected_shape or self.q_tableau.shape != expected_shape:
+            raise ValueError("permutation tableaux and shape must agree")
+        if self.lis_length != expected_lis or self.lds_length != expected_lds:
+            raise ValueError("LIS/LDS lengths do not match the exact RSK shape")
+        return self
 
 
 class RSKWordRequest(StrictModel):

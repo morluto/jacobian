@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.admission import AdmissionDecision
+from jacobian.math import algebraic_combinatorics
 from jacobian.math.algebraic_combinatorics import (
     inverse_row_insertion_rsk,
     row_insertion_rsk,
@@ -141,11 +142,22 @@ def test_forward_output_feeds_inverse_without_representation_repair() -> None:
     )
     assert partition_request.partition == produced.shape
     assert HookLengthRequest(partition=produced.shape).partition is produced.shape
-    assert compute_hook_lengths(HookLengthRequest(partition=produced.shape)).hooks == (
+    expected_hooks = (
         (5, 2, 1),
         (2,),
         (1,),
     )
+    assert (
+        compute_hook_lengths(HookLengthRequest(partition=produced.shape)).hooks
+        == expected_hooks
+    )
+    assert algebraic_combinatorics.hook_lengths(produced.shape) == expected_hooks
+    assert algebraic_combinatorics.conjugate_partition(produced.shape).parts == (
+        3,
+        1,
+        1,
+    )
+    assert algebraic_combinatorics.standard_young_tableaux_count(produced.shape) == 6
 
 
 def test_all_short_ternary_words_round_trip_both_directions() -> None:
@@ -168,9 +180,9 @@ def test_permutation_operation_agrees_with_word_specialization() -> None:
             letters=tuple(str(entry) for entry in permutation),
         )
     )
-    assert old_result.p_tableau == word_pair.insertion_tableau.rows
-    assert old_result.q_tableau == word_pair.recording_tableau.rows
-    assert old_result.shape == word_pair.shape.parts
+    assert old_result.p_tableau.rows == word_pair.insertion_tableau.rows
+    assert old_result.q_tableau.rows == word_pair.recording_tableau.rows
+    assert old_result.shape == word_pair.shape
 
 
 def test_permutation_inversion_swaps_the_tableaux() -> None:

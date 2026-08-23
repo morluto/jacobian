@@ -9,8 +9,11 @@ from pydantic import Field, StrictInt, model_validator
 from jacobian._models import StrictModel
 
 MAX_PARTITION_SIZE = 100
-MAX_PARTITION_PARTS = 50
-MAX_TABLEAU_ENTRY = MAX_PARTITION_SIZE
+MAX_PARTITION_PARTS = MAX_PARTITION_SIZE
+# Positive-integer tableau labels are mathematical values, not cell indices.
+# Keep them exactly interoperable as JSON numbers while bounding comparison and
+# serialized-output work independently of the tableau cell-count envelope.
+MAX_TABLEAU_ENTRY = 2**53 - 1
 
 TableauEntry = Annotated[
     int,
@@ -19,7 +22,8 @@ TableauEntry = Annotated[
         ge=1,
         le=MAX_TABLEAU_ENTRY,
         description=(
-            "Positive integer tableau entry bounded by the maximum tableau size."
+            "Positive JSON-safe integer tableau label; its magnitude is "
+            "independent of the tableau cell count."
         ),
     ),
 ]
@@ -32,7 +36,7 @@ TableauRow = Annotated[
 class IntegerPartition(StrictModel):
     """A partition as a weakly decreasing tuple of positive integers.
 
-    There are at most 50 parts and their sum is at most 100.  The empty tuple
+    There are at most 100 parts and their sum is at most 100.  The empty tuple
     is the unique partition of zero.
     """
 

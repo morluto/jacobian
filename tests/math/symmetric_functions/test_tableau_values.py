@@ -67,3 +67,19 @@ def test_tableau_entries_are_strict_positive_integers() -> None:
         SemistandardYoungTableau(rows=((True,),))
     with pytest.raises(ValidationError):
         SemistandardYoungTableau(rows=((0,),))
+
+
+def test_semistandard_labels_are_not_bounded_by_tableau_size() -> None:
+    assert SemistandardYoungTableau(rows=((101,),)).rows == ((101,),)
+    assert SemistandardYoungTableau(rows=((2**53 - 1,),)).rows == ((2**53 - 1,),)
+    with pytest.raises(ValidationError):
+        SemistandardYoungTableau(rows=((2**53,),))
+
+
+def test_tableau_shape_domain_is_closed_under_transposition_extremes() -> None:
+    assert (
+        SemistandardYoungTableau(
+            rows=tuple((row,) for row in range(1, 101))
+        ).shape.parts
+        == (1,) * 100
+    )

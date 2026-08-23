@@ -5,6 +5,7 @@ from itertools import permutations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.math import algebraic_combinatorics
 from jacobian.math.algebraic_combinatorics._models import (
     ConjugatePartitionRequest,
     HookLengthRequest,
@@ -161,6 +162,18 @@ def test_empty_canonical_partition_composes_with_all_partition_consumers() -> No
     assert count_result.count == "1"
     assert count_result.n == 0
     assert conjugate_result.conjugate == partition
+    assert algebraic_combinatorics.hook_lengths(partition) == ()
+    assert algebraic_combinatorics.standard_young_tableaux_count(partition) == 1
+    assert algebraic_combinatorics.conjugate_partition(partition) == partition
+
+
+def test_native_partition_functions_are_closed_at_conjugate_boundary() -> None:
+    row = IntegerPartition(parts=(100,))
+    column = algebraic_combinatorics.conjugate_partition(row)
+    assert column.parts == (1,) * 100
+    assert algebraic_combinatorics.conjugate_partition(column) == row
+    assert len(algebraic_combinatorics.hook_lengths(column)) == 100
+    assert algebraic_combinatorics.standard_young_tableaux_count(column) == 1
 
 
 def test_contract_rejects_non_decreasing() -> None:

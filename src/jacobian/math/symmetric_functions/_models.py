@@ -13,6 +13,7 @@ from jacobian.math.symmetric_functions.values import IntegerPartition
 _MAX_POINT_COORDINATE_DIGITS = 6
 _MAX_POINT_COORDINATE_ABS = 10**_MAX_POINT_COORDINATE_DIGITS - 1
 _MAX_SCHUR_RESULT_DIGITS = 4000
+_MAX_SCHUR_PARTITION_LENGTH = 50
 
 PointCoordinate = Annotated[
     int,
@@ -45,7 +46,12 @@ class SchurExpansionRequest(StrictModel):
     total size is capped at 100.
     """
 
-    partition: IntegerPartition
+    partition: IntegerPartition = Field(
+        description=(
+            "A canonical partition of size at most 100 and length at most 50 "
+            "for the admitted Jacobi-Trudi determinant."
+        )
+    )
     variables: tuple[str, ...] = Field(
         min_length=1,
         max_length=20,
@@ -67,6 +73,11 @@ class SchurExpansionRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_matching_dimensions(self) -> Self:
+        if len(self.partition.parts) > _MAX_SCHUR_PARTITION_LENGTH:
+            raise ValueError(
+                "Schur evaluation partition length must not exceed "
+                f"{_MAX_SCHUR_PARTITION_LENGTH}"
+            )
         if len(self.variables) != len(self.point):
             raise ValueError("variables and point must have the same length")
         if len(set(self.variables)) != len(self.variables):

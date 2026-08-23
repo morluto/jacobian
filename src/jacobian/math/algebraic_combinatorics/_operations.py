@@ -25,18 +25,20 @@ from jacobian.math.algebraic_combinatorics._models import (
 )
 from jacobian.math.algebraic_combinatorics._rsk import _row_insert
 from jacobian.math.algebraic_combinatorics.values import RSKTableauPair
-from jacobian.math.symmetric_functions.values import IntegerPartition
+from jacobian.math.symmetric_functions.values import (
+    IntegerPartition,
+    StandardYoungTableau,
+)
 
 
 def compute_hook_lengths(request: HookLengthRequest) -> HookLengthResult:
-    parts = list(request.partition.parts)
-    hooks = hook_lengths(parts)
+    hooks = hook_lengths(request.partition)
     total_product = 1
     for row in hooks:
         for hook in row:
             total_product *= hook
     return HookLengthResult(
-        hooks=tuple(tuple(row) for row in hooks),
+        hooks=hooks,
         total_product=format_canonical_integer(total_product),
     )
 
@@ -44,18 +46,15 @@ def compute_hook_lengths(request: HookLengthRequest) -> HookLengthResult:
 def compute_syt_count(
     request: StandardYoungTableauCountRequest,
 ) -> StandardYoungTableauCountResult:
-    parts = list(request.partition.parts)
-    count = standard_young_tableaux_count(parts)
-    n = sum(parts)
+    count = standard_young_tableaux_count(request.partition)
+    n = sum(request.partition.parts)
     return StandardYoungTableauCountResult(count=format_canonical_integer(count), n=n)
 
 
 def compute_conjugate_partition(
     request: ConjugatePartitionRequest,
 ) -> ConjugatePartitionResult:
-    parts = list(request.partition.parts)
-    result = conjugate_partition(parts)
-    return ConjugatePartitionResult(conjugate=IntegerPartition(parts=tuple(result)))
+    return ConjugatePartitionResult(conjugate=conjugate_partition(request.partition))
 
 
 def compute_rsk_permutation(request: RSKPermutationRequest) -> RSKResult:
@@ -76,9 +75,10 @@ def compute_rsk_permutation(request: RSKPermutationRequest) -> RSKResult:
     lds_length = len(p)
 
     return RSKResult(
-        p_tableau=p,
-        q_tableau=q,
-        shape=shape,
+        permutation=perm,
+        p_tableau=StandardYoungTableau(rows=p),
+        q_tableau=StandardYoungTableau(rows=q),
+        shape=IntegerPartition(parts=shape),
         lis_length=lis_length,
         lds_length=lds_length,
     )

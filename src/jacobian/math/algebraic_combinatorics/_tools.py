@@ -118,9 +118,9 @@ ALGEBRAIC_COMBINATORICS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "combinatorics.rsk.permutation.compute",
         "Compute RSK correspondence for a permutation",
         "Compute the Robinson-Schensted-Knuth correspondence for one "
-        "permutation of 1..n, returning the P (insertion) tableau, "
-        "Q (recording) tableau, shape, and LIS/LDS lengths. "
-        "Uses standard row insertion.",
+        "strict permutation of 1..n, returning the exact source, canonical "
+        "standard P/Q tableaux, canonical shape, and LIS/LDS lengths under "
+        "ROW_INSERTION_RSK_V1. The result independently replays row insertion.",
         RSKPermutationRequest,
         RSKResult,
         compute_rsk_permutation,

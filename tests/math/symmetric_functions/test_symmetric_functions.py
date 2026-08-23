@@ -44,6 +44,18 @@ def test_conjugate_single_row() -> None:
     assert result.conjugate.parts == (1, 1, 1, 1, 1)
 
 
+def test_partition_domain_is_closed_under_boundary_conjugation() -> None:
+    source = IntegerPartition(parts=(100,))
+    result = compute_partition_conjugate(PartitionRequest(partition=source))
+    assert result.conjugate.parts == (1,) * 100
+    assert (
+        compute_partition_conjugate(
+            PartitionRequest(partition=result.conjugate)
+        ).conjugate
+        == source
+    )
+
+
 def test_conjugate_empty() -> None:
     result = compute_partition_conjugate(
         PartitionRequest(partition=IntegerPartition(parts=()))
@@ -130,8 +142,9 @@ def test_request_schema_publishes_schur_invariants() -> None:
     assert "decimal digits" in point["items"]["description"]
     partition = schema["$defs"]["IntegerPartition"]["properties"]["parts"]
     assert "100" in partition["description"]
-    assert schema["$defs"]["IntegerPartition"]["properties"]["parts"]["maxItems"] == 50
+    assert schema["$defs"]["IntegerPartition"]["properties"]["parts"]["maxItems"] == 100
     assert "100" in schema["$defs"]["IntegerPartition"]["description"]
+    assert "length at most 50" in schema["properties"]["partition"]["description"]
 
 
 def test_schur_rejects_coordinate_exceeding_digit_bound() -> None:
@@ -155,3 +168,12 @@ def test_schur_accepts_boundary_coordinate() -> None:
 def test_partition_schema_rejects_size_above_cap() -> None:
     with pytest.raises(ValueError, match="bound"):
         IntegerPartition(parts=(51, 50))
+
+
+def test_schur_request_retains_its_operation_specific_length_bound() -> None:
+    with pytest.raises(ValueError, match="length must not exceed 50"):
+        SchurExpansionRequest(
+            partition=IntegerPartition(parts=(1,) * 51),
+            variables=("x",),
+            point=(1,),
+        )

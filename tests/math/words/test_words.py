@@ -12,6 +12,7 @@ from jacobian.math.words import (
     FiniteWord,
     ProlongableSubstitution,
     Substitution,
+    SubstitutionDependencyGraph,
     WordMorphism,
     apply_morphism,
     compose_morphisms,
@@ -191,6 +192,27 @@ def test_dependency_graph_output_budget_is_admitted_before_enumeration() -> None
     above_limit = _substitution((("0",) * 5_001, ("1",) * 5_000))
     with pytest.raises(ValidationError, match="aggregate bound"):
         SubstitutionDependencyGraphRequest(substitution=above_limit)
+    with pytest.raises(ValidationError, match="aggregate bound"):
+        SubstitutionDependencyGraph(substitution=above_limit, edges=())
+    with pytest.raises(ValueError, match="aggregate bound"):
+        substitution_dependency_graph(above_limit)
+    with pytest.raises(ValidationError, match="aggregate bound"):
+        SubstitutionPrimitivityProfileRequest.model_validate(
+            {
+                "dependency_graph": {
+                    "substitution": above_limit.model_dump(),
+                    "edges": (),
+                }
+            }
+        )
+    unchecked_graph = SubstitutionDependencyGraph.model_construct(
+        substitution=above_limit,
+        edges=(),
+    )
+    with pytest.raises(ValidationError, match="aggregate bound"):
+        SubstitutionPrimitivityProfileRequest(dependency_graph=unchecked_graph)
+    with pytest.raises(ValueError, match="aggregate bound"):
+        substitution_primitivity_profile(unchecked_graph)
 
 
 def test_primitivity_profile_distinguishes_positive_reducible_and_periodic() -> None:
@@ -198,7 +220,7 @@ def test_primitivity_profile_distinguishes_positive_reducible_and_periodic() -> 
     fibonacci = compute_substitution_primitivity_profile(
         SubstitutionPrimitivityProfileRequest(dependency_graph=fibonacci_graph)
     )
-    assert fibonacci.incidence_matrix == ((1, 1), (1, 0))
+    assert "incidence_matrix" not in fibonacci.model_dump()
     assert fibonacci.strongly_connected_components == (("0", "1"),)
     assert fibonacci.primitive is True
     assert fibonacci.least_positive_power == 2
@@ -268,6 +290,79 @@ def test_fixed_point_prefix_empty_and_length_boundaries() -> None:
     assert len(boundary.prefix.letters) == 500
     with pytest.raises(ValidationError, match="less than or equal to 500"):
         SubstitutionFixedPointPrefixRequest(source=doubling, prefix_length=501)
+    with pytest.raises(ValueError, match="prefix length"):
+        fixed_point_prefix(doubling, 501)
+
+
+def test_fixed_point_source_and_result_envelopes_cover_exact_boundaries() -> None:
+    source_boundary = ProlongableSubstitution(
+        substitution=_substitution(
+            (("0",) * 10_000, ("1",) * 10_000),
+        ),
+        seed="0",
+    )
+    assert (
+        sum(len(image) for image in source_boundary.substitution.morphism.images)
+        == 20_000
+    )
+    accepted = compute_substitution_fixed_point_prefix(
+        SubstitutionFixedPointPrefixRequest(
+            source=source_boundary,
+            prefix_length=1,
+        )
+    )
+    assert accepted.prefix.letters == ("0",)
+
+    source_above = ProlongableSubstitution(
+        substitution=_substitution(
+            (("0",) * 10_000, ("1",) * 10_000, ("2",)),
+            ("0", "1", "2"),
+        ),
+        seed="0",
+    )
+    with pytest.raises(ValidationError, match="source exceeds"):
+        SubstitutionFixedPointPrefixRequest(source=source_above, prefix_length=1)
+    with pytest.raises(ValueError, match="source exceeds"):
+        fixed_point_prefix(source_above, 1)
+
+    accepted_symbol = "x" * 45
+    byte_boundary = ProlongableSubstitution(
+        substitution=_substitution(((accepted_symbol,) * 10_000,), (accepted_symbol,)),
+        seed=accepted_symbol,
+    )
+    byte_result = compute_substitution_fixed_point_prefix(
+        SubstitutionFixedPointPrefixRequest(
+            source=byte_boundary,
+            prefix_length=500,
+        )
+    )
+    assert len(byte_result.prefix.letters) == 500
+
+    rejected_symbol = "x" * 46
+    byte_above = ProlongableSubstitution(
+        substitution=_substitution(((rejected_symbol,) * 10_000,), (rejected_symbol,)),
+        seed=rejected_symbol,
+    )
+    with pytest.raises(ValidationError, match="result exceeds the byte bound"):
+        SubstitutionFixedPointPrefixRequest(source=byte_above, prefix_length=500)
+
+
+def test_fixed_point_generation_caps_the_intermediate_prefix() -> None:
+    source = ProlongableSubstitution(
+        substitution=_substitution(
+            (("a",) + ("b",) * 498, ("b",) * 10_000),
+            ("a", "b"),
+        ),
+        seed="a",
+    )
+    uncapped_second_length = 499 + 498 * 10_000
+    assert uncapped_second_length > 4_000_000
+
+    result = compute_substitution_fixed_point_prefix(
+        SubstitutionFixedPointPrefixRequest(source=source, prefix_length=500)
+    )
+    assert result.retained_prefix_lengths == (1, 499, 500)
+    assert len(result.prefix.letters) == 500
 
 
 def test_prolongability_rejects_mortal_nongrowing_and_wrong_seed_images() -> None:

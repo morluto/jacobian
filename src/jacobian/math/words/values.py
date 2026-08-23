@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from jacobian._models import StrictModel
 
@@ -75,6 +75,15 @@ class Substitution(StrictModel):
         return self
 
 
+def _require_dependency_occurrence_bound(substitution: Substitution) -> None:
+    occurrence_count = sum(len(image) for image in substitution.morphism.images)
+    if occurrence_count > MAX_SUBSTITUTION_DEPENDENCY_OCCURRENCES:
+        raise ValueError(
+            "dependency occurrence output exceeds the aggregate bound "
+            f"({occurrence_count} > {MAX_SUBSTITUTION_DEPENDENCY_OCCURRENCES})"
+        )
+
+
 class ProlongableSubstitution(StrictModel):
     """A substitution with a certified unbounded nested seed iterate."""
 
@@ -135,8 +144,19 @@ class SubstitutionDependencyGraph(StrictModel):
         max_length=MAX_ALPHABET_SIZE * MAX_ALPHABET_SIZE
     )
 
+    @field_validator("substitution")
+    @classmethod
+    def require_bounded_source_before_edges(
+        cls, substitution: Substitution
+    ) -> Substitution:
+        _require_dependency_occurrence_bound(substitution)
+        return substitution
+
     @model_validator(mode="after")
     def bind_graph_to_substitution(self) -> Self:
+        # Recheck before replay when Pydantic receives an existing model instance;
+        # instance revalidation may not revisit the field validator above.
+        _require_dependency_occurrence_bound(self.substitution)
         morphism = self.substitution.morphism
         expected = tuple(
             SubstitutionDependencyEdge(

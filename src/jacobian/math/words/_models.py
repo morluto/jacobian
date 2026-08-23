@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.words.operations import (
+    _require_fixed_point_prefix_budget,
     factors_of_length,
     fixed_point_prefix,
     incidence_matrix,
@@ -17,12 +18,12 @@ from jacobian.math.words.operations import (
 )
 from jacobian.math.words.values import (
     MAX_MORPHISM_OUTPUT_LENGTH,
-    MAX_SUBSTITUTION_DEPENDENCY_OCCURRENCES,
     FiniteWord,
     ProlongableSubstitution,
     Substitution,
     SubstitutionDependencyGraph,
     WordMorphism,
+    _require_dependency_occurrence_bound,
 )
 
 
@@ -133,15 +134,7 @@ class SubstitutionDependencyGraphRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_occurrence_output(self) -> Self:
-        occurrence_count = sum(
-            len(image) for image in self.substitution.morphism.images
-        )
-        if occurrence_count > MAX_SUBSTITUTION_DEPENDENCY_OCCURRENCES:
-            raise ValueError(
-                "dependency occurrence output exceeds the aggregate bound "
-                f"({occurrence_count} > "
-                f"{MAX_SUBSTITUTION_DEPENDENCY_OCCURRENCES})"
-            )
+        _require_dependency_occurrence_bound(self.substitution)
         return self
 
 
@@ -169,11 +162,15 @@ class SubstitutionPrimitivityProfileRequest(StrictModel):
 
     dependency_graph: SubstitutionDependencyGraph
 
+    @model_validator(mode="after")
+    def require_bounded_dependency_source(self) -> Self:
+        _require_dependency_occurrence_bound(self.dependency_graph.substitution)
+        return self
+
 
 class SubstitutionPrimitivityProfileResult(SubstitutionPrimitivityProfileRequest):
     """Complete Boolean-power primitivity profile with graph obstruction."""
 
-    incidence_matrix: tuple[tuple[int, ...], ...]
     strongly_connected_components: tuple[tuple[str, ...], ...]
     irreducible: bool
     aperiodic: bool | None
@@ -187,17 +184,12 @@ class SubstitutionPrimitivityProfileResult(SubstitutionPrimitivityProfileRequest
     method: Literal["BOOLEAN_POWERS_THROUGH_WIELANDT_BOUND"] = (
         "BOOLEAN_POWERS_THROUGH_WIELANDT_BOUND"
     )
-    matrix_orientation: Literal["ROWS_TARGET_COLUMNS_SOURCE"] = (
-        "ROWS_TARGET_COLUMNS_SOURCE"
-    )
 
     @model_validator(mode="after")
     def bind_exact_primitivity_profile(self) -> Self:
         expected = substitution_primitivity_profile(self.dependency_graph)
         if (
-            self.incidence_matrix != expected.incidence_matrix
-            or self.strongly_connected_components
-            != expected.strongly_connected_components
+            self.strongly_connected_components != expected.strongly_connected_components
             or self.irreducible != expected.irreducible
             or self.aperiodic != expected.aperiodic
             or self.primitive != expected.primitive
@@ -214,6 +206,11 @@ class SubstitutionFixedPointPrefixRequest(StrictModel):
 
     source: ProlongableSubstitution
     prefix_length: int = Field(ge=0, le=MAX_MORPHISM_OUTPUT_LENGTH)
+
+    @model_validator(mode="after")
+    def require_bounded_source_work_and_result(self) -> Self:
+        _require_fixed_point_prefix_budget(self.source, self.prefix_length)
+        return self
 
 
 class SubstitutionFixedPointPrefixResult(SubstitutionFixedPointPrefixRequest):

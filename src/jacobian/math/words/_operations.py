@@ -73,7 +73,6 @@ def compute_substitution_primitivity_profile(
     analysis = substitution_primitivity_profile(request.dependency_graph)
     return SubstitutionPrimitivityProfileResult(
         **request.model_dump(),
-        incidence_matrix=analysis.incidence_matrix,
         strongly_connected_components=analysis.strongly_connected_components,
         irreducible=analysis.irreducible,
         aperiodic=analysis.aperiodic,

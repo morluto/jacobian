@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Literal
 
@@ -13,7 +14,12 @@ from jacobian.math.words.values import (
     SubstitutionDependencyEdge,
     SubstitutionDependencyGraph,
     WordMorphism,
+    _require_dependency_occurrence_bound,
 )
+
+MAX_FIXED_POINT_SOURCE_OCCURRENCES = 20_000
+MAX_FIXED_POINT_GENERATION_WORK = 1_000_000
+MAX_FIXED_POINT_RESULT_BYTES = 512_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +45,6 @@ class FixedPointPrefixAnalysis:
 
 @dataclass(frozen=True, slots=True)
 class PrimitivityAnalysis:
-    incidence_matrix: tuple[tuple[int, ...], ...]
     strongly_connected_components: tuple[tuple[str, ...], ...]
     irreducible: bool
     aperiodic: bool | None
@@ -179,6 +184,7 @@ def substitution_dependency_graph(
 ) -> SubstitutionDependencyGraph:
     """Return every nonzero letter dependency in alphabet row order."""
 
+    _require_dependency_occurrence_bound(substitution)
     morphism = substitution.morphism
     edges = tuple(
         SubstitutionDependencyEdge(
@@ -201,17 +207,22 @@ def fixed_point_prefix(
 ) -> FixedPointPrefixAnalysis:
     """Return the requested prefix from the least sufficient seed iterate."""
 
-    if not 0 <= prefix_length <= MAX_MORPHISM_OUTPUT_LENGTH:
-        raise ValueError(f"prefix length must be in 0..{MAX_MORPHISM_OUTPUT_LENGTH}")
+    _require_fixed_point_prefix_budget(source, prefix_length)
     morphism = source.substitution.morphism
     image_map = dict(zip(morphism.source_alphabet, morphism.images, strict=True))
     current: tuple[str, ...] = (source.seed,)
     retained_prefix_lengths = [min(1, prefix_length)]
     depth = 0
     while len(current) < prefix_length:
-        current = tuple(output for letter in current for output in image_map[letter])[
-            :prefix_length
-        ]
+        next_prefix: list[str] = []
+        for letter in current:
+            for output in image_map[letter]:
+                next_prefix.append(output)
+                if len(next_prefix) == prefix_length:
+                    break
+            if len(next_prefix) == prefix_length:
+                break
+        current = tuple(next_prefix)
         depth += 1
         retained_prefix_lengths.append(len(current))
     return FixedPointPrefixAnalysis(
@@ -222,6 +233,55 @@ def fixed_point_prefix(
         least_iterate_depth=depth,
         retained_prefix_lengths=tuple(retained_prefix_lengths),
     )
+
+
+def _fixed_point_result_byte_bound(
+    source: ProlongableSubstitution, prefix_length: int
+) -> int:
+    alphabet = source.substitution.morphism.target_alphabet
+    encoded_symbols = tuple(
+        len(json.dumps(symbol, ensure_ascii=True).encode("utf-8"))
+        for symbol in alphabet
+    )
+    prefix_bytes = (
+        128
+        + sum(encoded_symbols)
+        + len(encoded_symbols)
+        + prefix_length * (max(encoded_symbols) + 1)
+    )
+    ledger_length = max(1, prefix_length)
+    ledger_bytes = 128 + ledger_length * (len(str(max(1, prefix_length))) + 1)
+    source_bytes = len(source.model_dump_json().encode("utf-8"))
+    return 4_096 + source_bytes + prefix_bytes + ledger_bytes
+
+
+def _require_fixed_point_prefix_budget(
+    source: ProlongableSubstitution, prefix_length: int
+) -> None:
+    if not 0 <= prefix_length <= MAX_MORPHISM_OUTPUT_LENGTH:
+        raise ValueError(f"prefix length must be in 0..{MAX_MORPHISM_OUTPUT_LENGTH}")
+    source_occurrences = sum(
+        len(image) for image in source.substitution.morphism.images
+    )
+    if source_occurrences > MAX_FIXED_POINT_SOURCE_OCCURRENCES:
+        raise ValueError(
+            "fixed-point source exceeds the aggregate occurrence bound "
+            f"({source_occurrences} > {MAX_FIXED_POINT_SOURCE_OCCURRENCES})"
+        )
+    # One capped generation inspects/appends fewer than 2N cells, there are at
+    # most N generations, and a public result replays the kernel once.
+    generation_work = 4 * prefix_length * prefix_length
+    if generation_work > MAX_FIXED_POINT_GENERATION_WORK:
+        raise ValueError(
+            "fixed-point generation exceeds the work bound "
+            f"({generation_work} > {MAX_FIXED_POINT_GENERATION_WORK})"
+        )
+    result_bytes = _fixed_point_result_byte_bound(source, prefix_length)
+    if result_bytes > MAX_FIXED_POINT_RESULT_BYTES:
+        raise ValueError(
+            "fixed-point result exceeds the byte bound "
+            f"({result_bytes} > {MAX_FIXED_POINT_RESULT_BYTES})"
+        )
 
 
 def _boolean_product(left: tuple[int, ...], right: tuple[int, ...]) -> tuple[int, ...]:
@@ -242,6 +302,7 @@ def substitution_primitivity_profile(
 ) -> PrimitivityAnalysis:
     """Decide primitivity by Boolean powers through the Wielandt bound."""
 
+    _require_dependency_occurrence_bound(dependency_graph.substitution)
     import networkx as nx
 
     alphabet = dependency_graph.substitution.morphism.source_alphabet
@@ -290,11 +351,7 @@ def substitution_primitivity_profile(
     else:
         obstruction = "PERIODIC_DEPENDENCY_GRAPH"
 
-    matrix = [[0] * order for _ in range(order)]
-    for edge in dependency_graph.edges:
-        matrix[index[edge.target]][index[edge.source]] = edge.multiplicity
     return PrimitivityAnalysis(
-        incidence_matrix=tuple(tuple(row) for row in matrix),
         strongly_connected_components=components,
         irreducible=irreducible,
         aperiodic=aperiodic,

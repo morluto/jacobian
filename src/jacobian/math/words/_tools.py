@@ -139,7 +139,7 @@ WORDS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         version="1",
         title="Compute a substitution primitivity profile",
         description=(
-            "Decide whether a substitution dependency matrix is primitive, "
+            "Decide whether a substitution dependency graph is primitive, "
             "returning its least positive Boolean power or an exact graph obstruction."
         ),
         request_type=SubstitutionPrimitivityProfileRequest,
@@ -197,7 +197,8 @@ WORDS_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         title="Compute a substitution fixed-point prefix",
         description=(
             "Return the requested finite prefix of a certified prolongable growing "
-            "substitution fixed point, from the least sufficient iterate."
+            "substitution fixed point from the least sufficient iterate, after "
+            "bounding source size, generation work, and serialized output."
         ),
         request_type=SubstitutionFixedPointPrefixRequest,
         result_type=SubstitutionFixedPointPrefixResult,

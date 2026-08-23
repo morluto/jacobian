@@ -112,7 +112,14 @@ def _script(
         if right is None:
             raise ValueError("saturation requires a saturation polynomial ideal")
         declarations.append(_singular_ideal("jacobian_right", right))
-        operation_line = "ideal jacobian_result=sat(jacobian_left,jacobian_right[1]);"
+        # Singular's sat() returns a LIST (saturated ideal, saturated
+        # quotient); assigning it to an ideal fails at execution, so store
+        # the list and extract its first element, as the verification script
+        # in this module does.
+        operation_line = (
+            "list jacobian_saturation=sat(jacobian_left,jacobian_right[1]);\n"
+            "ideal jacobian_result=jacobian_saturation[1];"
+        )
     else:
         if right is None:
             raise ValueError("quotient requires a divisor ideal")

@@ -6,6 +6,7 @@ from jacobian.math.number_theory._divisibility import DIVISIBILITY_OPERATIONS
 from jacobian.math.number_theory._finite_abelian_groups import (
     FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION,
 )
+from jacobian.math.number_theory._friable import FRIABLE_COUNT_OPERATION
 from jacobian.math.number_theory._modular import MODULAR_OPERATIONS
 from jacobian.math.number_theory._modular_identity import MODULAR_IDENTITY_OPERATIONS
 from jacobian.math.number_theory._primes import PRIME_OPERATIONS
@@ -19,4 +20,5 @@ TOOLS: MathTools = (
     *MODULAR_IDENTITY_OPERATIONS,
     *DERIVED_NUMBER_THEORY_OPERATIONS,
     FINITE_ABELIAN_GROUP_FACTORIZATION_OPERATION,
+    FRIABLE_COUNT_OPERATION,
 )

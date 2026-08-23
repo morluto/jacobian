@@ -230,6 +230,11 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
+    OperationAdmission(
+        "number_theory.friable.count.compute",
+        AdmissionDecision.KEEP,
+        "complete exact friable count with result-sensitive materialized and generated regimes, avoiding caller-side factorization of every source integer",
+    ),
 )
 
 REGISTRATION = OperationRegistration(TOOLS, ADMISSIONS)

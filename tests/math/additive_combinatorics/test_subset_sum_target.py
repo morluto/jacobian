@@ -175,6 +175,18 @@ def test_result_rejects_source_decision_and_witness_mutations() -> None:
         )
 
 
+def test_result_bounds_raw_witness_and_sum_before_replay() -> None:
+    valid = _operation().run(_request((3, 2, 5), 5, allow_empty_subset=False))
+    payload = valid.model_dump(mode="json")
+
+    with pytest.raises(ValidationError, match="outside its source"):
+        SubsetSumTargetResult.model_validate({**payload, "witness": {"indices": [3]}})
+    with pytest.raises(ValidationError, match="262-digit result bound"):
+        SubsetSumTargetResult.model_validate(
+            {**payload, "reconstructed_sum": "9" * 263}
+        )
+
+
 def test_request_admits_large_low_state_and_exact_digit_and_state_boundaries() -> None:
     zeros = _operation().run(_request((0,) * 256, 0, allow_empty_subset=False))
     assert zeros.witness == IndexSubset(indices=(0,))
@@ -202,13 +214,13 @@ def test_request_admits_large_low_state_and_exact_digit_and_state_boundaries() -
 def test_request_rejects_immediately_above_each_search_bound() -> None:
     with pytest.raises(ValidationError, match="256-digit"):
         SubsetSumTargetRequest(
-            source=IndexedIntegerSequence(values=("1" + "0" * 256,)),
+            source={"values": ["1" + "0" * 256]},
             target="0",
             allow_empty_subset=False,
         )
     with pytest.raises(ValidationError, match="256-digit"):
         SubsetSumTargetRequest(
-            source=IndexedIntegerSequence(values=()),
+            source={"values": []},
             target="1" + "0" * 256,
             allow_empty_subset=False,
         )
@@ -217,9 +229,18 @@ def test_request_rejects_immediately_above_each_search_bound() -> None:
     above_wire_count = (4 * 1024 * 1024 - 64) // (len(widest) + 4) + 1
     with pytest.raises(ValidationError, match="4 MiB wire-size"):
         SubsetSumTargetRequest(
-            source=IndexedIntegerSequence(values=(widest,) * above_wire_count),
+            source={"values": [widest] * above_wire_count},
             target="0",
             allow_empty_subset=True,
+        )
+
+    with pytest.raises(ValidationError, match="complete-call bound"):
+        SubsetSumTargetRequest.model_validate(
+            {
+                "source": {"values": ["not-an-integer"] * (500_000 + 1)},
+                "target": "0",
+                "allow_empty_subset": True,
+            }
         )
 
     with pytest.raises(ValidationError, match="65,536-reachable-state"):

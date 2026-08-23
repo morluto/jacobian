@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from math import gcd
 from typing import Literal, Self
 
@@ -23,6 +24,7 @@ MAX_SUBSET_SUM_REACHABLE_STATES = 65_536
 MAX_SUBSET_SUM_TRANSITIONS_PER_PASS = 500_000
 MAX_SUBSET_SUM_TOTAL_TRANSITIONS = 2 * MAX_SUBSET_SUM_TRANSITIONS_PER_PASS
 MAX_SUBSET_SUM_SOURCE_WIRE_BYTES = 4 * 1024 * 1024
+MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS = 262
 _SUBSET_COUNT_EXACT_ITEM_LIMIT = MAX_SUBSET_SUM_REACHABLE_STATES.bit_length() - 1
 
 
@@ -31,6 +33,40 @@ def _require_integer_digits(value: str, label: str) -> None:
         raise ValueError(
             f"{label} exceeds the {MAX_SUBSET_SUM_INTEGER_DIGITS}-digit bound"
         )
+
+
+def _raw_source_item_count(source: object) -> int | None:
+    """Bound one raw source before Pydantic parses its canonical integers."""
+
+    if isinstance(source, IndexedIntegerSequence):
+        values: list[object] | tuple[object, ...] = source.values
+    elif isinstance(source, Mapping):
+        raw_values = source.get("values")
+        if not isinstance(raw_values, (list, tuple)):
+            return None
+        values = raw_values
+    else:
+        return None
+
+    item_count = len(values)
+    if item_count > MAX_SUBSET_SUM_TRANSITIONS_PER_PASS:
+        raise ValueError(
+            "subset-sum request exceeds the "
+            f"{MAX_SUBSET_SUM_TOTAL_TRANSITIONS:,}-transition complete-call "
+            "bound across computation and source-binding replay"
+        )
+
+    source_wire_bound = 64
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        digit_count = len(value) - value.startswith("-")
+        if digit_count > MAX_SUBSET_SUM_INTEGER_DIGITS:
+            _require_integer_digits(value, "source item")
+        source_wire_bound += len(value) + 4
+        if source_wire_bound > MAX_SUBSET_SUM_SOURCE_WIRE_BYTES:
+            raise ValueError("subset-sum source exceeds the 4 MiB wire-size bound")
+    return item_count
 
 
 def _require_admitted_work(values: tuple[int, ...], allow_empty: bool) -> None:
@@ -84,6 +120,19 @@ class SubsetSumTargetRequest(StrictModel):
         description="Whether the empty index subset is an admissible witness."
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def bound_raw_request(cls, value: object) -> object:
+        """Reject oversized raw strings and containers before nested parsing."""
+
+        if not isinstance(value, Mapping):
+            return value
+        _raw_source_item_count(value.get("source"))
+        raw_target = value.get("target")
+        if isinstance(raw_target, str):
+            _require_integer_digits(raw_target, "target")
+        return value
+
     @model_validator(mode="after")
     def require_bounded_exact_search(self) -> Self:
         for value in self.source.values:
@@ -121,6 +170,45 @@ class SubsetSumTargetResult(StrictModel):
         default=None,
         description="The exact sum reconstructed from an attaining witness.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def bound_raw_result(cls, value: object) -> object:
+        """Reject oversized forged result values before nested parsing."""
+
+        if not isinstance(value, Mapping):
+            return value
+        item_count = _raw_source_item_count(value.get("source"))
+        raw_target = value.get("target")
+        if isinstance(raw_target, str):
+            _require_integer_digits(raw_target, "target")
+        raw_sum = value.get("reconstructed_sum")
+        if isinstance(raw_sum, str) and (
+            len(raw_sum) - raw_sum.startswith("-") > MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS
+        ):
+            raise ValueError("reconstructed_sum exceeds the 262-digit result bound")
+
+        raw_witness = value.get("witness")
+        if isinstance(raw_witness, IndexSubset):
+            indices: list[object] | tuple[object, ...] = raw_witness.indices
+        elif isinstance(raw_witness, Mapping):
+            raw_indices = raw_witness.get("indices")
+            if not isinstance(raw_indices, (list, tuple)):
+                return value
+            indices = raw_indices
+        else:
+            return value
+        if len(indices) > MAX_SUBSET_SUM_REACHABLE_STATES:
+            raise ValueError("subset-sum witness exceeds the 65,536-index result bound")
+        maximum_index = (
+            item_count
+            if item_count is not None
+            else MAX_SUBSET_SUM_TRANSITIONS_PER_PASS
+        )
+        for index in indices:
+            if type(index) is int and not 0 <= index < maximum_index:
+                raise ValueError("subset-sum witness index lies outside its source")
+        return value
 
     @model_validator(mode="after")
     def bind_decision_to_source(self) -> Self:

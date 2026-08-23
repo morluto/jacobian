@@ -461,21 +461,18 @@ class TestScanWorkBoundary:
         roughly 152M reconstruction units per pass (kernel plus replay),
         far above the budget, so it fails admission without enumerating.
 
-        The wall-clock sanity bound only guards against accidentally running
-        the rejected scan; constructing the request still legitimately pays
-        the O(dimension^4) coalgebra-axiom verification, which varies several
-        fold on loaded CI runners.
+        Rejection is proven structurally: the predicted scan work exceeds
+        the budget, and the typed admission error (not a completed scan)
+        is what fires. No wall-clock bound: construction legitimately pays
+        the O(dimension^4) coalgebra-axiom verification, which varies
+        several fold on loaded CI runners.
         """
-        import time
-
         ca = _direct_sum_group_like_coalgebra(16)
         assert (
             group_like_scan_work(ca.prime, ca.dimension) > GROUP_LIKE_SCAN_WORK_BUDGET
         )
-        started = time.monotonic()
         with pytest.raises(ValidationError, match="scan work exceeds"):
             GroupLikeElementsRequest(coalgebra=ca)
-        assert time.monotonic() - started < 30
 
 
 class TestNestedModulusPrevalidation:

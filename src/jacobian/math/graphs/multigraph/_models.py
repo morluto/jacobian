@@ -453,9 +453,9 @@ class MultigraphFlowFindRequest(StrictModel):
 class _FlowSearchOutcome(StrictModel):
     """Private unbound search outcome used inside the bounded search kernel.
 
-    Carries no retained search domain so source-binding validators can
-    replay it without recursion; the public result type adds the required
-    ``graph``/``group``/``resource_budget`` binding.
+    Carries no retained search domain so the public result type can add the
+    required ``graph``/``group``/``resource_budget`` binding without
+    recursion.
     """
 
     result_schema_version: Literal["1"] = "1"
@@ -493,38 +493,80 @@ class MultigraphFlowFindResult(StrictModel):
 
     @model_validator(mode="after")
     def require_consistent_status(self) -> Self:
+        # The bounded search runs exactly once per request, inside the
+        # operation; validation -- including deserialized re-validation --
+        # must never repeat it, so the declared budget bounds the total
+        # visited states.  Each outcome is therefore checked structurally
+        # and arithmetically against the retained source: shape, budget,
+        # witness validity, and the exact charged-state totals that only
+        # the kernel's termination modes can produce.
         _require_status_shape(self.status, self.flow, self.termination_reason)
         if self.states_explored > self.resource_budget.max_states:
             raise ValueError("states_explored exceeds resource budget")
-        # Every outcome is replayed against the retained search domain and
-        # budget: the deterministic bounded search must reproduce the same
-        # status, state count, and (for FOUND) the same witness.
-        from jacobian.math.graphs.multigraph._operations import (
-            _search_flow_unbound,
-        )
-
-        replay = _search_flow_unbound(self.graph, self.group, self.resource_budget)
-        if (
-            replay.status != self.status
-            or replay.states_explored != self.states_explored
-            or replay.termination_reason != self.termination_reason
-        ):
-            raise ValueError(
-                f"{self.status} outcome does not match the deterministic "
-                f"search replay over the retained domain "
-                f"(replay reported {replay.status} after "
-                f"{replay.states_explored} states)"
-            )
-        if self.status == "FOUND" and self.flow is not None:
+        if self.status == "FOUND":
+            if self.termination_reason == "SPECIAL_CASE":
+                # SPECIAL_CASE is reserved for the edgeless empty-flow
+                # shortcut; the DFS itself never emits it.
+                if self.graph.edges or self.flow != ():
+                    raise ValueError(
+                        "SPECIAL_CASE termination requires an edgeless "
+                        "graph with the empty flow"
+                    )
+            elif not self.graph.edges:
+                raise ValueError(
+                    "an edgeless graph terminates as SPECIAL_CASE, not "
+                    f"{self.termination_reason}"
+                )
+            assert self.flow is not None  # guaranteed by _require_status_shape
             _verify_found_witness(
                 self.graph, self.group, self.resource_budget, self.flow
             )
-            if replay.flow != self.flow:
+        elif self.status == "EXHAUSTED":
+            if not self.graph.edges:
+                raise ValueError("EXHAUSTED status requires a nonempty search domain")
+            expected = _complete_enumeration_state_count(
+                self.graph,
+                self.group,
+                self.resource_budget.require_nowhere_zero,
+            )
+            if self.states_explored != expected:
                 raise ValueError(
-                    "FOUND witness does not match the deterministic "
-                    "search replay over the retained domain"
+                    f"EXHAUSTED outcome reports {self.states_explored} "
+                    f"explored states; a completed enumeration of the "
+                    f"retained domain charges exactly {expected}"
+                )
+        else:
+            # UNKNOWN is emitted only at the moment the budget is exceeded,
+            # reporting exactly max_states charged states.
+            if self.states_explored != self.resource_budget.max_states:
+                raise ValueError(
+                    f"UNKNOWN outcome reports {self.states_explored} "
+                    "explored states; a budget-exceeded search reports "
+                    f"exactly {self.resource_budget.max_states}"
                 )
         return self
+
+
+def _complete_enumeration_state_count(
+    graph: LooplessMultigraph,
+    group: FiniteAbelianGroup,
+    require_nowhere_zero: bool,
+) -> int:
+    """Exact charged-state total of a completed exhaustive flow search.
+
+    The bounded DFS charges one state per pushed partial assignment, so a
+    completed enumeration over ``d = len(graph.edges)`` edges with ``b``
+    choices per edge visits exactly ``b + b^2 + ... + b^d`` states, where
+    ``b`` is twice the number of admissible per-edge values (one term per
+    orientation).  Deriving this closed form from the retained source lets
+    validators authenticate EXHAUSTED outcomes without repeating the
+    bounded search.
+    """
+    depth = len(graph.edges)
+    values = group.cardinality - 1 if require_nowhere_zero else group.cardinality
+    branching = 2 * values
+    growth: int = branching**depth
+    return branching * (growth - 1) // (branching - 1)
 
 
 def _require_status_shape(

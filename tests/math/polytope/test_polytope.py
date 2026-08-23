@@ -9,6 +9,7 @@ import pytest
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.polytope._models import (
+    MAX_VERTICES,
     Halfspace,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
@@ -776,3 +777,53 @@ class TestNonzeroNormalContractPublished:
         (operation,) = POLYTOPE_OPERATIONS
         names = [e.name for e in operation.examples]
         assert "unit_square_halfspaces" in names
+
+
+class TestHullWorkBoundPublished:
+    """The coupled C(n, d) hull-work bound must be schema-visible so
+    clients can size a V-representation per dimension without trial
+    execution (review thread: document the coupled hull-work limit)."""
+
+    @staticmethod
+    def _expected_max_distinct(dimension: int) -> int:
+        from math import comb
+
+        from jacobian.math.polytope._models import MAX_HULL_SUBFACETS
+
+        n = MAX_VERTICES
+        while comb(n, dimension) > MAX_HULL_SUBFACETS:
+            n -= 1
+        return n
+
+    def test_formula_and_threshold_are_schema_visible(self) -> None:
+        from jacobian.math.polytope._models import MAX_HULL_SUBFACETS
+
+        schema = PolytopeVolumeRequest.model_json_schema()
+        vertices_description = schema["properties"]["vertices"]["description"]
+        assert f"C(n, d) <= {MAX_HULL_SUBFACETS}" in vertices_description
+        model_description = schema["description"]
+        assert "C(n, d)" in model_description
+
+    def test_documented_per_dimension_counts_match_the_bound(self) -> None:
+        """Every published usable-count figure is exactly the largest n
+        with C(n, d) <= the enforced hull-work ceiling."""
+        schema = PolytopeVolumeRequest.model_json_schema()
+        description = schema["properties"]["vertices"]["description"]
+        for d in range(4, 7):
+            expected = self._expected_max_distinct(d)
+            assert f"{expected} for d = {d}" in description
+        flat = self._expected_max_distinct(3)
+        assert flat == MAX_VERTICES
+        assert f"up to {flat} distinct vertices for d <= 3" in description
+
+    def test_reviewer_boundary_count_is_rejected_with_typed_error(self) -> None:
+        """26 distinct six-dimensional points satisfy every visible field
+        bound yet exceed C(26, 6) = 230230; the rejection must say why."""
+        points = tuple(_v(*((1000 * j + i, 1) for i in range(6))) for j in range(26))
+        with pytest.raises(ValueError, match=r"combinatorial bound \(230230"):
+            PolytopeVolumeRequest(vertices=points)
+
+    def test_just_above_the_four_dimensional_maximum_rejected(self) -> None:
+        points = tuple(_v(*((1000 * j + i, 1) for i in range(4))) for j in range(49))
+        with pytest.raises(ValueError, match=r"combinatorial bound \(211876"):
+            PolytopeVolumeRequest(vertices=points)

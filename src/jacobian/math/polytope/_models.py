@@ -27,6 +27,17 @@ rejected as budget exhaustion.
 MAX_FACETS = 64
 """Absolute upper bound on the number of half-spaces in an H-representation."""
 
+MAX_HULL_SUBFACETS = 200_000
+"""Ceiling on the d-subsets the exact hull enumeration may consider.
+
+The hull work couples vertex count with ambient dimension: after
+duplicate points are removed, enumerating the hull of ``n`` distinct
+vertices in dimension ``d`` considers ``C(n, d)`` d-subsets, so requests
+with ``C(n, d) > 200_000`` are rejected as budget exhaustion. The bound
+lives here so the published request-schema descriptions quote the same
+constant the admission check enforces.
+"""
+
 COORDINATE_DIGITS = 32_768
 """Per-component digit bound forwarded to the canonical rational validator."""
 
@@ -191,7 +202,6 @@ def require_volume_components_within_result_bound(
         return
 
     from jacobian.math.polytope._operations import (
-        MAX_HULL_SUBFACETS,
         _filter_redundant_vertices,
         _triangulate,
     )
@@ -250,7 +260,15 @@ class Halfspace(StrictModel):
 
 
 class PolytopeVolumeRequest(StrictModel):
-    """A bounded rational polytope in exactly one of the two representations."""
+    """A bounded rational polytope in exactly one of the two representations.
+
+    Admission enforces a work bound that couples vertex count with ambient
+    dimension: after duplicate points are removed, the exact hull
+    enumeration considers ``C(n, d)`` d-subsets of ``n`` distinct vertices
+    in dimension ``d``, and requests with ``C(n, d) > 200000`` are rejected.
+    The same limit applies to the vertex set derived from an
+    H-representation.
+    """
 
     vertices: tuple[Vertex, ...] | None = Field(
         default=None,
@@ -258,7 +276,14 @@ class PolytopeVolumeRequest(StrictModel):
         max_length=MAX_VERTICES,
         description=(
             "V-representation: the vertices of the convex hull. "
-            "Mutually exclusive with ``halfspaces``."
+            "Mutually exclusive with ``halfspaces``. "
+            f"Coupled hull-work bound: after duplicate points are removed, "
+            f"admission requires C(n, d) <= {MAX_HULL_SUBFACETS} on the n "
+            "distinct vertices in ambient dimension d (the exact hull "
+            "enumeration considers every d-subset); larger requests are "
+            "rejected. Within the 64-vertex maximum this admits up to 64 "
+            "distinct vertices for d <= 3, 48 for d = 4, 31 for d = 5, and "
+            "25 for d = 6."
         ),
     )
     halfspaces: tuple[Halfspace, ...] | None = Field(
@@ -345,7 +370,6 @@ def _require_admissible_h_vertices(halfspaces: tuple[Halfspace, ...], dim: int) 
     """
 
     from jacobian.math.polytope._operations import (
-        MAX_HULL_SUBFACETS,
         _is_bounded_h,
         _vertices_from_h_representation,
     )
@@ -416,6 +440,7 @@ class PolytopeVolumeResult(StrictModel):
 __all__ = [
     "MAX_DIMENSION",
     "MAX_FACETS",
+    "MAX_HULL_SUBFACETS",
     "MAX_VERTICES",
     "Halfspace",
     "PolytopeVolumeRequest",

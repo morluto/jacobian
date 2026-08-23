@@ -34,6 +34,7 @@ from sympy.matrices.exceptions import NonInvertibleMatrixError
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.polytope._models import (
+    MAX_HULL_SUBFACETS,
     Halfspace,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
@@ -46,12 +47,9 @@ from jacobian.math.polytope._models import (
 # is the practical gate on budget exhaustion.
 MAX_SUBSYSTEM_SOLVES = 5_000_000
 
-# Absolute ceiling on the number of d-subsets the brute-force hull
-# enumeration may consider (``C(n, d)``). Polytopes exceeding this bound
-# are rejected as budget exhaustion rather than enumerated, keeping the
-# exact computation bounded. This admits the unit cube through d=4 and
-# the standard simplex at every supported dimension.
-MAX_HULL_SUBFACETS = 200_000
+# ``MAX_HULL_SUBFACETS`` (the C(n, d) hull-enumeration ceiling) is owned
+# by ``_models`` beside the other published request bounds, which quote it
+# in their schema-visible descriptions.
 
 
 def _hyperplane_normal(points: list[list[Rational]]) -> Matrix | None:

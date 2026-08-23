@@ -47,9 +47,10 @@ def cohomology_operation[
 
 _SQ_EXAMPLE: dict[str, Any] = {
     "cochain_degree": 1,
-    "simplex_values": [[0, 1], [1, 2], [0, 2]],
-    "simplex_coefficients": [1, 1, 1],
+    "simplex_values": [[0, 1], [0, 2]],
+    "simplex_coefficients": [1, 1],
     "square_degree": 0,
+    "ambient_simplices": [[0], [1], [2], [0, 1], [0, 2], [1, 2], [0, 1, 2]],
 }
 
 _BOCKSTEIN_EXAMPLE: dict[str, Any] = {
@@ -63,12 +64,13 @@ _BOCKSTEIN_EXAMPLE: dict[str, Any] = {
 COHOMOLOGY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     cohomology_operation(
         "cohomology.steenrod_square.compute",
-        "Compute Steenrod squares Sq^k(x) for a cocycle over GF(2)",
-        "Given a simplicial cocycle x of degree n over GF(2) and an integer k, "
-        "compute the Steenrod square Sq^k(x). Sq^0 is the identity, Sq^n(x) = "
-        "x cup x for a degree-n cocycle, and Sq^k(x) = 0 for k > n (instability). "
-        "Steenrod squares are fundamental cohomology operations that distinguish "
-        "spaces whose ordinary cohomology groups agree.",
+        "Compute Sq^0, Sq^n (cup) and Sq^k=0 for k>n over GF(2) for cocycles",
+        "Given a cocycle x of degree n over GF(2) compute Sq^k(x). "
+        "Supported: Sq^0(x)=x (identity, chain-level without ambient), "
+        "Sq^n(x)=x cup x (top, requires ambient for (2n)-simplices), "
+        "Sq^k=0 for k>n (instability). Intermediate 0<k<n need cup-i "
+        "and are rejected as unsupported. With ambient_simplices or "
+        "ambient_complex the cochain is verified as cocycle.",
         SteenrodSquareRequest,
         SteenrodSquareResult,
         compute_steenrod_square,
@@ -78,7 +80,7 @@ COHOMOLOGY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "sq0_identity",
-                "Compute Sq^0(x) which is the identity on a 1-cochain.",
+                "Compute Sq^0(x) which is the identity on a 1-cocycle d(vertex 0) in the triangle.",
                 _SQ_EXAMPLE,
             ),
         ),

@@ -20,12 +20,15 @@ class TestSteenrodSquare:
 
     def test_sq0_identity(self):
         """Sq^0 is the identity."""
+        # Minimal ambient where a single edge is vacuously a cocycle (no triangles).
+        ambient = ((0,), (1,), (0, 1))
         result = compute_steenrod_square(
             SteenrodSquareRequest(
                 cochain_degree=1,
                 simplex_values=((0, 1),),
                 simplex_coefficients=(1,),
                 square_degree=0,
+                ambient_simplices=ambient,
             )
         )
         assert not result.is_zero
@@ -33,24 +36,28 @@ class TestSteenrodSquare:
 
     def test_sq_above_degree_is_zero(self):
         """Sq^k(x) = 0 for k > deg(x) (instability)."""
+        ambient = ((0,), (1,), (0, 1))
         result = compute_steenrod_square(
             SteenrodSquareRequest(
                 cochain_degree=1,
                 simplex_values=((0, 1),),
                 simplex_coefficients=(1,),
                 square_degree=2,
+                ambient_simplices=ambient,
             )
         )
         assert result.is_zero
 
     def test_sq_above_degree_zero(self):
         """Sq^3(x) = 0 for a degree-1 cocycle."""
+        ambient = ((0,), (1,), (0, 1))
         result = compute_steenrod_square(
             SteenrodSquareRequest(
                 cochain_degree=1,
                 simplex_values=((0, 1),),
                 simplex_coefficients=(1,),
                 square_degree=3,
+                ambient_simplices=ambient,
             )
         )
         assert result.is_zero
@@ -148,12 +155,15 @@ class TestSteenrodSquare:
         )
         assert result.is_zero
 
+        # Non-zero 0-cochain requires an ambient where it is a cocycle;
+        # isolated vertices have no edges, so every 0-cochain is a cocycle.
         result2 = compute_steenrod_square(
             SteenrodSquareRequest(
                 cochain_degree=0,
                 simplex_values=((1,), (0,), (0,)),
                 simplex_coefficients=(1, 1, 1),
                 square_degree=0,
+                ambient_simplices=((0,), (1,)),
             )
         )
         assert not result2.is_zero

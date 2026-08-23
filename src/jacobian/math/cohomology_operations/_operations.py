@@ -26,6 +26,23 @@ def _reduce_support(
     return values, coefficients
 
 
+def _reduce_support_mod_prime(
+    simplices: tuple[tuple[int, ...], ...],
+    coeffs: tuple[int, ...],
+    prime: int,
+) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...]]:
+    """Merge duplicate simplex keys, summing coefficients modulo ``prime``."""
+
+    merged: dict[tuple[int, ...], int] = {}
+    for simplex, coefficient in zip(simplices, coeffs, strict=True):
+        key = tuple(sorted(simplex))
+        merged[key] = (merged.get(key, 0) + coefficient) % prime
+    surviving = sorted(key for key, value in merged.items() if value != 0)
+    values = tuple(surviving)
+    coefficients = tuple(merged[key] for key in surviving)
+    return values, coefficients
+
+
 def _combined_face(
     front: tuple[int, ...],
     back: tuple[int, ...],
@@ -149,6 +166,19 @@ def steenrod_square_fields(
     )
 
 
+def _effective_ambient_for_request(
+    request: SteenrodSquareRequest | BocksteinRequest,
+) -> tuple[tuple[int, ...], ...]:
+    """Return the integer ambient set for a request, handling canonical complexes."""
+    # Import here to avoid circular import at module load.
+    from jacobian.math.cohomology_operations._models import _effective_ambient
+
+    # ``request`` is either Steenrod or Bockstein; both now carry the two fields.
+    ambient_simplices = getattr(request, "ambient_simplices", ())
+    ambient_complex = getattr(request, "ambient_complex", None)
+    return _effective_ambient(ambient_simplices, ambient_complex)
+
+
 def compute_steenrod_square(request: SteenrodSquareRequest) -> SteenrodSquareResult:
     """Compute the Steenrod square Sq^k(x) for a cocycle x over GF(2).
 
@@ -163,6 +193,7 @@ def compute_steenrod_square(request: SteenrodSquareRequest) -> SteenrodSquareRes
     - Sq^k(x) = 0 for k > n (instability)
     - Sq^k(x) for 0 < k < n requires the cup-i product structure
     """
+    effective = _effective_ambient_for_request(request)
     (
         result_degree,
         result_simplex_values,
@@ -173,7 +204,7 @@ def compute_steenrod_square(request: SteenrodSquareRequest) -> SteenrodSquareRes
         request.simplex_values,
         request.simplex_coefficients,
         request.square_degree,
-        request.ambient_simplices,
+        effective,
     )
     return SteenrodSquareResult(
         cochain_degree=request.cochain_degree,
@@ -181,6 +212,7 @@ def compute_steenrod_square(request: SteenrodSquareRequest) -> SteenrodSquareRes
         simplex_coefficients=request.simplex_coefficients,
         square_degree=request.square_degree,
         ambient_simplices=request.ambient_simplices,
+        ambient_complex=getattr(request, "ambient_complex", None),
         result_degree=result_degree,
         result_simplex_values=result_simplex_values,
         result_simplex_coefficients=result_simplex_coefficients,
@@ -192,8 +224,26 @@ def bockstein_fields(
     prime: int,
     cochain_degree: int,
     simplex_coefficients: tuple[int, ...],
+    simplex_values: tuple[tuple[int, ...], ...] | None = None,
 ) -> tuple[int, tuple[tuple[int, ...], ...], tuple[int, ...], bool]:
-    """Pure Bockstein core returning ``(degree, values, coefficients, is_zero)``."""
+    """Pure Bockstein core returning ``(degree, values, coefficients, is_zero)``.
+
+    When ``simplex_values`` is supplied duplicate simplex keys are merged
+    modulo ``prime`` before the zero test, so a cochain whose sparse
+    support cancels to zero is correctly classified as the zero cocycle.
+    """
+
+    if simplex_values is not None:
+        # Merge duplicate keys modulo prime before the zero check.
+        _, merged_coeffs = _reduce_support_mod_prime(
+            simplex_values, simplex_coefficients, prime
+        )
+        # ``merged_coeffs`` is empty iff every residue is 0
+        if not merged_coeffs:
+            return (cochain_degree + 1, (), (), True)
+        raise ValueError(
+            "non-zero Bockstein requires the ambient simplicial complex and is not supported"
+        )
 
     if not simplex_coefficients or all(c % prime == 0 for c in simplex_coefficients):
         return (cochain_degree + 1, (), (), True)
@@ -222,12 +272,15 @@ def compute_bockstein(request: BocksteinRequest) -> BocksteinResult:
         request.prime,
         request.cochain_degree,
         request.simplex_coefficients,
+        request.simplex_values,
     )
     return BocksteinResult(
         prime=request.prime,
         cochain_degree=request.cochain_degree,
         simplex_values=request.simplex_values,
         simplex_coefficients=request.simplex_coefficients,
+        ambient_simplices=getattr(request, "ambient_simplices", ()),
+        ambient_complex=getattr(request, "ambient_complex", None),
         result_degree=result_degree,
         result_simplex_values=result_simplex_values,
         result_simplex_coefficients=result_simplex_coefficients,

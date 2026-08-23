@@ -8,6 +8,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+import jacobian.math.discrepancy_theory._models as discrepancy_models
 from jacobian.math.discrepancy_theory._models import (
     MAX_COLUMN_INCIDENCES,
     MAX_MONITORED_COLUMNS,
@@ -330,6 +331,35 @@ class TestHardConstraintRounding:
         above[-1] = {"label": "i511", "coordinates": (*support, len(support))}
         with pytest.raises(ValidationError, match="incidences exceed"):
             _rounding_request(values=values, rows=rows, columns=tuple(above))
+
+    def test_over_incidence_rejects_before_exact_aggregation(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def fail_if_aggregated(
+            _values: list[Fraction], _coordinates: tuple[int, ...]
+        ) -> Fraction:
+            raise AssertionError("exact aggregation reached before cheap preflight")
+
+        monkeypatch.setattr(
+            discrepancy_models,
+            "_sum_selected_fractions",
+            fail_if_aggregated,
+        )
+        denominator = 10 ** (MAX_ROUNDING_RATIONAL_DIGITS - 1) + 1
+        coordinate_count = MAX_ROUNDING_COORDINATES
+        support = tuple(range(coordinate_count))
+        column_count = MAX_COLUMN_INCIDENCES // coordinate_count + 1
+        columns = tuple(
+            {"label": f"c{index}", "coordinates": support}
+            for index in range(column_count)
+        )
+
+        with pytest.raises(ValidationError, match="incidences exceed"):
+            _rounding_request(
+                values=(Fraction(1, denominator),) * coordinate_count,
+                rows=({"label": "all", "coordinates": support},),
+                columns=columns,
+            )
 
     def test_rational_digit_and_work_boundaries(self) -> None:
         denominator = 10 ** (MAX_ROUNDING_RATIONAL_DIGITS - 1) + 1

@@ -35,6 +35,14 @@ def _fraction_wire_size(value: Fraction) -> int:
     return len(str(abs(value.numerator))) + len(str(value.denominator))
 
 
+def _sum_selected_fractions(
+    values: list[Fraction], coordinates: tuple[int, ...]
+) -> Fraction:
+    """Aggregate one admitted row or column after cheap source preflight."""
+
+    return sum((values[index] for index in coordinates), Fraction())
+
+
 def _as_canonical_rational(value: Fraction) -> CanonicalRational:
     return CanonicalRational.from_fraction(value)
 
@@ -131,14 +139,10 @@ class HardConstraintRoundingSource(StrictModel):
                 owner="row",
             )
             partition.extend(row.coordinates)
-            row_sum = sum((fractions[index] for index in row.coordinates), Fraction())
-            if row_sum.denominator != 1:
-                raise ValueError("every hard row must have an integral source sum")
         if sorted(partition) != list(range(coordinate_count)):
             raise ValueError("hard rows must partition every coordinate exactly once")
 
         total_incidences = 0
-        column_sums: list[Fraction] = []
         for column in self.columns:
             _require_canonical_subset(
                 column.coordinates,
@@ -146,16 +150,10 @@ class HardConstraintRoundingSource(StrictModel):
                 owner="column",
             )
             total_incidences += len(column.coordinates)
-            column_sums.append(
-                sum(
-                    (fractions[index] for index in column.coordinates),
-                    Fraction(),
+            if total_incidences > MAX_COLUMN_INCIDENCES:
+                raise ValueError(
+                    f"monitored column incidences exceed {MAX_COLUMN_INCIDENCES}"
                 )
-            )
-        if total_incidences > MAX_COLUMN_INCIDENCES:
-            raise ValueError(
-                f"monitored column incidences exceed {MAX_COLUMN_INCIDENCES}"
-            )
 
         fractional_count = sum(0 < value < 1 for value in fractions)
         scan_work = fractional_count * (coordinate_count + total_incidences)
@@ -182,15 +180,20 @@ class HardConstraintRoundingSource(StrictModel):
         ):
             raise ValueError("rounding intermediate rational-height bound exceeded")
 
+        row_sums = [
+            _sum_selected_fractions(fractions, row.coordinates) for row in self.rows
+        ]
+        if any(row_sum.denominator != 1 for row_sum in row_sums):
+            raise ValueError("every hard row must have an integral source sum")
+        column_sums = [
+            _sum_selected_fractions(fractions, column.coordinates)
+            for column in self.columns
+        ]
+
         input_rational_digits = sum(
             len(value.num.lstrip("-")) + len(value.den) for value in self.values
         )
-        row_digits = sum(
-            _fraction_wire_size(
-                sum((fractions[index] for index in row.coordinates), Fraction())
-            )
-            for row in self.rows
-        )
+        row_digits = sum(_fraction_wire_size(row_sum) for row_sum in row_sums)
         coordinate_digits = len(str(max(1, coordinate_count)))
         column_digits = sum(
             3 * (_fraction_wire_size(value) + coordinate_digits + 1)

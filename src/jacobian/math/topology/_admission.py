@@ -48,7 +48,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "topology.simplicial_complex.deletion.compute",
         AdmissionDecision.KEEP,
-        "exact vertex deletion: remove all facets containing a declared vertex subset",
+        "exact vertex deletion: the induced subcomplex on the undeclared vertices",
     ),
     OperationAdmission(
         "topology.simplicial_complex.skeleton.compute",

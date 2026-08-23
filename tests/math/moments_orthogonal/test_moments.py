@@ -1044,7 +1044,9 @@ class TestDerivedQuadratureHeightAdmission:
             CanonicalRational.from_fraction(Fraction(10) ** 16400),
             CanonicalRational(num="0", den="1"),
         )
-        with pytest.raises(ValidationError, match="moment heights exceed the conservative"):
+        with pytest.raises(
+            ValidationError, match="moment heights exceed the conservative"
+        ):
             GaussianQuadratureRequest(prefix=_prefix(moments), order=1)
 
     def test_representable_large_node_admitted_and_round_trips(self) -> None:

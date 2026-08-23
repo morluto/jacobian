@@ -1,319 +1,691 @@
-"""Exact bounded native kernels for moments and orthogonal polynomials."""
+"""Exact moment-functional and orthogonal-polynomial operations."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from fractions import Fraction
 
+from jacobian._exact import CanonicalRational
+from jacobian.math.moments_orthogonal._models import (
+    ChristoffelDarbouxRequest,
+    GaussianQuadratureRequest,
+    HankelRequest,
+    JacobiMatrixRequest,
+    OrthogonalPolynomialRequest,
+    RecurrenceRequest,
+    ShiftedHankelRequest,
+)
 from jacobian.math.moments_orthogonal.values import (
-    MAX_HANKEL_DIMENSION,
-    MAX_MOMENTS,
-    MAX_POLYNOMIAL_COUNT,
-    MAX_QUADRATURE_POINTS,
-    MAX_RECURRENCE_ORDER,
     ChristoffelDarbouxKernel,
-    GaussianQuadrature,
-    HankelMatrix,
+    GaussianQuadratureRule,
+    HankelMomentMatrix,
     JacobiMatrix,
-    RecurrenceCoefficients,
+    MomentFunctionalPrefix,
+    OrthogonalPolynomialFamily,
+    OrthogonalPolynomialTerm,
+    QuadratureNode,
+    ThreeTermRecurrence,
 )
 
-type Poly = tuple[Fraction, ...]
+
+def _to_fraction(r: CanonicalRational) -> Fraction:
+    # Canonical chunked parsing: int() on the decimal strings would trip
+    # CPython's 4300-digit conversion limit inside the admitted range.
+    return r.as_fraction()
 
 
-def hankel_matrix(moments: Sequence[Fraction]) -> HankelMatrix:
-    """Build the Hankel matrix ``H[i][j] = moment[i+j]`` from a moment sequence.
-
-    The number of moments ``m`` determines a Hankel matrix of dimension
-    ``(m + 1) // 2``: the largest square Hankel matrix whose entries never
-    reference an out-of-range moment.
-    """
-    if not 1 <= len(moments) <= MAX_MOMENTS:
-        raise ValueError("moment sequence must contain between 1 and 64 moments")
-    if any(type(value) is not Fraction for value in moments):
-        raise TypeError("moments must use exact Fractions")
-    n = (len(moments) + 1) // 2
-    if n > MAX_HANKEL_DIMENSION:
-        raise ValueError("Hankel matrix dimension exceeds the supported bound")
-    matrix = tuple(tuple(moments[i + j] for j in range(n)) for i in range(n))
-    return HankelMatrix(matrix=matrix, moments=tuple(moments))
+def _from_fraction(f: Fraction) -> CanonicalRational:
+    # Canonical chunked formatting mirrors _to_fraction.
+    return CanonicalRational.from_fraction(f)
 
 
-def _inner_product(moments: Sequence[Fraction], p: Poly, q: Poly) -> Fraction:
-    """Exact ``<p, q> = sum_{i,j} p_i q_j mu_{i+j}`` from the moment sequence."""
-    result = Fraction(0)
-    for i, p_i in enumerate(p):
-        if p_i == 0:
+_CANONICAL_DIGIT_LIMIT = 10**32_768
+
+
+def _fraction_exceeds_canonical_limit(value: Fraction) -> bool:
+    """Decimal-height test on the exact Fraction, performed BEFORE any
+    canonical conversion so an over-tall value is rejected with a typed
+    error instead of failing inside ``CanonicalRational`` construction."""
+    return (
+        abs(value.numerator) >= _CANONICAL_DIGIT_LIMIT
+        or value.denominator >= _CANONICAL_DIGIT_LIMIT
+    )
+
+
+def _rational_det(matrix: list[list[Fraction]]) -> Fraction:
+    """Compute the determinant of a rational matrix via Gaussian elimination."""
+    n = len(matrix)
+    if n == 0:
+        return Fraction(1)
+    mat = [row[:] for row in matrix]
+    det = Fraction(1)
+    for col in range(n):
+        pivot = None
+        for row in range(col, n):
+            if mat[row][col] != 0:
+                pivot = row
+                break
+        if pivot is None:
+            return Fraction(0)
+        if pivot != col:
+            mat[col], mat[pivot] = mat[pivot], mat[col]
+            det = -det
+        det *= mat[col][col]
+        for row in range(col + 1, n):
+            factor = mat[row][col] / mat[col][col]
+            for j in range(col, n):
+                mat[row][j] -= factor * mat[col][j]
+    return det
+
+
+def _rational_rank(matrix: list[list[Fraction]]) -> int:
+    """Compute the rank of a rational matrix via Gaussian elimination."""
+    if not matrix or not matrix[0]:
+        return 0
+    rows = len(matrix)
+    cols = len(matrix[0])
+    mat = [row[:] for row in matrix]
+    rank = 0
+    for col in range(cols):
+        pivot = next((row for row in range(rank, rows) if mat[row][col] != 0), None)
+        if pivot is None:
             continue
-        for j, q_j in enumerate(q):
-            if q_j == 0:
-                continue
-            index = i + j
-            if index >= len(moments):
-                raise ValueError("insufficient moments for the requested order")
-            result += p_i * q_j * moments[index]
+        mat[rank], mat[pivot] = mat[pivot], mat[rank]
+        _eliminate_below(mat, rank, col)
+        rank += 1
+        if rank == rows:
+            break
+    return rank
+
+
+def _eliminate_below(mat: list[list[Fraction]], rank: int, col: int) -> None:
+    """Clear ``col`` in every row except the current pivot row."""
+    cols = len(mat[0])
+    for row in range(len(mat)):
+        if row == rank or mat[row][col] == 0:
+            continue
+        factor = mat[row][col] / mat[rank][col]
+        for j in range(cols):
+            mat[row][j] -= factor * mat[rank][j]
+
+
+def compute_hankel_matrix(request: HankelRequest) -> HankelMomentMatrix:
+    """Compute the Hankel matrix H_r[i,j] = mu_(i+j)."""
+    moments = [_to_fraction(m) for m in request.prefix.moments]
+    order = request.order
+    matrix = [[moments[i + j] for j in range(order + 1)] for i in range(order + 1)]
+    det = _rational_det(matrix)
+    rank = _rational_rank(matrix)
+    entries = tuple(
+        tuple(_from_fraction(matrix[i][j]) for j in range(order + 1))
+        for i in range(order + 1)
+    )
+    return HankelMomentMatrix(
+        order=order,
+        entries=entries,
+        determinant=_from_fraction(det),
+        rank=rank,
+        variable=request.prefix.variable,
+    )
+
+
+def compute_shifted_hankel(request: ShiftedHankelRequest) -> HankelMomentMatrix:
+    """Compute the shifted Hankel matrix H_r^(1)[i,j] = mu_(i+j+1)."""
+    moments = [_to_fraction(m) for m in request.prefix.moments]
+    order = request.order
+    matrix = [[moments[i + j + 1] for j in range(order + 1)] for i in range(order + 1)]
+    det = _rational_det(matrix)
+    rank = _rational_rank(matrix)
+    entries = tuple(
+        tuple(_from_fraction(matrix[i][j]) for j in range(order + 1))
+        for i in range(order + 1)
+    )
+    return HankelMomentMatrix(
+        order=order,
+        entries=entries,
+        determinant=_from_fraction(det),
+        rank=rank,
+        variable=request.prefix.variable,
+    )
+
+
+def _poly_eval(coeffs: list[Fraction], x: Fraction) -> Fraction:
+    """Evaluate a polynomial with given coefficients (lowest degree first)."""
+    result = Fraction(0)
+    for c in reversed(coeffs):
+        result = result * x + c
     return result
 
 
-def _shift_up(p: Poly) -> Poly:
-    """Multiply a polynomial by x (left-shift coefficients)."""
-    return (Fraction(0), *p)
-
-
-def _scale(scalar: Fraction, p: Poly) -> Poly:
-    return tuple(scalar * coeff for coeff in p)
-
-
-def _subtract(p: Poly, q: Poly) -> Poly:
-    length = max(len(p), len(q))
-    result = [Fraction(0)] * length
-    for i, coeff in enumerate(p):
-        result[i] += coeff
-    for i, coeff in enumerate(q):
-        result[i] -= coeff
-    while len(result) > 1 and result[-1] == 0:
-        result.pop()
-    return tuple(result)
-
-
-def _monic_orthogonal_recurrence(
-    moments: Sequence[Fraction], max_order: int
-) -> tuple[list[Fraction], list[Fraction]]:
-    """Compute monic three-term recurrence coefficients via exact Gram-Schmidt.
-
-    Returns (alpha, beta) where the monic polynomials satisfy
-    ``p_{k+1}(x) = (x - alpha_k) p_k(x) - beta_k p_{k-1}(x)``
-    with ``p_{-1} = 0``, ``p_0 = 1``, ``beta_0 = mu_0``.
-
-    ``max_order`` recurrence coefficients ``alpha`` are produced, requiring
-    at least ``2 * max_order + 1`` moments.
-    """
-    alpha: list[Fraction] = []
-    beta: list[Fraction] = [moments[0]]
-    h_prev = Fraction(0)
-    p_prev: Poly = ()
-    p_curr: Poly = (Fraction(1),)
-    h_curr = moments[0]
-    for k in range(max_order):
-        alpha_k = _inner_product(moments, _shift_up(p_curr), p_curr) / h_curr
-        alpha.append(alpha_k)
-        beta_k = (
-            Fraction(0) if k == 0 else (h_curr / h_prev if h_prev != 0 else Fraction(0))
-        )
-        x_p = _shift_up(p_curr)
-        p_next = _subtract(
-            _subtract(x_p, _scale(alpha_k, p_curr)), _scale(beta_k, p_prev)
-        )
-        h_prev = h_curr
-        p_prev = p_curr
-        p_curr = p_next
-        h_curr = _inner_product(moments, p_curr, p_curr)
-        if h_curr <= 0:
-            if h_curr == 0:
-                raise ValueError(
-                    "moment sequence does not define a positive-definite measure"
-                )
-            raise ValueError(
-                "moment sequence does not define a positive-definite measure"
-            )
-        if k < max_order - 1:
-            beta.append(h_curr / h_prev)
-    return alpha, beta
-
-
-def recurrence_coefficients(moments: Sequence[Fraction]) -> RecurrenceCoefficients:
-    """Compute monic three-term recurrence coefficients from moments.
-
-    Implements an exact Gram-Schmidt orthogonalization of the monomials
-    ``1, x, x^2, ...`` against the moment inner product, then extracts the
-    monic three-term recurrence
-
-        p_{0}(x) = 1
-        p_{k+1}(x) = (x - alpha_k) p_k(x) - beta_k p_{k-1}(x)
-
-    with ``beta_0 = mu_0`` (the zeroth moment, serving as the inner-product
-    reference) and ``p_{-1}(x) = 0``. The returned ``alpha`` are the diagonal
-    (shift) coefficients and ``beta`` the subdiagonal (norm-squared ratio)
-    coefficients of the symmetric Jacobi matrix.
-    """
-    m = len(moments)
-    if not 1 <= m <= MAX_MOMENTS:
-        raise ValueError("moment sequence must contain between 1 and 64 moments")
-    if any(type(value) is not Fraction for value in moments):
-        raise TypeError("moments must use exact Fractions")
-    if moments[0] <= 0:
-        raise ValueError("the zeroth moment must be positive and nonzero")
-    max_order = min(MAX_RECURRENCE_ORDER, (m - 1) // 2)
-    if max_order < 1:
-        return RecurrenceCoefficients(alpha=(), beta=(moments[0],))
-    alpha, beta = _monic_orthogonal_recurrence(moments, max_order)
-    return RecurrenceCoefficients(alpha=tuple(alpha), beta=tuple(beta))
-
-
-def jacobi_matrix(alpha: Sequence[Fraction], beta: Sequence[Fraction]) -> JacobiMatrix:
-    """Build the symmetric tridiagonal Jacobi matrix from recurrence coefficients.
-
-    The diagonal entries are ``alpha_0, ..., alpha_{n-1}`` and the positive
-    subdiagonal entries are ``sqrt(beta_1), ..., sqrt(beta_n)``. Because the
-    square roots may be irrational, the returned matrix stores the rational
-    diagonal and the rational squared subdiagonal ``beta`` separately so that the
-    full symmetric matrix can be reconstructed by any consumer.
-    """
-    if not 1 <= len(beta) <= MAX_RECURRENCE_ORDER:
-        raise ValueError("beta must contain between 1 and 16 entries")
-    if not 0 <= len(alpha) <= MAX_RECURRENCE_ORDER:
-        raise ValueError("alpha out of range")
-    if len(alpha) != len(beta) and len(alpha) != len(beta) - 1:
-        raise ValueError("alpha must have length len(beta)-1 or len(beta)")
-    if any(type(value) is not Fraction for value in alpha):
-        raise TypeError("alpha must use exact Fractions")
-    if any(type(value) is not Fraction for value in beta):
-        raise TypeError("beta must use exact Fractions")
-    if beta[0] <= 0:
-        # The typed JacobiMatrixRequest admits only positive-definite
-        # functionals; the native API returns invalid matrix data otherwise.
+def _require_nonzero_norm(norm: Fraction, degree: int) -> None:
+    """Quasi-definite prefixes have no vanishing orthogonal-polynomial norm."""
+    if norm == 0:
         raise ValueError(
-            "beta_0 (the zeroth moment of a positive functional) must be positive"
+            f"moment functional is not quasi-definite through degree {degree}: "
+            f"the squared norm of p_{degree} vanishes, so no orthogonal family "
+            "through this degree exists"
         )
-    for index in range(1, min(len(alpha), len(beta))):
-        if beta[index] <= 0:
+
+
+def _require_canonical_family_values(
+    polynomials: list[list[Fraction]], squared_norms: list[Fraction]
+) -> None:
+    """Typed height gate on derived Gram-Schmidt values.
+
+    Derived coefficients and norms can leave the canonical range even
+    when every input moment stays inside it; measure the exact Fractions
+    before wire conversion so an over-tall family is reported as a typed
+    domain error here instead of failing inside canonical construction.
+    """
+    for n, coefficients in enumerate(polynomials):
+        if any(_fraction_exceeds_canonical_limit(c) for c in coefficients):
             raise ValueError(
-                "subdiagonal beta entries must be positive squared-norm ratios"
+                f"derived p_{n} coefficients exceed the canonical rational "
+                "digit limit; supply a moment prefix whose orthogonal "
+                "family stays representable"
             )
-    return JacobiMatrix(
-        diagonal=tuple(alpha),
-        # The squared subdiagonal entries are beta_1, ..., beta_{n-1}; beta_0 is
-        # the zeroth moment and never occupies an off-diagonal position.
-        off_diagonal=tuple(beta)[1 : len(alpha)],
+        if _fraction_exceeds_canonical_limit(squared_norms[n]):
+            raise ValueError(
+                f"derived squared norm h_{n} exceeds the canonical "
+                "rational digit limit; supply a moment prefix whose "
+                "orthogonal family stays representable"
+            )
+
+
+def _moment_inner(
+    moments: list[Fraction],
+    coeffs_a: list[Fraction],
+    coeffs_b: list[Fraction],
+) -> Fraction:
+    """L(a*b) for polynomials given lowest-degree-first over the prefix."""
+    product = [Fraction(0)] * (len(coeffs_a) + len(coeffs_b) - 1)
+    for i, a in enumerate(coeffs_a):
+        for j, b in enumerate(coeffs_b):
+            product[i + j] += a * b
+    result = Fraction(0)
+    for k, coeff in enumerate(product):
+        if k < len(moments):
+            result += coeff * moments[k]
+    return result
+
+
+def _project_out(
+    moments: list[Fraction],
+    target: list[Fraction],
+    basis_polynomial: list[Fraction],
+    basis_norm: Fraction,
+) -> None:
+    """Subtract target's projection onto one basis polynomial."""
+    projection = _moment_inner(moments, target, basis_polynomial) / basis_norm
+    for i, coefficient in enumerate(basis_polynomial):
+        target[i] -= projection * coefficient
+
+
+def _construct_monic_orthogonal_polynomial(
+    moments: list[Fraction], degree: int
+) -> list[Fraction]:
+    """Exact monic ``p_degree`` via Gram-Schmidt over the moment functional.
+
+    Gaussian construction divides by squared norms only through
+    ``p_{degree - 1}``: building ``p_n`` projects onto earlier polynomials,
+    and a vanishing terminal norm ``h_degree`` is admissible (it is exactly
+    the finite-support case where the measure sits on ``degree`` points).
+    The terminal norm is therefore not computed here.
+    """
+    polynomials: list[list[Fraction]] = []
+    squared_norms: list[Fraction] = []
+    for n in range(degree):
+        p_n = [Fraction(0)] * (n + 1)
+        p_n[n] = Fraction(1)
+        for k in range(n):
+            _project_out(moments, p_n, polynomials[k], squared_norms[k])
+        norm = _moment_inner(moments, p_n, p_n)
+        _require_nonzero_norm(norm, n)
+        polynomials.append(p_n)
+        squared_norms.append(norm)
+
+    p_degree = [Fraction(0)] * (degree + 1)
+    p_degree[degree] = Fraction(1)
+    for k in range(degree):
+        _project_out(moments, p_degree, polynomials[k], squared_norms[k])
+    return p_degree
+
+
+def orthogonal_polynomials_from_moments(
+    moments: list[Fraction], max_deg: int, var: str
+) -> OrthogonalPolynomialFamily:
+    """Pure Gram-Schmidt kernel over one bounded moment sequence.
+
+    Shared by the MCP handler, the request admission replay, and the native
+    API so no caller performs the exact projection twice.
+    """
+
+    def inner(coeffs_a: list[Fraction], coeffs_b: list[Fraction]) -> Fraction:
+        """Compute L(a*b) where a,b are polynomials (coeffs lowest degree first)."""
+        product = [Fraction(0)] * (len(coeffs_a) + len(coeffs_b) - 1)
+        for i, a in enumerate(coeffs_a):
+            for j, b in enumerate(coeffs_b):
+                product[i + j] += a * b
+        result = Fraction(0)
+        for k, coeff in enumerate(product):
+            if k < len(moments):
+                result += coeff * moments[k]
+        return result
+
+    polynomials: list[list[Fraction]] = []
+    squared_norms: list[Fraction] = []
+
+    for n in range(max_deg + 1):
+        p_n = [Fraction(0)] * (n + 1)
+        p_n[n] = Fraction(1)  # monic
+
+        # Gram-Schmidt: subtract projections onto all previous p_k
+        for k in range(n):
+            proj = inner(p_n, polynomials[k]) / squared_norms[k]
+            for i, c in enumerate(polynomials[k]):
+                p_n[i] -= proj * c
+
+        norm = inner(p_n, p_n)
+        _require_nonzero_norm(norm, n)
+        polynomials.append(p_n)
+        squared_norms.append(norm)
+
+    # Quasi-definiteness requires every computed squared norm to be nonzero;
+    # positive-definiteness further requires each norm to be positive.
+    # Zero norms are already rejected above.
+    is_quasi_definite = all(sq != 0 for sq in squared_norms)
+    is_positive_definite = all(sq > 0 for sq in squared_norms)
+
+    # Derived coefficients and norms can leave the canonical range even
+    # when every input moment stays inside it; measure the exact Fractions
+    # before wire conversion so an over-tall family is reported as a typed
+    # domain error here instead of failing inside canonical construction.
+    _require_canonical_family_values(polynomials, squared_norms)
+
+    poly_terms = []
+    for n in range(max_deg + 1):
+        coeffs = tuple(_from_fraction(c) for c in polynomials[n])
+        poly_terms.append(
+            OrthogonalPolynomialTerm(
+                degree=n,
+                coefficients=coeffs,
+                squared_norm=_from_fraction(squared_norms[n]),
+            )
+        )
+
+    return OrthogonalPolynomialFamily(
+        polynomials=tuple(poly_terms),
+        variable=var,
+        is_quasi_definite=is_quasi_definite,
+        is_positive_definite=is_positive_definite,
     )
 
 
-def christoffel_darboux(
-    alpha: Sequence[Fraction],
-    beta: Sequence[Fraction],
-    x: Fraction,
-    y: Fraction,
-) -> ChristoffelDarbouxKernel:
-    """Compute the Christoffel-Darboux kernel ``K_n(x, y)``.
+def _require_gram_schmidt_admission(
+    prefix: MomentFunctionalPrefix, max_degree: int
+) -> None:
+    """Shared degree, moment-count, and height admission for the kernel.
 
-    For the monic orthogonal polynomial family with three-term recurrence
-
-        p_{k+1}(x) = (x - alpha_k) p_k(x) - beta_k p_{k-1}(x)
-
-    the squared norms are ``h_0 = beta_0 = mu_0`` and
-    ``h_k = beta_k * h_{k-1}`` for ``k >= 1``. The Christoffel-Darboux kernel is
-
-        K_n(x, y) = sum_{k=0}^{n-1} p_k(x) p_k(y) / h_k
-
-    evaluated by forward recurrence of the polynomials at ``x`` and ``y``.
+    The wire request model enforces the same bounds through its fields and
+    validators; native callers bypass that envelope, so this gate keeps
+    the exported exact API from fabricating omitted moments (a short
+    prefix silently reads missing moments as zero) or accepting
+    unsupported degrees.
     """
-    if not 1 <= len(beta) <= MAX_POLYNOMIAL_COUNT:
-        raise ValueError("beta must contain between 1 and 32 entries")
-    if not 0 <= len(alpha) <= MAX_POLYNOMIAL_COUNT:
-        raise ValueError("alpha out of range")
-    if len(alpha) != len(beta) and len(alpha) != len(beta) - 1:
-        raise ValueError("alpha must have length len(beta)-1 or len(beta)")
-    if type(x) is not Fraction or type(y) is not Fraction:
-        raise TypeError("x and y must use exact Fractions")
-    # beta_0 is the zeroth moment of the claimed positive functional; the CD
-    # kernel of such a family is positive on the diagonal, so a negative
-    # beta_0 cannot belong to the documented domain.
-    if beta[0] <= 0:
+    from jacobian.math.moments_orthogonal._models import (
+        _require_gram_schmidt_heights_admissible,
+    )
+    from jacobian.math.moments_orthogonal.values import MAX_POLYNOMIAL_DEGREE
+
+    if not 0 <= max_degree <= MAX_POLYNOMIAL_DEGREE:
+        raise ValueError(f"max_degree must be between 0 and {MAX_POLYNOMIAL_DEGREE}")
+    needed = 2 * max_degree + 1
+    if len(prefix.moments) < needed:
         raise ValueError(
-            "beta_0 (the zeroth moment of a positive functional) must be positive"
+            f"need at least {needed} moments for degree {max_degree}, got "
+            f"{len(prefix.moments)}"
         )
-    n = len(alpha)
-    if n == 0:
-        return ChristoffelDarbouxKernel(
-            kernel=Fraction(0), polynomials_evaluated=(Fraction(1),)
-        )
-    px_prev = Fraction(0)
-    px_curr = Fraction(1)
-    py_prev = Fraction(0)
-    py_curr = Fraction(1)
-    h = beta[0]
-    kernel = px_curr * py_curr / h
-    evaluated: list[Fraction] = [Fraction(1)]
-    for k in range(n - 1):
-        alpha_k = alpha[k]
-        # Step k forms p_{k+1} using the recurrence coefficient beta_k = beta[k]
-        # (beta_0 is mu_0 and the k = 0 step multiplies p_{-1} = 0).
-        rec_beta = Fraction(0) if k == 0 else beta[k]
-        px_next = (x - alpha_k) * px_curr - rec_beta * px_prev
-        py_next = (y - alpha_k) * py_curr - rec_beta * py_prev
-        px_prev, px_curr = px_curr, px_next
-        py_prev, py_curr = py_curr, py_next
-        # Advancing the squared norm to h_{k+1} uses beta_{k+1} = beta[k + 1].
-        if k + 1 >= len(beta) or beta[k + 1] == 0:
-            raise ValueError(
-                "recurrence coefficients do not define the requested kernel"
-            )
-        next_beta = beta[k + 1]
-        h = next_beta * h
-        kernel += px_curr * py_curr / h
-        evaluated.append(px_curr)
-    return ChristoffelDarbouxKernel(
-        kernel=kernel, polynomials_evaluated=tuple(evaluated)
+    _require_gram_schmidt_heights_admissible(prefix.moments, max_degree)
+
+
+def compute_orthogonal_polynomials(
+    request: OrthogonalPolynomialRequest,
+) -> OrthogonalPolynomialFamily:
+    """MCP adapter: validate the wire request, then run the shared kernel."""
+    moments = [_to_fraction(m) for m in request.prefix.moments]
+    return orthogonal_polynomials_from_moments(
+        moments, request.max_degree, request.prefix.variable
     )
 
 
-def gaussian_quadrature(
-    alpha: Sequence[Fraction], beta: Sequence[Fraction]
-) -> GaussianQuadrature:
-    """Compute Gaussian quadrature nodes and weights via the Golub-Welsch algorithm.
+def recurrence_coefficients_from_family(
+    family: OrthogonalPolynomialFamily,
+) -> ThreeTermRecurrence:
+    """Domain kernel: three-term recurrence coefficients of one family.
 
-    The nodes are the eigenvalues of the symmetric tridiagonal Jacobi matrix and
-    the weights are ``mu_0 * v_{0,i}^2`` where ``v_{0,i}`` is the first component of
-    the normalized eigenvector for node ``i``. Because the nodes are roots of the
-    orthogonal polynomial (generically irrational), the result is numerical
-    (IEEE double).
+    p_{k+1}(x) = (x - alpha_k) p_k(x) - beta_k p_{k-1}(x)
+
+    ``alpha`` carries only coefficients determined by adjacent polynomials:
+    reading ``x*p_k = p_{k+1} + alpha_k p_k + beta_k p_{k-1}`` requires both
+    ``p_k`` and ``p_{k+1}``, so the terminal ``alpha_{n-1}`` - which would
+    need ``p_n`` or additional moments - is omitted.  ``beta[0]`` is an
+    unused placeholder; ``beta[k] = <p_k,p_k>/<p_{k-1},p_{k-1}>`` for k >= 1.
     """
-    import math
+    polys = family.polynomials
+    n = len(polys)
 
-    import numpy as np
+    def poly_to_frac_list(p: OrthogonalPolynomialTerm) -> list[Fraction]:
+        return [_to_fraction(c) for c in p.coefficients]
 
-    n = len(alpha)
-    if not 1 <= n <= MAX_QUADRATURE_POINTS:
-        raise ValueError("alpha must contain between 1 and 16 entries")
-    if len(beta) != n and len(beta) != n + 1:
-        raise ValueError("beta must have length len(alpha) or len(alpha)+1")
-    if beta[0] <= 0:
-        # Mirror the typed operation contract: mu_0 is the zeroth moment of a
-        # positive functional, so a nonpositive weight would be invalid
-        # quadrature data rather than a computed rule.
-        raise ValueError(
-            "beta_0 (the zeroth moment of a positive functional) must be positive"
-        )
-    diagonal = np.array([float(a) for a in alpha], dtype=float)
-    off: list[float] = []
-    for k in range(n - 1):
-        if k + 1 >= len(beta):
+    alphas: list[Fraction] = []
+    betas: list[Fraction] = [Fraction(0)]
+
+    for k in range(n):
+        squared_norm_k = _to_fraction(polys[k].squared_norm)
+        if k > 0:
+            betas.append(squared_norm_k / _to_fraction(polys[k - 1].squared_norm))
+
+        if k + 1 >= n:
+            # alpha_k cannot be recovered without p_{k+1}; omit it rather
+            # than inventing a terminal coefficient.
             break
-        sub = beta[k + 1]
-        if sub <= 0:
+
+        p_k = poly_to_frac_list(polys[k])
+        p_next = poly_to_frac_list(polys[k + 1])
+
+        x_pk: list[Fraction] = [Fraction(0)] * (len(p_k) + 1)
+        for i in range(len(p_k)):
+            x_pk[i + 1] = p_k[i]
+
+        residual = [
+            x_pk[i] - (p_next[i] if i < len(p_next) else Fraction(0))
+            for i in range(len(x_pk))
+        ]
+        alphas.append(residual[k])
+
+    # Norm ratios can be mathematically valid yet exceed the canonical
+    # result range; measure the exact Fraction height before conversion.
+    for value in (*alphas, *betas):
+        if _fraction_exceeds_canonical_limit(value):
             raise ValueError(
-                "subdiagonal beta entries must be positive squared-norm ratios"
+                "recurrence coefficients exceed the canonical rational "
+                "digit limit for this family"
             )
-        off.append(math.sqrt(float(sub)))
-    jacobi = np.diag(diagonal)
-    if off:
-        off_arr = np.array(off, dtype=float)
-        jacobi += np.diag(off_arr, 1) + np.diag(off_arr, -1)
-    eigenvalues, eigenvectors = np.linalg.eigh(jacobi)
-    mu0 = float(beta[0])
-    weights = mu0 * eigenvectors[0, :] ** 2
-    # Each double is carried as its exact dyadic rational image so the result
-    # stays canonical and reconstructible without JSON floating points.
-    return GaussianQuadrature(
-        nodes=tuple(Fraction(float(v)) for v in eigenvalues),
-        weights=tuple(Fraction(float(w)) for w in weights),
+    return ThreeTermRecurrence(
+        alpha=tuple(_from_fraction(a) for a in alphas),
+        beta=tuple(_from_fraction(b) for b in betas),
+        variable=family.variable,
     )
 
 
-__all__ = [
-    "christoffel_darboux",
-    "gaussian_quadrature",
-    "hankel_matrix",
-    "jacobi_matrix",
-    "recurrence_coefficients",
-]
+def compute_recurrence(request: RecurrenceRequest) -> ThreeTermRecurrence:
+    """MCP adapter: parse one request, call the domain kernel once."""
+    return recurrence_coefficients_from_family(request.family)
+
+
+def _kernel_coefficient_matrix(
+    polynomials: tuple[OrthogonalPolynomialTerm, ...], m: int
+) -> list[list[Fraction]]:
+    """Exact bivariate coefficient matrix of K_m from p_0..p_m.
+
+    Shared by execution and the kernel value's defining-sum replay.
+    """
+    size = m + 1
+    coefficients = [[Fraction(0)] * size for _ in range(size)]
+    for k in range(m + 1):
+        p_k = [_to_fraction(c) for c in polynomials[k].coefficients]
+        h_k = _to_fraction(polynomials[k].squared_norm)
+        if h_k == 0:
+            raise ValueError(
+                f"family polynomial p_{k} has zero squared norm; the "
+                "Christoffel-Darboux kernel is undefined"
+            )
+        for i in range(k + 1):
+            for j in range(k + 1):
+                coefficients[i][j] += p_k[i] * p_k[j] / h_k
+    return coefficients
+
+
+def christoffel_darboux_kernel_from_family(
+    family: OrthogonalPolynomialFamily, degree: int
+) -> ChristoffelDarbouxKernel:
+    """Domain kernel: the bivariate Christoffel-Darboux kernel K_m(x,y).
+
+    K_m(x, y) = sum_{k=0}^m p_k(x) p_k(y) / h_k is returned as the exact
+    bivariate coefficient matrix ``coefficients[i][j]`` of ``x^i y^j`` so
+    off-diagonal evaluations and downstream composition stay faithful; the
+    diagonal specialization K_m(x,x) is a derived evaluation, not the
+    kernel itself.
+    """
+    polys = family.polynomials
+    m = degree
+
+    if m >= len(polys):
+        raise ValueError(f"degree {m} exceeds family size {len(polys)}")
+
+    coefficients = _kernel_coefficient_matrix(polys, m)
+    size = m + 1
+
+    # Kernel entries can exceed the canonical range even when the family
+    # is quasi-definite; measure the exact Fraction height before
+    # canonical conversion.
+    for row in coefficients:
+        for value in row:
+            if _fraction_exceeds_canonical_limit(value):
+                raise ValueError(
+                    "Christoffel-Darboux kernel coefficients exceed the "
+                    "canonical rational digit limit for this family"
+                )
+    return ChristoffelDarbouxKernel(
+        degree=m,
+        coefficients=tuple(
+            tuple(_from_fraction(coefficients[i][j]) for j in range(size))
+            for i in range(size)
+        ),
+        variable=family.variable,
+        family=family,
+    )
+
+
+def compute_christoffel_darboux(
+    request: ChristoffelDarbouxRequest,
+) -> ChristoffelDarbouxKernel:
+    """MCP adapter: parse one request, call the domain kernel once."""
+    return christoffel_darboux_kernel_from_family(request.family, request.degree)
+
+
+def compute_jacobi_matrix(request: JacobiMatrixRequest) -> JacobiMatrix:
+    """Compute the finite Jacobi matrix from the orthogonal polynomial family."""
+    family = request.family
+    polys = family.polynomials
+    n = len(polys)
+
+    if n < 2:
+        return JacobiMatrix(
+            alphas=(),
+            betas=(),
+            matrix=(),
+            variable=family.variable,
+        )
+
+    alphas: list[Fraction] = []
+    betas: list[Fraction] = []
+
+    for k in range(n - 1):
+        p_k = [_to_fraction(c) for c in polys[k].coefficients]
+        p_next = [_to_fraction(c) for c in polys[k + 1].coefficients]
+        squared_norm_k = _to_fraction(polys[k].squared_norm)
+
+        if k == 0:
+            alphas.append(-p_next[0])
+            betas.append(Fraction(0))
+        else:
+            squared_norm_prev = _to_fraction(polys[k - 1].squared_norm)
+
+            x_pk = [Fraction(0)] * (len(p_k) + 1)
+            for i in range(len(p_k)):
+                x_pk[i + 1] = p_k[i]
+
+            residual = [
+                x_pk[i] - p_next[i] if i < len(p_next) else x_pk[i]
+                for i in range(len(x_pk))
+            ]
+            alpha_k = residual[k] if k < len(residual) else Fraction(0)
+            alphas.append(alpha_k)
+
+            # Admission guarantees every norm feeding an emitted ratio is
+            # nonzero.
+            betas.append(squared_norm_k / squared_norm_prev)
+
+    matrix_size = n - 1
+    matrix = [[Fraction(0)] * matrix_size for _ in range(matrix_size)]
+    for i in range(matrix_size):
+        matrix[i][i] = alphas[i]
+        if i < matrix_size - 1:
+            # Monic-basis multiplication by x: x p_k = p_{k+1} + alpha_k p_k
+            # + beta_k p_{k-1}, so the subdiagonal carries the monic
+            # normalization 1 and the superdiagonal carries beta_{i+1}.
+            matrix[i + 1][i] = Fraction(1)
+            matrix[i][i + 1] = betas[i + 1]
+
+    return JacobiMatrix(
+        alphas=tuple(_from_fraction(a) for a in alphas),
+        betas=tuple(_from_fraction(b) for b in betas),
+        matrix=tuple(
+            tuple(_from_fraction(matrix[i][j]) for j in range(matrix_size))
+            for i in range(matrix_size)
+        ),
+        variable=family.variable,
+    )
+
+
+def _construct_quadrature_rule(
+    p_n: list[Fraction], moments: list[Fraction], n: int
+) -> tuple[list[Fraction], list[Fraction] | None]:
+    """Exact nodes and weights shared by execution and admission replay.
+
+    Nodes are the rational roots of p_n; weights solve the moment
+    Vandermonde system V[k][i] = node_i**k against mu_k.
+    """
+    import sympy
+
+    var_symbol = sympy.Symbol("x")
+    poly_sym = sum(
+        sympy.Rational(int(p_n[i].numerator), int(p_n[i].denominator)) * var_symbol**i
+        for i in range(len(p_n))
+    )
+    # Exact numeric ordering only: stringifying a root would trip CPython's
+    # integer-string conversion limit inside the admitted canonical range.
+    nodes_frac = []
+    for r in sympy.solve(poly_sym, var_symbol):
+        # Admission guarantees every root is a distinct rational; keep a
+        # typed guard so a backend surprise cannot produce a wrong value.
+        if not r.is_Rational:
+            raise ValueError("orthogonal polynomial produced a non-rational node")
+        nodes_frac.append(Fraction(int(r.p), int(r.q)))
+    nodes_frac.sort()
+    if len(nodes_frac) != n:
+        raise ValueError(f"Expected {n} roots, got {len(nodes_frac)}")
+
+    vandermonde = [[nodes_frac[i] ** k for i in range(n)] for k in range(n)]
+    weights = _solve_linear_system(vandermonde, moments[:n])
+    return nodes_frac, weights
+
+
+def _build_quadrature_rule(
+    prefix: MomentFunctionalPrefix, order: int
+) -> tuple[list[Fraction], list[Fraction]]:
+    """Pure nodes+weights construction shared by execution and validation."""
+    moments = [_to_fraction(m) for m in prefix.moments]
+    p_n = _construct_monic_orthogonal_polynomial(moments, order)
+    nodes, weights = _construct_quadrature_rule(p_n, moments, order)
+    if weights is None:
+        raise ValueError("Vandermonde system is singular")
+    return nodes, weights
+
+
+def compute_gaussian_quadrature(
+    request: GaussianQuadratureRequest,
+) -> GaussianQuadratureRule:
+    """Compute an exact Gaussian quadrature rule from moments.
+
+    For small orders, we use the fact that the nodes are roots of the
+    degree-n orthogonal polynomial. We compute weights from the Vandermonde
+    moment system.
+    """
+    n = request.order
+    var = request.prefix.variable
+
+    nodes_frac, weights = _build_quadrature_rule(request.prefix, n)
+
+    # Find rational roots using the rational root theorem
+    # For a monic polynomial with rational coefficients, rational roots
+    # are of the form p/q where p | constant term, q | leading coefficient
+    # Since the polynomial is monic, q = 1, so rational roots are integers
+    # dividing the constant term
+
+    # Actually, for general rational moments, we need to clear denominators
+    # and use the rational root theorem on the resulting integer polynomial
+
+    # For now, let's use numpy or sympy for root finding
+    # But we should use exact methods. Let's try a simple approach:
+    # For small n, we can try all rational candidates
+
+    # Actually, let's use sympy for exact root finding
+    import sympy  # noqa: F401 - availability guard for the exact backend
+
+    if weights is None:
+        raise ValueError("Vandermonde system is singular")
+
+    # Check that all weights are positive
+    for w in weights:
+        if w <= 0:
+            raise ValueError(f"Non-positive weight {w} in Gaussian quadrature")
+
+    # Verify exactness through degree 2n-1 against the retained prefix.
+    prefix_moments = [_to_fraction(m) for m in request.prefix.moments]
+    for k in range(2 * n):
+        approx = sum(weights[i] * nodes_frac[i] ** k for i in range(n))
+        if k < len(prefix_moments) and approx != prefix_moments[k]:
+            raise ValueError(f"Quadrature not exact at degree {k}")
+
+    nodes = [
+        QuadratureNode(
+            node=_from_fraction(nodes_frac[i]),
+            weight=_from_fraction(weights[i]),
+        )
+        for i in range(n)
+    ]
+
+    return GaussianQuadratureRule(
+        order=n,
+        nodes=tuple(nodes),
+        variable=var,
+        exactness_degree=2 * n - 1,
+        prefix=request.prefix,
+    )
+
+
+def _solve_linear_system(
+    matrix: list[list[Fraction]], vector: list[Fraction]
+) -> list[Fraction] | None:
+    """Solve a linear system using Gaussian elimination with partial pivoting."""
+    n = len(matrix)
+    aug = [row[:] for row in matrix]
+    for i, value in enumerate(vector):
+        aug[i].append(value)
+    for col in range(n):
+        pivot = None
+        for row in range(col, n):
+            if aug[row][col] != 0:
+                pivot = row
+                break
+        if pivot is None:
+            return None
+        aug[col], aug[pivot] = aug[pivot], aug[col]
+        for row in range(n):
+            if row == col:
+                continue
+            factor = aug[row][col] / aug[col][col]
+            for j in range(n + 1):
+                aug[row][j] -= factor * aug[col][j]
+    return [aug[i][n] / aug[i][i] for i in range(n)]

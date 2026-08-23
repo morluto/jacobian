@@ -13,6 +13,7 @@ as one contract.
 Before auditing, read the current relevant sections of:
 
 - `AGENTS.md`;
+- `docs/reference/public-operation-admission.md`;
 - `docs/reference/domain-operation-library.md`;
 - `docs/reference/testing-strategy.md`; and
 - `docs/reference/mathematical-backends.md` when a backend is involved.
@@ -91,6 +92,17 @@ exact workload supplied by an agent trajectory, primary-source obligation,
 benchmark, or deterministic boundary case. Do not infer mathematical-kernel
 performance from a repository-wide static scan alone.
 
+First separate the stable mathematical postcondition from the release's
+admitted execution envelope and complete the execution-envelope review in
+`public-operation-admission.md`. Keep the semantic domain broad. Before
+retaining a small fixed cap, compare result-sensitive admission, compact exact
+representations, maintained specialist backends, and exact algorithms suited
+to different input regimes. A backend restriction is not a mathematical domain
+restriction, and large scalar inputs should remain admissible when predicted
+work, intermediates, memory, and exact output are small. When no sharper safe
+envelope is established, classify and document the fixed cap as a conservative
+fallback and state what evidence could raise it.
+
 Freeze the workload before comparing implementations. Record the operation ID,
 repository revision, canonical request or input digest, coefficient domain and
 parent, relevant mathematical size quantities, current backend and version,
@@ -114,10 +126,15 @@ evidence classes separately:
 - behavioral or invariant checks establishing comparable exact results; and
 - unknowns, timeouts, unavailable backends, and incomplete coverage.
 
+Exercise accepted and rejected boundaries, relevant algorithm or
+representation crossover points, and realistic source-backed scale cases.
+Check every regime with the same defining invariant or independent oracle; a
+fast path that returns a weaker or lossy value does not widen the operation.
+
 Classify the outcome before recommending work:
 
-- **admission:** the public domain uses an unproved, excessively coarse, or
-  misleading work or output proxy;
+- **admission:** the admitted execution envelope uses an unproved, excessively
+  coarse, or misleading work or output proxy;
 - **representation/output:** computation succeeds but canonical conversion,
   repeated source context, or output shape dominates the useful bound;
 - **scale/backend:** a maintained engine materially improves completion or cost

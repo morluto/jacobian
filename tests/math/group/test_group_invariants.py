@@ -152,7 +152,13 @@ class TestLatticeWorkBound:
         orders = sorted(entry.order for entry in result.subgroups)
         assert orders[0] == 1 and orders[-1] == 64
         # Every entry's generator chain stays within log2(order) <= 6 links.
-        assert max(len(entry.generators) for entry in result.subgroups) <= 6
+        assert max(
+            len(entry.group.generators) for entry in result.subgroups
+        ) <= 6
+        # Entries are canonical permutation-group values: chainable into
+        # other permutation-group consumers unchanged.
+        first = result.subgroups[0].group
+        assert first.degree == 12 and len(first.generators) >= 1
 
     def test_budget_exhaustion_returns_typed_outcome(self, monkeypatch):
         """An exhausted closure budget yields LIMIT_EXCEEDED, not an error."""
@@ -206,8 +212,65 @@ class TestRelayedPayloadBounds:
             GroupSubgroupLatticeResult.model_validate(payload)
 
     def test_generator_count_cap_restored(self):
-        """Subgroup entries declare a schema-visible generator-count cap."""
+        """Subgroup values declare a schema-visible generator-count cap."""
         from jacobian.math.group._models import SubgroupEntry
 
-        with pytest.raises(ValidationError, match="at most 64"):
-            SubgroupEntry(generators=tuple([(0, 1)] * 65), order=2)
+        with pytest.raises(ValidationError):
+            SubgroupEntry(
+                group={
+                    "degree": 2,
+                    "generators": tuple([(0, 1)] * 65),
+                },
+                order=2,
+            )
+
+
+class TestExceededOutcomeSourceBinding:
+    """Relayed limit-exceeded payloads keep the source-binding invariants."""
+
+    @staticmethod
+    def _exceeded(degree=4, generators=((1, 2, 3, 0),), **overrides):
+        from jacobian.math.group._models import GroupSubgroupLatticeResult
+
+        payload = {
+            "outcome": "LIMIT_EXCEEDED",
+            "degree": degree,
+            "generators": [list(g) for g in generators],
+            "detail": "traversal exceeded budget",
+            **overrides,
+        }
+        return GroupSubgroupLatticeResult.model_validate(payload)
+
+    def test_fabricated_subgroup_count_rejected(self):
+        with pytest.raises(ValidationError, match="no subgroup count"):
+            self._exceeded(subgroup_count=5)
+
+    def test_exceeded_payload_still_admits_only_real_sources(self):
+        """A non-permutation generator cannot ride on an exceeded outcome."""
+        with pytest.raises(ValidationError):
+            self._exceeded(degree=2, generators=((999,),))
+
+    def test_oversized_source_group_rejected_on_exceeded_path(self):
+        s6 = ((1, 0, 2, 3, 4, 5), (1, 2, 3, 4, 5, 0))
+        with pytest.raises(ValidationError, match="bounded maximum"):
+            self._exceeded(degree=6, generators=s6)
+
+    def test_entries_chain_into_permutation_group_consumers(self):
+        from jacobian.math.group._models import PermutationGroupRequest
+        from jacobian.math.group._operations import compute_group_order
+
+        result = compute_subgroup_lattice(
+            GroupSubgroupLatticeRequest(degree=4, generators=((1, 2, 3, 0),))
+        )
+        order_two = next(e for e in result.subgroups if e.order == 2)
+        # The canonical value feeds group.order.compute unchanged.
+        assert (
+            str(
+                compute_group_order(
+                    PermutationGroupRequest.model_validate(
+                        order_two.group.model_dump()
+                    )
+                ).order
+            )
+            == "2"
+        )

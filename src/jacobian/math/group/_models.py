@@ -483,32 +483,24 @@ class GroupSubgroupLatticeRequest(StrictModel):
 
 
 class SubgroupEntry(StrictModel):
-    """One subgroup with its generators and order."""
+    """One subgroup as the canonical permutation-group value plus its order.
 
-    # A group of admitted order <= 64 never needs more than 6 generators
-    # (each accepted generator at least doubles the generated subgroup, so a
-    # chain has length <= log2(64)); the cap keeps a relayed payload from
-    # driving unbounded backend construction before the source-bound
-    # comparison runs.
-    generators: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=64)
-    order: int = Field(ge=1, le=64)
+    Carrying ``group: PermutationGroupRequest`` lets callers chain an
+    enumerated subgroup into ``group.order.compute``, ``group.orbit.compute``,
+    or any other permutation-group consumer unchanged.
+    """
+
+    group: PermutationGroupRequest
+    order: int = Field(ge=1, le=MAX_SUBGROUP_LATTICE_GROUP_ORDER)
 
     @model_validator(mode="after")
     def require_order_matches_generators(self) -> Self:
-        degree = len(self.generators[0])
-        if any(
-            len(gen) != degree or sorted(gen) != list(range(degree))
-            for gen in self.generators
-        ):
-            raise ValueError(
-                "each subgroup generator must be a permutation of equal degree"
-            )
-        if degree > MAX_GROUP_DEGREE:
-            raise ValueError("subgroup generators exceed the supported degree bound")
         from sympy.combinatorics import Permutation, PermutationGroup
 
         group_order = int(
-            PermutationGroup(*(Permutation(list(g)) for g in self.generators)).order()
+            PermutationGroup(
+                *(Permutation(list(g)) for g in self.group.generators)
+            ).order()
         )
         if group_order != self.order:
             raise ValueError(
@@ -563,15 +555,20 @@ class GroupSubgroupLatticeResult(StrictModel):
                 raise ValueError("subgroup_count must match the number of subgroups")
         elif self.subgroups is not None or self.detail is None:
             raise ValueError("an exceeded traversal carries only a safe detail")
+        elif self.subgroup_count != 0:
+            # No entries are retained on exhaustion, so any positive count
+            # would fabricate an exact conclusion.
+            raise ValueError("an exceeded traversal reports no subgroup count")
         return self
 
     @model_validator(mode="after")
     def bind_lattice_to_source_group(self) -> Self:
+        # Replaying through the request model revalidates generator shape and
+        # the bounded group order for EVERY outcome, including relayed
+        # limit-exceeded payloads whose source must still be admissible.
+        GroupSubgroupLatticeRequest(degree=self.degree, generators=self.generators)
         if self.outcome != "COMPUTED" or self.subgroups is None:
             return self
-        # Replaying through the request model revalidates generator shape and
-        # the bounded group order before the lattice is recomputed.
-        GroupSubgroupLatticeRequest(degree=self.degree, generators=self.generators)
         from jacobian.math.group.operations import subgroup_lattice
 
         expected_lattice = tuple(
@@ -581,7 +578,7 @@ class GroupSubgroupLatticeResult(StrictModel):
             )
         )
         actual_lattice = tuple(
-            (entry.generators, entry.order) for entry in self.subgroups
+            (entry.group.generators, entry.order) for entry in self.subgroups
         )
         if len(set(expected_lattice)) != len(expected_lattice):
             raise ValueError("subgroups must be distinct")

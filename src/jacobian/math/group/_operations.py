@@ -81,7 +81,10 @@ def compute_subgroup_lattice(
         )
     entries = tuple(
         SubgroupEntry(
-            generators=tuple(tuple(g) for g in sg[0]),
+            group=PermutationGroupRequest(
+                degree=request.degree,
+                generators=tuple(tuple(g) for g in sg[0]),
+            ),
             order=sg[1],
         )
         for sg in subgroups

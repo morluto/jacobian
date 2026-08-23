@@ -2,16 +2,39 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Any, Self
 
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
 
-#: Group-like enumeration scans every element of GF(p)^dimension, so the
-#: admitted request space is bounded by this many candidate vectors.
-GROUP_LIKE_ENUMERATION_BUDGET = 65_536
+#: Decimal digit budget for an admitted field characteristic. The digit
+#: length, not a magnitude ceiling, is what bounds the admitted work:
+#: primality testing and every modular multiply-add operate on operands
+#: below the prime, so their cost grows with its digit length while the
+#: mathematical domain stays open (any GF(p) whose characteristic carries
+#: at most this many digits is admissible when the derived work budgets
+#: below also hold).
+MAX_PRIME_DIGITS = 64
+
+#: Group-like enumeration scans every element of GF(p)^dimension. Its
+#: admission bound is derived work, not a bare candidate count: every
+#: candidate pays dimension counit-filter summands plus one unit of
+#: candidate-loop overhead, and -- because a valid counit is nonzero --
+#: exactly prime**(dimension-1) candidates survive that filter and each
+#: pays dimension**3 Delta-construction summands plus 2*dimension**2
+#: tensor-square and comparison operations:
+#:
+#:   group_like_scan_work = prime**dimension * (dimension + 1)
+#:       + prime**(dimension-1) * (dimension**3 + 2*dimension**2)
+#:
+#: bind_group_like_to_source replays the identical scan, so one full call
+#: performs at most twice this bound. Measured throughput exceeds 50M
+#: summands/s in the dense regime and 5M units/s in the loop-overhead
+#: dominated one-dimensional regime, keeping an admitted call well under
+#: two seconds.
+GROUP_LIKE_SCAN_WORK_BUDGET = 2_000_000
 
 #: Maximum number of structure-constant entries in an admitted comultiplication
 #: tensor. Admission is derived from explicit work and size bounds instead of a
@@ -19,13 +42,37 @@ GROUP_LIKE_ENUMERATION_BUDGET = 65_536
 #:   - the input tensor and each per-request projection are bounded by exactly
 #:     dimension**3 <= MAX_TENSOR_ENTRIES entries;
 #:   - coassociativity validation performs at most dimension**5 modular
-#:     multiply-adds (16**5 ~ 10**6 at this envelope);
-#:   - group-like scans remain separately bounded by GROUP_LIKE_ENUMERATION_BUDGET
-#:     candidate vectors, so their worst-case work is candidates x per-candidate
-#:     reconstruction (Theta(dimension**2) entries each).
+#:     multiply-adds (16**5 ~ 10**6 at this envelope), each on operands below
+#:     the MAX_PRIME_DIGITS-bounded characteristic;
+#:   - group-like scans remain separately bounded by GROUP_LIKE_SCAN_WORK_BUDGET
+#:     derived work units covering candidates x per-candidate reconstruction
+#:     plus the replay in bind_group_like_to_source.
 #: For example the 9-dimensional GF(2) direct-sum coalgebra needs 729 entries
-#: and 512 group-like candidates, well inside both budgets.
+#: and roughly 2*10**5 scan-work units, well inside both budgets.
 MAX_TENSOR_ENTRIES = 4096
+
+
+def group_like_scan_work(prime: int, dimension: int) -> int:
+    """Worst-case Python-level work units for one exhaustive group-like scan.
+
+    Every prime**dimension candidate pays dimension counit summands plus one
+    loop-overhead unit; exactly prime**(dimension-1) candidates pass the
+    nonzero counit filter and each pays dimension**3 Delta-construction
+    summands plus 2*dimension**2 tensor-square and comparison operations.
+    """
+    n = dimension
+    candidate_units: int = prime**n * (n + 1)
+    survivor_units: int = prime ** (n - 1) * (n**3 + 2 * n * n)
+    return candidate_units + survivor_units
+
+
+def _require_admitted_prime_digits(prime: int) -> None:
+    """Reject characteristics beyond the documented digit budget before any
+    primality test or modular arithmetic runs."""
+    if prime >= 10**MAX_PRIME_DIGITS:
+        raise ValueError(
+            f"field prime exceeds the {MAX_PRIME_DIGITS}-digit admission bound"
+        )
 
 
 class Coalgebra(StrictModel):
@@ -35,19 +82,20 @@ class Coalgebra(StrictModel):
     Delta(c_i) = sum_{j,k} d_{i}^{jk} * c_j ⊗ c_k
     The counit is epsilon(c_i) = e_i.
 
-    Admission is derived from named work budgets rather than a dimension
-    ceiling: the tensor carries at most MAX_TENSOR_ENTRIES structure
-    constants, and group-like enumeration additionally requires
-    prime**dimension <= GROUP_LIKE_ENUMERATION_BUDGET candidate vectors.
+    Admission is derived from named work budgets rather than magnitude
+    ceilings: the characteristic is bounded by decimal digit length
+    (MAX_PRIME_DIGITS), the tensor carries at most MAX_TENSOR_ENTRIES
+    structure constants, and group-like enumeration additionally requires
+    group_like_scan_work(prime, dimension) <= GROUP_LIKE_SCAN_WORK_BUDGET.
     """
 
     prime: int = Field(
         ge=2,
-        le=10_000,
         description=(
-            "characteristic p of the prime field GF(p). Every "
-            "comultiplication and counit entry must already be a canonical "
-            "residue in 0..p-1; noncanonical representatives are rejected"
+            "characteristic p of the prime field GF(p), admitted up to "
+            "MAX_PRIME_DIGITS decimal digits. Every comultiplication and "
+            "counit entry must already be a canonical residue in 0..p-1; "
+            "noncanonical representatives are rejected"
         ),
     )
     dimension: int = Field(
@@ -99,6 +147,7 @@ class Coalgebra(StrictModel):
                     raise ValueError("comultiplication tensor must be 3D")
         if len(self.counit) != self.dimension:
             raise ValueError("counit must have dimension entries")
+        _require_admitted_prime_digits(self.prime)
         from sympy import isprime
 
         if not isprime(self.prime):
@@ -187,6 +236,36 @@ class ComultiplicationResult(StrictModel):
     matrix: PrimeFieldMatrix
     dimension: int = Field(ge=1)
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_admitted_nested_modulus(cls, data: Any) -> Any:
+        """Inspect the raw nested modulus before PrimeFieldMatrix is built.
+
+        A detached result can carry any matrix dict; constructing the shared
+        PrimeFieldMatrix type would run its primality test on an unbounded
+        modulus before bind_comultiplication_to_source can compare fields.
+        The digit budget and the equality with the already-validated
+        coalgebra prime are therefore enforced on the raw nested input.
+        """
+        if not isinstance(data, dict):
+            return data
+        matrix_input = data.get("matrix")
+        if not isinstance(matrix_input, dict):
+            return data
+        nested_prime = matrix_input.get("prime")
+        if type(nested_prime) is not int:
+            return data
+        _require_admitted_prime_digits(nested_prime)
+        coalgebra_input = data.get("coalgebra")
+        coalgebra_prime = (
+            coalgebra_input.get("prime")
+            if isinstance(coalgebra_input, dict)
+            else getattr(coalgebra_input, "prime", None)
+        )
+        if type(coalgebra_prime) is int and nested_prime != coalgebra_prime:
+            raise ValueError("matrix prime must match the retained coalgebra's field")
+        return data
+
     @model_validator(mode="after")
     def bind_comultiplication_to_source(self) -> Self:
         """Replay Delta(c_i) against the retained canonical coalgebra."""
@@ -251,22 +330,25 @@ class CounitResult(StrictModel):
 class GroupLikeElementsRequest(StrictModel):
     """Find all group-like elements in a coalgebra.
 
-    The operation enumerates every element of GF(p)^dimension, so requests
-    are admitted only when prime**dimension is within the documented
-    enumeration budget.
+    The operation enumerates every element of GF(p)^dimension and
+    reconstructs each candidate that survives the counit filter, so
+    requests are admitted only when group_like_scan_work(prime,
+    dimension) is within the documented scan budget; the retained result
+    replays the same scan, so one full call performs at most twice that
+    work.
     """
 
     coalgebra: Coalgebra
 
     @model_validator(mode="after")
     def require_enumerable(self) -> Self:
-        if (
-            self.coalgebra.prime**self.coalgebra.dimension
-            > GROUP_LIKE_ENUMERATION_BUDGET
-        ):
+        work = group_like_scan_work(self.coalgebra.prime, self.coalgebra.dimension)
+        if work > GROUP_LIKE_SCAN_WORK_BUDGET:
             raise ValueError(
-                "group-like enumeration requires prime**dimension <= "
-                f"{GROUP_LIKE_ENUMERATION_BUDGET}"
+                "group-like enumeration scan work exceeds the documented "
+                f"budget: {work} units for prime {self.coalgebra.prime}, "
+                f"dimension {self.coalgebra.dimension} exceeds "
+                f"{GROUP_LIKE_SCAN_WORK_BUDGET}"
             )
         return self
 
@@ -288,27 +370,29 @@ class GroupLikeElementsResult(StrictModel):
     def bind_group_like_to_source(self) -> Self:
         """Replay the exhaustive enumeration against the retained coalgebra.
 
-        The enumeration admission bound is reapplied here because a serialized
+        The scan-work admission bound is reapplied here because a serialized
         result validates its ``coalgebra`` as a plain ``Coalgebra``, which
         carries no enumerability guarantee; only then is the defining replay
         Delta(g) = g (x) g and epsilon(g) = 1 over the whole element space
         deterministic bounded work that the retained conclusion must match.
+        The bound covers kernel and replay together, so a validated result
+        never pays more than twice GROUP_LIKE_SCAN_WORK_BUDGET.
         """
         from jacobian.math.coalgebras._operations import _group_like_coefficients
 
         if self.count != len(self.elements):
             raise ValueError("count must match element count")
-        # Reapply the enumeration admission bound before replaying: when a
+        # Reapply the scan-work admission bound before replaying: when a
         # serialized result is validated directly, its coalgebra is parsed as
         # a Coalgebra, not as a GroupLikeElementsRequest, so the request
         # guard alone never runs.
-        if (
-            self.coalgebra.prime**self.coalgebra.dimension
-            > GROUP_LIKE_ENUMERATION_BUDGET
-        ):
+        work = group_like_scan_work(self.coalgebra.prime, self.coalgebra.dimension)
+        if work > GROUP_LIKE_SCAN_WORK_BUDGET:
             raise ValueError(
-                "group-like enumeration requires prime**dimension <= "
-                f"{GROUP_LIKE_ENUMERATION_BUDGET}"
+                "group-like enumeration scan work exceeds the documented "
+                f"budget: {work} units for prime {self.coalgebra.prime}, "
+                f"dimension {self.coalgebra.dimension} exceeds "
+                f"{GROUP_LIKE_SCAN_WORK_BUDGET}"
             )
         n = self.coalgebra.dimension
         seen = set()
@@ -330,6 +414,8 @@ class GroupLikeElementsResult(StrictModel):
 
 
 __all__ = [
+    "GROUP_LIKE_SCAN_WORK_BUDGET",
+    "MAX_PRIME_DIGITS",
     "Coalgebra",
     "ComultiplicationRequest",
     "ComultiplicationResult",
@@ -338,4 +424,5 @@ __all__ = [
     "GroupLikeElement",
     "GroupLikeElementsRequest",
     "GroupLikeElementsResult",
+    "group_like_scan_work",
 ]

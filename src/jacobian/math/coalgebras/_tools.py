@@ -96,9 +96,10 @@ COALGEBRA_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Find all group-like elements in a coalgebra",
         "Find every group-like element g of a finite-dimensional coalgebra "
         "over GF(p): Delta(g) = g (x) g and epsilon(g) = 1. Enumerates the "
-        "whole element space, so requests require prime**dimension <= 65536. "
-        "Group-like elements are linearly independent and each spans a "
-        "one-dimensional subcoalgebra.",
+        "whole element space and reconstructs each candidate passing the "
+        "counit filter, so requests require the derived scan work to fit "
+        "the documented budget. Group-like elements are linearly "
+        "independent and each spans a one-dimensional subcoalgebra.",
         GroupLikeElementsRequest,
         GroupLikeElementsResult,
         find_group_like_elements,

@@ -61,9 +61,11 @@ def _group_like_coefficients(
     """Enumerate every group-like coefficient vector of a coalgebra.
 
     An element g = sum a_i c_i is group-like when epsilon(g) = 1 and
-    Delta(g) = g (x) g modulo p. The request model bounds prime**dimension
-    within the documented enumeration budget, so this scan is exhaustive and
-    deterministic; the result validator replays the identical enumeration.
+    Delta(g) = g (x) g modulo p. The request model bounds the derived scan
+    work -- candidates times per-candidate reconstruction -- within the
+    documented budget, so this scan is exhaustive and deterministic; the
+    result validator replays the identical enumeration. Delta(g) = g (x) g
+    is decided row by row so a mismatching row skips the remaining rows.
     """
     n = ca.dimension
     p = ca.prime
@@ -81,14 +83,17 @@ def _group_like_coefficients(
         if sum(coeffs[i] * counit[i] for i in range(n)) % p != 1:
             continue
 
-        delta = [
-            [sum(coeffs[i] * comult[i][j][k] for i in range(n)) % p for k in range(n)]
-            for j in range(n)
-        ]
-        tensor_square = [
-            [coeffs[j] * coeffs[k] % p for k in range(n)] for j in range(n)
-        ]
-        if delta == tensor_square:
+        group_like = True
+        for j in range(n):
+            delta_row = tuple(
+                sum(coeffs[i] * comult[i][j][k] for i in range(n)) % p for k in range(n)
+            )
+            coefficient_j = coeffs[j]
+            tensor_row = tuple(coefficient_j * coeffs[k] % p for k in range(n))
+            if delta_row != tensor_row:
+                group_like = False
+                break
+        if group_like:
             found.append(coeffs)
     return tuple(found)
 
@@ -105,8 +110,9 @@ def find_group_like_elements(
     2. Delta(g) = sum_{i,j,k} a_i d_i^{jk} c_j ⊗ c_k equals
        g ⊗ g = sum_{j,k} a_j a_k c_j ⊗ c_k
 
-    The request model admits only coalgebras whose full element space
-    GF(p)^dimension fits the documented enumeration budget, so this scan is
+    The request model admits only coalgebras whose derived scan work --
+    every candidate's counit filter plus each surviving candidate's
+    reconstruction -- fits the documented budget, so this scan is
     exhaustive and the result lists every group-like element.
     """
     ca = request.coalgebra

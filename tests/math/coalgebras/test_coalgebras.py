@@ -6,7 +6,8 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.coalgebras._models import (
-    GROUP_LIKE_ENUMERATION_BUDGET,
+    GROUP_LIKE_SCAN_WORK_BUDGET,
+    MAX_PRIME_DIGITS,
     MAX_TENSOR_ENTRIES,
     Coalgebra,
     ComultiplicationRequest,
@@ -15,6 +16,7 @@ from jacobian.math.coalgebras._models import (
     CounitResult,
     GroupLikeElementsRequest,
     GroupLikeElementsResult,
+    group_like_scan_work,
 )
 from jacobian.math.coalgebras._operations import (
     compute_comultiplication,
@@ -152,10 +154,15 @@ class TestGroupLikeElements:
                 counit=(1,),
             )
 
-    def test_enumeration_budget_rejected(self):
-        """Requests whose element space exceeds the budget are rejected."""
-        ca = Coalgebra(
-            prime=263,
+    def test_scan_work_budget_rejected(self):
+        """Requests whose derived scan work exceeds the budget are rejected."""
+        oversized = _direct_sum_group_like_coalgebra(12)
+        assert group_like_scan_work(2, 12) > GROUP_LIKE_SCAN_WORK_BUDGET
+        with pytest.raises(ValidationError, match="scan work exceeds"):
+            GroupLikeElementsRequest(coalgebra=oversized)
+
+        large_prime_squared = Coalgebra(
+            prime=9973,
             dimension=2,
             comultiplication=(
                 ((1, 0), (0, 0)),
@@ -163,12 +170,12 @@ class TestGroupLikeElements:
             ),
             counit=(1, 1),
         )
-        assert ca.prime**ca.dimension > GROUP_LIKE_ENUMERATION_BUDGET
-        with pytest.raises(ValueError, match="enumeration requires"):
-            GroupLikeElementsRequest(coalgebra=ca)
+        assert group_like_scan_work(9973, 2) > GROUP_LIKE_SCAN_WORK_BUDGET
+        with pytest.raises(ValidationError, match="scan work exceeds"):
+            GroupLikeElementsRequest(coalgebra=large_prime_squared)
 
-    def test_within_enumeration_budget_admitted(self):
-        """An element space inside the budget enumerates exhaustively."""
+    def test_within_scan_work_budget_admitted(self):
+        """An element space whose scan work fits the budget enumerates."""
         ca = Coalgebra(
             prime=251,
             dimension=2,
@@ -178,7 +185,9 @@ class TestGroupLikeElements:
             ),
             counit=(1, 1),
         )
-        assert ca.prime**ca.dimension <= GROUP_LIKE_ENUMERATION_BUDGET
+        assert (
+            group_like_scan_work(ca.prime, ca.dimension) <= GROUP_LIKE_SCAN_WORK_BUDGET
+        )
         result = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
         # Both basis elements are group-like in this direct-sum coalgebra.
         assert result.count == 2
@@ -224,9 +233,9 @@ class TestSourceBoundResults:
         with pytest.raises(ValueError, match="exact group-like set"):
             GroupLikeElementsResult(coalgebra=ca, elements=(), count=0)
 
-    def test_detached_result_reapplies_enumeration_budget(self):
+    def test_detached_result_reapplies_scan_work_budget(self):
         """A serialized result validates its coalgebra as a plain Coalgebra,
-        so the replay must reapply prime**dimension admission itself."""
+        so the replay must reapply the derived scan-work admission itself."""
         ca = Coalgebra(
             prime=9973,
             dimension=2,
@@ -236,8 +245,10 @@ class TestSourceBoundResults:
             ),
             counit=(1, 1),
         )
-        assert ca.prime**ca.dimension > GROUP_LIKE_ENUMERATION_BUDGET
-        with pytest.raises(ValidationError, match="enumeration requires"):
+        assert (
+            group_like_scan_work(ca.prime, ca.dimension) > GROUP_LIKE_SCAN_WORK_BUDGET
+        )
+        with pytest.raises(ValidationError, match="scan work exceeds"):
             GroupLikeElementsResult(coalgebra=ca, elements=(), count=0)
 
     def test_forged_comultiplication_coefficients_are_rejected(self):
@@ -281,9 +292,9 @@ class TestSourceBoundResults:
             )
 
 
-class TestEnumerationBudgetBeforeReplay:
+class TestScanWorkBeforeReplay:
     def test_oversized_direct_result_rejected_before_enumeration(self):
-        """A serialized result with an unbounded coalgebra fails fast."""
+        """A serialized result with an over-budget scan fails fast."""
         import time
 
         big = Coalgebra(
@@ -295,9 +306,11 @@ class TestEnumerationBudgetBeforeReplay:
             ),
             counit=(1, 1),
         )
-        assert big.prime**big.dimension > GROUP_LIKE_ENUMERATION_BUDGET
+        assert (
+            group_like_scan_work(big.prime, big.dimension) > GROUP_LIKE_SCAN_WORK_BUDGET
+        )
         started = time.monotonic()
-        with pytest.raises(ValidationError, match="enumeration requires"):
+        with pytest.raises(ValidationError, match="scan work exceeds"):
             GroupLikeElementsResult(coalgebra=big, elements=(), count=0)
         assert time.monotonic() - started < 5
 
@@ -341,13 +354,15 @@ def _direct_sum_group_like_coalgebra(n: int, prime: int = 2) -> Coalgebra:
 
 
 class TestDerivedDimensionAdmission:
-    """Dimension admission derives from tensor size and enumeration work."""
+    """Dimension admission derives from tensor size and scan work."""
 
     def test_nine_dim_gf2_direct_sum_admitted(self):
-        """729 tensor entries and 512 group-like candidates fit both budgets."""
+        """729 tensor entries and ~2*10**5 scan-work units fit both budgets."""
         ca = _direct_sum_group_like_coalgebra(9, prime=2)
         assert ca.dimension**3 == 729
-        assert ca.prime**ca.dimension == 512
+        assert (
+            group_like_scan_work(ca.prime, ca.dimension) <= GROUP_LIKE_SCAN_WORK_BUDGET
+        )
 
         result = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
         assert result.count == 9
@@ -377,12 +392,12 @@ class TestDerivedDimensionAdmission:
         with pytest.raises(ValidationError, match="structure constants"):
             _direct_sum_group_like_coalgebra(17)
 
-    def test_large_prime_nine_dim_rejected_by_enumeration_budget(self):
-        """A 9-dim GF(13) coalgebra fits the tensor budget but its 13^9
-        candidate space exceeds the enumeration budget."""
+    def test_large_prime_nine_dim_rejected_by_scan_work_budget(self):
+        """A 9-dim GF(13) coalgebra fits the tensor budget but reconstructing
+        its surviving candidates exceeds the scan-work budget."""
         ca = _direct_sum_group_like_coalgebra(9, prime=13)
         assert ca.dimension**3 == 729 <= MAX_TENSOR_ENTRIES
-        with pytest.raises(ValidationError, match="enumeration requires"):
+        with pytest.raises(ValidationError, match="scan work exceeds"):
             GroupLikeElementsRequest(coalgebra=ca)
 
 
@@ -407,3 +422,150 @@ class TestCounitOperationRemovalFromCatalog:
         )
         result = compute_counit(CounitRequest(coalgebra=ca, element_index=0))
         assert result.value == 1
+
+
+class TestScanWorkBoundary:
+    """Admission bounds combined kernel-plus-replay work, not just the
+    candidate count."""
+
+    def test_largest_admitted_gf2_boundary_completes_quickly(self):
+        """The admitted boundary (11-dim GF(2) direct sum) finishes fast even
+        though kernel and replay each scan its whole element space."""
+        import time
+
+        ca = _direct_sum_group_like_coalgebra(11)
+        assert (
+            group_like_scan_work(ca.prime, ca.dimension) <= GROUP_LIKE_SCAN_WORK_BUDGET
+        )
+        started = time.monotonic()
+        result = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
+        elapsed = time.monotonic() - started
+        assert result.count == 11
+        assert {tuple(e.coefficients) for e in result.elements} == {
+            tuple(1 if i == j else 0 for i in range(11)) for j in range(11)
+        }
+        assert elapsed < 5
+
+    def test_first_rejected_boundary_names_the_budget(self):
+        """12-dim GF(2) direct sum: 4096 candidates whose reconstruction
+        exceeds the documented scan-work budget are rejected up front."""
+        ca = _direct_sum_group_like_coalgebra(12)
+        assert (
+            group_like_scan_work(ca.prime, ca.dimension) > GROUP_LIKE_SCAN_WORK_BUDGET
+        )
+        with pytest.raises(ValidationError, match="scan work exceeds"):
+            GroupLikeElementsRequest(coalgebra=ca)
+
+
+class TestNestedModulusPrevalidation:
+    """The raw nested matrix modulus is checked before PrimeFieldMatrix
+    construction runs its primality test."""
+
+    def _payload(self, matrix_prime: int) -> dict:
+        ca = Coalgebra(
+            prime=5,
+            dimension=1,
+            comultiplication=(((1,),),),
+            counit=(1,),
+        )
+        return {
+            "coalgebra": ca.model_dump(),
+            "element_index": 0,
+            "matrix": {"prime": matrix_prime, "entries": [[1]], "columns": 1},
+            "dimension": 1,
+        }
+
+    def test_huge_nested_modulus_rejected_before_primality_test(self):
+        """A multi-thousand-digit nested modulus is rejected by digit
+        admission, never reaching the shared type's unbounded primality
+        test."""
+        import time
+
+        payload = self._payload(10**6000 + 4567)
+        started = time.monotonic()
+        with pytest.raises(ValidationError, match="digit admission bound"):
+            ComultiplicationResult.model_validate(payload)
+        assert time.monotonic() - started < 5
+
+    def test_foreign_nested_modulus_rejected_before_matrix_construction(self):
+        """A 63-digit composite passes the digit budget but would fail the
+        shared type's primality test; the field-mismatch message proves the
+        raw-modulus check ran first."""
+        composite = 2 * 10**62
+        with pytest.raises(
+            ValidationError, match="matrix prime must match the retained"
+        ):
+            ComultiplicationResult.model_validate(self._payload(composite))
+
+    def test_matching_nested_modulus_still_round_trips(self):
+        from jacobian.math.coalgebras._operations import compute_comultiplication
+
+        ca = Coalgebra(
+            prime=5,
+            dimension=1,
+            comultiplication=(((1,),),),
+            counit=(1,),
+        )
+        result = compute_comultiplication(
+            ComultiplicationRequest(coalgebra=ca, element_index=0)
+        )
+        assert ComultiplicationResult.model_validate(result.model_dump()) == result
+
+
+class TestPrimeDigitAdmission:
+    """Field admission derives from characteristic digit length, not a fixed
+    magnitude ceiling."""
+
+    def test_one_dimensional_gf10007_coalgebra_admitted(self):
+        """The one-entry GF(10007) coalgebra is admissible end to end."""
+        ca = Coalgebra(
+            prime=10007,
+            dimension=1,
+            comultiplication=(((1,),),),
+            counit=(1,),
+        )
+        comult = compute_comultiplication(
+            ComultiplicationRequest(coalgebra=ca, element_index=0)
+        )
+        assert comult.matrix.entries == ((1,),)
+        counit = compute_counit(CounitRequest(coalgebra=ca, element_index=0))
+        assert counit.value == 1
+        result = find_group_like_elements(GroupLikeElementsRequest(coalgebra=ca))
+        assert result.count == 1
+        assert result.elements[0].coefficients == (1,)
+
+    def test_multithousand_digit_prime_rejected_before_primality_test(self):
+        import time
+
+        started = time.monotonic()
+        with pytest.raises(ValidationError, match="digit admission bound"):
+            Coalgebra(
+                prime=10**6000 + 4567,
+                dimension=1,
+                comultiplication=(((1,),),),
+                counit=(1,),
+            )
+        assert time.monotonic() - started < 5
+
+    def test_digit_boundary(self):
+        """A 65-digit characteristic is rejected while a full-budget
+        64-digit prime is admitted."""
+        with pytest.raises(ValidationError, match="digit admission bound"):
+            Coalgebra(
+                prime=10**MAX_PRIME_DIGITS,
+                dimension=1,
+                comultiplication=(((1,),),),
+                counit=(1,),
+            )
+        from sympy import nextprime
+
+        ca = Coalgebra(
+            prime=nextprime(10 ** (MAX_PRIME_DIGITS - 1)),
+            dimension=1,
+            comultiplication=(((1,),),),
+            counit=(1,),
+        )
+        comult = compute_comultiplication(
+            ComultiplicationRequest(coalgebra=ca, element_index=0)
+        )
+        assert comult.matrix.entries == ((1,),)

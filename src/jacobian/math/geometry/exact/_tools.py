@@ -201,7 +201,7 @@ EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 (
                     "Four points A=(-1,0), B=(1,0), C=(0,2), D=(0,-2) have no "
                     "three collinear. The configuration must be planar with "
-                    "3..64 points, pairwise distinct coordinates, each "
+                    "3..40 points, pairwise distinct coordinates, each "
                     "coordinate at most 64 digits."
                 ),
                 NO_COLLINEAR_GENERAL_POSITION,
@@ -211,7 +211,7 @@ EXACT_GEOMETRY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 (
                     "A=(0,0), B=(2,0), C=(0,2), D=(0,-2): A, C, D are collinear "
                     "on x=0, so a collinear triple exists. The configuration "
-                    "must be planar with 3..64 points, pairwise distinct "
+                    "must be planar with 3..40 points, pairwise distinct "
                     "coordinates, each coordinate at most 64 digits."
                 ),
                 HAS_COLLINEAR_TRIPLE,

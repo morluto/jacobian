@@ -598,3 +598,40 @@ class TestIncidenceWitnessCanonicalOrder:
                 witnesses=tuple(permuted),
                 kind="COLLINEAR_TRIPLE",
             )
+
+
+class TestCollinearWitnessBudget:
+    def test_request_above_witness_budget_cap_rejected(self):
+        """41+ point configurations are rejected at admission because the
+        worst-case complete witness set C(n,3) would exceed one bounded
+        response (review: bound the collinear witness result)."""
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.geometry.exact._models import (
+            CollinearTriplesRequest,
+            LabelledRationalPoint,
+            PointConfiguration,
+        )
+
+        labelled = tuple(
+            LabelledRationalPoint(
+                label=f"P{idx}",
+                coordinates=(
+                    CanonicalRational(num=str(idx), den="1"),
+                    CanonicalRational(num="0", den="1"),
+                ),
+            )
+            for idx in range(41)
+        )
+        configuration = PointConfiguration(points=labelled)
+        with pytest.raises(ValidationError, match="enumeration bound"):
+            CollinearTriplesRequest(configuration=configuration)
+
+    def test_result_schema_publishes_witness_cardinality_cap(self):
+        from jacobian.math.geometry.exact._models import IncidenceSearchResult
+
+        schema = IncidenceSearchResult.model_json_schema()
+        assert schema["properties"]["witnesses"].get("maxItems") == 9880
+        assert schema["properties"]["point_count"]["maximum"] == 40

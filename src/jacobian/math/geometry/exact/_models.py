@@ -12,6 +12,14 @@ from jacobian._models import StrictModel
 MAX_POINTS = 64
 MAX_DIMENSION = 20
 MAX_QUADRUPLE_SEARCH_POINTS = 18
+
+# A collinear search over n points must be able to return every C(n,3)
+# witness triple in one bounded math.run response.  The complete witness set
+# for an all-collinear configuration is the worst case, so the point cap is
+# derived from a fixed witness budget: each index triple serializes to at
+# most 12 bytes of compact JSON, and C(40,3) = 9,880 triples stay under
+# 120 KB.  Larger collinear searches are rejected at request admission.
+MAX_COLLINEAR_SEARCH_POINTS = 40
 """Cap on configuration size for C(n,4) quadruple enumeration (3060 subsets)."""
 
 INCIDENCE_COORDINATE_DIGITS = 256
@@ -169,32 +177,38 @@ class DistanceGraphResult(StrictModel):
 class CollinearTriplesRequest(StrictModel):
     """Search a planar configuration for collinear triples.
 
-    The configuration must be planar with 3..64 points (the sibling
+    The configuration must be planar with 3..40 points (the sibling
     concyclic search admits 4..18 points under a joint work budget) and
     each coordinate must stay within the 64-digit operation-specific bound
     so that enumeration with huge Fractions stays bounded; see the
-    validator for the precise bound.
+    validator for the precise bound.  The point cap keeps the complete
+    worst-case witness set C(40,3) = 9,880 triples inside one bounded
+    response.
     """
 
     model_config = ConfigDict(
         json_schema_extra={
             "description": (
                 "Search a planar configuration for collinear triples. "
-                "Requires a planar configuration with 3..64 points whose "
+                "Requires a planar configuration with 3..40 points whose "
                 "coordinates are pairwise distinct (no repeated coordinate "
                 "pairs, even under distinct labels); each coordinate must "
                 "stay within the 64-digit operation-specific bound so "
-                "enumeration stays bounded."
+                "enumeration stays bounded.  The 40-point bound keeps the "
+                "complete worst-case witness set C(40,3) = 9,880 triples "
+                "inside one bounded response."
             )
         }
     )
 
     configuration: PointConfiguration = Field(
         description=(
-            "Planar point configuration with 3..64 points with pairwise "
+            "Planar point configuration with 3..40 points with pairwise "
             "distinct coordinates; 4..18 points for the sibling concyclic "
             "search. Each coordinate is bounded to 64 digits so that all "
-            "exact determinants stay representable."
+            "exact determinants stay representable.  The point count is "
+            "capped so the complete witness set C(n,3) stays within one "
+            "bounded response."
         )
     )
 
@@ -209,6 +223,13 @@ class CollinearTriplesRequest(StrictModel):
         # boundary so the search scope is exact.
         if len(self.configuration.points) < 3:
             raise ValueError("collinear-triple search requires at least three points")
+        if len(self.configuration.points) > MAX_COLLINEAR_SEARCH_POINTS:
+            raise ValueError(
+                "collinear-triple search exceeds the "
+                f"{MAX_COLLINEAR_SEARCH_POINTS}-point enumeration bound "
+                f"(C({MAX_COLLINEAR_SEARCH_POINTS},3) = 9880 witness triples); "
+                "reduce the point count"
+            )
         for idx, point in enumerate(self.configuration.points):
             for dim, coord in enumerate(point.coordinates):
                 _bounded_incidence_coordinate(coord, f"point {idx} coordinate {dim}")
@@ -285,11 +306,18 @@ class IncidenceSearchResult(StrictModel):
 
     configuration: PointConfiguration
     dimension: int = Field(ge=2, le=2)
-    point_count: int = Field(ge=3, le=64)
+    point_count: int = Field(ge=3, le=MAX_COLLINEAR_SEARCH_POINTS)
     holds: bool = Field(
         description="True iff at least one witness incidence exists.",
     )
-    witnesses: tuple[tuple[int, ...], ...] = Field(default=())
+    witnesses: tuple[tuple[int, ...], ...] = Field(
+        default=(),
+        max_length=9880,
+        description=(
+            "Complete canonically ordered witness set; capped at "
+            "C(40,3) = 9,880 triples so one response stays bounded."
+        ),
+    )
     kind: Literal["COLLINEAR_TRIPLE", "CONCYCLIC_QUADRUPLE"]
 
     @model_validator(mode="after")

@@ -16,13 +16,11 @@ from jacobian.math.commutative_algebra_ops._models import (
     IdealQuotientRequest,
     IdealRadicalMembershipRequest,
     IdealRadicalRequest,
-    IdealSaturationRequest,
 )
 from jacobian.math.commutative_algebra_ops._operations import (
     compute_ideal_quotient,
     compute_ideal_radical,
     compute_ideal_radical_membership,
-    compute_ideal_saturation,
 )
 from jacobian.math.commutative_algebra_ops._tools import TOOLS
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
@@ -198,16 +196,6 @@ def test_singular_script_uses_internal_identifiers_not_caller_names() -> None:
     assert "jv1" in source
 
 
-def test_singular_script_routes_saturation_to_the_saturation_kernel() -> None:
-    source = _singular._script(
-        "saturation",
-        _ideal(("x",), {(2,): 1}),
-        _ideal(("x",), {(1,): 1}),
-    ).decode("ascii")
-    assert "sat(jacobian_left,jacobian_right);" in source
-    assert "quotient(" not in source
-
-
 def test_radical_membership_uses_canonical_polynomials() -> None:
     source = _ideal(("x", "y"), {(2, 0): 1}, {(1, 1): 1})
     assert compute_ideal_radical_membership(
@@ -228,53 +216,6 @@ requires_singular = pytest.mark.skipif(
     shutil.which("Singular") is None,
     reason="Singular 4.4 backend is not installed",
 )
-
-
-@requires_singular
-@pytest.mark.requires_backend("singular")
-def test_ideal_saturation_is_not_the_first_colon_ideal() -> None:
-    # I:<d> = <x> for I=<x^2> and d=x, but the saturation I:<d>^inf = <1>.
-    result = compute_ideal_saturation(
-        IdealSaturationRequest(
-            ideal=_ideal(("x",), {(2,): 1}),
-            saturation_polynomial=_polynomial(("x",), {(1,): 1}),
-        )
-    )
-    assert result.outcome == "COMPUTED"
-    assert result.saturation is not None
-    assert _equal(result.saturation, _ideal(("x",), {(0,): 1}))
-
-
-@requires_singular
-@pytest.mark.requires_backend("singular")
-def test_ideal_saturation_satisfies_the_defining_colon_invariant() -> None:
-    # I:<x>^inf = <y> for I=<x^2*y>: only y-multiples survive saturation,
-    # while one colon step I:<x> = <x*y> is strictly smaller.
-    variables = ("x", "y")
-    result = compute_ideal_saturation(
-        IdealSaturationRequest(
-            ideal=_ideal(variables, {(2, 1): 1}),
-            saturation_polynomial=_polynomial(variables, {(1, 0): 1}),
-        )
-    )
-    assert result.outcome == "COMPUTED"
-    assert result.saturation is not None
-    assert _equal(result.saturation, _ideal(variables, {(0, 1): 1}))
-    # The saturation contains d^k*f witnesses: x*y is in <y> and
-    # x*(x*y) = x^2*y lies in I, while the first colon step is smaller.
-    first = compute_ideal_quotient(
-        IdealQuotientRequest(
-            dividend=_ideal(variables, {(2, 1): 1}),
-            divisor=_ideal(variables, {(1, 0): 1}),
-        )
-    )
-    assert first.quotient is not None
-    assert _equal(first.quotient, _ideal(variables, {(1, 1): 1}))
-    assert not _equal(first.quotient, result.saturation)
-    assert all(
-        _contains(result.saturation, generator)
-        for generator in first.quotient.generators
-    )
 
 
 @requires_singular

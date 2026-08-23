@@ -1,6 +1,6 @@
 ---
 name: audit-public-operation-contracts
-description: Audit new or materially changed Jacobian mathematical operations for public-domain mismatches, hidden work expansion, lossy exact results, source-unbound conclusions, and producer-consumer incompatibility. Use for operation-contract reviews and adjacent-domain searches; do not use for general repository, CI, MCP-discovery, or security audits.
+description: Audit new or existing Jacobian mathematical operations for public-domain mismatches, hidden work expansion, evidence-backed scale or backend improvements, lossy exact results, source-unbound conclusions, and producer-consumer incompatibility. Use for operation-contract reviews, mathematical performance investigations, and adjacent-domain searches; do not use for general repository, CI, MCP-discovery, or security audits.
 ---
 
 # Audit Public Operation Contracts
@@ -82,6 +82,65 @@ When a finding depends on a maintained library, verify its current documented
 domain and semantics against official documentation and the pinned version.
 Generated documentation summaries are discovery aids; confirm consequential
 claims in source, tests, or release documentation.
+
+## Audit scale and backend fitness
+
+Treat a timeout, slow trace, or static complexity finding as a candidate, not
+proof that an operation or backend should change. Start from a representative
+exact workload supplied by an agent trajectory, primary-source obligation,
+benchmark, or deterministic boundary case. Do not infer mathematical-kernel
+performance from a repository-wide static scan alone.
+
+Freeze the workload before comparing implementations. Record the operation ID,
+repository revision, canonical request or input digest, coefficient domain and
+parent, relevant mathematical size quantities, current backend and version,
+candidate backend and version, execution environment, and the defining
+invariant or independent oracle used to compare results.
+
+Derive the operation's mathematical budget before measuring wall time. Depending
+on the operation, relevant quantities include candidate tuples, search nodes,
+terms, degree, coefficient height, matrix dimensions, witness count, and
+worst-case serialized output. Keep these quantities separate unless a documented
+formula proves that one aggregate conservatively bounds them. A wall-time limit
+is an execution safety net, not the mathematical work bound.
+
+Compare current and candidate implementations on identical canonical inputs,
+mathematical options, completion criteria, and resource limits. Report these
+evidence classes separately:
+
+- static observations from source or backend capabilities;
+- mathematical estimates derived from stated assumptions;
+- measurements tied to the frozen workload and environment;
+- behavioral or invariant checks establishing comparable exact results; and
+- unknowns, timeouts, unavailable backends, and incomplete coverage.
+
+Classify the outcome before recommending work:
+
+- **admission:** the public domain uses an unproved, excessively coarse, or
+  misleading work or output proxy;
+- **representation/output:** computation succeeds but canonical conversion,
+  repeated source context, or output shape dominates the useful bound;
+- **scale/backend:** a maintained engine materially improves completion or cost
+  without changing the public mathematical contract;
+- **operation:** the stable mathematical postcondition itself is missing or
+  incorrectly scoped;
+- **composition/reasoning:** factor selection, partitioning, saturation,
+  branch exploration, or stopping policy belongs to the caller; or
+- **no gap:** the evidence does not support a useful contract or implementation
+  change.
+
+Prefer a private backend replacement or owner-local algorithm improvement when
+the public contract stays the same. Do not turn a difficult benchmark into a
+problem-specific public solver, branch checker, skill, or workflow operation.
+Retain only a small exact regression or benchmark fixture when it represents a
+recurrent boundary and has a stable reconstruction or correctness invariant.
+
+For a durable performance finding, keep a compact coverage ledger containing:
+operation and revision, workload digest and provenance, mathematical size
+quantities, backend versions, declared resource limits, completion status,
+exact output size, timing environment, and invariant-check outcome. The ledger
+prevents a single dramatic trace or convenient fixture from being reported as
+general coverage.
 
 ## Search for the shared mechanism
 

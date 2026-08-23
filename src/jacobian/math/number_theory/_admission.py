@@ -157,8 +157,8 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     ),
     OperationAdmission(
         "integer.decide.powerful",
-        AdmissionDecision.DROP,
-        "ordinary arithmetic or cheap projection of a retained exact factorization/divisor result",
+        AdmissionDecision.KEEP,
+        "bounded partial-factor and rough-cofactor certificate decides 25-digit inputs without complete factorization",
     ),
     OperationAdmission(
         "integer.decide.prime",

@@ -418,9 +418,7 @@ def compute_initial_form(request: InitialFormRequest) -> PolynomialFaceData:
         polynomial=SparseRationalPolynomial(
             terms=tuple(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(
-                        num=str(c.numerator), den=str(c.denominator)
-                    ),
+                    coefficient=CanonicalRational.from_fraction(c),
                     exponents=e,
                 )
                 for c, e in face_terms

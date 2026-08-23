@@ -18,6 +18,24 @@ MAX_COCHAIN_TENSOR_ELEMENTS = 4_096
 # so bounding |G|^(2*max_degree+1) bounds the full allocation and the Gaussian
 # elimination work (cells times pivot-row length) for every degree at once.
 MAX_BAR_MATRIX_CELLS = 65_536
+# Prime modulus: the kernel supports arbitrary primes but primality testing
+# and each modular inverse pow(a, p-2, p) scale with digit length / log p,
+# not the prime's numeric value alone. Bar matrices are at most
+# 65_536 cells (cochain budget 4_096), so even the densest admitted
+# Gaussian elimination performs at most ~2M field ops. Bounding
+# p < 2**31 (10 decimal digits) keeps sympy.isprime deterministic and
+# cheap and each inverse to <=31 modular multiplies, so predicted
+# modular-arithmetic work stays bounded for every admitted matrix shape.
+# This is a documented conservative fallback per AGENTS.md:157-164 and
+# matches prime_field_matrix.MAX_PRIME: the semantic domain is all
+# primes, the admitted envelope is digit-length / log p work, so
+# p=10_007 for the trivial group (1x1 matrix) is admitted with
+# identical work to p=9_973 rather than being rejected by a small
+# hard ceiling on p.
+MAX_PRIME = 2_147_483_647
+"""Conservative 31-bit prime bound before primality testing; bounds digit
+length and predicted modular-arithmetic work, not a mathematical restriction
+to small primes."""
 
 # Canonical permutation-group value owned by the ``group`` domain.  Re-export
 # under the local name for backward compatibility; new code should import
@@ -42,7 +60,7 @@ class GroupCohomologyRequest(StrictModel):
             "`stabilizer` or `source` group unchanged."
         )
     )
-    prime: int = Field(ge=2, le=10_000)
+    prime: int = Field(ge=2, le=MAX_PRIME)
     max_degree: int = Field(ge=0, le=MAX_COCHAIN_DEGREE)
 
     @model_validator(mode="after")
@@ -116,6 +134,11 @@ class GroupCohomologyResult(StrictModel):
 
 
 __all__ = [
+    "MAX_BAR_MATRIX_CELLS",
+    "MAX_COCHAIN_DEGREE",
+    "MAX_COCHAIN_TENSOR_ELEMENTS",
+    "MAX_GROUP_ORDER",
+    "MAX_PRIME",
     "CohomologyGroup",
     "GroupCohomologyRequest",
     "GroupCohomologyResult",

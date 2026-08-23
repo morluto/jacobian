@@ -45,10 +45,10 @@ class TestGroupCohomology:
             max_degree=3,
         )
         result = compute_group_cohomology(req)
-        assert result.groups[0].dimension == 1
-        assert result.groups[1].dimension == 2
-        assert result.groups[2].dimension == 4
-        assert result.groups[3].dimension == 8
+        assert result.groups[0].cochain_dimension == 1
+        assert result.groups[1].cochain_dimension == 2
+        assert result.groups[2].cochain_dimension == 4
+        assert result.groups[3].cochain_dimension == 8
 
     def test_prime_reported(self):
         """The result should report the prime."""
@@ -104,6 +104,13 @@ class TestExactBarComplex:
         result = self._compute(2, ((1, 0),), 3)
         bettis = {g.degree: g.betti for g in result.groups}
         assert bettis == {0: 1, 1: 0, 2: 0, 3: 0}
+
+    def test_cochain_dimension_is_not_the_cohomology_dimension(self):
+        """H^1(C2; GF(3)) is zero-dimensional inside a 2-dim cochain space."""
+        result = self._compute(2, ((1, 0),), 3)
+        first = result.groups[1]
+        assert first.betti == 0
+        assert first.cochain_dimension == 2
 
     def test_composite_prime_rejected_at_model(self):
         with pytest.raises(ValidationError, match="prime"):
@@ -181,7 +188,7 @@ class TestResultBinding:
         with pytest.raises(ValidationError):
             GroupCohomologyResult(
                 request=request,
-                groups=(CohomologyGroup(degree=0, betti=5, dimension=7),),
+                groups=(CohomologyGroup(degree=0, betti=5, cochain_dimension=7),),
                 group_order=request.max_degree + 1,
             )
 
@@ -194,8 +201,8 @@ class TestResultBinding:
                     max_degree=1,
                 ),
                 groups=(
-                    CohomologyGroup(degree=0, betti=1, dimension=1),
-                    CohomologyGroup(degree=1, betti=0, dimension=2),
+                    CohomologyGroup(degree=0, betti=1, cochain_dimension=1),
+                    CohomologyGroup(degree=1, betti=0, cochain_dimension=2),
                 ),
                 group_order=2,
             )

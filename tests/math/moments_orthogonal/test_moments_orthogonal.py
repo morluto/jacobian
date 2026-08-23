@@ -129,6 +129,20 @@ class TestRecurrenceCoefficients:
         assert result.alpha == (_frac(1, 2), _frac(1, 2))
         assert result.beta == (_frac(1, 1), _frac(1, 12))
 
+    def test_odd_length_trailing_moment_determines_final_beta(self) -> None:
+        """mu_2 distinguishes (1,0,1) from (1,0,2); neither may ignore it."""
+        first = recurrence_coefficients((_frac(1, 1), _frac(0, 1), _frac(1, 1)))
+        second = recurrence_coefficients((_frac(1, 1), _frac(0, 1), _frac(2, 1)))
+        assert first.alpha == (_frac(0, 1),)
+        assert second.alpha == (_frac(0, 1),)
+        assert first.beta == (_frac(1, 1), _frac(1, 1))
+        assert second.beta == (_frac(1, 1), _frac(2, 1))
+
+    def test_odd_length_indefinite_trailing_hankel_rejected(self) -> None:
+        """(1, 0, -1) has an indefinite trailing Hankel minor and is rejected."""
+        with pytest.raises(ValueError, match="positive-definite"):
+            recurrence_coefficients((_frac(1, 1), _frac(0, 1), _frac(-1, 1)))
+
 
 # ---------------------------------------------------------------------------
 # Jacobi matrix
@@ -340,6 +354,17 @@ class TestWireAdapters:
                 coefficients=RecurrenceCoefficientsValue(
                     alpha=(_cr(1, 10**400),),
                     beta=(_cr(1, 1),),
+                ),
+            )
+
+    def test_quadrature_rejects_unresolvable_spectrum(self) -> None:
+        """alpha=(0,10^300), beta=(1,10^-300) passes per-entry bounds but its
+        small exact eigenvalue and eigenvector components vanish in float64."""
+        with pytest.raises(ValidationError):
+            GaussianQuadratureRequest(
+                coefficients=RecurrenceCoefficientsValue(
+                    alpha=(_cr(0, 1), _cr(10**300, 1)),
+                    beta=(_cr(1, 1), _cr(1, 10**300)),
                 ),
             )
 

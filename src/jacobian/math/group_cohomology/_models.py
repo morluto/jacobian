@@ -81,11 +81,15 @@ class GroupCohomologyRequest(StrictModel):
 
 
 class CohomologyGroup(StrictModel):
-    """One group cohomology group."""
+    """One group cohomology group.
+
+    ``betti`` is dim H^n(G, GF(p)); ``cochain_dimension`` is the dimension
+    |G|^n of the ambient cochain space C^n, not the cohomology dimension.
+    """
 
     degree: int = Field(ge=0)
     betti: int = Field(ge=0)
-    dimension: int = Field(ge=1)
+    cochain_dimension: int = Field(ge=1)
 
 
 class GroupCohomologyResult(StrictModel):

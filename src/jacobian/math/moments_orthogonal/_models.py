@@ -29,6 +29,20 @@ MAX_RATIONAL_DIGITS = 4_096
 MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
 MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10**300)
 
+# Per-entry conversion bounds do not bound the conditioning of the assembled
+# Jacobi matrix: entries spanning many magnitudes produce eigenvalues and
+# eigenvector components that vanish in float64 although they are
+# mathematically nonzero. The assembled nonzero entries must share one
+# magnitude scale, and the exact determinant must exclude eigenvalues whose
+# only representation is below the float64 underflow floor. With n <= 16 and
+# entry spread <= R, an eigenvector first component is bounded below by
+# |q_1| >= 1 / (n * (5R)^(n-1)), so these constants keep every Golub-Welsch
+# weight above QUADRATURE_WEIGHT_UNDERFLOW_FLOOR and every nonzero node above
+# the double-precision underflow floor.
+MAX_QUADRATURE_ENTRY_SPREAD = Fraction(10) ** 6
+QUADRATURE_WEIGHT_UNDERFLOW_FLOOR = Fraction(1, 10**280)
+QUADRATURE_NODE_UNDERFLOW_FLOOR = Fraction(1, 10**280)
+
 
 def _to_fractions(
     values: tuple[CanonicalRational, ...],
@@ -367,7 +381,78 @@ class GaussianQuadratureRequest(StrictModel):
                 )
         for value in (*alpha, *beta):
             _require_admissible_quadrature_entry(value)
+        self._require_conditioned_jacobi_matrix(alpha, beta)
         return self
+
+    @staticmethod
+    def _require_conditioned_jacobi_matrix(
+        alpha: tuple[CanonicalRational, ...],
+        beta: tuple[CanonicalRational, ...],
+    ) -> None:
+        """Reject Jacobi matrices whose float64 spectrum cannot be resolved.
+
+        The per-entry bounds above admit matrices whose eigen-decomposition
+        underflows: alpha=(0, 10^300) with beta=(1, 10^-300) assembles
+        [[0, 10^-150], [10^-150, 10^300]], whose small exact eigenvalue and
+        its eigenvector components vanish in double precision although the
+        matrix is irreducible and both Gaussian weights are positive.
+        """
+        alpha_magnitudes = [
+            abs(value.as_fraction()) for value in alpha if value.as_fraction() != 0
+        ]
+        beta_magnitudes = [
+            value.as_fraction() for value in beta if value.as_fraction() != 0
+        ]
+        magnitudes = alpha_magnitudes + beta_magnitudes
+        if magnitudes:
+            spread = max(magnitudes) / min(magnitudes)
+            if spread > MAX_QUADRATURE_ENTRY_SPREAD:
+                raise ValueError(
+                    "assembled quadrature entries span more than "
+                    f"{MAX_QUADRATURE_ENTRY_SPREAD} magnitudes; the "
+                    "Golub-Welsch spectrum would underflow float64"
+                )
+            # Weight floor: with entry spread R and n <= 16, every unit
+            # eigenvector first component satisfies |q_1| >= 1/(n*(5R)^(n-1)),
+            # so the smallest representable weight is bounded below by
+            # beta_0 / (n^2 * (5R)^(2n-2)).
+            count = len(alpha)
+            weight_floor = beta_magnitudes[0] / (
+                Fraction(count * count) * (5 * spread) ** (2 * (count - 1))
+            )
+            if weight_floor < QUADRATURE_WEIGHT_UNDERFLOW_FLOOR:
+                raise ValueError(
+                    "quadrature weights may underflow float64 for this "
+                    "Jacobi matrix conditioning"
+                )
+        # Node floor: leading principal minors of a tridiagonal matrix with
+        # squared off-diagonal beta satisfy the rational recurrence
+        # D_k = alpha_k * D_{k-1} - beta_k * D_{k-2}, so det is exact. A
+        # nonzero determinant smaller than the underflow floor times the
+        # norm bound means some eigenvalue exists only below float64.
+        previous_previous = Fraction(1)
+        previous = alpha[0].as_fraction()
+        for index in range(1, len(alpha)):
+            current = (
+                alpha[index].as_fraction() * previous
+                - beta[index].as_fraction() * previous_previous
+            )
+            previous_previous, previous = previous, current
+        determinant = previous
+        scale = (
+            max(
+                max((abs(value.as_fraction()) for value in alpha), default=Fraction(0)),
+                max(beta_magnitudes, default=Fraction(0)),
+            )
+            + 1
+        )
+        node_floor = QUADRATURE_NODE_UNDERFLOW_FLOOR * (2 * scale) ** (len(alpha) - 1)
+        if determinant != 0 and abs(determinant) < node_floor:
+            raise ValueError(
+                "the assembled Jacobi matrix has an exact eigenvalue below "
+                "the float64 underflow floor; Golub-Welsch would return a "
+                "vanishing node for a mathematically nonzero one"
+            )
 
 
 class GaussianQuadratureResult(GaussianQuadratureRequest):

@@ -86,8 +86,10 @@ def _monic_orthogonal_recurrence(
     with ``p_{-1} = 0``, ``p_0 = 1``, ``beta_0 = mu_0``.
 
     ``max_order`` recurrence coefficients ``alpha`` are produced, consuming
-    at most moments up to index ``2 * max_order - 1``: the final coefficient
-    pair never requires the norm of the last generated polynomial.
+    at most moments up to index ``2 * max_order - 1``; when the retained
+    prefix also carries the odd moment ``mu_{2*max_order}``, the final
+    squared norm and its trailing ``beta`` coefficient are derived from it,
+    so every retained moment is consumed.
     """
     alpha: list[Fraction] = []
     beta: list[Fraction] = [moments[0]]
@@ -114,6 +116,18 @@ def _monic_orthogonal_recurrence(
                 "moment sequence does not define a positive-definite measure"
             )
         beta.append(h_curr / h_prev)
+    if len(moments) > 2 * max_order:
+        # An odd-length prefix retains mu_{2*max_order}, which determines the
+        # final squared norm h_n = <p_n, p_n> and therefore the trailing
+        # beta_n = h_n / h_{n-1}. Consuming it keeps the result a complete
+        # function of every retained moment; an indefinite trailing Hankel
+        # form is rejected instead of silently ignored.
+        h_final = _inner_product(moments, p_curr, p_curr)
+        if h_final <= 0:
+            raise ValueError(
+                "moment sequence does not define a positive-definite measure"
+            )
+        beta.append(h_final / h_curr)
     return alpha, beta
 
 

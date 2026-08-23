@@ -56,9 +56,11 @@ GROUP_COHOMOLOGY_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "Compute group cohomology with trivial coefficients over GF(p)",
         "Given a finite permutation group G and a prime p, compute the "
         "cohomology groups H^n(G, K) with trivial coefficients K = GF(p) "
-        "using the normalized bar complex. H^0(G, K) = K always; higher "
-        "groups measure extensions, crossed homomorphisms, and obstruction "
-        "classes.",
+        "using the normalized bar complex. Each group reports betti = "
+        "dim H^n(G, K) exactly; cochain_dimension is the ambient cochain "
+        "space dimension |G|^n, not the cohomology dimension. H^0 = K "
+        "always; higher groups measure extensions, crossed homomorphisms, "
+        "and obstruction classes.",
         GroupCohomologyRequest,
         GroupCohomologyResult,
         compute_group_cohomology,

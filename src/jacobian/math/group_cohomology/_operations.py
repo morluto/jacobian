@@ -124,7 +124,7 @@ def _cohomology_profile(
             raise ValueError(
                 "internal inconsistency: coboundaries do not square to zero"
             )
-        groups.append(CohomologyGroup(degree=k, betti=betti, dimension=dims[k]))
+        groups.append(CohomologyGroup(degree=k, betti=betti, cochain_dimension=dims[k]))
 
     return tuple(groups), group_order
 
@@ -133,8 +133,9 @@ def compute_group_cohomology(request: GroupCohomologyRequest) -> GroupCohomology
     """Compute H^n(G, GF(p)) with trivial action via the exact bar complex.
 
     The cochain groups are C^n = {functions G^n -> GF(p)} of dimension
-    |G|^n and the inhomogeneous bar coboundaries are materialized exactly;
-    each betti number is dim ker(delta^n) - rank(im(delta^{n-1})).
+    |G|^n (reported as ``cochain_dimension``) and the inhomogeneous bar
+    coboundaries are materialized exactly; each ``betti`` number is
+    dim ker(delta^n) - rank(im(delta^{n-1})) = dim H^n(G, GF(p)).
     """
     groups, group_order = _cohomology_profile(request)
     return GroupCohomologyResult(

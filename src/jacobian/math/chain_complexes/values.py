@@ -291,10 +291,22 @@ class MappingConeResult(StrictModel):
     def bind_cone_to_source(self) -> Self:
         """Replay the defining construction so only the exact mapping
         cone of the retained chain map validates."""
+        from jacobian.math.chain_complexes._models import (
+            _require_chain_map_components,
+        )
         from jacobian.math.chain_complexes.operations import (
             _compute_mapping_cone,
         )
 
+        # The retained map must satisfy the request contract before the
+        # replay: _matrix_to_fractions zero-pads undersized matrices, so an
+        # unpadded replay alone could bind a cone to a malformed non-map.
+        _require_chain_map_components(
+            self.source,
+            self.target,
+            self.map_matrices,
+            label="mapping cone",
+        )
         if (
             self.source_degree_min != self.source.degree_min
             or self.target_degree_min != self.target.degree_min

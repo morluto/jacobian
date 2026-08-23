@@ -207,6 +207,50 @@ class MappingConeRequest(StrictModel):
         )
         _require_square_zero_at_admission(self.source, label="mapping cone source")
         _require_square_zero_at_admission(self.target, label="mapping cone target")
+        # The mapping cone is defined only for a genuine chain map, so the
+        # commutation relation d_target * f_{i+1} == f_i * d_source is part
+        # of the accepted request domain: checking it here keeps an accepted
+        # math.run request from dying in execution.
+        from jacobian.math.chain_complexes.operations import (
+            _matrix_to_fractions,
+            _require_chain_map_relation,
+        )
+
+        prime = self.source.prime
+        source_diffs = [
+            _matrix_to_fractions(
+                m,
+                self.source.basis_sizes[i],
+                self.source.basis_sizes[i + 1],
+                prime,
+            )
+            for i, m in enumerate(self.source.differential_matrices)
+        ]
+        target_diffs = [
+            _matrix_to_fractions(
+                m,
+                self.target.basis_sizes[i],
+                self.target.basis_sizes[i + 1],
+                prime,
+            )
+            for i, m in enumerate(self.target.differential_matrices)
+        ]
+        map_mats = [
+            _matrix_to_fractions(
+                m,
+                self.target.basis_sizes[i],
+                self.source.basis_sizes[i],
+                prime,
+            )
+            for i, m in enumerate(self.map_matrices)
+        ]
+        _require_chain_map_relation(
+            source_diffs,
+            target_diffs,
+            map_mats,
+            prime,
+            list(self.source.basis_sizes),
+        )
         return self
 
 

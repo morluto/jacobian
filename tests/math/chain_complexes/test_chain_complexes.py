@@ -282,6 +282,47 @@ class TestMappingConeDefiningEquations:
                 MappingConeRequest(source=bad, target=bad, map_matrices=(one, one, one))
             )
 
+    def test_noncommuting_map_rejected_at_admission(self) -> None:
+        """Correctly shaped square-zero endpoints with a noncommuting map
+        are out of the operation's domain: admission rejects the request
+        instead of letting execution die inside the cone construction."""
+        zero = self._complex("0")
+        one = self._complex("1")
+        with pytest.raises(ValidationError, match="commute"):
+            MappingConeRequest(
+                source=zero,
+                target=one,
+                # f_0 = 0, f_1 = 1: d_target * f_1 = 1 != 0 = f_0 * d_source
+                map_matrices=((("0",),), (("1",),)),
+            )
+
+    def test_retained_map_components_must_match_request_contract(self) -> None:
+        """A serialized cone cannot revalidate against an undersized
+        retained map that replay padding would silently accept."""
+        source = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=0,
+            basis_sizes=(1,),
+            differential_matrices=(),
+        )
+        target = ChainComplexValue(
+            coefficient_field=CoefficientField.RATIONAL,
+            degree_min=0,
+            degree_max=0,
+            basis_sizes=(1,),
+            differential_matrices=(),
+        )
+        result = compute_mapping_cone(
+            MappingConeRequest(source=source, target=target, map_matrices=((("0",),),))
+        )
+        payload = result.model_dump()
+        payload["map_matrices"] = [()]
+        from jacobian.math.chain_complexes.values import MappingConeResult
+
+        with pytest.raises(ValidationError, match="shape"):
+            MappingConeResult.model_validate(payload)
+
 
 class TestTensorProductSignAndBudget:
     def test_koszul_sign_uses_actual_chain_degree(self) -> None:

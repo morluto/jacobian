@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sympy
+from pydantic import ValidationError
 
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
@@ -15,9 +16,63 @@ from jacobian.math.polynomials.maps._models import (
     CompositionResult,
     EvalRequest,
     EvalResult,
+    GenericDegreeOutcome,
+    GenericDegreeRequest,
+    GenericDegreeResult,
     JacobianRequest,
     JacobianResult,
 )
+from jacobian.math.polynomials.maps._singular import run_singular_generic_fiber
+
+
+def compute_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult:
+    """Compute the exact degree of the map's generic scheme-theoretic fiber."""
+
+    backend = run_singular_generic_fiber(
+        request.polynomial_map,
+        request.resource_budget,
+    )
+    if backend.outcome != "COMPUTED":
+        operational_outcome = (
+            "BOUND_EXCEEDED" if backend.outcome == "LIMIT_EXCEEDED" else backend.outcome
+        )
+        return GenericDegreeResult(
+            outcome=operational_outcome,
+            source=request.polynomial_map,
+            detail=backend.detail,
+        )
+    if (
+        backend.certificate is None
+        or backend.dimension is None
+        or backend.backend_version is None
+    ):
+        raise RuntimeError("computed generic-fiber backend result is incomplete")
+    mathematical_outcome: GenericDegreeOutcome
+    if backend.dimension == -1:
+        mathematical_outcome = "NOT_DOMINANT"
+        degree = None
+    elif backend.dimension == 0:
+        if backend.vector_dimension is None:
+            raise RuntimeError("finite generic fiber is missing its quotient dimension")
+        mathematical_outcome = "GENERICALLY_FINITE"
+        degree = backend.vector_dimension
+    else:
+        mathematical_outcome = "DOMINANT_NOT_GENERICALLY_FINITE"
+        degree = None
+    try:
+        return GenericDegreeResult(
+            outcome=mathematical_outcome,
+            source=request.polynomial_map,
+            degree=degree,
+            evidence=backend.certificate,
+            backend_version=backend.backend_version,
+        )
+    except ValidationError:
+        return GenericDegreeResult(
+            outcome="ERROR",
+            source=request.polynomial_map,
+            detail="Singular evidence failed source-bound exact replay.",
+        )
 
 
 def evaluate_polynomial(request: EvalRequest) -> EvalResult:
@@ -80,4 +135,9 @@ def compose_polynomials(request: CompositionRequest) -> CompositionResult:
     )
 
 
-__all__ = ["compose_polynomials", "compute_jacobian", "evaluate_polynomial"]
+__all__ = [
+    "compose_polynomials",
+    "compute_generic_degree",
+    "compute_jacobian",
+    "evaluate_polynomial",
+]

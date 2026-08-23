@@ -1,0 +1,172 @@
+"""Failure-mode tests for the generic-fiber Singular boundary."""
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+import pytest
+
+from jacobian._exact import CanonicalRational
+from jacobian.math.polynomials.maps import RationalPolynomialMap, _singular
+from jacobian.math.polynomials.maps._models import (
+    GenericDegreeComputationBudget,
+    GenericDegreeRequest,
+)
+from jacobian.math.polynomials.maps._operations import compute_generic_degree
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
+
+
+def _map() -> RationalPolynomialMap:
+    return RationalPolynomialMap(
+        input_variables=("x",),
+        output_polynomials=(
+            RationalPolynomial(
+                variables=("x",),
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational(num="1", den="1"),
+                            exponents=(1,),
+                        ),
+                    )
+                ),
+            ),
+        ),
+    )
+
+
+def _executable(tmp_path: Path, body: str) -> str:
+    path = tmp_path / "fake-singular"
+    path.write_text(f"#!{sys.executable}\n{body}\n", encoding="utf-8")
+    path.chmod(0o700)
+    return os.fspath(path)
+
+
+def _select_executable(
+    monkeypatch: pytest.MonkeyPatch,
+    executable: str,
+) -> None:
+    monkeypatch.setattr(
+        _singular.shutil,
+        "which",
+        lambda name: executable if name == "Singular" else None,
+    )
+
+
+def test_valid_protocol_is_replayed_to_a_mathematical_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    records = (
+        "JACOBIAN_SINGULAR_GENERIC_FIBER_V1",
+        "44105",
+        "0",
+        "1",
+        "1",
+        "1",
+        "POLYNOMIAL",
+        "1",
+        "1",
+        "1",
+        "0",
+        "(-jtp1)",
+        "1",
+        "END_POLYNOMIAL",
+        "POLYNOMIAL",
+        "0",
+        "1",
+        "1",
+        "END_POLYNOMIAL",
+        "END",
+    )
+    executable = _executable(tmp_path, f"print({chr(10).join(records)!r})")
+    _select_executable(monkeypatch, executable)
+
+    result = compute_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
+
+    assert result.outcome == "GENERICALLY_FINITE"
+    assert result.degree == 1
+
+
+def test_timeout_is_not_a_dominance_conclusion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _executable(tmp_path, "import time; time.sleep(30)")
+    _select_executable(monkeypatch, executable)
+
+    result = compute_generic_degree(
+        GenericDegreeRequest(
+            polynomial_map=_map(),
+            resource_budget=GenericDegreeComputationBudget(wall_seconds=1),
+        )
+    )
+
+    assert result.outcome == "TIMEOUT"
+    assert result.degree is None
+    assert result.evidence is None
+
+
+def test_malformed_success_output_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _executable(tmp_path, 'print("not the protocol")')
+    _select_executable(monkeypatch, executable)
+
+    result = compute_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
+
+    assert result.outcome == "ERROR"
+    assert result.degree is None
+
+
+def test_oversized_certificate_is_a_typed_bound_outcome(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _executable(tmp_path, 'print("x" * 600_000)')
+    _select_executable(monkeypatch, executable)
+
+    result = compute_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
+
+    assert result.outcome == "BOUND_EXCEEDED"
+    assert result.degree is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "jtp1+system(quit)",
+        "jtp1/2",
+        "jtp2",
+        "jtp1**2",
+        "__import__",
+    ),
+)
+def test_parameter_protocol_is_non_evaluating_and_fail_closed(text: str) -> None:
+    with pytest.raises(ValueError):
+        _singular._parse_parameter_polynomial(text, parameter_count=1)
+
+
+def test_backend_script_uses_only_fixed_internal_identifiers() -> None:
+    caller_named_map = RationalPolynomialMap(
+        input_variables=("callerVariable",),
+        output_polynomials=(
+            RationalPolynomial(
+                variables=("callerVariable",),
+                polynomial=_map().output_polynomials[0].polynomial,
+            ),
+        ),
+    )
+
+    source = _singular._generic_fiber_script(caller_named_map).decode("ascii")
+
+    assert "callerVariable" not in source
+    assert "jv1" in source
+    assert "jtp1" in source

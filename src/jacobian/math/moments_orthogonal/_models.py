@@ -16,8 +16,10 @@ from jacobian._exact import (
 from jacobian._models import StrictModel
 from jacobian.math.moments_orthogonal.values import (
     MAX_MOMENTS,
+    MAX_QUADRATURE_MAGNITUDE,
     MAX_QUADRATURE_POINTS,
     MAX_RECURRENCE_ORDER,
+    MIN_QUADRATURE_SUBDIAGONAL,
 )
 
 MAX_RATIONAL_DIGITS = 4_096
@@ -25,8 +27,6 @@ MAX_RATIONAL_DIGITS = 4_096
 # Golub-Welsch converts admitted rationals to IEEE doubles; every accepted
 # coefficient must convert to a finite double and every subdiagonal entry must
 # stay far from both overflow and underflow so its square root is exact enough.
-MAX_QUADRATURE_MAGNITUDE = Fraction(10) ** 300
-MIN_QUADRATURE_SUBDIAGONAL = Fraction(1, 10**300)
 
 
 def _to_fractions(

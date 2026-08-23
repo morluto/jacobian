@@ -98,9 +98,9 @@ class TestNullspace:
     def test_basic_nullspace(self) -> None:
         req = NullspaceRequest(matrix=_matrix(2, ((1, 1, 0), (0, 1, 1)), 3))
         result = compute_nullspace(req)
-        assert len(result.nullspace_rows) == 1
+        assert len(result.nullspace_matrix.entries) == 1
         # Verify A*v = 0 mod p
-        ns = result.nullspace_rows[0]
+        ns = result.nullspace_matrix.entries[0]
         for row in req.matrix.entries:
             dot = sum(a * b for a, b in zip(row, ns, strict=False)) % req.matrix.prime
             assert dot == 0
@@ -108,14 +108,14 @@ class TestNullspace:
     def test_full_rank_no_nullspace(self) -> None:
         req = NullspaceRequest(matrix=_matrix(5, ((1, 0), (0, 1)), 2))
         result = compute_nullspace(req)
-        assert result.nullspace_rows == ()
+        assert result.nullspace_matrix.entries == ()
 
     def test_nullity(self) -> None:
         """Nullity = columns - rank."""
         entries = ((1, 2, 0), (0, 0, 1))
         null_result = compute_nullspace(NullspaceRequest(matrix=_matrix(3, entries, 3)))
         rank_result = compute_rank(RankRequest(matrix=_matrix(3, entries, 3)))
-        nullity = len(null_result.nullspace_rows)
+        nullity = len(null_result.nullspace_matrix.entries)
         assert nullity == 3 - rank_result.rank
 
 
@@ -132,7 +132,7 @@ class TestComposition:
         assert rank_of_rref.rank == len(rref_result.pivot_columns)
 
         null_of_rref = compute_nullspace(NullspaceRequest(matrix=rref_result.rref))
-        assert len(null_of_rref.nullspace_rows) == 3 - rank_of_rref.rank
+        assert len(null_of_rref.nullspace_matrix.entries) == 3 - rank_of_rref.rank
 
     def test_serialized_result_round_trips_into_consumers(self) -> None:
         rref_result = compute_rref(

@@ -89,18 +89,29 @@ class NullspaceRequest(_PrimeFieldMatrixRequest):
 
 
 class NullspaceResult(NullspaceRequest):
-    nullspace_rows: tuple[tuple[int, ...], ...]
+    """The nullspace basis as the domain-owned canonical matrix value.
+
+    ``nullspace_matrix`` retains the source prime and declared column axis,
+    so an empty basis still names its ambient space and the serialized form
+    feeds rank/RREF consumers unchanged.
+    """
+
+    nullspace_matrix: PrimeFieldMatrix
     complete: Literal[True] = True
     method: Literal["EXACT_DOMAIN_MATRIX_NULLSPACE"] = "EXACT_DOMAIN_MATRIX_NULLSPACE"
 
     @model_validator(mode="after")
     def bind_nullspace(self) -> Self:
         expected = nullspace(self.matrix)
-        if self.nullspace_rows != expected:
-            raise ValueError("nullspace_rows must be the exact nullspace basis")
-        for vector in self.nullspace_rows:
-            if len(vector) != self.matrix.columns:
-                raise ValueError("nullspace vector length must match matrix columns")
+        if self.nullspace_matrix.entries != tuple(expected):
+            raise ValueError("nullspace_matrix must be the exact nullspace basis")
+        if (
+            self.nullspace_matrix.prime != self.matrix.prime
+            or self.nullspace_matrix.columns != self.matrix.columns
+        ):
+            raise ValueError(
+                "nullspace_matrix must carry the source prime and column axis"
+            )
         return self
 
 

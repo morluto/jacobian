@@ -393,3 +393,19 @@ class TestToolsAndExamples:
         for tool in TOOLS:
             names = [ex.name for ex in tool.examples]
             assert len(names) == len(set(names))
+
+
+class TestNativeQuadratureDomain:
+    """Direct native callers face the wire request's finite-double domain."""
+
+    def test_native_overflow_magnitude_rejected(self):
+        from fractions import Fraction
+
+        with pytest.raises(ValueError, match="finite-float magnitude bound"):
+            gaussian_quadrature((Fraction(10**400),), (Fraction(1),))
+
+    def test_native_negative_subdiagonal_rejected_in_jacobi(self):
+        from fractions import Fraction
+
+        with pytest.raises(ValueError, match="positive squared-norm ratios"):
+            jacobi_matrix((Fraction(0), Fraction(0)), (Fraction(1), Fraction(-1)))

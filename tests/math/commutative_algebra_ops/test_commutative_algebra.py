@@ -511,3 +511,90 @@ class TestSaturationContainment:
         )
         with pytest.raises(ValueError, match="differs"):
             ops.compute_ideal_saturation(request)
+
+
+class TestSaturationWallBudget:
+    @staticmethod
+    def _request(wall_seconds: int):
+        from jacobian.math.commutative_algebra_ops._models import (
+            IdealSaturationRequest,
+        )
+
+        return IdealSaturationRequest(
+            ideal=_ideal(("x", "y"), {(1, 0): 1}),
+            saturation_polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
+            resource_budget=IdealComputationBudget(wall_seconds=wall_seconds),
+        )
+
+    def test_subsecond_first_call_charges_whole_elapsed_seconds(
+        self, monkeypatch
+    ) -> None:
+        """A first computation under one second still reserves its elapsed
+        second, so verification can never push the two-stage operation past
+        the declared wall budget."""
+        import time as time_module
+
+        from jacobian.math.commutative_algebra_ops import _operations as ops
+
+        captured: dict[str, int] = {}
+
+        class _FakeBackend:
+            outcome = "COMPUTED"
+            ideal = _ideal(("x", "y"), {(0, 1): 1})
+            backend_version = "4.4"
+            detail = None
+
+        monkeypatch.setattr(
+            ops,
+            "run_singular_ideal_operation",
+            lambda *args, **kwargs: _FakeBackend(),
+        )
+
+        def fake_verification(source, saturator, claimed, budget) -> str:
+            captured["wall_seconds"] = budget.wall_seconds
+            return "VERIFIED"
+
+        monkeypatch.setattr(
+            ops, "run_singular_saturation_verification", fake_verification
+        )
+        start = time_module.monotonic()
+        readings = iter([start, start + 0.3])
+        monkeypatch.setattr(time_module, "monotonic", lambda: next(readings))
+
+        result = ops.compute_ideal_saturation(self._request(10))
+
+        assert result.outcome == "COMPUTED"
+        assert captured["wall_seconds"] == 9
+
+    def test_spent_budget_returns_timeout_without_verification(self, monkeypatch) -> None:
+        """A first computation that consumed the declared budget yields a
+        typed TIMEOUT and never launches the verification stage."""
+        import time as time_module
+
+        from jacobian.math.commutative_algebra_ops import _operations as ops
+
+        class _FakeBackend:
+            outcome = "COMPUTED"
+            ideal = _ideal(("x", "y"), {(0, 1): 1})
+            backend_version = "4.4"
+            detail = None
+
+        monkeypatch.setattr(
+            ops,
+            "run_singular_ideal_operation",
+            lambda *args, **kwargs: _FakeBackend(),
+        )
+
+        def fail_verification(*args, **kwargs) -> str:
+            raise AssertionError("verification must not run without budget")
+
+        monkeypatch.setattr(
+            ops, "run_singular_saturation_verification", fail_verification
+        )
+        start = time_module.monotonic()
+        readings = iter([start, start + 12.5])
+        monkeypatch.setattr(time_module, "monotonic", lambda: next(readings))
+
+        result = ops.compute_ideal_saturation(self._request(10))
+
+        assert result.outcome == "TIMEOUT"

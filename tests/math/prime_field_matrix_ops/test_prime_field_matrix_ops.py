@@ -62,13 +62,13 @@ class TestRref:
     def test_basic_rref(self) -> None:
         req = RrefRequest(prime=2, entries=[[1, 1, 0], [0, 1, 1]], columns=3)
         result = compute_rref(req)
-        assert result.rref_rows == ((1, 0, 1), (0, 1, 1))
+        assert result.rref_matrix.entries == ((1, 0, 1), (0, 1, 1))
         assert result.pivot_columns == (0, 1)
 
     def test_identity_matrix(self) -> None:
         req = RrefRequest(prime=7, entries=[[1, 0], [0, 1]], columns=2)
         result = compute_rref(req)
-        assert result.rref_rows == ((1, 0), (0, 1))
+        assert result.rref_matrix.entries == ((1, 0), (0, 1))
         assert result.pivot_columns == (0, 1)
 
     def test_zero_matrix(self) -> None:
@@ -80,6 +80,45 @@ class TestRref:
         req = RrefRequest(prime=5, entries=[[0, 0, 1], [1, 0, 0]], columns=3)
         result = compute_rref(req)
         assert result.pivot_columns == tuple(sorted(result.pivot_columns))
+
+    def test_rref_matrix_feeds_rank_unchanged(self) -> None:
+        """The computed matrix composes into downstream prime-field rank
+        requests directly through its canonical serialized value."""
+        from pydantic import TypeAdapter
+
+        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+        from jacobian.math.prime_field_matrix_ops._models import RankRequest
+
+        req = RrefRequest(prime=2, entries=[[1, 1, 0], [0, 1, 1]], columns=3)
+        result = compute_rref(req)
+        payload = TypeAdapter(PrimeFieldMatrix).dump_python(result.rref_matrix)
+        assert payload == {
+            "prime": 2,
+            "entries": ((1, 0, 1), (0, 1, 1)),
+            "columns": 3,
+        }
+        rank_request = RankRequest.model_validate(payload)
+        rank_result = compute_rank(rank_request)
+        assert rank_result.rank == len(result.pivot_columns)
+
+    def test_forged_rref_matrix_rejected(self) -> None:
+        """An authored rref_matrix that is not the exact reduced form of the
+        retained source matrix fails validation."""
+        from jacobian.math.prime_field_linear_algebra import PrimeFieldMatrix
+        from jacobian.math.prime_field_matrix_ops._models import RrefResult
+
+        with pytest.raises(ValidationError, match="exact reduced row-echelon"):
+            RrefResult(
+                prime=7,
+                entries=((1, 2), (3, 4)),
+                columns=2,
+                rref_matrix=PrimeFieldMatrix(
+                    prime=7,
+                    entries=((1, 0), (0, 0)),
+                    columns=2,
+                ),
+                pivot_columns=(0,),
+            )
 
 
 class TestNullspace:

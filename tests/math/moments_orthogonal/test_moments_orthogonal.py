@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.moments_orthogonal import (
     christoffel_darboux,
     gaussian_quadrature,
@@ -37,7 +38,6 @@ from jacobian.math.moments_orthogonal._tools import TOOLS
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
 
 def _frac(num: int, den: int) -> Fraction:
     return Fraction(num, den)
@@ -243,7 +243,37 @@ class TestWireAdapters:
         request = HankelMatrixRequest(moments=tuple(_cr(1, k) for k in range(1, 8)))
         result = compute_hankel_matrix(request)
         assert result.dimension == 4
+        assert isinstance(result.matrix, RationalMatrix)
         assert isinstance(result, HankelMatrixResult)
+
+    def test_hankel_matrix_feeds_matrix_rank_unchanged(self) -> None:
+        """The returned canonical matrix composes into downstream rational
+        matrix operations without rewrapping or renaming fields."""
+        from jacobian.math.matrices._operation_models import MatrixRankRequest
+        from jacobian.math.matrices._operations import compute_rank
+
+        request = HankelMatrixRequest(moments=tuple(_cr(1, k) for k in range(1, 8)))
+        result = compute_hankel_matrix(request)
+        rank_request = MatrixRankRequest.model_validate(
+            {"matrix": result.matrix.model_dump()}
+        )
+        assert rank_request.matrix.entries == result.matrix.entries
+        assert compute_rank(rank_request).rank == result.dimension
+
+    def test_forged_hankel_matrix_rejected(self) -> None:
+        """An authored matrix that is not the exact Hankel matrix of the
+        retained moments fails validation."""
+        with pytest.raises(ValidationError, match="exact Hankel"):
+            HankelMatrixResult(
+                moments=tuple(_cr(1, k) for k in range(1, 5)),
+                matrix=RationalMatrix(
+                    entries=(
+                        (_cr(1, 1), _cr(1, 1)),
+                        (_cr(1, 1), _cr(1, 1)),
+                    )
+                ),
+                dimension=2,
+            )
 
     def test_recurrence_wire(self) -> None:
         request = RecurrenceCoefficientsRequest(

@@ -13,7 +13,7 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
         "graph.edge_coloring.check",
         AdmissionDecision.KEEP,
-        "exact proper-edge-coloring validator with a blocking-edge witness, the independent checker for edge-coloring producers",
+        "exact proper-edge-coloring validator over the canonical source-bound assignment value, the independent checker for edge-coloring producers",
     ),
     OperationAdmission(
         "graph.edge_coloring.k_decide",

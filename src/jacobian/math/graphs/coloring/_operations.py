@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from jacobian.math.graphs.coloring._models import (
+    EdgeColoringAssignment,
     EdgeColoringCheckRequest,
     EdgeColoringCheckResult,
     EdgeKColorabilityRequest,
@@ -71,37 +72,42 @@ def compute_edge_k_colorability(
 
     A proper edge coloring assigns each edge a color in ``0..k-1`` such that
     incident edges receive distinct colors.  Uses a Z3 SAT search bounded by
-    the request-visible ``solver_conflicts`` budget and returns one coloring
-    witness when one exists.  Non-colorability is claimed only on an
+    the request-visible ``solver_conflicts`` budget and returns one proper
+    coloring as a canonical source-bound value accepted directly by
+    ``graph.edge_coloring.check``.  Non-colorability is claimed only on an
     explicit unsatisfiable outcome; an exhausted budget yields the typed
     ``SOLVER_BUDGET_EXCEEDED`` outcome instead of an unbounded wait.
     """
     from jacobian.math.graphs.coloring._models import _run_edge_coloring_solver
 
     edges = request.graph.edges
-    if not edges:
+
+    def _colorable_result(witness: tuple[int, ...]) -> EdgeKColorabilityResult:
         return EdgeKColorabilityResult(
             graph=request.graph,
             colors=request.colors,
             solver_conflicts=request.solver_conflicts,
             status="DECIDED",
             colorable=True,
-            coloring=(),
-            edge_count=0,
+            coloring=EdgeColoringAssignment(
+                graph=request.graph,
+                colors=request.colors,
+                coloring=witness,
+            ),
+            edge_count=len(edges),
         )
+
+    if not edges:
+        return _colorable_result(())
     outcome, coloring = _run_edge_coloring_solver(
         request.graph, request.colors, request.solver_conflicts
     )
     if outcome == "sat":
-        return EdgeKColorabilityResult(
-            graph=request.graph,
-            colors=request.colors,
-            solver_conflicts=request.solver_conflicts,
-            status="DECIDED",
-            colorable=True,
-            coloring=coloring,
-            edge_count=len(edges),
-        )
+        if coloring is None:
+            raise AssertionError(
+                "the bounded solver returned a satisfying outcome without a witness"
+            )
+        return _colorable_result(coloring)
     if outcome == "unsat":
         return EdgeKColorabilityResult(
             graph=request.graph,
@@ -126,23 +132,21 @@ def compute_edge_k_colorability(
 def compute_edge_coloring_check(
     request: EdgeColoringCheckRequest,
 ) -> EdgeColoringCheckResult:
-    """Validate a submitted edge-to-color assignment as a proper edge coloring."""
-    edges = request.graph.edges
-    coloring = request.coloring
-    for a, b in _incident_edge_index_pairs_for_canonical_graph(request.graph):
+    """Validate one source-bound edge-to-color assignment as a proper coloring."""
+    edges = request.assignment.graph.edges
+    coloring = request.assignment.coloring
+    for a, b in _incident_edge_index_pairs_for_canonical_graph(
+        request.assignment.graph
+    ):
         if coloring[a] == coloring[b]:
             return EdgeColoringCheckResult(
-                graph=request.graph,
-                colors=request.colors,
-                coloring=request.coloring,
+                assignment=request.assignment,
                 proper=False,
                 blocking_edge=edges[a],
                 conflicting_edge=edges[b],
             )
     return EdgeColoringCheckResult(
-        graph=request.graph,
-        colors=request.colors,
-        coloring=request.coloring,
+        assignment=request.assignment,
         proper=True,
         blocking_edge=None,
         conflicting_edge=None,

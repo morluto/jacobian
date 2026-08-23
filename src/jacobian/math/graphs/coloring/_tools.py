@@ -129,14 +129,12 @@ GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         "graph.edge_coloring.k_decide",
         "Decide bounded k-edge-colorability",
         "Given a bounded simple graph and an integer k, decide whether the "
-        "graph admits a proper k-edge-coloring (incident edges receive distinct "
-        "colors), returning one edge-coloring witness when one exists. "
-        "The exact solver runs under the request-visible solver_conflicts "
-        "budget: non-colorability is returned only on an explicit "
-        "unsatisfiable outcome, and an exhausted budget yields the typed "
-        "SOLVER_BUDGET_EXCEEDED status with no colorability claim. "
-        "Distinct from vertex k-colorability; the chromatic index is the "
-        "smallest such k.",
+        "graph admits a proper k-edge-coloring. The exact solver runs under "
+        "the request-visible solver_conflicts budget: non-colorability "
+        "requires an explicit unsatisfiable outcome, and an exhausted budget "
+        "yields SOLVER_BUDGET_EXCEEDED with no colorability claim. A "
+        "colorable decision returns one proper edge coloring as a canonical "
+        "source-bound assignment value accepted by graph.edge_coloring.check.",
         EdgeKColorabilityRequest,
         EdgeKColorabilityResult,
         compute_edge_k_colorability,
@@ -158,10 +156,11 @@ GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     graph_coloring_operation(
         "graph.edge_coloring.check",
         "Validate a proper edge coloring",
-        "Given a bounded simple graph, a palette size, and a submitted "
-        "edge-to-color assignment, validate that it is a proper edge coloring "
-        "(no two incident edges share a color), returning a blocking edge when "
-        "it is improper.",
+        "Given one source-bound edge-to-color assignment value (the graph, "
+        "the palette size, and one color per edge in graph.edges order), "
+        "validate that it is a proper edge coloring (no two incident edges "
+        "share a color), returning a blocking edge when it is improper. "
+        "Accepts the canonical value returned by graph.edge_coloring.k_decide.",
         EdgeColoringCheckRequest,
         EdgeColoringCheckResult,
         compute_edge_coloring_check,
@@ -176,9 +175,11 @@ GRAPH_COLORING_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                     "The assignment must assign one color per edge in 0..colors-1."
                 ),
                 {
-                    **PETERSEN_GRAPH,
-                    "colors": 4,
-                    "coloring": [1, 0, 1, 3, 2, 3, 0, 3, 1, 2, 0, 2, 2, 0, 1],
+                    "assignment": {
+                        **PETERSEN_GRAPH,
+                        "colors": 4,
+                        "coloring": [1, 0, 1, 3, 2, 3, 0, 3, 1, 2, 0, 2, 2, 0, 1],
+                    },
                 },
             ),
         ),

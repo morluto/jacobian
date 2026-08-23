@@ -230,6 +230,34 @@ class MaximalIndependentSetResult(StrictModel):
 # ---------------------------------------------------------------------------
 
 
+class EdgeColoringAssignment(StrictModel):
+    """Canonical source-bound edge-coloring value.
+
+    One simple undirected graph, one palette size, and one color per edge:
+    ``coloring[i]`` is the color of ``graph.edges[i]`` in ``0..colors-1``
+    (graph.edges order is authoritative).  Returned by
+    ``graph.edge_coloring.k_decide`` for colorable graphs and accepted
+    unchanged by ``graph.edge_coloring.check``, which decides properness;
+    structural validity only, so improper candidates are representable.
+    """
+
+    graph: EdgeColoringGraph
+    colors: StrictInt = Field(ge=1, le=20)
+    coloring: tuple[StrictInt, ...] = Field(
+        max_length=MAX_EDGE_COLORING_EDGES,
+        description=(
+            "Edge colors aligned to graph.edges: coloring[i] is the color of "
+            "graph.edges[i] in 0..colors-1 (graph.edges order is authoritative)."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_assignment(self) -> Self:
+        _require_edge_coloring_graph_bound(self.graph)
+        _require_coloring_sequence(self.graph, self.coloring, self.colors)
+        return self
+
+
 def _require_budget_exceeded_shape(result: EdgeKColorabilityResult) -> None:
     """A budget-exceeded outcome carries no claim and must replay unknown."""
 
@@ -269,12 +297,13 @@ def _require_negative_replay(result: EdgeKColorabilityResult) -> None:
 
 
 def _require_positive_witness(result: EdgeKColorabilityResult) -> None:
-    """A colorable claim must carry a proper witness."""
+    """A colorable claim must carry a proper source-bound witness."""
 
     if result.coloring is None:
         raise ValueError("a colorable result must carry a coloring witness")
-    _require_coloring_sequence(result.graph, result.coloring, result.colors)
-    if not _is_proper_edge_coloring(result.graph, result.coloring):
+    if result.coloring.graph != result.graph or result.coloring.colors != result.colors:
+        raise ValueError("witness must bind the result's own graph and palette")
+    if not _is_proper_edge_coloring(result.graph, result.coloring.coloring):
         raise ValueError("coloring witness must be a proper edge coloring")
 
 
@@ -313,14 +342,7 @@ class EdgeKColorabilityResult(StrictModel):
     )
     status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED"] = "DECIDED"
     colorable: bool | None = None
-    coloring: tuple[StrictInt, ...] | None = Field(
-        default=None,
-        max_length=MAX_EDGE_COLORING_EDGES,
-        description=(
-            "Edge colors aligned to graph.edges: coloring[i] is the color of "
-            "graph.edges[i] in 0..colors-1 (graph.edges order is authoritative)."
-        ),
-    )
+    coloring: EdgeColoringAssignment | None = None
     edge_count: StrictInt = Field(ge=0, le=MAX_EDGE_COLORING_EDGES)
 
     @model_validator(mode="after")
@@ -341,46 +363,24 @@ class EdgeKColorabilityResult(StrictModel):
 
 
 class EdgeColoringCheckRequest(StrictModel):
-    """Validate a submitted edge-to-color assignment as a proper edge coloring."""
+    """Validate one source-bound edge-to-color assignment as a proper coloring."""
 
-    graph: EdgeColoringGraph
-    colors: StrictInt = Field(ge=1, le=20)
-    coloring: tuple[StrictInt, ...] = Field(
-        max_length=MAX_EDGE_COLORING_EDGES,
-        description=(
-            "Edge colors aligned to graph.edges: coloring[i] is the color of "
-            "graph.edges[i] in 0..colors-1 (graph.edges order is authoritative)."
-        ),
-    )
-
-    @model_validator(mode="after")
-    def require_assignment_length(self) -> Self:
-        _require_edge_coloring_graph_bound(self.graph)
-        _require_coloring_sequence(self.graph, self.coloring, self.colors)
-        return self
+    assignment: EdgeColoringAssignment
 
 
 class EdgeColoringCheckResult(StrictModel):
-    """Whether a submitted edge coloring is proper, with a replayable conflict pair."""
+    """Whether the submitted edge coloring is proper, with a replayable conflict pair."""
 
-    graph: SimpleUndirectedGraph
-    colors: StrictInt = Field(ge=1, le=20)
-    coloring: tuple[StrictInt, ...] = Field(
-        max_length=MAX_EDGE_COLORING_EDGES,
-        description=(
-            "Edge colors aligned to graph.edges: coloring[i] is the color of "
-            "graph.edges[i] in 0..colors-1 (graph.edges order is authoritative)."
-        ),
-    )
+    assignment: EdgeColoringAssignment
     proper: bool
     blocking_edge: tuple[str, str] | None = None
     conflicting_edge: tuple[str, str] | None = None
 
     @model_validator(mode="after")
     def require_blocking_edge_consistency(self) -> Self:
-        _require_edge_coloring_graph_bound(self.graph)
-        _require_coloring_sequence(self.graph, self.coloring, self.colors)
-        actual_proper = _is_proper_edge_coloring(self.graph, self.coloring)
+        actual_proper = _is_proper_edge_coloring(
+            self.assignment.graph, self.assignment.coloring
+        )
         if self.proper != actual_proper:
             raise ValueError("proper flag does not match the submitted coloring")
         if self.proper:
@@ -390,6 +390,9 @@ class EdgeColoringCheckResult(StrictModel):
         if self.blocking_edge is None or self.conflicting_edge is None:
             raise ValueError("an improper coloring must carry a conflicting edge pair")
         _require_conflicting_pair(
-            self.graph, self.coloring, self.blocking_edge, self.conflicting_edge
+            self.assignment.graph,
+            self.assignment.coloring,
+            self.blocking_edge,
+            self.conflicting_edge,
         )
         return self

@@ -246,6 +246,18 @@ class TestGaussianQuadrature:
         with pytest.raises(ValueError, match="between 1 and 16"):
             gaussian_quadrature((), (_frac(1, 1),))
 
+    def test_underflowing_beta_zero_rejected(self) -> None:
+        """mu_0 scales every Golub-Welsch weight; a positive value below the
+        least nonzero double would convert to 0.0 and return zero total mass
+        for a measure with positive mass."""
+        with pytest.raises(ValueError, match="underflow"):
+            gaussian_quadrature((_frac(0, 1),), (Fraction(1, 10**400),))
+
+    def test_beta_zero_at_the_float_floor_is_admitted(self) -> None:
+        result = gaussian_quadrature((_frac(0, 1),), (Fraction(1, 10**300),))
+        assert result.weights[0] > 0
+        assert sum(result.weights) == pytest.approx(float(Fraction(1, 10**300)))
+
 
 # ---------------------------------------------------------------------------
 # Wire adapter tests
@@ -359,6 +371,18 @@ class TestWireAdapters:
         result = compute_gaussian_quadrature(request)
         assert isinstance(result, GaussianQuadratureResult)
         assert len(result.nodes) == 3
+
+    def test_underflowing_beta_zero_rejected_at_wire_boundary(self) -> None:
+        """The wire request rejects the same positive-but-unrepresentable
+        mu_0 the native kernel rejects, so no accepted request can return a
+        zero weight for a positive measure."""
+        with pytest.raises(ValidationError, match="underflow"):
+            GaussianQuadratureRequest(
+                coefficients=RecurrenceCoefficientsValue(
+                    alpha=(_cr(0, 1),),
+                    beta=(CanonicalRational(num="1", den=str(10**400)),),
+                )
+            )
 
     def test_hankel_validation_error(self) -> None:
         with pytest.raises(ValidationError):

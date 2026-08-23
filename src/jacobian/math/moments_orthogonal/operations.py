@@ -311,6 +311,13 @@ def _require_quadrature_admission(
         raise ValueError("beta must have length len(alpha) or len(alpha)+1")
     if beta[0] <= 0:
         raise ValueError("beta_0 (the zeroth moment) must be nonzero")
+    if beta[0] < MIN_QUADRATURE_SUBDIAGONAL:
+        # mu_0 scales every weight; below the least nonzero double it would
+        # convert to 0.0 and return zero total mass for a positive measure.
+        raise ValueError(
+            "beta_0 falls below the quadrature underflow bound and would "
+            "convert to a zero weight"
+        )
     for index in range(1, min(len(alpha), len(beta))):
         sub = beta[index]
         if type(sub) is not Fraction or sub <= 0:

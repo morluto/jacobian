@@ -11,16 +11,6 @@ from jacobian.math.geometry._tools import TOOLS
 
 ADMISSIONS: tuple[OperationAdmission, ...] = (
     OperationAdmission(
-        "geometry.circumradius.profile.compute",
-        AdmissionDecision.KEEP,
-        "complete exact circumradius profile with derived-growth-bounded entries",
-    ),
-    OperationAdmission(
-        "geometry.configuration.forbidden_patterns.check",
-        AdmissionDecision.KEEP,
-        "complete bounded forbidden-pattern enumeration with typed witnesses",
-    ),
-    OperationAdmission(
         "geometry.line.compute.projection",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
@@ -44,11 +34,6 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "geometry.points.compute.convex_hull",
         AdmissionDecision.KEEP,
         "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
-    ),
-    OperationAdmission(
-        "geometry.points.compute.pinned_distances",
-        AdmissionDecision.KEEP,
-        "exact pinned-distance line profile keyed by canonical line equations with source-bound replay",
     ),
     OperationAdmission(
         "geometry.points.compute.squared_distance",
@@ -109,6 +94,16 @@ ADMISSIONS: tuple[OperationAdmission, ...] = (
         "geometry.triangle.compute.orientation",
         AdmissionDecision.DROP,
         "elementary exact formula without material leverage over direct Python",
+    ),
+    OperationAdmission(
+        "geometry.points.general_position.search",
+        AdmissionDecision.KEEP,
+        "distinct exact or explicitly bounded search outcome with material computational leverage",
+    ),
+    OperationAdmission(
+        "geometry.points.circumradius_profile.compute",
+        AdmissionDecision.KEEP,
+        "distinct exact bounded mathematical value or invariant with material computational or reliability leverage",
     ),
 )
 

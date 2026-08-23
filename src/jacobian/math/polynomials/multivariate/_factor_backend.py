@@ -203,7 +203,15 @@ def _worker_outcome(
     """Classify one finished worker run and decode its decomposition."""
     if isinstance(payload, dict) and payload.get("ok") is True:
         _require_worker_memory_limit(payload, wrapped_with_prlimit=wrapped_with_prlimit)
-        return _sympy_decomposition(payload, polynomial.variables)
+        try:
+            return _sympy_decomposition(payload, polynomial.variables)
+        except Exception as exc:
+            # A syntactically valid success payload with a malformed
+            # result shape is a worker defect or version skew, never an
+            # exact decomposition.
+            raise FactorBackendFailureError(
+                "the bounded factorization worker produced a malformed result payload"
+            ) from exc
     if isinstance(payload, dict) and payload.get("ok") is False:
         if payload.get("exhausted") is True:
             # Allocation failure under the declared memory budget is
@@ -213,16 +221,18 @@ def _worker_outcome(
         raise FactorBackendFailureError(str(payload.get("error")))
     if isinstance(completed.returncode, int) and completed.returncode < 0:
         # Only a signal death conclusively attributable to an enforced
-        # limit may authenticate the bounded outcome: SIGXCPU is exactly
-        # how the declared CPU limit terminates the worker.  Any other
-        # signal (SIGSEGV, SIGABRT, external kill) is an execution
-        # failure establishing nothing about output size.
+        # limit may authenticate the bounded outcome.  SIGXCPU is exactly
+        # how the declared CPU limit terminates the worker, but CPU
+        # exhaustion is a deadline-type execution condition: it
+        # establishes nothing about output size and the verification
+        # deadline differs from the producing one, so it must never
+        # become OUTPUT_BUDGET_EXCEEDED.
         import signal
 
         sigxcpu = getattr(signal, "SIGXCPU", None)
         if sigxcpu is not None and completed.returncode == -int(sigxcpu):
-            raise FactorBackendExhaustedError(
-                "the bounded factorization worker hit its declared CPU limit"
+            raise FactorBackendInterruptedError(
+                "the bounded factorization worker hit its declared CPU budget"
             )
         raise FactorBackendFailureError(
             f"the bounded factorization worker was killed by unexpected "

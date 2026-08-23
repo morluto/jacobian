@@ -681,13 +681,14 @@ class TestKillableFactorBackend:
             run_bounded_factorization(poly)
         assert not isinstance(exc_info.value, FactorBackendExhaustedError)
 
-    def test_signal_death_under_cpu_limit_is_exhaustion(self, monkeypatch):
-        """Only a limit-attributable death (SIGXCPU from the declared CPU
-        budget) reports the bounded exhaustion outcome."""
+    def test_signal_death_under_cpu_limit_is_interrupted(self, monkeypatch):
+        """CPU exhaustion is a deadline-type execution condition: SIGXCPU
+        yields the retryable interrupted error, never a capacity status."""
         import signal
 
         from jacobian.math.polynomials.multivariate._factor_backend import (
             FactorBackendExhaustedError,
+            FactorBackendInterruptedError,
             run_bounded_factorization,
         )
 
@@ -702,7 +703,30 @@ class TestKillableFactorBackend:
             ),
         )
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
-        with pytest.raises(FactorBackendExhaustedError):
+        with pytest.raises(FactorBackendInterruptedError) as exc_info:
+            run_bounded_factorization(poly)
+        assert not isinstance(exc_info.value, FactorBackendExhaustedError)
+
+    def test_malformed_success_payload_is_execution_failure(self, monkeypatch):
+        """A syntactically valid ok:true payload with a malformed result
+        shape is a worker defect, not an exact decomposition."""
+        import json as _json
+
+        from jacobian.math.polynomials.multivariate._factor_backend import (
+            FactorBackendFailureError,
+            run_bounded_factorization,
+        )
+
+        payload = _json.dumps({"ok": True, "as_limit_applied": True}).encode()
+
+        monkeypatch.setattr(
+            "jacobian.process.run_bounded_process",
+            lambda *_a, **_k: TestExecutionInterruptionSeparation._fake_completed(
+                stdout=payload,
+            ),
+        )
+        poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
+        with pytest.raises(FactorBackendFailureError, match="malformed"):
             run_bounded_factorization(poly)
 
     def test_unknown_signal_death_is_execution_failure(self, monkeypatch):

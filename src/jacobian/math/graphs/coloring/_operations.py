@@ -76,9 +76,17 @@ def compute_edge_k_colorability(
     coloring as a canonical source-bound value accepted directly by
     ``graph.edge_coloring.check``.  Non-colorability is claimed only on an
     explicit unsatisfiable outcome; an exhausted budget yields the typed
-    ``SOLVER_BUDGET_EXCEEDED`` outcome instead of an unbounded wait.
+    ``SOLVER_BUDGET_EXCEEDED`` outcome instead of an unbounded wait.  The
+    declared budget covers the whole request: decided-negative and
+    budget-exceeded outcomes reuse the producing solve directly instead of
+    paying a second replay, while independently supplied results still
+    validate through full replay.
     """
-    from jacobian.math.graphs.coloring._models import _run_edge_coloring_solver
+    from jacobian.math.graphs.coloring._models import (
+        _budget_exceeded_result,
+        _decided_unsat_result,
+        _run_edge_coloring_solver,
+    )
 
     edges = request.graph.edges
 
@@ -109,23 +117,11 @@ def compute_edge_k_colorability(
             )
         return _colorable_result(coloring)
     if outcome == "unsat":
-        return EdgeKColorabilityResult(
-            graph=request.graph,
-            colors=request.colors,
-            solver_conflicts=request.solver_conflicts,
-            status="DECIDED",
-            colorable=False,
-            coloring=None,
-            edge_count=len(edges),
+        return _decided_unsat_result(
+            request.graph, request.colors, request.solver_conflicts
         )
-    return EdgeKColorabilityResult(
-        graph=request.graph,
-        colors=request.colors,
-        solver_conflicts=request.solver_conflicts,
-        status="SOLVER_BUDGET_EXCEEDED",
-        colorable=None,
-        coloring=None,
-        edge_count=len(edges),
+    return _budget_exceeded_result(
+        request.graph, request.colors, request.solver_conflicts
     )
 
 

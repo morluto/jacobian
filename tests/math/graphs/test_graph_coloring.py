@@ -556,3 +556,73 @@ class TestSolverConflictBudget:
         )
         assert result.status == "DECIDED"
         assert result.colorable is False
+
+    def test_decided_negative_runs_the_bounded_solver_exactly_once(self, monkeypatch):
+        """The producing solve must not pay a second full-budget replay:
+        one declared budget covers all solver work on the request."""
+        import jacobian.math.graphs.coloring._models as coloring_models
+        from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
+        from jacobian.math.graphs.coloring._operations import (
+            compute_edge_k_colorability,
+        )
+
+        calls: list[int] = []
+        original = coloring_models._run_edge_coloring_solver
+
+        def counting(graph, colors, solver_conflicts):
+            calls.append(solver_conflicts)
+            return original(graph, colors, solver_conflicts)
+
+        monkeypatch.setattr(coloring_models, "_run_edge_coloring_solver", counting)
+        result = compute_edge_k_colorability(
+            EdgeKColorabilityRequest(graph=_petersen_graph(), colors=3)
+        )
+        assert result.status == "DECIDED"
+        assert result.colorable is False
+        assert calls == [result.solver_conflicts]
+
+    def test_budget_exceeded_outcome_runs_the_bounded_solver_exactly_once(
+        self, monkeypatch
+    ):
+        import jacobian.math.graphs.coloring._models as coloring_models
+        from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
+        from jacobian.math.graphs.coloring._operations import (
+            compute_edge_k_colorability,
+        )
+
+        calls: list[int] = []
+        original = coloring_models._run_edge_coloring_solver
+
+        def counting(graph, colors, solver_conflicts):
+            calls.append(solver_conflicts)
+            return original(graph, colors, solver_conflicts)
+
+        monkeypatch.setattr(coloring_models, "_run_edge_coloring_solver", counting)
+        result = compute_edge_k_colorability(
+            EdgeKColorabilityRequest(
+                graph=_petersen_graph(), colors=3, solver_conflicts=1
+            )
+        )
+        assert result.status == "SOLVER_BUDGET_EXCEEDED"
+        assert result.colorable is None
+        assert calls == [1]
+
+    def test_produced_outcomes_round_trip_through_full_validation(self):
+        """Results built from the producing solve must equal their fully
+        validated reconstruction, so the skipped replay invariant holds."""
+        from jacobian.math.graphs.coloring._models import EdgeKColorabilityRequest
+        from jacobian.math.graphs.coloring._operations import (
+            compute_edge_k_colorability,
+        )
+
+        petersen = _petersen_graph()
+        negative = compute_edge_k_colorability(
+            EdgeKColorabilityRequest(graph=petersen, colors=3)
+        )
+        assert EdgeKColorabilityResult.model_validate(negative.model_dump()) == negative
+        undecided = compute_edge_k_colorability(
+            EdgeKColorabilityRequest(graph=petersen, colors=3, solver_conflicts=1)
+        )
+        assert (
+            EdgeKColorabilityResult.model_validate(undecided.model_dump()) == undecided
+        )

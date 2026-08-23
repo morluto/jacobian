@@ -258,6 +258,52 @@ class EdgeColoringAssignment(StrictModel):
         return self
 
 
+def _decided_unsat_result(
+    graph: SimpleUndirectedGraph,
+    colors: int,
+    solver_conflicts: int,
+) -> EdgeKColorabilityResult:
+    """Build a decided-negative result from one explicit bounded unsat.
+
+    Direct construction from the producing solve skips result replay so one
+    declared budget covers all solver work; independently supplied results
+    always validate through ``_require_negative_replay``.
+    """
+
+    return EdgeKColorabilityResult.model_construct(
+        graph=graph,
+        colors=colors,
+        solver_conflicts=solver_conflicts,
+        status="DECIDED",
+        colorable=False,
+        coloring=None,
+        edge_count=len(graph.edges),
+    )
+
+
+def _budget_exceeded_result(
+    graph: SimpleUndirectedGraph,
+    colors: int,
+    solver_conflicts: int,
+) -> EdgeKColorabilityResult:
+    """Build the typed incomplete outcome from one explicit bounded unknown.
+
+    As with ``_decided_unsat_result``, the producing solve's own answer is
+    carried unclaimed; replay stays reserved for independently supplied
+    results via ``_require_budget_exceeded_shape``.
+    """
+
+    return EdgeKColorabilityResult.model_construct(
+        graph=graph,
+        colors=colors,
+        solver_conflicts=solver_conflicts,
+        status="SOLVER_BUDGET_EXCEEDED",
+        colorable=None,
+        coloring=None,
+        edge_count=len(graph.edges),
+    )
+
+
 def _require_budget_exceeded_shape(result: EdgeKColorabilityResult) -> None:
     """A budget-exceeded outcome carries no claim and must replay unknown."""
 

@@ -180,18 +180,21 @@ class CollinearTriplesRequest(StrictModel):
         json_schema_extra={
             "description": (
                 "Search a planar configuration for collinear triples. "
-                "Requires a planar configuration with 3..64 points; "
-                "each coordinate must stay within the 64-digit "
-                "operation-specific bound so enumeration stays bounded."
+                "Requires a planar configuration with 3..64 points whose "
+                "coordinates are pairwise distinct (no repeated coordinate "
+                "pairs, even under distinct labels); each coordinate must "
+                "stay within the 64-digit operation-specific bound so "
+                "enumeration stays bounded."
             )
         }
     )
 
     configuration: PointConfiguration = Field(
         description=(
-            "Planar point configuration with 3..64 points; 4..18 points "
-            "for the sibling concyclic search. Each coordinate is bounded "
-            "to 64 digits so that all exact determinants stay representable."
+            "Planar point configuration with 3..64 points with pairwise "
+            "distinct coordinates; 4..18 points for the sibling concyclic "
+            "search. Each coordinate is bounded to 64 digits so that all "
+            "exact determinants stay representable."
         )
     )
 
@@ -216,11 +219,11 @@ class CollinearTriplesRequest(StrictModel):
 class ConcyclicQuadruplesRequest(StrictModel):
     """Search a planar configuration for concyclic quadruples.
 
-    Requires a planar configuration with 4..18 points whose coordinates
-    each stay within the 64-digit operation-specific bound and whose joint
-    work measure stays within budget: with h the largest decimal digit
-    length over all coordinate numerators and denominators, C(n,4)*h must
-    not exceed 65536.
+    Requires a planar configuration with 4..18 points with pairwise
+    distinct coordinates whose coordinates each stay within the 64-digit
+    operation-specific bound and whose joint work measure stays within
+    budget: with h the largest decimal digit length over all coordinate
+    numerators and denominators, C(n,4)*h must not exceed 65536.
     """
 
     model_config = ConfigDict(
@@ -228,21 +231,24 @@ class ConcyclicQuadruplesRequest(StrictModel):
             "description": (
                 "Search a planar configuration for concyclic quadruples. "
                 "Requires a planar configuration with 4..18 points "
-                "(C(18,4)=3060); configurations with 19..64 points are "
-                "rejected. Each coordinate is bounded to 64 digits, and "
-                "the joint work budget C(n,4)*h <= 65536 (h = largest "
-                "coordinate digit length) must hold so exact enumeration "
-                "stays bounded."
+                "(C(18,4)=3060) whose coordinates are pairwise distinct "
+                "(no repeated coordinate pairs, even under distinct "
+                "labels); configurations with 19..64 points are rejected. "
+                "Each coordinate is bounded to 64 digits, and the joint "
+                "work budget C(n,4)*h <= 65536 (h = largest coordinate "
+                "digit length) must hold so exact enumeration stays "
+                "bounded."
             )
         }
     )
 
     configuration: PointConfiguration = Field(
         description=(
-            "Planar point configuration with 4..18 points; the enumeration "
-            "covers every unordered quadruple. Each coordinate is bounded "
-            "to 64 digits, and C(n,4)*h <= 65536 (h = largest coordinate "
-            "digit length) so exact enumeration stays bounded."
+            "Planar point configuration with 4..18 points with pairwise "
+            "distinct coordinates; the enumeration covers every unordered "
+            "quadruple. Each coordinate is bounded to 64 digits, and "
+            "C(n,4)*h <= 65536 (h = largest coordinate digit length) so "
+            "exact enumeration stays bounded."
         )
     )
 
@@ -309,6 +315,15 @@ class IncidenceSearchResult(StrictModel):
             raise ValueError(
                 "concyclic result point_count exceeds the "
                 f"{MAX_QUADRUPLE_SEARCH_POINTS}-point enumeration bound"
+            )
+        # Mirror each request's cardinality domain: a result retaining
+        # fewer points than its kind's request accepts can never be an
+        # outcome of the operation.
+        required_point_count = 3 if self.kind == "COLLINEAR_TRIPLE" else 4
+        if self.point_count < required_point_count:
+            raise ValueError(
+                f"{self.kind} results require at least "
+                f"{required_point_count} retained points"
             )
         if self.holds and not self.witnesses:
             raise ValueError("a holds=True result must list at least one witness")

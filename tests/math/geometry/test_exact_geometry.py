@@ -471,3 +471,63 @@ class TestConcyclicWorkBound:
                 witnesses=(),
                 kind="CONCYCLIC_QUADRUPLE",
             )
+
+
+class TestResultCardinalityMirrorsRequest:
+    def _point(self, label: str, *coords):
+        from jacobian._exact import CanonicalRational
+        from jacobian.math.geometry.exact._models import LabelledRationalPoint
+
+        return LabelledRationalPoint(
+            label=label,
+            coordinates=tuple(
+                CanonicalRational.from_fraction(__import__("fractions").Fraction(c))
+                for c in coords
+            ),
+        )
+
+    def test_undersized_concyclic_result_rejected(self):
+        """A CONCYCLIC_QUADRUPLE result retaining only three points can
+        never come from the operation, whose request requires at least
+        four; replay over three points enumerates nothing."""
+        import pytest
+        from pydantic import ValidationError
+
+        from jacobian.math.geometry.exact._models import (
+            IncidenceSearchResult,
+            PointConfiguration,
+        )
+
+        configuration = PointConfiguration(
+            points=(
+                self._point("a", 0, 0),
+                self._point("b", 1, 0),
+                self._point("c", 0, 1),
+            )
+        )
+        with pytest.raises(ValidationError, match="at least 4 retained points"):
+            IncidenceSearchResult(
+                configuration=configuration,
+                dimension=2,
+                point_count=3,
+                holds=False,
+                witnesses=(),
+                kind="CONCYCLIC_QUADRUPLE",
+            )
+
+    def test_request_schemas_advertise_distinct_coordinates(self):
+        """The pairwise-distinct coordinate rule is validator-enforced, so
+        it must be visible in the advertised schema descriptions."""
+        from jacobian.math.geometry.exact import _models
+
+        for request_type in (
+            _models.CollinearTriplesRequest,
+            _models.ConcyclicQuadruplesRequest,
+        ):
+            schema = request_type.model_json_schema()
+            model_description = (schema.get("description") or "").lower()
+            field_description = (
+                schema["properties"]["configuration"].get("description") or ""
+            ).lower()
+            assert "distinct" in model_description, request_type.__name__
+            assert "distinct" in field_description, request_type.__name__

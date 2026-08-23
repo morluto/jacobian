@@ -12,6 +12,7 @@ from jacobian.math.geometry._models import (
     CIRCUMRADIUS_INPUT_HEIGHT,
     MAX_CIRCUMRADIUS_PROFILE_RESULT_BYTES,
     CircumradiusProfileRequest,
+    CircumradiusProfileResult,
     CircumradiusTripleEntry,
     _maximum_profile_wire_bytes,
 )
@@ -576,3 +577,37 @@ class TestCanonicalConfigurationRetention:
         )
         assert profile.point_count == 3
         assert sum(entry.pair_count for entry in profile.entries) == 3
+
+
+class TestNonplanarResultReplayRejection:
+    def _honest_payload(self) -> dict[str, object]:
+        pts = (
+            _lp("A", "0", "1", "0", "1"),
+            _lp("B", "2", "1", "0", "1"),
+            _lp("C", "0", "1", "2", "1"),
+        )
+        return circumradius_profile(_request(pts)).model_dump(mode="json")
+
+    def test_three_dimensional_retained_configuration_is_rejected(self):
+        # The planar projection of (0,0), (2,0), (0,2) replays to R^2 = 2,
+        # but the true triangle (0,0,0), (2,0,0), (0,2,2) has R^2 = 3; the
+        # replay must reject the nonplanar retained configuration instead
+        # of silently validating the projected radius.
+        payload = self._honest_payload()
+        for point in payload["configuration"]["points"]:
+            point["coordinates"].append({"num": "0", "den": "1"})
+        with pytest.raises(ValidationError, match="planar"):
+            CircumradiusProfileResult.model_validate(payload)
+
+    def test_one_dimensional_retained_configuration_is_rejected(self):
+        payload = self._honest_payload()
+        for point in payload["configuration"]["points"]:
+            del point["coordinates"][1]
+        with pytest.raises(ValidationError, match="planar"):
+            CircumradiusProfileResult.model_validate(payload)
+
+    def test_planar_retained_configuration_still_replays(self):
+        payload = self._honest_payload()
+        result = CircumradiusProfileResult.model_validate(payload)
+        assert result.entries[0].squared_circumradius is not None
+        assert result.entries[0].squared_circumradius.as_fraction() == Fraction(2)

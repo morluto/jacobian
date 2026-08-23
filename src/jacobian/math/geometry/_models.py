@@ -739,6 +739,11 @@ class CircumradiusProfileResult(StrictModel):
             raise ValueError("circumradius profile must be complete")
         if self.triple_count != expected_count:
             raise ValueError("triple_count must equal C(point_count, 3)")
+        if any(len(item.coordinates) != 2 for item in points):
+            raise ValueError(
+                "circumradius profile results require a planar retained "
+                "configuration (exactly two coordinates per point)"
+            )
         coords: list[tuple[Fraction, Fraction]] = [
             (item.coordinates[0].as_fraction(), item.coordinates[1].as_fraction())
             for item in points

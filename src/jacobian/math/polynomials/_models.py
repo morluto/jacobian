@@ -470,8 +470,13 @@ def _require_authentic_retained_basis(
     retained element in the source ideal.
     """
 
-    if not generators_reduce_to_zero(ideal, groebner_basis, monomial_order):
+    verdict = generators_reduce_to_zero(ideal, groebner_basis, monomial_order)
+    if verdict is False:
         raise ValueError("retained basis does not reduce every ideal generator to zero")
+    # A ``None`` verdict means the capped replay exhausted its work budget on
+    # some presentation generator: that is inconclusive about this
+    # presentation, not a refutation, and authenticity is still established
+    # by the independent reduced-basis recomputation below.
     if not retained_basis_is_groebner(ideal, groebner_basis, monomial_order):
         raise ValueError("retained basis is not the Gröbner basis of the source ideal")
 

@@ -152,7 +152,7 @@ main()
 """
 
 
-WorkerStatus = Literal["ok", "exceeded", "aborted", "failed", "unavailable"]
+WorkerStatus = Literal["ok", "exceeded", "aborted"]
 
 
 class GroebnerWorkerError(RuntimeError):
@@ -176,6 +176,31 @@ class GroebnerWorkerExecutionError(GroebnerWorkerError):
     """The worker ran but exited without a parseable, well-formed report."""
 
 
+class GroebnerWorkerTimeoutError(GroebnerWorkerError):
+    """The worker was killed by its wall-clock deadline without reporting.
+
+    Host load or an unexpectedly slow machine can trigger this for work that
+    would conclude elsewhere, so it must stay retryable and distinguishable
+    from any mathematical conclusion.
+    """
+
+
+def _resolve_memory_enforcement() -> str | None:
+    """Resolve the prlimit executable or fail closed without a hard cap."""
+    prlimit = shutil.which("prlimit")
+    if prlimit is not None:
+        return str(Path(prlimit).resolve())
+    import resource
+
+    if not hasattr(resource, "prlimit"):
+        raise GroebnerWorkerLaunchError(
+            "the groebner worker's hard address-space cap cannot be "
+            "enforced on this platform (no util-linux prlimit and no "
+            "resource.prlimit); refusing to run unbounded-memory work"
+        )
+    return None
+
+
 def complete_basis_in_worker(
     ideal: RationalPolynomialIdeal,
     monomial_order: str,
@@ -189,11 +214,10 @@ def complete_basis_in_worker(
     one unguarded call where Buchberger sees every collapsing pair from
     the start.  Returns ``("ok", basis)`` when the attempt concluded
     within every output budget, ``("exceeded", None)`` for evidenced
-    complete-basis overflow, ``("aborted"|"failed", None)`` when the attempt
-    self-reports no conclusion, and ``("unavailable", None)`` when the hard
-    wall-clock safety net expires on a runaway attempt. Launch failures,
-    cancellation, and malformed worker exits are execution/deployment faults,
-    not mathematical conclusions: they raise their typed
+    complete-basis overflow, and ``("aborted"|"failed", None)`` when the
+    attempt self-reports no conclusion. Launch failures, cancellation,
+    wall-clock timeouts, and malformed worker exits are execution/deployment
+    faults, not mathematical conclusions: they raise their typed
     ``GroebnerWorkerError`` subclasses instead of collapsing into a domain
     status.
     """
@@ -216,9 +240,7 @@ def complete_basis_in_worker(
             for generator in ideal.generators
         ],
     }
-    prlimit = shutil.which("prlimit")
-    if prlimit is not None:
-        prlimit = str(Path(prlimit).resolve())
+    prlimit = _resolve_memory_enforcement()
     try:
         completed = run_bounded_process(
             [sys.executable, "-c", _WORKER_PROGRAM],
@@ -241,10 +263,11 @@ def complete_basis_in_worker(
             "groebner worker was cancelled before reporting"
         )
     if completed.timed_out:
-        # The hard wall-clock safety net expired on a runaway attempt: the
-        # worker produced no report, so there is no conclusion either way
-        # about the ideal (a mathematically hard request).
-        return "unavailable", None
+        raise GroebnerWorkerTimeoutError(
+            "groebner worker exceeded its wall-clock deadline before "
+            "reporting; the attempt may have been slowed by host load and "
+            "is retryable"
+        )
     if completed.returncode != 0:
         raise GroebnerWorkerExecutionError(
             f"groebner worker exited with returncode "
@@ -275,6 +298,7 @@ __all__ = [
     "GroebnerWorkerError",
     "GroebnerWorkerExecutionError",
     "GroebnerWorkerLaunchError",
+    "GroebnerWorkerTimeoutError",
     "WorkerStatus",
     "complete_basis_in_worker",
 ]

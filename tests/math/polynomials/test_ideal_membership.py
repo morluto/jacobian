@@ -438,21 +438,17 @@ def test_basis_growth_beyond_representability_reports_non_conclusion() -> None:
         polynomial=_poly(variables, {(1,) + (0,) * 7: 1}),
         monomial_order="lex",
     )
-    result = polynomial_ideal_normal_form(request)
-    assert result.status == "UNKNOWN"
-    assert result.groebner_basis is None and result.remainder is None
-    membership = polynomial_ideal_membership(request)
-    assert membership.status == "UNKNOWN"
-    IdealNormalFormResult.model_validate(
-        {
-            "ideal": result.ideal,
-            "polynomial": result.polynomial,
-            "monomial_order": result.monomial_order,
-            "status": "UNKNOWN",
-            "groebner_basis": None,
-            "remainder": None,
-        }
+    # The worker is killed by its wall-clock deadline before its own work
+    # guards can report: a retryable transport fault, not a mathematical
+    # conclusion about the ideal.
+    from jacobian.math.polynomials._groebner_worker import (
+        GroebnerWorkerTimeoutError,
     )
+
+    with pytest.raises(GroebnerWorkerTimeoutError):
+        polynomial_ideal_normal_form(request)
+    with pytest.raises(GroebnerWorkerTimeoutError):
+        polynomial_ideal_membership(request)
 
 
 def test_unknown_result_must_not_carry_partial_artifacts() -> None:
@@ -924,10 +920,14 @@ class TestWorkerFailurePreservation:
         with pytest.raises(GroebnerWorkerExecutionError, match="returncode 3"):
             complete_basis_in_worker(_ideal1(), "grevlex", "ascending")
 
-    def test_hard_timeout_remains_a_non_conclusion(self, monkeypatch):
+    def test_hard_timeout_raises_typed_transport_failure(self, monkeypatch):
+        """A deadline-killed worker is retryable timing, not a conclusion."""
         from collections import namedtuple
 
-        from jacobian.math.polynomials._replay import incremental_source_groebner
+        from jacobian.math.polynomials._groebner_worker import (
+            GroebnerWorkerTimeoutError,
+            complete_basis_in_worker,
+        )
 
         fake = namedtuple("Result", "timed_out cancelled returncode stdout")(
             timed_out=True, cancelled=False, returncode=-9, stdout=b""
@@ -936,8 +936,31 @@ class TestWorkerFailurePreservation:
             "jacobian.math.polynomials._groebner_worker.run_bounded_process",
             lambda *args, **kwargs: fake,
         )
-        basis, exceeded = incremental_source_groebner(_ideal1(), "grevlex")
-        assert basis is None and exceeded is False
+        with pytest.raises(GroebnerWorkerTimeoutError):
+            complete_basis_in_worker(_ideal1(), "grevlex", "ascending")
+
+    def test_memory_cap_enforcement_fails_closed_without_prlimit(self, monkeypatch):
+        """No hard memory cap on this platform means no unbounded run."""
+        import shutil as _shutil
+
+        from jacobian.math.polynomials._groebner_worker import (
+            GroebnerWorkerLaunchError,
+            complete_basis_in_worker,
+        )
+
+        monkeypatch.setattr(_shutil, "which", lambda name: None)
+        import resource as _resource
+
+        if not hasattr(_resource, "prlimit"):
+            with pytest.raises(GroebnerWorkerLaunchError, match="address-space"):
+                complete_basis_in_worker(_ideal1(), "grevlex", "ascending")
+        else:
+            try:
+                complete_basis_in_worker(_ideal1(), "grevlex", "ascending")
+            except GroebnerWorkerLaunchError as error:
+                raise AssertionError(
+                    "platform supports resource.prlimit; launch must proceed"
+                ) from error
 
     def test_public_operations_surface_transport_faults(self, monkeypatch):
         """A broken worker installation is not a mathematical UNKNOWN."""

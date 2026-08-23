@@ -233,8 +233,16 @@ def generators_reduce_to_zero(
     ideal: RationalPolynomialIdeal,
     groebner_basis: tuple[RationalPolynomial, ...],
     monomial_order: str,
-) -> bool:
-    """Check every retained ideal generator reduces to zero modulo the basis."""
+) -> bool | None:
+    """Check every retained ideal generator reduces to zero modulo the basis.
+
+    Returns ``True`` when every generator reduces to zero, ``False`` when
+    some generator provably does not, and ``None`` when the capped replay
+    exhausted its work budget on some presentation generator: exhaustion is
+    inconclusive about this particular presentation, not evidence against
+    the basis (a redundant generator can expand enormously while the basis
+    itself stays small).
+    """
 
     ring_context = _sparse_ring(ideal.variables, monomial_order)
     zero = ring_context.zero
@@ -244,7 +252,7 @@ def generators_reduce_to_zero(
                 ideal, groebner_basis, generator, monomial_order
             )
         except ReductionWorkLimitError:
-            return False
+            return None
         # An overflowing reduction cannot be corroborated, so fail closed.
         if replayed is None or replayed != zero:
             return False

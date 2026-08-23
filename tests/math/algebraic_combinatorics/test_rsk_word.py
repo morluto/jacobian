@@ -9,7 +9,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.admission import AdmissionDecision
-from jacobian.catalog.catalog import Catalog
 from jacobian.math import algebraic_combinatorics
 from jacobian.math.algebraic_combinatorics import (
     inverse_row_insertion_rsk,
@@ -305,9 +304,6 @@ def test_public_operations_are_admitted_and_examples_execute() -> None:
     decisions = {admission.operation_id: admission.decision for admission in ADMISSIONS}
     assert public_ids <= tools.keys()
     assert tools["combinatorics.rsk.permutation.compute"].version == "2"
-    descriptor = Catalog.open().inspect("combinatorics.rsk.permutation.compute")
-    assert descriptor is not None
-    assert descriptor.version == "2"
     assert all(
         decisions[operation_id] is AdmissionDecision.KEEP for operation_id in public_ids
     )

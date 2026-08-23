@@ -184,6 +184,53 @@ class TestLagrangeBasisSourceBinding:
         with pytest.raises(ValidationError):
             LagrangeBasisResult.model_validate(payload)
 
+    def test_forged_higher_degree_basis_rejected(self):
+        """(x-1)^2 passes the delta replay on nodes (0, 1) but is not l_0.
+
+        The degree bound (degree < node_count) is what pins the cardinal
+        polynomial, so a degree-2 forgery with correct node values and weight
+        must be rejected.
+        """
+        request = LagrangeBasisRequest(nodes=self._nodes("0", "1"))
+        payload = {
+            "nodes": request.model_dump(mode="json")["nodes"],
+            "node_count": 2,
+            "basis": [
+                {
+                    "index": 0,
+                    "polynomial": {
+                        "polynomial_schema_version": "1",
+                        "domain": "QQ",
+                        "variables": ["x"],
+                        "polynomial": {
+                            "terms": [
+                                {"coefficient": {"num": "1", "den": "1"}, "exponents": [2]},
+                                {"coefficient": {"num": "-2", "den": "1"}, "exponents": [1]},
+                                {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
+                            ]
+                        },
+                    },
+                    "barycentric_weight": {"num": "-1", "den": "1"},
+                },
+                {
+                    "index": 1,
+                    "polynomial": {
+                        "polynomial_schema_version": "1",
+                        "domain": "QQ",
+                        "variables": ["x"],
+                        "polynomial": {
+                            "terms": [
+                                {"coefficient": {"num": "1", "den": "1"}, "exponents": [1]},
+                            ]
+                        },
+                    },
+                    "barycentric_weight": {"num": "1", "den": "1"},
+                },
+            ],
+        }
+        with pytest.raises(ValidationError, match="below node_count"):
+            LagrangeBasisResult.model_validate(payload)
+
     def test_tampered_weight_rejected(self):
         request = LagrangeBasisRequest(nodes=self._nodes("0", "1", "2"))
         genuine = compute_lagrange_basis(request)

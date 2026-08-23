@@ -144,3 +144,14 @@ class TestPinnedDistances:
                 squared_distance={"num": "1", "den": "0"},
                 source_pairs=((0, 1),),
             )
+
+
+def test_duplicated_source_pair_rejected():
+    """A relayed entry listing one source pair twice must not revalidate."""
+    request = _request(_point("0", "0"), (_point("1", "0"), _point("0", "1")))
+    result = compute_pinned_distances(request)
+    payload = result.model_dump()
+    assert len(payload["lines"][0]["source_pairs"]) == 1
+    payload["lines"][0]["source_pairs"] = [(0, 1), (0, 1)]
+    with pytest.raises(ValidationError, match="exactly"):
+        PinnedDistanceResult.model_validate(payload)

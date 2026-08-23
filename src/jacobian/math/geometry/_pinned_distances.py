@@ -129,14 +129,17 @@ class PinnedDistanceResult(StrictModel):
 
         if len(expected_entries) != len(self.lines):
             raise ValueError("line count must match the exact pair-spanned lines")
-        # Exact line entries must match in sorted-key order.
+        # Exact line entries must match in sorted-key order, including every
+        # source pair exactly once: a set comparison would silently accept a
+        # duplicated source-pair list.
         for expected, actual in zip(expected_entries, self.lines):
             if expected.squared_distance != actual.squared_distance:
                 raise ValueError("squared distance must match the exact pinned distance")
-            if set(expected.source_pairs) != set(actual.source_pairs):
-                raise ValueError("source_pairs must cover the exact line pairs")
-            if tuple(sorted(actual.source_pairs)) != actual.source_pairs:
-                raise ValueError("source_pairs must be sorted")
+            if expected.source_pairs != actual.source_pairs:
+                raise ValueError(
+                    "source_pairs must list each exact generating pair exactly "
+                    "once in ascending order"
+                )
         if self.lines:
             min_entry = min(
                 self.lines,

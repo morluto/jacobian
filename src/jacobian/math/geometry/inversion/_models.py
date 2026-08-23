@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry._models import RationalPoint2D
 
 MAX_INVERSION_COMPONENT_DIGITS = 4_096
@@ -65,8 +66,11 @@ class CircleInversionRequest(StrictModel):
         qx = cx + s * dx / norm_sq
         qy = cy + s * dy / norm_sq
         for frac, name in ((qx, "inverted_x"), (qy, "inverted_y")):
-            num_digits = len(str(abs(frac.numerator)))
-            den_digits = len(str(abs(frac.denominator)))
+            # Count digits through the limit-independent canonical formatter:
+            # str(int) raises under CPython's 4,300-digit conversion limit
+            # before this explicit 32,768-digit check can run.
+            num_digits = len(format_canonical_integer(frac.numerator).lstrip("-"))
+            den_digits = len(format_canonical_integer(frac.denominator))
             if max(num_digits, den_digits) > 32_768:
                 raise ValueError(f"derived {name} exceeds the canonical digit limit")
         return self

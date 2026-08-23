@@ -119,6 +119,15 @@ class LagrangeBasisResult(StrictModel):
             )
         for entry in self.basis:
             k = entry.index
+            # Node evaluations alone do not identify the basis: a forged
+            # higher-degree polynomial can agree with l_k on every node. The
+            # genuine cardinal polynomial has degree below node_count, which
+            # together with the delta property pins it uniquely.
+            terms = entry.polynomial.polynomial.terms
+            if any(term.exponents[0] >= self.node_count for term in terms):
+                raise ValueError(
+                    "basis polynomial degree must be below node_count"
+                )
             expected_weight = Fraction(1)
             for i, x_i in enumerate(nodes):
                 if i != k:

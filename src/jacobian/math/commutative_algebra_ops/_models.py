@@ -245,6 +245,16 @@ class IdealSaturationRequest(StrictModel):
             maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
             label="saturation polynomial",
         )
+        # require_polynomial_budget bounds each individual exponent; the
+        # advertised backend domain is a TOTAL degree of 12, so also reject
+        # terms whose exponent sum exceeds it (e.g. x^12*y^12 has degree 24).
+        if any(
+            sum(term.exponents) > MAX_INPUT_EXPONENT
+            for term in self.saturation_polynomial.polynomial.terms
+        ):
+            raise ValueError(
+                f"saturation polynomial exceeds total degree {MAX_INPUT_EXPONENT}"
+            )
         if self.saturation_polynomial.variables != self.ideal.variables:
             raise ValueError(
                 "saturation polynomial must use the ideal's ordered ring"

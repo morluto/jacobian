@@ -162,3 +162,41 @@ class TestCanonicalPointComposition:
         payload["point"]["x"]["num"] = "9"
         with pytest.raises(ValidationError):
             CircleInversionResult.model_validate(payload)
+
+
+def test_derived_digit_count_is_limit_independent() -> None:
+    """Inputs inside every declared bound validate without int->str limits.
+
+    With N = 10^4095 every input component has at most 4,096 digits and the
+    inverse coordinate N^2 carries 8,191 digits, which crosses CPython's
+    default str(int) conversion limit; counting digits via the canonical
+    formatter must admit this request instead of raising before the explicit
+    canonical-range check can run.
+    """
+    big = "1" + "0" * 4095
+    request = CircleInversionRequest.model_validate(
+        {
+            "center_x": {"num": "0", "den": "1"},
+            "center_y": {"num": "0", "den": "1"},
+            "power": {"num": big, "den": "1"},
+            "point_x": {"num": "1", "den": big},
+            "point_y": {"num": "0", "den": "1"},
+        }
+    )
+    assert request.power.num == big
+
+
+def test_extreme_power_inverts_to_canonical_point() -> None:
+    """The extreme admitted request composes through to its typed result."""
+    big = "1" + "0" * 4095
+    request = CircleInversionRequest.model_validate(
+        {
+            "center_x": {"num": "0", "den": "1"},
+            "center_y": {"num": "0", "den": "1"},
+            "power": {"num": big, "den": "1"},
+            "point_x": {"num": "1", "den": big},
+            "point_y": {"num": "0", "den": "1"},
+        }
+    )
+    result = compute_circle_inversion(request)
+    assert result.complete is True
